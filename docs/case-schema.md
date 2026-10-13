@@ -200,6 +200,23 @@ Works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient 
 with turbulence models, the compressible solver or a user-function viscosity (diagnostics). Not implemented: the
 transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift, checkpoints that carry the viscosity history.
 
+## `sources` momentum sources (F-031)
+
+`sources.<name>` adds a momentum source in a cell zone of a steady (`simple`, `simplec`) run; other algorithms are
+rejected with a located diagnostic. `zone` is `all` (default), `box` (cells whose centres lie in
+`[box_min, box_max]`, metres) or `cell_zone` (a named zone of an imported mesh). A face belongs to the zone when both
+its cells do. `type` selects:
+
+| `type` | Keys | Meaning |
+| --- | --- | --- |
+| `porous` | `model = ergun`: `porosity` (0 < e < 1), `particle_diameter` [m]. `model = darcy_forchheimer`: `permeability` K [m^2], `inertial_resistance` C2 [1/m] | implicit sink `-(nu/K + C2 \|u\|/2) u` per unit mass, **superficial-velocity** formulation (the porosity does not enter the transport terms). Ergun maps to `1/K = 150 (1-e)^2/(e^3 d^2)`, `C2 = 3.5 (1-e)/(e^3 d)`; `\|u\|` is lagged one iteration |
+| `rotating_frame` | `rotation_axis` (default +z), `rotation_origin`, `angular_velocity` [rad/s], `centrifugal` (default true) | relative-velocity form: `-2 Omega x u - Omega x (Omega x r)`. The centrifugal part is analytic at cell and face centres, the Coriolis part uses the previous iterate (boundary faces: the boundary velocity). Wall velocities are given in the rotating frame. `centrifugal = false` keeps Coriolis only (needed for periodic domains) |
+| `acceleration` | `acceleration` [m/s^2] | constant acceleration in the zone |
+
+Limits: no interface treatment between a rotating zone and a stationary one (frozen-rotor MRF with absolute/relative
+velocity conversion needs the non-conformal interface of F-114), steady runs only, the viscous porous term uses `physics.nu`.
+Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
+
 ## `udf` user functions (F-122)
 
 `udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,

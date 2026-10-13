@@ -6,6 +6,7 @@ use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
 use crate::rheology::Rheology;
+use crate::sources::Sources;
 use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
@@ -451,6 +452,8 @@ pub struct Simulation {
     udf_monitors: Vec<String>,
     /// Generalised-Newtonian viscosity law (F-110).
     rheology: Option<Rheology>,
+    /// Porous, rotating-frame and acceleration sources (F-031).
+    sources: Option<Sources>,
     t_init: f64,
     /// Run-time statistics of transient runs (F-116).
     stats: Option<Statistics>,
@@ -948,6 +951,11 @@ impl Simulation {
                 "user functions are not supported by the compressible solver",
             ));
         }
+        let sources = if compressible {
+            None
+        } else {
+            Sources::from_case(case, &geom)?
+        };
         Ok(Simulation {
             case: case.clone(),
             geom,
@@ -963,6 +971,7 @@ impl Simulation {
             udf_viscosity,
             udf_monitors,
             rheology,
+            sources,
             t_init: get_f(case, "initial.temperature"),
             stats,
             report_exprs,
@@ -1163,13 +1172,18 @@ impl Simulation {
                         s.nu_face = Some(nu);
                     }
                 }
-                if self.energy.is_some() || self.udf_momentum.is_some() {
+                let (src_force, src_sink) = match &self.sources {
+                    Some(src) => src.evaluate(&self.geom, &s.u),
+                    None => (None, None),
+                };
+                s.sink = src_sink;
+                if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
                         en.buoyancy
                             .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref))
                     });
                     let mut total = self.base_body.clone();
-                    for part in [bous, udf_force].into_iter().flatten() {
+                    for part in [bous, udf_force, src_force].into_iter().flatten() {
                         match &mut total {
                             Some(t) => t.add(&part),
                             None => total = Some(part),

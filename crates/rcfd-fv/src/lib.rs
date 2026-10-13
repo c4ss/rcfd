@@ -16,6 +16,7 @@ pub mod pimple;
 pub mod pressure;
 pub mod riemann;
 pub mod simple;
+pub mod sources;
 
 pub use bc::{
     Bc, BcCtx, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Symmetry,

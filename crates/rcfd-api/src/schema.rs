@@ -1091,6 +1091,59 @@ pub fn case_schema() -> Schema {
             )
             .doc("Sandboxed user functions (WebAssembly)"),
         )
+        .field(
+            "sources",
+            Schema::named(
+                Schema::object()
+                    .doc("A momentum source restricted to a cell zone (steady SIMPLE/SIMPLEC runs)")
+                    .field(
+                        "type",
+                        Schema::enumeration("porous", &["porous", "rotating_frame", "acceleration"])
+                            .doc("porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; acceleration: constant acceleration"),
+                    )
+                    .field(
+                        "zone",
+                        Schema::enumeration("all", &["all", "box", "cell_zone"])
+                            .doc("Where the source acts: the whole mesh, the cells whose centres lie in the axis-aligned box [box_min, box_max], or a named mesh cell zone (imported meshes)"),
+                    )
+                    .field("box_min", vec3([0.0; 3], "Lower corner [m] of the box zone"))
+                    .field("box_max", vec3([0.0; 3], "Upper corner [m] of the box zone"))
+                    .field("cell_zone", Schema::string("").doc("Name of the mesh cell zone"))
+                    .field(
+                        "model",
+                        Schema::enumeration("ergun", &["ergun", "darcy_forchheimer"])
+                            .doc("porous: ergun derives the resistances from porosity and particle_diameter (150 and 1.75 constants of Ergun 1952); darcy_forchheimer takes permeability and inertial_resistance directly"),
+                    )
+                    .field(
+                        "porosity",
+                        Schema::float(0.4).doc("Bed void fraction for the Ergun model (0 < e < 1); the velocity stays the superficial one"),
+                    )
+                    .field(
+                        "particle_diameter",
+                        Schema::float(0.0).dim(Dimension::LENGTH).doc("Particle diameter [m] for the Ergun model"),
+                    )
+                    .field(
+                        "permeability",
+                        Schema::float(0.0).doc("Permeability K [m^2] of the Darcy term nu/K u (0 = no viscous resistance)"),
+                    )
+                    .field(
+                        "inertial_resistance",
+                        Schema::float(0.0).doc("Inertial resistance C2 [1/m] of the Forchheimer term C2 |u| u / 2"),
+                    )
+                    .field("rotation_origin", vec3([0.0; 3], "A point on the rotation axis [m] (default the origin)"))
+                    .field("rotation_axis", vec3([0.0, 0.0, 1.0], "Rotation axis direction (default +z); right-handed"))
+                    .field(
+                        "angular_velocity",
+                        Schema::float(0.0).dim(Dimension::ANGULAR_VELOCITY).doc("Angular velocity Omega [rad/s] of the frame; the solved velocity is relative to it, so wall velocities are given in the rotating frame"),
+                    )
+                    .field(
+                        "centrifugal",
+                        Schema::boolean(true).doc("Include the centrifugal acceleration Omega^2 r_perp of the rotating frame (false keeps only the Coriolis force, which is needed for periodic domains)"),
+                    )
+                    .field("acceleration", vec3([0.0; 3], "Constant acceleration [m/s^2] for type = acceleration")),
+            )
+            .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
+        )
         .field("reports", Schema::named(report).doc("Scalar reports by name"))
         .field(
             "convergence",
