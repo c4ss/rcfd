@@ -669,6 +669,12 @@ pub fn case_schema() -> Schema {
                 .doc("Iteration cap of the linear momentum solves; 0 = algorithm default"),
         )
         .field(
+            "pressure_abs_tol",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Absolute residual floor of the linear pressure solves (SIMPLE family, coupled); 0 = algorithm default. Lower it to drive the mass imbalance of the flux field to round-off"),
+        )
+        .field(
             "pressure_rel_tol",
             Schema::float(0.0)
                 .at_least(0.0)
@@ -706,9 +712,15 @@ pub fn case_schema() -> Schema {
                     "maximum",
                     "expression",
                     "y_plus",
+                    "scalar_flux",
+                    "scalar_average",
                 ],
             )
             .doc("What to compute (y_plus: wall y+ minimum / maximum / average over a wall patch, k-epsilon runs)"),
+        )
+        .field(
+            "scalar",
+            Schema::string("").doc("Name of a passive scalar or species (scalar_flux: net outflow through the patch, or the conservation imbalance of all boundaries when no patch is given; scalar_average: volume average)"),
         )
         .field(
             "statistic",
@@ -762,7 +774,7 @@ pub fn case_schema() -> Schema {
             "conductivity",
             Schema::float(1.0)
                 .at_least(0.0)
-                .doc("Thermal conductivity for heat_flow"),
+                .doc("Thermal conductivity for heat_flow (ignored when properties.conductivity is temperature-dependent: the law is used at the wall temperature)"),
         );
 
     let convergence = Schema::object()
@@ -1144,6 +1156,25 @@ pub fn case_schema() -> Schema {
             )
             .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
         )
+        .field(
+            "properties",
+            Schema::object()
+                .doc("Temperature-dependent fluid properties (steady runs with the energy equation); constant density")
+                .field("viscosity", property_law("Dynamic viscosity mu(T) [Pa s]; the kinematic viscosity is mu(T) / physics.rho on the faces"))
+                .field("conductivity", property_law("Thermal conductivity k(T) [W/m/K]"))
+                .field("specific_heat", property_law("Specific heat cp(T) [J/kg/K]")),
+        )
+        .field(
+            "scalars",
+            Schema::named(scalar_schema(false))
+                .doc("Passive scalars transported by the flow (steady runs): div(phi s) - div(D grad s) = S, constant density"),
+        )
+        .field(
+            "species",
+            Schema::named(scalar_schema(true)).doc(
+                "Multicomponent mass fractions (steady runs): all but the balance species are transported, the balance species is 1 - sum of the others; every transported species is conserved separately",
+            ),
+        )
         .field("reports", Schema::named(report).doc("Scalar reports by name"))
         .field(
             "convergence",
@@ -1151,6 +1182,87 @@ pub fn case_schema() -> Schema {
         )
         .field("statistics", statistics)
         .field("output", output)
+}
+
+/// Settings of one passive scalar or species.
+fn scalar_schema(species: bool) -> Schema {
+    let mut s = Schema::object()
+        .doc(if species {
+            "A species mass fraction"
+        } else {
+            "A passive scalar"
+        })
+        .field(
+            "diffusivity",
+            Schema::float(0.0).doc("Molecular diffusivity [m^2/s]; give this or schmidt"),
+        )
+        .field(
+            "schmidt",
+            Schema::float(0.0).doc("Schmidt number nu / D; the diffusivity then follows the (temperature-dependent) viscosity of the flow solver"),
+        )
+        .field("initial", Schema::float(0.0).doc("Initial uniform value"))
+        .field(
+            "source",
+            Schema::float(0.0).doc("Uniform volumetric source (value per second)"),
+        )
+        .field(
+            "relax",
+            Schema::float(1.0).doc("Implicit under-relaxation of the sweep (1 for the linear frozen-flow problem)"),
+        );
+    if species {
+        s = s.field(
+            "remainder",
+            Schema::boolean(false)
+                .doc("This species is the balance species, closed by difference (default: the last one by name)"),
+        );
+    }
+    s.field(
+        "boundaries",
+        Schema::named(
+            Schema::object()
+                .doc("Condition on a patch (default zero_gradient)")
+                .field(
+                    "type",
+                    Schema::enumeration("zero_gradient", &["zero_gradient", "fixed", "gradient"])
+                        .doc("fixed value, or prescribed outward normal gradient"),
+                )
+                .field("value", Schema::float(0.0).doc("Value or outward normal gradient"))
+                .field(
+                    "value_expression",
+                    Schema::string("")
+                        .doc("Dimensionless expression of x, y, z (F-104) for a fixed value; overrides value"),
+                ),
+        )
+        .doc("Boundary conditions by patch name"),
+    )
+}
+
+/// One temperature-dependent property law.
+fn property_law(doc: &str) -> Schema {
+    Schema::object()
+        .doc(doc)
+        .field(
+            "law",
+            Schema::enumeration("constant", &["constant", "polynomial", "sutherland"]).doc(
+                "constant: the physics value; polynomial: c0 + c1 T + c2 T^2 + ... (T in kelvin); sutherland: v_ref (T/T_ref)^1.5 (T_ref + S) / (T + S)",
+            ),
+        )
+        .field(
+            "coefficients",
+            Schema::list(Schema::float(0.0)).doc("Polynomial coefficients in ascending powers of T [K]"),
+        )
+        .field(
+            "reference_value",
+            Schema::float(0.0).doc("Sutherland: value at the reference temperature"),
+        )
+        .field(
+            "reference_temperature",
+            Schema::float(0.0).dim(Dimension::TEMPERATURE).doc("Sutherland: reference temperature [K]"),
+        )
+        .field(
+            "sutherland_constant",
+            Schema::float(0.0).dim(Dimension::TEMPERATURE).doc("Sutherland constant S [K]"),
+        )
 }
 
 #[cfg(test)]

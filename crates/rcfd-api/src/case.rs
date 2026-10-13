@@ -509,6 +509,15 @@ impl Case {
             .map(|s| s.to_string())
             .collect();
             monitors.extend(self.tree.names("reports").unwrap_or_default());
+            for s in ["scalars", "species"] {
+                monitors.extend(
+                    self.tree
+                        .names(s)
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|n| format!("res_{n}")),
+                );
+            }
             for n in names {
                 let p = format!("convergence.{n}.monitor");
                 let m = self
@@ -532,6 +541,8 @@ impl Case {
         out.extend(crate::udf::load_case_udfs(self).1);
         out.extend(crate::rheology::check(self));
         out.extend(crate::sources::check(self));
+        out.extend(crate::scalars::check(self));
+        out.extend(crate::properties::check(self));
         out.extend(crate::stats::check(self));
         out.extend(crate::stats::check_output(self));
         out

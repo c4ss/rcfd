@@ -3,8 +3,10 @@
 pub mod case;
 pub mod comp;
 pub mod exprs;
+pub mod properties;
 pub mod rheology;
 pub mod runctl;
+pub mod scalars;
 pub mod schema;
 pub mod service;
 pub mod sim;

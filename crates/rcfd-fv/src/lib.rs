@@ -16,6 +16,7 @@ pub mod gradient;
 pub mod pimple;
 pub mod pressure;
 pub mod riemann;
+pub mod scalar;
 pub mod simple;
 pub mod sources;
 
