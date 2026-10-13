@@ -1,0 +1,66 @@
+# Fully developed turbulent plane channel, Re_tau = 395, standard k-epsilon with
+# standard wall functions. Periodic in x and driven by a unit body force
+# (u_tau = 1, half-height 1, nu = 1/395). Coarse on purpose (y+ about 28 in the
+# wall cells) so that `rcfd run` finishes in seconds.
+#
+#   rcfd run cases/channel/kepsilon_channel.toml --out out/kepsilon_channel
+title = "k-epsilon plane channel, Re_tau = 395"
+
+[mesh]
+generator = "box_2d"
+nx = 4
+ny = 14
+lx = 1.0
+ly = 2.0
+periodic_x = true
+
+[physics]
+nu = 0.002531645569620253   # 1 / 395
+body_force = [1.0, 0.0, 0.0]
+
+[initial]
+velocity = [17.0, 0.0, 0.0]
+
+[boundaries.ymin]
+velocity = "fixed"
+
+[boundaries.ymax]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+alpha_u = 0.9
+max_iterations = 8000
+# The relative momentum/pressure residuals of the periodic channel level out at about 1e-3
+# (linear solver noise on a converged state), so the run is stopped by the wall-cell y+
+# having stopped moving instead; see [convergence.yplus_settled].
+tolerance_u = 1e-12
+tolerance_p = 1e-12
+
+[turbulence]
+model = "k_epsilon"
+variant = "standard"
+wall_function = "standard"
+k_initial = 1.0
+epsilon_initial = 0.36
+
+[reports.yplus_lower]
+type = "y_plus"
+patch = "ymin"
+statistic = "average"
+
+[reports.yplus_upper]
+type = "y_plus"
+patch = "ymax"
+statistic = "max"
+
+[convergence.yplus_settled]
+monitor = "yplus_lower"
+type = "window_range"
+window = 20
+tolerance = 1e-9
+relative = true
+
+[output]
+directory = "results"

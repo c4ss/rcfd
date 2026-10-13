@@ -1,0 +1,57 @@
+# Developing turbulent channel flow with the inlet turbulence helpers: 5 %
+# intensity and a 0.01 m length scale give k = 3/2 (I U)^2 and
+# epsilon = Cmu^(3/4) k^(3/2) / l at the inlet. RNG k-epsilon, standard wall
+# functions on the walls.
+title = "k-epsilon channel with inlet turbulence helpers"
+
+[mesh]
+generator = "channel_2d"
+nx = 24
+ny = 12
+lx = 3.0
+ly = 0.2
+depth = 0.1
+
+[physics]
+nu = 1e-5
+
+[boundaries.inlet]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+turbulence_spec = "intensity_length"
+turbulence_intensity = 0.05
+turbulence_length = 0.01
+
+[boundaries.outlet]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.walls]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+alpha_u = 0.7
+alpha_p = 0.3
+max_iterations = 400
+tolerance_u = 1e-5
+tolerance_p = 1e-5
+
+[turbulence]
+model = "k_epsilon"
+variant = "rng"
+
+[reports.k_inlet]
+type = "area_average"
+patch = "inlet"
+field = "k"
+
+[reports.yplus_walls]
+type = "y_plus"
+patch = "walls"
+statistic = "average"
+
+[reports.outlet_flow]
+type = "mass_flow"
+patch = "outlet"

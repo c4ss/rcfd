@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rcfd-core",
+    "crates/rcfd-mesh",
+    "crates/rcfd-linalg",
+    "crates/rcfd-fv",
+    "crates/rcfd-turb",
+    "crates/rcfd-io",
+    "crates/rcfd-post",
+    "crates/rcfd-cli",
+    "crates/rcfd-api",
+    "crates/rcfd-mcp",
+    "crates/rcfd-assistant",
+    "crates/rcfd-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://example.invalid/rcfd"
+rust-version = "1.75"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+thiserror = "1"
+toml = { version = "1", default-features = false, features = ["parse", "display", "serde"] }
+png = "0.18"
+rayon = "1"
+rcfd-core = { path = "crates/rcfd-core" }
+rcfd-mesh = { path = "crates/rcfd-mesh" }
+rcfd-linalg = { path = "crates/rcfd-linalg" }
+rcfd-fv = { path = "crates/rcfd-fv" }
+rcfd-turb = { path = "crates/rcfd-turb" }
+rcfd-io = { path = "crates/rcfd-io" }
+rcfd-post = { path = "crates/rcfd-post" }
+rcfd-api = { path = "crates/rcfd-api" }
+rcfd-mcp = { path = "crates/rcfd-mcp" }
+rcfd-assistant = { path = "crates/rcfd-assistant" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+needless_range_loop = "allow"
+too_many_arguments = "allow"

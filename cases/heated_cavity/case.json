@@ -1,0 +1,36 @@
+{
+  "id": "heated_cavity",
+  "title": "Differentially heated square cavity",
+  "description": "Air (Pr=0.71) in a unit square, hot left wall, cold right wall, adiabatic top and bottom, Boussinesq buoyancy. Benchmark quantities: average and maximum hot-wall Nusselt number and maximum mid-plane velocities (non-dimensional).",
+  "physics": {
+    "regime": "natural convection, laminar steady",
+    "prandtl": 0.71,
+    "rayleigh": [
+      1000.0,
+      10000.0,
+      100000.0,
+      1000000.0
+    ]
+  },
+  "mesh": {
+    "generator": "cavity_2d",
+    "params": {
+      "n": [
+        40,
+        80
+      ],
+      "size": 1.0
+    },
+    "note": "wall clustering recommended for Ra >= 1e5"
+  },
+  "reference": {
+    "citation": "G. de Vahl Davis, Natural convection of air in a square cavity: a bench mark numerical solution, Int. J. Numer. Methods Fluids 3 (1983) 249-264. Velocities are scaled by alpha/L. Values cross-checked against secondary tables that quote the benchmark (see docs/reference-data.md).",
+    "files": [
+      "reference/devahldavis1983.csv"
+    ],
+    "tolerance": "2 percent on Nu_avg (F-050)"
+  },
+  "roadmap": [
+    "F-050"
+  ]
+}

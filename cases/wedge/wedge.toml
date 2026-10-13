@@ -1,0 +1,53 @@
+# Mach 2 supersonic flow (non-dimensional: rho = 1, p = 1/gamma, so a = 1) over
+# a 10 degree compression ramp that starts at x = 0.2. An oblique shock leaves
+# the ramp corner; the HLLC flux with limited reconstruction keeps it sharp.
+# Small mesh so that `rcfd run` finishes in seconds.
+title = "Mach 2 flow over a 10 degree ramp"
+
+[mesh]
+generator = "wedge_2d"
+nx = 60
+ny = 20
+lx = 1.5
+ly = 1.0
+ramp_start = 0.2
+ramp_angle = 10.0
+
+[solver]
+algorithm = "compressible"
+end_time = 3.0
+
+[compressible]
+flux = "hllc"
+reconstruction = "tvd_van_leer"
+rk_order = 3
+cfl = 0.4
+gamma = 1.4
+
+[compressible.initial.left]
+density = 1.0
+velocity = [2.0, 0.0, 0.0]
+pressure = 0.7142857142857143
+
+[boundaries.xmin]
+compressible_bc = "fixed"
+density_value = 1.0
+velocity_value = [2.0, 0.0, 0.0]
+pressure_value = 0.7142857142857143
+
+[boundaries.xmax]
+compressible_bc = "extrapolate"
+
+[boundaries.ymax]
+compressible_bc = "extrapolate"
+
+[boundaries.ymin]
+compressible_bc = "slip"
+
+[reports.p_max]
+type = "maximum"
+field = "p"
+
+[reports.inflow]
+type = "mass_flow"
+patch = "xmin"

@@ -1,0 +1,39 @@
+{
+  "id": "channel",
+  "title": "Plane turbulent channel / Poiseuille flow",
+  "description": "Periodic (or long) plane channel. Laminar Poiseuille flow gives an exact parabola for verification; turbulent runs at Re_tau=395 are compared against DNS and the log law.",
+  "physics": {
+    "regime": "laminar verification, then turbulent RANS",
+    "re_tau": 395
+  },
+  "mesh": {
+    "generator": "channel",
+    "params": {
+      "n": [
+        40,
+        60,
+        1
+      ],
+      "l": [
+        6.28,
+        2.0,
+        0.1
+      ],
+      "y_grading": {
+        "symmetric": 10.0
+      },
+      "two_d": true
+    }
+  },
+  "reference": {
+    "citation": "Laminar: u(y) = (G / 2 mu)(h^2 - y^2) (any fluid mechanics text). Turbulent: R. D. Moser, J. Kim, N. N. Mansour, Direct numerical simulation of turbulent channel flow up to Re_tau=590, Phys. Fluids 11 (1999) 943-945 (chan395.means: actual Re_tau = 392.24, centreline U+ = 20.13, bulk U+ = 17.54, Re_b = 13764; use the published profile files for profiles). Log law: u+ = ln(y+)/0.41 + 5.2 (S. B. Pope, Turbulent Flows, 2000, Ch. 7).",
+    "files": [
+      "reference/log_law.csv"
+    ],
+    "tolerance": "10 percent on mean profile (F-042)"
+  },
+  "roadmap": [
+    "F-040",
+    "F-042"
+  ]
+}

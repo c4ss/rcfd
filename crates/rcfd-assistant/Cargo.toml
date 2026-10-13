@@ -1,0 +1,17 @@
+[package]
+name = "rcfd-assistant"
+description = "Provider-agnostic AI assistant core: providers, tool layer with approvals, setup-workflow tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version = "1.88"
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-api.workspace = true
+rcfd-mcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq = "3"

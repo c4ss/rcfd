@@ -1,0 +1,53 @@
+{
+  "id": "cavity",
+  "title": "Lid-driven square cavity",
+  "description": "Unit square, lid moves at U=1 in +x, incompressible laminar; Re = U L / nu with L=1. Compare u along the vertical centreline x=0.5 and v along the horizontal centreline y=0.5.",
+  "physics": {
+    "regime": "incompressible laminar steady",
+    "reynolds": [
+      100,
+      400,
+      1000
+    ]
+  },
+  "mesh": {
+    "generator": "cavity_2d",
+    "params": {
+      "n": [
+        32,
+        64,
+        128
+      ],
+      "size": 1.0
+    }
+  },
+  "boundary_conditions": {
+    "lid": {
+      "type": "velocity",
+      "value": [
+        1,
+        0,
+        0
+      ]
+    },
+    "walls": {
+      "type": "no_slip"
+    },
+    "frontAndBack": {
+      "type": "empty"
+    }
+  },
+  "reference": {
+    "citation": "U. Ghia, K. N. Ghia, C. T. Shin, High-Re solutions for incompressible flow using the Navier-Stokes equations and a multigrid method, J. Comput. Phys. 48 (1982) 387-411, Tables I and II (129x129 grid). Values cross-checked against independent published copies of the tables (2 secondary sources; see docs/reference-data.md); v-centreline only at Re = 100.",
+    "files": [
+      "reference/ghia1982_u_centerline.csv",
+      "reference/ghia1982_v_centerline_Re100.csv"
+    ],
+    "tolerance": "2 percent of lid speed for centreline profiles (F-028)"
+  },
+  "roadmap": [
+    "F-028",
+    "F-029",
+    "F-032"
+  ]
+}
