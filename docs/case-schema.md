@@ -177,6 +177,22 @@ inside the root. Not implemented: Fluent profile-file syntax, cubic/monotone int
 fall outside the range during a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
 Example: `cases/channel/profile_inlet.toml`.
 
+## `rheology` viscosity laws (F-110)
+
+`rheology.model` selects `power_law`, `carreau`, `carreau_yasuda`, `cross`, `herschel_bulkley` or `bingham` (default
+`newtonian`, which keeps `physics.nu`). The settings carry SI units: dynamic viscosities in Pa s
+(`zero_shear_viscosity`, `infinite_shear_viscosity`, `min_viscosity`, `max_viscosity`), `time_constant` and
+`regularisation_time` in s, `yield_stress` in Pa, `consistency_index` in Pa s^n (the plastic viscosity for Bingham),
+plus the dimensionless `power_index`, `yasuda_exponent`, `cross_exponent`. `rheology.shift = "arrhenius"`, `"wlf"` or `"table"` (`a_T(T)` from `tables.<shift_table>`: input column `T`, output column `a_T`; a temperature outside the table stops the run with a message unless the table clamps)
+adds a temperature dependence by time-temperature superposition `mu(g, T) = a_T mu_ref(a_T g)` (needs
+`energy.enabled`; with `model = "newtonian"` the reference viscosity is `physics.nu * physics.rho`;
+`reference_temperature`, `activation_temperature`, `wlf_c1`, `wlf_c2`). The apparent viscosity follows the shear
+rate `sqrt(2 S:S)` of the current velocity, is clamped to `[min_viscosity, max_viscosity]`, divided by `physics.rho`
+and used on the faces of the momentum diffusion term (cell values interpolated, relaxed with `rheology.relax`).
+Works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient PISO/PIMPLE runs. Not combined
+with turbulence models, the compressible solver or a user-function viscosity (diagnostics). Not implemented: the
+transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift, checkpoints that carry the viscosity history.
+
 ## `udf` user functions (F-122)
 
 `udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,

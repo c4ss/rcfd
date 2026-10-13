@@ -187,3 +187,16 @@ where a real file confirmed them. Treat as unverified.
   (`(10 (zone first last type nd)`, face records `n0 n1 right-cell left-cell`, hex numbers in headers).
 - Section 18 as periodic shadow faces; the binary section ids 2010/3010 (nodes single/double), 2012/3012, 2013/3013 and the
   `End of Binary Section` terminator; little-endian 32-bit integers in binary face data. No real binary file was read.
+
+## Viscosity laws (F-110)
+
+The law forms in `crates/rcfd-api/src/rheology.rs` are textbook expressions written from memory of the literature
+(Bird, Armstrong and Hassager 1987; Carreau 1972; Yasuda 1981; Cross 1965; Herschel and Bulkley 1926; Papanastasiou
+1987; Williams, Landel and Ferry 1955) and were not checked against the papers in this session. Unverified:
+the Carreau-Yasuda exponent convention `(n-1)/a`, the Cross form `1/(1+(lambda g)^m)`, the regularised yield term
+`tau0 (1 - exp(-m g))/g`, and the WLF constants 17.44 and 51.6 K (the "universal" values, relative to the glass
+transition temperature, offered only as defaults). The checks that do not depend on those forms are analytic:
+the power-law plane channel profile and pressure gradient (`u = U (2n+1)/(n+1) [1 - |1-2y/H|^((n+1)/n)]`, derived by
+integrating the momentum balance), and the Buckingham-Reiner plane solution of a Bingham fluid
+(`U = G h^2/(3 mu) (1 - 1.5 xi + 0.5 xi^3)`, `xi = tau0/(G h)`, mean speed verified to 1e-6 by quadrature of the
+profile in the test).

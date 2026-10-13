@@ -812,9 +812,9 @@
       "F-050",
       "F-105"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Power-law channel flow matches the analytic profile; Carreau recovers Newtonian limits at low and high shear; laws exposed in the settings tree with units",
-    "note": "P2. Gap: Fluent/CFX non-Newtonian models and the Polyflow law set. Cheap, textbook-derived. Temperature-dependent laws use table inputs (F-105)."
+    "note": "Done. rcfd-api `rheology`: settings group `rheology` (docs/case-schema.md) with power_law, carreau, carreau_yasuda, cross, herschel_bulkley (Papanastasiou-regularised yield stress) and bingham, viscosity clamps, face-wise relaxation, and temperature dependence by time-temperature superposition mu(g,T) = a_T mu_ref(a_T g) with Arrhenius, WLF or a lookup table a_T(T) (F-105 tables; needs the energy equation). Dynamic viscosities in Pa s, times in s, stress in Pa, declared with units in the schema; the solver uses mu(shear rate sqrt(2 S:S))/rho on the momentum-diffusion faces in steady SIMPLE/SIMPLEC (with or without the energy equation) and transient PISO/PIMPLE runs (PimpleSolver gained nu_face). Measured (tests/rheology.rs, checks fixed first, 60x20 plane channel, H=1, U=1, K=0.1): power law n=0.6: profile error 0.77% of centreline (limit 2%), dp/dx +0.26% (limit 3%); n=1.4: 1.15%, -0.86%. Bingham (mu_p 0.1, tau0 0.2, regularisation 200 s) vs Buckingham-Reiner: profile 1.6% of the plug velocity 1.349 (limit 5%), dp/dx +1.04% (limit 5%), 1783 iterations. Carreau, Carreau-Yasuda, Cross and power law (n=1) in their Newtonian limits reproduce the plain run to below 1e-6 (steady and PISO); unit tests: Carreau within 1e-6 of mu_0 at lambda*g=2e-4 and within 3e-3 of mu_inf at 1e14, closed forms, Yasuda a=2 equals Carreau; Arrhenius and table shifts at uniform T equal a Newtonian run with scaled viscosity (1e-6); a temperature outside the shift table stops the run with a message; bad parameters are diagnostics. Law forms are from memory of the literature and marked unverified in docs/reference-data.md. Not done: the transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift (diagnostic), combination with turbulence models, the compressible solver or a UDF viscosity (diagnostics), restart checkpoints carrying the viscosity relaxation history."
   },
   {
     "id": "F-111",
