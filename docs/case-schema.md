@@ -253,8 +253,8 @@ carry their data into a case): NASA-polynomial species (N2, O2, AR, H2O, CO2, CH
 mass-weighted and ideal-volume mixing, Wilke's gas-mixture rule, ideal-gas, Redlich-Kwong and Peng-Robinson equations of state
 (roots, density, fugacity, residual enthalpy, saturation pressure), and water and steam from IAPWS-IF97 regions 1 and 2 (273.15-1073.15 K,
 up to 100 MPa, outside region 3) with the IAPWS viscosity and conductivity correlations. Ready-to-paste `properties` laws for air at
-100 kPa, valid 200-600 K (cubic fits to the CRC/NIST gas tables, see `docs/reference-data.md`; the Sutherland constants below are
-good to about 1 % for the conductivity but only to 0.2 % at 300 K and 1.5 % at 500 K for the viscosity):
+100 kPa, valid 200-600 K (cubic fits to the CRC/NIST gas tables, see `docs/reference-data.md`; Sutherland's law with the textbook air constants
+is within 1 % for the conductivity at 300-500 K but not for the viscosity, -0.2 % at 300 K, -1.1 % at 400 K, -1.5 % at 500 K):
 
 ```toml
 [properties.viscosity]
