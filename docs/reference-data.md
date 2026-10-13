@@ -163,3 +163,15 @@ The 5 percent tolerance is unchanged; the recorded run of 0.1588 is -3.8 percent
 - Toro Table 4.3 / NACA 1135 attributions.
 - Original value of A0 in Shih et al. (4.04 vs 4.0).
 - Roe/Harten/Liou/Shu-Osher/Issa/Choi bibliographic details (not re-fetched).
+
+## Public validation-data pack (F-125, fetched 2026-10-13)
+
+Files are listed with checksums and licences in `validation-data/manifest.json` (see `docs/validation-data.md`).
+
+- Flat plate Cf at x = 0.97: the pinned TMR file `FlatPlate/SST/cf_plate_sstv.dat` (CFL3D, SST) gives about 2.691e-3
+  (2.6949e-3 at x = 0.9601, 2.6909e-3 at x = 0.9701). `crates/rcfd-turb/tests/flat_plate_sst.rs` uses 0.00268299
+  (273 x 193 grid value from the TMR page). rcfd measures 0.002663: -0.7 % vs the page value, -1.0 % vs the file. Test tolerance (5 %) unchanged.
+- Rotor 37 values from NASA TP-1337: only the report is stored; no numbers are transcribed yet. Unverified until they are.
+- GRI-Mech 3.0 (Berkeley copy): licence status unverified (no licence text on the page). Cantera BSD copy preferred.
+- OpenFOAM damBreak set-up files: GPL-3.0-only, fetched only, never vendored.
+- Hannover compressor: no open upstream found; unresolved.

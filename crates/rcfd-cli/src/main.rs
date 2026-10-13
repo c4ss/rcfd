@@ -12,6 +12,7 @@ use rcfd_api::schema::case_schema;
 use rcfd_api::service::{Service, ServiceConfig};
 use rcfd_api::sim::Simulation;
 use rcfd_io::cases::Registry;
+use rcfd_io::datapack::{FileState, Manifest};
 use rcfd_mesh::quality::check_mesh;
 use rcfd_mesh::Mesh;
 use rcfd_post::monitors::{html_report, MonitorStore};
@@ -51,6 +52,9 @@ COMMANDS:
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
         --journal <file>         run the case recorded in a service journal (journal.get) instead of a file
+    data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]
+                               public validation-data pack (F-125): datasets with licence, checksum
+                               verification of local copies (offline), provenance report (markdown)
     workflow templates                list workflow templates and task kinds
     workflow show [--template <name> | --workflow <file>]
                                print a workflow document (JSON)
@@ -142,6 +146,7 @@ fn dispatch(args: &[String]) -> u8 {
         "call" => cmd_call(rest),
         "cases" => cmd_cases(rest),
         "workflow" => cmd_workflow(rest),
+        "data" => cmd_data(rest),
         other => usage_error(&format!("unknown command '{other}'")),
     }
 }
@@ -629,8 +634,17 @@ fn cmd_cases(args: &[String]) -> u8 {
         .unwrap_or_else(|| PathBuf::from("cases"));
     match Registry::load(&dir) {
         Ok(reg) => {
+            // data provenance of each case from the validation-data manifest next to cases/
+            let man = Manifest::load(&dir.join("..").join("validation-data").join("manifest.json")).ok();
             for c in reg.list() {
                 println!("{:<16} {}  [{}]", c.id, c.title, c.roadmap.join(", "));
+                for d in man
+                    .iter()
+                    .flat_map(|m| &m.datasets)
+                    .filter(|d| d.case.as_deref() == Some(c.id.as_str()))
+                {
+                    println!("{:<16}   data: {} ({})", "", d.id, d.licence.spdx);
+                }
             }
             OK
         }
@@ -796,5 +810,75 @@ fn cmd_workflow(args: &[String]) -> u8 {
             }
         }
         other => usage_error(&format!("unknown workflow subcommand '{other}'")),
+    }
+}
+
+fn cmd_data(args: &[String]) -> u8 {
+    let Some(sub) = args.first().map(String::as_str) else {
+        return usage_error("data needs a subcommand: list, verify or provenance");
+    };
+    let rest = &args[1..];
+    let root = PathBuf::from(".");
+    let manifest = opt(rest, "--manifest")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("validation-data").join("manifest.json"));
+    let data_dir = opt(rest, "--data").map(PathBuf::from).unwrap_or_else(|| {
+        manifest
+            .parent()
+            .map_or(PathBuf::from("."), Path::to_path_buf)
+            .join("data")
+    });
+    let man = match Manifest::load(&manifest) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return FAIL;
+        }
+    };
+    let problems = man.validate(&root);
+    if !problems.is_empty() {
+        for p in &problems {
+            eprintln!("manifest: {p}");
+        }
+        return INVALID;
+    }
+    match sub {
+        "list" => {
+            for d in &man.datasets {
+                println!("{:<32} {:<11} {:<36} {}", d.id, d.status, d.licence.spdx, d.title);
+            }
+            OK
+        }
+        "provenance" => {
+            print!("{}", man.provenance_markdown());
+            OK
+        }
+        "verify" => {
+            let mut bad = 0;
+            let mut missing = 0;
+            for (id, name, st) in man.verify(&root, &data_dir) {
+                match st {
+                    FileState::Ok => println!("[{id}] ok {name}"),
+                    FileState::Missing => {
+                        missing += 1;
+                        println!("[{id}] not fetched {name}");
+                    }
+                    FileState::Mismatch(got) => {
+                        bad += 1;
+                        println!("[{id}] CHECKSUM MISMATCH {name} (actual {got})");
+                    }
+                }
+            }
+            // in-repo tables must always be present and correct; fetched files only if present
+            if bad > 0 {
+                eprintln!("{bad} file(s) differ from the manifest");
+                return FAIL;
+            }
+            if missing > 0 {
+                eprintln!("{missing} file(s) not fetched yet (python validation-data/fetch.py fetch)");
+            }
+            OK
+        }
+        other => usage_error(&format!("unknown data subcommand '{other}'")),
     }
 }
