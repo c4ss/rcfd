@@ -937,12 +937,19 @@ impl Simulation {
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
-        let energy = if energy_on && steady_alg {
+        let transient_alg = matches!(alg.as_str(), "piso" | "pimple");
+        let energy = if energy_on && (steady_alg || transient_alg) {
             let rho = get_f(case, "physics.rho");
             let (cp, kth) = (get_f(case, "physics.cp"), get_f(case, "physics.conductivity"));
             let mut solver = EnergySolver::new(geom.clone(), temp, kth / (rho * cp));
             solver.convection = conv;
             solver.relax = get_f(case, "energy.relax");
+            if transient_alg {
+                // linear for the frozen flux, solved tightly every step
+                solver.solver.tol_rel = 1e-10;
+                solver.solver.tol_abs = 1e-300;
+                solver.solver.max_iter = 2000;
+            }
             Some(EnergyState {
                 solver,
                 beta: get_f(case, "physics.thermal_expansion"),
@@ -1375,6 +1382,21 @@ impl Simulation {
                         Ok(v) => s.nu_face = Some(v),
                         Err(e) => udf_error = Some(e),
                     }
+                }
+                if let Some(en) = &mut self.energy {
+                    // temperature first, on the flux of the previous step; the flow then sees the new buoyancy
+                    en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
+                    let bous = en
+                        .buoyancy
+                        .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref));
+                    let mut total = self.base_body.clone();
+                    if let Some(b) = bous {
+                        match &mut total {
+                            Some(t) => t.add(&b),
+                            None => total = Some(b),
+                        }
+                    }
+                    s.body_force = total;
                 }
                 let i = s.step(dt);
                 self.monitors.push("courant", "", i.time, i.courant);
@@ -2294,11 +2316,11 @@ field = "T"
 
     #[test]
     fn energy_settings_are_validated() {
+        // energy with piso/pimple is accepted since the transient energy equation exists (F-050)
         let bad = CAVITY
             .replace("algorithm = \"simplec\"", "algorithm = \"piso\"")
             .replace("[solver]\n", "[energy]\nenabled = true\n[solver]\n");
-        let e = Case::parse_toml(&bad).unwrap_err();
-        assert!(format!("{e:?}").contains("energy"), "{e:?}");
+        assert!(Case::parse_toml(&bad).is_ok());
         let e2 = CAVITY.replace(
             "[boundaries.lid]",
             "[boundaries.lid]\ntemperature = \"zero_gradient\"\ntemperature_expression = \"300 [K]\"",

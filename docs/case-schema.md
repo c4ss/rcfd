@@ -148,6 +148,11 @@ reports carry pressure and density dimensions (the pressure is the absolute pres
 Energy (`energy.*`) and pseudo-transient (`solver.pseudo_*`) settings were already in the schema
 and are unchanged.
 
+`energy.enabled` also works with the transient `piso` and `pimple` algorithms (F-050): the temperature equation is advanced
+with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, `energy.relax` unused) on the flux of the previous step,
+then the flow step sees the Boussinesq buoyancy of the new temperature (first-order coupling in time; a steady state is independent of it).
+Temperature-dependent `properties`, scalars and species stay steady-only.
+
 ## `tables` and profile inputs (F-105)
 
 `tables.<name>` reads a lookup table or profile from CSV (`file`, relative to the case file, or inline

@@ -10,9 +10,11 @@
 //! spurious flow from the pressure/buoyancy imbalance.
 
 use crate::convection::ConvScheme;
+use crate::ddt::{History, TimeScheme};
 use crate::diffusion::uniform_gamma;
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
+use crate::pimple::{PimpleSolver, StepInfo};
 use crate::scalar::{self, SweepInputs};
 use crate::simple::{BodyForce, IterationInfo, SimpleSolver};
 use rcfd_core::vec3::{self, Vec3};
@@ -37,11 +39,14 @@ pub struct EnergySolver {
     pub source: Option<Vec<f64>>,
     /// Linear solver controls.
     pub solver: SolveControl,
+    /// Old time levels of `T` for transient runs ([`EnergySolver::advance`]).
+    pub history: History,
 }
 
 impl EnergySolver {
     /// New solver with an initial uniform temperature field supplied by the caller.
     pub fn new(geom: Arc<FvGeometry>, t: ScalarField, alpha: f64) -> Self {
+        let history = History::new(t.values.clone());
         EnergySolver {
             geom,
             t,
@@ -55,6 +60,7 @@ impl EnergySolver {
                 tol_rel: 1e-4,
                 max_iter: 500,
             },
+            history,
         }
     }
 
@@ -77,8 +83,35 @@ impl EnergySolver {
                 relax: self.relax,
                 source: self.source.as_deref(),
                 solver: &self.solver,
+                ddt: None,
             },
         )
+    }
+
+    /// One transient step of size `dt` on the face flux `phi` (the flux of the new time level): implicit Euler or BDF2
+    /// in time, no relaxation, one linear solve (the equation is linear for a frozen flux). Returns the normalised
+    /// residual before the solve and pushes the new level into [`EnergySolver::history`].
+    pub fn advance(&mut self, phi: &[f64], dt: f64, scheme: TimeScheme) -> f64 {
+        let g = self.geom.clone();
+        let gamma = match &self.alpha_face {
+            Some(a) => a.clone(),
+            None => uniform_gamma(&g, self.alpha),
+        };
+        let res = scalar::sweep(
+            &g,
+            &mut self.t,
+            &SweepInputs {
+                phi,
+                gamma: &gamma,
+                scheme: self.convection,
+                relax: 1.0,
+                source: self.source.as_deref(),
+                solver: &self.solver,
+                ddt: Some((scheme, dt, &self.history)),
+            },
+        );
+        self.history.push(self.t.values.clone(), dt);
+        res
     }
 
     /// Outward-normal temperature gradient at the faces of `patch` (one value per patch face).
@@ -166,5 +199,39 @@ impl BuoyantSimple {
         let flow = self.flow.iterate();
         let res_t = self.energy.iterate(&self.flow.phi);
         BuoyantInfo { flow, res_t }
+    }
+}
+
+/// Buoyancy-coupled transient flow: PISO/PIMPLE with the Boussinesq body force and the transient energy equation.
+///
+/// Each step advances the temperature first, on the flux of the previous step, and then the flow with the buoyancy of
+/// the new temperature; the coupling error is first order in the time step (a steady state, where nothing changes
+/// between levels, is independent of it).
+pub struct BuoyantPimple {
+    /// Flow solver.
+    pub flow: PimpleSolver,
+    /// Temperature solver.
+    pub energy: EnergySolver,
+    /// Volumetric thermal expansion coefficient (1/K).
+    pub beta: f64,
+    /// Gravity vector (m/s^2).
+    pub gravity: Vec3,
+    /// Reference temperature of the Boussinesq model (K).
+    pub t_ref: f64,
+}
+
+impl BuoyantPimple {
+    /// Advance by `dt`; returns the flow diagnostics and the normalised temperature residual.
+    pub fn step(&mut self, dt: f64) -> (StepInfo, f64) {
+        let scheme = self.flow.settings.time_scheme;
+        let res_t = self.energy.advance(&self.flow.phi, dt, scheme);
+        self.flow.body_force = Some(boussinesq_force(
+            &self.flow.geom,
+            &self.energy.t,
+            self.beta,
+            self.gravity,
+            self.t_ref,
+        ));
+        (self.flow.step(dt), res_t)
     }
 }

@@ -27,7 +27,7 @@ use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc, solve_pressure,
     PressureControls,
 };
-use crate::simple::normalised_residual;
+use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
 use std::sync::Arc;
@@ -145,6 +145,8 @@ pub struct PimpleSolver {
     step_no: usize,
     /// Kinematic viscosity at every face; `None` uses `settings.nu`.
     pub nu_face: Option<Vec<f64>>,
+    /// Body acceleration (balanced-force face values, as in the steady solver), e.g. Boussinesq buoyancy.
+    pub body_force: Option<BodyForce>,
 }
 
 impl PimpleSolver {
@@ -166,6 +168,7 @@ impl PimpleSolver {
             phi_hist,
             step_no: 0,
             nu_face: None,
+            body_force: None,
         }
     }
 
@@ -215,7 +218,23 @@ impl PimpleSolver {
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
-            let pbc = pressure_bc(&g, &self.u, &self.p);
+            let mut pbc = pressure_bc(&g, &self.u, &self.p);
+            if let Some(bf) = &self.body_force {
+                // fixed-flux pressure condition: where the normal velocity is prescribed the pressure gradient balances
+                // the body force (as in the steady solver)
+                for i in 0..pbc.coeffs.len() {
+                    if pbc.fixed_u[i] && pbc.coupled[i].is_none() {
+                        let f = n_int + i;
+                        let gradient = bf.face[f] / vec3::norm(sf[f]).max(1e-300);
+                        pbc.coeffs[i] = crate::bc::FaceCoeffs {
+                            a: 1.0,
+                            b: g.dn[i] * gradient,
+                            c: 0.0,
+                            d: gradient,
+                        };
+                    }
+                }
+            }
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
             let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
@@ -260,6 +279,9 @@ impl PimpleSolver {
                 let mut sys = m.clone();
                 for c in 0..n {
                     sys.b[c] -= vol[c] * grad_p[c][k];
+                    if let Some(bf) = &self.body_force {
+                        sys.b[c] += vol[c] * bf.cell[c][k];
+                    }
                 }
                 if outer == 0 {
                     res_u = res_u.max(normalised_residual(&sys, &cells));
@@ -297,6 +319,14 @@ impl PimpleSolver {
                         phi_hby_a[f] += gamma_p[f] / dt * ddt_defect[f];
                     }
                 }
+                if let Some(bf) = &self.body_force {
+                    // balanced-force face value of the body acceleration, like the pressure gradient
+                    for f in 0..mesh.n_faces() {
+                        if !g.empty[f] {
+                            phi_hby_a[f] += gamma_p[f] * bf.face[f];
+                        }
+                    }
+                }
                 let controls = PressureControls {
                     p_ref: s.p_ref,
                     non_orth_correctors: s.non_orth_correctors,
@@ -316,7 +346,8 @@ impl PimpleSolver {
                 for c in 0..n {
                     for k in 0..3 {
                         if g.active[k] {
-                            self.u.values[c][k] = hby_a[c][k] - r_au[c] * grad_new[c][k];
+                            let body = self.body_force.as_ref().map_or(0.0, |bf| r_au[c] * bf.cell[c][k]);
+                            self.u.values[c][k] = hby_a[c][k] + body - r_au[c] * grad_new[c][k];
                         }
                     }
                 }
