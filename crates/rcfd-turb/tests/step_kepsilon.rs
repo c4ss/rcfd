@@ -11,7 +11,7 @@ use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::simple::{Coupling, SimpleSettings, SimpleSolver};
 use rcfd_fv::{FvGeometry, Profile, ScalarField, VectorField, ZeroGradient};
 use rcfd_mesh::gen::{backward_step_graded, Grading, StepGrading, StepSpec};
-use rcfd_turb::{KEpsilon, KEpsilonVariant};
+use rcfd_turb::{KEpsilon, KEpsilonVariant, WallTreatment};
 use std::sync::Arc;
 
 fn env<T: std::str::FromStr>(k: &str, d: T) -> T {
@@ -97,6 +97,11 @@ fn driver_seegmiller_step_k_epsilon() {
     };
     let mut model = KEpsilon::new(variant, geom.clone(), nu, &["walls"], 1.5e-4, 1e-5).unwrap();
     model.relax_turb = env("AT", 0.6);
+    model.wall_treatment = match env::<String>("WT", "smooth".into()).as_str() {
+        "hyst" => WallTreatment::Hysteresis { band: env("BAND", 0.1) },
+        "switch" => WallTreatment::Switch,
+        _ => WallTreatment::Smooth,
+    };
     model
         .k
         .set_bc(&geom, "inlet", Box::new(FixedValue(Profile::PerFace(prof_k))))
@@ -108,23 +113,26 @@ fn driver_seegmiller_step_k_epsilon() {
     let nit: usize = env("NIT", 6000);
     let mut change = f64::INFINITY;
     let mut last = None;
+    let mut converged_at = None;
     for it in 1..=nit {
         let prev = model.nut.clone();
         change = model.update(&flow.u, &flow.phi);
         if it == nit {
             let cc = geom.mesh.cell_centres();
-            let (mut im, mut dm) = (0, 0.0);
-            for c in 0..prev.len() {
-                let d = (model.nut[c] - prev[c]).abs() / (prev[c] + nu);
-                if d > dm {
-                    dm = d;
-                    im = c;
-                }
+            let mut ranked: Vec<(f64, usize)> = (0..prev.len())
+                .map(|c| ((model.nut[c] - prev[c]).abs() / (prev[c] + nu), c))
+                .collect();
+            ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+            for &(d, c) in ranked.iter().take(env("TOPN", 6)) {
+                println!(
+                    "nut change {d:.2e} at x {:.3} y {:.3} (nut {:.3e}, k {:.3e}, wall dist {:.3e})",
+                    cc[c][0],
+                    cc[c][1],
+                    model.nut[c],
+                    model.k.values[c],
+                    model.wall_distance()[c]
+                );
             }
-            println!(
-                "max nut change {dm:.2e} at x {:.3} y {:.3} (nut {:.3e}, k {:.3e})",
-                cc[im][0], cc[im][1], model.nut[im], model.k.values[im]
-            );
         }
         flow.nu_face = Some(model.nu_face());
         let info = flow.iterate();
@@ -141,6 +149,7 @@ fn driver_seegmiller_step_k_epsilon() {
         }
         if it > 100 && info.max_du < 1e-7 && change < 1e-6 {
             println!("converged at {it}");
+            converged_at = Some(it);
             break;
         }
     }
@@ -149,4 +158,14 @@ fn driver_seegmiller_step_k_epsilon() {
         "RESULT k-epsilon {variant:?} D&S ER 1.125: du {:.2e} dnut {change:.2e} xr/h {xr:?} (D&S 6.26 +- 0.10)",
         info.max_du
     );
+    // The sharp viscous/log switch chatters (nu_t change O(1), never below 1e-6); the smooth and
+    // hysteresis wall treatments must reach the unchanged criterion (max update < 1e-7 and
+    // nu_t change < 1e-6).
+    if !matches!(model.wall_treatment, WallTreatment::Switch) && nit >= 3000 {
+        assert!(
+            converged_at.is_some(),
+            "no convergence: du {:.2e} dnut {change:.2e}",
+            info.max_du
+        );
+    }
 }

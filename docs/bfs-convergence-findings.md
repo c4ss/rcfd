@@ -71,11 +71,17 @@ Re_h = 400 with a TVD limiter is therefore sensitive to the coupling/relaxation 
 (SIMPLE and SIMPLEC, linearUpwind and vanLeer, all converge). No automatic setting was added
 beyond the H default; the working recipe is vanLeer + SIMPLEC alpha_u 0.9.
 
-Also found in rcfd-turb (not fixed here): in the Driver and Seegmiller k-epsilon runs the
-nu_t of the first cell above the floor keeps oscillating by O(1) (relative) between iterations
-(the cell is on the viscous-sublayer / log-law switch of the wall function, y* ~ 11.5). The
-reattachment length is unaffected to 1e-5, but the "nut change < 1e-6" convergence test never
-passes and max velocity update stalls at 3e-4 .. 4e-3.
+Also found in rcfd-turb, now fixed (F-042): in the Driver and Seegmiller k-epsilon runs the
+nu_t of some cells kept oscillating by O(1) (relative) between iterations. A top-N listing of the
+changing cells showed all of them wall-adjacent (step face x = 5.04 and floor), i.e. the hard
+viscous/log switch of the wall function at y* = 11.225 (epsilon jumps about 4x, production 0 to
+log-law). `WallTreatment::Smooth` (default; compound epsilon and blended production) and
+`WallTreatment::Hysteresis` (+-10 percent dead band) remove it: with the unchanged criterion
+(max velocity update < 1e-7 and nu_t change < 1e-6) all three variants now converge in 800 to 920
+iterations on the medium mesh (`Switch`: du 2e-4 to 2e-3, nu_t change 0.4 to 1.1, never).
+Reattachment x_r/H is unchanged by the treatment (< 0.003): Standard 5.359, RNG 6.373,
+Realizable 6.402 (medium mesh, smooth); fine mesh 5.460, 6.380, 6.506. `Switch` and `Hysteresis`
+give 5.358/6.373/6.404 and 5.358/6.372/6.404.
 
 ## Laminar reattachment length (tests/step_laminar.rs, release)
 

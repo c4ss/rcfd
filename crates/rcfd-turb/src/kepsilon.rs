@@ -50,8 +50,76 @@ pub enum KEpsilonVariant {
     Realizable,
 }
 
+/// Treatment of the wall-cell production and dissipation around the viscous/log intersection
+/// `y* = y*_lam`.
+///
+/// The sharp switch changes the wall-cell epsilon by a factor of about four (`2 nu k / y^2` below,
+/// `C_mu^(3/4) k^(3/2) / (kappa y)` above, i.e. about 8.4 nu k / y^2 at the intersection) and the
+/// production from zero to the log-law value, so a cell whose `y*` sits near the intersection can
+/// flip between the two branches from one iteration to the next and `nu_t` never settles.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WallTreatment {
+    /// Sharp switch at `y*_lam` (the Launder-Spalding two-layer form; may chatter).
+    Switch,
+    /// Sharp switch with a dead band: a wall cell changes branch only when `y*` leaves
+    /// `y*_lam (1 -/+ band)`; the branch of each cell is remembered between sweeps.
+    Hysteresis {
+        /// Relative half width of the dead band (0.1 = 10 percent).
+        band: f64,
+    },
+    /// Smooth blend: `eps_w = sqrt(eps_v^2 + eps_l^2)` (the compound form of Popovac and Hanjalic,
+    /// Flow Turbul. Combust. 78 (2007) 177-202, reduces to the two limits) and the log-law
+    /// production multiplied by `w = r^n / (1 + r^n)`, `r = y*/y*_lam` (rcfd's own smooth step,
+    /// n = 6).
+    Smooth,
+}
+
+/// Production and dissipation imposed in a wall-adjacent cell with turbulent kinetic energy `k`,
+/// wall distance `y` and tangential speed `u_t`, as `(G, epsilon)`. `in_log` is the remembered
+/// branch used by [`WallTreatment::Hysteresis`].
+pub fn wall_cell_sources(
+    treatment: WallTreatment,
+    in_log: &mut bool,
+    wc: &WallConstants,
+    nu: f64,
+    k: f64,
+    y: f64,
+    u_t: f64,
+) -> (f64, f64) {
+    let k = k.max(0.0);
+    let c25 = wc.cmu.powf(0.25);
+    let yst = c25 * k.sqrt() * y / nu;
+    let ylam = wc.y_plus_lam();
+    let eps_log = c25.powi(3) * k.powf(1.5) / (wc.kappa * y);
+    let eps_vis = 2.0 * nu * k / (y * y);
+    let log_prod = (nu + wc.nut_wall_from_k(nu, k, y)) * u_t / y * c25 * k.sqrt() / (wc.kappa * y);
+    match treatment {
+        WallTreatment::Smooth => {
+            let r = (yst / ylam).powi(6);
+            (r / (1.0 + r) * log_prod, (eps_vis * eps_vis + eps_log * eps_log).sqrt())
+        }
+        WallTreatment::Switch | WallTreatment::Hysteresis { .. } => {
+            if let WallTreatment::Hysteresis { band } = treatment {
+                if *in_log && yst < ylam * (1.0 - band) {
+                    *in_log = false;
+                } else if !*in_log && yst > ylam * (1.0 + band) {
+                    *in_log = true;
+                }
+            } else {
+                *in_log = yst > ylam;
+            }
+            if *in_log {
+                (log_prod, eps_log)
+            } else {
+                // viscous sublayer: laminar production vanishes, epsilon = 2 nu k / y^2
+                (0.0, eps_vis)
+            }
+        }
+    }
+}
+
 /// Velocity gradient `g[i][c][j] = d u_i / d x_j` by Green-Gauss.
-fn velocity_gradient(geom: &FvGeometry, u: &VectorField) -> Vec<Vec<[f64; 3]>> {
+pub(crate) fn velocity_gradient(geom: &FvGeometry, u: &VectorField) -> Vec<Vec<[f64; 3]>> {
     let ub = u.boundary_values(geom);
     (0..3)
         .map(|k| {
@@ -88,6 +156,8 @@ pub struct KEpsilon {
     pub relax_nut: f64,
     /// Linear solver controls.
     pub solver: SolveControl,
+    /// Wall-cell treatment around the viscous/log intersection.
+    pub wall_treatment: WallTreatment,
     /// Model constants.
     pub c_mu: f64,
     /// `C1` (standard and RNG).
@@ -102,6 +172,8 @@ pub struct KEpsilon {
     wall_faces: Vec<usize>,
     /// Wall face of every wall-adjacent cell (nearest wall face), `usize::MAX` otherwise.
     cell_wall_face: Vec<usize>,
+    /// Branch remembered by the hysteresis treatment (`true` = log layer).
+    wall_log: Vec<bool>,
     started: bool,
 }
 
@@ -153,11 +225,13 @@ impl KEpsilon {
                 tol_rel: 1e-6,
                 max_iter: 500,
             },
+            wall_treatment: WallTreatment::Smooth,
             c_mu,
             c1,
             c2,
             sigma_k,
             sigma_e,
+            wall_log: vec![false; geom.n_cells()],
             wall_dist,
             wall_faces,
             cell_wall_face,
@@ -250,9 +324,6 @@ impl KEpsilon {
         let nut_f = effective_viscosity(&g, 0.0, &self.nut, &[]);
 
         // wall-cell production and dissipation (wall functions)
-        let kappa = self.wc.kappa;
-        let c75 = cmu.powf(0.75);
-        let c25 = cmu.powf(0.25);
         let mut prod = vec![0.0; n];
         for (c, p) in prod.iter_mut().enumerate() {
             *p = self.nut[c] * s_mag[c] * s_mag[c];
@@ -262,17 +333,18 @@ impl KEpsilon {
         for &c in &wall_cells {
             let f = self.cell_wall_face[c];
             let y = g.dn[f - g.n_internal];
-            let yst = c25 * kv[c].max(0.0).sqrt() * y / self.nu;
-            if yst > self.wc.y_plus_lam() {
-                let nutw = self.wc.nut_wall_from_k(self.nu, kv[c], y);
-                let tau = (self.nu + nutw) * self.tangential_speed(u, f) / y;
-                prod[c] = tau * c25 * kv[c].max(0.0).sqrt() / (kappa * y);
-                wall_eps[c] = Some(c75 * kv[c].max(0.0).powf(1.5) / (kappa * y));
-            } else {
-                // viscous sublayer: laminar production vanishes, epsilon = 2 nu k / y^2
-                prod[c] = 0.0;
-                wall_eps[c] = Some(2.0 * self.nu * kv[c].max(0.0) / (y * y));
-            }
+            let u_t = self.tangential_speed(u, f);
+            let (pc, ec) = wall_cell_sources(
+                self.wall_treatment,
+                &mut self.wall_log[c],
+                &self.wc,
+                self.nu,
+                kv[c],
+                y,
+                u_t,
+            );
+            prod[c] = pc;
+            wall_eps[c] = Some(ec);
         }
 
         // ---- k equation
@@ -360,5 +432,65 @@ impl KEpsilon {
             })
             .collect();
         change
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// k giving a requested `y*` at wall distance `y`.
+    fn k_for(wc: &WallConstants, nu: f64, y: f64, yst: f64) -> f64 {
+        (yst * nu / (wc.cmu.powf(0.25) * y)).powi(2)
+    }
+
+    #[test]
+    fn smooth_treatment_has_no_jump_at_the_intersection() {
+        let wc = WallConstants::default();
+        let (nu, y, ut) = (1e-3, 1e-2, 0.5);
+        let yl = wc.y_plus_lam();
+        let at = |t, st: &mut bool, ys: f64| wall_cell_sources(t, st, &wc, nu, k_for(&wc, nu, y, ys), y, ut);
+        // sharp switch: epsilon jumps by a factor of more than three across y*_lam
+        let (mut a, mut b) = (false, false);
+        let lo = at(WallTreatment::Switch, &mut a, yl * 0.999);
+        let hi = at(WallTreatment::Switch, &mut b, yl * 1.001);
+        assert!(hi.1 / lo.1 > 3.0, "switch eps jump {}", hi.1 / lo.1);
+        assert_eq!(lo.0, 0.0);
+        assert!(hi.0 > 0.0);
+        // smooth blend: relative change over a 0.2 percent step in y* is tiny for both quantities
+        let (mut a, mut b) = (false, false);
+        let lo = at(WallTreatment::Smooth, &mut a, yl * 0.999);
+        let hi = at(WallTreatment::Smooth, &mut b, yl * 1.001);
+        assert!((hi.1 / lo.1 - 1.0).abs() < 0.01, "eps {} {}", lo.1, hi.1);
+        assert!((hi.0 / lo.0 - 1.0).abs() < 0.05, "G {} {}", lo.0, hi.0);
+        // limits: viscous sublayer gives eps = 2 nu k / y^2 and G -> 0; deep log layer the log law
+        let (mut a, mut b) = (false, false);
+        let deep = at(WallTreatment::Smooth, &mut a, 0.02);
+        let k = k_for(&wc, nu, y, 0.02);
+        assert!((deep.1 / (2.0 * nu * k / (y * y)) - 1.0).abs() < 1e-3);
+        assert!(deep.0 < 1e-9 * at(WallTreatment::Switch, &mut b, 100.0).0);
+        let mut c = false;
+        let log = at(WallTreatment::Smooth, &mut c, 100.0);
+        let k = k_for(&wc, nu, y, 100.0);
+        let eps_l = wc.cmu.powf(0.75) * k.powf(1.5) / (wc.kappa * y);
+        assert!((log.1 / eps_l - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn hysteresis_keeps_its_branch_inside_the_dead_band() {
+        let wc = WallConstants::default();
+        let (nu, y, ut) = (1e-3, 1e-2, 0.5);
+        let yl = wc.y_plus_lam();
+        let t = WallTreatment::Hysteresis { band: 0.1 };
+        let mut st = false;
+        let mut run = |ys: f64| {
+            wall_cell_sources(t, &mut st, &wc, nu, k_for(&wc, nu, y, ys), y, ut);
+            st
+        };
+        assert!(!run(yl * 1.05)); // inside the band: stays viscous
+        assert!(run(yl * 1.2)); // above the band: log
+        assert!(run(yl * 0.95)); // inside the band: stays log
+        assert!(!run(yl * 0.8)); // below the band: viscous
+        assert!(!run(yl * 1.05));
     }
 }
