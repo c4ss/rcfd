@@ -45,7 +45,9 @@ pub fn pressure_bc(geom: &FvGeometry, u: &VectorField, p: &ScalarField) -> Press
         .map(|i| {
             let n = geom.normal(geom.n_internal + i);
             let k = (0..3).max_by(|&a, &b| n[a].abs().total_cmp(&n[b].abs())).unwrap_or(0);
-            ucoef[k][i].a == 0.0
+            // a symmetry plane has a = 1 - n_k^2, which is 1e-16 rather than 0 when the face normal is
+            // not exactly axis-aligned in floating point
+            ucoef[k][i].a.abs() < 1e-12
         })
         .collect();
     let coeffs = pcoef

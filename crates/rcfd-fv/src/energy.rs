@@ -9,12 +9,12 @@
 //! [`BodyForce`] so that a fluid at rest in a stratified field produces no
 //! spurious flow from the pressure/buoyancy imbalance.
 
-use crate::convection::{convection, ConvScheme};
-use crate::diffusion::{laplacian, uniform_gamma};
+use crate::convection::ConvScheme;
+use crate::diffusion::uniform_gamma;
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
-use crate::gradient::least_squares;
-use crate::simple::{normalised_residual, BodyForce, IterationInfo, SimpleSolver};
+use crate::scalar::{self, SweepInputs};
+use crate::simple::{BodyForce, IterationInfo, SimpleSolver};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
 use std::sync::Arc;
@@ -59,35 +59,26 @@ impl EnergySolver {
     }
 
     /// One implicit sweep of the temperature equation with face flux `phi`;
-    /// returns the normalised residual before the solve.
+    /// returns the normalised residual before the solve. The sweep is the shared scalar-transport
+    /// routine of [`crate::scalar`].
     pub fn iterate(&mut self, phi: &[f64]) -> f64 {
         let g = self.geom.clone();
-        let cells = self.t.values.clone();
-        let bc = self.t.boundary_coeffs(&g);
-        let bvals = self.t.boundary_values(&g);
-        let grad = if self.convection.needs_gradient() {
-            Some(least_squares(&g, &cells, &bvals))
-        } else {
-            None
-        };
-        let mut m = convection(&g, phi, &cells, &bc, self.convection, grad.as_deref());
         let gamma = match &self.alpha_face {
             Some(a) => a.clone(),
             None => uniform_gamma(&g, self.alpha),
         };
-        m.add(&laplacian(&g, &gamma, &bc, grad.as_deref()));
-        if let Some(s) = &self.source {
-            let vol = g.mesh.cell_volumes();
-            for c in 0..cells.len() {
-                m.b[c] += s[c] * vol[c];
-            }
-        }
-        let res = normalised_residual(&m, &cells);
-        m.relax(self.relax, &cells);
-        let mut x = cells;
-        m.solve(&mut x, &self.solver);
-        self.t.values = x;
-        res
+        scalar::sweep(
+            &g,
+            &mut self.t,
+            &SweepInputs {
+                phi,
+                gamma: &gamma,
+                scheme: self.convection,
+                relax: self.relax,
+                source: self.source.as_deref(),
+                solver: &self.solver,
+            },
+        )
     }
 
     /// Outward-normal temperature gradient at the faces of `patch` (one value per patch face).
@@ -99,6 +90,22 @@ impl EnergySolver {
         p.faces()
             .map(|f| coeffs[f - g.n_internal].gradient(self.t.values[own[f]]))
             .collect()
+    }
+
+    /// Conductive heat flow out of the domain through `patch` with a temperature-dependent
+    /// conductivity `k(T_b)` evaluated at the boundary face value: `-sum k(T_b) dT/dn |S|`.
+    pub fn heat_flow_out_var(&self, patch: &str, k_of_t: &dyn Fn(f64) -> f64) -> f64 {
+        let g = &self.geom;
+        let p = g.mesh.patch(patch).expect("known patch");
+        let coeffs = self.t.boundary_coeffs(g);
+        let own = g.mesh.owner();
+        -p.faces()
+            .map(|f| {
+                let c = &coeffs[f - g.n_internal];
+                let tc = self.t.values[own[f]];
+                k_of_t(c.value(tc)) * c.gradient(tc) * vec3::norm(g.mesh.face_area_vectors()[f])
+            })
+            .sum::<f64>()
     }
 
     /// Conductive heat flow out of the domain through `patch` for conductivity `k`:

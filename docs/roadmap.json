@@ -402,8 +402,9 @@
     "deps": [
       "F-050"
     ],
-    "status": "todo",
-    "acceptance": "Mixing layer species mass conserved to machine precision"
+    "status": "done",
+    "acceptance": "Mixing layer species mass conserved to machine precision",
+    "note": "Done. rcfd-fv scalar.rs: one shared implicit scalar sweep (EnergySolver::iterate now calls it, no duplicated assembly), ScalarTransport, SpeciesSet (N-1 transported mass fractions, balance species by difference), exact discrete boundary_flux per patch; rcfd-core materials.rs PropertyLaw (constant, polynomial, Sutherland); api: scalars.<name>, species.<name> (diffusivity or Schmidt number, source, per-patch fixed/gradient with expression profiles), properties.viscosity/conductivity/specific_heat (T-dependent via the nu_face and alpha_face paths; conflicts with rheology, UDF viscosity, turbulence, missing energy, non-steady algorithms diagnosed), reports scalar_flux/scalar_average, res_<name> monitors, VTU fields, solver.pressure_abs_tol. Validation (checks fixed beforehand): mixing layer of two streams, 3 species with different diffusivities (one via Schmidt number), 100x50: net boundary outflow per species relative to summed boundary fluxes A -3.7e-16, B -3.5e-16, balance species C -8.7e-17 (limit 1e-12), mass fractions sum to 1 within 1.1e-16 (limit 1e-14), similarity-solution profile error 0.66 percent of the jump (limit 2); fv-level run on the frozen uniform flux 3e-15 and 0.11 percent. Couette flow with polynomial viscosity (b=2): max |u - ln(1+by)/ln(1+b)| 2.8e-4 U (limit 1 percent), Sc=1 scalar equals u to 1.9e-9 (limit 1e-6); conduction with k(T) vs Kirchhoff transform: T error 1.7e-4 of range (limit 0.2 percent), heat flow 0.374967 vs 0.375 (limit 0.5 percent). Finding and fix: the pressure BC test for prescribed normal velocity compared a = 1 - n^2 to exactly 0, so on some meshes symmetry planes leaked mass (0.17 percent of the through-flow on a 100x50 channel); now a tolerance 1e-12. Balance-species conservation equals the flow solver's continuity error, so it needs solver.pressure_abs_tol (default floor gave about 1e-11). Caveats: constant density (no ideal-gas density), constant per-species diffusivity (no multicomponent diffusion), no reactions, steady algorithms only; the Sutherland constants are user inputs, no data shipped (see F-111)."
   },
   {
     "id": "F-054",

@@ -5,7 +5,9 @@
 use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
+use crate::properties::Properties;
 use crate::rheology::Rheology;
+use crate::scalars::ScalarState;
 use crate::sources::Sources;
 use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
@@ -264,6 +266,10 @@ pub enum ReportKind {
     Expression,
     /// Wall y+ statistic over a wall patch (k-epsilon runs).
     YPlus,
+    /// Net outflow of a passive scalar or species through a patch (conservation imbalance without a patch).
+    ScalarFlux,
+    /// Volume average of a passive scalar or species.
+    ScalarAverage,
 }
 
 /// A report definition read from the settings tree.
@@ -299,6 +305,8 @@ pub struct ReportDef {
     pub expr_unit: String,
     /// `average`, `min` or `max` (`y_plus` reports).
     pub statistic: String,
+    /// Passive scalar or species name (`scalar_flux`, `scalar_average`).
+    pub scalar: String,
 }
 
 impl ReportDef {
@@ -323,6 +331,8 @@ impl ReportDef {
                     "maximum" => ReportKind::Maximum,
                     "expression" => ReportKind::Expression,
                     "y_plus" => ReportKind::YPlus,
+                    "scalar_flux" => ReportKind::ScalarFlux,
+                    "scalar_average" => ReportKind::ScalarAverage,
                     _ => ReportKind::VolumeAverage,
                 };
                 ReportDef {
@@ -340,6 +350,7 @@ impl ReportDef {
                     expression: get_s(case, &p("expression")),
                     expr_unit: String::new(),
                     statistic: get_s(case, &p("statistic")),
+                    scalar: get_s(case, &p("scalar")),
                     name: n,
                 }
             })
@@ -456,6 +467,8 @@ pub struct Simulation {
     rheology: Option<Rheology>,
     /// Porous, rotating-frame and acceleration sources (F-031).
     sources: Option<Sources>,
+    scalars: Option<ScalarState>,
+    props: Option<Properties>,
     t_init: f64,
     /// Run-time statistics of transient runs (F-116).
     stats: Option<Statistics>,
@@ -677,7 +690,14 @@ impl Simulation {
                 "res_rho",
             ]
             .contains(&monitor.as_str())
-                || case.tree.names("reports").unwrap_or_default().contains(&monitor);
+                || case.tree.names("reports").unwrap_or_default().contains(&monitor)
+                || ["scalars", "species"].iter().any(|s| {
+                    case.tree
+                        .names(s)
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|n| format!("res_{n}") == monitor)
+                });
             if !known {
                 errs.push(Diagnostic {
                     path: p("monitor"),
@@ -807,6 +827,10 @@ impl Simulation {
                 }
                 if pt > 0.0 {
                     $s.pressure_solver.tol_rel = pt;
+                }
+                let pa = get_f(case, "solver.pressure_abs_tol");
+                if pa > 0.0 {
+                    $s.pressure_solver.tol_abs = pa;
                 }
                 if pi > 0 {
                     $s.pressure_solver.max_iter = pi as usize;
@@ -991,6 +1015,11 @@ impl Simulation {
                 }
             }
         }
+        let scalars = if compressible {
+            None
+        } else {
+            ScalarState::from_case(case, &geom, conv, nu)?
+        };
         let sources = if compressible {
             None
         } else {
@@ -1012,6 +1041,8 @@ impl Simulation {
             udf_monitors,
             rheology,
             sources,
+            scalars,
+            props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
             stats,
             report_exprs,
@@ -1215,6 +1246,11 @@ impl Simulation {
                         s.nu_face = Some(nu);
                     }
                 }
+                if let (Some(pr), Some(en)) = (&self.props, &self.energy) {
+                    if let Some(nu) = pr.nu_faces(&self.geom, &en.solver.t) {
+                        s.nu_face = Some(nu);
+                    }
+                }
                 let (src_force, src_sink) = match &self.sources {
                     Some(src) => src.evaluate(&self.geom, &s.u),
                     None => (None, None),
@@ -1239,10 +1275,20 @@ impl Simulation {
                 }
                 let i = s.iterate();
                 if let Some(en) = &mut self.energy {
+                    if let Some(pr) = &self.props {
+                        if let Some(a) = pr.alpha_faces(&self.geom, &en.solver.t) {
+                            en.solver.alpha_face = Some(a);
+                        }
+                    }
                     en.res_t = en.solver.iterate(&s.phi);
                 }
+                let res_sc = self
+                    .scalars
+                    .as_mut()
+                    .map_or(0.0, |sc| sc.iterate(&s.phi, s.nu_face.as_deref()));
                 let converged = i.res_u < self.tol_u
                     && i.res_p < self.tol_p
+                    && res_sc < self.tol_u
                     && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u)
                     && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u);
                 StepSummary {
@@ -1257,7 +1303,8 @@ impl Simulation {
             }
             Engine::Coupled(s) => {
                 let i = s.iterate();
-                let converged = i.res_u < self.tol_u && i.res_p < self.tol_p;
+                let res_sc = self.scalars.as_mut().map_or(0.0, |sc| sc.iterate(&s.phi, None));
+                let converged = i.res_u < self.tol_u && i.res_p < self.tol_p && res_sc < self.tol_u;
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,
@@ -1357,6 +1404,11 @@ impl Simulation {
         if let Some(t) = &self.turb {
             self.monitors.push("res_nut", "", x, t.change);
         }
+        if let Some(sc) = &self.scalars {
+            for (n, v) in sc.residuals() {
+                self.monitors.push(&format!("res_{n}"), "", x, v);
+            }
+        }
         for (r, v) in self.reports.clone().iter().zip(self.eval_all_reports()) {
             if let Ok(v) = v {
                 self.monitors.push(&r.name, &r.unit(), x, v);
@@ -1447,6 +1499,9 @@ impl Simulation {
             });
         }
         if let Some(v) = self.stats.as_ref().and_then(|s| s.get(name)) {
+            return Ok(v);
+        }
+        if let Some(v) = self.scalars.as_ref().and_then(|s| s.field(name)) {
             return Ok(v);
         }
         Ok(match name {
@@ -1588,9 +1643,22 @@ impl Simulation {
                     return Err(Error::PathNotFound(format!("patch '{}'", r.patch)));
                 }
                 // conductive heat flow out of the domain; a report-level conductivity overrides physics.conductivity
-                en.solver
-                    .heat_flow_out(&r.patch, if r.conductivity > 0.0 { r.conductivity } else { en.k })
+                match &self.props {
+                    Some(pr) if pr.has_conductivity() => en.solver.heat_flow_out_var(&r.patch, &|t| pr.conductivity(t)),
+                    _ => en
+                        .solver
+                        .heat_flow_out(&r.patch, if r.conductivity > 0.0 { r.conductivity } else { en.k }),
+                }
             }
+            ReportKind::ScalarFlux => {
+                let sc = self.scalars.as_ref().ok_or_else(|| {
+                    Error::Other(
+                        "scalar_flux needs a passive scalar or species (scalars.<name>, species.<name>)".into(),
+                    )
+                })?;
+                sc.flux(&r.scalar, &r.patch, self.flux())?
+            }
+            ReportKind::ScalarAverage => ig::volume_average(g, &self.field(&r.scalar)?),
             ReportKind::Probe => ig::Probe::new(g, r.point).sample(g, &self.field(&r.field)?, None),
             ReportKind::Minimum => self.field(&r.field)?.into_iter().fold(f64::INFINITY, f64::min),
             ReportKind::Maximum => self.field(&r.field)?.into_iter().fold(f64::NEG_INFINITY, f64::max),
@@ -1915,6 +1983,16 @@ impl Simulation {
         if let Some(en) = &self.energy {
             extra.push(("T", en.solver.t.values.clone()));
         }
+        let scalar_fields: Vec<(String, Vec<f64>)> = self
+            .scalars
+            .as_ref()
+            .map(|s| {
+                s.field_names()
+                    .into_iter()
+                    .filter_map(|n| s.field(&n).map(|v| (n, v)))
+                    .collect()
+            })
+            .unwrap_or_default();
         if let Some(t) = &self.turb {
             extra.push(("k", t.model.k().values.clone()));
             let (second_name, second) = t.model.second();
@@ -1952,6 +2030,14 @@ impl Simulation {
             });
         }
         for (n, v) in &extra {
+            if stats::keeps(&sel, n, false) {
+                fields.push(VtkField {
+                    name: n,
+                    values: VtkValues::Scalar(v),
+                });
+            }
+        }
+        for (n, v) in &scalar_fields {
             if stats::keeps(&sel, n, false) {
                 fields.push(VtkField {
                     name: n,

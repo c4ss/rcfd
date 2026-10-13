@@ -8,6 +8,7 @@ pub mod error;
 pub mod expr;
 pub mod hash;
 pub mod log;
+pub mod materials;
 pub mod scalar;
 pub mod settings;
 pub mod table;

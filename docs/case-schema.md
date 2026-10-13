@@ -208,11 +208,43 @@ momentum rows, continuity rows with an implicit Rhie-Chow face flux, right-preco
 the momentum blocks and one AMG V-cycle (aggregation AMG) on the approximate pressure Schur complement.
 `solver.alpha_u` is the implicit momentum relaxation (0.95 to 0.98 work on the cavity, where SIMPLEC is
 limited to about 0.95); there is no pressure relaxation. `solver.pressure_rel_tol` and
-`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400). Scope of the first version, each
+`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400) and `solver.pressure_abs_tol` the absolute residual floor. Scope of the first version, each
 diagnosed with a located error: laminar flow in a closed domain with the velocity prescribed on every boundary
 (walls, moving walls, fixed inlets; no pressure outlets, no periodic patches), no turbulence model, rheology, user
 functions, momentum sources, energy equation, uniform body force, bulk-velocity driver or non-orthogonal
 correctors. The pressure level is fixed by `solver.p_ref_cell` / `solver.p_ref_value`.
+
+## `scalars`, `species` and `properties` (F-053)
+
+`scalars.<name>` and `species.<name>` transport extra variables on the flow flux of a steady run
+(`simple`, `simplec`, `coupled`; other algorithms are rejected with a located diagnostic):
+`div(phi s) - div(D grad s) = S` with constant density, the momentum convection scheme (`solver.convection`) and the
+shared scalar routine that also solves the temperature (`rcfd_fv::scalar`). Per entry: `diffusivity` [m^2/s] or
+`schmidt` (D = nu/Sc, which follows a temperature-dependent or non-Newtonian face viscosity), `initial`, `source`
+(value per second, uniform), `relax` (default 1, the frozen-flux problem is linear), and
+`boundaries.<patch>` with `type` = `zero_gradient` (default) | `fixed` | `gradient`, `value` and, for `fixed`, a
+dimensionless `value_expression` of x, y, z (F-104). Fields appear as `sim.field("<name>")`, in VTU output
+and in `res_<name>` monitors (usable in `convergence`). Reports: `scalar_flux` (`scalar`, optional `patch`) is the net
+discrete outflow through a patch, or the conservation imbalance of all boundaries minus the integrated source when no
+patch is given; `scalar_average` is the volume average.
+
+`species.<name>` are mass fractions of a mixture: all but one are transported and the balance species
+(`remainder = true`, else the last one by name) is closed by difference `Y_N = 1 - sum Y_i`, so the fractions sum to one
+to round-off. The balance species takes no transport data and no boundary conditions (it follows from the others). The
+initial fractions and the fixed values on a patch must sum to one (diagnosed). Every transported species is conserved
+separately: the net boundary outflow (convection plus diffusion, from the same boundary coefficients as the matrix)
+vanishes to round-off, and the balance species inherits the flow solver's mass imbalance, which
+`solver.pressure_abs_tol` (default tolerance-limited at about 1e-11 of the volume flow) can drive to 1e-16. Not covered: variable density, mixture-averaged or multicomponent
+diffusion (a constant diffusivity per species), reactions, and transient scalar transport.
+
+`properties.viscosity` (dynamic, Pa s), `properties.conductivity` and `properties.specific_heat` each take
+`law` = `constant` (the `physics` value, default) | `polynomial` (`coefficients` c0, c1, ... of T in kelvin) | `sutherland`
+(`reference_value`, `reference_temperature`, `sutherland_constant`; value times (T/T_ref)^1.5 (T_ref+S)/(T+S)). They need
+`energy.enabled` and a steady SIMPLE/SIMPLEC run. The viscosity enters through the face viscosity `mu(T_f)/rho` (the path of
+`rheology`, with which and with a turbulence model or a user-function viscosity it is rejected); conductivity and
+specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `heat_flow` reports use the law at the wall
+temperature. The density stays constant; no property data is shipped, the constants are inputs (the material library
+F-111 provides sourced data).
 
 ## `sources` momentum sources (F-031)
 
