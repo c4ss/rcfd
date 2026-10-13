@@ -628,6 +628,26 @@ impl SimpleSolver {
         Ok(())
     }
 
+    /// Replace the cell velocity and pressure (for example by values interpolated from another
+    /// mesh) and rebuild the face flux from the velocity and the boundary values. The iteration
+    /// counter restarts at zero.
+    pub fn set_fields(&mut self, u: Vec<Vec3>, p: Vec<f64>) -> rcfd_core::Result<()> {
+        let nc = self.geom.n_cells();
+        if u.len() != nc || p.len() != nc {
+            return Err(rcfd_core::Error::InvalidValue {
+                path: "initial fields".into(),
+                reason: "field size does not match the mesh".into(),
+            });
+        }
+        self.u.values = u;
+        self.p.values = p;
+        let bu = self.u.boundary_values(&self.geom);
+        self.phi = face_flux(&self.geom, &self.u.values, &bu);
+        self.iteration = 0;
+        self.history.clear();
+        Ok(())
+    }
+
     /// Residual history as CSV (`iteration,res_u,res_p,continuity,max_du,p_iters`).
     pub fn history_csv(&self) -> String {
         let mut o = String::from("iteration,res_u,res_p,continuity,max_du,p_iters\n");

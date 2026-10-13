@@ -873,9 +873,9 @@
       "F-010",
       "F-020"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Solution from a coarse cavity interpolated to a fine mesh starts at a lower initial residual than uniform init; conservative and non-conservative modes selectable",
-    "note": "P2. Gap: Fluent file.interpolate and the CFX interpolate-initial-values / initial-file run options."
+    "note": "Partial (acceptance met; scope limited). Delivered: rcfd-post interpolate module (nearest source cell by bucket search + least-squares gradient, clipped to the neighbour range; modes nonconservative and conservative), SimpleSolver::set_fields (rebuilds the face flux), Simulation::interpolate_from(source case, checkpoint, mode), rcfd run --interpolate-case/--interpolate-checkpoint/--interpolate-mode, run.headless interpolate_* parameters and matching MCP run_headless fields (docs/run-control.md, docs/service-protocol.md). Measured (checks fixed up front), 12x12 cavity solution onto 24x24: first-iteration normalised residual res_u 0.1656 and res_p 0.1091 versus 1.0 and 1.0 for the uniform start (conservative: 0.1656 and 0.1086); relative L2 distance of the start from the converged speed 0.171 versus 1.000. A linear field is reproduced to 1e-12 inside the source cell-centre hull; conservative mode matches the source volume average of p, ux, uy to 1e-10 (non-conservative differs: ux average 1.43e-3 vs 3.25e-3). Negative finding: the iteration count to tolerance 1e-6 did not drop (103 interpolated vs 89 uniform) because the normalised residual is relative to the solution's own variation; the hypothesis that it would drop is recorded, not an acceptance gate. Not done: conservative here means a uniform shift that matches the volume average, not a geometric cell-overlap remap (sub-regions are not conserved); the donor cell is the nearest centre, not a point-in-cell search; steady laminar SIMPLE/SIMPLEC only (transient, compressible and turbulence-model state are not interpolated); the source is a checkpoint plus its case, VTU/result files cannot be read back; no GUI control."
   },
   {
     "id": "F-116",

@@ -22,6 +22,7 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
 | `--status-file f` | additionally write the stream to a file (for another process to tail) |
 | `--status-every n` | iteration event every n steps (default 10); iterations 1-5 and the last one are always reported |
 | `--continue-from f` | restore a checkpoint and continue; the iteration counter and the iteration cap continue from the checkpoint |
+| `--interpolate-case c --interpolate-checkpoint f [--interpolate-mode conservative\|nonconservative]` | initialise from a solution of another mesh: `c` is the source case, `f` a checkpoint written for it (F-115). Each cell takes the nearest source cell value plus the least-squares gradient times the offset, clipped to the neighbour range; `conservative` adds one uniform shift so the volume average equals the source's. Velocity, pressure and temperature only; steady laminar SIMPLE/SIMPLEC; not combinable with `--continue-from` (exit 2); a checkpoint of another mesh is exit 1 |
 | `--checkpoint f` | where to write the checkpoint (default `<out>/restart.rcfd`); written when the run is interrupted, hits the time limit or the step cap, and at the end |
 | `--checkpoint-every n` | also write it every n steps |
 | `--stop-file f` | the run stops cleanly before the next step when this file exists |

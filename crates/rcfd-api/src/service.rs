@@ -1016,6 +1016,24 @@ impl Service {
                 .load_checkpoint(c)
                 .map_err(|e| RpcError::params(format!("continue_from: {e}")))?;
         }
+        if let Some(src) = opt_path("interpolate_case")? {
+            let ck = opt_path("interpolate_checkpoint")?
+                .ok_or_else(|| RpcError::params("interpolate_case needs interpolate_checkpoint"))?;
+            if cont.is_some() {
+                return Err(RpcError::params("interpolate_* cannot be combined with continue_from"));
+            }
+            let mode = rcfd_post::interpolate::InterpMode::parse(
+                p.get("interpolate_mode")
+                    .and_then(Value::as_str)
+                    .unwrap_or("nonconservative"),
+            )
+            .ok_or_else(|| RpcError::params("interpolate_mode must be conservative or nonconservative"))?;
+            let src_case = Case::load_with(&src, self.cfg.root.as_deref()).map_err(RpcError::validation)?;
+            self.check_case_paths(&src_case)?;
+            lock(&sim)
+                .interpolate_from(&src_case, &ck, mode)
+                .map_err(|e| RpcError::params(format!("interpolate: {e}")))?;
+        }
         let cap = self.cfg.max_steps_per_call;
         let max_steps = u_param(p, "max_steps", cap as u64)?.min(cap as u64) as usize;
         let max_elapsed = p
