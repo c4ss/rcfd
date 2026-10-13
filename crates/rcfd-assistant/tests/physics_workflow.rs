@@ -47,6 +47,10 @@ fn k_epsilon_inlets_get_turbulence_helpers() {
     }
     // the incompressible suggestions stay
     assert!(inlet.contains(&"boundaries.inlet.velocity".to_string()));
+    // k-omega SST gets the same inlet helpers (intensity + length is model independent)
+    let sst = json!({"turbulence": {"model": "k_omega_sst"}, "solver": {"algorithm": "simplec"}});
+    let out = suggest_boundary_conditions_for(&patches(), &json!({}), &sst);
+    assert!(paths(&out, "inlet").contains(&"boundaries.inlet.turbulence_length".to_string()));
     assert!(!paths(&out, "walls").iter().any(|p| p.contains("turbulence")));
 }
 
