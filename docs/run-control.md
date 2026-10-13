@@ -58,6 +58,7 @@ within one launch) and `wall_s`. Events:
 - `start`: `cells`, `algorithm`, `steady`, `start_iteration`, `case_hash`, `info` (`driver`, `threads`, `precision`, `continue_from`)
 - `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
+- `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
 - `warning`: `message` (for example a run that cannot be checkpointed)
 - `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `mesh` (quality report)
 - `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`
@@ -80,6 +81,28 @@ solution files are byte-identical; 25 steps after a restore are bit-identical to
 steps. `--threads 1` and `--threads 4` give byte-identical solution files. Note that the residual
 normalisation history restarts at the restore, so for runs that are restored in the middle of a
 transient phase the stopping iteration is not guaranteed to be identical.
+
+## Output policy and statistics (F-116)
+
+Settings of the case, honoured by `rcfd run` and by `run.headless` with an `out_dir`:
+
+- `output.write_interval = N`: every N steps write `<out>/snapshots/snapshot_<step>.vtu` (and a `snapshot` event);
+  `output.retain_snapshots = K` keeps only the newest K (0 keeps all).
+- `output.retain_checkpoints = K` (backup retention, default 1): with `--checkpoint-every n` and K > 1 the periodic
+  restart files are `<checkpoint>.<step>` and only the newest K remain; the end-of-run, interrupt and time-limit
+  checkpoint is always written to `<checkpoint>` itself. K = 1 keeps the old behaviour (one file, overwritten).
+- `output.fields = ["U", "p", ...]` limits the variables written to `solution.vtu` and the snapshots (empty = all;
+  `statistics` selects all statistics fields, single ones such as `ux_mean` are accepted).
+- `statistics.enabled` (transient piso/pimple runs): time-weighted mean, rms, std, min and max of `statistics.fields`
+  (default `ux uy uz p`; also `speed`) from `statistics.start_time`. Fields `<name>_mean/_rms/_std/_min/_max` appear
+  in the VTK files and can be probed and reported like any other field. Definitions are in `crates/rcfd-api/src/stats.rs`
+  (end-of-step values weighted by the step width after the start time).
+- The wall-clock limit (`--max-elapsed`) and the stop file (`--stop-file`) are the F-121 controls described above and
+  work for transient runs too.
+
+Not covered: statistics and snapshots are not part of a checkpoint (transient runs cannot be checkpointed), no
+statistics for the compressible solver or steady runs, no cumulative time-averaging restarts, no time-based
+(rather than step-based) write interval.
 
 ## Workflows
 

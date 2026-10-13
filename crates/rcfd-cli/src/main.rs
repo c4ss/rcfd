@@ -433,6 +433,7 @@ fn cmd_run(args: &[String]) -> u8 {
                 .unwrap_or_else(|| out_dir.join("restart.rcfd")),
         ),
         checkpoint_every: ckpt_every.unwrap_or(0),
+        out_dir: Some(out_dir.clone()),
         info: serde_json::json!({
             "driver": "cli", "case": label, "continue_from": cont,
             "threads": threads.or_else(|| std::thread::available_parallelism().ok().map(|n| n.get())),

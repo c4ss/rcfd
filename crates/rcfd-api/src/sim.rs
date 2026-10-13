@@ -6,6 +6,7 @@ use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
 use crate::rheology::Rheology;
+use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
 use rcfd_core::expr::Compiled;
@@ -451,6 +452,8 @@ pub struct Simulation {
     /// Generalised-Newtonian viscosity law (F-110).
     rheology: Option<Rheology>,
     t_init: f64,
+    /// Run-time statistics of transient runs (F-116).
+    stats: Option<Statistics>,
     /// Compiled expression of each report (aligned with `reports`; `Some` for expression reports).
     report_exprs: Vec<Option<Compiled>>,
     /// Names of the non-expression reports, in expression-slot order.
@@ -925,6 +928,13 @@ impl Simulation {
                 "a user-function viscosity cannot be combined with a turbulence model",
             ));
         }
+        let stats = Statistics::from_case(case, n_cells);
+        if stats.is_some() && !matches!(engine, Engine::Transient(_)) {
+            return Err(diag(
+                "statistics.enabled",
+                "statistics are collected by the transient incompressible algorithms (piso, pimple)",
+            ));
+        }
         let rheology = Rheology::from_case(case);
         if let (Some(_), Some(n)) = (&rheology, &udf_viscosity) {
             return Err(diag(
@@ -954,6 +964,7 @@ impl Simulation {
             udf_monitors,
             rheology,
             t_init: get_f(case, "initial.temperature"),
+            stats,
             report_exprs,
             report_syms,
             nu,
@@ -1281,6 +1292,14 @@ impl Simulation {
                 self.monitors.push(&r.name, &r.unit(), x, v);
             }
         }
+        if let Some(names) = self.stats.as_ref().map(|s| s.names().to_vec()) {
+            if matches!(self.engine, Engine::Transient(_)) {
+                let vals: Vec<Vec<f64>> = names.iter().filter_map(|n| self.field(n).ok()).collect();
+                if let Some(st) = self.stats.as_mut() {
+                    st.accumulate(summary.time, &vals);
+                }
+            }
+        }
         let mut summary = summary;
         if udf_error.is_none() {
             udf_error = self.udf_monitor_step(x);
@@ -1356,6 +1375,9 @@ impl Simulation {
                     "field '{name}' needs a RANS model (turbulence.model = \"k_epsilon\" or \"k_omega_sst\")"
                 ),
             });
+        }
+        if let Some(v) = self.stats.as_ref().and_then(|s| s.get(name)) {
+            return Ok(v);
         }
         Ok(match name {
             "ux" => u.iter().map(|v| v[0]).collect(),
@@ -1809,7 +1831,12 @@ impl Simulation {
         }))
     }
 
-    /// Write the current solution as `<dir>/<name>.vtu`.
+    /// Averaging time accumulated by the run-time statistics (0 when they are off).
+    pub fn statistics_time(&self) -> f64 {
+        self.stats.as_ref().map_or(0.0, Statistics::time)
+    }
+
+    /// Write the current solution as `<dir>/<name>.vtu`; `output.fields` selects the variables.
     pub fn export_vtu(&self, dir: &Path, name: &str) -> Result<PathBuf> {
         use rcfd_io::vtk::{VtkField, VtkValues};
         std::fs::create_dir_all(dir)?;
@@ -1833,25 +1860,42 @@ impl Simulation {
                 }
             }
         }
-        let mut fields = vec![
-            VtkField {
+        let sel = stats::output_selection(&self.case);
+        let stat_fields = self.stats.as_ref().map(Statistics::fields).unwrap_or_default();
+        let mut fields = Vec::new();
+        if stats::keeps(&sel, "U", false) {
+            fields.push(VtkField {
                 name: "U",
                 values: VtkValues::Vector(&self.velocity().values),
-            },
-            VtkField {
+            });
+        }
+        if stats::keeps(&sel, "p", false) {
+            fields.push(VtkField {
                 name: "p",
                 values: VtkValues::Scalar(&self.pressure().values),
-            },
-            VtkField {
+            });
+        }
+        if stats::keeps(&sel, "speed", false) {
+            fields.push(VtkField {
                 name: "speed",
                 values: VtkValues::Scalar(&speed),
-            },
-        ];
-        for (n, v) in &extra {
-            fields.push(VtkField {
-                name: n,
-                values: VtkValues::Scalar(v),
             });
+        }
+        for (n, v) in &extra {
+            if stats::keeps(&sel, n, false) {
+                fields.push(VtkField {
+                    name: n,
+                    values: VtkValues::Scalar(v),
+                });
+            }
+        }
+        for (n, v) in &stat_fields {
+            if stats::keeps(&sel, n, true) {
+                fields.push(VtkField {
+                    name: n,
+                    values: VtkValues::Scalar(v),
+                });
+            }
         }
         let path = dir.join(format!("{name}.vtu"));
         rcfd_io::vtk::write_vtu(&path, &self.geom.mesh, &fields)?;

@@ -177,6 +177,13 @@ inside the root. Not implemented: Fluent profile-file syntax, cubic/monotone int
 fall outside the range during a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
 Example: `cases/channel/profile_inlet.toml`.
 
+## `statistics` and `output` policy (F-116)
+
+`statistics.enabled`, `start_time` (s) and `fields` (`ux uy uz speed p`) collect the time-weighted mean, rms,
+standard deviation, minimum and maximum of transient incompressible runs as fields `<name>_mean` and so on.
+`output.write_interval`, `retain_snapshots`, `retain_checkpoints` and `fields` control numbered snapshots, backup
+retention and the variables written. Details and limits: `docs/run-control.md` (Output policy and statistics).
+
 ## `rheology` viscosity laws (F-110)
 
 `rheology.model` selects `power_law`, `carreau`, `carreau_yasuda`, `cross`, `herschel_bulkley` or `bingham` (default
