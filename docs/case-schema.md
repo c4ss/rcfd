@@ -57,6 +57,18 @@ and `e_wall` define the Spalding law. Boundary values: `turbulence_spec = values
 `k_value` and `omega_value`; the other inlet specifications derive `omega = epsilon/(beta* k)`.
 Outputs add the field `omega`.
 
+### Non-conformal interface (`mesh.generator = "channel_2d_interface"`, F-114)
+
+A `channel_2d` made of two blocks that meet at `x = lx/2`: the first has `nx` x `ny` cells, the second
+`nx_right` x `ny_right` cells (0 = same as the first). When the counts across the channel differ the
+interface is non-conformal; it is joined at mesh level (`rcfd_mesh::non_conformal::join_non_conformal`)
+into an ordinary mesh with one internal face per overlap of an interface face of one block with one of
+the other, so every solver, boundary condition and report works unchanged and flux through the
+interface is conserved to round-off by construction. Patches: `inlet`, `outlet`, `walls`, `sides`.
+The Rust function also joins general planar interfaces in 3-D (convex faces; the patches must cover
+each other, otherwise the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the
+skewed interface faces.
+
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
 For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:

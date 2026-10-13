@@ -210,6 +210,33 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             )
             .map_err(me)
         }
+        "channel_2d_interface" => {
+            // two channel blocks meeting at x = lx/2 through a non-conformal interface (F-114)
+            let (nxr, nyr) = (
+                get_i(case, "mesh.nx_right") as usize,
+                get_i(case, "mesh.ny_right") as usize,
+            );
+            let (nxr, nyr) = (if nxr == 0 { nx } else { nxr }, if nyr == 0 { ny } else { nyr });
+            let gy = if (grading - 1.0).abs() < 1e-12 {
+                Grading::Uniform
+            } else {
+                Grading::Symmetric(grading)
+            };
+            let half = 0.5 * lx;
+            let block = |nx: usize, ny: usize, x0: f64| {
+                let m = gen::channel(
+                    [nx, ny, 1],
+                    [half, ly, depth],
+                    [Grading::Uniform, gy, Grading::Uniform],
+                    true,
+                )?;
+                gen::warp(&m, |p| [p[0] + x0, p[1], p[2]])
+            };
+            let (a, b) = (block(nx, ny, 0.0).map_err(me)?, block(nxr, nyr, half).map_err(me)?);
+            rcfd_mesh::non_conformal::join_non_conformal(&a, "outlet", &b, "inlet", 1e-8)
+                .map(|(m, _)| m)
+                .map_err(me)
+        }
         "wedge_2d" => {
             // box_2d whose lower wall turns upward by ramp_angle at ramp_start (the top boundary stays flat)
             let base = gen::box_2d(nx, ny, lx, ly, false, false).map_err(me)?;

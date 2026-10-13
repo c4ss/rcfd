@@ -11,6 +11,7 @@
 pub mod gen;
 pub mod layers;
 pub mod mesh;
+pub mod non_conformal;
 pub mod partition;
 pub mod quality;
 

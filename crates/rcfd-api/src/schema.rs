@@ -69,9 +69,9 @@ pub fn case_schema() -> Schema {
             "generator",
             Schema::enumeration(
                 "cavity_2d",
-                &["cavity_2d", "box_2d", "channel_2d", "cylinder_ogrid", "wedge_2d"],
+                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d"],
             )
-            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax)"),
+            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides)"),
         )
         .field(
             "nx",
@@ -84,6 +84,18 @@ pub fn case_schema() -> Schema {
             Schema::int(20)
                 .range(1.0, 100000.0)
                 .doc("Cells in y (radial for cylinder_ogrid)"),
+        )
+        .field(
+            "nx_right",
+            Schema::int(0)
+                .range(0.0, 100000.0)
+                .doc("Cells in x of the second block of channel_2d_interface (0 = same as nx)"),
+        )
+        .field(
+            "ny_right",
+            Schema::int(0)
+                .range(0.0, 100000.0)
+                .doc("Cells across the channel in the second block of channel_2d_interface (0 = same as ny); a different count makes the interface non-conformal"),
         )
         .field(
             "lx",
