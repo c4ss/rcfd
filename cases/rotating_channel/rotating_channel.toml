@@ -1,0 +1,34 @@
+# Laminar plane channel rotating about the spanwise axis (F-031). The velocity stays the Poiseuille
+# parabola u = g/(2 nu) y (H - y); the Coriolis force is balanced by dp/dy = -2 Omega u(y).
+title = "spanwise-rotating channel"
+
+[mesh]
+generator = "box_2d"
+nx = 4
+ny = 40
+lx = 0.4
+ly = 1.0
+periodic_x = true
+
+[physics]
+nu = 0.1
+rho = 1.0
+body_force = [1.0, 0.0, 0.0]
+
+[boundaries.ymin]
+velocity = "fixed"
+
+[boundaries.ymax]
+velocity = "fixed"
+
+[sources.frame]
+type = "rotating_frame"
+rotation_axis = [0.0, 0.0, 1.0]
+angular_velocity = 2.0
+centrifugal = false
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+h_operator = "from_solution"
+max_iterations = 1700

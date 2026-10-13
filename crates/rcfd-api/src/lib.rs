@@ -8,6 +8,7 @@ pub mod runctl;
 pub mod schema;
 pub mod service;
 pub mod sim;
+pub mod sources;
 pub mod stats;
 pub mod turb;
 pub mod udf;

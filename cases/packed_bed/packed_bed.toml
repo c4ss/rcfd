@@ -1,0 +1,41 @@
+# Air through a packed bed of 5 mm spheres (porosity 0.4), superficial velocity 0.15 m/s (F-031).
+# Kinematic pressure gradient from the Ergun equation: 150 nu (1-e)^2 U/(e^3 d^2) + 1.75 (1-e) U^2/(e^3 d) = 149.77 m/s^2.
+title = "packed bed (Ergun)"
+
+[mesh]
+generator = "channel_2d"
+nx = 40
+ny = 8
+lx = 1.0
+ly = 0.2
+depth = 0.05
+
+[physics]
+nu = 1.5e-5
+rho = 1.0
+
+[initial]
+velocity = [0.15, 0.0, 0.0]
+
+[boundaries.inlet]
+velocity = "fixed"
+velocity_value = [0.15, 0.0, 0.0]
+
+[boundaries.outlet]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.walls]
+velocity = "symmetry"
+
+[sources.bed]
+type = "porous"
+model = "ergun"
+porosity = 0.4
+particle_diameter = 0.005
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+h_operator = "from_solution"
+max_iterations = 1700
