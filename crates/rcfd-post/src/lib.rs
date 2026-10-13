@@ -4,5 +4,6 @@ pub mod checkpoint;
 pub mod convergence;
 pub mod gltf;
 pub mod integrals;
+pub mod interpolate;
 pub mod monitors;
 pub mod render;

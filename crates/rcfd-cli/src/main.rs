@@ -44,6 +44,9 @@ COMMANDS:
         --status-file <file>     also write the status stream to a file
         --status-every <n>       iteration events every n steps (default 10; first 5 and last always)
         --continue-from <file>   restart from a checkpoint (steady SIMPLE/SIMPLEC without turbulence)
+        --interpolate-case <case> --interpolate-checkpoint <file> [--interpolate-mode conservative|nonconservative]
+                                 initialise from a solution of another mesh (the source case and a checkpoint
+                                 written for it); not combinable with --continue-from
         --checkpoint <file>      checkpoint written on interrupt, time limit and at the end
                                  (default: <out>/restart.rcfd)
         --checkpoint-every <n>   also write the checkpoint every n steps
@@ -225,6 +228,9 @@ const RUN_VALUE_OPTS: &[&str] = &[
     "--status-file",
     "--status-every",
     "--continue-from",
+    "--interpolate-case",
+    "--interpolate-checkpoint",
+    "--interpolate-mode",
     "--checkpoint",
     "--checkpoint-every",
     "--stop-file",
@@ -374,6 +380,31 @@ fn cmd_run(args: &[String]) -> u8 {
                 .and_then(|v| v.as_str().map(PathBuf::from))
         })
         .unwrap_or_else(|| PathBuf::from("results"));
+    let interp_case = opt(args, "--interpolate-case");
+    let interp_ck = opt(args, "--interpolate-checkpoint");
+    if interp_case.is_some() != interp_ck.is_some() {
+        return usage_error("--interpolate-case and --interpolate-checkpoint go together");
+    }
+    if let (Some(sc), Some(ck)) = (interp_case, interp_ck) {
+        if opt(args, "--continue-from").is_some() {
+            return usage_error("--interpolate-* cannot be combined with --continue-from");
+        }
+        let mode_name = opt(args, "--interpolate-mode").unwrap_or("nonconservative");
+        let Some(mode) = rcfd_post::interpolate::InterpMode::parse(mode_name) else {
+            return usage_error("--interpolate-mode takes conservative or nonconservative");
+        };
+        let src = match load_case(sc) {
+            Ok(c) => c,
+            Err(code) => return code,
+        };
+        match sim.interpolate_from(&src, Path::new(ck), mode) {
+            Ok(r) => eprintln!("interpolated initial solution from {sc}: {r}"),
+            Err(e) => {
+                eprintln!("error: --interpolate-from {sc}: {e}");
+                return FAIL;
+            }
+        }
+    }
     let cont = opt(args, "--continue-from");
     if let Some(c) = cont {
         if let Err(e) = sim.load_checkpoint(Path::new(c)) {

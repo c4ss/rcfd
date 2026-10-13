@@ -25,6 +25,7 @@ use rcfd_mesh::gen::{self, Grading};
 use rcfd_mesh::{Mesh, PatchKind};
 use rcfd_post::convergence::{self, Combine, Condition, ConditionKind};
 use rcfd_post::integrals as ig;
+use rcfd_post::interpolate::{InterpMode, Interpolator};
 use rcfd_post::monitors::{MonitorStore, ReportValue};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -1544,6 +1545,69 @@ impl Simulation {
         self.last = None;
         self.stop_reason = None;
         Ok(())
+    }
+
+    /// Initialise this simulation from a solution computed on another mesh (F-115, the
+    /// counterpart of Fluent `file/interpolate` and the CFX initial-file option). `src_case`
+    /// describes the source mesh and `checkpoint` is a checkpoint written for it; velocity,
+    /// pressure and (when both cases solve the energy equation) temperature are interpolated onto
+    /// this mesh, the face flux is rebuilt, and the iteration counter restarts at zero.
+    pub fn interpolate_from(&mut self, src_case: &Case, checkpoint: &Path, mode: InterpMode) -> Result<Value> {
+        if self.turb.is_some() {
+            return Err(Error::Other(
+                "interpolation initialises velocity, pressure and temperature only; turbulence runs are not supported yet".into(),
+            ));
+        }
+        let src_mesh = build_mesh(src_case).map_err(|d| {
+            Error::Mesh(format!(
+                "source case mesh: {}",
+                d.iter().map(|x| x.message.clone()).collect::<Vec<_>>().join("; ")
+            ))
+        })?;
+        let c = rcfd_io::container::Container::read_file(checkpoint)?;
+        let meta: Value = serde_json::from_slice(
+            c.get("meta")
+                .ok_or_else(|| Error::Io("checkpoint: no meta section".into()))?,
+        )
+        .map_err(|e| Error::Io(format!("checkpoint meta: {e}")))?;
+        if meta["kind"] != "rcfd-sim-checkpoint" {
+            return Err(Error::Io("not an rcfd simulation checkpoint".into()));
+        }
+        if meta["mesh_hash"].as_str() != Some(format!("{:016x}", src_mesh.content_hash()).as_str()) {
+            return Err(Error::Io(
+                "the checkpoint was not written for the mesh of the given source case".into(),
+            ));
+        }
+        let ip = Interpolator::new(&src_mesh, &self.geom.mesh)?;
+        let u_src: Vec<Vec3> = c.get_f64s("u")?.chunks_exact(3).map(|v| [v[0], v[1], v[2]]).collect();
+        let p_src = c.get_f64s("p")?;
+        let u = ip.vector(&u_src, mode)?;
+        let p = ip.scalar(&p_src, mode)?;
+        let mut with_t = false;
+        let t_new = if self.energy.is_some() && meta["energy"].as_bool().unwrap_or(false) {
+            with_t = true;
+            Some(ip.scalar(&c.get_f64s("T")?, mode)?)
+        } else {
+            None
+        };
+        let Engine::Steady(s) = &mut self.engine else {
+            return Err(Error::Other(
+                "interpolated initialisation is available for steady SIMPLE/SIMPLEC runs only".into(),
+            ));
+        };
+        s.set_fields(u, p)?;
+        if let (Some(en), Some(t)) = (&mut self.energy, t_new) {
+            en.solver.t.values = t;
+        }
+        self.done = false;
+        self.converged = false;
+        self.last = None;
+        self.stop_reason = None;
+        Ok(json!({
+            "mode": if mode == InterpMode::Conservative { "conservative" } else { "nonconservative" },
+            "source_cells": src_mesh.n_cells(), "target_cells": self.geom.mesh.n_cells(),
+            "temperature": with_t,
+        }))
     }
 
     /// Write the current solution as `<dir>/<name>.vtu`.
