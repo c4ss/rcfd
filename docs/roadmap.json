@@ -281,8 +281,9 @@
       "F-027",
       "F-028"
     ],
-    "status": "todo",
-    "acceptance": "Cavity converges in fewer outer iterations than SIMPLE; documented"
+    "status": "partial",
+    "acceptance": "Cavity converges in fewer outer iterations than SIMPLE; documented",
+    "note": "Block-coupled solver (rcfd-fv coupled.rs, solver.algorithm = \"coupled\"): (u,v[,w],p) in one system per Picard iteration, implicit Green-Gauss pressure gradient, implicit Rhie-Chow continuity rows, GMRES(40) with ILU(0) momentum blocks and one AMG V-cycle on the approximate pressure Schur complement (AMG is used on the pressure block only, not on the full interleaved system). Measured (checks fixed beforehand: F-028 cavity Re 100, 40x40, linearUpwind; shared measure = first outer iteration after which the velocity stays within 1e-5 U_lid of the solver's own converged state, same function for both solvers; coupled must pass the unchanged Ghia gate 0.02 U_lid for u and v): coupled alpha_u 0.9 settles at 165 outer iterations (270 total, 3060 GMRES iterations), SIMPLEC alpha_u 0.9 at 167 (273), classic SIMPLE alpha_u 0.7 at 610 (917); Ghia max error u 0.00277, v 0.00855 (SIMPLEC identical, limit 0.02). Acceptance (fewer outer iterations than SIMPLE) met against SIMPLE (165 vs 610), but at equal relaxation the coupled solver needs the same number of Picard iterations as SIMPLEC (the count is set by the momentum under-relaxation, not the coupling); its advantage is stability at stronger relaxation: alpha_u 0.95 settles at 83, 0.98 at 38 outer iterations versus SIMPLEC best 97 (0.95; 249 at 0.98). Wall time is worse: 1.9 s at 0.98 versus 0.6 s for SIMPLEC at 0.95 (ILU/AMG rebuilt each iteration, unoptimised); AMG-less Jacobi Schur block needs 2 to 5 times more GMRES iterations (e.g. 14181 vs 3060 at alpha_u 0.9). Scope limits (hence partial): closed domains with the velocity prescribed on every boundary, laminar, no body force, sources, energy, turbulence, non-orthogonal correction or periodic patches (all rejected with located diagnostics); transient coupled solve and open boundaries not done."
   },
   {
     "id": "F-040",

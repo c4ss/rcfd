@@ -16,6 +16,7 @@ use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
 use rcfd_fv::bc::{Bc, FixedGradient, FixedValue, Freestream, Profile, Symmetry, ZeroGradient};
 use rcfd_fv::convection::{ConvScheme, TvdLimiter};
+use rcfd_fv::coupled::{CoupledSettings, CoupledSolver};
 use rcfd_fv::ddt::{CflController, TimeScheme};
 use rcfd_fv::energy::{boussinesq_force, EnergySolver};
 use rcfd_fv::gradient::green_gauss;
@@ -407,6 +408,7 @@ struct EnergyState {
 
 enum Engine {
     Steady(Box<SimpleSolver>),
+    Coupled(Box<CoupledSolver>),
     Transient(Box<PimpleSolver>),
     Compressible(Box<CompState>),
 }
@@ -751,6 +753,7 @@ impl Simulation {
         let nu = get_f(case, "physics.nu");
         let alg = get_s(case, "solver.algorithm");
         let conv = conv_scheme(&get_s(case, "solver.convection")).unwrap_or(ConvScheme::Upwind);
+        let coupled_alg = alg == "coupled";
         let steady_alg = matches!(alg.as_str(), "simple" | "simplec");
         let n_cells = geom.n_cells();
         let p_ref_cell = get_i(case, "solver.p_ref_cell").max(0) as usize;
@@ -813,6 +816,24 @@ impl Simulation {
         let mut base_body: Option<BodyForce> = None;
         let engine = if compressible {
             Engine::Compressible(Box::new(CompState::new(case, &geom)?))
+        } else if coupled_alg {
+            let mut s = CoupledSettings::new(nu);
+            s.convection = conv;
+            s.alpha_u = get_f(case, "solver.alpha_u");
+            s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
+            let (mt, mi) = (
+                get_f(case, "solver.pressure_rel_tol"),
+                get_i(case, "solver.pressure_max_iter"),
+            );
+            if mt > 0.0 {
+                s.linear.tol_rel = mt;
+            }
+            if mi > 0 {
+                s.linear.max_iter = mi as usize;
+            }
+            let solver =
+                CoupledSolver::new(geom.clone(), u, p, s).map_err(|e| diag("solver.algorithm", e.to_string()))?;
+            Engine::Coupled(Box::new(solver))
         } else if steady_alg {
             let coupling = if alg == "simple" {
                 Coupling::Simple
@@ -891,7 +912,7 @@ impl Simulation {
             s.amg_pressure = geom.n_cells() > 2000;
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };
-        let steady = steady_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
+        let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
         let energy = if energy_on && steady_alg {
             let rho = get_f(case, "physics.rho");
             let (cp, kth) = (get_f(case, "physics.cp"), get_f(case, "physics.conductivity"));
@@ -951,6 +972,25 @@ impl Simulation {
                 "user functions are not supported by the compressible solver",
             ));
         }
+        if coupled_alg {
+            for (present, path, what) in [
+                (turb.is_some(), "turbulence.model", "a turbulence model"),
+                (rheology.is_some(), "rheology.model", "non-Newtonian rheology"),
+                (
+                    udf_momentum.is_some() || udf_viscosity.is_some(),
+                    "udf",
+                    "user functions",
+                ),
+                (crate::sources::enabled(case), "sources", "momentum sources"),
+            ] {
+                if present {
+                    return Err(diag(
+                        path,
+                        format!("{what} is not supported by solver.algorithm = \"coupled\" (closed-domain laminar flow only)"),
+                    ));
+                }
+            }
+        }
         let sources = if compressible {
             None
         } else {
@@ -1007,7 +1047,7 @@ impl Simulation {
     /// True for SIMPLE/SIMPLEC runs.
     pub fn is_steady(&self) -> bool {
         match &self.engine {
-            Engine::Steady(_) => true,
+            Engine::Steady(_) | Engine::Coupled(_) => true,
             Engine::Transient(_) => false,
             Engine::Compressible(c) => c.steady,
         }
@@ -1031,7 +1071,7 @@ impl Simulation {
     /// Current simulation time (0 for steady runs).
     pub fn time(&self) -> f64 {
         match &self.engine {
-            Engine::Steady(_) => 0.0,
+            Engine::Steady(_) | Engine::Coupled(_) => 0.0,
             Engine::Transient(s) => s.time,
             Engine::Compressible(c) => {
                 if c.steady {
@@ -1097,6 +1137,7 @@ impl Simulation {
     pub fn velocity(&self) -> &VectorField {
         match &self.engine {
             Engine::Steady(s) => &s.u,
+            Engine::Coupled(s) => &s.u,
             Engine::Transient(s) => &s.u,
             Engine::Compressible(c) => &c.u,
         }
@@ -1106,6 +1147,7 @@ impl Simulation {
     pub fn pressure(&self) -> &ScalarField {
         match &self.engine {
             Engine::Steady(s) => &s.p,
+            Engine::Coupled(s) => &s.p,
             Engine::Transient(s) => &s.p,
             Engine::Compressible(c) => &c.p,
         }
@@ -1115,6 +1157,7 @@ impl Simulation {
     pub fn flux(&self) -> &[f64] {
         match &self.engine {
             Engine::Steady(s) => &s.phi,
+            Engine::Coupled(s) => &s.phi,
             Engine::Transient(s) => &s.phi,
             Engine::Compressible(c) => &c.phi,
         }
@@ -1202,6 +1245,19 @@ impl Simulation {
                     && i.res_p < self.tol_p
                     && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u)
                     && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u);
+                StepSummary {
+                    index: i.iteration,
+                    time: 0.0,
+                    res_u: i.res_u,
+                    res_p: i.res_p,
+                    continuity: i.continuity,
+                    done: converged || i.iteration >= self.max_iter,
+                    converged,
+                }
+            }
+            Engine::Coupled(s) => {
+                let i = s.iterate();
+                let converged = i.res_u < self.tol_u && i.res_p < self.tol_p;
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,

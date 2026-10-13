@@ -5,6 +5,7 @@
 pub mod bc;
 pub mod compressible;
 pub mod convection;
+pub mod coupled;
 pub mod ddt;
 pub mod diffusion;
 pub mod energy;
