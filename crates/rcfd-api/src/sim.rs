@@ -496,7 +496,17 @@ impl Simulation {
                     comps,
                     base: vval,
                 };
-                let bc = FixedValue(eb.profile(&geom, 0.0));
+                let prof0 = eb.profile(&geom, 0.0);
+                if let Profile::PerFace(v) = &prof0 {
+                    if v.iter().any(|f| f.iter().any(|c| !c.is_finite())) {
+                        errs.push(Diagnostic {
+                            path: format!("{b}.velocity"),
+                            line: None,
+                            message: exprs::NONFINITE_BC.into(),
+                        });
+                    }
+                }
+                let bc = FixedValue(prof0);
                 expr_bcs.push(eb);
                 Box::new(bc)
             } else {
@@ -525,14 +535,15 @@ impl Simulation {
                 let kth = get_f(case, "physics.conductivity");
                 let tval = get_f(case, &format!("{b}.temperature_value"));
                 let qval = get_f(case, &format!("{b}.heat_flux_value"));
-                let per_face = |c: &Compiled, scale: f64| {
+                let mut nonfinite = false;
+                let mut per_face = |c: &Compiled, scale: f64| {
                     let cf = geom.mesh.face_centres();
-                    Profile::PerFace(
-                        patch
-                            .faces()
-                            .map(|f| [scale * c.eval(&[cf[f][0], cf[f][1], cf[f][2], 0.0]), 0.0, 0.0])
-                            .collect(),
-                    )
+                    let v: Vec<[f64; 3]> = patch
+                        .faces()
+                        .map(|f| [scale * c.eval(&[cf[f][0], cf[f][1], cf[f][2], 0.0]), 0.0, 0.0])
+                        .collect();
+                    nonfinite |= v.iter().any(|x| !x[0].is_finite());
+                    Profile::PerFace(v)
                 };
                 let tbc: Box<dyn Bc> = match get_s(case, &format!("{b}.temperature")).as_str() {
                     "fixed" => {
@@ -572,6 +583,13 @@ impl Simulation {
                     }
                     _ => Box::new(ZeroGradient),
                 };
+                if nonfinite {
+                    errs.push(Diagnostic {
+                        path: format!("{b}.temperature"),
+                        line: None,
+                        message: exprs::NONFINITE_BC.into(),
+                    });
+                }
                 let _ = temp.set_bc(&geom, &patch.name, tbc);
             }
             let _ = u.set_bc(&geom, &patch.name, ubc);

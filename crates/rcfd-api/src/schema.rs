@@ -354,6 +354,10 @@ pub fn case_schema() -> Schema {
             Schema::string("").doc("Expression [W/m^2] for a prescribed wall heat flux into the domain (energy equation)"),
         )
         .field(
+            "profile",
+            Schema::string("").doc("Name of a table (tables.<name>) that supplies this patch's values from a profile file: its output columns ux, uy, uz (m/s, fixed velocity), T (K, fixed temperature) and heat_flux (W/m^2, heat_flux condition) replace the matching constant; its inputs must be among x, y, z, t; an explicit *_expression setting takes precedence"),
+        )
+        .field(
             "turbulence",
             Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient"]).doc(
                 "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient",
@@ -906,6 +910,38 @@ pub fn case_schema() -> Schema {
                 ),
             )
             .doc("Named expressions that boundary conditions and reports can use"),
+        )
+        .field(
+            "tables",
+            Schema::named(
+                Schema::object()
+                    .doc("A lookup table or profile read from CSV data")
+                    .field(
+                        "file",
+                        Schema::string("").doc("CSV file (relative to the case file); first line names the columns, optionally with units in brackets, e.g. \"T [K], nu [m^2/s]\""),
+                    )
+                    .field(
+                        "data",
+                        Schema::string("").doc("The same CSV text given inline (used when file is empty)"),
+                    )
+                    .field(
+                        "inputs",
+                        Schema::list(Schema::string("")).doc("Names of the input columns, in argument order (1 to 3), for example [\"T\"] or [\"y\"]"),
+                    )
+                    .field(
+                        "outputs",
+                        Schema::list(Schema::string("")).doc("Output columns to keep (empty = all the other columns)"),
+                    )
+                    .field(
+                        "units",
+                        Schema::list(Schema::string("")).doc("Units for columns without a unit in the header, as \"column = unit\" entries. Columns x, y, z, t, ux, uy, uz, T and heat_flux default to m, m, m, s, m/s, m/s, m/s, K and W/m^2"),
+                    )
+                    .field(
+                        "extrapolation",
+                        Schema::enumeration("error", &["error", "clamp"]).doc("Behaviour outside the data range: error (default) or the nearest edge value"),
+                    ),
+            )
+            .doc("Lookup tables and profiles; callable from expressions as <name>(args) (first output) or <name>_<column>(args)"),
         )
         .field("reports", Schema::named(report).doc("Scalar reports by name"))
         .field(

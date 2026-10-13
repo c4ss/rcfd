@@ -1,0 +1,14 @@
+# Plane Poiseuille inlet profile, U_mean = 1 m/s, H = 1 m: u = 6 U y (H - y) / H^2
+# (generated analytically; no external data)
+y [m], ux [m/s]
+0.0, 0.0
+0.1, 0.54
+0.2, 0.96
+0.3, 1.26
+0.4, 1.44
+0.5, 1.5
+0.6, 1.44
+0.7, 1.26
+0.8, 0.96
+0.9, 0.54
+1.0, 0.0

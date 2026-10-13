@@ -148,6 +148,35 @@ reports carry pressure and density dimensions (the pressure is the absolute pres
 Energy (`energy.*`) and pseudo-transient (`solver.pseudo_*`) settings were already in the schema
 and are unchanged.
 
+## `tables` and profile inputs (F-105)
+
+`tables.<name>` reads a lookup table or profile from CSV (`file`, relative to the case file, or inline
+`data`). The first line names the columns, a unit may follow in brackets (`T [degC], nu [m^2/s]`; values are
+converted to SI), the delimiter is a comma, semicolon or tab, `#` lines are comments.
+
+| Key | Meaning |
+| --- | --- |
+| `file` / `data` | CSV file or inline CSV text |
+| `inputs` | input (coordinate) columns in argument order, 1 to 3 |
+| `outputs` | output columns to keep (empty = all others) |
+| `units` | `"column = unit"` entries for columns without a unit in the header; `x y z t ux uy uz T heat_flux` default to `m m m s m/s m/s m/s K W/m^2` |
+| `extrapolation` | `error` (default: outside the data is an error) or `clamp` |
+
+Interpolation is linear (1 input) or multilinear on a complete rectilinear grid (2 or 3 inputs, rows in any
+order). Rows that do not form a grid are interpolated by inverse-distance weighting (power 2, nearest 6 or 8
+points) inside their bounding box. Duplicate inputs, non-numeric or non-finite cells, missing columns, unknown
+units, an unreadable file, and (with `extrapolation = "error"`) boundary faces outside the data range are
+reported as diagnostics naming the table.
+
+Tables are callable from every expression as `<name>(args)` (first output) or `<name>_<column>(args)`; each
+argument must have the dimension of its input column (so inputs need a unit), the result has the dimension of
+the output column. `boundaries.<patch>.profile = "<table>"` feeds the table's `ux/uy/uz`, `T` and `heat_flux`
+columns into the matching fixed-velocity, fixed-temperature and heat-flux conditions (explicit `*_expression`
+settings win); its inputs must be among `x, y, z, t`. Under the service sandbox (`--root`) table files must lie
+inside the root. Not implemented: Fluent profile-file syntax, cubic/monotone interpolation, table values that
+fall outside the range during a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
+Example: `cases/channel/profile_inlet.toml`.
+
 ## Caveats
 
 * Only the standard wall-function formulation is implemented (no scalable or enhanced wall

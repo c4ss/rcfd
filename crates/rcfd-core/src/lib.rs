@@ -10,6 +10,7 @@ pub mod hash;
 pub mod log;
 pub mod scalar;
 pub mod settings;
+pub mod table;
 pub mod units;
 pub mod vec3;
 

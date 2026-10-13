@@ -146,6 +146,9 @@ pub struct Case {
     pub tree: SettingsTree,
     /// Directory relative paths (mesh files, output) resolve against.
     pub base_dir: std::path::PathBuf,
+    /// When set (service sandbox), data files referenced by the settings (lookup tables) must lie
+    /// inside this directory.
+    pub sandbox: Option<std::path::PathBuf>,
 }
 
 impl Default for Case {
@@ -160,6 +163,7 @@ impl Case {
         Case {
             tree: SettingsTree::new(case_schema()),
             base_dir: std::path::PathBuf::from("."),
+            sandbox: None,
         }
     }
 
@@ -187,6 +191,20 @@ impl Case {
 
     /// Build a case from a JSON value; all schema errors are returned together.
     pub fn from_json(value: &Value) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::from_json_in(value, Path::new("."))
+    }
+
+    /// Like [`Case::from_json`], resolving relative file names (lookup tables) against `base_dir`.
+    pub fn from_json_in(value: &Value, base_dir: &Path) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::from_json_with(value, base_dir, None)
+    }
+
+    /// Like [`Case::from_json_in`], additionally confining data files to `sandbox`.
+    pub fn from_json_with(
+        value: &Value,
+        base_dir: &Path,
+        sandbox: Option<&Path>,
+    ) -> std::result::Result<Case, Vec<Diagnostic>> {
         let errs = Self::check_json(value);
         if !errs.is_empty() {
             return Err(errs);
@@ -200,7 +218,8 @@ impl Case {
         })?;
         let case = Case {
             tree,
-            base_dir: std::path::PathBuf::from("."),
+            base_dir: base_dir.to_path_buf(),
+            sandbox: sandbox.map(Path::to_path_buf),
         };
         let sem = case.semantic_errors();
         if sem.is_empty() {
@@ -212,6 +231,20 @@ impl Case {
 
     /// Parse TOML text; schema errors carry source lines.
     pub fn parse_toml(text: &str) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::parse_toml_in(text, Path::new("."))
+    }
+
+    /// Like [`Case::parse_toml`], resolving relative file names (lookup tables) against `base_dir`.
+    pub fn parse_toml_in(text: &str, base_dir: &Path) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::parse_toml_with(text, base_dir, None)
+    }
+
+    /// Like [`Case::parse_toml_in`], additionally confining data files to `sandbox`.
+    pub fn parse_toml_with(
+        text: &str,
+        base_dir: &Path,
+        sandbox: Option<&Path>,
+    ) -> std::result::Result<Case, Vec<Diagnostic>> {
         let v: Value = toml::from_str(text).map_err(|e| {
             let line = e
                 .span()
@@ -222,7 +255,7 @@ impl Case {
                 message: e.message().to_string(),
             }]
         })?;
-        Self::from_json(&v).map_err(|mut errs| {
+        Self::from_json_with(&v, base_dir, sandbox).map_err(|mut errs| {
             for e in &mut errs {
                 e.line = locate_line(text, &e.path);
             }
@@ -232,6 +265,20 @@ impl Case {
 
     /// Parse JSON text.
     pub fn parse_json(text: &str) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::parse_json_in(text, Path::new("."))
+    }
+
+    /// Like [`Case::parse_json`], resolving relative file names (lookup tables) against `base_dir`.
+    pub fn parse_json_in(text: &str, base_dir: &Path) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::parse_json_with(text, base_dir, None)
+    }
+
+    /// Like [`Case::parse_json_in`], additionally confining data files to `sandbox`.
+    pub fn parse_json_with(
+        text: &str,
+        base_dir: &Path,
+        sandbox: Option<&Path>,
+    ) -> std::result::Result<Case, Vec<Diagnostic>> {
         let v: Value = serde_json::from_str(text).map_err(|e| {
             vec![Diagnostic {
                 path: String::new(),
@@ -239,11 +286,16 @@ impl Case {
                 message: e.to_string(),
             }]
         })?;
-        Self::from_json(&v)
+        Self::from_json_with(&v, base_dir, sandbox)
     }
 
     /// Load a `.toml` or `.json` case file.
     pub fn load(path: impl AsRef<Path>) -> std::result::Result<Case, Vec<Diagnostic>> {
+        Self::load_with(path, None)
+    }
+
+    /// Like [`Case::load`], additionally confining data files referenced by the case to `sandbox`.
+    pub fn load_with(path: impl AsRef<Path>, sandbox: Option<&Path>) -> std::result::Result<Case, Vec<Diagnostic>> {
         let path = path.as_ref();
         let text = std::fs::read_to_string(path).map_err(|e| {
             vec![Diagnostic {
@@ -252,12 +304,11 @@ impl Case {
                 message: format!("cannot read {}: {e}", path.display()),
             }]
         })?;
-        let mut case = match path.extension().and_then(|e| e.to_str()) {
-            Some("json") => Self::parse_json(&text)?,
-            _ => Self::parse_toml(&text)?,
-        };
-        case.base_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
-        Ok(case)
+        let base = path.parent().map(Path::to_path_buf).unwrap_or_default();
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("json") => Self::parse_json_with(&text, &base, sandbox),
+            _ => Self::parse_toml_with(&text, &base, sandbox),
+        }
     }
 
     /// Serialise as TOML.
