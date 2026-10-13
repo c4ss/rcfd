@@ -255,8 +255,11 @@ pub fn drive(
             if g.is_done() {
                 let (steady, conv) = (g.is_steady(), g.is_converged());
                 let reason = g.stop_reason().unwrap_or("finished").to_string();
+                let failure = g.failure().map(String::from);
                 drop(g);
-                break if conv {
+                break if let Some(f) = failure {
+                    finish("failed", exit::FAIL, f)
+                } else if conv {
                     finish("converged", exit::OK, reason)
                 } else if !steady {
                     finish("finished", exit::OK, reason)

@@ -177,6 +177,13 @@ inside the root. Not implemented: Fluent profile-file syntax, cubic/monotone int
 fall outside the range during a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
 Example: `cases/channel/profile_inlet.toml`.
 
+## `udf` user functions (F-122)
+
+`udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,
+`viscosity` and `monitor` select the roles it plays; `boundaries.<patch>.velocity_udf` names a module whose
+`velocity_profile` export supplies a fixed velocity. The module may import nothing. The ABI, limits and failure
+behaviour are in `docs/udf-abi.md`.
+
 ## Caveats
 
 * Only the standard wall-function formulation is implemented (no scalable or enhanced wall

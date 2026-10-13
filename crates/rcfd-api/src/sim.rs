@@ -6,6 +6,7 @@ use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
 use crate::turb::{self, TurbState};
+use crate::udf::Udf;
 use rcfd_core::expr::Compiled;
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
@@ -28,6 +29,7 @@ use rcfd_post::integrals as ig;
 use rcfd_post::interpolate::{InterpMode, Interpolator};
 use rcfd_post::monitors::{MonitorStore, ReportValue};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -357,22 +359,34 @@ struct ExprBc {
     patch: String,
     comps: [Option<Compiled>; 3],
     base: Vec3,
+    /// User function that supplies the components without an expression.
+    udf: Option<String>,
 }
 
 impl ExprBc {
     /// Per-face velocity at time `t`.
-    fn profile(&self, geom: &FvGeometry, t: f64) -> Profile {
+    fn profile(
+        &self,
+        geom: &FvGeometry,
+        t: f64,
+        udfs: &mut BTreeMap<String, Udf>,
+    ) -> std::result::Result<Profile, String> {
         let patch = geom.mesh.patch(&self.patch).expect("patch checked at build time");
         let cf = geom.mesh.face_centres();
-        Profile::PerFace(
-            patch
-                .faces()
-                .map(|f| {
-                    let slots = [cf[f][0], cf[f][1], cf[f][2], t];
-                    std::array::from_fn(|k| self.comps[k].as_ref().map_or(self.base[k], |c| c.eval(&slots)))
-                })
-                .collect(),
-        )
+        let mut out = Vec::new();
+        for f in patch.faces() {
+            let slots = [cf[f][0], cf[f][1], cf[f][2], t];
+            let from_udf = match self.udf.as_ref().and_then(|n| udfs.get_mut(n)) {
+                Some(u) => Some(u.velocity_profile(cf[f], t)?),
+                None => None,
+            };
+            out.push(std::array::from_fn(|k| match (&self.comps[k], from_udf) {
+                (Some(c), _) => c.eval(&slots),
+                (None, Some(v)) => v[k],
+                (None, None) => self.base[k],
+            }));
+        }
+        Ok(Profile::PerFace(out))
     }
 }
 
@@ -428,6 +442,11 @@ pub struct Simulation {
     turb: Option<TurbState>,
     /// Uniform body acceleration of the momentum equation (steady runs).
     base_body: Option<BodyForce>,
+    /// Sandboxed user functions (F-122).
+    udfs: BTreeMap<String, Udf>,
+    udf_momentum: Option<String>,
+    udf_viscosity: Option<String>,
+    udf_monitors: Vec<String>,
     /// Compiled expression of each report (aligned with `reports`; `Some` for expression reports).
     report_exprs: Vec<Option<Compiled>>,
     /// Names of the non-expression reports, in expression-slot order.
@@ -447,6 +466,7 @@ pub struct Simulation {
     combine: Combine,
     min_iterations: usize,
     stop_reason: Option<String>,
+    failure: Option<String>,
 }
 
 impl Simulation {
@@ -463,6 +483,15 @@ impl Simulation {
         let mut errs = Vec::new();
         let sctx = exprs::spatial_context(case);
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
+        let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
+        errs.extend(udf_diags);
+        let flagged = |flag: &str| udfs.keys().find(|n| get_b(case, &format!("udf.{n}.{flag}"))).cloned();
+        let (udf_momentum, udf_viscosity) = (flagged("momentum_source"), flagged("viscosity"));
+        let udf_monitors: Vec<String> = udfs
+            .keys()
+            .filter(|n| get_b(case, &format!("udf.{n}.monitor")))
+            .cloned()
+            .collect();
         for patch in geom.mesh.patches() {
             if compressible || matches!(patch.kind, PatchKind::Empty | PatchKind::Cyclic) {
                 continue;
@@ -491,13 +520,26 @@ impl Simulation {
                     }
                 }
             }
-            let ubc: Box<dyn Bc> = if comps.iter().any(Option::is_some) {
+            let udf_name =
+                Some(get_s(case, &format!("{b}.velocity_udf"))).filter(|n| !n.is_empty() && udfs.contains_key(n));
+            let ubc: Box<dyn Bc> = if comps.iter().any(Option::is_some) || udf_name.is_some() {
                 let eb = ExprBc {
                     patch: patch.name.clone(),
                     comps,
                     base: vval,
+                    udf: udf_name,
                 };
-                let prof0 = eb.profile(&geom, 0.0);
+                let prof0 = match eb.profile(&geom, 0.0, &mut udfs) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        errs.push(Diagnostic {
+                            path: format!("{b}.velocity_udf"),
+                            line: None,
+                            message: e,
+                        });
+                        Profile::Uniform(vval)
+                    }
+                };
                 if let Profile::PerFace(v) = &prof0 {
                     if v.iter().any(|f| f.iter().any(|c| !c.is_finite())) {
                         errs.push(Diagnostic {
@@ -714,7 +756,11 @@ impl Simulation {
                 if turb::role(case, &n) == turb::Role::Inlet {
                     if let Some(patch) = geom.mesh.patch(&n) {
                         let nf = patch.faces().count();
-                        let v = match expr_bcs.iter().find(|e| e.patch == n).map(|e| e.profile(&geom, 0.0)) {
+                        let v = match expr_bcs
+                            .iter()
+                            .find(|e| e.patch == n)
+                            .and_then(|e| e.profile(&geom, 0.0, &mut udfs).ok())
+                        {
                             Some(Profile::PerFace(v)) => v.iter().map(|x| vec3::norm(*x)).collect(),
                             Some(Profile::Uniform(v)) => vec![vec3::norm(v); nf],
                             None => {
@@ -856,6 +902,31 @@ impl Simulation {
         };
         let dt = get_f(case, "solver.dt");
         let max_cfl = get_f(case, "solver.max_courant");
+        for (name, role, flag) in [
+            (&udf_momentum, "a momentum source", "momentum_source"),
+            (&udf_viscosity, "a viscosity", "viscosity"),
+        ] {
+            if let Some(n) = name {
+                if !steady_alg {
+                    return Err(diag(
+                        &format!("udf.{n}.{flag}"),
+                        format!("a user function can supply {role} only in steady SIMPLE/SIMPLEC runs"),
+                    ));
+                }
+            }
+        }
+        if let (Some(n), true) = (&udf_viscosity, turb.is_some()) {
+            return Err(diag(
+                &format!("udf.{n}.viscosity"),
+                "a user-function viscosity cannot be combined with a turbulence model",
+            ));
+        }
+        if compressible && !udfs.is_empty() {
+            return Err(diag(
+                "udf",
+                "user functions are not supported by the compressible solver",
+            ));
+        }
         Ok(Simulation {
             case: case.clone(),
             geom,
@@ -866,6 +937,10 @@ impl Simulation {
             energy,
             turb,
             base_body,
+            udfs,
+            udf_momentum,
+            udf_viscosity,
+            udf_monitors,
             report_exprs,
             report_syms,
             nu,
@@ -892,6 +967,7 @@ impl Simulation {
             },
             min_iterations: get_i(case, "solver.min_iterations").max(0) as usize,
             stop_reason: None,
+            failure: None,
         })
     }
 
@@ -939,6 +1015,46 @@ impl Simulation {
         self.stop_reason.as_deref()
     }
 
+    /// Set when the run stopped because a user function failed (trap, fuel, bad value).
+    pub fn failure(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
+
+    /// Evaluate the user-function monitors on the current fields; returns an error text on failure.
+    fn udf_monitor_step(&mut self, x: f64) -> Option<String> {
+        if self.udf_monitors.is_empty() || matches!(self.engine, Engine::Compressible(_)) {
+            return None;
+        }
+        let mut udfs = std::mem::take(&mut self.udfs);
+        let mut sums = Vec::new();
+        let mut error = None;
+        {
+            let geom = self.geom.clone();
+            let (cc, vol) = (geom.mesh.cell_centres(), geom.mesh.cell_volumes());
+            let (u, p) = (&self.velocity().values, &self.pressure().values);
+            let tc = self.energy.as_ref().map(|e| &e.solver.t.values);
+            'outer: for name in &self.udf_monitors {
+                let m = udfs.get_mut(name).expect("checked at build time");
+                let mut sum = 0.0;
+                for c in 0..cc.len() {
+                    match m.monitor(cc[c], vol[c], u[c], p[c], tc.map_or(0.0, |t| t[c])) {
+                        Ok(v) => sum += v * vol[c],
+                        Err(e) => {
+                            error = Some(e);
+                            break 'outer;
+                        }
+                    }
+                }
+                sums.push((format!("udf_{name}"), sum));
+            }
+        }
+        self.udfs = udfs;
+        for (n, v) in sums {
+            self.monitors.push(&n, "", x, v);
+        }
+        error
+    }
+
     /// Last step summary.
     pub fn last(&self) -> Option<StepSummary> {
         self.last
@@ -974,6 +1090,7 @@ impl Simulation {
     /// Advance one iteration (steady) or time step (transient) and record monitors.
     pub fn step(&mut self) -> StepSummary {
         let mut reason_override: Option<String> = None;
+        let mut udf_error: Option<String> = None;
         let summary = match &mut self.engine {
             Engine::Steady(s) => {
                 if let Some(t) = &mut self.turb {
@@ -981,18 +1098,57 @@ impl Simulation {
                     t.change = t.model.update(&s.u, &s.phi);
                     s.nu_face = Some(t.model.nu_face());
                 }
-                if let Some(en) = &self.energy {
-                    let bous = en
-                        .buoyancy
-                        .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref));
-                    s.body_force = match (&self.base_body, bous) {
-                        (Some(b), Some(mut x)) => {
-                            x.add(b);
-                            Some(x)
+                let temp_cells: Option<&[f64]> = self.energy.as_ref().map(|en| en.solver.t.values.as_slice());
+                let mut udf_force = None;
+                if let Some(name) = &self.udf_momentum {
+                    let (cc, u) = (self.geom.mesh.cell_centres(), &s.u.values);
+                    let u0 = self.udfs.get_mut(name).expect("checked at build time");
+                    let cells: std::result::Result<Vec<Vec3>, String> =
+                        (0..cc.len()).map(|c| u0.momentum_source(cc[c], 0.0, u[c])).collect();
+                    match cells {
+                        Ok(v) => udf_force = Some(BodyForce::from_cells(&self.geom, v)),
+                        Err(e) => udf_error = Some(e),
+                    }
+                }
+                if let (Some(name), None) = (&self.udf_viscosity, &udf_error) {
+                    let g = &self.geom;
+                    let (fc, u) = (g.mesh.face_centres(), &s.u.values);
+                    let u0 = self.udfs.get_mut(name).expect("checked at build time");
+                    let mut nu = Vec::with_capacity(g.mesh.n_faces());
+                    for f in 0..g.mesh.n_faces() {
+                        let (o, w) = (g.mesh.owner()[f], if f < g.n_internal { g.weights[f] } else { 1.0 });
+                        let n = if f < g.n_internal { g.mesh.neighbour()[f] } else { o };
+                        let blend = |a: f64, b: f64| w * a + (1.0 - w) * b;
+                        let speed = blend(vec3::norm(u[o]), vec3::norm(u[n]));
+                        let temperature = temp_cells.map_or(0.0, |t| blend(t[o], t[n]));
+                        match u0.kinematic_viscosity(fc[f], 0.0, temperature, speed) {
+                            Ok(v) => nu.push(v),
+                            Err(e) => {
+                                udf_error = Some(e);
+                                break;
+                            }
                         }
-                        (Some(b), None) => Some(b.clone()),
-                        (None, x) => x,
-                    };
+                    }
+                    if udf_error.is_none() {
+                        s.nu_face = Some(nu);
+                    }
+                }
+                if self.energy.is_some() || self.udf_momentum.is_some() {
+                    let bous = self.energy.as_ref().and_then(|en| {
+                        en.buoyancy
+                            .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref))
+                    });
+                    let mut total = self.base_body.clone();
+                    for part in [bous, udf_force].into_iter().flatten() {
+                        match &mut total {
+                            Some(t) => t.add(&part),
+                            None => total = Some(part),
+                        }
+                    }
+                    s.body_force = total;
+                }
+                if let Some(e) = &udf_error {
+                    reason_override = Some(e.clone());
                 }
                 let i = s.iterate();
                 if let Some(en) = &mut self.energy {
@@ -1054,8 +1210,18 @@ impl Simulation {
                 };
                 dt = dt.min((self.end_time - s.time).max(1e-12));
                 for eb in &self.expr_bcs {
-                    let prof = eb.profile(&self.geom, s.time + dt);
-                    let _ = s.u.set_bc(&self.geom, &eb.patch, Box::new(FixedValue(prof)));
+                    match eb.profile(&self.geom, s.time + dt, &mut self.udfs) {
+                        Ok(prof) => {
+                            let _ = s.u.set_bc(&self.geom, &eb.patch, Box::new(FixedValue(prof)));
+                        }
+                        Err(e) => {
+                            udf_error = Some(e);
+                            break;
+                        }
+                    }
+                }
+                if let Some(e) = &udf_error {
+                    reason_override = Some(e.clone());
                 }
                 let i = s.step(dt);
                 self.monitors.push("courant", "", i.time, i.courant);
@@ -1091,7 +1257,15 @@ impl Simulation {
             }
         }
         let mut summary = summary;
-        if let Some(r) = reason_override {
+        if udf_error.is_none() {
+            udf_error = self.udf_monitor_step(x);
+        }
+        if let Some(e) = udf_error {
+            summary.done = true;
+            summary.converged = false;
+            self.stop_reason = Some(e.clone());
+            self.failure = Some(e);
+        } else if let Some(r) = reason_override {
             self.stop_reason = Some(r);
         } else if summary.converged {
             self.stop_reason = Some(format!(

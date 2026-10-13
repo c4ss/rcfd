@@ -8,4 +8,5 @@ pub mod schema;
 pub mod service;
 pub mod sim;
 pub mod turb;
+pub mod udf;
 pub mod workflow;

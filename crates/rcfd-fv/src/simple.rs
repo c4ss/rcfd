@@ -79,6 +79,28 @@ impl BodyForce {
         BodyForce { cell, face }
     }
 
+    /// Acceleration given at every cell centre, interpolated linearly to the faces
+    /// (boundary faces use the owner value).
+    pub fn from_cells(geom: &FvGeometry, cell: Vec<Vec3>) -> Self {
+        let mesh = &geom.mesh;
+        let sf = mesh.face_area_vectors();
+        let face = (0..mesh.n_faces())
+            .map(|f| {
+                let a = if f < geom.n_internal {
+                    let w = geom.weights[f];
+                    vec3::add(
+                        vec3::scale(cell[mesh.owner()[f]], w),
+                        vec3::scale(cell[mesh.neighbour()[f]], 1.0 - w),
+                    )
+                } else {
+                    cell[mesh.owner()[f]]
+                };
+                vec3::dot(a, sf[f])
+            })
+            .collect();
+        BodyForce { cell, face }
+    }
+
     /// Sum of two body forces.
     pub fn add(&mut self, o: &BodyForce) {
         for (a, b) in self.cell.iter_mut().zip(&o.cell) {

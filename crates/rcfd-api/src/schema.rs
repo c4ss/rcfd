@@ -328,6 +328,10 @@ pub fn case_schema() -> Schema {
             Schema::string("").doc("Expression [m/s] for the z velocity component (see velocity_expression_x)"),
         )
         .field(
+            "velocity_udf",
+            Schema::string("").doc("Name of a user function (udf.<name>, WebAssembly module with a velocity_profile export) that supplies the velocity of a fixed condition per face; an explicit velocity_expression_* component takes precedence"),
+        )
+        .field(
             "temperature_expression",
             Schema::string("").doc("Expression [K] for a fixed wall/inlet temperature (energy equation)"),
         )
@@ -942,6 +946,34 @@ pub fn case_schema() -> Schema {
                     ),
             )
             .doc("Lookup tables and profiles; callable from expressions as <name>(args) (first output) or <name>_<column>(args)"),
+        )
+        .field(
+            "udf",
+            Schema::named(
+                Schema::object()
+                    .doc("A sandboxed user-function module (WebAssembly, ABI version 1, see docs/udf-abi.md)")
+                    .field(
+                        "file",
+                        Schema::string("").doc("WebAssembly binary (.wasm, relative to the case file); it may import nothing"),
+                    )
+                    .field(
+                        "fuel_per_call",
+                        Schema::int(1_000_000).doc("Instruction budget of one call; a call that exceeds it stops the run with an error"),
+                    )
+                    .field(
+                        "momentum_source",
+                        Schema::boolean(false).doc("Use the module's momentum_source export as a body acceleration (steady SIMPLE/SIMPLEC runs; at most one module)"),
+                    )
+                    .field(
+                        "viscosity",
+                        Schema::boolean(false).doc("Use the module's kinematic_viscosity export as the laminar viscosity (steady runs without a turbulence model; at most one module)"),
+                    )
+                    .field(
+                        "monitor",
+                        Schema::boolean(false).doc("Record the module's monitor export as the monitor udf_<name> (sum of value times cell volume)"),
+                    ),
+            )
+            .doc("Sandboxed user functions (WebAssembly)"),
         )
         .field("reports", Schema::named(report).doc("Scalar reports by name"))
         .field(
