@@ -367,10 +367,10 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
   - depends on: F-030, F-070, F-109
   - acceptance: Time-averaged field over a vortex-shedding run matches the post-computed average; the run honors a max-elapsed-time and a stop-file; retained backups limited to the configured count
   - note: P2. Gap: CFX transient statistics, backup results, wall-clock limit and control-condition options; Fluent data-file options and run-calculation settings.
-- [ ] **F-117** glTF/GLB export of surfaces with scalar/vector field colouring for browser and sidebar preview
+- [~] **F-117** glTF/GLB export of surfaces with scalar/vector field colouring for browser and sidebar preview
   - depends on: F-070
   - acceptance: Exported GLB for a contour on a boundary loads in a glTF validator and a viewer with correct colours; size scales linearly with face count
-  - note: P2. Gap: Fluent hardcopy glb and CFD-Post hardcopy gltf/glb2. Khronos glTF is an open spec; suits the assistant sidebar preview (F-073/F-093).
+  - note: Partial (container and content checks pass; external validator and viewer not run). Delivered: rcfd-post gltf module (glb_patches/write_glb, GLB 2.0 with one primitive per boundary patch, flat-shaded viridis COLOR_0 from a cell or face field, raw value in _SCALAR, outward normals, optional fixed colour range), a structural self-check (check_glb: header, chunk alignment, buffer/view/accessor bounds, min/max, index range) and service method render.glb (sandboxed path, optional inline base64). Measured with checks fixed up front: 4x4x4 box all patches gives 96 faces / 192 triangles / 384 vertices, 0 wrongly wound triangles, every vertex colour equals the colour map of its stored value; size grows by 152 bytes per quad face (4 x 32 + 6 x 4) with slopes agreeing within 1 percent from 96 to 6144 faces (linear). Not done: no run through the Khronos glTF validator or a real viewer (no network or viewer here), so the acceptance wording is not demonstrated; Y-up is not applied (z-up cases appear rotated); no vector glyphs, no point-interpolated colours, no texture/legend; no CLI or MCP tool yet (service only).
 - [ ] **F-119** Interchange formats: STL (surface), Tecplot ASCII, Plot3D structured, XDMF/HDF5 writer
   - depends on: F-070, F-015
   - acceptance: Round trip of a boundary patch through STL and of a field through Tecplot ASCII and XDMF opens in third-party viewers; the Plot3D structured reader reads a public sample

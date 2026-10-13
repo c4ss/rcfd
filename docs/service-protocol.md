@@ -42,6 +42,7 @@ All session methods take `session`.
 - `report.export {format: html|csv|json, path?}`
 - `field.stats {name}`, `field.slice {name, max_points?}`, `field.export_vtk {dir?, name?}`
 - `render.png {field?, width?, vectors?, path?}` returns `data_base64`
+- `render.glb {field?, patches?, min?, max?, path?, inline?}` binary glTF 2.0 of boundary patches, flat coloured by the cell field (viridis, range from the data unless min and max are given); returns size and face counts, `data_base64` only with `inline` (max 4 MiB), file only with a sandboxed `path`
 - `log.tail {lines?}`
 - `field.grid {name, cols?, rows?}` field averaged onto a coarse grid (first row is the top), `null` where empty
 - `panel.snapshot {since?, field?, cols?, rows?, log_lines?}` status, new monitor samples, reports, log tail and optional grid in one call (used by the sidebar panel)

@@ -664,6 +664,70 @@ impl Service {
                     "field": field, "min": r.vmin, "max": r.vmax, "data_base64": base64(&png),
                 }))
             }
+            "render.glb" => {
+                let s = self.session(p)?;
+                let sim = self.sim(&s)?;
+                let sim = lock(&sim);
+                let field = p.get("field").and_then(Value::as_str);
+                let vals = match field {
+                    Some(f) => Some(sim.field(f).map_err(|e| RpcError::params(e.to_string()))?),
+                    None => None,
+                };
+                let mesh = &sim.geom.mesh;
+                let names: Vec<String> = match p.get("patches") {
+                    Some(v) => v
+                        .as_array()
+                        .ok_or_else(|| RpcError::params("patches must be an array of names"))?
+                        .iter()
+                        .map(|x| {
+                            x.as_str()
+                                .map(str::to_string)
+                                .ok_or_else(|| RpcError::params("patches must be an array of names"))
+                        })
+                        .collect::<Rpc<_>>()?,
+                    None => mesh.patches().iter().map(|q| q.name.clone()).collect(),
+                };
+                let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+                let range = match (
+                    p.get("min").and_then(Value::as_f64),
+                    p.get("max").and_then(Value::as_f64),
+                ) {
+                    (Some(a), Some(b)) => Some((a, b)),
+                    (None, None) => None,
+                    _ => return Err(RpcError::params("give both min and max or neither")),
+                };
+                let opt = rcfd_post::gltf::GltfOptions {
+                    range,
+                    scalar_name: field.unwrap_or("").to_string(),
+                };
+                let (glb, st) = rcfd_post::gltf::glb_patches(
+                    mesh,
+                    &refs,
+                    vals.as_deref().map(rcfd_post::gltf::GltfScalar::Cell),
+                    &opt,
+                )
+                .map_err(|e| RpcError::params(e.to_string()))?;
+                if let Some(path) = p.get("path").and_then(Value::as_str) {
+                    let path = self.sandbox_path(path)?;
+                    if let Some(dir) = path.parent() {
+                        std::fs::create_dir_all(dir).map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+                    }
+                    std::fs::write(&path, &glb).map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+                }
+                let inline = p.get("inline").and_then(Value::as_bool).unwrap_or(false);
+                let mut out = json!({
+                    "mime": "model/gltf-binary", "bytes": glb.len(), "field": field,
+                    "faces": st.faces, "triangles": st.triangles, "vertices": st.vertices,
+                    "min": st.range.0, "max": st.range.1, "patches": names,
+                });
+                if inline {
+                    if glb.len() > 4 << 20 {
+                        return Err(RpcError::params("GLB larger than 4 MiB; write it with 'path' instead"));
+                    }
+                    out["data_base64"] = json!(base64(&glb));
+                }
+                Ok(out)
+            }
             "field.grid" => {
                 let s = self.session(p)?;
                 let sim = self.sim(&s)?;
@@ -1635,6 +1699,7 @@ pub const METHODS: &[&str] = &[
     "field.slice",
     "field.export_vtk",
     "render.png",
+    "render.glb",
     "log.tail",
     "journal.get",
     "journal.replay",
@@ -1738,6 +1803,15 @@ mod tests {
             .unwrap();
         assert_eq!(img["mime"], "image/png");
         assert!(img["data_base64"].as_str().unwrap().starts_with("iVBORw0KGgo"));
+        let glb = svc
+            .call("render.glb", &json!({"session": id, "field": "speed", "inline": true}))
+            .unwrap();
+        assert_eq!(glb["mime"], "model/gltf-binary");
+        assert!(glb["data_base64"].as_str().unwrap().starts_with("Z2xU"));
+        assert!(glb["faces"].as_u64().unwrap() > 0 && glb["max"].as_f64().unwrap() > glb["min"].as_f64().unwrap());
+        assert!(svc
+            .call("render.glb", &json!({"session": id, "patches": ["nope"]}))
+            .is_err());
         let html = svc.call("report.export", &json!({"session": id})).unwrap();
         assert!(html["content"].as_str().unwrap().contains("<polyline"));
         let stats = svc.call("field.stats", &json!({"session": id, "name": "p"})).unwrap();
