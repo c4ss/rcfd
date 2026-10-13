@@ -80,6 +80,34 @@ fn validate_case_adds_physics_notes_without_the_laminar_reynolds_warning() {
     assert!(text(&mk(json!({}))).contains("laminar flow only"));
     let ke = mk(json!({"turbulence": {"model": "k_epsilon"}}));
     assert!(text(&ke).contains("y+") && !text(&ke).contains("laminar flow only"));
+    // k-omega SST: wall-resolution hint with an estimated first-cell y+
+    let sst = mk(json!({
+        "turbulence": {"model": "k_omega_sst"},
+        "mesh": {"lx": 1.0, "ly": 0.1, "ny": 20}
+    }));
+    let w = sst["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["path"] == "turbulence.model")
+        .unwrap();
+    let yp = w["y_plus_estimate"].as_f64().expect("y+ estimate");
+    // U = 10 m/s, nu = 1e-6, x = 1: Re_x = 1e7, u_tau about 0.36, h1 = 0.005 -> y+ about 900
+    assert!(yp > 500.0 && yp < 1500.0, "{yp}");
+    assert!(w["message"].as_str().unwrap().contains("SST") && !text(&sst).contains("laminar flow only"));
+    let fine = mk(json!({
+        "turbulence": {"model": "k_omega_sst"},
+        "mesh": {"lx": 1.0, "ly": 0.1, "ny": 20, "wall_layers": 10, "first_layer_height": 1e-5}
+    }));
+    let yf = fine["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|w| w["path"] == "turbulence.model")
+        .unwrap()["y_plus_estimate"]
+        .as_f64()
+        .unwrap();
+    assert!(yf < 3.0, "{yf}");
     let comp = mk(json!({"solver": {"algorithm": "compressible"}, "compressible": {"cfl": 0.95}}));
     assert!(text(&comp).contains("compressible.cfl") && !text(&comp).contains("laminar flow only"));
 }

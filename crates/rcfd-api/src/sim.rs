@@ -87,6 +87,54 @@ pub fn conv_scheme(name: &str) -> Option<ConvScheme> {
     })
 }
 
+/// y grading from the boundary-layer inflation settings (`mesh.wall_layers`), or `None` when off.
+fn wall_layer_grading(case: &Case) -> std::result::Result<Option<Grading>, Vec<Diagnostic>> {
+    let layers = get_i(case, "mesh.wall_layers").max(0) as usize;
+    if layers == 0 {
+        return Ok(None);
+    }
+    let mut first = get_f(case, "mesh.first_layer_height");
+    if first <= 0.0 {
+        let yp = get_f(case, "mesh.target_y_plus");
+        if yp <= 0.0 {
+            return Err(diag(
+                "mesh.wall_layers",
+                "wall layers need mesh.first_layer_height > 0 or mesh.target_y_plus > 0",
+            ));
+        }
+        let nu = get_f(case, "physics.nu");
+        if nu <= 0.0 {
+            return Err(diag("physics.nu", "mesh.target_y_plus needs a positive physics.nu"));
+        }
+        let mut ut = get_f(case, "mesh.layer_u_tau");
+        if ut <= 0.0 {
+            let (u, x) = (
+                get_f(case, "mesh.layer_reference_velocity"),
+                get_f(case, "mesh.layer_reference_length"),
+            );
+            if u <= 0.0 || x <= 0.0 {
+                return Err(diag(
+                    "mesh.target_y_plus",
+                    "set mesh.layer_u_tau, or mesh.layer_reference_velocity and mesh.layer_reference_length, to turn a target y+ into a first layer height",
+                ));
+            }
+            ut = rcfd_mesh::layers::flat_plate_u_tau(u, nu, x);
+        }
+        first = rcfd_mesh::layers::first_cell_height_from_y_plus(yp, ut, nu);
+    }
+    let both = get_s(case, "mesh.layer_walls") != "lower";
+    let ny = get_i(case, "mesh.ny").max(1) as usize;
+    let g = Grading::WallLayers {
+        first,
+        growth: get_f(case, "mesh.layer_growth"),
+        layers,
+        both,
+    };
+    // reject impossible layer stacks with a located message instead of a mesh error
+    gen::axis_coords(ny, get_f(case, "mesh.ly"), g).map_err(|e| diag("mesh.wall_layers", e.to_string()))?;
+    Ok(Some(g))
+}
+
 /// Build the mesh described by the case.
 pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     let me = |e: Error| diag("mesh", e.to_string());
@@ -126,12 +174,13 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             } else {
                 Grading::Symmetric(grading)
             };
+            let gy = wall_layer_grading(case)?.unwrap_or(g);
             gen::box_2d_graded(
                 nx,
                 ny,
                 lx,
                 ly,
-                [g, g],
+                [g, gy],
                 get_b(case, "mesh.periodic_x"),
                 get_b(case, "mesh.periodic_y"),
             )
@@ -143,6 +192,7 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             } else {
                 Grading::Symmetric(grading)
             };
+            let gy = wall_layer_grading(case)?.unwrap_or(gy);
             gen::channel(
                 [nx, ny, 1],
                 [lx, ly, depth],
@@ -1074,17 +1124,19 @@ impl Simulation {
         }
         if let Some(t) = &self.turb {
             match name {
-                "k" => return Ok(t.model.k.values.clone()),
-                "epsilon" => return Ok(t.model.eps.values.clone()),
-                "nut" => return Ok(t.model.nut.clone()),
+                "k" => return Ok(t.model.k().values.clone()),
+                "epsilon" | "omega" if t.model.second().0 == name => return Ok(t.model.second().1.values.clone()),
+                "nut" => return Ok(t.model.nut().to_vec()),
                 "wall_distance" => return Ok(t.model.wall_distance().to_vec()),
                 "y_plus" => return Ok(t.y_plus_cells()),
                 _ => {}
             }
-        } else if matches!(name, "k" | "epsilon" | "nut" | "y_plus") {
+        } else if matches!(name, "k" | "epsilon" | "omega" | "nut" | "y_plus") {
             return Err(Error::InvalidValue {
                 path: name.into(),
-                reason: format!("field '{name}' needs the k-epsilon model (turbulence.model = \"k_epsilon\")"),
+                reason: format!(
+                    "field '{name}' needs a RANS model (turbulence.model = \"k_epsilon\" or \"k_omega_sst\")"
+                ),
             });
         }
         Ok(match name {
@@ -1128,8 +1180,8 @@ impl Simulation {
         if let Some(t) = &self.turb {
             match name {
                 "y_plus" => return Ok(t.y_plus_boundary()),
-                "k" => return Ok(t.model.k.boundary_values(g)),
-                "epsilon" => return Ok(t.model.eps.boundary_values(g)),
+                "k" => return Ok(t.model.k().boundary_values(g)),
+                "epsilon" | "omega" if t.model.second().0 == name => return Ok(t.model.second().1.boundary_values(g)),
                 _ => {}
             }
         }
@@ -1234,7 +1286,9 @@ impl Simulation {
             ReportKind::Maximum => self.field(&r.field)?.into_iter().fold(f64::NEG_INFINITY, f64::max),
             ReportKind::YPlus => {
                 let t = self.turb.as_ref().ok_or_else(|| {
-                    Error::Other("y_plus needs the k-epsilon model (turbulence.model = \"k_epsilon\")".into())
+                    Error::Other(
+                        "y_plus needs a RANS model (turbulence.model = \"k_epsilon\" or \"k_omega_sst\")".into(),
+                    )
                 })?;
                 let patch = g
                     .mesh
@@ -1330,6 +1384,7 @@ impl Simulation {
             (
                 "Turbulence".to_string(),
                 match &self.turb {
+                    Some(_) if turb::is_sst(&self.case) => "k-omega SST".to_string(),
                     Some(_) => format!("k-epsilon ({})", get_s(&self.case, "turbulence.variant")),
                     None => "laminar".into(),
                 },
@@ -1365,8 +1420,8 @@ impl Simulation {
             "turbulence": self.turb.as_ref().map(|t| {
                 let y = t.y_plus_faces();
                 json!({
-                    "model": "k_epsilon",
-                    "variant": get_s(&self.case, "turbulence.variant"),
+                    "model": get_s(&self.case, "turbulence.model"),
+                    "variant": if turb::is_sst(&self.case) { "menter_2003".to_string() } else { get_s(&self.case, "turbulence.variant") },
                     "wall_patches": t.walls,
                     "y_plus_min": y.iter().cloned().fold(f64::INFINITY, f64::min),
                     "y_plus_max": y.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
@@ -1386,9 +1441,10 @@ impl Simulation {
             extra.push(("T", en.solver.t.values.clone()));
         }
         if let Some(t) = &self.turb {
-            extra.push(("k", t.model.k.values.clone()));
-            extra.push(("epsilon", t.model.eps.values.clone()));
-            extra.push(("nut", t.model.nut.clone()));
+            extra.push(("k", t.model.k().values.clone()));
+            let (second_name, second) = t.model.second();
+            extra.push((second_name, second.values.clone()));
+            extra.push(("nut", t.model.nut().to_vec()));
             extra.push(("wall_distance", t.model.wall_distance().to_vec()));
             extra.push(("y_plus", t.y_plus_cells()));
         }
