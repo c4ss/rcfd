@@ -109,6 +109,62 @@ impl WallConstants {
     }
 }
 
+/// Spalding's single-formula law of the wall (J. Appl. Mech. 28 (1961) 455-458), valid from the
+/// viscous sublayer through the log layer without a switch:
+/// `y+ = u+ + (1/E) [exp(kappa u+) - 1 - kappa u+ - (kappa u+)^2/2 - (kappa u+)^3/6]`, `E = exp(kappa B)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpaldingLaw {
+    /// von Karman constant.
+    pub kappa: f64,
+    /// `E = exp(kappa B)` (B = 5.5 gives 9.5; rcfd uses the wall-function value 9.8).
+    pub e: f64,
+}
+
+impl Default for SpaldingLaw {
+    fn default() -> Self {
+        SpaldingLaw { kappa: 0.41, e: 9.8 }
+    }
+}
+
+impl SpaldingLaw {
+    /// `y+` as a function of `u+`.
+    pub fn y_plus(&self, u_plus: f64) -> f64 {
+        let ku = self.kappa * u_plus;
+        u_plus + (ku.exp() - 1.0 - ku - 0.5 * ku * ku - ku * ku * ku / 6.0) / self.e
+    }
+
+    /// `d y+ / d u+` (`d u+ / d y+` is its inverse).
+    pub fn dy_du(&self, u_plus: f64) -> f64 {
+        let ku = self.kappa * u_plus;
+        1.0 + self.kappa / self.e * (ku.exp() - 1.0 - ku - 0.5 * ku * ku)
+    }
+
+    /// Friction velocity from the tangential speed `u` at distance `y` (bisection on `u_tau`; the
+    /// law is monotone). Zero speed gives zero.
+    pub fn u_tau(&self, nu: f64, u: f64, y: f64) -> f64 {
+        let u = u.abs();
+        if u == 0.0 {
+            return 0.0;
+        }
+        // g(ut) = y+(u/ut) - y ut / nu is decreasing in ut
+        let g = |ut: f64| self.y_plus(u / ut) - y * ut / nu;
+        let mut hi = 2.0 * u.max((nu * u / y).sqrt());
+        let mut lo = hi * 1e-8;
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if g(mid) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+            if hi - lo < 1e-14 * hi {
+                break;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+}
+
 /// Distance from `p` to the triangle `(a, b, c)`.
 fn point_triangle_distance(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> f64 {
     // Ericson, Real-Time Collision Detection, section 5.1.5 (closest point on a triangle).
@@ -275,6 +331,48 @@ mod tests {
         let k = (100.0 * nu / (c.cmu.powf(0.25) * y)).powi(2);
         let want = nu * (100.0 * c.kappa / (100.0 * c.e).ln() - 1.0);
         assert!((c.nut_wall_from_k(nu, k, y) - want).abs() < 1e-12);
+    }
+
+    #[test]
+    fn spalding_law_recovers_both_limits() {
+        let sp = SpaldingLaw::default();
+        // viscous limit u+ = y+ (1 percent at y+ = 1)
+        assert!((sp.y_plus(1.0) - 1.0).abs() < 1e-3);
+        assert!((sp.dy_du(1.0) - 1.0).abs() < 1e-3);
+        // log layer: u+ = ln(E y+)/kappa within 2 percent at y+ = 100..1000
+        for &yp in &[100.0, 300.0, 1000.0] {
+            let (mut lo, mut hi) = (1.0, 40.0);
+            for _ in 0..100 {
+                let mid = 0.5 * (lo + hi);
+                if sp.y_plus(mid) < yp {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            let log = (sp.e * yp).ln() / sp.kappa;
+            assert!((lo / log - 1.0).abs() < 0.02, "y+ {yp}: {lo} vs {log}");
+        }
+        // inversion for u_tau, including the viscous regime
+        let nu = 1.5e-5;
+        for &(ut, y) in &[(0.5, 0.01), (1.0, 0.002), (0.05, 0.0008), (0.3, 3e-5)] {
+            let yp: f64 = y * ut / nu;
+            let up = {
+                let (mut lo, mut hi) = (0.0, 60.0);
+                for _ in 0..200 {
+                    let mid = 0.5 * (lo + hi);
+                    if sp.y_plus(mid) < yp {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                lo
+            };
+            let got = sp.u_tau(nu, ut * up, y);
+            assert!((got / ut - 1.0).abs() < 1e-9, "{got} vs {ut} (y+ {yp})");
+        }
+        assert_eq!(sp.u_tau(nu, 0.0, 0.01), 0.0);
     }
 
     #[test]
