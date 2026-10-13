@@ -802,7 +802,38 @@ pub fn case_schema() -> Schema {
             "write_interval",
             Schema::int(0)
                 .range(0.0, 1e9)
-                .doc("Write VTK every N iterations/steps (0 = only at the end)"),
+                .doc("Write a numbered VTK snapshot (snapshots/snapshot_<step>.vtu in the output directory) every N iterations/steps during rcfd run and run.headless with an output directory (0 = only the final solution.vtu)"),
+        )
+        .field(
+            "fields",
+            Schema::list(Schema::string("")).doc("Result variables written to the VTK files (empty = all): U, p, speed, T, k, epsilon, omega, nut, wall_distance, y_plus, rho, mach, statistics (all run-time statistics) or single statistics fields such as ux_mean"),
+        )
+        .field(
+            "retain_snapshots",
+            Schema::int(0)
+                .range(0.0, 1e9)
+                .doc("Keep only the newest N numbered snapshots (0 = keep all)"),
+        )
+        .field(
+            "retain_checkpoints",
+            Schema::int(1)
+                .range(1.0, 1e6)
+                .doc("Periodic restart files kept (backup retention): 1 overwrites one file; N > 1 writes <checkpoint>.<step> files and keeps the newest N, the end-of-run checkpoint always goes to <checkpoint>"),
+        );
+
+    let statistics = Schema::object()
+        .doc("Run-time statistics of transient incompressible runs: time-weighted mean, rms, std, min and max fields")
+        .field(
+            "enabled",
+            Schema::boolean(false).doc("Accumulate statistics every time step (piso / pimple)"),
+        )
+        .field(
+            "start_time",
+            Schema::float(0.0).dim(Dimension::TIME).doc("Time [s] from which steps contribute (the part of a step after this time counts)"),
+        )
+        .field(
+            "fields",
+            Schema::list(Schema::string("")).doc("Cell fields to accumulate: ux, uy, uz, speed, p (empty = ux, uy, uz, p). Results are the fields <name>_mean, _rms, _std, _min, _max in solution.vtu, probes and reports"),
         );
 
     let turbulence = Schema::object()
@@ -1065,6 +1096,7 @@ pub fn case_schema() -> Schema {
             "convergence",
             Schema::named(convergence).doc("Convergence and interrupt conditions that stop the run automatically"),
         )
+        .field("statistics", statistics)
         .field("output", output)
 }
 

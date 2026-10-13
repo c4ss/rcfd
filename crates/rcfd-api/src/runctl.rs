@@ -55,6 +55,9 @@ pub struct RunOptions {
     pub checkpoint: Option<PathBuf>,
     /// Steps between periodic checkpoints (0 = only at the end).
     pub checkpoint_every: usize,
+    /// Output directory: with `output.write_interval` > 0 numbered snapshots go to `<out_dir>/snapshots`
+    /// (newest `output.retain_snapshots` kept).
+    pub out_dir: Option<PathBuf>,
     /// Informational fields copied into the `start` event (threads, continue-from, ...).
     pub info: Value,
 }
@@ -210,13 +213,32 @@ pub fn drive(
             ));
             return;
         }
-        match g.save_checkpoint(path) {
-            Ok(()) => sink(&event(
-                "checkpoint",
-                seq,
-                t0.elapsed().as_secs_f64(),
-                json!({"path": path.display().to_string(), "iteration": g.iteration(), "why": why}),
-            )),
+        let keep = g
+            .case
+            .get("output.retain_checkpoints")
+            .ok()
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1) as usize;
+        let numbered = why == "periodic" && keep > 1;
+        let target = if numbered {
+            let mut n = path.clone().into_os_string();
+            n.push(format!(".{}", g.iteration()));
+            PathBuf::from(n)
+        } else {
+            path.clone()
+        };
+        match g.save_checkpoint(&target) {
+            Ok(()) => {
+                if numbered {
+                    prune_numbered(path, keep);
+                }
+                sink(&event(
+                    "checkpoint",
+                    seq,
+                    t0.elapsed().as_secs_f64(),
+                    json!({"path": target.display().to_string(), "iteration": g.iteration(), "why": why}),
+                ))
+            }
             Err(e) => sink(&event(
                 "warning",
                 seq,
@@ -224,6 +246,11 @@ pub fn drive(
                 json!({"message": format!("checkpoint failed: {e}")}),
             )),
         }
+    };
+    let (snapshot_every, retain_snapshots) = {
+        let g = lock_sim(sim);
+        let get = |p: &str| g.case.get(p).ok().and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        (get("output.write_interval"), get("output.retain_snapshots"))
     };
     let mut steps = 0usize;
     let mut pending: Option<Value> = None;
@@ -276,6 +303,31 @@ pub fn drive(
             }
         };
         steps += 1;
+        if let (Some(dir), true) = (&opts.out_dir, snapshot_every > 0) {
+            if step.index % snapshot_every == 0 {
+                let g = lock_sim(sim);
+                let snaps = dir.join("snapshots");
+                let name = format!("snapshot_{:08}", step.index);
+                match g.export_vtu(&snaps, &name) {
+                    Ok(path) => {
+                        drop(g);
+                        prune_snapshots(&snaps, retain_snapshots);
+                        sink(&event(
+                            "snapshot",
+                            &mut seq,
+                            t0.elapsed().as_secs_f64(),
+                            json!({"path": path.display().to_string(), "index": step.index, "time": step.time}),
+                        ));
+                    }
+                    Err(e) => sink(&event(
+                        "warning",
+                        &mut seq,
+                        t0.elapsed().as_secs_f64(),
+                        json!({"message": format!("snapshot failed: {e}")}),
+                    )),
+                }
+            }
+        }
         let body = json!({
             "index": step.index, "time": step.time, "res_u": step.res_u, "res_p": step.res_p,
             "continuity": step.continuity, "done": step.done,
@@ -307,6 +359,57 @@ pub fn drive(
     body["ok"] = json!(outcome.exit_code == exit::OK);
     sink(&event("finish", &mut seq, outcome.elapsed_s, body));
     outcome
+}
+
+/// Remove the oldest `snapshot_*.vtu` files of `dir` until at most `keep` remain (`keep` 0 = all kept).
+fn prune_snapshots(dir: &Path, keep: usize) {
+    if keep == 0 {
+        return;
+    }
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.starts_with("snapshot_") && n.ends_with(".vtu"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    let excess = files.len().saturating_sub(keep);
+    for f in files.into_iter().take(excess) {
+        let _ = std::fs::remove_file(f);
+    }
+}
+
+/// Remove the oldest numbered checkpoints `<path>.<iteration>` until at most `keep` remain.
+fn prune_numbered(path: &Path, keep: usize) {
+    let (Some(dir), Some(stem)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
+        return;
+    };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let prefix = format!("{stem}.");
+    let mut files: Vec<(u64, PathBuf)> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.filter_map(|e| e.ok().map(|e| e.path()))
+                .filter_map(|p| {
+                    let n = p.file_name()?.to_str()?.strip_prefix(&prefix)?.parse::<u64>().ok()?;
+                    Some((n, p))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    let excess = files.len().saturating_sub(keep);
+    for (_, f) in files.into_iter().take(excess) {
+        let _ = std::fs::remove_file(f);
+    }
 }
 
 /// Write the standard result files (`solution.vtu`, `monitors.json/csv`, `report.html`) to `dir`.

@@ -1049,6 +1049,7 @@ impl Service {
             status_every: u_param(p, "status_every", 0)? as usize,
             checkpoint,
             checkpoint_every: u_param(p, "checkpoint_every", 0)? as usize,
+            out_dir: out_dir.clone(),
             info: json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())}),
         };
         let mut file = match &status_path {
