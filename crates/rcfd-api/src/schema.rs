@@ -517,8 +517,8 @@ pub fn case_schema() -> Schema {
         .doc("Numerical method and run control")
         .field(
             "algorithm",
-            Schema::enumeration("simplec", &["simple", "simplec", "piso", "pimple", "compressible"])
-                .doc("Pressure-velocity coupling: simple/simplec are steady, piso/pimple transient; compressible selects the density-based explicit Euler solver (see the compressible section)"),
+            Schema::enumeration("simplec", &["simple", "simplec", "coupled", "piso", "pimple", "compressible"])
+                .doc("Pressure-velocity coupling: simple/simplec are steady segregated, coupled is the steady block-coupled solver (u, v, w and p in one system, Krylov solver with an AMG pressure block; closed domains with prescribed velocity on every boundary, laminar, no body forces/sources/energy), piso/pimple transient; compressible selects the density-based explicit Euler solver (see the compressible section)"),
         )
         .field(
             "convection",

@@ -200,6 +200,20 @@ Works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient 
 with turbulence models, the compressible solver or a user-function viscosity (diagnostics). Not implemented: the
 transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift, checkpoints that carry the viscosity history.
 
+## `solver.algorithm = "coupled"` block-coupled solver (F-032)
+
+The steady block-coupled solver solves `(u, v[, w], p)` in one linear system per outer (Picard) iteration
+instead of the segregated predictor/corrector of SIMPLE: implicit Green-Gauss pressure gradient in the
+momentum rows, continuity rows with an implicit Rhie-Chow face flux, right-preconditioned GMRES with ILU(0) on
+the momentum blocks and one AMG V-cycle (aggregation AMG) on the approximate pressure Schur complement.
+`solver.alpha_u` is the implicit momentum relaxation (0.95 to 0.98 work on the cavity, where SIMPLEC is
+limited to about 0.95); there is no pressure relaxation. `solver.pressure_rel_tol` and
+`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400). Scope of the first version, each
+diagnosed with a located error: laminar flow in a closed domain with the velocity prescribed on every boundary
+(walls, moving walls, fixed inlets; no pressure outlets, no periodic patches), no turbulence model, rheology, user
+functions, momentum sources, energy equation, uniform body force, bulk-velocity driver or non-orthogonal
+correctors. The pressure level is fixed by `solver.p_ref_cell` / `solver.p_ref_value`.
+
 ## `sources` momentum sources (F-031)
 
 `sources.<name>` adds a momentum source in a cell zone of a steady (`simple`, `simplec`) run; other algorithms are

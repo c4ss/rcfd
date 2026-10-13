@@ -427,6 +427,46 @@ impl Case {
                 );
             }
         }
+        if alg == "coupled" {
+            let nonzero = |p: &str| {
+                self.tree
+                    .get(p)
+                    .ok()
+                    .and_then(|v| v.as_array().map(|a| a.iter().any(|x| x.as_f64().unwrap_or(0.0) != 0.0)))
+                    .unwrap_or(false)
+            };
+            let on = |p: &str| self.tree.get(p).ok().and_then(|v| v.as_bool()).unwrap_or(false);
+            let why = "is not supported by solver.algorithm = \"coupled\" (closed-domain laminar flow only)";
+            if self
+                .tree
+                .get("solver.bulk_velocity")
+                .ok()
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0)
+                != 0.0
+            {
+                err("solver.bulk_velocity", format!("the bulk-velocity driver {why}"));
+            }
+            if nonzero("physics.body_force") {
+                err("physics.body_force", format!("a body force {why}"));
+            }
+            if on("energy.enabled") {
+                err("energy.enabled", format!("the energy equation {why}"));
+            }
+            if self
+                .tree
+                .get("solver.non_orthogonal_correctors")
+                .ok()
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+                > 0
+            {
+                err(
+                    "solver.non_orthogonal_correctors",
+                    format!("non-orthogonal correction {why}"),
+                );
+            }
+        }
         let energy_on = self
             .tree
             .get("energy.enabled")
