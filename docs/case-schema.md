@@ -99,6 +99,7 @@ names, a `Turbulence` row in the HTML report, a `turbulence` object in the servi
 `y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area
 weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent
 cells, the quantity the wall functions use.
+For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
 
 ## `compressible` and `solver.algorithm = "compressible"`
 

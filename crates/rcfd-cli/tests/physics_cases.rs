@@ -33,6 +33,7 @@ fn every_physics_example_validates() {
     for rel in [
         "channel/kepsilon_channel.toml",
         "channel/kepsilon_inlet.toml",
+        "channel/sst_channel.toml",
         "sod/sod.toml",
         "wedge/wedge.toml",
     ] {
@@ -74,6 +75,23 @@ fn kepsilon_channel_converges_and_writes_turbulence_fields() {
     }
     let csv = std::fs::read_to_string(out.join("monitors.csv")).unwrap();
     assert!(csv.lines().next().unwrap().contains("yplus_lower"));
+}
+
+#[test]
+fn sst_channel_converges_to_unit_wall_y_plus_and_writes_omega() {
+    let (o, out) = run_example("channel/sst_channel.toml", "sstchannel");
+    assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
+    let vtu = std::fs::read_to_string(out.join("solution.vtu")).unwrap();
+    for f in ["\"k\"", "\"omega\"", "\"nut\"", "\"y_plus\""] {
+        assert!(vtu.contains(f), "vtu lacks {f}");
+    }
+    let csv = std::fs::read_to_string(out.join("monitors.csv")).unwrap();
+    let head: Vec<&str> = csv.lines().next().unwrap().split(',').collect();
+    let last: Vec<&str> = csv.lines().last().unwrap().split(',').collect();
+    let col = |n: &str| last[head.iter().position(|h| *h == n).unwrap()].parse::<f64>().unwrap();
+    assert!((col("yplus_lower") - 1.0).abs() < 0.01, "y+ {}", col("yplus_lower"));
+    // bulk velocity: 18.17 (DNS 17.4, +4.4 percent, see the F-043 roadmap note)
+    assert!((col("u_mean") / 17.4 - 1.0).abs() < 0.10, "bulk {}", col("u_mean"));
 }
 
 #[test]
