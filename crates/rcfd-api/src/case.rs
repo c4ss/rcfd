@@ -467,18 +467,6 @@ impl Case {
                 );
             }
         }
-        let energy_on = self
-            .tree
-            .get("energy.enabled")
-            .ok()
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if energy_on && matches!(alg.as_str(), "piso" | "pimple") {
-            err(
-                "energy.enabled",
-                "the energy equation is available with the steady algorithms (simple, simplec) only".into(),
-            );
-        }
         if self
             .tree
             .get("mesh.source")

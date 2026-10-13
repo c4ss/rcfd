@@ -13,6 +13,7 @@
 
 use crate::bc::FaceCoeffs;
 use crate::convection::{convection, ConvScheme};
+use crate::ddt::{add_ddt, History, TimeScheme};
 use crate::diffusion::{laplacian, uniform_gamma};
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
@@ -36,6 +37,8 @@ pub struct SweepInputs<'a> {
     pub source: Option<&'a [f64]>,
     /// Linear solver controls.
     pub solver: &'a SolveControl,
+    /// Time derivative with its scheme, step size and history (transient run); `None` is steady.
+    pub ddt: Option<(TimeScheme, f64, &'a History)>,
 }
 
 /// One implicit sweep of the transport equation for `field`; returns the normalised residual
@@ -52,6 +55,9 @@ pub fn sweep(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs) -> f
         for c in 0..cells.len() {
             m.b[c] += s[c] * vol[c];
         }
+    }
+    if let Some((scheme, dt, hist)) = inp.ddt {
+        m = add_ddt(scheme, m, geom.mesh.cell_volumes(), dt, hist);
     }
     let res = normalised_residual(&m, &cells);
     m.relax(inp.relax, &cells);
@@ -173,6 +179,7 @@ impl ScalarTransport {
                 relax: self.relax,
                 source: self.source.as_deref(),
                 solver: &self.solver,
+                ddt: None,
             },
         )
     }
