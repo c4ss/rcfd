@@ -3,8 +3,10 @@
 
 pub mod eddy;
 pub mod kepsilon;
+pub mod sst;
 pub mod wall;
 
 pub use eddy::{effective_viscosity, patch_faces, MixingLength};
-pub use kepsilon::{KEpsilon, KEpsilonVariant};
-pub use wall::{wall_distance, wall_y_plus, WallConstants};
+pub use kepsilon::{wall_cell_sources, KEpsilon, KEpsilonVariant, WallTreatment};
+pub use sst::KOmegaSst;
+pub use wall::{wall_distance, wall_y_plus, SpaldingLaw, WallConstants};
