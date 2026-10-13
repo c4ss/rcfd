@@ -270,6 +270,30 @@
       ]
     },
     {
+      "id": "fluent-elbow-openfoam",
+      "title": "Fluent TGrid 2D elbow mesh (ASCII .msh, triangles, 918 cells) from the OpenFOAM-11 icoFoam elbow tutorial",
+      "case": null,
+      "citation": "OpenFOAM Foundation, OpenFOAM-11, tutorials/legacy/incompressible/icoFoam/elbow/elbow.msh (a mesh written by Fluent TGrid 2.4.1 / PreBFC 4.3)",
+      "status": "available",
+      "licence": {
+        "spdx": "GPL-3.0-only",
+        "name": "GNU General Public License v3 (COPYING of OpenFOAM-11)",
+        "url": "https://github.com/OpenFOAM/OpenFOAM-11/blob/master/COPYING",
+        "attribution": "OpenFOAM Foundation",
+        "notes": "Fetched on the user's machine only and never vendored. Used as a real-world input for the Fluent .msh reader test, which skips when the file is absent."
+      },
+      "redistribute_in_repo": false,
+      "files": [
+        {
+          "path": "elbow.msh",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/legacy/incompressible/icoFoam/elbow/elbow.msh",
+          "retrieved": "2026-10-13",
+          "sha256": "a7a3c88110d19f5534b5a225eb99102f1416d5113331c61ee47de1a416c299e3",
+          "bytes": 32114
+        }
+      ]
+    },
+    {
       "id": "gri-mech-30",
       "title": "GRI-Mech 3.0 methane combustion mechanism, thermo and transport data",
       "case": null,

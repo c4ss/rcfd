@@ -175,3 +175,15 @@ Files are listed with checksums and licences in `validation-data/manifest.json` 
 - GRI-Mech 3.0 (Berkeley copy): licence status unverified (no licence text on the page). Cantera BSD copy preferred.
 - OpenFOAM damBreak set-up files: GPL-3.0-only, fetched only, never vendored.
 - Hannover compressor: no open upstream found; unresolved.
+
+## Fluent mesh format details (F-118)
+
+All from memory of the public format description and not checked against a primary source in this session, except
+where a real file confirmed them. Treat as unverified.
+
+- Boundary type ids: 2 interior, 3 wall, 4 pressure-inlet, 5 pressure-outlet, 7 symmetry, 8 periodic-shadow, 10 velocity-inlet,
+  12 periodic, 20 mass-flow-inlet, 31 parent (hanging node), 36 outflow, 37 axis. The names in section 45 take precedence. The real file
+  `elbow.msh` confirmed 2 (interior), 3 (wall), 5 (pressure-outlet), 10 (velocity-inlet) with names and the 2D layout
+  (`(10 (zone first last type nd)`, face records `n0 n1 right-cell left-cell`, hex numbers in headers).
+- Section 18 as periodic shadow faces; the binary section ids 2010/3010 (nodes single/double), 2012/3012, 2013/3013 and the
+  `End of Binary Section` terminator; little-endian 32-bit integers in binary face data. No real binary file was read.

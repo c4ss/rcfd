@@ -21,7 +21,7 @@ Rules
 - Data come from public upstream sources only; copies of datasets distributed with commercial software are never used.
 - Files under GPL (the OpenFOAM damBreak set-up) are fetched on the user's machine and never vendored.
 - Cross-check done when the pack was pinned (2026-10-13): the independent SHA-256 implementation in Rust
-  (`rcfd-io::datapack`) agrees with Python's hashlib on all 31 listed files (`rcfd data verify`).
+  (`rcfd-io::datapack`) agrees with Python's hashlib on all 32 listed files (`rcfd data verify`).
 
 Unresolved
 - `hannover-compressor`: no public upstream with an open licence was found; the entry is kept with the reason
@@ -115,6 +115,15 @@ Findings while pinning
   - `g` sha256 `d6377d97d8c0631d625ed54486e9abb142eda889f66f309e2fc74a1521a9a56b` (748 bytes), https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/g
   - `physicalProperties.water` sha256 `de9ad8fa8ef86531c963bd771db62b14495a95debced2484f8c8b4f072e5bb33` (762 bytes), https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/physicalProperties.water
   - `physicalProperties.air` sha256 `25f849fbff0b2d861318a65a60d714805d3a134ca62ac0a50dc45faae87a9769` (760 bytes), https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/physicalProperties.air
+
+## Fluent TGrid 2D elbow mesh (ASCII .msh, triangles, 918 cells) from the OpenFOAM-11 icoFoam elbow tutorial (`fluent-elbow-openfoam`)
+
+- status: available
+- citation: OpenFOAM Foundation, OpenFOAM-11, tutorials/legacy/incompressible/icoFoam/elbow/elbow.msh (a mesh written by Fluent TGrid 2.4.1 / PreBFC 4.3)
+- licence: GPL-3.0-only (GNU General Public License v3 (COPYING of OpenFOAM-11)), https://github.com/OpenFOAM/OpenFOAM-11/blob/master/COPYING
+- attribution: OpenFOAM Foundation
+- licence notes: Fetched on the user's machine only and never vendored. Used as a real-world input for the Fluent .msh reader test, which skips when the file is absent.
+  - `elbow.msh` sha256 `a7a3c88110d19f5534b5a225eb99102f1416d5113331c61ee47de1a416c299e3` (32114 bytes), https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/legacy/incompressible/icoFoam/elbow/elbow.msh
 
 ## GRI-Mech 3.0 methane combustion mechanism, thermo and transport data (`gri-mech-30`)
 

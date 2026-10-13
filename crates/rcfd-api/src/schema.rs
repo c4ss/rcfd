@@ -201,7 +201,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "file",
-            Schema::string("").doc("Mesh file path (Gmsh .msh or OpenFOAM polyMesh directory; source = file)"),
+            Schema::string("").doc("Mesh file path (Gmsh .msh, Fluent .msh/.cas or OpenFOAM polyMesh directory; source = file)"),
         )
         .field(
             "scale",
