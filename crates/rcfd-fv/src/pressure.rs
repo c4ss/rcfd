@@ -195,14 +195,9 @@ pub fn solve_pressure(
     let gamma_eff = coupled_gamma(geom, bc, gamma_p);
     let (own, sf) = (geom.mesh.owner(), geom.mesh.face_area_vectors());
     let (mut res0, mut iters) = (0.0, 0);
-    for pass in 0..=ctl.non_orth_correctors {
-        let grad = if pass > 0 {
-            let bv = boundary_values_pbc(geom, bc, p);
-            Some(least_squares(geom, p, &bv))
-        } else {
-            None
-        };
-        let mut pm: FvMatrix = laplacian(geom, &gamma_eff, &bc.coeffs, grad.as_deref());
+    // assembled pressure equation for an optional explicit non-orthogonal correction gradient
+    let assemble = |grad: Option<&[Vec3]>| -> (FvMatrix, Vec<(usize, usize, f64)>) {
+        let mut pm: FvMatrix = laplacian(geom, &gamma_eff, &bc.coeffs, grad);
         for (b, d) in pm.b.iter_mut().zip(&div) {
             *b -= d;
         }
@@ -223,10 +218,32 @@ pub fn solve_pressure(
             pm.a.diag[cell] += d;
             pm.b[cell] += d * value;
         }
+        (pm, extras)
+    };
+    let residual = |pm: &FvMatrix, extras: &[(usize, usize, f64)], p: &[f64]| -> f64 {
         if extras.is_empty() {
-            if pass == 0 {
-                res0 = crate::simple::normalised_residual(&pm, p);
-            }
+            crate::simple::normalised_residual(pm, p)
+        } else {
+            let mut t = ldu_triplets(&pm.a);
+            t.extend_from_slice(extras);
+            let csr = CsrMatrix::from_triplets(p.len(), t);
+            crate::simple::normalised_residual_csr(&csr, &pm.b, p)
+        }
+    };
+    for pass in 0..=ctl.non_orth_correctors {
+        // the explicit non-orthogonal term uses the current pressure from the first solve on (so that repeated
+        // outer iterations converge to the fully corrected solution and the initial residual below vanishes there)
+        let grad = if ctl.non_orth_correctors > 0 {
+            let bv = boundary_values_pbc(geom, bc, p);
+            Some(least_squares(geom, p, &bv))
+        } else {
+            None
+        };
+        let (pm, extras) = assemble(grad.as_deref());
+        if pass == 0 {
+            res0 = residual(&pm, &extras, p);
+        }
+        if extras.is_empty() {
             iters += if ctl.amg {
                 pm.solve_amg(p, &ctl.solver)
             } else {
@@ -237,9 +254,6 @@ pub fn solve_pressure(
             let mut t = ldu_triplets(&pm.a);
             t.extend(extras);
             let csr = CsrMatrix::from_triplets(p.len(), t);
-            if pass == 0 {
-                res0 = crate::simple::normalised_residual_csr(&csr, &pm.b, p);
-            }
             let amg = Amg::new(&csr, AmgSettings::default());
             iters += cg(&csr, &pm.b, p, &amg, &ctl.solver).iterations;
         }
