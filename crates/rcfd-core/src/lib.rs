@@ -6,7 +6,9 @@
 
 pub mod error;
 pub mod expr;
+pub mod fluids;
 pub mod hash;
+pub mod iapws;
 pub mod log;
 pub mod materials;
 pub mod scalar;

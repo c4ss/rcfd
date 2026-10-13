@@ -828,9 +828,9 @@
       "F-053",
       "F-105"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Air/water properties within 1 percent of published tables; mixture rules unit-tested; no third-party licensed data (no REFPROP files) is shipped",
-    "note": "P2. Gap: CFX MATERIALS libraries and real-gas sets, REFPROP-style FLD files (third-party, must not be used). Optionally bridge to CoolProp (MIT) as an external dependency. Property tables use F-105."
+    "note": "Partial. rcfd-core fluids.rs: NASA TM-4513 species polynomials (N2, O2, Ar, H2O, CO2, CH4, H2), mole/mass fractions, mass-weighted and ideal-volume mixing, Wilke gas-mixture rule, air mixture, Sutherland air laws and 200-600 K cubic fit laws, Redlich-Kwong and Peng-Robinson EOS (roots, density, fugacity, residual enthalpy, saturation pressure); iapws.rs: IAPWS-IF97 regions 1 and 2, B23, saturation pressure, IAPWS R12-08 viscosity and R15-11 conductivity (no critical enhancement). Water: all IF97 verification points (Tables 5, 15, 35) and the viscosity/conductivity verification tables reproduced to 1e-8 / 1e-7 relative. Air check pre-registered at 1 percent for 300-500 K against the CRC/NIST gas tables (Huber) and NASA TN D-5452: cp -0.01/+0.12/-0.01 percent and Sutherland conductivity -0.64/+0.26/+0.69 percent met; Sutherland VISCOSITY NOT met (-0.22 at 300 K, -1.08 at 400 K, -1.46 at 500 K; -2.07 at 600 K); cubic fit laws for 200-600 K are within 0.11 percent but are in-sample fits to the same 3-digit table (leave-one-out 400 K row -0.22 percent). Not done: IF97 region 3 and 5, backward equations, critical enhancements, species transport coefficients per species, case-schema keys for the library (laws are pasted through properties.*; no variable-density coupling, that is F-050). Mixture-rule formulas, PR/RK constants and atomic weights are from memory and listed as unverified in docs/reference-data.md. No NIST WebBook or REFPROP data used."
   },
   {
     "id": "F-112",
