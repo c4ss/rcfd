@@ -169,6 +169,96 @@ fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "list_workflow_tasks",
+            description: "List the tasks of the session's set-up/run workflow with their state (not_run, done, failed, stale), dependencies and the next task to run; also lists the available templates and task kinds.",
+            access: Access::Read,
+            schema: || obj(json!({"session": sess()}), &[]),
+        },
+        Tool {
+            name: "create_workflow",
+            description: "Create the session's workflow from a template (mesh_to_results, channel_flow, empty), from a workflow document, or by loading a workflow file from the sandbox.",
+            access: Access::Mutate,
+            schema: || {
+                obj(
+                    json!({
+                        "session": sess(),
+                        "template": {"type": "string", "description": "mesh_to_results (default), channel_flow or empty"},
+                        "workflow": {"type": "object", "description": "an rcfd-workflow document"},
+                        "path": {"type": "string", "description": "workflow JSON file inside the sandbox"},
+                        "name": {"type": "string"}
+                    }),
+                    &[],
+                )
+            },
+        },
+        Tool {
+            name: "edit_workflow",
+            description: "Insert a task into, or delete a task from, the session's workflow. Deleting is refused while other tasks depend on the task; inserting validates ids, kinds, dependencies and cycles.",
+            access: Access::Mutate,
+            schema: || {
+                obj(
+                    json!({
+                        "session": sess(),
+                        "action": {"type": "string", "enum": ["insert", "delete"]},
+                        "task": {"type": "object", "description": "for insert: {id, kind, title?, deps?, params?}"},
+                        "after": {"type": "string", "description": "for insert: id of the task to insert after (default: at the end)"},
+                        "id": {"type": "string", "description": "for delete: task id"}
+                    }),
+                    &["action"],
+                )
+            },
+        },
+        Tool {
+            name: "run_workflow_task",
+            description: "Run one workflow task (and, by default, the prerequisite tasks that are not done), or all outstanding tasks when task is omitted. Stops at the first failing task and reports its message. Solve tasks run synchronously under the service limits.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "session": sess(),
+                        "task": {"type": "string"},
+                        "with_prerequisites": {"type": "boolean"},
+                        "max_steps": {"type": "integer", "minimum": 1}
+                    }),
+                    &[],
+                )
+            },
+        },
+        Tool {
+            name: "check_case_headless",
+            description: "Check a case without running it (the --check-only launch): settings, simulation set-up and mesh quality. Give a session, or a case file path inside the sandbox. Returns the exit code the CLI would use (0 ok, 3 invalid, 4 bad mesh).",
+            access: Access::Read,
+            schema: || obj(json!({"session": sess(), "path": {"type": "string"}}), &[]),
+        },
+        Tool {
+            name: "run_headless",
+            description: "Run the session under the run-control contract: step and wall-clock limits, stop file, continue from a checkpoint, periodic/final checkpoints and a machine-readable status stream written to a file. Blocks until the run ends; returns the outcome (state, exit code, iterations) and the last status events.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "session": sess(),
+                        "max_steps": {"type": "integer", "minimum": 1},
+                        "max_elapsed_s": {"type": "number", "minimum": 0.0},
+                        "stop_file": {"type": "string"},
+                        "continue_from": {"type": "string", "description": "checkpoint file (steady SIMPLE/SIMPLEC without turbulence)"},
+                        "checkpoint": {"type": "string"},
+                        "checkpoint_every": {"type": "integer", "minimum": 1},
+                        "status_path": {"type": "string", "description": "write the JSON-lines status stream here"},
+                        "status_every": {"type": "integer", "minimum": 1},
+                        "out_dir": {"type": "string", "description": "write solution.vtu, monitors and report.html here at the end"}
+                    }),
+                    &[],
+                )
+            },
+        },
+        Tool {
+            name: "read_status_stream",
+            description: "Summarise a status stream file (JSON lines, format rcfd-status) written by `rcfd run --status-json/--status-file` or run_headless: final state, exit code, iterations, last residuals, checkpoints and warnings.",
+            access: Access::Read,
+            schema: || obj(json!({"path": {"type": "string"}}), &["path"]),
+        },
+        Tool {
             name: "render_image",
             description: "Render a field as a PNG image (optionally with velocity vectors) and return it as an image content block.",
             access: Access::Read,
@@ -478,6 +568,75 @@ impl McpServer {
                 }
                 Ok(ok_result(svc.call("field.export_vtk", &with(Value::Object(p))?)?))
             }
+            "list_workflow_tasks" => Ok(ok_result(svc.call("workflow.list", &with(json!({}))?)?)),
+            "create_workflow" => {
+                if let Some(path) = args.get("path") {
+                    return Ok(ok_result(svc.call("workflow.load", &with(json!({"path": path}))?)?));
+                }
+                let mut p = Map::new();
+                for k in ["template", "workflow", "name"] {
+                    if let Some(v) = args.get(k) {
+                        p.insert(k.into(), v.clone());
+                    }
+                }
+                Ok(ok_result(svc.call("workflow.create", &with(Value::Object(p))?)?))
+            }
+            "edit_workflow" => match args["action"].as_str() {
+                Some("insert") => {
+                    let mut p = Map::new();
+                    for k in ["task", "after"] {
+                        if let Some(v) = args.get(k) {
+                            p.insert(k.into(), v.clone());
+                        }
+                    }
+                    Ok(ok_result(svc.call("workflow.insert", &with(Value::Object(p))?)?))
+                }
+                Some("delete") => Ok(ok_result(svc.call(
+                    "workflow.delete",
+                    &with(json!({"id": args.get("id").cloned().unwrap_or(Value::Null)}))?,
+                )?)),
+                _ => Err(RpcError {
+                    code: -32602,
+                    message: "action must be insert or delete".into(),
+                    data: None,
+                }),
+            },
+            "run_workflow_task" => {
+                let mut p = Map::new();
+                for k in ["task", "with_prerequisites", "max_steps"] {
+                    if let Some(v) = args.get(k) {
+                        p.insert(k.into(), v.clone());
+                    }
+                }
+                Ok(ok_result(svc.call("workflow.run", &with(Value::Object(p))?)?))
+            }
+            "check_case_headless" => {
+                let p = match args.get("path") {
+                    Some(path) => json!({"path": path}),
+                    None => with(json!({}))?,
+                };
+                Ok(ok_result(svc.call("run.check", &p)?))
+            }
+            "run_headless" => {
+                let mut p = Map::new();
+                for k in [
+                    "max_steps",
+                    "max_elapsed_s",
+                    "stop_file",
+                    "continue_from",
+                    "checkpoint",
+                    "checkpoint_every",
+                    "status_path",
+                    "status_every",
+                    "out_dir",
+                ] {
+                    if let Some(v) = args.get(k) {
+                        p.insert(k.into(), v.clone());
+                    }
+                }
+                Ok(ok_result(svc.call("run.headless", &with(Value::Object(p))?)?))
+            }
+            "read_status_stream" => Ok(ok_result(svc.call("status.read", &json!({"path": args["path"]}))?)),
             "render_image" => {
                 let mut p = Map::new();
                 for k in ["field", "width", "vectors"] {

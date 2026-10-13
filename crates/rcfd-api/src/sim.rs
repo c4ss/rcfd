@@ -18,7 +18,7 @@ use rcfd_fv::gradient::green_gauss;
 use rcfd_fv::pimple::{PimpleSettings, PimpleSolver};
 use rcfd_fv::pressure::{boundary_values, pressure_bc};
 use rcfd_fv::simple::{
-    BodyForce, Coupling, MeanVelocityDriver, PseudoMode, PseudoTransient, SimpleSettings, SimpleSolver,
+    BodyForce, Coupling, MeanVelocityDriver, PseudoMode, PseudoTransient, SimpleSettings, SimpleSolver, SimpleState,
 };
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::gen::{self, Grading};
@@ -1447,6 +1447,103 @@ impl Simulation {
                 })
             }),
         })
+    }
+
+    /// Whether [`save_checkpoint`](Self::save_checkpoint) works for this run (steady SIMPLE/SIMPLEC,
+    /// laminar, with or without the energy equation).
+    pub fn supports_checkpoint(&self) -> bool {
+        matches!(self.engine, Engine::Steady(_)) && self.turb.is_none()
+    }
+
+    /// Write a restart file (F-121 `continue-from`): velocity, pressure, face flux, temperature
+    /// and the iteration counter in the checksummed container, tied to the mesh by its hash.
+    pub fn save_checkpoint(&self, path: &Path) -> Result<()> {
+        let Engine::Steady(s) = &self.engine else {
+            return Err(Error::Other(
+                "checkpoints are available for steady SIMPLE/SIMPLEC runs only".into(),
+            ));
+        };
+        if self.turb.is_some() {
+            return Err(Error::Other(
+                "the k-epsilon / k-omega SST state is not part of a checkpoint yet".into(),
+            ));
+        }
+        let st = s.snapshot();
+        let mut c = rcfd_io::container::Container::new();
+        c.put(
+            "meta",
+            json!({
+                "kind": "rcfd-sim-checkpoint", "version": 1,
+                "iteration": st.iteration,
+                "mesh_hash": format!("{:016x}", self.geom.mesh.content_hash()),
+                "n_cells": st.p.len(), "n_faces": st.phi.len(),
+                "energy": self.energy.is_some(),
+            })
+            .to_string()
+            .into_bytes(),
+        );
+        c.put_f64s("u", &st.u.iter().flatten().copied().collect::<Vec<_>>());
+        c.put_f64s("p", &st.p);
+        c.put_f64s("phi", &st.phi);
+        if let Some(en) = &self.energy {
+            c.put_f64s("T", &en.solver.t.values);
+        }
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        c.write_file(path)
+    }
+
+    /// Restore a restart file written by [`save_checkpoint`](Self::save_checkpoint) into this
+    /// freshly built simulation (same mesh and physics); the run continues from its iteration.
+    pub fn load_checkpoint(&mut self, path: &Path) -> Result<()> {
+        let c = rcfd_io::container::Container::read_file(path)?;
+        let meta: Value = serde_json::from_slice(
+            c.get("meta")
+                .ok_or_else(|| Error::Io("checkpoint: no meta section".into()))?,
+        )
+        .map_err(|e| Error::Io(format!("checkpoint meta: {e}")))?;
+        if meta["kind"] != "rcfd-sim-checkpoint" {
+            return Err(Error::Io("not an rcfd simulation checkpoint".into()));
+        }
+        if meta["mesh_hash"].as_str() != Some(format!("{:016x}", self.geom.mesh.content_hash()).as_str()) {
+            return Err(Error::Io("checkpoint was written for a different mesh".into()));
+        }
+        if meta["energy"].as_bool().unwrap_or(false) != self.energy.is_some() {
+            return Err(Error::Io(
+                "checkpoint and case disagree about the energy equation".into(),
+            ));
+        }
+        if self.turb.is_some() {
+            return Err(Error::Other(
+                "the k-epsilon / k-omega SST state is not part of a checkpoint yet".into(),
+            ));
+        }
+        let Engine::Steady(s) = &mut self.engine else {
+            return Err(Error::Other(
+                "checkpoints are available for steady SIMPLE/SIMPLEC runs only".into(),
+            ));
+        };
+        let u = c.get_f64s("u")?;
+        let state = SimpleState {
+            iteration: meta["iteration"].as_u64().unwrap_or(0) as usize,
+            u: u.chunks_exact(3).map(|v| [v[0], v[1], v[2]]).collect(),
+            p: c.get_f64s("p")?,
+            phi: c.get_f64s("phi")?,
+        };
+        s.restore(&state)?;
+        if let Some(en) = &mut self.energy {
+            let t = c.get_f64s("T")?;
+            if t.len() != en.solver.t.values.len() {
+                return Err(Error::Io("checkpoint temperature size does not match the mesh".into()));
+            }
+            en.solver.t.values = t;
+        }
+        self.done = false;
+        self.converged = false;
+        self.last = None;
+        self.stop_reason = None;
+        Ok(())
     }
 
     /// Write the current solution as `<dir>/<name>.vtu`.

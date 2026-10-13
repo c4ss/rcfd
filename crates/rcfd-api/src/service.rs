@@ -6,8 +6,10 @@
 //! [`Service::call`], which is how the MCP server uses it.
 
 use crate::case::{Case, Diagnostic};
+use crate::runctl;
 use crate::schema::case_schema;
 use crate::sim::Simulation;
+use crate::workflow::{self, Task, TaskState, Workflow};
 use rcfd_core::vec3::Vec3;
 use rcfd_mesh::quality::check_mesh;
 use rcfd_post::monitors::monitor_json_schema;
@@ -222,6 +224,7 @@ struct SessionInner {
     sim: Option<Arc<Mutex<Simulation>>>,
     log: VecDeque<String>,
     journal: Vec<Value>,
+    workflow: Option<Workflow>,
 }
 
 struct Session {
@@ -435,6 +438,11 @@ impl Service {
                     return Err(e);
                 }
                 inner.sim = None;
+                if p.get("_workflow") != Some(&Value::Bool(true)) {
+                    if let Some(w) = inner.workflow.as_mut() {
+                        w.invalidate_all();
+                    }
+                }
                 let stored = inner.case.get(path).unwrap_or(Value::Null);
                 inner.journal.push(json!({"op": "set", "path": path, "value": stored}));
                 drop(inner);
@@ -460,6 +468,9 @@ impl Service {
                     }])
                 })?;
                 inner.sim = None;
+                if let Some(w) = inner.workflow.as_mut() {
+                    w.invalidate_all();
+                }
                 inner.journal.push(json!({"op": "remove", "path": path}));
                 drop(inner);
                 s.set_state(RunState::Defined);
@@ -791,10 +802,419 @@ impl Service {
                 let (events, next) = self.events.poll(after, sess, timeout, limit);
                 Ok(json!({"events": events, "next": next}))
             }
+            "workflow.create" => {
+                let s = self.session(p)?;
+                let mut w = if let Some(doc) = p.get("workflow") {
+                    Workflow::from_json(doc).map_err(RpcError::params)?
+                } else {
+                    let t = p.get("template").and_then(Value::as_str).unwrap_or("mesh_to_results");
+                    Workflow::template(t).ok_or_else(|| {
+                        RpcError::params(format!(
+                            "unknown template '{t}' (known: {})",
+                            workflow::TEMPLATES.iter().map(|x| x.0).collect::<Vec<_>>().join(", ")
+                        ))
+                    })?
+                };
+                if let Some(n) = p.get("name").and_then(Value::as_str) {
+                    w.name = n.into();
+                }
+                let sum = w.summary();
+                lock(&s.inner).workflow = Some(w);
+                self.events.emit(
+                    &s.id,
+                    "workflow_created",
+                    json!({"tasks": sum["tasks"].as_array().map_or(0, Vec::len)}),
+                );
+                Ok(sum)
+            }
+            "workflow.list" => {
+                let s = self.session(p)?;
+                let mut v = self.with_workflow(&s, |w| Ok(w.summary()))?;
+                v["kinds"] = json!(workflow::KINDS
+                    .iter()
+                    .map(|k| json!({"kind": k.0, "description": k.1}))
+                    .collect::<Vec<_>>());
+                v["templates"] = json!(workflow::TEMPLATES
+                    .iter()
+                    .map(|k| json!({"name": k.0, "description": k.1}))
+                    .collect::<Vec<_>>());
+                Ok(v)
+            }
+            "workflow.get" => {
+                let s = self.session(p)?;
+                self.with_workflow(&s, |w| Ok(w.to_json()))
+            }
+            "workflow.run" => self.workflow_run(p),
+            "workflow.insert" => {
+                let s = self.session(p)?;
+                let t = p.get("task").ok_or_else(|| RpcError::params("missing 'task'"))?;
+                let task = workflow::task_from_json(t).map_err(RpcError::params)?;
+                let after = p.get("after").and_then(Value::as_str);
+                self.with_workflow(&s, |w| w.insert(task, after).map(|_| w.summary()))
+            }
+            "workflow.delete" => {
+                let s = self.session(p)?;
+                let id = s_param(p, "id")?;
+                self.with_workflow(&s, |w| w.delete(id).map(|_| w.summary()))
+            }
+            "workflow.save" => {
+                let s = self.session(p)?;
+                let path = self.sandbox_path(s_param(p, "path")?)?;
+                let doc = self.with_workflow(&s, |w| Ok(w.to_json()))?;
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+                }
+                std::fs::write(&path, serde_json::to_string_pretty(&doc).unwrap_or_default())
+                    .map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+                Ok(json!({"path": path.display().to_string()}))
+            }
+            "workflow.load" => {
+                let s = self.session(p)?;
+                let path = self.sandbox_path(s_param(p, "path")?)?;
+                let text = std::fs::read_to_string(&path)
+                    .map_err(|e| RpcError::params(format!("cannot read {}: {e}", path.display())))?;
+                let doc: Value =
+                    serde_json::from_str(&text).map_err(|e| RpcError::params(format!("workflow file: {e}")))?;
+                let w = Workflow::from_json(&doc).map_err(RpcError::params)?;
+                let sum = w.summary();
+                lock(&s.inner).workflow = Some(w);
+                Ok(sum)
+            }
+            "run.check" => {
+                let case = if p.get("session").is_some() {
+                    let s = self.session(p)?;
+                    let c = lock(&s.inner).case.clone();
+                    c
+                } else {
+                    let path = self.sandbox_path(s_param(p, "path")?)?;
+                    Case::load_with(&path, self.cfg.root.as_deref()).map_err(RpcError::validation)?
+                };
+                self.check_case_paths(&case)?;
+                let (code, ev) = runctl::check_only(&case);
+                Ok(json!({"ok": code == runctl::exit::OK, "exit_code": code, "event": ev}))
+            }
+            "run.headless" => {
+                let s = self.session(p)?;
+                let (out, events) = self.headless(&s, p)?;
+                Ok(
+                    json!({"outcome": out.to_json(), "ok": out.exit_code == runctl::exit::OK, "events": events, "status": self.status(&s)}),
+                )
+            }
+            "status.read" => {
+                let path = self.sandbox_path(s_param(p, "path")?)?;
+                let text = std::fs::read_to_string(&path)
+                    .map_err(|e| RpcError::params(format!("cannot read {}: {e}", path.display())))?;
+                runctl::summarize_stream(&text).map_err(RpcError::params)
+            }
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),
             )),
+        }
+    }
+
+    fn with_workflow<R>(&self, s: &Session, f: impl FnOnce(&mut Workflow) -> Result<R, String>) -> Rpc<R> {
+        let mut inner = lock(&s.inner);
+        let w = inner
+            .workflow
+            .as_mut()
+            .ok_or_else(|| RpcError::new(code::BAD_STATE, "no workflow; call workflow.create first"))?;
+        f(w).map_err(RpcError::params)
+    }
+
+    /// Run a session's simulation under the run-control driver (F-121): limits, stop file,
+    /// continue-from, checkpoints, status stream. Blocks until the run ends.
+    fn headless(&self, s: &Arc<Session>, p: &Value) -> Rpc<(runctl::RunOutcome, Vec<Value>)> {
+        self.require_idle(s)?;
+        let opt_path = |key: &str| -> Rpc<Option<PathBuf>> {
+            p.get(key)
+                .and_then(Value::as_str)
+                .map(|x| self.sandbox_path(x))
+                .transpose()
+        };
+        let cont = opt_path("continue_from")?;
+        let stop_file = opt_path("stop_file")?;
+        let checkpoint = opt_path("checkpoint")?;
+        let status_path = opt_path("status_path")?;
+        let out_dir = opt_path("out_dir")?;
+        if lock(&s.inner).sim.is_none()
+            || cont.is_some()
+            || matches!(
+                s.state(),
+                RunState::Finished { .. } | RunState::Stopped | RunState::Failed(_)
+            )
+        {
+            self.initialize(s)?;
+        }
+        let sim = self.sim(s)?;
+        if let Some(c) = &cont {
+            lock(&sim)
+                .load_checkpoint(c)
+                .map_err(|e| RpcError::params(format!("continue_from: {e}")))?;
+        }
+        let cap = self.cfg.max_steps_per_call;
+        let max_steps = u_param(p, "max_steps", cap as u64)?.min(cap as u64) as usize;
+        let max_elapsed = p
+            .get("max_elapsed_s")
+            .and_then(Value::as_f64)
+            .into_iter()
+            .chain(self.cfg.max_run_seconds)
+            .fold(None, |a: Option<f64>, x| Some(a.map_or(x, |y| y.min(x))));
+        let opts = runctl::RunOptions {
+            max_steps: Some(max_steps),
+            max_elapsed,
+            stop_file,
+            status_every: u_param(p, "status_every", 0)? as usize,
+            checkpoint,
+            checkpoint_every: u_param(p, "checkpoint_every", 0)? as usize,
+            info: json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())}),
+        };
+        let mut file = match &status_path {
+            Some(f) => {
+                if let Some(dir) = f.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                Some(std::fs::File::create(f).map_err(|e| RpcError::new(code::INTERNAL, format!("status_path: {e}")))?)
+            }
+            None => None,
+        };
+        s.ctl.stop.store(false, Ordering::SeqCst);
+        s.ctl.pause.store(false, Ordering::SeqCst);
+        s.set_state(RunState::Running);
+        self.events
+            .emit(&s.id, "started", json!({"max_steps": max_steps, "headless": true}));
+        let mut events: Vec<Value> = Vec::new();
+        let outcome = runctl::drive(&sim, &opts, &|| s.ctl.stop.load(Ordering::SeqCst), &mut |ev: &Value| {
+            if let Some(f) = file.as_mut() {
+                let _ = writeln!(f, "{ev}");
+            }
+            if ev["event"] == "iteration" {
+                let mut inner = lock(&s.inner);
+                inner.log.push_back(format!(
+                    "iter {:>6}  res_u {:.3e}  res_p {:.3e}",
+                    ev["index"],
+                    ev["res_u"].as_f64().unwrap_or(f64::NAN),
+                    ev["res_p"].as_f64().unwrap_or(f64::NAN)
+                ));
+                while inner.log.len() > 2000 {
+                    inner.log.pop_front();
+                }
+                drop(inner);
+                self.events.emit(&s.id, "iteration", ev.clone());
+            }
+            events.push(ev.clone());
+        });
+        if events.len() > 60 {
+            let skip = events.len() - 60;
+            events.drain(1..=skip.min(events.len() - 1));
+        }
+        match outcome.state {
+            "converged" | "finished" => {
+                s.set_state(RunState::Finished { converged: true });
+                self.events.emit(&s.id, "finished", json!({"converged": true}));
+            }
+            "not_converged" => {
+                s.set_state(RunState::Finished { converged: false });
+                self.events.emit(&s.id, "finished", json!({"converged": false}));
+            }
+            "step_limit" => {
+                s.set_state(RunState::Ready);
+                self.events
+                    .emit(&s.id, "chunk_done", json!({"steps": outcome.iterations}));
+            }
+            "interrupted" | "time_limit" => {
+                s.set_state(RunState::Stopped);
+                self.events.emit(&s.id, "stopped", json!({"reason": outcome.reason}));
+            }
+            _ => {
+                s.set_state(RunState::Failed(outcome.reason.clone()));
+                self.events.emit(&s.id, "error", json!({"message": outcome.reason}));
+            }
+        }
+        if let Some(dir) = out_dir {
+            let g = lock(&sim);
+            runctl::write_results(&g, &dir).map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+        }
+        Ok((outcome, events))
+    }
+
+    /// Execute the planned tasks of `workflow.run`.
+    fn workflow_run(self: &Arc<Self>, p: &Value) -> Rpc {
+        let s = self.session(p)?;
+        self.require_idle(&s)?;
+        let with_pre = p.get("with_prerequisites").and_then(Value::as_bool).unwrap_or(true);
+        let plan: Vec<String> = {
+            let inner = lock(&s.inner);
+            let w = inner
+                .workflow
+                .as_ref()
+                .ok_or_else(|| RpcError::new(code::BAD_STATE, "no workflow; call workflow.create first"))?;
+            match p.get("task").and_then(Value::as_str) {
+                Some(t) => w.plan(t, with_pre).map_err(RpcError::params)?,
+                None => {
+                    let mut all: Vec<String> = Vec::new();
+                    for t in w.tasks.iter().filter(|t| t.state != TaskState::Done) {
+                        for id in w.plan(&t.id, true).map_err(RpcError::params)? {
+                            if !all.contains(&id) {
+                                all.push(id);
+                            }
+                        }
+                    }
+                    all
+                }
+            }
+        };
+        let mut results = Vec::new();
+        let mut ok = true;
+        for id in plan {
+            let task = lock(&s.inner)
+                .workflow
+                .as_ref()
+                .and_then(|w| w.task(&id).cloned())
+                .ok_or_else(|| RpcError::params(format!("task '{id}' vanished")))?;
+            self.events
+                .emit(&s.id, "workflow_task", json!({"id": id, "state": "running"}));
+            let r = self.execute_task(&s, &task, p);
+            let (good, message, result) = match r {
+                Ok((m, v)) => (true, m, v),
+                Err((m, v)) => (false, m, v),
+            };
+            if let Some(w) = lock(&s.inner).workflow.as_mut() {
+                // a set task changes the case under every other result
+                w.finish(&id, good, message.clone(), result.clone());
+                if task.kind == "set" && good {
+                    w.invalidate_all();
+                    if let Some(i) = w.index(&id) {
+                        w.tasks[i].state = TaskState::Done;
+                    }
+                }
+            }
+            self.events.emit(
+                &s.id,
+                "workflow_task",
+                json!({"id": id, "state": if good { "done" } else { "failed" }, "message": message}),
+            );
+            results.push(json!({"id": id, "ok": good, "message": message, "result": result}));
+            if !good {
+                ok = false;
+                break;
+            }
+        }
+        let summary = self.with_workflow(&s, |w| Ok(w.summary()))?;
+        Ok(json!({"ok": ok, "ran": results, "workflow": summary}))
+    }
+
+    fn execute_task(
+        self: &Arc<Self>,
+        s: &Arc<Session>,
+        task: &Task,
+        call: &Value,
+    ) -> Result<(String, Value), (String, Value)> {
+        let sid = json!(s.id);
+        let fail = |e: RpcError| (e.message.clone(), e.data.clone().unwrap_or(Value::Null));
+        let tp = &task.params;
+        match task.kind.as_str() {
+            "check_mesh" => {
+                let r = self.call("mesh.check", &json!({"session": sid})).map_err(fail)?;
+                let cells = r["report"]["n_cells"].clone();
+                if r["ok"] == true {
+                    Ok((format!("mesh ok, {cells} cells"), json!({"report": r["report"]})))
+                } else {
+                    Err(("mesh failed its quality check".into(), json!({"report": r["report"]})))
+                }
+            }
+            "validate" => {
+                let r = self.call("settings.validate", &json!({"session": sid})).map_err(fail)?;
+                if r["ok"] == true {
+                    Ok(("settings valid".into(), Value::Null))
+                } else {
+                    let msgs: Vec<String> = r["diagnostics"]
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .take(3)
+                                .map(|d| {
+                                    format!(
+                                        "{}: {}",
+                                        d["path"].as_str().unwrap_or(""),
+                                        d["message"].as_str().unwrap_or("")
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    Err((
+                        format!("invalid set-up: {}", msgs.join("; ")),
+                        json!({"diagnostics": r["diagnostics"]}),
+                    ))
+                }
+            }
+            "set" => {
+                let r = self
+                    .call(
+                        "settings.set",
+                        &json!({"session": sid, "path": tp["path"], "value": tp["value"], "_workflow": true}),
+                    )
+                    .map_err(fail)?;
+                Ok((format!("{} = {}", tp["path"].as_str().unwrap_or(""), r["value"]), r))
+            }
+            "initialize" => {
+                let r = self.call("run.initialize", &json!({"session": sid})).map_err(fail)?;
+                Ok((format!("initialised, {} cells", r["simulation"]["cells"]), r))
+            }
+            "solve" => {
+                let mut hp = json!({"max_steps": tp.get("max_steps").or_else(|| call.get("max_steps")).cloned().unwrap_or(Value::Null)});
+                for k in [
+                    "max_elapsed_s",
+                    "stop_file",
+                    "status_path",
+                    "checkpoint",
+                    "status_every",
+                ] {
+                    if let Some(v) = tp.get(k).or_else(|| call.get(k)) {
+                        hp[k] = v.clone();
+                    }
+                }
+                hp["session"] = sid.clone();
+                if hp["max_steps"].is_null() {
+                    hp.as_object_mut().map(|o| o.remove("max_steps"));
+                }
+                // the sim built by an earlier initialize task is continued, not rebuilt
+                let (out, events) = self.headless(s, &hp).map_err(fail)?;
+                let body =
+                    json!({"outcome": out.to_json(), "last_events": events.iter().rev().take(3).collect::<Vec<_>>()});
+                let msg = format!("{} after {} iterations ({})", out.state, out.iterations, out.reason);
+                if matches!(out.state, "converged" | "finished") {
+                    Ok((msg, body))
+                } else {
+                    Err((msg, body))
+                }
+            }
+            "report" => {
+                let r = self.call("reports.get", &json!({"session": sid})).map_err(fail)?;
+                let mut body = json!({"reports": r["reports"]});
+                if let Some(path) = tp.get("path").and_then(Value::as_str) {
+                    let mut ep = json!({"session": sid, "path": path});
+                    if let Some(f) = tp.get("format") {
+                        ep["format"] = f.clone();
+                    }
+                    let e = self.call("report.export", &ep).map_err(fail)?;
+                    body["file"] = e["path"].clone();
+                }
+                let n = r["reports"].as_array().map_or(0, Vec::len);
+                Ok((format!("{n} report values"), body))
+            }
+            "export_vtk" => {
+                let mut ep = json!({"session": sid});
+                for k in ["dir", "name"] {
+                    if let Some(v) = tp.get(k) {
+                        ep[k] = v.clone();
+                    }
+                }
+                let r = self.call("field.export_vtk", &ep).map_err(fail)?;
+                Ok((format!("wrote {}", r["path"].as_str().unwrap_or("")), r))
+            }
+            other => Err((format!("unknown task kind '{other}'"), Value::Null)),
         }
     }
 
@@ -843,6 +1263,7 @@ impl Service {
                 sim: None,
                 log: VecDeque::new(),
                 journal: vec![create_entry],
+                workflow: None,
             }),
             ctl: Arc::new(RunCtl {
                 state: Mutex::new(RunState::Defined),
@@ -1220,6 +1641,17 @@ pub const METHODS: &[&str] = &[
     "field.grid",
     "panel.snapshot",
     "events.poll",
+    "workflow.create",
+    "workflow.list",
+    "workflow.get",
+    "workflow.run",
+    "workflow.insert",
+    "workflow.delete",
+    "workflow.save",
+    "workflow.load",
+    "run.check",
+    "run.headless",
+    "status.read",
 ];
 
 /// Minimal blocking client for the line protocol (tests, CLI, scripts).

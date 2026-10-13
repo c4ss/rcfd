@@ -291,6 +291,87 @@ fn stdio_loop_handles_a_scripted_session() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-03-26");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 12);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 19);
     assert_eq!(lines[2]["error"]["code"], -32700);
+}
+
+#[test]
+fn workflow_and_headless_tools_run_a_case_and_read_the_status_stream() {
+    let dir = std::env::temp_dir().join(format!("rcfd_mcp_wf_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let s = McpServer::new(
+        Service::new(ServiceConfig {
+            root: Some(dir.clone()),
+            ..Default::default()
+        }),
+        Policy::default(),
+    );
+    let payload = |r: &Value| -> Value { serde_json::from_str(r["content"][0]["text"].as_str().unwrap()).unwrap() };
+    call(&s, "create_case", json!({"template": "lid_driven_cavity"}));
+    call(&s, "set_setting", json!({"path": "mesh.nx", "value": 8}));
+    call(&s, "set_setting", json!({"path": "mesh.ny", "value": 8}));
+    // listing before creating a workflow is an error result, not a protocol error
+    let r = call(&s, "list_workflow_tasks", json!({}));
+    assert_eq!(r["isError"], true);
+    let r = payload(&call(&s, "create_workflow", json!({"template": "mesh_to_results"})));
+    assert_eq!(r["next"], "mesh_check");
+    let r = payload(&call(&s, "check_case_headless", json!({})));
+    assert_eq!(r["exit_code"], 0, "{r}");
+    // edit: insert then refuse a delete that others depend on
+    let r = call(
+        &s,
+        "edit_workflow",
+        json!({"action": "insert", "after": "report", "task": {"id": "export", "kind": "export_vtk", "deps": ["solve"], "params": {"dir": "res"}}}),
+    );
+    assert!(r.get("isError").is_none() || r["isError"] == false, "{r}");
+    let r = call(&s, "edit_workflow", json!({"action": "delete", "id": "solve"}));
+    assert_eq!(r["isError"], true);
+    let r = payload(&call(&s, "run_workflow_task", json!({"task": "export"})));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(dir.join("res/solution.vtu").exists());
+    let l = payload(&call(&s, "list_workflow_tasks", json!({})));
+    assert_eq!(l["tasks"].as_array().unwrap().len(), 6);
+    // headless: step-limited launch writes a status stream the reader tool summarises
+    call(
+        &s,
+        "set_setting",
+        json!({"path": "solver.max_iterations", "value": 500}),
+    );
+    let r = payload(&call(
+        &s,
+        "run_headless",
+        json!({"max_steps": 12, "status_path": "st.jsonl", "checkpoint": "c.rcfd"}),
+    ));
+    assert_eq!(r["outcome"]["state"], "step_limit", "{r}");
+    let sum = payload(&call(&s, "read_status_stream", json!({"path": "st.jsonl"})));
+    assert_eq!(
+        (sum["state"].clone(), sum["iterations"].clone()),
+        (json!("step_limit"), json!(12))
+    );
+    // the sandbox applies to the stream reader
+    let r = call(&s, "read_status_stream", json!({"path": "../x.jsonl"}));
+    assert_eq!(r["isError"], true);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn workflow_tools_are_gated_by_the_permission_model() {
+    let s = server(Policy::read_only());
+    let list = rpc(&s, 1, "tools/list", json!({}))["result"]["tools"].clone();
+    for (name, read) in [
+        ("list_workflow_tasks", true),
+        ("check_case_headless", true),
+        ("read_status_stream", true),
+        ("create_workflow", false),
+        ("edit_workflow", false),
+        ("run_workflow_task", false),
+        ("run_headless", false),
+    ] {
+        let t = list.as_array().unwrap().iter().find(|t| t["name"] == name).unwrap();
+        assert_eq!(t["annotations"]["readOnlyHint"], read, "{name}");
+    }
+    let r = call(&s, "create_workflow", json!({"template": "mesh_to_results"}));
+    assert_eq!(r["isError"], true);
+    assert!(r["content"][0]["text"].as_str().unwrap().contains("permission denied"));
 }
