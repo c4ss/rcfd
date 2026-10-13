@@ -9,6 +9,7 @@
 //!   with the normal pointing out of the domain.
 
 pub mod gen;
+pub mod layers;
 pub mod mesh;
 pub mod partition;
 pub mod quality;

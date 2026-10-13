@@ -16,6 +16,20 @@ pub enum Grading {
     /// Cells clustered at both ends: mirrored geometric progression where the
     /// ratio is (largest, central cell size) / (smallest, end cell size).
     Symmetric(f64),
+    /// Prismatic wall layers (F-108): `layers` cells of height `first * growth^i` starting at
+    /// coordinate 0 (and mirrored at `len` when `both`), followed by bulk cells whose sizes grow
+    /// geometrically from the last layer to fill the rest of the axis (see
+    /// [`crate::layers::wall_segment_sizes`]). `both` needs an even cell count.
+    WallLayers {
+        /// Height of the wall-adjacent cell.
+        first: f64,
+        /// Ratio of successive layer heights.
+        growth: f64,
+        /// Number of inflation layers at each wall.
+        layers: usize,
+        /// Layers at both ends of the axis instead of at coordinate 0 only.
+        both: bool,
+    },
 }
 
 fn geometric(n: usize, len: f64, ratio: f64) -> Vec<f64> {
@@ -59,6 +73,20 @@ pub fn axis_coords(n: usize, len: f64, g: Grading) -> Result<Vec<f64>> {
             let mut x = vec![0.0];
             for s in &sizes {
                 x.push(x.last().expect("non-empty") + s * len / total);
+            }
+            *x.last_mut().expect("non-empty") = len;
+            Ok(x)
+        }
+        Grading::WallLayers {
+            first,
+            growth,
+            layers,
+            both,
+        } => {
+            let sizes = crate::layers::wall_layer_axis_sizes(n, len, first, growth, layers, both)?;
+            let mut x = vec![0.0];
+            for s in &sizes {
+                x.push(x.last().expect("non-empty") + s);
             }
             *x.last_mut().expect("non-empty") = len;
             Ok(x)
