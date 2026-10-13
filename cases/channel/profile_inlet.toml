@@ -1,0 +1,37 @@
+# Laminar channel whose inlet velocity is read from a CSV profile (F-105).
+# Fully developed plane Poiseuille flow: pressure drop 12 nu U L / H^2 = 2.4.
+title = "channel with a profile-file inlet"
+
+[mesh]
+generator = "channel_2d"
+nx = 24
+ny = 20
+lx = 2.0
+ly = 1.0
+depth = 0.1
+
+[physics]
+nu = 0.1
+
+[boundaries.inlet]
+velocity = "fixed"
+profile = "inlet_u"
+
+[boundaries.outlet]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.walls]
+velocity = "fixed"
+
+[tables.inlet_u]
+file = "profile_inlet.csv"
+inputs = ["y"]
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+h_operator = "from_solution"
+max_iterations = 2000
+tolerance_u = 1e-9
+tolerance_p = 1e-9

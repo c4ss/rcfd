@@ -819,11 +819,13 @@ impl Service {
         }});
         let mut case = if let Some(path) = p.get("path").and_then(Value::as_str) {
             let path = self.sandbox_path(path)?;
-            Case::load(&path).map_err(RpcError::validation)?
+            Case::load_with(&path, self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else if let Some(text) = p.get("toml").and_then(Value::as_str) {
-            Case::parse_toml(text).map_err(RpcError::validation)?
+            let base = self.cfg.root.clone().unwrap_or_else(|| PathBuf::from("."));
+            Case::parse_toml_with(text, &base, self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else if let Some(obj) = p.get("settings") {
-            Case::from_json(obj).map_err(RpcError::validation)?
+            let base = self.cfg.root.clone().unwrap_or_else(|| PathBuf::from("."));
+            Case::from_json_with(obj, &base, self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else {
             Case::new()
         };

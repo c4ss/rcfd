@@ -749,9 +749,9 @@
       "F-020",
       "F-104"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Parabolic inlet read from a profile file reproduces the analytic Poiseuille solution; a temperature-dependent viscosity table is interpolated correctly (unit test); missing/out-of-range data raise errors",
-    "note": "P1. Gap: both products expose profile data and table/interpolation functions (CFX material functions: profile data, table, interpolation; Fluent file.read_profile and setup.profiles)."
+    "note": "Wave 8. Done. rcfd-core table.rs: Table (CSV with bracketed header units, 1-3 inputs, linear / multilinear grid / inverse-distance scattered interpolation, error or clamp outside the range) and table calls in expressions (Context::add_table; arguments dimension-checked against the input units, result carries the output unit). Settings: tables.<name> (file or inline data, inputs, outputs, units, extrapolation) and boundaries.<patch>.profile feeding ux/uy/uz/T/heat_flux; service sandbox confines table files; Case gained parse_toml_in/with, from_json_in/with and load_with so relative files resolve before validation. Validation (checks fixed before running, rcfd-api tests/tables.rs): parabolic inlet from a 101-row CSV on a 24x20 channel, Re=10: last-column velocity max deviation from u=6Uy(H-y)/H^2 0.66 percent of the centreline value (limit 2), inlet-outlet kinematic pressure drop 2.358 vs analytic 12 nu U L/H^2 = 2.400 (-1.7 percent, limit 3); a water nu(T) table in degC gives 0.801e-6 at 30 degC and 0.9025e-6 at 298.15 K (exact linear interpolation); missing file, uncovered patch, wrong dimension, unknown input column and sandbox escape are all errors. Caveats: no Fluent profile syntax; scattered interpolation is IDW only; out-of-range values during a transient run are not trapped (only t=0 at build)."
   },
   {
     "id": "F-106",

@@ -26,9 +26,11 @@
 //! evaluating one per boundary face or cell is cheap.
 
 use crate::error::Error;
+use crate::table::Table;
 use crate::units::{Dimension, Quantity, Unit};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 /// A parse or dimension error with the byte span of the offending source text.
 #[derive(Debug, Clone, PartialEq)]
@@ -380,6 +382,7 @@ pub struct Context {
     vars: Vec<(String, Dimension)>,
     consts: BTreeMap<String, Quantity>,
     named: BTreeMap<String, Expr>,
+    tables: BTreeMap<String, (Arc<Table>, usize)>,
 }
 
 impl Context {
@@ -407,6 +410,17 @@ impl Context {
     /// Declare a named expression.
     pub fn add_named(&mut self, name: &str, e: Expr) {
         self.named.insert(name.to_string(), e);
+    }
+
+    /// Make output column `output` of a lookup table callable as `name(arg, ...)` (one argument per
+    /// table input, each with the dimension of that input; the result has the dimension of the output).
+    pub fn add_table(&mut self, name: &str, table: Arc<Table>, output: usize) {
+        self.tables.insert(name.to_string(), (table, output));
+    }
+
+    /// The table callable under `name`, if any.
+    pub fn table(&self, name: &str) -> Option<&Arc<Table>> {
+        self.tables.get(name).map(|t| &t.0)
     }
 
     /// Slot of a variable.
@@ -496,6 +510,7 @@ enum Op {
     Bin(char, Box<Op>, Box<Op>),
     Cmp(&'static str, Box<Op>, Box<Op>),
     Call(Func, Vec<Op>),
+    Table(Arc<Table>, usize, Vec<Op>),
 }
 
 /// A dimension-checked expression ready for repeated evaluation.
@@ -556,6 +571,13 @@ fn eval_op(op: &Op, s: &[f64]) -> f64 {
                 _ => x != 0.0 || y != 0.0,
             };
             f64::from(u8::from(t))
+        }
+        Op::Table(t, out, args) => {
+            let mut x = [0.0f64; 3];
+            for (k, a) in args.iter().enumerate().take(3) {
+                x[k] = eval_op(a, s);
+            }
+            t.eval(*out, &x[..args.len().min(3)])
         }
         Op::Call(f, args) => {
             let a: Vec<f64> = args.iter().map(|x| eval_op(x, s)).collect();
@@ -749,6 +771,54 @@ fn compile_node(n: &Node, ctx: &Context, stack: &mut Vec<String>) -> Result<(Com
                     ))
                 }
             }
+        }
+        Node::Call(name, args, s, e) if ctx.tables.contains_key(name) => {
+            let (table, out) = &ctx.tables[name];
+            if args.len() != table.n_inputs() {
+                return Err(ExprError::new(
+                    format!(
+                        "table '{name}' takes {} argument(s), found {}",
+                        table.n_inputs(),
+                        args.len()
+                    ),
+                    *s,
+                    *e,
+                ));
+            }
+            let mut ops = Vec::new();
+            let mut constant = true;
+            for (k, a) in args.iter().enumerate() {
+                let (c, _) = compile_node(a, ctx, stack)?;
+                let col = &table.inputs[k];
+                let Some(want) = col.dim else {
+                    let (as_, ae) = a.span();
+                    return Err(ExprError::new(
+                        format!(
+                            "input column '{}' of table '{name}' has no unit; declare it in the file header or the table's units setting (for example \"{} [m]\")",
+                            col.name, col.name
+                        ),
+                        as_,
+                        ae,
+                    ));
+                };
+                if c.dim != want {
+                    let (as_, ae) = a.span();
+                    return Err(ExprError::new(
+                        format!(
+                            "argument {} of table '{name}' (column '{}') must have dimension '{want}', found '{}'",
+                            k + 1,
+                            col.name,
+                            c.dim
+                        ),
+                        as_,
+                        ae,
+                    ));
+                }
+                constant &= c.constant;
+                ops.push(c.op);
+            }
+            let dim = table.outputs[*out].dim.unwrap_or(Dimension::NONE);
+            Ok((mk(dim, constant, Op::Table(table.clone(), *out, ops)), ()))
         }
         Node::Call(name, args, s, e) => {
             let (f, arity) = match name.as_str() {
