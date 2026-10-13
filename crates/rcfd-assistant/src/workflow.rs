@@ -223,9 +223,41 @@ pub fn suggest_boundary_conditions(patches: &Value, boundaries: &Value) -> Value
     json!({"suggestions": out, "notes": notes})
 }
 
-/// True when the settings select the k-epsilon turbulence model.
+/// True when the settings select a RANS turbulence model (k-epsilon or k-omega SST); the inlet
+/// helpers and the y+ checks apply to both.
 fn is_k_epsilon(settings: &Value) -> bool {
-    settings["turbulence"]["model"] == "k_epsilon"
+    matches!(
+        settings["turbulence"]["model"].as_str(),
+        Some("k_epsilon" | "k_omega_sst")
+    )
+}
+
+/// True when the settings select k-omega SST.
+fn is_sst(settings: &Value) -> bool {
+    settings["turbulence"]["model"] == "k_omega_sst"
+}
+
+/// Estimated cell-centre `y+` of the wall-adjacent cell from the settings alone: flat-plate
+/// friction velocity `u_tau = U sqrt(Cf/2)`, `Cf = 0.455 / ln^2(0.06 Re_x)` (White) at the
+/// downstream end `lx`, and the first-cell height from `mesh.first_layer_height`, or `ly / ny`
+/// (half of it for a channel-like domain is not assumed: the uniform cell height is used).
+/// Returns `None` when speed, viscosity or the mesh sizes are not available.
+fn estimate_first_cell_y_plus(settings: &Value, speed: f64, nu: f64) -> Option<f64> {
+    let mesh = &settings["mesh"];
+    let lx = mesh["lx"].as_f64()?;
+    let re = speed * lx / nu;
+    if re.is_nan() || re <= 1e3 {
+        return None;
+    }
+    let cf = 0.455 / (0.06 * re).ln().powi(2);
+    let u_tau = speed * (0.5 * cf).sqrt();
+    let h1 =
+        if mesh["wall_layers"].as_i64().unwrap_or(0) > 0 && mesh["first_layer_height"].as_f64().unwrap_or(0.0) > 0.0 {
+            mesh["first_layer_height"].as_f64()?
+        } else {
+            mesh["ly"].as_f64()? / mesh["ny"].as_f64()?.max(1.0)
+        };
+    Some(0.5 * h1 * u_tau / nu)
 }
 
 /// True when the settings select the compressible solver.
@@ -337,8 +369,23 @@ pub fn validate_case(service_validation: &Value, mesh_check: Option<&Value>, set
         .unwrap_or(1.0)
         .max(settings["mesh"]["ly"].as_f64().unwrap_or(1.0));
     let (ke, comp) = (is_k_epsilon(settings), is_compressible(settings));
-    if ke {
+    if ke && !is_sst(settings) {
         warnings.push(json!({"path": "turbulence.model", "message": "k-epsilon with standard wall functions needs the first cell centre in the log layer (y+ about 30 to 300); a y_plus report on each wall patch shows the value", "fix": "add reports.<name> with type y_plus, then coarsen the wall-adjacent cells if y+ < 11 or refine if y+ > 300"}));
+    }
+    if is_sst(settings) {
+        let mut w = json!({"path": "turbulence.model", "message": "k-omega SST with its automatic wall treatment is accurate for a wall-resolved first cell (y+ about 1, at most 2) and for the log layer (y+ about 30 to 300); y+ between about 3 and 20 is less accurate (the wall shear then relies on the blended law of the wall)", "fix": "add reports.<name> with type y_plus on each wall patch; for a wall-resolved mesh set mesh.wall_layers with mesh.target_y_plus (or mesh.first_layer_height) and mesh.layer_growth about 1.1 to 1.2"});
+        if nu > 0.0 && speed > 0.0 {
+            if let Some(yp) = estimate_first_cell_y_plus(settings, speed, nu) {
+                w["y_plus_estimate"] = json!((yp * 100.0).round() / 100.0);
+                let note = if yp > 2.0 && yp < 20.0 {
+                    format!(" Estimated first-cell y+ = {yp:.1} (flat-plate friction at lx): in the less accurate range, refine the wall-adjacent cells to y+ <= 1 (mesh.target_y_plus = 1) or coarsen them to y+ > 30")
+                } else {
+                    format!(" Estimated first-cell y+ = {yp:.1} (flat-plate friction at lx)")
+                };
+                w["message"] = json!(format!("{}{note}", w["message"].as_str().unwrap_or_default()));
+            }
+        }
+        warnings.push(w);
     }
     if comp {
         let cfl = settings["compressible"]["cfl"].as_f64().unwrap_or(0.4);

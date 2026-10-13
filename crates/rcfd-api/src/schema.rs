@@ -29,6 +29,7 @@ pub const FIELD_NAMES: &[&str] = &[
     "vorticity_z",
     "k",
     "epsilon",
+    "omega",
     "nut",
     "wall_distance",
     "y_plus",
@@ -145,6 +146,58 @@ pub fn case_schema() -> Schema {
             Schema::float(10.0)
                 .range(0.0, 60.0)
                 .doc("Ramp angle in degrees (wedge_2d)"),
+        )
+        .field(
+            "wall_layers",
+            Schema::int(0)
+                .range(0.0, 1000.0)
+                .doc("Number of boundary-layer inflation layers in y at the wall(s) (box_2d, channel_2d; 0 = off). Layer heights grow by layer_growth from first_layer_height (or the height derived from target_y_plus); the remaining cells grow smoothly to fill ly"),
+        )
+        .field(
+            "first_layer_height",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::LENGTH)
+                .doc("Height of the wall-adjacent cell; 0 = derive it from target_y_plus"),
+        )
+        .field(
+            "target_y_plus",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Target y+ of the wall-adjacent cell centre when first_layer_height is 0: h1 = 2 y+ nu / u_tau, u_tau from layer_u_tau or from the flat-plate skin friction at layer_reference_velocity and layer_reference_length"),
+        )
+        .field(
+            "layer_growth",
+            Schema::float(1.2)
+                .range(1.0, 3.0)
+                .doc("Growth ratio of successive inflation layers"),
+        )
+        .field(
+            "layer_walls",
+            Schema::enumeration("both", &["both", "lower"]).doc(
+                "Inflation at both y walls (needs an even ny) or at the lower wall (ymin) only, e.g. a flat plate under a free stream",
+            ),
+        )
+        .field(
+            "layer_reference_velocity",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::VELOCITY)
+                .doc("Free-stream or bulk speed for the target_y_plus estimate"),
+        )
+        .field(
+            "layer_reference_length",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::LENGTH)
+                .doc("Distance from the leading edge for the flat-plate Reynolds number of the target_y_plus estimate (use lx for the downstream end)"),
+        )
+        .field(
+            "layer_u_tau",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::VELOCITY)
+                .doc("Friction velocity for target_y_plus (0 = estimate from the flat-plate correlation)"),
         )
         .field(
             "file",
@@ -303,7 +356,7 @@ pub fn case_schema() -> Schema {
         .field(
             "turbulence",
             Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient"]).doc(
-                "Turbulence role of the patch (k-epsilon): wall = standard wall functions, inlet = fixed k and epsilon from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient",
+                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient",
             ),
         )
         .field(
@@ -346,6 +399,13 @@ pub fn case_schema() -> Schema {
                 .at_least(0.0)
                 .dim(Dimension::VELOCITY * Dimension::VELOCITY * Dimension::ANGULAR_VELOCITY)
                 .doc("Dissipation rate of an inlet (turbulence_spec = values)"),
+        )
+        .field(
+            "omega_value",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::ANGULAR_VELOCITY)
+                .doc("Specific dissipation rate of an inlet (k_omega_sst with turbulence_spec = values)"),
         )
         .field(
             "compressible_bc",
@@ -657,7 +717,7 @@ pub fn case_schema() -> Schema {
         .doc("Turbulence modelling (steady SIMPLE / SIMPLEC runs)")
         .field(
             "model",
-            Schema::enumeration("laminar", &["laminar", "k_epsilon"]).doc("laminar, or the k-epsilon eddy-viscosity family"),
+            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst"]).doc("laminar, the k-epsilon eddy-viscosity family with wall functions, or k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer"),
         )
         .field(
             "variant",
@@ -669,6 +729,12 @@ pub fn case_schema() -> Schema {
             "wall_function",
             Schema::enumeration("standard", &["standard"]).doc(
                 "Wall treatment: standard equilibrium log-law wall functions (Launder and Spalding 1974). Scalable wall functions and rough walls are not available",
+            ),
+        )
+        .field(
+            "wall_treatment",
+            Schema::enumeration("smooth", &["smooth", "hysteresis", "switch"]).doc(
+                "Wall-cell treatment around the viscous/log intersection y* = 11.5: smooth (blended epsilon and production, no chatter, default), hysteresis (sharp switch with a 10 percent dead band) or switch (sharp Launder-Spalding switch; the eddy viscosity of cells near y* = 11.5 may oscillate and res_nut then never converges)",
             ),
         )
         .field(
@@ -708,6 +774,13 @@ pub fn case_schema() -> Schema {
                 .at_least(0.0)
                 .dim(Dimension::VELOCITY * Dimension::VELOCITY * Dimension::ANGULAR_VELOCITY)
                 .doc("Initial epsilon; 0 = derive from initial_viscosity_ratio"),
+        )
+        .field(
+            "omega_initial",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::ANGULAR_VELOCITY)
+                .doc("Initial omega (k_omega_sst); 0 = derive from initial_viscosity_ratio. Set together with k_initial"),
         )
         .field(
             "initial_intensity",

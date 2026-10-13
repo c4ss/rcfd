@@ -1,0 +1,74 @@
+# Wall-resolved plane channel, Re_tau = 395, k-omega SST (Menter 2003). The y+ = 1 mesh is
+# built by boundary-layer inflation: 16 layers growing by 1.1 at both walls, the first
+# cell height derived from mesh.target_y_plus (h1 = 2 y+ nu / u_tau with the known
+# u_tau = 1). Periodic in x and driven by a unit body force (u_tau = 1, half-height 1,
+# nu = 1/395). Reference (DNS, Moser/Kim/Mansour 1999): U_c+ = 20.1, U_b+ = 17.4.
+#
+#   rcfd run cases/channel/sst_channel.toml --out out/sst_channel
+title = "k-omega SST plane channel, Re_tau = 395, y+ = 1 mesh"
+
+[mesh]
+generator = "box_2d"
+nx = 4
+ny = 60
+lx = 1.0
+ly = 2.0
+periodic_x = true
+wall_layers = 16
+layer_growth = 1.1
+layer_walls = "both"
+target_y_plus = 1.0
+layer_u_tau = 1.0
+
+[physics]
+nu = 0.002531645569620253   # 1 / 395
+body_force = [1.0, 0.0, 0.0]
+
+[initial]
+velocity = [17.0, 0.0, 0.0]
+
+[boundaries.ymin]
+velocity = "fixed"
+
+[boundaries.ymax]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+alpha_u = 0.9
+max_iterations = 9000
+# The relative momentum/pressure residuals of the periodic channel level out at about 1e-3
+# (linear solver noise on a converged state), so the run is stopped by the wall-cell y+
+# having stopped moving instead; see [convergence.yplus_settled].
+tolerance_u = 1e-12
+tolerance_p = 1e-12
+
+[turbulence]
+model = "k_omega_sst"
+k_initial = 1.0
+omega_initial = 39.5   # k / (10 nu)
+
+[reports.yplus_lower]
+type = "y_plus"
+patch = "ymin"
+statistic = "average"
+
+[reports.yplus_upper]
+type = "y_plus"
+patch = "ymax"
+statistic = "max"
+
+[reports.u_mean]
+type = "volume_average"
+field = "ux"
+
+[convergence.yplus_settled]
+monitor = "yplus_lower"
+type = "window_range"
+window = 20
+tolerance = 1e-9
+relative = true
+
+[output]
+directory = "results"

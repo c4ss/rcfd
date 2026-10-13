@@ -16,6 +16,7 @@ Example cases (all run in seconds to a minute in a debug build):
 | --- | --- |
 | `cases/channel/kepsilon_channel.toml` | periodic Re_tau 395 channel, standard k-epsilon, y+ report, y+-plateau stop |
 | `cases/channel/kepsilon_inlet.toml` | developing channel, RNG k-epsilon, inlet intensity + length scale |
+| `cases/channel/sst_channel.toml` | wall-resolved Re_tau 395 channel, k-omega SST, y+ = 1 from `mesh.target_y_plus` with 16 inflation layers |
 | `cases/sod/sod.toml` | Sod shock tube, HLLC + van Leer + SSP-RK3 |
 | `cases/wedge/wedge.toml` | Mach 2 flow over a 10 degree ramp |
 
@@ -23,19 +24,56 @@ Example cases (all run in seconds to a minute in a debug build):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `model` | `laminar` | `laminar` or `k_epsilon` |
-| `variant` | `standard` | `standard`, `rng`, `realizable` |
+| `model` | `laminar` | `laminar`, `k_epsilon` or `k_omega_sst` (Menter 2003, see below) |
+| `variant` | `standard` | `standard`, `rng`, `realizable` (k-epsilon only; rejected for SST) |
+| `wall_treatment` | `smooth` | k-epsilon wall cells: `smooth` (compound viscous/log epsilon and blended production, no switch), `hysteresis` (+-10 percent dead band on the y* = 11.225 switch) or `switch` (original hard switch; its nu_t never settles, see docs/bfs-convergence-findings.md) |
 | `wall_function` | `standard` | log-law wall functions (the only option; `standard` variant constants) |
 | `kappa`, `e_wall` | 0.41, 9.8 | log-law constants |
 | `convection` | `upwind` | scheme for k and epsilon transport |
 | `relax`, `relax_nut` | 0.7, 0.5 | under-relaxation of k/epsilon and of the eddy viscosity |
 | `k_initial`, `epsilon_initial` | 0 | initial values; both must be set together, or leave both 0 to derive them |
+| `omega_initial` | 0 | k-omega SST only, replaces `epsilon_initial` (`k_initial` and `omega_initial` together, or both 0 to derive them) |
 | `initial_intensity`, `initial_viscosity_ratio` | 0.05, 10 | used to derive the initial k, epsilon from the initial velocity when the two above are 0 |
 
 `k_epsilon` runs with the steady algorithms (`simple`, `simplec`) only, needs at least one wall
 patch, a positive `physics.nu`, and cannot be combined with `energy.enabled`. Walls must be at
 rest (moving walls are rejected). The momentum equation uses the solved-H operator
 (`solver.h_operator = from_solution`) automatically unless you choose otherwise.
+
+### `k_omega_sst`
+
+Menter's 2003 k-omega SST ("Ten years of industrial experience with the SST turbulence model",
+Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the form of the NASA
+Turbulence Modeling Resource page (constants and blending functions checked against it, see
+docs/reference-data.md). Same restrictions as `k_epsilon` (steady algorithms, a wall patch, no
+energy). Wall treatment: automatic. A Spalding (1961) law of the wall gives the wall shear for
+any first-cell y+, `omega` on the wall faces is `10 * 6 nu / (beta1 y^2)` (y = first cell-centre
+distance, the TMR recommendation), and for y+ > 5 the cell omega follows the blend of the viscous
+and the log-layer value. Wall-resolved meshes (y+ about 1) and wall-function-like meshes (y+ 30
+to 300) both work; y+ between about 3 and 20 is the least accurate range and
+`validate_case` of the assistant warns with a y+ estimate. Convection of k and omega uses
+`turbulence.convection` (`upwind` is the safe choice; `linearUpwind` diverged in tests). `kappa`
+and `e_wall` define the Spalding law. Boundary values: `turbulence_spec = values` takes
+`k_value` and `omega_value`; the other inlet specifications derive `omega = epsilon/(beta* k)`.
+Outputs add the field `omega`.
+
+### Boundary-layer inflation (`mesh.wall_layers`, F-108)
+
+For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `wall_layers` | 0 | number of inflation layers (0 = off) |
+| `first_layer_height` | 0 | height of the wall-adjacent cell; 0 = derive from `target_y_plus` |
+| `target_y_plus` | 0 | y+ of the wall-adjacent cell centre: `h1 = 2 y+ nu / u_tau` |
+| `layer_growth` | 1.2 | ratio of successive layer heights |
+| `layer_walls` | `both` | `both` (needs an even `ny`) or `lower` |
+| `layer_u_tau` | 0 | friction velocity for `target_y_plus`; 0 = flat-plate estimate from `layer_reference_velocity` and `layer_reference_length` (White Cf = 0.455/ln^2(0.06 Re_x)) |
+
+After the layers the remaining cells grow smoothly (ratio solved so that the sizes fill `ly`).
+Impossible stacks (too many layers, layers thicker than the domain, no height information) are
+rejected with located diagnostics. Block meshes only: inflation on unstructured wall patches is
+not implemented.
 
 Per-boundary keys (`boundaries.<patch>.`):
 
@@ -114,4 +152,8 @@ and are unchanged.
 * Only the standard wall-function formulation is implemented (no scalable or enhanced wall
   treatment, no rough walls).
 * k-epsilon is steady-only and incompressible, without heat transfer.
+* k-omega SST: same limits. Its skin friction and channel velocity depend on the first-cell y+
+  (flat plate Cf rises as y+ falls: -10.5 percent against White's formula at y+ 2 down to
+  -4.8 percent at y+ 0.1; channel bulk velocity +5.4 percent at y+ 2 to +1.4 percent at 0.25);
+  the validated accuracy statements are in the roadmap note of F-043.
 * The compressible solver is inviscid and explicit; there is no implicit option.

@@ -43,6 +43,7 @@ pub fn report_dimension(kind: &str, field: &str) -> Dimension {
         "vorticity_z" => Dimension::ANGULAR_VELOCITY,
         "k" => Dimension::VELOCITY * Dimension::VELOCITY,
         "epsilon" => Dimension::VELOCITY * Dimension::VELOCITY * Dimension::ANGULAR_VELOCITY,
+        "omega" => Dimension::ANGULAR_VELOCITY,
         "nut" => Dimension::KINEMATIC_VISCOSITY,
         "wall_distance" => Dimension::LENGTH,
         "rho" => Dimension::DENSITY,
