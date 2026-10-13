@@ -383,10 +383,10 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
   - depends on: F-072, F-020
   - acceptance: A region defined by a field threshold can be patched with a value and used to restrict a source term; registers are named objects in the settings tree
   - note: P3. Gap: Fluent cell registers and adaption registers; CFX subdomains.
-- [ ] **F-125** Public-data validation pack: fetch scripts and manifests for open benchmark data (cavity, step, flat plate, NACA 0012, damBreak, GRI-Mech, NASA Rotor 37, Hannover compressor)
+- [~] **F-125** Public-data validation pack: fetch scripts and manifests for open benchmark data (cavity, step, flat plate, NACA 0012, damBreak, GRI-Mech, NASA Rotor 37, Hannover compressor)
   - depends on: F-006
   - acceptance: Each dataset has a fetch script, checksum and licence record; CI never reads from any proprietary install; validation reports list data provenance
-  - note: P1. Gap: several public cases are useful (Hannover compressor, OpenFOAM damBreak, Chemkin GRI-Mech) and rcfd must fetch from the public upstream.
+  - note: Partial (acceptance met for 7 of 8 datasets). Delivered: validation-data/manifest.json (rcfd-data-manifest v1) with upstream URLs pinned to commits/tags, SHA-256 and sizes of 31 files, licence records and citations; validation-data/fetch.py (list/fetch/verify/pin, stdlib, downloads to git-ignored data/); rcfd-io datapack module with independent SHA-256 (agrees with hashlib), rcfd data list|verify|provenance, data lines in rcfd cases list, docs/validation-data.md with provenance table. Datasets: Ghia and de Vahl Davis (in-repo tables), NASA TMR flat plate / backward step / NACA 0012 (CC0), OpenFOAM damBreak set-up (GPL, fetch only), GRI-Mech 3.0 (Berkeley licence unverified; Cantera BSD copy), NASA TP-1337 rotor 37 report. Not done: Hannover compressor unresolved (no open upstream found); Rotor 37 numbers not transcribed; the TMR flat-plate/step/airfoil data are not yet wired into automated comparisons. Finding: TMR CFL3D file gives Cf(0.97) about 2.691e-3 vs 2.683e-3 used in flat_plate_sst test (tolerance unchanged). CI and tests never use the network or proprietary files.
 
 ### Phase 7 additions
 

@@ -1,0 +1,363 @@
+{
+  "format": "rcfd-data-manifest",
+  "version": 1,
+  "description": "Public benchmark data for rcfd validation (F-125). Fetch with validation-data/fetch.py; CI never uses the network or any proprietary file.",
+  "datasets": [
+    {
+      "id": "cavity-ghia1982",
+      "title": "Lid-driven cavity centreline velocities (Ghia, Ghia and Shin 1982)",
+      "case": "cavity",
+      "citation": "U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411, doi:10.1016/0021-9991(82)90058-4",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://doi.org/10.1016/0021-9991(82)90058-4",
+        "attribution": "Ghia, Ghia and Shin (1982)",
+        "notes": "In-repo tables (cases/cavity/reference) cross-checked against secondary copies, see docs/reference-data.md. No upstream download: the paper's tables are not distributed as a file."
+      },
+      "files": [
+        {
+          "local": "cases/cavity/reference/ghia1982_u_centerline.csv",
+          "sha256": "2c815e4837de8802b90c075eede15592cb0f4c6c7911734271d722a000a9e175",
+          "bytes": 541
+        },
+        {
+          "local": "cases/cavity/reference/ghia1982_v_centerline_Re100.csv",
+          "sha256": "0d2e9c29d25bf8de06442f47c4f9b11475bcb08a1b81e2cd9db40d941ca82408",
+          "bytes": 254
+        }
+      ]
+    },
+    {
+      "id": "heated-cavity-devahldavis1983",
+      "title": "Differentially heated square cavity (de Vahl Davis 1983)",
+      "case": "heated_cavity",
+      "citation": "G. de Vahl Davis, Int. J. Numer. Meth. Fluids 3 (1983) 249-264, doi:10.1002/fld.1650030305",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://doi.org/10.1002/fld.1650030305",
+        "attribution": "de Vahl Davis (1983)",
+        "notes": "In-repo table (cases/heated_cavity/reference), verified against secondary copies in docs/reference-data.md."
+      },
+      "files": [
+        {
+          "local": "cases/heated_cavity/reference/devahldavis1983.csv",
+          "sha256": "b84b03aa48c3a963f0bc4211a6052b06861fbd587d3bf7d15ff9eacf79fe5a81",
+          "bytes": 161
+        }
+      ]
+    },
+    {
+      "id": "flat-plate-tmr",
+      "title": "Zero-pressure-gradient flat plate: validation data, CFL3D SST result, coarse grid (NASA TMR 2DZP)",
+      "case": "flat_plate",
+      "citation": "NASA Turbulence Modeling Resource, 2D Zero Pressure Gradient Flat Plate Verification and Validation, https://tmbwg.github.io/turbmodels/flatplate.html",
+      "status": "available",
+      "licence": {
+        "spdx": "CC0-1.0",
+        "name": "Creative Commons CC0 1.0 (repository LICENSE of TMBWG/turbmodels)",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA Turbulence Modeling Resource (TMBWG), https://tmbwg.github.io/turbmodels/",
+        "notes": "Experimental data inside the files originate from the cited papers; the TMR page states they are public, provided as is."
+      },
+      "files": [
+        {
+          "path": "cf_K-S.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/FlatPlate_validation/cf_K-S.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "bafbaf7fa7969a945a5ad0935ca90c320ab72f14ba5a08474abffa61356bba2d",
+          "bytes": 4224
+        },
+        {
+          "path": "cf_as_function_of_x.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/FlatPlate_validation/cf_as_function_of_x.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "97d01033550468819a0f081fee37fc1836ff12a4ad8318f0a80cdc847625a8e2",
+          "bytes": 183312
+        },
+        {
+          "path": "u+y+.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/FlatPlate_validation/u+y+.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "314dc0b5e4aa666ee88ac507eeda8cbeaacc1279057d10430748231264277bcb",
+          "bytes": 137104
+        },
+        {
+          "path": "cf_plate_sstv.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/FlatPlate/SST/cf_plate_sstv.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "a56bd2d16818456af015b13839f0a991b4b85bfa6c18242e7c331a2c7a4d40e8",
+          "bytes": 32816
+        },
+        {
+          "path": "flatplate_clust2_4levelsdown_35x25.p2dfmt",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/FlatPlate/Grids/flatplate_clust2_4levelsdown_35x25.p2dfmt",
+          "retrieved": "2026-10-13",
+          "sha256": "41c409f49afca8affaafd4a0a49c6ba934eca9007da502fe0c20afbd091500b0",
+          "bytes": 42622
+        }
+      ]
+    },
+    {
+      "id": "backward-step-tmr",
+      "title": "Backward-facing step: Driver and Seegmiller (1985) experiment (NASA TMR 2DBFS)",
+      "case": "backward_step",
+      "citation": "D. M. Driver, H. L. Seegmiller, AIAA J. 23 (1985) 163-171, doi:10.2514/3.8890; data via NASA TMR https://tmbwg.github.io/turbmodels/backstep_val.html",
+      "status": "available",
+      "licence": {
+        "spdx": "CC0-1.0",
+        "name": "Creative Commons CC0 1.0 (repository LICENSE of TMBWG/turbmodels)",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA Turbulence Modeling Resource (TMBWG), https://tmbwg.github.io/turbmodels/",
+        "notes": "Experimental data inside the files originate from the cited papers; the TMR page states they are public, provided as is."
+      },
+      "files": [
+        {
+          "path": "cf.exp.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/Backstep_validation/cf.exp.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "cd9b6434b7956bc58e859de6af654cd7f891e25303babf1dd8633d6c58f74276",
+          "bytes": 592
+        },
+        {
+          "path": "cp.expnew.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/Backstep_validation/cp.expnew.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "2b3ec9f8d8025b958d6ddcf6767daaf3c93083d45ef350a8cf9c4b46f93a882a",
+          "bytes": 2087
+        },
+        {
+          "path": "profiles.exp.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/Backstep_validation/profiles.exp.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "23e8b44db52bfc36c66af6b743a4080c34f0165eb213a3db29c0914e12cf598d",
+          "bytes": 10341
+        }
+      ]
+    },
+    {
+      "id": "naca0012-tmr",
+      "title": "NACA 0012 airfoil: experimental Cl/Cd/Cp (Abbott, Ladson, Gregory, McCroskey) and surface points (NASA TMR)",
+      "case": "naca0012",
+      "citation": "NASA Turbulence Modeling Resource, 2D NACA 0012 Airfoil Validation, https://tmbwg.github.io/turbmodels/naca0012_val.html",
+      "status": "available",
+      "licence": {
+        "spdx": "CC0-1.0",
+        "name": "Creative Commons CC0 1.0 (repository LICENSE of TMBWG/turbmodels)",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA Turbulence Modeling Resource (TMBWG), https://tmbwg.github.io/turbmodels/",
+        "notes": "Experimental data inside the files originate from the cited papers; the TMR page states they are public, provided as is."
+      },
+      "files": [
+        {
+          "path": "n0012points_superbig_clust_fix.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_grids/n0012points_superbig_clust_fix.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "74e147db4fa052be7ab79465a756c55b39b1786bfd7141a86257e89586728ae1",
+          "bytes": 824246
+        },
+        {
+          "path": "0012.abbottdata.cd.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/0012.abbottdata.cd.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "21321fe22883672c344f3cd1369c69cdaf045ed8496cd0a976b741645c79e3d9",
+          "bytes": 569
+        },
+        {
+          "path": "0012.abbottdata.cl.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/0012.abbottdata.cl.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "3ee6a0c198f6402c9fc5fd8affc1115c1e87ff943b8b02775df86a7cfa3c55f3",
+          "bytes": 696
+        },
+        {
+          "path": "0012.mccroskeydata.cl.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/0012.mccroskeydata.cl.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "bf5848c235cedffef4e307f5cb52be1e7146bd5e480c202824a59d6d9754924e",
+          "bytes": 250
+        },
+        {
+          "path": "CLCD_Ladson_expdata.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CLCD_Ladson_expdata.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "78cd2f6aa4968e80f44cbf6c96f699bd9c6e45681d958ec528a10cf72ed23357",
+          "bytes": 1343
+        },
+        {
+          "path": "CL_Gregory_expdata.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CL_Gregory_expdata.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "0b7381a45412de50fcf0e0dddf67f1e8e35ba1a278bd4734fb7f16ad08df1f74",
+          "bytes": 308
+        },
+        {
+          "path": "CP_Gregory_expdata.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CP_Gregory_expdata.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "38d8474bc67661c3cef5e4cd9eeddb95d4a436d06abc1f58a8518066f510647c",
+          "bytes": 1608
+        },
+        {
+          "path": "CP_Ladson.dat",
+          "url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CP_Ladson.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "547e022634a360cd7697813543348cd447ee0038cdbc8f00a5296c7822ec7af8",
+          "bytes": 6331
+        }
+      ]
+    },
+    {
+      "id": "dambreak-openfoam",
+      "title": "damBreak laminar two-phase set-up (OpenFOAM-11 tutorial files, geometry and initial conditions)",
+      "case": null,
+      "citation": "OpenFOAM Foundation, OpenFOAM-11, tutorials/incompressibleVoF/damBreakLaminar (set-up after Koshizuka and Oka 1996 / Martin and Moyce 1952 style dam break)",
+      "status": "available",
+      "licence": {
+        "spdx": "GPL-3.0-only",
+        "name": "GNU General Public License v3 (COPYING of OpenFOAM-11)",
+        "url": "https://github.com/OpenFOAM/OpenFOAM-11/blob/master/COPYING",
+        "attribution": "OpenFOAM Foundation",
+        "notes": "Fetched on the user's machine only and never vendored into this repository. Use the files as set-up data (geometry, dimensions, initial water column); no OpenFOAM code is linked."
+      },
+      "redistribute_in_repo": false,
+      "files": [
+        {
+          "path": "blockMeshDict",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/system/blockMeshDict",
+          "retrieved": "2026-10-13",
+          "sha256": "d2a5a377a20df7fe5bdb888088c2927990077febd7741e546a4fdcbb89100a3c",
+          "bytes": 2069
+        },
+        {
+          "path": "setFieldsDict",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/system/setFieldsDict",
+          "retrieved": "2026-10-13",
+          "sha256": "c9813a4cbf891088709ea0c5379e8455e35d0fa62af760e6fc3d8c53db788ca1",
+          "bytes": 904
+        },
+        {
+          "path": "controlDict",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/system/controlDict",
+          "retrieved": "2026-10-13",
+          "sha256": "fc946771fd8c25bfe3de13bd8aab8102cc847c6fad7dbb7689313d12f4f7a0ad",
+          "bytes": 1151
+        },
+        {
+          "path": "g",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/g",
+          "retrieved": "2026-10-13",
+          "sha256": "d6377d97d8c0631d625ed54486e9abb142eda889f66f309e2fc74a1521a9a56b",
+          "bytes": 748
+        },
+        {
+          "path": "physicalProperties.water",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/physicalProperties.water",
+          "retrieved": "2026-10-13",
+          "sha256": "de9ad8fa8ef86531c963bd771db62b14495a95debced2484f8c8b4f072e5bb33",
+          "bytes": 762
+        },
+        {
+          "path": "physicalProperties.air",
+          "url": "https://raw.githubusercontent.com/OpenFOAM/OpenFOAM-11/9cbf94f3339dd49286633b303c4155fd10ea8200/tutorials/incompressibleVoF/damBreakLaminar/damBreak/constant/physicalProperties.air",
+          "retrieved": "2026-10-13",
+          "sha256": "25f849fbff0b2d861318a65a60d714805d3a134ca62ac0a50dc45faae87a9769",
+          "bytes": 760
+        }
+      ]
+    },
+    {
+      "id": "gri-mech-30",
+      "title": "GRI-Mech 3.0 methane combustion mechanism, thermo and transport data",
+      "case": null,
+      "citation": "G. P. Smith, D. M. Golden, M. Frenklach et al., GRI-Mech 3.0, http://combustion.berkeley.edu/gri-mech/version30/text30.html",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-GRI-Mech-citation-requested",
+        "name": "Distributed freely by the GRI-Mech project; the page asks to be cited and states no formal licence",
+        "url": "http://combustion.berkeley.edu/gri-mech/version30/text30.html",
+        "attribution": "GRI-Mech 3.0 (Smith et al.)",
+        "notes": "UNVERIFIED legal status: no licence text on the page. The Cantera copy gri30.yaml sits in a BSD-3-Clause repository (Cantera License.txt) and is the preferred source."
+      },
+      "files": [
+        {
+          "path": "berkeley-grimech30.dat",
+          "url": "http://combustion.berkeley.edu/gri-mech/version30/files30/grimech30.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "a7726208619d27b50e43b9fb6b27dc0a737003c049cc79e0a849bc75301cd763",
+          "bytes": 29134
+        },
+        {
+          "path": "berkeley-thermo30.dat",
+          "url": "http://combustion.berkeley.edu/gri-mech/version30/files30/thermo30.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "8d918b771aa965fe05e8c8f1f7e926a5326ebc90e7fc923ce129dc118b634dcc",
+          "bytes": 17346
+        },
+        {
+          "path": "berkeley-transport.dat",
+          "url": "http://combustion.berkeley.edu/gri-mech/version30/files30/transport.dat",
+          "retrieved": "2026-10-13",
+          "sha256": "e2ef4437568311ad0ba6c2311a564966c9accb2b43ea3157b764c1e8febc5825",
+          "bytes": 8118
+        },
+        {
+          "path": "gri30.yaml",
+          "url": "https://raw.githubusercontent.com/cantera/cantera/v3.0.0/data/gri30.yaml",
+          "retrieved": "2026-10-13",
+          "sha256": "06650b1e0ee0012f6903d5328b1bb218cb6007d07f8ebe375d18f24811039345",
+          "bytes": 67813
+        },
+        {
+          "path": "cantera-License.txt",
+          "url": "https://raw.githubusercontent.com/cantera/cantera/v3.0.0/License.txt",
+          "retrieved": "2026-10-13",
+          "sha256": "2a51b2b912ef60b74559aa20b2b2799b4001c72c6e5a2c0887f3226f0dec1974",
+          "bytes": 1796
+        }
+      ]
+    },
+    {
+      "id": "nasa-rotor37",
+      "title": "NASA transonic compressor stage 37 (rotor 37): design and overall performance report",
+      "case": null,
+      "citation": "L. Reid, R. D. Moore, NASA TP-1337 (1978), 'Design and overall performance of four highly loaded, high speed inlet stages for an advanced high-pressure-ratio core compressor', NTRS 19780025165",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-NASA-public",
+        "name": "NASA NTRS document, distribution PUBLIC, determination GOV_PUBLIC_USE_PERMITTED, no third-party material flagged",
+        "url": "https://ntrs.nasa.gov/citations/19780025165",
+        "attribution": "NASA Lewis Research Center",
+        "notes": "Rotor 37 geometry and overall performance are in the stage 37 section. Detailed LDV data are in AGARD-AR-355 (not fetched)."
+      },
+      "files": [
+        {
+          "path": "NASA-TP-1337.pdf",
+          "url": "https://ntrs.nasa.gov/api/citations/19780025165/downloads/19780025165.pdf",
+          "retrieved": "2026-10-13",
+          "sha256": "5c2b9b2b1b701c9c5c14a167ad8bcea92af3c66fe452aaacfac4f691549c5157",
+          "bytes": 3813337
+        }
+      ]
+    },
+    {
+      "id": "hannover-compressor",
+      "title": "Leibniz University Hannover compressor cascade",
+      "case": null,
+      "citation": "none found",
+      "status": "unresolved",
+      "unresolved_reason": "No public upstream with an open licence was found (search 2026-10-13: the only Hannover TFD compressor dataset located is CC-BY-NC and not open). Copies distributed with commercial software are not used. Add a file entry here once an upstream URL and licence are confirmed.",
+      "licence": {
+        "spdx": "NONE",
+        "name": "unresolved",
+        "url": "",
+        "attribution": "",
+        "notes": ""
+      },
+      "files": []
+    }
+  ]
+}

@@ -10,6 +10,7 @@
 pub mod cases;
 pub mod common;
 pub mod container;
+pub mod datapack;
 pub mod fluent;
 pub mod gmsh;
 pub mod openfoam;
