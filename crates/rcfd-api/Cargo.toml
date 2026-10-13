@@ -1,0 +1,21 @@
+[package]
+name = "rcfd-api"
+description = "Solver service API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-core.workspace = true
+rcfd-fv.workspace = true
+rcfd-io.workspace = true
+rcfd-mesh.workspace = true
+rcfd-post.workspace = true
+rcfd-turb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true

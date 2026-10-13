@@ -1,0 +1,23 @@
+{
+  "id": "naca0012",
+  "title": "NACA 0012 airfoil",
+  "description": "Symmetric airfoil at small angle of attack (incompressible lift slope) and a transonic condition M=0.8, alpha=1.25 deg (AGARD AR-138 family).",
+  "physics": {
+    "regime": "incompressible RANS, then transonic compressible"
+  },
+  "mesh": {
+    "generator": null,
+    "note": "requires an airfoil C-grid generator (not yet implemented); geometry formula in reference/naca4_thickness.txt"
+  },
+  "reference": {
+    "citation": "I. H. Abbott, A. E. von Doenhoff, Theory of Wing Sections (1959); AGARD AR-138 (1979) for transonic surface-pressure data (consult the report for tabulated Cp).",
+    "files": [
+      "reference/naca4_thickness.txt"
+    ],
+    "tolerance": "lift slope within 5 percent of 0.11 per degree before stall (indicative)"
+  },
+  "roadmap": [
+    "F-043",
+    "F-062"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "backward_step",
+  "title": "Backward-facing step",
+  "description": "2D backward-facing step, expansion ratio 1.125 (Driver and Seegmiller geometry): step height h, inlet channel height 8h. Turbulent validation case for reattachment length; laminar variants for code verification.",
+  "physics": {
+    "regime": "incompressible turbulent (k-epsilon / SST) or laminar",
+    "reynolds_step_height": 37500
+  },
+  "mesh": {
+    "generator": "backward_step",
+    "params": {
+      "l_in": 10.0,
+      "l_out": 40.0,
+      "h_in": 8.0,
+      "step": 1.0,
+      "depth": 0.1,
+      "n": [
+        40,
+        160,
+        32,
+        8
+      ]
+    },
+    "note": "lengths in units of step height h"
+  },
+  "reference": {
+    "citation": "D. M. Driver, H. L. Seegmiller, Features of a reattaching turbulent shear layer in divergent channel flow, AIAA J. 23 (1985) 163-171; J. K. Eaton, J. P. Johnston, A review of research on subsonic turbulent flow reattachment, AIAA J. 19 (1981) 1093-1100.",
+    "data": {
+      "reattachment_length_over_h": {
+        "value": 6.26,
+        "uncertainty": 0.1
+      }
+    },
+    "tolerance": "literature scatter, roughly 5.5 to 7 step heights for RANS models"
+  },
+  "roadmap": [
+    "F-042",
+    "F-043"
+  ]
+}

@@ -1,0 +1,19 @@
+[package]
+name = "rcfd-mcp"
+description = "MCP server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-api.workspace = true
+rcfd-io.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "rcfd-mcp"
+path = "src/main.rs"

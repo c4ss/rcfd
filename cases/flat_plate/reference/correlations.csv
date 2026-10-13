@@ -1,0 +1,4 @@
+regime,formula,notes
+laminar,Cf = 0.664 / sqrt(Re_x),Blasius local skin friction
+turbulent,Cf = 0.0576 * Re_x^-0.2,1/7th power law; 5e5 < Re_x < 1e7 (CFD-Online and White; Schlichting-type texts use 0.0592)
+turbulent_alt,Cf = 0.455 / ln(0.06 Re_x)^2,White's local fit (the 0.523 form is the plate average); not the Prandtl-Schlichting 0.455/log10(Re)^2.58 average law; wide range

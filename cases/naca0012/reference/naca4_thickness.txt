@@ -1,0 +1,4 @@
+NACA 4-digit half thickness (Abbott and von Doenhoff, Theory of Wing Sections, 1959):
+  y_t = 5 t ( 0.2969 sqrt(x) - 0.1260 x - 0.3516 x^2 + 0.2843 x^3 - 0.1036 x^4 )   (closed trailing edge)
+  x = chordwise coordinate / chord, t = 0.12 for NACA 0012.
+Thin airfoil theory: C_L = 2 pi alpha (alpha in radians), about 0.110 per degree.

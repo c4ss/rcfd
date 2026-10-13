@@ -1,0 +1,43 @@
+{
+  "id": "flat_plate",
+  "title": "Zero-pressure-gradient flat plate boundary layer",
+  "description": "Flat plate of length L with uniform freestream; local skin friction Cf(Re_x) compared against Blasius (laminar) and power-law correlations (turbulent).",
+  "physics": {
+    "regime": "laminar then turbulent boundary layer",
+    "reynolds_length": [
+      100000.0,
+      10000000.0
+    ]
+  },
+  "mesh": {
+    "generator": "channel",
+    "params": {
+      "n": [
+        100,
+        60,
+        1
+      ],
+      "l": [
+        2.0,
+        0.5,
+        0.01
+      ],
+      "y_grading": {
+        "expansion": 200.0
+      },
+      "two_d": true
+    },
+    "note": "wall at ymin; leading-edge refinement planned"
+  },
+  "reference": {
+    "citation": "H. Schlichting, K. Gersten, Boundary-Layer Theory, 9th ed., Springer 2017; F. M. White, Viscous Fluid Flow, 3rd ed., McGraw-Hill 2006.",
+    "files": [
+      "reference/correlations.csv"
+    ],
+    "tolerance": "5 percent on Cf (F-041)"
+  },
+  "roadmap": [
+    "F-041",
+    "F-043"
+  ]
+}
