@@ -5,6 +5,7 @@
 use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
+use crate::rheology::Rheology;
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
 use rcfd_core::expr::Compiled;
@@ -447,6 +448,9 @@ pub struct Simulation {
     udf_momentum: Option<String>,
     udf_viscosity: Option<String>,
     udf_monitors: Vec<String>,
+    /// Generalised-Newtonian viscosity law (F-110).
+    rheology: Option<Rheology>,
+    t_init: f64,
     /// Compiled expression of each report (aligned with `reports`; `Some` for expression reports).
     report_exprs: Vec<Option<Compiled>>,
     /// Names of the non-expression reports, in expression-slot order.
@@ -921,6 +925,13 @@ impl Simulation {
                 "a user-function viscosity cannot be combined with a turbulence model",
             ));
         }
+        let rheology = Rheology::from_case(case);
+        if let (Some(_), Some(n)) = (&rheology, &udf_viscosity) {
+            return Err(diag(
+                &format!("udf.{n}.viscosity"),
+                "a user-function viscosity cannot be combined with rheology.model / rheology.shift",
+            ));
+        }
         if compressible && !udfs.is_empty() {
             return Err(diag(
                 "udf",
@@ -941,6 +952,8 @@ impl Simulation {
             udf_momentum,
             udf_viscosity,
             udf_monitors,
+            rheology,
+            t_init: get_f(case, "initial.temperature"),
             report_exprs,
             report_syms,
             nu,
@@ -1099,6 +1112,12 @@ impl Simulation {
                     s.nu_face = Some(t.model.nu_face());
                 }
                 let temp_cells: Option<&[f64]> = self.energy.as_ref().map(|en| en.solver.t.values.as_slice());
+                if let Some(r) = &mut self.rheology {
+                    match r.nu_faces(&self.geom, &s.u, temp_cells, self.t_init) {
+                        Ok(v) => s.nu_face = Some(v),
+                        Err(e) => udf_error = Some(e),
+                    }
+                }
                 let mut udf_force = None;
                 if let Some(name) = &self.udf_momentum {
                     let (cc, u) = (self.geom.mesh.cell_centres(), &s.u.values);
@@ -1222,6 +1241,12 @@ impl Simulation {
                 }
                 if let Some(e) = &udf_error {
                     reason_override = Some(e.clone());
+                }
+                if let Some(r) = &mut self.rheology {
+                    match r.nu_faces(&self.geom, &s.u, None, self.t_init) {
+                        Ok(v) => s.nu_face = Some(v),
+                        Err(e) => udf_error = Some(e),
+                    }
                 }
                 let i = s.step(dt);
                 self.monitors.push("courant", "", i.time, i.courant);

@@ -295,6 +295,90 @@ pub fn case_schema() -> Schema {
                 .doc("Implicit under-relaxation factor of the temperature equation"),
         );
 
+    let rheology = Schema::object()
+        .doc("Generalised-Newtonian viscosity (shear-rate and temperature dependent); steady and transient laminar runs. The viscosities below are dynamic (Pa s); the solver divides by physics.rho")
+        .field(
+            "model",
+            Schema::enumeration(
+                "newtonian",
+                &["newtonian", "power_law", "carreau", "carreau_yasuda", "cross", "herschel_bulkley", "bingham"],
+            )
+            .doc("Viscosity law: newtonian (physics.nu; only changes with a temperature shift), power_law K g^(n-1), carreau, carreau_yasuda, cross, herschel_bulkley (K g^(n-1) + tau0 (1 - exp(-m g))/g) or bingham (herschel_bulkley with n = 1, K the plastic viscosity)"),
+        )
+        .field(
+            "consistency_index",
+            Schema::float(1.0).doc("K [Pa s^n] of the power-law, Herschel-Bulkley and Bingham laws (plastic viscosity [Pa s] for Bingham)"),
+        )
+        .field(
+            "power_index",
+            Schema::float(1.0).range(0.05, 5.0).doc("Power-law index n (n < 1 shear thinning, n > 1 shear thickening); ignored by bingham (n = 1)"),
+        )
+        .field(
+            "zero_shear_viscosity",
+            Schema::float(1.0).dim(Dimension::DYNAMIC_VISCOSITY).doc("mu_0 [Pa s] of the Carreau, Carreau-Yasuda and Cross laws"),
+        )
+        .field(
+            "infinite_shear_viscosity",
+            Schema::float(0.0).dim(Dimension::DYNAMIC_VISCOSITY).doc("mu_inf [Pa s] of the Carreau, Carreau-Yasuda and Cross laws"),
+        )
+        .field(
+            "time_constant",
+            Schema::float(1.0).dim(Dimension::TIME).doc("lambda [s] of the Carreau, Carreau-Yasuda and Cross laws"),
+        )
+        .field(
+            "yasuda_exponent",
+            Schema::float(2.0).doc("Exponent a of the Carreau-Yasuda law (2 gives Carreau)"),
+        )
+        .field(
+            "cross_exponent",
+            Schema::float(1.0).doc("Exponent m of the Cross law"),
+        )
+        .field(
+            "yield_stress",
+            Schema::float(0.0).dim(Dimension::PRESSURE).doc("tau_0 [Pa] of the Herschel-Bulkley and Bingham laws"),
+        )
+        .field(
+            "regularisation_time",
+            Schema::float(100.0).dim(Dimension::TIME).doc("Papanastasiou stress-growth time m [s] that regularises the yield stress: a larger value approaches a true yield stress and is stiffer"),
+        )
+        .field(
+            "min_viscosity",
+            Schema::float(0.0).dim(Dimension::DYNAMIC_VISCOSITY).doc("Lower clamp of the apparent viscosity [Pa s]"),
+        )
+        .field(
+            "max_viscosity",
+            Schema::float(1.0e6).dim(Dimension::DYNAMIC_VISCOSITY).doc("Upper clamp of the apparent viscosity [Pa s] (also bounds the viscosity of the first iterations, where the shear rate is still small)"),
+        )
+        .field(
+            "relax",
+            Schema::float(0.7).range(0.05, 1.0).doc("Under-relaxation of the face viscosity between iterations or steps (1 = none)"),
+        )
+        .field(
+            "shift",
+            Schema::enumeration("none", &["none", "arrhenius", "wlf", "table"])
+                .doc("Temperature dependence by time-temperature superposition mu(g, T) = a_T mu_ref(a_T g); needs the energy equation. table reads a_T from tables.<shift_table>"),
+        )
+        .field(
+            "shift_table",
+            Schema::string("").doc("Name of a lookup table (tables.<name>) with the input column T [K] and the output column a_T (dimensionless) for shift = table"),
+        )
+        .field(
+            "reference_temperature",
+            Schema::float(293.15).dim(Dimension::TEMPERATURE).doc("Reference temperature [K] of the shift"),
+        )
+        .field(
+            "activation_temperature",
+            Schema::float(0.0).dim(Dimension::TEMPERATURE).doc("E_a/R [K] of the Arrhenius shift a_T = exp(E (1/T - 1/T_ref))"),
+        )
+        .field(
+            "wlf_c1",
+            Schema::float(17.44).doc("C1 of the WLF shift log10 a_T = -C1 (T - T_ref)/(C2 + T - T_ref)"),
+        )
+        .field(
+            "wlf_c2",
+            Schema::float(51.6).dim(Dimension::TEMPERATURE).doc("C2 [K] of the WLF shift"),
+        );
+
     let boundary = Schema::object()
         .doc("Boundary conditions for one mesh patch")
         .field(
@@ -895,6 +979,7 @@ pub fn case_schema() -> Schema {
         .field("mesh", mesh)
         .field("physics", physics)
         .field("energy", energy)
+        .field("rheology", rheology)
         .field("initial", initial)
         .field(
             "boundaries",

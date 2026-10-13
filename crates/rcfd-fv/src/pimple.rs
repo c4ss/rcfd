@@ -143,6 +143,8 @@ pub struct PimpleSolver {
     hist_u: [History; 3],
     phi_hist: History,
     step_no: usize,
+    /// Kinematic viscosity at every face; `None` uses `settings.nu`.
+    pub nu_face: Option<Vec<f64>>,
 }
 
 impl PimpleSolver {
@@ -163,6 +165,7 @@ impl PimpleSolver {
             hist_u,
             phi_hist,
             step_no: 0,
+            nu_face: None,
         }
     }
 
@@ -177,7 +180,10 @@ impl PimpleSolver {
         let s = self.settings.clone();
         self.step_no += 1;
 
-        let gamma_nu = uniform_gamma(&g, s.nu);
+        let gamma_nu = match &self.nu_face {
+            Some(v) => v.clone(),
+            None => uniform_gamma(&g, s.nu),
+        };
         let n_active = g.active.iter().filter(|&&a| a).count() as f64;
         let mut res_u: f64 = 0.0;
         let mut res_p = 0.0;
