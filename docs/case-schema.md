@@ -246,6 +246,25 @@ specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `
 temperature. The density stays constant; no property data is shipped, the constants are inputs (the material library
 F-111 provides sourced data).
 
+### Material library (F-111)
+
+`rcfd_core::fluids` and `rcfd_core::iapws` are Rust APIs (no case keys of their own; the `properties` laws above and the F-105 tables
+carry their data into a case): NASA-polynomial species (N2, O2, AR, H2O, CO2, CH4, H2), mass/mole-fraction conversion,
+mass-weighted and ideal-volume mixing, Wilke's gas-mixture rule, ideal-gas, Redlich-Kwong and Peng-Robinson equations of state
+(roots, density, fugacity, residual enthalpy, saturation pressure), and water and steam from IAPWS-IF97 regions 1 and 2 (273.15-1073.15 K,
+up to 100 MPa, outside region 3) with the IAPWS viscosity and conductivity correlations. Ready-to-paste `properties` laws for air at
+100 kPa, valid 200-600 K (cubic fits to the CRC/NIST gas tables, see `docs/reference-data.md`; the Sutherland constants below are
+good to about 1 % for the conductivity but only to 0.2 % at 300 K and 1.5 % at 500 K for the viscosity):
+
+```toml
+[properties.viscosity]
+law = "polynomial"
+coefficients = [2.6e-7, 7.532142857142829e-8, -5.571428571428524e-11, 2.4999999999999777e-14]
+[properties.conductivity]
+law = "polynomial"
+coefficients = [-9.4e-4, 1.1165476190476213e-4, -8.071428571428652e-8, 4.16666666666674e-11]
+```
+
 ## `sources` momentum sources (F-031)
 
 `sources.<name>` adds a momentum source in a cell zone of a steady (`simple`, `simplec`) run; other algorithms are
