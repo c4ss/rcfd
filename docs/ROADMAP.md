@@ -299,10 +299,10 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
 
 ### Phase 1 additions
 
-- [ ] **F-118** Fluent case/mesh import (.cas/.msh, ASCII and binary mesh sections; HDF5 .cas.h5 mesh only) from public file-structure documentation
+- [~] **F-118** Fluent case/mesh import (.cas/.msh, ASCII and binary mesh sections; HDF5 .cas.h5 mesh only) from public file-structure documentation
   - depends on: F-014
   - acceptance: Imports a 2D and a 3D mesh with zone/BC-type mapping and passes mesh checks; unsupported section ids are reported, not silently dropped; only fixtures from public sources run in default CI
-  - note: P2. Gap: the Fluent format is the de facto exchange format. Validation uses public sample meshes only.
+  - note: Partial (acceptance met on the tested files; title scope not). Delivered in rcfd-io fluent: 2D and 3D, ASCII and binary face/node/cell sections, zone and boundary-type name mapping (type names first, numeric ids as fallback), 2D meshes extruded to one prism layer with a frontAndBack empty patch, a Report listing skipped sections (also printed by rcfd check-mesh / convert as a note), explicit errors for periodic zones and section 18, hanging-node parents, axis zones, gzip and HDF5; format sniffing (Fluent vs Gmsh) in case mesh.file, check-mesh and convert; docs/mesh-import.md. Measured (checks fixed up front) on the real Fluent TGrid-written 2D mesh elbow.msh (OpenFOAM-11 tutorial, GPL, fetched not vendored, skipped when absent): 537 nodes and 918 triangles as declared, 5 boundary zones with names plus frontAndBack, passes the rcfd mesh quality check, extruded volume equals thickness times the independent shoelace area from the file's boundary edges (relative difference 5.4e-16). A hand-written 2D Fluent channel (16x8) runs a laminar SIMPLEC case to convergence through rcfd run. Not done: HDF5 .cas.h5 (needs an HDF5 reader), gzip, periodic/hanging-node/axisymmetric/non-conformal meshes, reading the case setup from .cas; the 3D and the binary paths are tested only on files written by the tests (no public 3D or binary Fluent file was found), so binary layout and little-endian reading are unverified (docs/reference-data.md). Existing behaviour change: bc types 12 (periodic) and 31 no longer map silently to cyclic/outlet; they are errors.
 
 ### Phase 2 additions
 

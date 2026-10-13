@@ -499,14 +499,18 @@ fn read_mesh(path: &str) -> Result<Mesh, String> {
             p.to_path_buf()
         };
         rcfd_io::openfoam::read_dir(dir).map_err(|e| e.to_string())
-    } else if p.extension().is_some_and(|e| e == "msh") {
-        rcfd_io::gmsh::read_file(p).map_err(|e| e.to_string())
+    } else if p.extension().is_some_and(|e| e == "msh" || e == "cas") {
+        let (mesh, notes) = rcfd_io::read_msh_with_notes(p).map_err(|e| e.to_string())?;
+        for n in notes {
+            eprintln!("note: {n}");
+        }
+        Ok(mesh)
     } else if p.extension().is_some_and(|e| e == "toml" || e == "json") {
         let case = Case::load(p).map_err(|d| d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))?;
         rcfd_api::sim::build_mesh(&case).map_err(|d| d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))
     } else {
         Err(format!(
-            "cannot tell the mesh format of '{path}' (expected .msh, .toml/.json case, or an OpenFOAM directory)"
+            "cannot tell the mesh format of '{path}' (expected .msh/.cas, .toml/.json case, or an OpenFOAM directory)"
         ))
     }
 }

@@ -149,7 +149,7 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
         let mesh = if path.is_dir() {
             rcfd_io::openfoam::read_dir(&path)
         } else {
-            rcfd_io::gmsh::read_file(&path)
+            rcfd_io::read_msh_file(&path)
         }
         .map_err(|e| diag("mesh.file", format!("{}: {e}", path.display())))?;
         let s = get_f(case, "mesh.scale");
