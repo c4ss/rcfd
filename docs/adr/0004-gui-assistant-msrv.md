@@ -16,15 +16,19 @@ Decisions:
   `rcfd-assistant` and `rcfd-gui` declare `rust-version = "1.88"`. The solver crates
   keep 1.75 and do not depend on either. This 1.88 figure comes from declared
   metadata; builds on other toolchains were not run.
-- No native file dialog (rfd); the app asks for typed paths. This avoids a GTK/portal
-  dependency on Linux. Revisit when the viewport work lands.
+- Native file dialog: `rfd` =0.15.4 (MIT, default features: Win32 dialogs on Windows, NSOpenPanel on macOS,
+  XDG desktop portal via async-std on Linux, so no GTK development packages). Its Windows dependencies declare
+  rust-version <= 1.71; the Linux portal stack (ashpd, zbus) declares <= 1.87, within the 1.88 floor. Built and
+  linked on Windows only. The dialog sits behind a `FileChooser` trait; the typed-path prompts remain as a fallback
+  because `rfd` returns the same `None` for a cancel and for a missing portal.
 - eframe `persistence` is not enabled: it serialises app memory to disk, which could
   leak keys. Only theme and layout are saved, by the app itself.
-- API keys: environment variable first, then a per-user `keys.json`. On unix the file
-  is created with mode 0600 (code is `cfg(unix)` and has not been run on Windows,
-  where the per-user profile ACL is the only protection). No OS keychain integration
-  yet; keys are plain text in that file. Keys are never logged and are scrubbed from
-  error text.
+- API keys: environment variable first, then the OS keychain (`keyring` =3.6.3, MIT OR Apache-2.0, MSRV 1.75;
+  Windows Credential Manager and macOS Keychain only), then a per-user `keys.json` as the fallback when there is no
+  keychain (Linux, where Secret Service needs libdbus) or a keychain write fails. Writes are read back to catch a
+  backend that does not persist. On unix the file is created with mode 0600 (code is `cfg(unix)` and has not been run).
+  Keys are never logged and are scrubbed from error text. Tests use an in-memory backend; the real keychain was not
+  exercised.
 - Tools run in-process: the assistant reuses the `rcfd-mcp` tool definitions and
   permission model; the GUI approval card is the approval hook, and the gate is
   enforced below the UI so a model cannot bypass it.

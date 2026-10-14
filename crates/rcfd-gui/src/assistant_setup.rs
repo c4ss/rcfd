@@ -4,6 +4,7 @@ use rcfd_assistant::config::{
     build_provider, config_dir, resolve_key, AssistantConfig, FileKeyStore, KeyStore, MemoryKeyStore, ProviderConfig,
 };
 use rcfd_assistant::http::Transport;
+use rcfd_assistant::keychain::{LayeredKeyStore, OsKeychain};
 use rcfd_assistant::openai::OpenAiCompatible;
 use rcfd_assistant::{Provider, ProviderError, Secret};
 use std::path::PathBuf;
@@ -25,16 +26,30 @@ pub struct AssistantSetup {
 }
 
 impl AssistantSetup {
-    /// Load from the per-user config directory (providers.json, keys.json).
+    /// Load from the per-user config directory (providers.json). Keys go to the OS keychain when the
+    /// platform has one, with keys.json in that directory as the fallback.
     pub fn load_default() -> AssistantSetup {
         match config_dir() {
-            Some(d) => Self::load_from(d),
+            Some(d) => {
+                let file = FileKeyStore::new(d.join("keys.json"));
+                let store: Box<dyn KeyStore> = match OsKeychain::new() {
+                    Some(k) => Box::new(LayeredKeyStore::new(Box::new(k), Box::new(file))),
+                    None => Box::new(file),
+                };
+                Self::load_with_store(d, store)
+            }
             None => Self::in_memory(),
         }
     }
 
-    /// Load from `dir`.
+    /// Load from `dir` with keys in `dir/keys.json` only (never the OS keychain; used by tests).
     pub fn load_from(dir: PathBuf) -> AssistantSetup {
+        let store = Box::new(FileKeyStore::new(dir.join("keys.json")));
+        Self::load_with_store(dir, store)
+    }
+
+    /// Load providers.json from `dir` and keep keys in `store`.
+    pub fn load_with_store(dir: PathBuf, store: Box<dyn KeyStore>) -> AssistantSetup {
         let path = dir.join("providers.json");
         let (config, status) = match AssistantConfig::load(&path) {
             Ok(c) => (c, None),
@@ -49,7 +64,7 @@ impl AssistantSetup {
         AssistantSetup {
             config,
             config_path: Some(path),
-            store: Box::new(FileKeyStore::new(dir.join("keys.json"))),
+            store,
             key_input: String::new(),
             status,
             models: vec![],
@@ -107,7 +122,7 @@ impl AssistantSetup {
         let key = Secret::new(self.key_input.trim());
         self.key_input.clear();
         self.status = Some(match self.store.set(&name, &key) {
-            Ok(()) => format!("key for '{name}' stored locally"),
+            Ok(()) => format!("key for '{name}' stored in {}", self.store.location()),
             Err(e) => format!("could not store key: {e}"),
         });
     }
@@ -118,6 +133,14 @@ impl AssistantSetup {
             let _ = self.store.delete(&n);
             self.status = Some(format!("key for '{n}' removed"));
         }
+    }
+
+    /// One-line description of where keys are kept, for the settings panel.
+    pub fn key_storage_note(&self) -> String {
+        format!(
+            "Keys are kept in {} (the environment variable, if set, wins) and never logged.",
+            self.store.location()
+        )
     }
 
     /// Persist the provider list.

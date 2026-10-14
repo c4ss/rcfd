@@ -5,6 +5,7 @@
 //! a window) but not inspected visually by the author.
 
 use crate::chat::{CardState, Entry};
+use crate::files;
 use crate::layout::{self, Panel};
 use crate::schema_model::{format_value, matches_filter, value_at, Kind, Node};
 use crate::state::{AppState, Prompt, QuickAction};
@@ -91,6 +92,14 @@ impl RcfdApp {
                         ui.close_menu();
                     }
                     if ui.button("Open...").clicked() {
+                        ui.close_menu();
+                        let st = &mut self.st;
+                        match files::open_with_dialog(&mut st.ctrl, st.chooser.as_ref(), st.dialog_dir.as_deref()) {
+                            files::Outcome::Failed(e) => st.ctrl.message = Some(e),
+                            files::Outcome::Done(_) | files::Outcome::Cancelled => {}
+                        }
+                    }
+                    if ui.button("Open from typed path...").clicked() {
                         self.st.prompt = Some(Prompt::Open);
                         ui.close_menu();
                     }
@@ -107,6 +116,17 @@ impl RcfdApp {
                         ui.close_menu();
                     }
                     if ui.add_enabled(can_save, egui::Button::new("Save as...")).clicked() {
+                        ui.close_menu();
+                        let st = &mut self.st;
+                        match files::save_as_with_dialog(&mut st.ctrl, st.chooser.as_ref(), st.dialog_dir.as_deref()) {
+                            files::Outcome::Failed(e) => st.ctrl.message = Some(e),
+                            files::Outcome::Done(_) | files::Outcome::Cancelled => {}
+                        }
+                    }
+                    if ui
+                        .add_enabled(can_save, egui::Button::new("Save as typed path..."))
+                        .clicked()
+                    {
                         self.st.prompt = Some(Prompt::SaveAs);
                         self.st.prompt_path = self
                             .st
@@ -829,7 +849,7 @@ fn assistant_panel(ui: &mut egui::Ui, st: &mut AppState) {
                 } else {
                     "no key stored"
                 });
-                ui.weak("Keys are kept in a per-user file (owner-only permissions on unix) and never logged.");
+                ui.weak(st.setup.key_storage_note());
                 if kind == Some(ProviderKind::OpenAiCompatible) && ui.button("List models").clicked() {
                     match st.setup.probe(None) {
                         Ok(m) => {

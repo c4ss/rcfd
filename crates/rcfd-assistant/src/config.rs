@@ -5,9 +5,11 @@
 //! in the per-user config directory. Keys live in a separate `keys.json`
 //! that is created with owner-only permissions (0600) on unix. On Windows the
 //! file is placed in the per-user `%APPDATA%` directory and relies on the
-//! default per-user ACL; no ACL is set by this code. There is no OS keychain
-//! integration yet (F-149). Keys are never written to `providers.json`, never
-//! included in `Debug` output and scrubbed from provider error text.
+//! default per-user ACL; no ACL is set by this code. When an OS keychain is
+//! available (Windows Credential Manager, macOS Keychain) the GUI uses
+//! [`crate::keychain::LayeredKeyStore`]: keychain first, `keys.json` only as the
+//! fallback. Keys are never written to `providers.json`, never included in
+//! `Debug` output and scrubbed from provider error text.
 
 use crate::anthropic::Anthropic;
 use crate::http::{Transport, UreqTransport};
@@ -191,6 +193,10 @@ pub trait KeyStore: Send + Sync {
     fn set(&self, provider: &str, key: &Secret) -> Result<(), String>;
     /// Remove a key.
     fn delete(&self, provider: &str) -> Result<(), String>;
+    /// Where keys are (or were last) written, for status lines.
+    fn location(&self) -> String {
+        "the local store".into()
+    }
 }
 
 /// In-memory store (tests, or keys that must not touch disk).
@@ -278,6 +284,9 @@ impl KeyStore for FileKeyStore {
         let mut m = self.read();
         m.remove(provider);
         self.write(&m)
+    }
+    fn location(&self) -> String {
+        format!("the plaintext key file {}", self.path.display())
     }
 }
 
