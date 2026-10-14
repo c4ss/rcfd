@@ -242,3 +242,22 @@ Unverified (from memory, not checked against a primary source in this session):
   critical constants of N2 used in the tests (126.2 K, 3.39 MPa, omega 0.0372) are illustrative, from memory.
 - NIST WebBook data was deliberately not used (its terms were not reviewed); no REFPROP or other licensed file is read or shipped.
 
+
+## Variable-density validation (wave 10, ADR 0005)
+
+Verified against the primary source:
+
+- Le Quere, Weisman, Paillere, Vierendeels, Dick, Becker, Braack and Locke, "Modelling of natural convection flows with
+  large temperature differences: a benchmark problem for low Mach number solvers. Part 1. Reference solutions", ESAIM: M2AN
+  39(3) 609-616 (2005), DOI 10.1051/m2an:2005027; full text read from the author's postprint
+  https://wrap.warwick.ac.uk/id/eprint/3824/1/WRAP_Locke_modelling_natural_convection.pdf. Table 1 (square cavity, adiabatic
+  horizontal walls, no slip, P0 = 101325 Pa, T0 = 600 K, R = 287, Pr = 0.71, gamma = 1.4, g = 9.81, epsilon = (Th-Tc)/(Th+Tc) = 0.6,
+  Ra = Pr g rho0^2 (Th-Tc) L^3 / (T0 mu0^2) with a single g): T1 (Ra 1e6, constant properties) Nu 8.85978, P/P0 0.856338;
+  T2 (Ra 1e6, Sutherland) Nu 8.6866, P/P0 0.924487; T3 (Ra 1e7, Sutherland) Nu 16.2410, P/P0 0.92263 (T3 not used).
+  Sutherland: mu = mu* (T/T*)^1.5 (T*+S)/(T+S), T* = 273 K, S = 110.5 K, mu* = 1.68e-5 Pa s, k = mu gamma R / ((gamma-1) Pr).
+  Thermodynamic pressure P(t) = P0 integral(1/T0 dv) / integral(1/T dv).
+- Quasi-1-D isentropic relations and the area-Mach relation (A/A*)(M) = (1/M) [2/(gamma+1) (1 + (gamma-1)/2 M^2)]^((gamma+1)/(2(gamma-1))),
+  choked mass flow A* p0 sqrt(gamma/(R T0)) (2/(gamma+1))^((gamma+1)/(2(gamma-1))): standard textbook formulae (for example
+  Anderson, Modern Compressible Flow), not looked up in this session; the code of the checks uses them as written here.
+- Hydrostatic ideal-gas columns: analytic atmospheres dp/dy = -rho g with p = rho R T (isothermal exponential; linear T
+  polytropic with exponent g/(R a)), derived in the test headers.
