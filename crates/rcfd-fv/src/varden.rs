@@ -206,6 +206,10 @@ pub struct VdSettings {
     pub p_ref: (usize, f64),
     /// H operator from the solved predictor.
     pub h_from_solution: bool,
+    /// Component-consistent diagonal (ADR 0010): where the component diagonals differ (a symmetry plane puts its
+    /// Dirichlet term on the normal component only) the H operator of component `k` gets `(a_P - a_k) u_k`, with `a_P`
+    /// the mean of the component diagonals. Off by default (earlier results stay bit-identical).
+    pub component_diag_correction: bool,
     /// Stagnation inlets.
     pub inlets: Vec<StagnationInlet>,
     /// Linear solver controls for momentum.
@@ -248,6 +252,7 @@ impl VdSettings {
             density_scheme: DensityScheme::LinearUpwind,
             p_ref: (0, 0.0),
             h_from_solution: true,
+            component_diag_correction: false,
             inlets: Vec::new(),
             momentum_solver: SolveControl {
                 tol_abs: 1e-12,
@@ -1256,6 +1261,8 @@ impl VarDensitySolver {
         let mut h1 = vec![0.0; n];
         let mut n_active = 0.0;
         let mut res_u: f64 = 0.0;
+        let mut comp_diag: Vec<Vec<f64>> = vec![Vec::new(); 3];
+        let mut comp_x: Vec<Vec<f64>> = vec![Vec::new(); 3];
         let ub = self.u.boundary_values(&g);
         for k in 0..3 {
             if !g.active[k] {
@@ -1288,6 +1295,9 @@ impl VarDensitySolver {
                 }
             }
             m.relax(s.alpha_u, &cells);
+            if s.component_diag_correction {
+                comp_diag[k] = m.a.diag.clone();
+            }
             let mut hk = m.a.h_operator(&cells, &m.b);
             let off = m.a.off_diag_abs_sum();
             for c in 0..n {
@@ -1307,6 +1317,13 @@ impl VarDensitySolver {
             if s.h_from_solution {
                 hk = m.a.h_operator(&x, &m.b);
             }
+            if s.component_diag_correction {
+                comp_x[k] = if s.h_from_solution {
+                    x.clone()
+                } else {
+                    u_old.iter().map(|v| v[k]).collect()
+                };
+            }
             for c in 0..n {
                 h[c][k] = hk[c];
                 self.u.values[c][k] = x[c];
@@ -1315,6 +1332,20 @@ impl VarDensitySolver {
         for c in 0..n {
             a_p[c] /= n_active;
             h1[c] /= n_active;
+        }
+        if s.component_diag_correction {
+            // ADR 0010: make H consistent with the component-averaged diagonal a_P
+            let ks: Vec<usize> = (0..3).filter(|&k| g.active[k]).collect();
+            for c in 0..n {
+                if ks
+                    .iter()
+                    .any(|&k| comp_diag[k][c].to_bits() != comp_diag[ks[0]][c].to_bits())
+                {
+                    for &k in &ks {
+                        h[c][k] += (a_p[c] - comp_diag[k][c]) * comp_x[k][c];
+                    }
+                }
+            }
         }
 
         // ---- pressure equation -------------------------------------------------------------

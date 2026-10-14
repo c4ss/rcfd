@@ -473,6 +473,7 @@ impl VdState {
             get_f(case, "solver.p_ref_value"),
         );
         s.h_from_solution = get_s(case, "solver.h_operator") != "previous_iterate";
+        s.component_diag_correction = get_s(case, "solver.component_diagonal") == "corrected";
         let (mt, mi) = (
             get_f(case, "solver.momentum_rel_tol"),
             get_i(case, "solver.momentum_max_iter"),

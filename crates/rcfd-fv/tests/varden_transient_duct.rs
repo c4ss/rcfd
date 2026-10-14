@@ -119,11 +119,12 @@ struct T5 {
 }
 
 /// Steady reference (3000 iterations) and the registered transient run (`steps` BDF2 steps of 1 ms).
-fn t5_run(steps: usize) -> T5 {
+fn t5_run(steps: usize, corrected: bool) -> T5 {
     let ar_t = area_ratio(0.3);
     let m_e = mach_of_area(2.0 * ar_t, false);
     let p_e = P0 * p_ratio(m_e);
     let mut steady = build(100, 6, 2.0 * H_T, 2.0 * H_T, p_e, 0.5 * (P0 + p_e), None);
+    steady.sol.settings.component_diag_correction = corrected;
     for _ in 0..3000 {
         steady.sol.iterate();
     }
@@ -133,6 +134,7 @@ fn t5_run(steps: usize) -> T5 {
     tr.tol = 1e-8;
     tr.max_inner = 30;
     let mut c = build(100, 6, 2.0 * H_T, 2.0 * H_T, p_e, 0.985 * P0, Some(tr));
+    c.sol.settings.component_diag_correction = corrected;
     for k in 1..=steps {
         let info = c.sol.advance(1e-3).unwrap();
         if k % 100 == 0 {
@@ -166,7 +168,7 @@ fn t5_run(steps: usize) -> T5 {
 #[test]
 #[ignore = "heavy: about 55 s in release, cargo test --release -- --ignored varden_transient_duct"]
 fn t5_transient_steady_limit_mach_and_pressure() {
-    let r = t5_run(400);
+    let r = t5_run(400, false);
     assert!(r.d_mach <= 2e-3, "Mach {}", r.d_mach);
     assert!(r.d_p <= 5e-4, "p {}", r.d_p);
 }
@@ -176,7 +178,7 @@ fn t5_transient_steady_limit_mach_and_pressure() {
 #[test]
 #[ignore = "known miss of the registered T5 mass-flow limits (measured 1.6e-3 vs 1e-3, in/out 1.6e-5 vs 1e-6)"]
 fn t5_transient_steady_limit_mass_flow_known_miss() {
-    let r = t5_run(400);
+    let r = t5_run(400, false);
     assert!(r.e_in <= 1e-3 && r.e_out <= 1e-3, "mdot {} {}", r.e_in, r.e_out);
     assert!(r.in_out <= 1e-6, "in/out {}", r.in_out);
 }
@@ -186,5 +188,24 @@ fn t5_transient_steady_limit_mass_flow_known_miss() {
 #[test]
 #[ignore = "post-hoc diagnostic (not a registered criterion)"]
 fn t5_posthoc_1200_steps() {
-    t5_run(1200);
+    t5_run(1200, false);
+}
+
+/// ADR 0010: the registered T5 limits (unchanged) with the component-consistent diagonal in both the steady reference
+/// and the transient run, 400 steps. Measured: Mach 3.0e-4 (2e-3), p 1.1e-4 (5e-4), mass flow 9.3e-4 / 9.2e-4 (1e-3) pass;
+/// the in/out equality 1.6e-5 (1e-6) still misses, see the known miss below.
+#[test]
+#[ignore = "heavy: about 55 s in release; registered T5 limits with component_diagonal = corrected (ADR 0010)"]
+fn t5_transient_steady_limit_corrected_diagonal_mach_pressure_mass_flow() {
+    let r = t5_run(400, true);
+    assert!(r.d_mach <= 2e-3, "Mach {}", r.d_mach);
+    assert!(r.d_p <= 5e-4, "p {}", r.d_p);
+    assert!(r.e_in <= 1e-3 && r.e_out <= 1e-3, "mdot {} {}", r.e_in, r.e_out);
+}
+
+#[test]
+#[ignore = "known miss of the registered T5 in/out limit 1e-6 with component_diagonal = corrected (measured 1.56e-5 at 400 steps)"]
+fn t5_transient_steady_limit_corrected_diagonal_in_out_known_miss() {
+    let r = t5_run(400, true);
+    assert!(r.in_out <= 1e-6, "in/out {}", r.in_out);
 }
