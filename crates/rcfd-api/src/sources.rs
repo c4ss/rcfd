@@ -5,7 +5,7 @@
 use crate::case::{Case, Diagnostic};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::simple::BodyForce;
-use rcfd_fv::sources::{self as fvs, RotatingFrame};
+use rcfd_fv::sources::{self as fvs, MrfZone, RotatingFrame};
 use rcfd_fv::{FvGeometry, VectorField};
 
 fn gf(c: &Case, p: &str) -> f64 {
@@ -135,13 +135,13 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     }
                 }
             }
-            "rotating_frame" => {
+            "rotating_frame" | "mrf" => {
                 match vec3_of("rotation_axis") {
                     Ok(Some(a)) if vec3::norm(a) > 0.0 => {}
                     Ok(None) => {}
                     Ok(_) => bad(
                         p("rotation_axis"),
-                        "a rotating frame needs a non-zero rotation_axis".into(),
+                        "a rotating frame or MRF zone needs a non-zero rotation_axis".into(),
                     ),
                     Err(m) => bad(p("rotation_axis"), m),
                 }
@@ -165,10 +165,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
 enum Kind {
     Porous { inv_k: f64, c2: f64 },
     Rotating(RotatingFrame),
+    Mrf(MrfZone),
     Acceleration(Vec3),
 }
 
 struct Item {
+    name: String,
     kind: Kind,
     zone: Vec<bool>,
 }
@@ -178,6 +180,12 @@ pub struct Sources {
     items: Vec<Item>,
     /// Kinematic viscosity used by the viscous porous term.
     nu: f64,
+    /// Frame flux `(Omega x r) . S` per face of the MRF zones (`None` without an MRF source).
+    pub frame_flux: Option<Vec<f64>>,
+    /// Use the body-force wall-pressure construction of the SIMPLE kernel (`wall_pressure_trapezoid`): needed by the
+    /// relative-velocity rotating frame and by accelerations, not by MRF zones (it forces the wall-normal pressure
+    /// gradient of fixed-velocity faces, inlets included, to the body force, which distorts through-flow; ADR 0008).
+    pub wall_pressure_trapezoid: bool,
 }
 
 impl Sources {
@@ -252,16 +260,69 @@ impl Sources {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(true),
                 }),
+                "mrf" => {
+                    let m = MrfZone {
+                        origin: gv(case, &p("rotation_origin")).flatten().unwrap_or([0.0; 3]),
+                        axis: vec3::unit(gv(case, &p("rotation_axis")).flatten().unwrap_or([0.0, 0.0, 1.0])),
+                        omega: gf(case, &p("angular_velocity")),
+                    };
+                    let worst = m.worst_non_axisymmetry(geom, &zone);
+                    if worst > 1e-6 {
+                        errs.push(Diagnostic {
+                            path: p("zone"),
+                            line: None,
+                            message: format!(
+                                "the boundary of an MRF zone (walls, symmetry planes and the interface to other cells) must be a surface of revolution about the rotation axis; the frame flux (Omega x r).S is {worst:.2e} of |Omega||r||S| on a zone boundary face (limit 1e-6)"
+                            ),
+                        });
+                        continue;
+                    }
+                    Kind::Mrf(m)
+                }
                 _ => Kind::Acceleration(gv(case, &p("acceleration")).flatten().unwrap_or([0.0; 3])),
             };
-            items.push(Item { kind, zone });
+            items.push(Item {
+                name: n.clone(),
+                kind,
+                zone,
+            });
+        }
+        // MRF zones must not overlap each other or a relative-velocity rotating frame
+        for (i, a) in items.iter().enumerate() {
+            for b in &items[i + 1..] {
+                let rot = |k: &Kind| matches!(k, Kind::Mrf(_) | Kind::Rotating(_));
+                let any_mrf = matches!(a.kind, Kind::Mrf(_)) || matches!(b.kind, Kind::Mrf(_));
+                if any_mrf && rot(&a.kind) && rot(&b.kind) && a.zone.iter().zip(&b.zone).any(|(x, y)| *x && *y) {
+                    let culprit = if matches!(b.kind, Kind::Mrf(_)) { b } else { a };
+                    errs.push(Diagnostic {
+                        path: format!("sources.{}.zone", culprit.name),
+                        line: None,
+                        message: format!(
+                            "an MRF zone must not share cells with another MRF zone or a rotating_frame source ('{}' and '{}' overlap)",
+                            a.name, b.name
+                        ),
+                    });
+                }
+            }
         }
         if !errs.is_empty() {
             return Err(errs);
         }
+        let mut frame_flux: Option<Vec<f64>> = None;
+        for it in &items {
+            if let Kind::Mrf(m) = &it.kind {
+                let off = frame_flux.get_or_insert_with(|| vec![0.0; geom.mesh.n_faces()]);
+                m.add_frame_flux(geom, &it.zone, off);
+            }
+        }
+        let wall_pressure_trapezoid = items
+            .iter()
+            .any(|i| matches!(i.kind, Kind::Rotating(_) | Kind::Acceleration(_)));
         Ok(Some(Sources {
+            wall_pressure_trapezoid,
             items,
             nu: gf(case, "physics.nu"),
+            frame_flux,
         }))
     }
 
@@ -279,6 +340,10 @@ impl Sources {
                 Kind::Rotating(r) => {
                     let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));
                     r.add_force(geom, &u.values, &ub, &it.zone, f);
+                }
+                Kind::Mrf(m) => {
+                    let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));
+                    m.add_force(geom, &u.values, &ub, &it.zone, f);
                 }
                 Kind::Acceleration(a) => {
                     let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));

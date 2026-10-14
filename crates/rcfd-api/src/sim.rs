@@ -265,6 +265,35 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             })
             .map_err(me)
         }
+        "annulus_3d" | "annulus_3d_interface" => {
+            // cylindrical annulus about z (F-031 MRF); the interface variant joins two blocks at z = lz/2
+            let g = if (grading - 1.0).abs() < 1e-12 {
+                Grading::Uniform
+            } else {
+                Grading::Expansion(grading)
+            };
+            let (r_in, r_out, lz) = (
+                get_f(case, "mesh.r_in"),
+                get_f(case, "mesh.r_out"),
+                get_f(case, "mesh.lz"),
+            );
+            let nz = get_i(case, "mesh.nz").max(1) as usize;
+            if get_s(case, "mesh.generator") == "annulus_3d" {
+                gen::annulus_3d(nx, ny, nz, r_in, r_out, lz, 0.0, g).map_err(me)
+            } else {
+                let (nyr, nzr) = (
+                    get_i(case, "mesh.ny_right") as usize,
+                    get_i(case, "mesh.nz_right") as usize,
+                );
+                let (nyr, nzr) = (if nyr == 0 { ny } else { nyr }, if nzr == 0 { nz } else { nzr });
+                let half = 0.5 * lz;
+                let a = gen::annulus_3d(nx, ny, nz, r_in, r_out, half, 0.0, g).map_err(me)?;
+                let b = gen::annulus_3d(nx, nyr, nzr, r_in, r_out, half, half, g).map_err(me)?;
+                rcfd_mesh::non_conformal::join_non_conformal(&a, "zmax", &b, "zmin", 1e-8)
+                    .map(|(m, _)| m)
+                    .map_err(me)
+            }
+        }
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform
@@ -551,6 +580,23 @@ impl Simulation {
         let mut temp = ScalarField::uniform("T", &geom, get_f(case, "initial.temperature"));
         let mut errs = Vec::new();
         let sctx = exprs::spatial_context(case);
+        // initial velocity expressions of x, y, z (cell centres, t = 0); components without one keep initial.velocity
+        for (k, c) in ["x", "y", "z"].iter().enumerate() {
+            match exprs::compile_bc(
+                case,
+                &format!("initial.velocity_expression_{c}"),
+                Dimension::VELOCITY,
+                &sctx,
+            ) {
+                Ok(Some(ex)) => {
+                    for (v, p) in u.values.iter_mut().zip(geom.mesh.cell_centres()) {
+                        v[k] = ex.eval(&[p[0], p[1], p[2], 0.0]);
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => errs.extend(e),
+            }
+        }
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
         let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
         errs.extend(udf_diags);
@@ -1134,7 +1180,7 @@ impl Simulation {
             Engine::Steady(_) | Engine::Coupled(_) => true,
             Engine::Transient(_) => false,
             Engine::Compressible(c) => c.steady,
-            Engine::VarDensity(_) => true,
+            Engine::VarDensity(v) => v.solver.settings.transient.is_none(),
         }
     }
 
@@ -1156,7 +1202,8 @@ impl Simulation {
     /// Current simulation time (0 for steady runs).
     pub fn time(&self) -> f64 {
         match &self.engine {
-            Engine::Steady(_) | Engine::Coupled(_) | Engine::VarDensity(_) => 0.0,
+            Engine::Steady(_) | Engine::Coupled(_) => 0.0,
+            Engine::VarDensity(v) => v.solver.time,
             Engine::Transient(s) => s.time,
             Engine::Compressible(c) => {
                 if c.steady {
@@ -1313,7 +1360,10 @@ impl Simulation {
                     None => (None, None),
                 };
                 s.sink = src_sink;
-                s.wall_pressure_trapezoid = src_force.is_some();
+                s.conv_flux_offset = self.sources.as_ref().and_then(|x| x.frame_flux.clone());
+                s.component_diag_correction = s.conv_flux_offset.is_some();
+                s.wall_pressure_trapezoid =
+                    src_force.is_some() && self.sources.as_ref().map_or(true, |x| x.wall_pressure_trapezoid);
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
                         en.buoyancy
@@ -1405,6 +1455,49 @@ impl Simulation {
                     continuity: a.mass_drift,
                     done,
                     converged,
+                }
+            }
+            Engine::VarDensity(v) if v.solver.settings.transient.is_some() => {
+                // transient variable density (ADR 0009): one time step of SIMPLE-inner iterations
+                let dt = self.dt.min((self.end_time - v.solver.time).max(1e-12));
+                match v.solver.advance(dt) {
+                    Ok(si) => {
+                        v.steps += 1;
+                        v.last = Some(si.last);
+                        v.max_du = si.last.max_du;
+                        let l = si.last;
+                        let finite = si.change.is_finite() && l.res_u.is_finite() && l.res_p.is_finite() && l.res_h.is_finite();
+                        if !finite {
+                            reason_override = Some(format!(
+                                "variable-density solver diverged at time {} (non-finite inner iteration); lower solver.dt or the relaxation factors",
+                                si.time
+                            ));
+                        }
+                        self.monitors.push("res_T", "", si.time, l.res_h);
+                        self.monitors.push("inner_iterations", "", si.time, si.inner as f64);
+                        self.monitors.push("dt", "s", si.time, dt);
+                        StepSummary {
+                            index: v.steps,
+                            time: si.time,
+                            res_u: l.res_u,
+                            res_p: l.res_p,
+                            continuity: l.continuity,
+                            done: !finite || si.time >= self.end_time - 1e-12,
+                            converged: false,
+                        }
+                    }
+                    Err(e) => {
+                        reason_override = Some(e.to_string());
+                        StepSummary {
+                            index: v.steps,
+                            time: v.solver.time,
+                            res_u: f64::NAN,
+                            res_p: f64::NAN,
+                            continuity: f64::NAN,
+                            done: true,
+                            converged: false,
+                        }
+                    }
                 }
             }
             Engine::VarDensity(v) => {

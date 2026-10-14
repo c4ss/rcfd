@@ -502,6 +502,82 @@ pub fn cylinder_ogrid(n_theta: usize, n_r: usize, r_in: f64, r_out: f64, grading
     Mesh::from_cell_faces(points, &cells, &specs)
 }
 
+/// 3-D cylindrical annulus `r_in <= r <= r_out`, `z0 <= z <= z0 + height` about the z axis (full circle, `n_theta`
+/// chords, `n_r` radial and `n_z` axial hexahedra; MRF / Taylor-Couette work, F-031). The hexahedron axes are
+/// (radial, theta, z), a right-handed triple. Patches: `inner`, `outer`, `zmin`, `zmax` (all walls by default). The
+/// outer and inner polygons depend on `n_theta` only, so two blocks with equal `n_theta` and different `n_r` / `n_z`
+/// cover each other at a z plane (non-conformal join, [`crate::non_conformal`]).
+#[allow(clippy::too_many_arguments)]
+pub fn annulus_3d(
+    n_theta: usize,
+    n_r: usize,
+    n_z: usize,
+    r_in: f64,
+    r_out: f64,
+    height: f64,
+    z0: f64,
+    grading: Grading,
+) -> Result<Mesh> {
+    if n_theta < 3 || n_r < 1 || n_z < 1 || r_in <= 0.0 || r_out <= r_in || height <= 0.0 {
+        return Err(Error::Mesh(
+            "annulus_3d needs n_theta >= 3, n_r >= 1, n_z >= 1, 0 < r_in < r_out and height > 0".into(),
+        ));
+    }
+    let rs: Vec<f64> = axis_coords(n_r, r_out - r_in, grading)?
+        .into_iter()
+        .map(|r| r + r_in)
+        .collect();
+    let zs = axis_coords(n_z, height, Grading::Uniform)?;
+    let pid = |ir: usize, it: usize, k: usize| ir + (n_r + 1) * ((it % n_theta) + n_theta * k);
+    let mut points = Vec::new();
+    for &z in &zs {
+        for it in 0..n_theta {
+            let th = 2.0 * std::f64::consts::PI * it as f64 / n_theta as f64;
+            for &r in &rs {
+                points.push([r * th.cos(), r * th.sin(), z0 + z]);
+            }
+        }
+    }
+    let (mut cells, mut inner, mut outer, mut zmin, mut zmax) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for k in 0..n_z {
+        for it in 0..n_theta {
+            for ir in 0..n_r {
+                let mut p = [0usize; 8];
+                for (c, pc) in p.iter_mut().enumerate() {
+                    *pc = pid(ir + (c & 1), it + ((c >> 1) & 1), k + (c >> 2));
+                }
+                let faces = hex_faces(p);
+                if ir == 0 {
+                    inner.push(faces[0].clone());
+                }
+                if ir + 1 == n_r {
+                    outer.push(faces[1].clone());
+                }
+                if k == 0 {
+                    zmin.push(faces[4].clone());
+                }
+                if k + 1 == n_z {
+                    zmax.push(faces[5].clone());
+                }
+                cells.push(faces);
+            }
+        }
+    }
+    let spec = |name: &str, faces: Vec<Vec<usize>>| BoundarySpec {
+        name: name.into(),
+        kind: PatchKind::Wall,
+        faces,
+    };
+    let specs = vec![
+        spec("inner", inner),
+        spec("outer", outer),
+        spec("zmin", zmin),
+        spec("zmax", zmax),
+    ];
+    Mesh::from_cell_faces(points, &cells, &specs)
+}
+
 /// Annular sector `r_in <= r <= r_out`, `0 <= theta <= angle` about the z axis
 /// (2D, one cell in z) for rotational-periodicity work. Patches: `inner`,
 /// `outer` (walls), `theta_min` / `theta_max` (a rotationally cyclic pair, the
@@ -591,6 +667,20 @@ pub fn warp(mesh: &Mesh, map: impl Fn(Vec3) -> Vec3) -> Result<Mesh> {
 mod tests {
     use super::*;
     use crate::quality::check_mesh;
+
+    #[test]
+    fn annulus_3d_volume_and_patches() {
+        let m = annulus_3d(48, 5, 3, 0.5, 1.0, 0.3, 0.0, Grading::Uniform).unwrap();
+        assert_eq!(m.n_cells(), 48 * 5 * 3);
+        assert!(m.cell_volumes().iter().all(|&v| v > 0.0));
+        // inscribed polygon area pi-like: n/2 sin(2 pi/n) (ro^2 - ri^2) * height
+        let n = 48.0_f64;
+        let exact = 0.5 * n * (2.0 * std::f64::consts::PI / n).sin() * (1.0 - 0.25) * 0.3;
+        assert!((m.total_volume() - exact).abs() < 1e-12 * exact);
+        for name in ["inner", "outer", "zmin", "zmax"] {
+            assert!(m.patch(name).is_some(), "{name}");
+        }
+    }
 
     #[test]
     fn axis_coordinates() {
