@@ -259,6 +259,14 @@ unchanged (Q1, Q2 MET).
   divergence from an inconsistent start is a robustness limit of the transient solver and was not fixed.
 * **Compressible transient from rest is not robust** for impulsive velocity mismatches at large `dt` (see above); no
   claim beyond the checks listed is made.
+* **T6 B top-wall flux is not independent evidence.** `heat_flow_out` reads the temperature boundary coefficients, so a
+  zero-gradient (adiabatic) patch returns exactly 0 and the `|q_top| <= 1e-3 q_bottom` check passes by construction. The
+  check of the section 5 `h0` wall condition is the temperature profile (1.6e-4 of the scale) and the bottom-wall flow.
+* **Re-measurement.** After the last kernel change (prescribed-velocity `phid`) the ignored `varden_transient` and
+  `varden_transient_duct` tests were run again: T3c BDF2 errors 1.114e-2, 2.99e-3, 1.18e-3 (order 1.34) and T5 6.04e-4,
+  1.88e-4, 1.64e-3 / 1.62e-3, 1.56e-5 are unchanged.
+* **History.** The `schema.rs` keys and the `sim.rs` transient branch were committed inside the MRF commit ba1dff7 of
+  another agent (it picked up the working-tree files); `vd.rs` followed in 24d6ba2, so ba1dff7 alone does not build.
 * **Viscous heating in steady runs** is available (same terms) but unvalidated; only the transient Couette checks
   exercise the term.
 
