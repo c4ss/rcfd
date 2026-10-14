@@ -22,7 +22,7 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure,
+    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure, PressureBc,
     PressureControls,
 };
 use rcfd_core::vec3::{self, Vec3};
@@ -303,7 +303,15 @@ pub struct SimpleSolver {
     pub pseudo: Option<PseudoTransient>,
     /// Bulk-velocity driver for periodic flows.
     pub driver: Option<MeanVelocityDriver>,
+    /// Wall pressure used by the cell gradients next to fixed-velocity walls with a body force: chosen so that the
+    /// wall-normal gradient of the wall cell equals the cell-centre body force (off by default; set for
+    /// rotating-frame sources, F-031). With SIMPLEC it also applies the lagged (rAU - rAtU) correction to the wall
+    /// pressure gradient of the flux balance.
+    pub wall_pressure_trapezoid: bool,
     iteration: usize,
+    /// Wall pressure gradient used in the previous iteration at every boundary face (SIMPLEC wall treatment of
+    /// `wall_pressure_trapezoid`).
+    wall_grad: Vec<f64>,
     /// `rAU / rAtU` of the previous iteration (wall pressure extrapolation with body forces).
     body_ratio: Vec<f64>,
 }
@@ -322,6 +330,53 @@ pub struct SimpleState {
 }
 
 impl SimpleSolver {
+    /// Boundary-face pressures for the cell Green-Gauss gradients. By default the values of `pbc`. With
+    /// `wall_pressure_trapezoid` the value on a fixed-velocity wall face is chosen so that the wall-normal
+    /// component of the cell gradient equals the cell-centre body force exactly (the gradient of the
+    /// linearly interpolated opposite faces is O(h) off for a curved pressure otherwise).
+    fn gradient_wall_values(&self, pbc: &PressureBc, body: Option<&BodyForce>, p: &[f64]) -> Vec<f64> {
+        let g = &self.geom;
+        let mut out = boundary_values_pbc(g, pbc, p);
+        let (Some(bf), true) = (body, self.wall_pressure_trapezoid) else {
+            return out;
+        };
+        let mesh = &g.mesh;
+        let (sf, own, nei, vol) = (
+            mesh.face_area_vectors(),
+            mesh.owner(),
+            mesh.neighbour(),
+            mesh.cell_volumes(),
+        );
+        let base = out.clone();
+        for i in 0..out.len() {
+            if !(pbc.fixed_u[i] && pbc.coupled[i].is_none()) {
+                continue;
+            }
+            let f = g.n_internal + i;
+            let c = own[f];
+            let area = vec3::norm(sf[f]).max(1e-300);
+            let nhat = vec3::scale(sf[f], 1.0 / area);
+            let mut others = 0.0;
+            for &fo in mesh.cell_faces(c) {
+                if fo == f || g.empty[fo] {
+                    continue;
+                }
+                let (pf, sign) = if fo < g.n_internal {
+                    let w = g.weights[fo];
+                    (
+                        w * p[own[fo]] + (1.0 - w) * p[nei[fo]],
+                        if own[fo] == c { 1.0 } else { -1.0 },
+                    )
+                } else {
+                    (base[fo - g.n_internal], 1.0)
+                };
+                others += pf * sign * vec3::dot(sf[fo], nhat);
+            }
+            out[i] = (vol[c] * vec3::dot(bf.cell[c], nhat) - others) / area;
+        }
+        out
+    }
+
     /// Create a solver; initial flux is computed from the velocity field.
     pub fn new(geom: Arc<FvGeometry>, u: VectorField, p: ScalarField, settings: SimpleSettings) -> Self {
         let bu = u.boundary_values(&geom);
@@ -338,7 +393,9 @@ impl SimpleSolver {
             sink: None,
             pseudo: None,
             driver: None,
+            wall_pressure_trapezoid: false,
             iteration: 0,
+            wall_grad: Vec::new(),
             body_ratio: Vec::new(),
         }
     }
@@ -412,6 +469,7 @@ impl SimpleSolver {
             }
         };
         let mut pbc = pressure_bc(&g, &self.u, &self.p);
+        let mut wall_prev = self.wall_grad.clone();
         if let Some(bf) = &body {
             // Where the normal velocity is prescribed the flux is zero, so the pressure
             // gradient balances the body force there: extrapolate the wall pressure with
@@ -421,7 +479,19 @@ impl SimpleSolver {
                 if pbc.fixed_u[i] && pbc.coupled[i].is_none() {
                     let f = n_int + i;
                     let ratio = self.body_ratio.get(mesh.owner()[f]).copied().unwrap_or(1.0);
-                    let gradient = ratio * bf.face[f] / vec3::norm(sf[f]).max(1e-300);
+                    let mut gradient = ratio * bf.face[f] / vec3::norm(sf[f]).max(1e-300);
+                    if self.wall_pressure_trapezoid && s.coupling == Coupling::Simplec {
+                        // SIMPLEC: the interior faces converge to dp/dn = f_f (the (rAU - rAtU) grad p_old term of
+                        // the flux); apply the same lagged correction at walls so that the wall gradient also
+                        // converges to f_f while the wall flux stays zero
+                        if wall_prev.len() != pbc.coeffs.len() {
+                            wall_prev = (0..pbc.coeffs.len())
+                                .map(|j| bf.face[n_int + j] / vec3::norm(sf[n_int + j]).max(1e-300))
+                                .collect();
+                        }
+                        let f_n = bf.face[f] / vec3::norm(sf[f]).max(1e-300);
+                        gradient = ratio * f_n - (ratio - 1.0) * wall_prev[i];
+                    }
                     pbc.coeffs[i] = crate::bc::FaceCoeffs {
                         a: 1.0,
                         b: g.dn[i] * gradient,
@@ -431,7 +501,10 @@ impl SimpleSolver {
                 }
             }
         }
-        let p_bvals_for_grad = boundary_values_pbc(&g, &pbc, &self.p.values);
+        let wall_used: Vec<f64> = pbc.coeffs.iter().map(|c| c.d).collect();
+        // wall pressure used by the cell gradients only: with the trapezoid option the wall gradient is the mean
+        // of the cell-centre and face force (the matrix and the flux keep the face value, so mass stays balanced)
+        let p_bvals_for_grad = self.gradient_wall_values(&pbc, body.as_ref(), &self.p.values);
         let grad_p = green_gauss(&g, &self.p.values, &p_bvals_for_grad, 0);
         let mut a_p = vec![0.0; n];
         let mut h = vec![[0.0; 3]; n];
@@ -506,6 +579,9 @@ impl SimpleSolver {
             Coupling::Simplec => (0..n).map(|c| vol[c] / (a_p[c] - h1[c]).max(1e-3 * a_p[c])).collect(),
         };
         self.body_ratio = (0..n).map(|c| r_au[c] / r_atu[c]).collect();
+        if self.wall_pressure_trapezoid && s.coupling == Coupling::Simplec && body.is_some() {
+            self.wall_grad = wall_used.clone();
+        }
         let hby_a0: Vec<Vec3> = (0..n)
             .map(|c| {
                 let mut v = [0.0; 3];
@@ -548,6 +624,15 @@ impl SimpleSolver {
                 }
             }
         }
+        if body.is_some() && self.wall_pressure_trapezoid && s.coupling == Coupling::Simplec && !wall_prev.is_empty() {
+            for i in 0..pbc.coeffs.len() {
+                if pbc.fixed_u[i] && pbc.coupled[i].is_none() {
+                    let f = n_int + i;
+                    let c = mesh.owner()[f];
+                    phi_hby_a[f] -= (r_au[c] - r_atu[c]) * wall_prev[i] * vec3::norm(sf[f]);
+                }
+            }
+        }
         if s.coupling == Coupling::Simplec {
             let corr = self.simplec_flux_correction(&r_au, &r_atu, &self.p.values);
             for f in 0..n_int {
@@ -564,7 +649,7 @@ impl SimpleSolver {
         };
         let (res_p, p_iters) = solve_pressure(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls);
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
-        let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
+        let bv_new = self.gradient_wall_values(&pbc, body.as_ref(), &p_new);
         self.phi = corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
 
         // under-relax pressure, correct velocity

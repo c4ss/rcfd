@@ -68,6 +68,12 @@ tolerance_p = 1e-10
 /// maximum speed, respectively pressure). The normalised residual is not used as the stop criterion: for
 /// the uniform or linear solutions of these tests its normalisation constant vanishes.
 fn run(text: &str) -> Simulation {
+    run_with_floor(text, 1e-12)
+}
+
+/// [`run`] with a floor for the velocity scale of the stationarity check (a fluid at rest has speeds at round-off level,
+/// for which a relative change is meaningless).
+fn run_with_floor(text: &str, speed_floor: f64) -> Simulation {
     let case = Case::parse_toml(text).unwrap();
     let mut sim = Simulation::new(&case).unwrap();
     let n = 1500;
@@ -86,7 +92,10 @@ fn run(text: &str) -> Simulation {
         } else {
             sim.field("speed").unwrap()
         };
-        let scale = reference.iter().map(|v| v.abs()).fold(1e-12, f64::max);
+        let scale = reference
+            .iter()
+            .map(|v| v.abs())
+            .fold(if *f == "p" { 1e-12 } else { speed_floor }, f64::max);
         let change = new.iter().zip(old).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max) / scale;
         assert!(
             change < 1e-8,
@@ -274,7 +283,7 @@ tolerance_p = 1e-10
 
 /// (max speed / (Omega R_max), pressure error as a fraction of the pressure range) of the fluid at rest.
 fn rest_errors(n: usize) -> (f64, f64) {
-    let sim = run(&rest_text(n));
+    let sim = run_with_floor(&rest_text(n), 1e-3);
     let (omega, rmax) = (3.0, 0.5 * 2f64.sqrt());
     let c = sim.geom.mesh.cell_centres();
     let umax = sim.field("speed").unwrap().iter().copied().fold(0.0, f64::max);
@@ -295,24 +304,23 @@ fn rest_errors(n: usize) -> (f64, f64) {
     (umax / (omega * rmax), perr)
 }
 
-/// Fluid at rest in a rotating frame. The criterion fixed beforehand was a spurious speed below 1e-3 of
-/// Omega R_max and a pressure error below 1 % of the range; on 24 x 24 cells it is MISSED (5.2e-3 and
-/// 1.6 %): next to walls the Green-Gauss cell gradient of a curved pressure field differs from the cell
-/// centre force by O(h) (the same wall effect as the stratified rest state of F-050), the pressure
-/// extrapolation to the wall only fixes the face value. What is asserted here instead is the measured
-/// behaviour, that both errors fall with mesh refinement at close to first order.
+/// Fluid at rest in a rotating frame, with the criterion fixed beforehand (wave 9): spurious speed below 1e-3 of
+/// Omega R_max and pressure error below 1 % of the range, on the 24 x 24 mesh of the original test. Wave 9 measured
+/// 5.2e-3 and 1.62 % there (criterion missed). Wave 10 changes the wall pressure that enters the cell gradient next
+/// to walls (SimpleSolver::wall_pressure_trapezoid, rotating-frame sources only) so that the wall-normal gradient of
+/// the wall cell equals the cell-centre body force, and applies the SIMPLEC (rAU - rAtU) correction to the wall
+/// pressure gradient; the 24 x 24 case then reaches round-off. The 48 x 48 mesh is printed for information.
 #[test]
-fn fluid_at_rest_in_a_rotating_frame_spurious_flow_falls_with_the_mesh() {
+fn fluid_at_rest_in_a_rotating_frame_meets_the_original_criterion() {
     let (u24, p24) = rest_errors(24);
     let (u48, p48) = rest_errors(48);
     eprintln!(
-        "rotating at rest: speed/(Omega R) {u24:.3e} (24x24) -> {u48:.3e} (48x48), order {:.2}; pressure error {:.3}% -> {:.3}%",
-        (u24 / u48).log2(),
+        "rotating at rest: speed/(Omega R) {u24:.3e} (24x24), {u48:.3e} (48x48); pressure error {:.3e}% (24x24), {:.3e}% (48x48)",
         100.0 * p24,
         100.0 * p48
     );
-    assert!((u24 / u48).log2() > 0.8, "speed order {}", (u24 / u48).log2());
-    assert!((p24 / p48).log2() > 0.8, "pressure order {}", (p24 / p48).log2());
+    assert!(u24 < 1e-3, "speed/(Omega R) {u24}");
+    assert!(p24 < 0.01, "pressure error {p24}");
 }
 
 #[test]
