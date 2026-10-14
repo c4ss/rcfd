@@ -69,9 +69,9 @@ pub fn case_schema() -> Schema {
             "generator",
             Schema::enumeration(
                 "cavity_2d",
-                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d"],
+                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d"],
             )
-            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides)"),
+            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides)"),
         )
         .field(
             "nx",
@@ -152,6 +152,20 @@ pub fn case_schema() -> Schema {
                 .at_least(0.0)
                 .dim(Dimension::LENGTH)
                 .doc("x position where the lower wall starts to rise (wedge_2d)"),
+        )
+        .field(
+            "throat_height",
+            Schema::float(0.05)
+                .at_least(1e-12)
+                .dim(Dimension::LENGTH)
+                .doc("Half-height of the throat at x = lx/2 (nozzle_2d)"),
+        )
+        .field(
+            "exit_height",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::LENGTH)
+                .doc("Half-height at xmax (nozzle_2d); 0 = ly"),
         )
         .field(
             "ramp_angle",
@@ -516,6 +530,19 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("auto", &["auto", "slip", "extrapolate", "fixed"]).doc(
                 "Compressible solver condition: slip = wall / symmetry, extrapolate = supersonic outflow, fixed = free-stream or inflow state from velocity_value, pressure_value (static, Pa) and density_value (or temperature_value through the ideal gas law). auto: extrapolate on outlet patches, slip elsewhere",
             ),
+        )
+        .field(
+            "inlet",
+            Schema::enumeration("none", &["none", "stagnation"]).doc(
+                "Variable-density solver (fluid.density = ideal_gas) inlet type: stagnation = total pressure total_pressure_value and total temperature temperature_value, flow direction from the interior (the velocity, pressure and temperature settings of the patch are replaced)",
+            ),
+        )
+        .field(
+            "total_pressure_value",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::PRESSURE)
+                .doc("Total (stagnation) pressure of a stagnation inlet [Pa]"),
         )
         .field(
             "density_value",
@@ -1028,6 +1055,79 @@ pub fn case_schema() -> Schema {
                 .field("right", state("Right", 0.125, 0.1)),
         );
 
+    let fluid = Schema::object()
+        .doc("Fluid model. density = constant keeps the incompressible solvers; density = ideal_gas selects the steady pressure-based variable-density SIMPLE/SIMPLEC solver (ADR 0005): ideal-gas density rho = p/(R T), total-enthalpy energy equation, laminar, solver.algorithm simple or simplec")
+        .field(
+            "density",
+            Schema::enumeration("constant", &["constant", "ideal_gas"]).doc("constant: physics.rho; ideal_gas: rho = p / (R T)"),
+        )
+        .field(
+            "mode",
+            Schema::enumeration("compressible", &["compressible", "low_mach"]).doc(
+                "ideal_gas only. compressible: absolute pressure in p, full equation of state (subsonic to transonic nozzles, stagnation inlets); low_mach: p is the dynamic pressure and the density follows the thermodynamic pressure, which is uniform in space and fixed by the mass of a closed domain (large temperature differences, natural convection)",
+            ),
+        )
+        .field(
+            "gas_constant",
+            Schema::float(287.058)
+                .at_least(1e-12)
+                .dim(Dimension::SPECIFIC_HEAT)
+                .doc("ideal_gas only: specific gas constant R [J/kg/K]"),
+        )
+        .field(
+            "gamma",
+            Schema::float(1.4).range(1.001, 5.0).doc("ideal_gas only: ratio of specific heats (cp = gamma R / (gamma - 1))"),
+        )
+        .field(
+            "viscosity",
+            Schema::float(1.8e-5)
+                .at_least(1e-12)
+                .dim(Dimension::DYNAMIC_VISCOSITY)
+                .doc("ideal_gas only: dynamic viscosity [Pa s]; the reference value at sutherland_t_ref for the Sutherland law"),
+        )
+        .field(
+            "viscosity_model",
+            Schema::enumeration("constant", &["constant", "sutherland"]).doc("ideal_gas only: constant, or Sutherland's law viscosity mu_ref (T/T_ref)^1.5 (T_ref + S)/(T + S)"),
+        )
+        .field(
+            "sutherland_t_ref",
+            Schema::float(273.0).at_least(1e-12).dim(Dimension::TEMPERATURE).doc("ideal_gas only: reference temperature of the Sutherland law [K]"),
+        )
+        .field(
+            "sutherland_s",
+            Schema::float(110.5).at_least(0.0).dim(Dimension::TEMPERATURE).doc("ideal_gas only: Sutherland constant [K]"),
+        )
+        .field(
+            "prandtl",
+            Schema::float(0.71).at_least(1e-6).doc("ideal_gas only: Prandtl number; the conductivity is mu cp / Pr unless conductivity is set"),
+        )
+        .field(
+            "conductivity",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::CONDUCTIVITY)
+                .doc("ideal_gas only: constant thermal conductivity [W/m/K]; 0 = mu cp / prandtl"),
+        )
+        .field(
+            "reference_pressure",
+            Schema::float(101325.0)
+                .at_least(1e-12)
+                .dim(Dimension::PRESSURE)
+                .doc("ideal_gas only: thermodynamic pressure at the start (low_mach; fixes the mass of a closed domain); in compressible mode the initial pressure is initial.pressure when positive, else this value"),
+        )
+        .field(
+            "density_scheme",
+            Schema::enumeration("linear_upwind", &["upwind", "central", "linear_upwind"]).doc("ideal_gas only: face interpolation of the density in the mass flux"),
+        )
+        .field(
+            "relax_density",
+            Schema::float(1.0).range(0.05, 1.0).doc("ideal_gas only: density under-relaxation"),
+        )
+        .field(
+            "hydrostatic_init",
+            Schema::boolean(false).doc("ideal_gas only: start from the hydrostatic pressure and density of physics.gravity (closed columns)"),
+        );
+
     Schema::object()
         .doc("rcfd case definition")
         .field("title", Schema::string("untitled").doc("Case title"))
@@ -1043,6 +1143,7 @@ pub fn case_schema() -> Schema {
         .field("solver", solver)
         .field("turbulence", turbulence)
         .field("compressible", compressible)
+        .field("fluid", fluid)
         .field(
             "expressions",
             Schema::named(

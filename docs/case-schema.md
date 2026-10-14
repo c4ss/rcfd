@@ -145,6 +145,43 @@ is non-zero when fixed or extrapolating boundaries let mass through), and the mo
 `mass_flow` reports use the adjacent-cell density and velocity of the boundary face; `p` and `rho`
 reports carry pressure and density dimensions (the pressure is the absolute pressure, not kinematic).
 
+## `fluid` ideal-gas variable-density solver (F-050, F-061, ADR 0005)
+
+`fluid.density = "constant"` (default) keeps the incompressible solvers. `fluid.density = "ideal_gas"` selects the
+steady pressure-based variable-density SIMPLE/SIMPLEC solver (`rcfd_fv::varden`): density rho = p/(R T), momentum
+with the density-weighted mass flux, a total-enthalpy energy equation, laminar. It requires
+`solver.algorithm = "simple"` or `"simplec"` and `energy.enabled = true` (the temperature carries the thermal
+boundary conditions; `energy.relax` is the enthalpy relaxation, `energy.buoyancy` and the Boussinesq `physics`
+settings are ignored: buoyancy follows from the density with `physics.gravity`).
+
+* `fluid.mode`: `compressible` (default; `p` is the absolute pressure, full equation of state, subsonic to
+  transonic nozzles, stagnation inlets) or `low_mach` (`p` is the dynamic pressure; the density follows a thermodynamic
+  pressure that is uniform and fixed by the mass of a closed domain; large temperature differences).
+* `fluid.gas_constant` (287.058), `fluid.gamma` (1.4), `fluid.viscosity` (1.8e-5 Pa s), `fluid.viscosity_model`
+  (`constant` | `sutherland` with `sutherland_t_ref` 273 K and `sutherland_s` 110.5 K; `viscosity` is the value at
+  `sutherland_t_ref`), `fluid.prandtl` (0.71) and `fluid.conductivity` (0 = mu cp / Pr).
+* `fluid.reference_pressure` (101325 Pa; low_mach thermodynamic pressure; in compressible mode the initial pressure
+  is `initial.pressure` when positive, else this value), `fluid.density_scheme` (`upwind` | `central` |
+  `linear_upwind`), `fluid.relax_density`, `fluid.hydrostatic_init` (start from the hydrostatic state of
+  `physics.gravity`).
+* Boundaries: `inlet = "stagnation"` with `total_pressure_value` [Pa] and the total `temperature_value` [K]
+  (compressible mode only) replaces the velocity, pressure and temperature settings of the patch (zero-gradient
+  velocity, static state from the isentropic relations). Fixed `pressure_value` is absolute in compressible mode
+  and dynamic in low_mach mode. A symmetry plane uses `velocity = "symmetry"`.
+* Mesh: `mesh.generator = "nozzle_2d"` is the upper half of a converging-diverging duct (inlet half-height `ly`,
+  `throat_height` at x = lx/2, `exit_height` at xmax, 0 = `ly`; cosine wall; patches xmin, xmax, ymin = centre line,
+  ymax = wall).
+* Fields: `rho`, `T`, `mach`, `p_abs` (absolute pressure; `p` is the solver pressure), `ux`, `uy`, `speed`.
+  Reports: `mass_flow` (kg/s per unit mesh depth, positive out), `heat_flow` (W, conduction, positive out),
+  averages, probes. Monitors: `res_u`, `res_p`, `res_T`, `continuity`.
+* Diagnosed as errors (with the setting path): piso, pimple, coupled and compressible algorithms, turbulence models,
+  `rheology`, `properties`, `scalars`/`species`, `sources`, user-function momentum/viscosity, `solver.bulk_velocity`,
+  `physics.body_force` (use `physics.gravity`), pseudo-transient modes, periodic meshes, `statistics`,
+  `energy.enabled = false`, heat-flux temperature boundaries, stagnation inlets in low_mach mode, and any `fluid.*`
+  or stagnation setting with `fluid.density = "constant"`.
+* Limits: steady, laminar, no viscous heating, no non-orthogonal pressure correctors; choked or shock-containing
+  flows need smaller relaxation factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test).
+
 ## Other solver and physics settings now in the schema
 
 * `physics.body_force` (m/s^2); steady incompressible algorithms only (rejected with piso, pimple and compressible).
