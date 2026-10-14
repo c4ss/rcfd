@@ -14,4 +14,5 @@ pub mod sources;
 pub mod stats;
 pub mod turb;
 pub mod udf;
+pub mod vd;
 pub mod workflow;

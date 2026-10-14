@@ -12,6 +12,7 @@ use crate::sources::Sources;
 use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
+use crate::vd::{self, VdState};
 use rcfd_core::expr::Compiled;
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
@@ -250,6 +251,20 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             })
             .map_err(me)
         }
+        "nozzle_2d" => {
+            // upper half of a converging-diverging duct: cosine wall from the inlet half-height ly through the
+            // throat half-height to the exit half-height (the flat-top box_2d scaled in y)
+            let ht = get_f(case, "mesh.throat_height");
+            let he = Some(get_f(case, "mesh.exit_height")).filter(|h| *h > 0.0).unwrap_or(ly);
+            let base = gen::box_2d(nx, ny, lx, 1.0, false, false).map_err(me)?;
+            gen::warp(&base, |p| {
+                let s = p[0] / lx;
+                let h_end = if s <= 0.5 { ly } else { he };
+                let h = ht + (h_end - ht) * (1.0 + (2.0 * std::f64::consts::PI * s).cos()) / 2.0;
+                [p[0], p[1] * h, p[2]]
+            })
+            .map_err(me)
+        }
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform
@@ -449,6 +464,7 @@ enum Engine {
     Coupled(Box<CoupledSolver>),
     Transient(Box<PimpleSolver>),
     Compressible(Box<CompState>),
+    VarDensity(Box<VdState>),
 }
 
 /// Outcome of one iteration or time step.
@@ -531,6 +547,7 @@ impl Simulation {
         let mut p = ScalarField::uniform("p", &geom, get_f(case, "initial.pressure"));
         let energy_on = get_b(case, "energy.enabled");
         let compressible = comp::enabled(case);
+        let vdens = vd::enabled(case);
         let mut temp = ScalarField::uniform("T", &geom, get_f(case, "initial.temperature"));
         let mut errs = Vec::new();
         let sctx = exprs::spatial_context(case);
@@ -867,6 +884,8 @@ impl Simulation {
         let mut base_body: Option<BodyForce> = None;
         let engine = if compressible {
             Engine::Compressible(Box::new(CompState::new(case, &geom)?))
+        } else if vdens {
+            Engine::VarDensity(Box::new(VdState::new(case, &geom, u, p, temp.clone())?))
         } else if coupled_alg {
             let mut s = CoupledSettings::new(nu);
             s.convection = conv;
@@ -965,7 +984,7 @@ impl Simulation {
         };
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
         let transient_alg = matches!(alg.as_str(), "piso" | "pimple");
-        let energy = if energy_on && (steady_alg || transient_alg) {
+        let energy = if energy_on && !vdens && (steady_alg || transient_alg) {
             let rho = get_f(case, "physics.rho");
             let (cp, kth) = (get_f(case, "physics.cp"), get_f(case, "physics.conductivity"));
             let mut solver = EnergySolver::new(geom.clone(), temp, kth / (rho * cp));
@@ -1024,7 +1043,7 @@ impl Simulation {
                 "a user-function viscosity cannot be combined with rheology.model / rheology.shift",
             ));
         }
-        if compressible && !udfs.is_empty() {
+        if (compressible || vdens) && !udfs.is_empty() {
             return Err(diag(
                 "udf",
                 "user functions are not supported by the compressible solver",
@@ -1049,12 +1068,12 @@ impl Simulation {
                 }
             }
         }
-        let scalars = if compressible {
+        let scalars = if compressible || vdens {
             None
         } else {
             ScalarState::from_case(case, &geom, conv, nu)?
         };
-        let sources = if compressible {
+        let sources = if compressible || vdens {
             None
         } else {
             Sources::from_case(case, &geom)?
@@ -1115,6 +1134,7 @@ impl Simulation {
             Engine::Steady(_) | Engine::Coupled(_) => true,
             Engine::Transient(_) => false,
             Engine::Compressible(c) => c.steady,
+            Engine::VarDensity(_) => true,
         }
     }
 
@@ -1136,7 +1156,7 @@ impl Simulation {
     /// Current simulation time (0 for steady runs).
     pub fn time(&self) -> f64 {
         match &self.engine {
-            Engine::Steady(_) | Engine::Coupled(_) => 0.0,
+            Engine::Steady(_) | Engine::Coupled(_) | Engine::VarDensity(_) => 0.0,
             Engine::Transient(s) => s.time,
             Engine::Compressible(c) => {
                 if c.steady {
@@ -1160,7 +1180,7 @@ impl Simulation {
 
     /// Evaluate the user-function monitors on the current fields; returns an error text on failure.
     fn udf_monitor_step(&mut self, x: f64) -> Option<String> {
-        if self.udf_monitors.is_empty() || matches!(self.engine, Engine::Compressible(_)) {
+        if self.udf_monitors.is_empty() || matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
             return None;
         }
         let mut udfs = std::mem::take(&mut self.udfs);
@@ -1205,6 +1225,7 @@ impl Simulation {
             Engine::Coupled(s) => &s.u,
             Engine::Transient(s) => &s.u,
             Engine::Compressible(c) => &c.u,
+            Engine::VarDensity(v) => &v.solver.u,
         }
     }
 
@@ -1215,6 +1236,7 @@ impl Simulation {
             Engine::Coupled(s) => &s.p,
             Engine::Transient(s) => &s.p,
             Engine::Compressible(c) => &c.p,
+            Engine::VarDensity(v) => &v.solver.p,
         }
     }
 
@@ -1225,6 +1247,7 @@ impl Simulation {
             Engine::Coupled(s) => &s.phi,
             Engine::Transient(s) => &s.phi,
             Engine::Compressible(c) => &c.phi,
+            Engine::VarDensity(v) => &v.solver.phi,
         }
     }
 
@@ -1383,6 +1406,29 @@ impl Simulation {
                     converged,
                 }
             }
+            Engine::VarDensity(v) => {
+                let i = v.solver.iterate();
+                v.max_du = i.max_du;
+                v.last = Some(i);
+                let finite = i.max_du.is_finite() && i.res_u.is_finite() && i.res_p.is_finite() && i.res_h.is_finite();
+                if !finite {
+                    reason_override = Some(format!(
+                        "variable-density solver diverged at iteration {} (non-finite residuals); lower solver.alpha_u / alpha_p / energy.relax",
+                        i.iteration
+                    ));
+                }
+                let converged = finite && i.res_u < self.tol_u && i.res_p < self.tol_p && i.res_h < self.tol_u;
+                self.monitors.push("res_T", "", i.iteration as f64, i.res_h);
+                StepSummary {
+                    index: i.iteration,
+                    time: 0.0,
+                    res_u: i.res_u,
+                    res_p: i.res_p,
+                    continuity: i.continuity,
+                    done: !finite || converged || i.iteration >= self.max_iter,
+                    converged,
+                }
+            }
             Engine::Transient(s) => {
                 let dt_prev = s.history.last().map_or(self.dt, |h| h.dt);
                 let mut dt = match &self.cfl {
@@ -1530,6 +1576,14 @@ impl Simulation {
                 return Ok(v);
             }
         }
+        if let Engine::VarDensity(v) = &self.engine {
+            if name == "T" {
+                return Ok(v.solver.t.values.clone());
+            }
+            if let Some(f) = v.field(name) {
+                return Ok(f);
+            }
+        }
         if let Some(t) = &self.turb {
             match name {
                 "k" => return Ok(t.model.k().values.clone()),
@@ -1599,7 +1653,12 @@ impl Simulation {
                 _ => {}
             }
         }
-        if matches!(self.engine, Engine::Compressible(_)) {
+        if let Engine::VarDensity(v) = &self.engine {
+            if name == "T" {
+                return Ok(v.solver.t.boundary_values(g));
+            }
+        }
+        if matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
             // first-order face values: the adjacent cell state
             let cells = self.field(name)?;
             let own = g.mesh.owner();
@@ -1654,6 +1713,18 @@ impl Simulation {
                     ))
                 }
                 ReportKind::MassFlow => return ig::mass_flux(g, &r.patch, self.flux(), 1.0),
+                _ => {}
+            }
+        }
+        if let Engine::VarDensity(v) = &self.engine {
+            match r.kind {
+                ReportKind::Force | ReportKind::Moment | ReportKind::ForceCoefficient | ReportKind::YPlus => {
+                    return Err(Error::Other(
+                        "force, moment and y_plus reports are not available with the variable-density solver".into(),
+                    ))
+                }
+                ReportKind::MassFlow => return v.solver.mass_flow(&r.patch),
+                ReportKind::HeatFlow => return v.solver.heat_flow_out(&r.patch),
                 _ => {}
             }
         }
@@ -2054,6 +2125,14 @@ impl Simulation {
             for n in ["rho", "T", "mach"] {
                 if let Some(v) = c.field(n) {
                     extra.push((n, v));
+                }
+            }
+        }
+        if let Engine::VarDensity(v) = &self.engine {
+            extra.push(("T", v.solver.t.values.clone()));
+            for n in ["rho", "mach", "p_abs"] {
+                if let Some(f) = v.field(n) {
+                    extra.push((n, f));
                 }
             }
         }
