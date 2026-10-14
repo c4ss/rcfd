@@ -185,10 +185,88 @@ first/second-order scheme without shock capturing is not validated for them, and
 acoustic accuracy beyond the standing wave above (linear, 200 cells per wavelength, fixed amplitude `1e-4`). Transient
 turbulence, species, radiation and time-varying boundary expressions with the variable-density solver are not included.
 
+## Results (measured after the code existed; criteria above unchanged)
+
+Release builds, `cargo test --release -p rcfd-fv --test varden_transient --test varden_transient_duct --test
+varden_transient_cavity -- --include-ignored` and `-p rcfd-api --test transient_variable_density`. Steady results are
+bit-identical: `varden_ideal_hash` (0xbbedca02b6f39a6d), the existing `varden_*` tests and `baseline_hashes` pass
+unchanged (Q1, Q2 MET).
+
+| Check | Registered limit | Measured | Result |
+|-------|------------------|----------|--------|
+| T1 closed box, compressible Euler / BDF2 | p, T rel. error <= 1e-6; mass <= 1e-11; \|u\| <= 1e-8; uniformity <= 1e-9 | p 2.9e-10 / 1.7e-10; mass ~2e-15; \|u\| <= 4e-10; non-uniformity ~4e-15 | PASS |
+| T1 closed box, low-Mach Euler / BDF2 | same | p 3.3e-12 / 4.8e-12; same mass, \|u\|, uniformity | PASS |
+| T1r CO2 Peng-Robinson, Euler / BDF2 | energy balance <= 1e-6; p vs EOS <= 1e-6; mass <= 1e-11 | 1.2e-10 / 2.1e-10; 1e-15; 1.7e-15 (T_end 371.85 K) | PASS |
+| T2 order, Euler | [0.90, 1.10] | 1.019 (errors 5.445, 2.631, 1.283, 0.633 K) | PASS |
+| T2 order, BDF2 | [1.85, 2.15] | 1.989 (4.081, 1.132, 0.2915, 0.0734 K) | PASS |
+| T3a frequency, BDF2 / Euler | \|err\| <= 1 % | -0.132 % / -0.133 % | PASS |
+| T3b BDF2 amplitude after 4 periods | [0.98, 1.001] | 0.99157 (Euler 0.4529, reported only) | PASS |
+| T3c order, Euler | [0.85, 1.15] | 0.922 (errors 0.2298, 0.1270, 0.0670) | PASS |
+| T3c order, BDF2 | [1.80, 2.20] | 1.34 (errors 1.114e-2, 2.99e-3, 1.18e-3) | MISS (`t3c_order_bdf2_known_miss`) |
+| T4 cavity Nu hot / cold | within 1 % of 8.85978 | 8.86759 / 8.86806 (+0.09 %, +0.09 %) | PASS |
+| T4 P_th/P0 | within 0.3 % of 0.856338 | 0.856036 (-0.035 %) | PASS |
+| T4 hot/cold heat-flow imbalance | <= 2e-3 | 5.3e-5 | PASS |
+| T4 stationarity Nu_hot(20 s) vs (15 s) | <= 1e-3 | 4.8e-5 | PASS |
+| T5 max \|dMach\| (400 steps) | <= 2e-3 | 6.04e-4 | PASS |
+| T5 max \|dp\|/p0 | <= 5e-4 | 1.88e-4 | PASS |
+| T5 mass flow vs steady kernel, inlet / outlet | <= 1e-3 | 1.64e-3 / 1.62e-3 | MISS (`t5_transient_steady_limit_mass_flow_known_miss`) |
+| T5 in/out equality of the transient run | <= 1e-6 | 1.56e-5 | MISS (same test) |
+| T6 Couette A (both walls isothermal), compressible / low-Mach | profile <= 1 % of mu U^2/(2k); wall heat flow within 1 % | 1.56e-4 / 1.56e-4; 1.00000 of mu U^2/(2H) on both walls | PASS |
+| T6 Couette B (top adiabatic), compressible / low-Mach | profile <= 1 %; bottom flow within 1 %; top <= 1e-3 of bottom | 1.56e-4 / 1.56e-4; 1.00000 of mu U^2/H; top 0 | PASS |
+| T6 switch off (`viscous_heating = false`) | max \|T - T_w\| <= 1e-6 K | 9.9e-11 K (compressible), 0 (low-Mach) | PASS |
+| T7 case file, closed box (both modes) | \|p/p_analytic - 1\| <= 1e-6 | 1.3e-10 (compressible), 4.8e-12 (low-Mach) | PASS |
+| T7 case file, Couette A (both modes) | 1 % | 1.56e-4 (both) | PASS |
+| T7 located validation errors | piso, `inner_iterations < 1`, `max_courant`, `viscous_heating` / `heat_source` without `fluid.density` | all located | PASS |
+
+### Misses and what is known about them
+
+* **T3c BDF2 (1.34 against [1.80, 2.20]).** The ADR expected a spatial floor of 1e-5 at 200 cells; that estimate was
+  wrong. Post-hoc (after the miss, not a gate): the 800-cell run gives the same errors, so the floor is not spatial;
+  with `ly = 0.1`, or with a zero-gradient `u` on the y faces, the BDF2 order is 2.07 to 2.15 (errors 1.05e-2, 2.38e-3,
+  5.7e-4). Cause: the pressure-equation diagonal `a_P` is the mean of the component diagonals, and on the one-cell-high
+  strip of the registered case the Dirichlet normal component at the symmetry planes adds a viscous term `~ mu/ly^2` to
+  the y diagonal, which inflates `a_P` and slightly damps the acoustic mode (about 1e-3 amplitude loss per period at
+  `ly = 0.01`). It is a pre-existing property of the kernel on thin strips; the kernel was not changed for it.
+  (`t3c_order_bdf2_posthoc_tall_strip` records the `ly = 0.1` number.)
+* **T5 mass-flow limits.** At 400 steps (0.4 s, ten flow-through times) the transient run is still relaxing: the
+  mass flow in and out is 0.1159 kg/s against 0.1161 steady and the in/out difference is 1.6e-5. Post-hoc 1200 steps
+  (not a gate): in/out 5.3e-10, mass flow 6.4e-4 from the steady value (the floor of the steady kernel's own
+  `res_u ~ 1e-5` convergence), Mach 4.6e-4, pressure 7.3e-5; they would have passed. The registered 400 steps were kept.
+
+### Deviations and disclosures
+
+* **Tightened linear solves in the tests** (all kernel tests except T4): momentum and pressure relative tolerance
+  1e-10, energy 1e-12, iteration caps 2000 / 20000 / 2000, so that the inner tolerance and not the linear solver limits
+  the accuracy. T4 uses the default linear solver settings.
+* **Inner-iteration floor.** In compressible mode the inner change `max(|dP|/P, ...)` stalls near 1e-11 (round-off of the
+  absolute pressure), below the registered `inner_tol = 1e-12` of T1/T1r; the tests assert `change < 1e-9` instead of
+  `converged`. In T4, 200 of the 1000 steps stopped at the 20-iteration cap (early transient, change up to 1.2e-5);
+  after 10 s a step takes one inner iteration. In T6 the first steps use the 40-iteration cap (change 3e-10 to 5e-8)
+  and the test asserts `change < 1e-4`; the registered `inner_tol = 1e-10` is therefore not reached in the first steps.
+* **Kernel faults found by the checks and fixed** (not tuning of a criterion): (1) T1r exposed that the mass shift of a
+  closed compressible domain assumed the ideal-gas `rho = psi p`; it is now a Newton step with the actual EOS. (2) T6
+  exposed that a prescribed-velocity boundary face, whose density used the lagged cell pressure, made the inner
+  iteration diverge for a flow Courant number above one (the lagged outflow of a cell is multiplied by `u dt/dx`, here
+  5e4). Prescribed-velocity faces now get the same implicit upwind density linearisation as interior faces (`phid`,
+  applied only in transient compressible runs; the steady kernel and every other check are untouched). After this fix
+  both T6 modes pass at the registered `dt = 0.5 s`. (3) Section 5 (adiabatic-wall energy boundary condition) was
+  needed for T6 B; the steady kernel keeps its pre-existing limitation unless viscous heating is on.
+* **T7 Couette setup.** The case schema had only a uniform initial velocity. A uniform start (50 m/s) or a start from
+  rest with the imposed end profile `u = U y/H` makes the transient solver diverge in the first steps (compressible at
+  every `dt` tried between 0.5 and 0.005 (only a few steps at 1e-4 ran); low-Mach with viscous heating at `dt` from 0.5 to 0.02; the impulsive wall layer
+  heats the first cells by tens of kelvin per 10 ms). A new key `initial.velocity_expression_x/_y/_z` (expressions of
+  x, y, z at the cell centres) provides the consistent start. This is a schema addition, not a change of a limit; the
+  divergence from an inconsistent start is a robustness limit of the transient solver and was not fixed.
+* **Compressible transient from rest is not robust** for impulsive velocity mismatches at large `dt` (see above); no
+  claim beyond the checks listed is made.
+* **Viscous heating in steady runs** is available (same terms) but unvalidated; only the transient Couette checks
+  exercise the term.
+
 ## Reference data
 
 The linear-acoustics frequency, Stokes-Kirchhoff damping and Couette-with-dissipation profile are textbook results
-derived above, not table values; the Le Quere values are those of ADR 0005 (see `docs/reference-data.md`).
+derived above, not table values (Bird, Stewart and Lightfoot, Schlichting and Gersten and Patterson and Imberger were
+not re-read in this session; the derivations are in this ADR); the Le Quere values are those of ADR 0005 (see `docs/reference-data.md`).
 
 ## Consequences
 
