@@ -6,6 +6,7 @@ Workspace members (`crates/`), arrows mean "depends on":
 rcfd-core   (no rcfd deps: scalar, units, errors, log, settings tree, hash)
 rcfd-mesh   -> core
 rcfd-linalg -> core
+rcfd-reactor -> (no workspace crates; 0D reactor toolkit, stiff ODE integrator)
 rcfd-io     -> core, mesh
 rcfd-fv     -> core, mesh, linalg
 rcfd-turb   -> core, mesh, fv
