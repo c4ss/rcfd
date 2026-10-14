@@ -1,0 +1,13 @@
+[package]
+name = "rcfd-reactor"
+description = "0D reactor toolkit: CHEMKIN-format mechanisms, stiff ODE integration, equilibrium, batch/PSR/plug-flow reactors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true
