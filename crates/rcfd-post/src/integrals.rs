@@ -6,8 +6,9 @@
 //! of the fluid domain, so
 //!
 //! * the force of the fluid on a wall is `F = rho * sum(p_f S_f)` (pressure)
-//!   `- rho nu sum(dU/dn |S|)` (viscous; exact for no-slip walls) with `dU/dn`
-//!   the gradient along the outward normal;
+//!   `- rho nu sum((grad U + grad U^T) . n |S|)` (viscous: the full stress; the
+//!   wall-normal derivative comes from the boundary condition, the tangential
+//!   parts from the cell gradient);
 //! * a flux is positive when it leaves the domain.
 
 use rcfd_core::vec3::{self, Vec3};
@@ -118,12 +119,41 @@ pub fn wall_force_and_moment(
     let mut pf = vec3::ZERO;
     let mut vf = vec3::ZERO;
     let mut moment = vec3::ZERO;
+    // Cell gradients of the components (their tangential parts give the transpose term of the stress).
+    let grads: Vec<Vec<Vec3>> = if nu == 0.0 {
+        vec![]
+    } else {
+        (0..3)
+            .map(|k| {
+                let cells: Vec<f64> = u.values.iter().map(|v| v[k]).collect();
+                let bvals: Vec<f64> = (0..mesh.n_boundary_faces())
+                    .map(|i| coeffs[k][i].value(u.values[own[geom.n_internal + i]][k]))
+                    .collect();
+                rcfd_fv::gradient::least_squares(geom, &cells, &bvals)
+            })
+            .collect()
+    };
     for f in patch_faces(geom, patch)? {
         let i = f - geom.n_internal;
         let fp = vec3::scale(sf[f], rho * p_face[i]);
         let area = vec3::norm(sf[f]);
         let c = own[f];
-        let fv = [0, 1, 2].map(|k| -rho * nu * coeffs[k][i].gradient(u.values[c][k]) * area);
+        let dn = [0, 1, 2].map(|k| coeffs[k][i].gradient(u.values[c][k]));
+        // t = nu (grad u + grad u^T) . n with the normal derivative of the wall-face gradient fixed by the boundary
+        // condition: (grad u . n)_i = dn_i and ((grad u)^T . n)_i = sum_j n_j d_i u_j.
+        let mut tr = dn;
+        if !grads.is_empty() {
+            let n = vec3::unit(sf[f]);
+            for (j, nj) in n.iter().enumerate() {
+                let gj = grads[j][c];
+                // d_i u_j on the face: cell gradient with its normal part replaced by the wall derivative
+                let corr = dn[j] - vec3::dot(gj, n);
+                for (i2, t) in tr.iter_mut().enumerate() {
+                    *t += nj * (gj[i2] + corr * n[i2]);
+                }
+            }
+        }
+        let fv = tr.map(|t| -rho * nu * t * area);
         pf = vec3::add(pf, fp);
         vf = vec3::add(vf, fv);
         moment = vec3::add(moment, vec3::cross(vec3::sub(cf[f], origin), vec3::add(fp, fv)));
@@ -296,6 +326,64 @@ mod tests {
         assert!(f.viscous[1].abs() < 1e-12);
         let cd = force_coefficient(f.viscous, [1.0, 0.0, 0.0], rho, uw, a);
         assert!((cd - f.viscous[0] / (0.5 * rho * uw * uw * a)).abs() < 1e-14);
+    }
+
+    /// Field `f(x)` on the box with exact fixed face values on every patch.
+    fn exact_field(g: &FvGeometry, f: impl Fn(Vec3) -> Vec3) -> VectorField {
+        let mut u = VectorField::from_fn("U", g, &f);
+        let cf = g.mesh.face_centres();
+        for (name, faces) in all_patch_faces(g) {
+            let vals: Vec<Vec3> = faces.map(|fc| f(cf[fc])).collect();
+            u.set_bc(g, &name, Box::new(FixedValue(rcfd_fv::bc::Profile::PerFace(vals))))
+                .unwrap();
+        }
+        u
+    }
+
+    #[test]
+    fn rigid_rotation_has_no_viscous_force_or_moment() {
+        // u = Omega x r has zero strain rate: nu (grad u + grad u^T) = 0, although nu du/dn does not vanish.
+        let g = geom_box();
+        let u = exact_field(&g, |x| [-2.0 * x[1], 2.0 * x[0], 0.0]);
+        let pf = vec![0.0; g.mesh.n_boundary_faces()];
+        let (mut fsum, mut msum) = (vec3::ZERO, vec3::ZERO);
+        for (name, _) in all_patch_faces(&g) {
+            let (f, m) = wall_force_and_moment(&g, &name, &u, &pf, 0.1, 1.0, [0.3, 0.2, 0.1]).unwrap();
+            assert!(vec3::norm(f.viscous) < 1e-12, "{name}: {:?}", f.viscous);
+            fsum = vec3::add(fsum, f.viscous);
+            msum = vec3::add(msum, m);
+        }
+        assert!(
+            vec3::norm(fsum) < 1e-12 && vec3::norm(msum) < 1e-12,
+            "{fsum:?} {msum:?}"
+        );
+    }
+
+    #[test]
+    fn simple_shear_traction_includes_the_transpose_term() {
+        // u = (gamma y, 0, 0): sigma_xy = sigma_yx = nu gamma. On xmax (outward normal +x) the fluid pulls the wall
+        // with -nu gamma A in y; nu du/dn alone (normal derivative of u_x) would give zero.
+        let g = geom_box();
+        let (gamma, nu, rho) = (3.0, 0.02, 1.5);
+        let u = exact_field(&g, |x| [gamma * x[1], 0.0, 0.0]);
+        let pf = vec![0.0; g.mesh.n_boundary_faces()];
+        let (f, _) = wall_force_and_moment(&g, "xmax", &u, &pf, nu, rho, vec3::ZERO).unwrap();
+        let area = 1.0 * 0.5;
+        assert!(
+            (f.viscous[1] + rho * nu * gamma * area).abs() < 1e-12,
+            "{:?}",
+            f.viscous
+        );
+        assert!(f.viscous[0].abs() < 1e-12 && f.viscous[2].abs() < 1e-12);
+        // on ymax (outward normal +y) the shear is the usual -nu gamma A in x
+        let (f, _) = wall_force_and_moment(&g, "ymax", &u, &pf, nu, rho, vec3::ZERO).unwrap();
+        let area = 2.0 * 0.5;
+        assert!(
+            (f.viscous[0] + rho * nu * gamma * area).abs() < 1e-12,
+            "{:?}",
+            f.viscous
+        );
+        assert!(f.viscous[1].abs() < 1e-12);
     }
 
     #[test]
