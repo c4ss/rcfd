@@ -2,6 +2,7 @@
 
 pub mod checkpoint;
 pub mod convergence;
+pub mod glb_check;
 pub mod gltf;
 pub mod integrals;
 pub mod interpolate;

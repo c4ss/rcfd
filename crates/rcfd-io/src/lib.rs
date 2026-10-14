@@ -3,6 +3,7 @@
 //! * [`gmsh`] - Gmsh `.msh` v2.x and v4.1, ASCII and binary (F-013)
 //! * [`openfoam`] - OpenFOAM `polyMesh` reader and writer (F-014)
 //! * [`fluent`] - Fluent `.msh` / `.cas` reader, ASCII and binary sections, 2D and 3D (F-014, F-118)
+//! * [`stl`], [`tecplot`], [`plot3d`], [`xdmf`] - interchange formats (F-119, ADR 0011)
 //! * [`container`] - native case/data container (F-015)
 //!
 //! All formats are implemented from their public documentation.
@@ -13,8 +14,13 @@ pub mod container;
 pub mod datapack;
 pub mod fluent;
 pub mod gmsh;
+pub mod guard;
 pub mod openfoam;
+pub mod plot3d;
+pub mod stl;
+pub mod tecplot;
 pub mod vtk;
+pub mod xdmf;
 
 /// Read a `.msh` file of either family: Fluent (starts with a parenthesis) or Gmsh (`$MeshFormat`).
 /// The second value lists non-fatal notes, for example Fluent sections that were skipped.
