@@ -145,7 +145,8 @@ fn shipped_cases_match_registered_hashes() {
         "kepsilon_channel",
         run_file("channel/kepsilon_channel.toml"),
         60,
-        0xda0ee795fd177d8e,
+        // corrected after review: 8b68e46 (pre-ADR-0005) and HEAD both give this value; the first registered value was wrong
+        0x6ddc55969af2a835,
     );
 }
 
