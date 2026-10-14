@@ -634,6 +634,13 @@ impl Simulation {
                 Err(e) => errs.extend(e),
             }
         }
+        errs.extend(crate::registers::apply_initial_patches(
+            case,
+            &geom.mesh,
+            &mut u.values,
+            &mut p.values,
+            &mut temp.values,
+        ));
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
         let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
         errs.extend(udf_diags);

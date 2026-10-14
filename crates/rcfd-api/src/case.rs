@@ -529,6 +529,7 @@ impl Case {
         out.extend(crate::exprs::check_case_expressions(self));
         out.extend(crate::udf::load_case_udfs(self).1);
         out.extend(crate::rheology::check(self));
+        out.extend(crate::registers::check(self));
         out.extend(crate::sources::check(self));
         out.extend(crate::scalars::check(self));
         out.extend(crate::properties::check(self));
