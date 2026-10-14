@@ -274,6 +274,28 @@ Verified against the primary source:
 - Hydrostatic ideal-gas columns: analytic atmospheres dp/dy = -rho g with p = rho R T (isothermal exponential; linear T
   polytropic with exponent g/(R a)), derived in the test headers.
 
+## Transient variable density (ADR 0009)
+
+Reference values used by `crates/rcfd-fv/tests/varden_transient*.rs` and `crates/rcfd-api/tests/transient_variable_density.rs`:
+
+- Differentially heated cavity (T4): the steady Le Quere et al. 2005 values of the section above (Nu 8.85978, P/P0
+  0.856338, verified from the author's postprint). The transient approach is checked against them; no transient
+  reference data exist or are claimed.
+- Closed-box heating (T1, T1r), temporal order (T2): closed-form solutions derived in the ADR (uniform heating of a
+  closed ideal gas: `p = rho0 R T`, `T = T0 + q t/(rho cv)`; sinusoidal source `T - T0 = q0/(rho0 cv w) (1 - cos w t)`).
+  The real-gas energy balance uses the Peng-Robinson internal energy of the solver's own EOS (self-consistency, not an
+  independent data set).
+- Standing acoustic wave (T3): linear acoustics, `f = a/(2L)` of a tube closed at both ends and the Stokes-Kirchhoff
+  decay estimate; textbook results (not looked up in this session; the code uses the formulae as written in the ADR).
+  UNVERIFIED against a primary source here.
+- Couette flow with viscous heating (T6): `k T'' + mu (U/H)^2 = 0`, profiles `T - T_w = mu U^2/(2k) (y/H)(1 - y/H)` and
+  `(y/H)(2 - y/H)`. ADR 0009 cites Bird, Stewart and Lightfoot, Transport Phenomena 2nd ed., secs. 10.4-10.5, and
+  Schlichting and Gersten, Boundary-Layer Theory 9th ed., sec. 13.3; neither was accessed in this session. The
+  profiles follow from the stated equation by two integrations and the code agrees with them to 1.6e-4 of the
+  scale. UNVERIFIED section numbers.
+- Patterson and Imberger (1980), J. Fluid Mech. 100, 65: only the order of the boundary-layer filling time
+  `L^2/(kappa Ra^(1/4))` is used to choose the 20 s run length of T4; not accessed, no number is compared with it.
+
 ## Known misses (assertions added after the 2026-10-14 audit)
 
 Each row is a registered criterion that the code does not meet. The threshold in the test is the registered one, not

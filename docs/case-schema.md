@@ -173,7 +173,7 @@ reports carry pressure and density dimensions (the pressure is the absolute pres
 `fluid.density = "constant"` (default) keeps the incompressible solvers. `fluid.density = "ideal_gas"` selects the
 steady pressure-based variable-density SIMPLE/SIMPLEC solver (`rcfd_fv::varden`): density rho = p/(R T), momentum
 with the density-weighted mass flux, a total-enthalpy energy equation, laminar. It requires
-`solver.algorithm = "simple"` or `"simplec"` and `energy.enabled = true` (the temperature carries the thermal
+`solver.algorithm = "simple"` or `"simplec"` (steady) or `"pimple"` (transient, below) and `energy.enabled = true` (the temperature carries the thermal
 boundary conditions; `energy.relax` is the enthalpy relaxation, `energy.buoyancy` and the Boussinesq `physics`
 settings are ignored: buoyancy follows from the density with `physics.gravity`).
 
@@ -210,14 +210,36 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 * Fields: `rho`, `T`, `mach`, `p_abs` (absolute pressure; `p` is the solver pressure), `ux`, `uy`, `speed`.
   Reports: `mass_flow` (kg/s through the patch of the mesh, positive out), `heat_flow` (W, conduction, positive out),
   averages, probes. Monitors: `res_u`, `res_p`, `res_T`, `continuity`.
-* Diagnosed as errors (with the setting path): piso, pimple, coupled and compressible algorithms, turbulence models,
+* Transient (ADR 0009): `solver.algorithm = "pimple"` advances the variable-density equations in time with
+  `solver.dt` and `solver.end_time`, `solver.time_scheme = "euler"` (first order) or `"bdf2"` (second order, Euler
+  first step), including the density time derivative in continuity, momentum and energy. Each time step runs
+  SIMPLE-inner iterations until the largest of `|dP|/max P`, `|dT|/max T` and `|du|/max(sound speed)` between two
+  inner iterations falls below `fluid.inner_tolerance` (1e-8), at most `fluid.inner_iterations` (30, >= 1). Fixed time
+  steps only (`solver.max_courant` > 0 is an error); the relaxation factors `solver.alpha_u`, `solver.alpha_p`,
+  `energy.relax` apply to the inner iterations (ADR 0009 registers `alpha_p = 1`, `energy.relax = 1` for its tests).
+  A closed compressible domain keeps its mass through the equation of state, so no pressure level is pinned.
+  `piso` with `fluid.density` is an error ("use pimple"). The monitors `res_T`, `inner_iterations`, `dt` are recorded
+  per step; `convergence.*` conditions work as for the other transient runs.
+* `energy.viscous_heating` (false): viscous heating in the energy equation, the viscous work `div(tau . u)` of the
+  total enthalpy in the compressible mode, the dissipation `tau : grad u` in the low_mach mode; `energy.heat_source`
+  (W/m3, 0): a uniform volumetric heat source. Both need `fluid.density = "ideal_gas"` (errors otherwise) and work
+  with the steady and the transient solver. With either of them, or in transient runs, an adiabatic wall also removes
+  the kinetic-energy diffusion flux through the wall (ADR 0009 section 5); the steady runs without them keep the
+  pre-ADR 0009 wall condition so that their results are unchanged.
+* `initial.velocity_expression_x`, `_y`, `_z` (m/s, expressions of x, y, z evaluated at the cell centres): a
+  non-uniform initial velocity, for example a start that is consistent with an imposed boundary profile
+  (`boundaries.<patch>.velocity_expression_*`, evaluated once at the start in variable-density runs). The
+  compressible transient solver diverges from a start that contradicts an imposed end profile (ADR 0009 results).
+* Diagnosed as errors (with the setting path): piso, coupled and compressible algorithms, turbulence models,
   `rheology`, `properties`, `scalars`/`species`, `sources`, user-function momentum/viscosity, `solver.bulk_velocity`,
   `physics.body_force` (use `physics.gravity`), pseudo-transient modes, periodic meshes, `statistics`,
-  `energy.enabled = false`, heat-flux temperature boundaries, stagnation inlets in low_mach mode, and any `fluid.*`
-  or stagnation setting with `fluid.density = "constant"`.
+  `energy.enabled = false`, heat-flux temperature boundaries, stagnation inlets in low_mach mode, `solver.max_courant`
+  with pimple, `fluid.inner_*` with a steady algorithm, `energy.viscous_heating` / `energy.heat_source` and any
+  `fluid.*` or stagnation setting with `fluid.density = "constant"`.
 * Convergence: the momentum residual `res_u` typically floors near 1e-5..1e-6, so the default `tolerance_u` may never be met and the run then stops at `max_iterations`; stop on `convergence.*` conditions (a window on `res_p`, `res_T` or a report) or set `tolerance_u` near the floor. `fluid.*` keys are flagged with `density = "constant"` only when they differ from their defaults.
-* Limits: steady, laminar, no viscous heating, no non-orthogonal pressure correctors; choked or shock-containing
-  flows need smaller relaxation factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test).
+* Limits: laminar, no non-orthogonal pressure correctors; choked or shock-containing flows need smaller relaxation
+  factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test); no shock-tube or choked transient
+  benchmark is claimed (ADR 0009).
 
 ## Other solver and physics settings now in the schema
 
