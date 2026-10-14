@@ -43,21 +43,8 @@ fn p_ratio(m: f64) -> f64 {
     (1.0 + 0.5 * (GAMMA - 1.0) * m * m).powf(-GAMMA / (GAMMA - 1.0))
 }
 
-fn t_ratio(m: f64) -> f64 {
-    1.0 / (1.0 + 0.5 * (GAMMA - 1.0) * m * m)
-}
-
-fn mdot_star(a_star: f64) -> f64 {
-    a_star * P0 * (GAMMA / (R * T0)).sqrt() * (2.0 / (GAMMA + 1.0)).powf((GAMMA + 1.0) / (2.0 * (GAMMA - 1.0)))
-}
-
 struct Case {
     sol: VarDensitySolver,
-    geom: Arc<FvGeometry>,
-    nx: usize,
-    ny: usize,
-    h_in: f64,
-    h_e: f64,
 }
 
 fn profile(h_in: f64, h_e: f64, x: f64) -> f64 {
@@ -111,15 +98,8 @@ fn build(nx: usize, ny: usize, h_in: f64, h_e: f64, p_out: f64, p_start: f64, tr
         p0: P0,
         t0: T0,
     }];
-    let sol = VarDensitySolver::new(geom.clone(), u, p, t, s).unwrap();
-    Case {
-        sol,
-        geom,
-        nx,
-        ny,
-        h_in,
-        h_e,
-    }
+    let sol = VarDensitySolver::new(geom, u, p, t, s).unwrap();
+    Case { sol }
 }
 
 fn fields(c: &Case) -> (Vec<f64>, Vec<f64>, f64, f64) {

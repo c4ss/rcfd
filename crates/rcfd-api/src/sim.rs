@@ -1466,7 +1466,8 @@ impl Simulation {
                         v.last = Some(si.last);
                         v.max_du = si.last.max_du;
                         let l = si.last;
-                        let finite = si.change.is_finite() && l.res_u.is_finite() && l.res_p.is_finite() && l.res_h.is_finite();
+                        let finite =
+                            si.change.is_finite() && l.res_u.is_finite() && l.res_p.is_finite() && l.res_h.is_finite();
                         if !finite {
                             reason_override = Some(format!(
                                 "variable-density solver diverged at time {} (non-finite inner iteration); lower solver.dt or the relaxation factors",

@@ -159,7 +159,7 @@ fn first_error(text: &str) -> (String, String) {
 
 #[test]
 fn unsupported_combinations_are_diagnosed_with_their_path() {
-    let (path, _) = first_error(&nozzle("").replace("algorithm = \"simplec\"", "algorithm = \"pimple\""));
+    let (path, _) = first_error(&nozzle("").replace("algorithm = \"simplec\"", "algorithm = \"piso\""));
     assert_eq!(path, "solver.algorithm");
     let (path, _) = first_error(&nozzle("").replace("enabled = true", "enabled = false"));
     assert_eq!(path, "energy.enabled");
