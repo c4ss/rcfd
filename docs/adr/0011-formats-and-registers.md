@@ -171,3 +171,16 @@ correct colours" is NOT demonstrated; only the stored per-vertex colour equals t
 
 Tests are written first against these numbers, then run once; results are copied to `docs/reference-data.md`. A miss
 is moved to an ignored `*_known_miss` test with the original assertion.
+
+## 6. Errata and deviations found while running (appended after the first results; criteria above are unchanged)
+
+- R5 states that face-neighbour dilation of the 10^3 block gives 12^3 = 1728 cells. That is wrong arithmetic: a
+  face-neighbour dilation adds six 10 x 10 slabs (1600 cells). The wording was kept; the face-neighbour assertion
+  with 1728 lives in the ignored test `r5_face_grow_known_miss` (measured 1600). The numbers 1728 and 1000 (shrink)
+  are met by the additional point-neighbour operations `grow_points` / `shrink_points` (`r5_algebra`); the settings
+  tree selects them with `neighbours = "points"`.
+- R6 and R7 are measured through the settings layer on a 20 x 20 `box_2d` mesh (there is no 3D box generator in the
+  settings layer): 100 register cells instead of 1000, same pass conditions (exactly the register cells change, others
+  bit identical; sink non-zero exactly on the register cells, bit-exact zero elsewhere).
+- The expression register compares an SI value with `above` / `below`; lengths need unit literals.
+- X4: the XDMF check used VTK's `vtkXdmfReader` (XDMF2), not `vtkXdmf3Reader`; meshio was not used for XDMF.

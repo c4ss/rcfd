@@ -430,3 +430,22 @@ behaviour are in `docs/udf-abi.md`.
   -4.8 percent at y+ 0.1; channel bulk velocity +5.4 percent at y+ 2 to +1.4 percent at 0.25);
   the validated accuracy statements are in the roadmap note of F-043.
 * The compressible solver is inviscid and explicit; there is no implicit option.
+
+## `registers` and `initial.patches` (F-124, ADR 0011)
+
+`registers.<name>` defines a named set of cells; see `docs/interchange-formats.md` for the semantics.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `type` | `box` | `box`, `expression`, `boundary_adjacent`, `cell_zone` or `combine` |
+| `box_min`, `box_max` | none | corners of the box (`box_max` above `box_min` in every component) |
+| `expression`, `above`, `below` | none, -1e300, 1e300 | expression of the cell centre x, y, z (lengths with units); selects `above <= value <= below` (SI, inclusive) |
+| `patches`, `layers` | none, 1 | `boundary_adjacent`: patches and number of cell layers |
+| `cell_zone` | none | mesh cell zone name |
+| `operation`, `operands` | `union`, none | `combine`: union, intersection, difference or complement of the named registers |
+| `grow`, `shrink`, `neighbours` | 0, 0, `faces` | dilate / erode the result; adjacency by faces or by points |
+
+`sources.<n>.zone = "register"` with `register = "<name>"` restricts a source. `initial.patches.<n>` has `register`,
+`variable` (`velocity`, `pressure`, `temperature`) and `value` (3 numbers for velocity, 1 otherwise) and overwrites the
+initial field inside the register. Errors name the setting, for example `sources.bed.register: unknown register 'x'
+(registers: core)` or `registers.x.patches: the mesh has no patch 'nope' (patches: ...)`.
