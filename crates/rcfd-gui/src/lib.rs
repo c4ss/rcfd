@@ -9,6 +9,7 @@
 pub mod assistant_setup;
 pub mod chat;
 pub mod controller;
+pub mod files;
 pub mod layout;
 pub mod monitors;
 pub mod schema_model;

@@ -13,6 +13,7 @@ pub mod agent;
 pub mod anthropic;
 pub mod config;
 pub mod http;
+pub mod keychain;
 pub mod mock;
 pub mod openai;
 pub mod tools;

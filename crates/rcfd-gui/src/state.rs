@@ -3,6 +3,7 @@
 use crate::assistant_setup::AssistantSetup;
 use crate::chat::{CardState, ChatState, Command, Entry, Worker, WorkerMsg};
 use crate::controller::Controller;
+use crate::files::{FileChooser, NativeChooser};
 use crate::theme::Theme;
 use rcfd_assistant::{Agent, AgentContext, AgentEvent, ApprovalMode, Decision, Provider};
 use serde_json::{json, Value};
@@ -87,6 +88,10 @@ pub struct AppState {
     pub prompt: Option<Prompt>,
     /// Path typed into the prompt.
     pub prompt_path: String,
+    /// Native file dialog (replaceable in tests).
+    pub chooser: Box<dyn FileChooser>,
+    /// Folder the file dialogs start in when no case file is open.
+    pub dialog_dir: Option<PathBuf>,
     /// Plot residuals on a log axis.
     pub log_plot: bool,
     /// Request to close the application.
@@ -115,6 +120,8 @@ impl AppState {
             new_names: HashMap::new(),
             prompt: None,
             prompt_path: String::new(),
+            chooser: Box::new(NativeChooser),
+            dialog_dir: Some(PathBuf::from("cases")),
             log_plot: true,
             quit: false,
             prefs_path: None,

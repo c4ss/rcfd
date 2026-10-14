@@ -15,3 +15,11 @@ rcfd-mcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ureq = "3"
+
+# OS keychain (ADR 0004): Windows Credential Manager and macOS Keychain. Linux (Secret Service needs
+# libdbus) has no backend here and uses the keys.json fallback.
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
