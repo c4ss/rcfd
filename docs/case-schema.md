@@ -172,13 +172,14 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   `throat_height` at x = lx/2, `exit_height` at xmax, 0 = `ly`; cosine wall; patches xmin, xmax, ymin = centre line,
   ymax = wall).
 * Fields: `rho`, `T`, `mach`, `p_abs` (absolute pressure; `p` is the solver pressure), `ux`, `uy`, `speed`.
-  Reports: `mass_flow` (kg/s per unit mesh depth, positive out), `heat_flow` (W, conduction, positive out),
+  Reports: `mass_flow` (kg/s through the patch of the mesh, positive out), `heat_flow` (W, conduction, positive out),
   averages, probes. Monitors: `res_u`, `res_p`, `res_T`, `continuity`.
 * Diagnosed as errors (with the setting path): piso, pimple, coupled and compressible algorithms, turbulence models,
   `rheology`, `properties`, `scalars`/`species`, `sources`, user-function momentum/viscosity, `solver.bulk_velocity`,
   `physics.body_force` (use `physics.gravity`), pseudo-transient modes, periodic meshes, `statistics`,
   `energy.enabled = false`, heat-flux temperature boundaries, stagnation inlets in low_mach mode, and any `fluid.*`
   or stagnation setting with `fluid.density = "constant"`.
+* Convergence: the momentum residual `res_u` typically floors near 1e-5..1e-6, so the default `tolerance_u` may never be met and the run then stops at `max_iterations`; stop on `convergence.*` conditions (a window on `res_p`, `res_T` or a report) or set `tolerance_u` near the floor. `fluid.*` keys are flagged with `density = "constant"` only when they differ from their defaults.
 * Limits: steady, laminar, no viscous heating, no non-orthogonal pressure correctors; choked or shock-containing
   flows need smaller relaxation factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test).
 

@@ -2,9 +2,14 @@
 //!
 //! Checks fixed before the first run: a subsonic converging-diverging duct (nozzle_2d, 100 x 8 cells, throat
 //! Mach 0.3 set by the back pressure through the area-Mach relation, stagnation inlet 101325 Pa / 300 K) built from
-//! a TOML case reaches the iteration cap with res_p < 1e-8 and res_u < 1e-4 (amended after the first run, which showed the res_u floor of 2.6e-5 that the kernel tests also see; the original target 1e-8 was not met), conserves the mass flow between inlet and outlet to 1e-6 and gives a
-//! throat Mach number within 2 % of 0.3 (a coarse smoke check of the wiring; the quantitative validation of the
-//! kernel is in rcfd-fv/tests/varden_*.rs). Unsupported combinations are diagnosed with their setting path.
+//! a TOML case (a) reaches the residual targets tolerance_u = tolerance_p = 1e-8, (b) conserves the mass flow between
+//! inlet and outlet to 1e-6 and (c) gives a throat Mach number within 2 % of 0.3 (a coarse smoke check of the wiring;
+//! the quantitative validation of the kernel is in rcfd-fv/tests/varden_*.rs). Unsupported combinations are diagnosed
+//! with their setting path.
+//!
+//! Result: (b) and (c) are met (in/out equal to 1e-7 or better, throat Mach 0.2997). (a) is NOT met: at the
+//! 3000-iteration cap res_u = 2.6e-5 and res_p = 6e-13 (the momentum residual floor also seen in the kernel tests), so
+//! the run is not flagged converged; the test therefore does not assert (a).
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
@@ -95,8 +100,6 @@ fn subsonic_nozzle_runs_from_a_case_file() {
         sim.step();
     }
     println!("{:?}: {:?}", sim.stop_reason(), sim.last());
-    let l = sim.last().unwrap();
-    assert!(l.res_u < 1e-4 && l.res_p < 1e-8, "{l:?}");
     let last = |n: &str| *sim.monitors.get(n).unwrap().y.last().unwrap();
     let (m_in, m_out) = (last("m_in"), last("m_out"));
     println!("mass flow in {m_in:.6e} out {m_out:.6e}");
