@@ -26,6 +26,8 @@ struct Setup {
     /// end planes with zero-gradient velocity and fixed pressure (ADR 0008 addendum A)
     open_ends: bool,
     iterations: usize,
+    /// `solver.component_diagonal = "corrected"` (ADR 0010); MRF sources switch the correction on by themselves
+    corrected: bool,
 }
 
 fn toml(s: &Setup) -> String {
@@ -113,6 +115,7 @@ fn base(generator: &'static str, ny: usize, nz: usize) -> Setup {
         through: false,
         open_ends: false,
         iterations: 4000,
+        corrected: false,
     }
 }
 
@@ -127,7 +130,10 @@ fn lower(z_max: f64) -> String {
 }
 
 fn run(s: &Setup) -> Simulation {
-    let text = toml(s);
+    let mut text = toml(s);
+    if s.corrected {
+        text = text.replacen("[solver]", "[solver]\ncomponent_diagonal = \"corrected\"", 1);
+    }
     let case = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     let n = sim.run(s.iterations);
@@ -227,17 +233,18 @@ fn m2_impl(open: bool) -> Failures {
 }
 
 fn m3_impl(open: bool) -> Failures {
-    m3_run(open, false)
+    m3_run(open, false, false)
 }
 
 /// M3; with `no_source` the stationary frame (a) has no source at all, as registered (otherwise it is an MRF source with
 /// Omega = 0, which also switches on the H-operator correction of the kernel, see ADR 0008 disclosures).
-fn m3_run(open: bool, no_source: bool) -> Failures {
+fn m3_run(open: bool, no_source: bool, corrected: bool) -> Failures {
     let mut f = Failures::new();
     let mut fields = Vec::new();
     for omega in [0.0, 0.5, 1.0, 2.0] {
         let mut s = base("annulus_3d", 16, 2);
         s.open_ends = open;
+        s.corrected = corrected;
         // Omega = 0 is the stationary frame; the (empty) MRF zone only switches on the H-operator consistency correction
         s.sources = if no_source && omega == 0.0 {
             String::new()
@@ -369,8 +376,24 @@ fn m2_m3_m4_torque_known_miss() {
 #[test]
 #[ignore = "known miss: registered stationary frame (no source at all) misses M3 (velocity, spurious, pairwise); see ADR 0008"]
 fn m3_stationary_frame_without_source_known_miss() {
-    let f = m3_run(false, true);
+    let f = m3_run(false, true, false);
     require(&f, &["velocity", "spurious", "pairwise"]);
+}
+
+/// ADR 0010: the registered stationary frame (no source at all) with `solver.component_diagonal = "corrected"`;
+/// limits unchanged. Velocity (6.76e-3 V_i against 1.5e-2) and pairwise (<= 1.7e-3 V_i against 1e-2) now pass; the
+/// spurious-speed limit 1e-3 V_i still misses (1.41e-3), see the known miss below.
+#[test]
+fn m3_stationary_frame_without_source_corrected_diagonal() {
+    let f = m3_run(false, true, true);
+    require(&f, &["velocity", "pairwise"]);
+}
+
+#[test]
+#[ignore = "known miss: spurious speed 1.41e-3 V_i (limit 1e-3) in the stationary frame without source, also with component_diagonal = corrected"]
+fn m3_stationary_frame_without_source_corrected_diagonal_spurious_known_miss() {
+    let f = m3_run(false, true, true);
+    require(&f, &["spurious"]);
 }
 
 #[test]
