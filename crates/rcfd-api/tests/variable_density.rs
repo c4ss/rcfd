@@ -91,6 +91,32 @@ patch = "xmax"
     )
 }
 
+/// KNOWN MISS (F-061). Pre-registered check (a) of this file: the subsonic duct case reaches the residual targets
+/// tolerance_u = tolerance_p = 1e-8 within the 3000-iteration cap of the case file. Measured when the test was first
+/// run: res_u = 2.6e-5, res_p = 6e-13 at the cap, so the run is not flagged converged. The threshold below is the
+/// registered one and is not loosened; the test is ignored because it fails by design until the momentum residual
+/// floor is understood. Run with `--ignored` to see the current values.
+#[test]
+#[ignore = "KNOWN MISS: registered residual target 1e-8 is not met at the 3000-iteration cap (res_u 2.6e-5)"]
+fn subsonic_nozzle_residual_target_1e8_known_miss() {
+    let case = Case::parse_toml(&nozzle("")).unwrap();
+    let mut sim = Simulation::new(&case).unwrap();
+    while !sim.is_done() {
+        sim.step();
+    }
+    let last = sim.last().unwrap();
+    println!(
+        "KNOWN MISS measured: res_u {:.3e}, res_p {:.3e}, converged {} after {} iterations",
+        last.res_u, last.res_p, last.converged, last.index
+    );
+    assert!(
+        last.res_u < 1e-8 && last.res_p < 1e-8 && last.converged,
+        "res_u {:.3e} res_p {:.3e}",
+        last.res_u,
+        last.res_p
+    );
+}
+
 #[test]
 fn subsonic_nozzle_runs_from_a_case_file() {
     let case = Case::parse_toml(&nozzle("")).unwrap();

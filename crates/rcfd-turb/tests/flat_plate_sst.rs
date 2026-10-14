@@ -11,6 +11,15 @@
 //! 273 x 193 grid; the two correlations of docs/reference-data.md are White's
 //! `Cf = 0.455 / ln^2(0.06 Re_x)` and the power law `Cf = 0.0576 Re_x^-0.2`, which themselves differ
 //! by 8.7 percent at Re_x = 5e6 (SST lies between them).
+//!
+//! Registered thresholds (F-043; the +-5 percent band is the one named in the F-043 roadmap note, unchanged):
+//! * Cf(0.97) within 5 % of the TMR page value 0.00268299 (273 x 193 grid): ASSERTED (`sst_flat_plate_cf`).
+//! * Cf(0.97) within 5 % of the TMR file `cf_plate_sstv.dat` value 0.0026909 at x = 0.9701 (the "about 2.691e-3" of
+//!   docs/reference-data.md): ASSERTED (`sst_flat_plate_cf`).
+//! * Cf within 5 % of the power law for Re_x <= 5e6: ASSERTED (`sst_flat_plate_cf`).
+//! * Cf(0.97) within 5 % of White's formula `0.455 / ln^2(0.06 Re_x)`: KNOWN MISS, recorded in
+//!   `sst_flat_plate_cf_within_5pct_of_white_known_miss` (ignored, fails by design; earlier measurement -7.3 % at
+//!   Re_x = 5e6, -6.6 .. -8.5 % over the plate). The 5 % is not widened.
 
 use rcfd_fv::bc::FixedValue;
 use rcfd_fv::convection::ConvScheme;
@@ -19,7 +28,7 @@ use rcfd_fv::{FvGeometry, ScalarField, Symmetry, VectorField, ZeroGradient};
 use rcfd_mesh::gen::{box_2d_graded, Grading};
 use rcfd_mesh::layers::{first_cell_height_from_y_plus, flat_plate_u_tau};
 use rcfd_turb::KOmegaSst;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 fn env<T: std::str::FromStr>(k: &str, d: T) -> T {
     std::env::var(k).ok().and_then(|v| v.parse().ok()).unwrap_or(d)
@@ -125,28 +134,42 @@ fn power(re_x: f64) -> f64 {
     0.0576 * re_x.powf(-0.2)
 }
 
+/// TMR CFL3D SST value of the page (273 x 193 grid) and of the pinned data file at x = 0.9701.
+const TMR_PAGE_CF_097: f64 = 0.00268299;
+const TMR_FILE_CF_097: f64 = 0.0026909;
+
+/// One shared converged run for the tests of this file (the run takes minutes).
+fn plate() -> &'static Plate {
+    static PLATE: OnceLock<Plate> = OnceLock::new();
+    PLATE.get_or_init(|| {
+        let (ny, layers) = (env("NY", 110), env("LAYERS", 70));
+        let o = run(
+            env("YP", 0.5),
+            env("GROWTH", 1.1),
+            layers,
+            ny,
+            env("NX", 140),
+            env("NIT", 8000),
+        );
+        println!("{} its, du {:.2e}, dnut {:.2e}", o.iterations, o.du, o.change);
+        o
+    })
+}
+
 #[test]
 #[ignore = "heavy: wall-resolved flat plate, run in release"]
 fn sst_flat_plate_cf() {
-    let (ny, layers) = (env("NY", 110), env("LAYERS", 70));
-    let o = run(
-        env("YP", 0.5),
-        env("GROWTH", 1.1),
-        layers,
-        ny,
-        env("NX", 140),
-        env("NIT", 8000),
-    );
-    println!("{} its, du {:.2e}, dnut {:.2e}", o.iterations, o.du, o.change);
-    let (cf97, _) = at(&o, 0.97);
+    let o = plate();
+    let (cf97, _) = at(o, 0.97);
     println!(
-        "Cf(0.97) = {cf97:.6} (TMR CFL3D SST 0.002683: {:+.1}%)",
-        100.0 * (cf97 / 0.00268299 - 1.0)
+        "Cf(0.97) = {cf97:.6} (TMR page 0.00268299: {:+.1}%, TMR file 0.0026909: {:+.1}%)",
+        100.0 * (cf97 / TMR_PAGE_CF_097 - 1.0),
+        100.0 * (cf97 / TMR_FILE_CF_097 - 1.0)
     );
     let mut worst: f64 = 0.0;
     for &x in &[0.4, 0.6, 1.0, 1.4, 2.0 - 0.01] {
         let re_x = x * 5.0e6;
-        let (cf, yp) = at(&o, x);
+        let (cf, yp) = at(o, x);
         println!(
             "x {x:.2} Re_x {re_x:.2e} Cf {cf:.5} White {:.5} ({:+.1}%) power-law {:.5} ({:+.1}%) first-cell y+ {yp:.2}",
             white(re_x),
@@ -164,9 +187,27 @@ fn sst_flat_plate_cf() {
         o.du,
         o.change
     );
-    assert!((cf97 / 0.00268299 - 1.0).abs() < 0.05, "Cf(0.97) {cf97}");
+    assert!((cf97 / TMR_PAGE_CF_097 - 1.0).abs() < 0.05, "Cf(0.97) {cf97}");
+    assert!((cf97 / TMR_FILE_CF_097 - 1.0).abs() < 0.05, "Cf(0.97) {cf97}");
     assert!(
         worst < 0.05,
         "Cf deviates {worst} from the power-law correlation for Re_x <= 5e6"
     );
+}
+
+/// KNOWN MISS (F-043): Cf(0.97) within 5 % of White's formula `0.455 / ln^2(0.06 Re_x)` (Re_x = 4.85e6). Earlier
+/// measurement: about -7.3 % (-6.6 .. -8.5 % along the plate), so this assertion fails by design. The 5 % is the
+/// registered band and is not widened; the test is ignored and named as a known miss.
+#[test]
+#[ignore = "KNOWN MISS: SST Cf is 6.6-8.5 % below White's formula, registered band is 5 %"]
+fn sst_flat_plate_cf_within_5pct_of_white_known_miss() {
+    let o = plate();
+    let (cf97, _) = at(o, 0.97);
+    let w = white(0.97 * 5.0e6);
+    let dev = cf97 / w - 1.0;
+    println!(
+        "KNOWN MISS measured: Cf(0.97) {cf97:.6} White {w:.6} deviation {:+.2} %",
+        100.0 * dev
+    );
+    assert!(dev.abs() < 0.05, "Cf(0.97) {cf97} vs White {w}: {:+.2} %", 100.0 * dev);
 }
