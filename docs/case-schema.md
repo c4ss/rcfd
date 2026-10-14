@@ -57,6 +57,14 @@ and `e_wall` define the Spalding law. Boundary values: `turbulence_spec = values
 `k_value` and `omega_value`; the other inlet specifications derive `omega = epsilon/(beta* k)`.
 Outputs add the field `omega`.
 
+### Mesh generator parameters
+
+`cavity_2d` is an `nx` x `ny` uniform grid on `lx` x `ly` (patches `lid` = ymax, `walls`, `frontAndBack`); it is
+square only when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` cavity of side `lx`.
+Options a generator does not apply are rejected with a located diagnostic instead of being ignored:
+`mesh.wall_layers` (`box_2d` and `channel_2d` only), `mesh.periodic_x` / `periodic_y` (`box_2d` only) and
+`mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`).
+
 ### Non-conformal interface (`mesh.generator = "channel_2d_interface"`, F-114)
 
 A `channel_2d` made of two blocks that meet at `x = lx/2`: the first has `nx` x `ny` cells, the second

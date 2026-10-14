@@ -210,11 +210,18 @@ pub fn box_mesh(n: [usize; 3], l: [f64; 3], g: [Grading; 3]) -> Result<Mesh> {
 /// 2D (one cell thick, `empty` front/back) lid-driven-cavity style square.
 /// Patches: `lid` (ymax), `walls` (xmin, xmax, ymin), `frontAndBack` (empty).
 pub fn cavity_2d(n: usize, size: f64) -> Result<Mesh> {
-    let xs = axis_coords(n, size, Grading::Uniform)?;
-    let zs = axis_coords(1, size / n as f64, Grading::Uniform)?;
+    cavity_2d_rect(n, n, size, size)
+}
+
+/// Rectangular cavity `[0,lx]x[0,ly]` of `nx` x `ny` uniform cells, patches `lid` (ymax),
+/// `walls` and `frontAndBack`; [`cavity_2d`] is the square case.
+pub fn cavity_2d_rect(nx: usize, ny: usize, lx: f64, ly: f64) -> Result<Mesh> {
+    let xs = axis_coords(nx, lx, Grading::Uniform)?;
+    let ys = axis_coords(ny, ly, Grading::Uniform)?;
+    let zs = axis_coords(1, lx / nx as f64, Grading::Uniform)?;
     build_masked(MaskedGrid {
         xs: &xs,
-        ys: &xs,
+        ys: &ys,
         zs: &zs,
         mask: &|_, _| true,
         patch: &|d, _, _| match d {
