@@ -1313,6 +1313,7 @@ impl Simulation {
                     None => (None, None),
                 };
                 s.sink = src_sink;
+                s.wall_pressure_trapezoid = src_force.is_some();
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
                         en.buoyancy
