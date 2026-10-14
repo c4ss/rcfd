@@ -19,6 +19,7 @@ pub mod riemann;
 pub mod scalar;
 pub mod simple;
 pub mod sources;
+pub mod varden;
 
 pub use bc::{
     Bc, BcCtx, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Symmetry,

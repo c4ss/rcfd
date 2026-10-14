@@ -112,7 +112,7 @@ maximum spurious speed 1e-6 m/s, mass conserved to 1e-10.
 **(c) Differentially heated cavity with large temperature difference (low-Mach mode).** Le Quere, Weisman, Paillere,
 Vierendeels, Dick, Becker, Braack and Locke, ESAIM: M2AN 39 (2005) 609-616, DOI 10.1051/m2an:2005027 (Table 1, values
 verified from the author's postprint, see `docs/reference-data.md`): `T0 = 600 K`, `epsilon = 0.6`, `P0 = 101325 Pa`,
-`Pr = 0.71`, `Ra = 1e6` (sets `L`), `Ra = Pr g^2 rho0^2 (Th-Tc) L^3/(T0 mu0^2)`, no-slip adiabatic top and bottom.
+`Pr = 0.71`, `Ra = 1e6` (sets `L`), `Ra = Pr g rho0^2 (Th-Tc) L^3/(T0 mu0^2)` (eq. 1 of the paper; a first transcription of this line had `g^2`, which is not dimensionless and is corrected here before any validation result existed), no-slip adiabatic top and bottom.
 T1 constant properties `mu = mu0 = mu(T0)` of the Sutherland law below, `k = mu cp/Pr` (the Nusselt number depends
 on `Ra`, `Pr`, `epsilon` only, the value of `mu0` just sets `L`); T2 Sutherland `mu = 1.68e-5 (T/273)^1.5 (273+110.5)/(T+110.5)`, `k = mu cp/Pr`. Mesh 96 x 96,
 `box_2d` grading 8, `linear_upwind` momentum and energy, SIMPLEC. Nu on both walls (`L/(k0 dT) * mean(k dT/dx)`,
