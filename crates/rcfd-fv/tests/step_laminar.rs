@@ -249,36 +249,100 @@ fn step_reattachment_grows_with_re_and_is_grading_insensitive() {
     assert!(rel < 0.06, "{rel}");
 }
 
-/// Validation sweep (heavy; run with `--ignored --nocapture` in release). Records the
-/// reattachment length x_r / h versus Re_h = U_mean h / nu for expansion ratio 2 and a parabolic
-/// inlet (Armaly et al. 1983 / Gartling 1990 geometry; Armaly's Re = 2 Re_h here).
+/// Print-only sweep point kept from the wave-6 exploration (Re_h = 389; note Armaly's own "389" would be Re_h about
+/// 195). It has no reference value and asserts nothing.
 #[test]
-#[ignore = "heavy validation sweep"]
+#[ignore = "heavy validation sweep, print only"]
 fn laminar_step_validation_sweep() {
-    for (re, l_out, n) in [
-        (100.0, 30.0, [16, 240, 32, 32]),
-        (200.0, 30.0, [16, 240, 32, 32]),
-        (389.0, 40.0, [16, 320, 32, 32]),
-        (400.0, 40.0, [16, 320, 32, 32]),
-    ] {
-        let r = laminar_step(
-            re,
-            spec_er2(l_out, n),
-            StepGrading::uniform(),
-            vl(),
-            Coupling::Simplec,
-            None,
-            true,
-            None,
-            8000,
-            1e-7,
-        );
-        println!(
-            "SWEEP Re_h {re} (Re_Armaly {}): its {} converged {} xr/h {:?}",
-            2.0 * re,
-            r.iterations,
-            r.converged,
-            r.x_reattach
-        );
-    }
+    let r = laminar_step(
+        389.0,
+        spec_er2(40.0, [16, 320, 32, 32]),
+        StepGrading::uniform(),
+        vl(),
+        Coupling::Simplec,
+        None,
+        true,
+        None,
+        8000,
+        1e-7,
+    );
+    println!(
+        "SWEEP Re_h 389 (Re_Armaly 778): its {} converged {} xr/h {:?}",
+        r.iterations, r.converged, r.x_reattach
+    );
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Registered reattachment criteria (audit follow-up: the sweep had no assertion). Fixed before the assertions below
+// were first run; a miss is moved, unchanged, into an #[ignore]d `*_known_miss` test.
+//
+// Set-up of all runs: expansion ratio 2 (inlet channel height = step height h), parabolic inlet of mean velocity 1,
+// Re_h = U_mean h / nu, which is half of the Armaly/Gartling/Erturk Reynolds number (Re_D = U_mean 2h / nu, the
+// hydraulic diameter of the inlet channel); mesh [16, 240, 32, 32] cells (l_out = 30 h; 40 h and [16, 320, 32, 32]
+// for Re_h = 400), van Leer, SIMPLEC, h from the solved predictor, converged to 1e-7 (the sweep set-up of F-106,
+// unchanged). Reattachment: last negative-to-positive crossing of u in the first cell row above the floor.
+//
+// (S1) Re_h = 400 (Re = 800): x_r/h within 5 % of Erturk (2008) 11.834, i.e. [11.242, 12.426].
+// (S2) Re_h = 400: x_r/h within 5 % of Gartling (1990) 12.20, i.e. [11.590, 12.810].
+//      S1/S2 values are as quoted in Table 2 of arXiv:2507.16509 (a secondary source, retrieved 2026-10-14; the
+//      original papers were not accessed); Armaly et al. (1983) give no table accessible here (marked unverified in
+//      docs/reference-data.md). The 5 % window is the literature spread (Erturk and Gartling differ by 3.0 %) plus
+//      the discretisation allowance; it was not tuned to the measured values, but the F-106 note (11.24 / 11.67 /
+//      11.75 on three meshes at Re_h = 400) was known when it was chosen, so S1/S2 are not blind.
+// (S3) Re_h = 100 (Re = 200): x_r/h within 5 % of 4.95; (S4) Re_h = 200 (Re = 400): within 5 % of 8.10. These two
+//      references are the finite-volume results of the same secondary source's Table 1 (ER 2, 2-D), NOT a published
+//      benchmark; they check consistency with an independent code only. Marked "secondary, unverified".
+// (S5) every run converges (residual below 1e-7 within 8000 iterations).
+// ---------------------------------------------------------------------------------------------------------------
+
+fn sweep_point(re_h: f64) -> Run {
+    let (l_out, n) = if re_h >= 300.0 {
+        (40.0, [16, 320, 32, 32])
+    } else {
+        (30.0, [16, 240, 32, 32])
+    };
+    let r = laminar_step(
+        re_h,
+        spec_er2(l_out, n),
+        StepGrading::uniform(),
+        vl(),
+        Coupling::Simplec,
+        None,
+        true,
+        None,
+        8000,
+        1e-7,
+    );
+    println!(
+        "REGISTERED Re_h {re_h}: its {} converged {} res {:.2e} xr/h {:?}",
+        r.iterations, r.converged, r.res, r.x_reattach
+    );
+    assert!(r.converged, "S5: Re_h {re_h} did not converge (res {:.2e})", r.res);
+    r
+}
+
+fn within(x: f64, reference: f64, rel: f64) -> bool {
+    (x / reference - 1.0).abs() <= rel
+}
+
+#[test]
+#[ignore = "heavy validation (minutes, release)"]
+fn step_reattachment_re_h_100_vs_secondary_fv() {
+    let x = sweep_point(100.0).x_reattach.expect("no reattachment");
+    assert!(within(x, 4.95, 0.05), "S3: x_r/h = {x} vs 4.95 (secondary FV), limit 5 %");
+}
+
+#[test]
+#[ignore = "heavy validation (minutes, release)"]
+fn step_reattachment_re_h_200_vs_secondary_fv() {
+    let x = sweep_point(200.0).x_reattach.expect("no reattachment");
+    assert!(within(x, 8.10, 0.05), "S4: x_r/h = {x} vs 8.10 (secondary FV), limit 5 %");
+}
+
+#[test]
+#[ignore = "heavy validation (minutes, release)"]
+fn step_reattachment_re_h_400_vs_erturk_and_gartling() {
+    let x = sweep_point(400.0).x_reattach.expect("no reattachment");
+    assert!(within(x, 11.834, 0.05), "S1: x_r/h = {x} vs Erturk 2008 11.834, limit 5 %");
+    assert!(within(x, 12.20, 0.05), "S2: x_r/h = {x} vs Gartling 1990 12.20, limit 5 %");
 }
