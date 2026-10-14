@@ -69,6 +69,14 @@ The Rust function also joins general planar interfaces in 3-D (convex faces; the
 each other, otherwise the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the
 skewed interface faces.
 
+### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, F-031)
+
+`annulus_3d`: a full cylindrical annulus `r_in <= r <= r_out` about the z axis, height `lz`, `nx` cells around, `ny`
+radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the case sets other conditions).
+`annulus_3d_interface`: two such blocks of height `lz/2` joined at `z = lz/2` through a non-conformal interface; the
+upper block has `ny_right` x `nz_right` cells (0 = same as the lower block). Both blocks have `nx` cells around, so the
+rim polygons coincide and the radial rings differ.
+
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
 For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:
@@ -359,10 +367,19 @@ its cells do. `type` selects:
 | --- | --- | --- |
 | `porous` | `model = ergun`: `porosity` (0 < e < 1), `particle_diameter` [m]. `model = darcy_forchheimer`: `permeability` K [m^2], `inertial_resistance` C2 [1/m] | implicit sink `-(nu/K + C2 \|u\|/2) u` per unit mass, **superficial-velocity** formulation (the porosity does not enter the transport terms). Ergun maps to `1/K = 150 (1-e)^2/(e^3 d^2)`, `C2 = 3.5 (1-e)/(e^3 d)`; `\|u\|` is lagged one iteration |
 | `rotating_frame` | `rotation_axis` (default +z), `rotation_origin`, `angular_velocity` [rad/s], `centrifugal` (default true) | relative-velocity form: `-2 Omega x u - Omega x (Omega x r)`. The centrifugal part is analytic at cell and face centres, the Coriolis part uses the previous iterate (boundary faces: the boundary velocity). Wall velocities are given in the rotating frame. `centrifugal = false` keeps Coriolis only (needed for periodic domains) |
+| `mrf` | `rotation_axis` (default +z), `rotation_origin`, `angular_velocity` [rad/s] | multiple-reference-frame (frozen rotor) zone, **absolute-velocity** formulation (ADR 0008): the solved velocity stays absolute, momentum in the zone is convected with the relative flux `phi - (Omega x r).S` and gets the lagged acceleration `-Omega x u`; boundary conditions are absolute (a wall rotating with the zone is given `Omega x r` by `velocity_expression_x/y/z`). The interface to the rest of the mesh (an ordinary internal face set, also a non-conformal one from `annulus_3d_interface`) carries absolute momentum, which is the frozen-rotor treatment. |
 | `acceleration` | `acceleration` [m/s^2] | constant acceleration in the zone |
 
-Limits: no interface treatment between a rotating zone and a stationary one (frozen-rotor MRF with absolute/relative
-velocity conversion needs the non-conformal interface of F-114), steady runs only, the viscous porous term uses `physics.nu`.
+MRF validation errors (path `sources.<name>...`): zero `rotation_axis`, non-finite `angular_velocity`,
+a zone without cells, a zone boundary (walls, symmetry planes, the interface) that is not a surface of revolution about
+the rotation axis (the frame flux `(Omega x r).S` must vanish there; planar interfaces perpendicular to the axis and
+cylindrical ones qualify), an MRF zone sharing cells with another MRF zone or a `rotating_frame` source, and
+transient algorithms. Pseudo-transient time steps use the absolute flux. Not validated: any pump or turbine
+benchmark, turbulence models or the energy equation with an MRF zone; the checks are in ADR 0008 and
+`crates/rcfd-api/tests/mrf.rs`.
+
+Limits: steady runs only, the viscous porous term uses `physics.nu`; the non-conformal join of F-114 handles planar
+interfaces only, so an MRF zone with a non-conformal interface is limited to interfaces perpendicular to the axis.
 Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
 
 ## `udf` user functions (F-122)

@@ -111,6 +111,107 @@ impl RotatingFrame {
     }
 }
 
+/// Multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation (ADR 0008): the zone rotates with
+/// `omega` about the axis through `origin`; the solved velocity stays absolute, momentum is convected with the relative flux
+/// `phi - (Omega x r) . S` and the lagged acceleration `-Omega x u` is added.
+#[derive(Debug, Clone, Copy)]
+pub struct MrfZone {
+    /// A point on the rotation axis.
+    pub origin: Vec3,
+    /// Unit axis direction.
+    pub axis: Vec3,
+    /// Angular velocity (rad/s, right-handed about `axis`).
+    pub omega: f64,
+}
+
+impl MrfZone {
+    /// Frame velocity `Omega x (r - origin)`.
+    pub fn frame_velocity(&self, r: Vec3) -> Vec3 {
+        vec3::cross(vec3::scale(self.axis, self.omega), vec3::sub(r, self.origin))
+    }
+
+    /// Frame flux `(Omega x r) . S` at every face whose two cells are in the zone (boundary and interface faces: 0),
+    /// added to `offset`.
+    pub fn add_frame_flux(&self, geom: &FvGeometry, zone: &[bool], offset: &mut [f64]) {
+        let mesh = &geom.mesh;
+        let (fc, sf) = (mesh.face_centres(), mesh.face_area_vectors());
+        for f in 0..geom.n_internal {
+            if zone[mesh.owner()[f]] && zone[mesh.neighbour()[f]] && !geom.empty[f] {
+                offset[f] += vec3::dot(self.frame_velocity(fc[f]), sf[f]);
+            }
+        }
+    }
+
+    /// Worst relative value of `|(Omega x r) . S| / (|Omega| |r_perp| |S|)` over the faces of the zone cells that do not
+    /// receive the frame flux (zone boundary faces, interface faces): zero for a surface of revolution about the axis.
+    pub fn worst_non_axisymmetry(&self, geom: &FvGeometry, zone: &[bool]) -> f64 {
+        let mesh = &geom.mesh;
+        let (fc, sf) = (mesh.face_centres(), mesh.face_area_vectors());
+        let mut worst: f64 = 0.0;
+        for f in 0..mesh.n_faces() {
+            if geom.empty[f] {
+                continue;
+            }
+            let (o, nb) = (
+                mesh.owner()[f],
+                if f < geom.n_internal {
+                    Some(mesh.neighbour()[f])
+                } else {
+                    None
+                },
+            );
+            let in_o = zone[o];
+            let in_n = nb.is_some_and(|n| zone[n]);
+            if !(in_o || in_n) || (in_o && in_n) {
+                continue;
+            }
+            let rel = vec3::sub(fc[f], self.origin);
+            let perp = vec3::sub(rel, vec3::scale(self.axis, vec3::dot(rel, self.axis)));
+            let denom = self.omega.abs() * vec3::norm(perp) * vec3::norm(sf[f]);
+            if denom > 0.0 {
+                worst = worst.max(vec3::dot(self.frame_velocity(fc[f]), sf[f]).abs() / denom);
+            }
+        }
+        worst
+    }
+
+    /// Add the acceleration `-Omega x u` in the zone: cell values from `u`, face values `a_f . S_f` on every face that
+    /// touches a zone cell (internal faces from the linearly interpolated acceleration of the cells, zero for cells
+    /// outside the zone; boundary faces from the boundary velocity `ub`, index `f - n_internal`).
+    pub fn add_force(&self, geom: &FvGeometry, u: &[Vec3], ub: &[Vec3], zone: &[bool], out: &mut BodyForce) {
+        let mesh = &geom.mesh;
+        let sf = mesh.face_area_vectors();
+        let w = vec3::scale(self.axis, self.omega);
+        let accel = |v: Vec3| vec3::scale(vec3::cross(w, v), -1.0);
+        for c in 0..u.len() {
+            if zone[c] {
+                out.cell[c] = vec3::add(out.cell[c], accel(u[c]));
+            }
+        }
+        for f in 0..mesh.n_faces() {
+            if geom.empty[f] {
+                continue;
+            }
+            let o = mesh.owner()[f];
+            let a = if f < geom.n_internal {
+                let n = mesh.neighbour()[f];
+                if !(zone[o] || zone[n]) {
+                    continue;
+                }
+                let wt = geom.weights[f];
+                let ao = if zone[o] { accel(u[o]) } else { [0.0; 3] };
+                let an = if zone[n] { accel(u[n]) } else { [0.0; 3] };
+                vec3::add(vec3::scale(ao, wt), vec3::scale(an, 1.0 - wt))
+            } else if zone[o] {
+                accel(ub[f - geom.n_internal])
+            } else {
+                continue;
+            };
+            out.face[f] += vec3::dot(a, sf[f]);
+        }
+    }
+}
+
 /// Constant acceleration `a` in the zone, added to `out`.
 pub fn add_constant_acceleration(geom: &FvGeometry, a: Vec3, zone: &[bool], out: &mut BodyForce) {
     let mesh = &geom.mesh;

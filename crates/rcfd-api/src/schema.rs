@@ -69,9 +69,9 @@ pub fn case_schema() -> Schema {
             "generator",
             Schema::enumeration(
                 "cavity_2d",
-                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d"],
+                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d", "annulus_3d", "annulus_3d_interface"],
             )
-            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides)"),
+            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides); annulus_3d is a full cylindrical annulus r_in <= r <= r_out about the z axis, height lz, nx cells around, ny radial, nz axial (patches inner, outer, zmin, zmax; F-031); annulus_3d_interface is two such blocks (heights lz/2) joined at z = lz/2 through a non-conformal interface, the upper block having ny_right x nz_right cells (0 = same as ny / nz)"),
         )
         .field(
             "nx",
@@ -96,6 +96,20 @@ pub fn case_schema() -> Schema {
             Schema::int(0)
                 .range(0.0, 100000.0)
                 .doc("Cells across the channel in the second block of channel_2d_interface (0 = same as ny); a different count makes the interface non-conformal"),
+        )
+        .field(
+            "nz",
+            Schema::int(1).range(1.0, 100000.0).doc("Axial cells of annulus_3d (and the lower block of annulus_3d_interface)"),
+        )
+        .field(
+            "nz_right",
+            Schema::int(0)
+                .range(0.0, 100000.0)
+                .doc("Axial cells of the upper block of annulus_3d_interface (0 = same as nz)"),
+        )
+        .field(
+            "lz",
+            Schema::float(1.0).at_least(1e-12).dim(Dimension::LENGTH).doc("Axial length of annulus_3d / annulus_3d_interface"),
         )
         .field(
             "lx",
@@ -295,6 +309,18 @@ pub fn case_schema() -> Schema {
     let initial = Schema::object()
         .doc("Uniform initial conditions")
         .field("velocity", vec3([0.0; 3], "Initial velocity [ux, uy, uz]"))
+        .field(
+            "velocity_expression_x",
+            Schema::string("").doc("Expression [m/s] of x, y, z for the initial x velocity (cell centres); overrides initial.velocity[0] (ADR 0009: a start consistent with an imposed velocity profile)"),
+        )
+        .field(
+            "velocity_expression_y",
+            Schema::string("").doc("Expression [m/s] for the initial y velocity (see velocity_expression_x)"),
+        )
+        .field(
+            "velocity_expression_z",
+            Schema::string("").doc("Expression [m/s] for the initial z velocity (see velocity_expression_x)"),
+        )
         .field("pressure", Schema::float(0.0).doc("Initial kinematic pressure"))
         .field(
             "temperature",
@@ -319,6 +345,14 @@ pub fn case_schema() -> Schema {
             Schema::float(0.9)
                 .range(0.05, 1.0)
                 .doc("Implicit under-relaxation factor of the temperature equation"),
+        )
+        .field(
+            "viscous_heating",
+            Schema::boolean(false).doc("fluid.density = ideal_gas only: viscous heating in the energy equation (viscous work div(tau.u) in the total enthalpy of the compressible mode, dissipation tau:grad u in the low_mach mode; ADR 0009)"),
+        )
+        .field(
+            "heat_source",
+            Schema::float(0.0).doc("fluid.density = ideal_gas only: uniform volumetric heat source [W/m3] in the energy equation (ADR 0009)"),
         );
 
     let rheology = Schema::object()
@@ -1201,6 +1235,18 @@ pub fn case_schema() -> Schema {
         .field(
             "hydrostatic_init",
             Schema::boolean(false).doc("ideal_gas only: start from the hydrostatic pressure and density of physics.gravity (closed columns)"),
+        )
+        .field(
+            "inner_iterations",
+            Schema::int(30)
+                .range(1.0, 1000.0)
+                .doc("ideal_gas, solver.algorithm = pimple only: maximum SIMPLE-inner iterations per time step (ADR 0009)"),
+        )
+        .field(
+            "inner_tolerance",
+            Schema::float(1e-8)
+                .range(1e-14, 1.0)
+                .doc("ideal_gas, solver.algorithm = pimple only: inner stopping tolerance, the largest of |dP|/max P, |dT|/max T and |du|/max(sound speed) between two inner iterations"),
         );
 
     Schema::object()
@@ -1298,8 +1344,8 @@ pub fn case_schema() -> Schema {
                     .doc("A momentum source restricted to a cell zone (steady SIMPLE/SIMPLEC runs)")
                     .field(
                         "type",
-                        Schema::enumeration("porous", &["porous", "rotating_frame", "acceleration"])
-                            .doc("porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; acceleration: constant acceleration"),
+                        Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration"])
+                            .doc("porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
                     )
                     .field(
                         "zone",

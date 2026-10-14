@@ -308,6 +308,16 @@ pub struct SimpleSolver {
     /// rotating-frame sources, F-031). With SIMPLEC it also applies the lagged (rAU - rAtU) correction to the wall
     /// pressure gradient of the flux balance.
     pub wall_pressure_trapezoid: bool,
+    /// Per-face offset subtracted from the flux that convects momentum (`phi_conv = phi - offset`, F-031 MRF zones:
+    /// the frame flux `(Omega x r) . S`); the pressure equation and `phi` itself are unaffected.
+    pub conv_flux_offset: Option<Vec<f64>>,
+    /// Make the H operator consistent with the component-averaged diagonal `a_p`: in cells where the component
+    /// matrices have different diagonals (a symmetry plane puts a Dirichlet term on the normal component only) the
+    /// H of component `k` gets `(a_p - a_k) u_k`, as OpenFOAM's `fvMatrix::H` does. Without it the converged
+    /// tangential velocity next to such a plane is multiplied by `a_k / a_p < 1` (a spurious end-wall drag, found by the
+    /// MRF Taylor-Couette checks of ADR 0008). Off by default so that every earlier case stays bit-identical; the
+    /// API switches it on for MRF zones.
+    pub component_diag_correction: bool,
     iteration: usize,
     /// Wall pressure gradient used in the previous iteration at every boundary face (SIMPLEC wall treatment of
     /// `wall_pressure_trapezoid`).
@@ -394,6 +404,8 @@ impl SimpleSolver {
             pseudo: None,
             driver: None,
             wall_pressure_trapezoid: false,
+            conv_flux_offset: None,
+            component_diag_correction: false,
             iteration: 0,
             wall_grad: Vec::new(),
             body_ratio: Vec::new(),
@@ -511,7 +523,13 @@ impl SimpleSolver {
         let mut h1 = vec![0.0; n];
         let mut n_active = 0.0;
         let mut res_u: f64 = 0.0;
+        let mut comp_diag: Vec<Vec<f64>> = vec![Vec::new(); 3];
+        let mut comp_x: Vec<Vec<f64>> = vec![Vec::new(); 3];
         let ub = self.u.boundary_values(&g);
+        let phi_conv: Vec<f64> = match &self.conv_flux_offset {
+            Some(o) => self.phi.iter().zip(o).map(|(p, o)| p - o).collect(),
+            None => self.phi.clone(),
+        };
         for k in 0..3 {
             if !g.active[k] {
                 continue;
@@ -525,7 +543,7 @@ impl SimpleSolver {
             } else {
                 None
             };
-            let mut m = convection(&g, &self.phi, &cells, &bc, s.convection, grad.as_deref());
+            let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, grad.as_deref());
             m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
             if let Some(sink) = &self.sink {
                 for c in 0..n {
@@ -540,6 +558,9 @@ impl SimpleSolver {
                 }
             }
             m.relax(s.alpha_u, &cells);
+            if self.component_diag_correction {
+                comp_diag[k] = m.a.diag.clone();
+            }
             // H operator (without pressure): b - sum offdiag u
             let mut hk = m.a.h_operator(&cells, &m.b);
             let off = m.a.off_diag_abs_sum();
@@ -562,6 +583,13 @@ impl SimpleSolver {
                 // classic SIMPLE: neighbour contributions from the solved predictor instead of the old iterate
                 hk = m.a.h_operator(&x, &m.b);
             }
+            if self.component_diag_correction {
+                comp_x[k] = if s.h_from_solution && self.driver.is_none() {
+                    x.clone()
+                } else {
+                    u_old.iter().map(|v| v[k]).collect()
+                };
+            }
             for c in 0..n {
                 h[c][k] = hk[c];
                 self.u.values[c][k] = x[c];
@@ -570,6 +598,19 @@ impl SimpleSolver {
         for c in 0..n {
             a_p[c] /= n_active;
             h1[c] /= n_active;
+        }
+        if self.component_diag_correction {
+            for c in 0..n {
+                let ks: Vec<usize> = (0..3).filter(|&k| g.active[k]).collect();
+                if ks
+                    .iter()
+                    .any(|&k| comp_diag[k][c].to_bits() != comp_diag[ks[0]][c].to_bits())
+                {
+                    for &k in &ks {
+                        h[c][k] += (a_p[c] - comp_diag[k][c]) * comp_x[k][c];
+                    }
+                }
+            }
         }
 
         // ---- pressure equation --------------------------------------------

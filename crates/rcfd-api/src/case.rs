@@ -583,7 +583,7 @@ algorithm = "simplec"
         let bad = r#"
 [mesh]
 nx = "sixteen"
-nz = 3
+nw = 3
 
 [physics]
 nu = "5 m"
@@ -604,7 +604,7 @@ alpha_u = 7.0
         };
         assert_eq!(by("mesh.nx").line, Some(3));
         assert!(by("mesh.nx").message.contains("expected integer"));
-        assert!(by("mesh.nz").message.contains("unknown setting"));
+        assert!(by("mesh.nw").message.contains("unknown setting"));
         assert!(
             by("physics.nu").message.contains("dimension"),
             "{}",

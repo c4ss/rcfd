@@ -329,20 +329,32 @@ fn within(x: f64, reference: f64, rel: f64) -> bool {
 #[ignore = "heavy validation (minutes, release)"]
 fn step_reattachment_re_h_100_vs_secondary_fv() {
     let x = sweep_point(100.0).x_reattach.expect("no reattachment");
-    assert!(within(x, 4.95, 0.05), "S3: x_r/h = {x} vs 4.95 (secondary FV), limit 5 %");
+    assert!(
+        within(x, 4.95, 0.05),
+        "S3: x_r/h = {x} vs 4.95 (secondary FV), limit 5 %"
+    );
 }
 
 #[test]
 #[ignore = "heavy validation (minutes, release)"]
 fn step_reattachment_re_h_200_vs_secondary_fv() {
     let x = sweep_point(200.0).x_reattach.expect("no reattachment");
-    assert!(within(x, 8.10, 0.05), "S4: x_r/h = {x} vs 8.10 (secondary FV), limit 5 %");
+    assert!(
+        within(x, 8.10, 0.05),
+        "S4: x_r/h = {x} vs 8.10 (secondary FV), limit 5 %"
+    );
 }
 
 #[test]
 #[ignore = "heavy validation (minutes, release)"]
 fn step_reattachment_re_h_400_vs_erturk_and_gartling() {
     let x = sweep_point(400.0).x_reattach.expect("no reattachment");
-    assert!(within(x, 11.834, 0.05), "S1: x_r/h = {x} vs Erturk 2008 11.834, limit 5 %");
-    assert!(within(x, 12.20, 0.05), "S2: x_r/h = {x} vs Gartling 1990 12.20, limit 5 %");
+    assert!(
+        within(x, 11.834, 0.05),
+        "S1: x_r/h = {x} vs Erturk 2008 11.834, limit 5 %"
+    );
+    assert!(
+        within(x, 12.20, 0.05),
+        "S2: x_r/h = {x} vs Gartling 1990 12.20, limit 5 %"
+    );
 }
