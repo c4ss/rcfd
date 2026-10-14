@@ -22,6 +22,7 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::pressure::{boundary_hby_a, boundary_values_pbc, divergence, face_interpolate, pressure_bc, PressureBc};
+use crate::realgas::RealGas;
 use crate::simple::{normalised_residual, BodyForce, Coupling};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
@@ -123,6 +124,9 @@ pub struct VdSettings {
     pub mode: DensityMode,
     /// Gas.
     pub gas: IdealGas,
+    /// Real-gas model (ADR 0007). When set it replaces the ideal-gas equation of state and enthalpy; `gas.cp` must
+    /// equal its `cp0` (used for the energy diffusivity `k/cp`) and `gas.r` its `R_u/M`. Compressible mode only.
+    pub real: Option<RealGas>,
     /// Dynamic viscosity (Pa s).
     pub mu: Property,
     /// Thermal conductivity (W/m/K).
@@ -170,6 +174,7 @@ impl VdSettings {
             coupling,
             mode: DensityMode::Compressible,
             gas,
+            real: None,
             mu,
             k,
             gravity: [0.0; 3],
@@ -291,6 +296,14 @@ impl VarDensitySolver {
         if !(s.gas.r > 0.0 && s.gas.cp > s.gas.r) {
             return Err(mismatch("gas", "needs R > 0 and cp > R"));
         }
+        if let Some(rg) = &s.real {
+            if s.mode != DensityMode::Compressible {
+                return Err(mismatch("fluid.mode", "a real gas needs the compressible mode"));
+            }
+            if (rg.cp0 / s.gas.cp - 1.0).abs() > 1e-9 || (rg.r() / s.gas.r - 1.0).abs() > 1e-9 {
+                return Err(mismatch("gas", "the ideal-gas settings must carry cp0 and R_u/M of the real gas"));
+            }
+        }
         if t.values.iter().any(|&x| x <= 0.0 || !x.is_finite()) {
             return Err(mismatch("temperature", "the temperature must be positive"));
         }
@@ -301,7 +314,12 @@ impl VarDensitySolver {
         if (0..geom.n_cells()).any(|c| p_eos(c) <= 0.0 || !p_eos(c).is_finite()) {
             return Err(mismatch("pressure", "the absolute pressure must be positive"));
         }
-        let rho: Vec<f64> = (0..geom.n_cells()).map(|c| s.gas.rho(p_eos(c), t.values[c])).collect();
+        let rho: Vec<f64> = (0..geom.n_cells())
+            .map(|c| match &s.real {
+                Some(rg) => rg.rho(p_eos(c), t.values[c]),
+                None => s.gas.rho(p_eos(c), t.values[c]),
+            })
+            .collect();
         let vol = geom.mesh.cell_volumes();
         let mass: f64 = rho.iter().zip(vol).map(|(r, v)| r * v).sum();
         let rho_ref = mass / vol.iter().sum::<f64>();
@@ -326,7 +344,10 @@ impl VarDensitySolver {
         };
         sol.rec_inv = sol.build_reconstruction();
         sol.h.values = (0..sol.geom.n_cells())
-            .map(|c| sol.settings.gas.cp * sol.t.values[c] + 0.5 * vec3::dot(sol.u.values[c], sol.u.values[c]))
+            .map(|c| {
+                sol.h_static(sol.p.values[c], sol.t.values[c])
+                    + 0.5 * vec3::dot(sol.u.values[c], sol.u.values[c])
+            })
             .collect();
         for inl in &sol.settings.inlets {
             if sol.geom.mesh.patch(&inl.patch).is_none() {
@@ -417,7 +438,6 @@ impl VarDensitySolver {
             return;
         }
         let compressible = self.settings.mode == DensityMode::Compressible;
-        let gas = self.settings.gas;
         for _ in 0..sweeps {
             let pbc = self.effective_pbc();
             let rho_b = self.boundary_density(&pbc, &self.p.values.clone());
@@ -458,7 +478,7 @@ impl VarDensitySolver {
             if compressible && !pbc.has_dirichlet() {
                 let (mut num, mut den) = (0.0, 0.0);
                 for c in 0..n {
-                    let psi = gas.psi(self.t.values[c]);
+                    let psi = self.psi_eos(self.p.values[c], self.t.values[c]);
                     num += vol[c] * psi * self.p.values[c];
                     den += vol[c] * psi;
                 }
@@ -469,9 +489,49 @@ impl VarDensitySolver {
             }
             if compressible {
                 for c in 0..n {
-                    self.rho[c] = gas.rho(self.p.values[c], self.t.values[c]);
+                    self.rho[c] = self.rho_eos(self.p.values[c], self.t.values[c]);
                 }
             }
+        }
+    }
+
+    /// Density from the equation of state (ideal gas or the real-gas model).
+    fn rho_eos(&self, p: f64, t: f64) -> f64 {
+        match &self.settings.real {
+            Some(rg) => rg.rho(p, t),
+            None => self.settings.gas.rho(p, t),
+        }
+    }
+
+    /// Compressibility `d rho/d p` at fixed temperature.
+    fn psi_eos(&self, p: f64, t: f64) -> f64 {
+        match &self.settings.real {
+            Some(rg) => rg.psi(p, t),
+            None => self.settings.gas.psi(t),
+        }
+    }
+
+    /// Speed of sound.
+    fn sound_speed_eos(&self, p: f64, t: f64) -> f64 {
+        match &self.settings.real {
+            Some(rg) => rg.sound_speed(p, t),
+            None => self.settings.gas.sound_speed(t),
+        }
+    }
+
+    /// Static specific enthalpy (J/kg): `cp T`, or `cp0 T` plus the departure for a real gas.
+    fn h_static(&self, p: f64, t: f64) -> f64 {
+        match &self.settings.real {
+            Some(rg) => rg.h(p, t),
+            None => self.settings.gas.cp * t,
+        }
+    }
+
+    /// Temperature from the static enthalpy `h` at pressure `p` (`guess` for the real-gas Newton iteration).
+    fn t_from_h_eos(&self, h: f64, p: f64, guess: f64) -> f64 {
+        match &self.settings.real {
+            Some(rg) => rg.t_from_h(h, p, guess).max(1.0),
+            None => (h / self.settings.gas.cp).max(1.0),
         }
     }
 
@@ -514,7 +574,7 @@ impl VarDensitySolver {
     /// Mach number of every cell.
     pub fn mach(&self) -> Vec<f64> {
         (0..self.geom.n_cells())
-            .map(|c| vec3::norm(self.u.values[c]) / self.settings.gas.sound_speed(self.t.values[c]))
+            .map(|c| vec3::norm(self.u.values[c]) / self.sound_speed_eos(self.p.values[c], self.t.values[c]))
             .collect()
     }
 
@@ -567,6 +627,12 @@ impl VarDensitySolver {
             let (mut pv, mut tv) = (Vec::new(), Vec::new());
             for f in patch.faces() {
                 let uc = self.u.values[own[f]];
+                if let Some(rg) = &self.settings.real {
+                    let (ps, ts) = rg.static_from_stagnation(inl.p0, inl.t0, 0.5 * vec3::dot(uc, uc));
+                    tv.push([ts, 0.0, 0.0]);
+                    pv.push([ps, 0.0, 0.0]);
+                    continue;
+                }
                 let tb = (inl.t0 - 0.5 * vec3::dot(uc, uc) / cp).max(0.05 * inl.t0);
                 tv.push([tb, 0.0, 0.0]);
                 pv.push([inl.p0 * (tb / inl.t0).powf(gamma / (gamma - 1.0)), 0.0, 0.0]);
@@ -587,7 +653,7 @@ impl VarDensitySolver {
         match self.settings.mode {
             DensityMode::Compressible => {
                 let pb = boundary_values_pbc(g, pbc, p_cells);
-                (0..tb.len()).map(|i| self.settings.gas.rho(pb[i], tb[i])).collect()
+                (0..tb.len()).map(|i| self.rho_eos(pb[i], tb[i])).collect()
             }
             DensityMode::LowMach => tb.iter().map(|&t| self.settings.gas.rho(self.p_th, t)).collect(),
         }
@@ -670,7 +736,7 @@ impl VarDensitySolver {
                 DensityMode::Compressible => self.p.values[c],
                 DensityMode::LowMach => self.p_th,
             };
-            let target = gas.rho(pe, self.t.values[c]);
+            let target = self.rho_eos(pe, self.t.values[c]);
             self.rho[c] += a * (target - self.rho[c]);
         }
     }
@@ -682,6 +748,7 @@ impl VarDensitySolver {
         let tc = self.t.boundary_coeffs(&g);
         let ub = self.u.boundary_values(&g);
         let own = g.mesh.owner();
+        let pbv = self.p.boundary_values(&g);
         for patch in g.mesh.patches() {
             if patch.kind == rcfd_mesh::PatchKind::Empty || patch.kind == rcfd_mesh::PatchKind::Cyclic {
                 continue;
@@ -696,8 +763,8 @@ impl VarDensitySolver {
                         let i = f - g.n_internal;
                         let kin = 0.5 * vec3::dot(ub[i], ub[i]);
                         let v = match stagnation {
-                            Some(s) => cp * s.t0,
-                            None => cp * tc[i].value(self.t.values[own[f]]) + kin,
+                            Some(s) => self.h_static(s.p0, s.t0),
+                            None => self.h_static(pbv[i], tc[i].value(self.t.values[own[f]])) + kin,
                         };
                         [v, 0.0, 0.0]
                     })
@@ -779,7 +846,7 @@ impl VarDensitySolver {
             self.h.values = x;
             for c in 0..n {
                 let kin = 0.5 * vec3::dot(self.u.values[c], self.u.values[c]);
-                self.t.values[c] = ((self.h.values[c] - kin) / s.gas.cp).max(1.0);
+                self.t.values[c] = self.t_from_h_eos(self.h.values[c] - kin, self.p.values[c], self.t.values[c]);
             }
         } else {
             self.t.values = x.iter().map(|&v| v.max(1.0)).collect();
@@ -796,7 +863,6 @@ impl VarDensitySolver {
         let sf = mesh.face_area_vectors();
         let n_int = g.n_internal;
         let s = self.settings.clone();
-        let gas = s.gas;
         let compressible = s.mode == DensityMode::Compressible;
         self.iteration += 1;
         let u_old = self.u.values.clone();
@@ -1003,11 +1069,11 @@ impl VarDensitySolver {
                 if f < n_int {
                     let (o, nb) = (mesh.owner()[f], mesh.neighbour()[f]);
                     let up = if q[f] >= 0.0 { o } else { nb };
-                    phid[f] = gas.psi(self.t.values[up]) * v_prev[f];
+                    phid[f] = self.psi_eos(p_old[up], self.t.values[up]) * v_prev[f];
                     p_up_old[f] = p_old[up];
                 } else {
                     let i = f - n_int;
-                    phid[f] = gas.psi(tb[i]) * v_prev[f];
+                    phid[f] = self.psi_eos(p_bvals[i], tb[i]) * v_prev[f];
                     p_up_old[f] = p_bvals[i];
                 }
                 m_exp[f] -= phid[f] * p_up_old[f];
@@ -1148,7 +1214,7 @@ impl VarDensitySolver {
         if compressible && closed {
             let (mut num, mut den) = (0.0, 0.0);
             for c in 0..n {
-                let psi = gas.psi(self.t.values[c]);
+                let psi = self.psi_eos(self.p.values[c], self.t.values[c]);
                 num += vol[c] * psi * self.p.values[c];
                 den += vol[c] * psi;
             }
