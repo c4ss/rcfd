@@ -725,8 +725,12 @@ mod tests {
     // 18.5, 23.1, 27.1 uPa s and 26.4, 33.5, 39.9 mW/(m K) at 300, 400, 500 K, tolerance 1 % (met for cp and conductivity, missed by the viscosity at 400 K: the deviations are printed
     // and recorded in the F-111 roadmap note). The 200 K and 600 K
     // entries (13.3, 30.8 uPa s; 18.5, 46.0 mW/(m K)) are reported but not asserted.
+    // What this test asserts: cp 1 %, Sutherland conductivity 1 %, the in-sample cubic fit laws 1 % (circular: they were
+    // fitted to these table rows), and Sutherland VISCOSITY 1.5 % (a regression guard set after the measurement, NOT the
+    // registered 1 %). The registered 1 % for the Sutherland viscosity is recorded in
+    // `sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss` below.
     #[test]
-    fn air_properties_match_published_tables_within_one_percent_from_300_to_500_k() {
+    fn air_cp_conductivity_fit_laws_within_1pct_and_sutherland_viscosity_within_1p5pct_300_to_500_k() {
         let air = GasMixture::dry_air();
         for (t, cp) in [(300.0, 1005.0), (400.0, 1013.0), (500.0, 1030.0), (600.0, 1051.0)] {
             let got = air.cp(t);
@@ -772,6 +776,26 @@ mod tests {
             101325.0 * m / (R_UNIVERSAL * 300.0),
             1e-14
         ));
+    }
+
+    /// KNOWN MISS (F-111). The registered criterion: Sutherland air viscosity within 1 % of the Huber (CRC/NIST) table
+    /// at 300, 400, 500 K (18.5, 23.1, 27.1 uPa s). Measured: -0.22, -1.08, -1.46 %, so 400 K and 500 K miss. The
+    /// threshold is the registered 1 % and is not loosened; the test is ignored because it fails by design.
+    #[test]
+    #[ignore = "KNOWN MISS: Sutherland air viscosity deviates -1.08 % (400 K) and -1.46 % (500 K) from the 1 % criterion"]
+    fn sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss() {
+        let mu = air_viscosity_law();
+        for (t, m_ref) in [(300.0, 18.5), (400.0, 23.1), (500.0, 27.1)] {
+            let m_got = mu.eval(t) * 1e6;
+            eprintln!(
+                "KNOWN MISS measured: mu({t}) = {m_got:.3} vs {m_ref}: {:+.2} %",
+                100.0 * (m_got / m_ref - 1.0)
+            );
+        }
+        for (t, m_ref) in [(300.0, 18.5), (400.0, 23.1), (500.0, 27.1)] {
+            let m_got = mu.eval(t) * 1e6;
+            assert!(close(m_got, m_ref, 0.01), "mu({t}) = {m_got}");
+        }
     }
 
     #[test]

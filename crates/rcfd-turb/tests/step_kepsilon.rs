@@ -5,6 +5,13 @@
 //! x_r / h = 6.26 +- 0.10 (value as recorded in cases/backward_step/case.json). The inlet profile
 //! (power-law boundary layer, thickness 1.5 h on both walls, 1 % free-stream turbulence) is an
 //! approximation, not the measured profile. Heavy: run in release with `--ignored --nocapture`.
+//!
+//! Registered threshold (from the case file / Driver and Seegmiller, taken before these assertions were run):
+//! reattachment length x_r / h within 6.26 +- 0.10, i.e. in [6.16, 6.36], for each of the Standard, RNG and
+//! Realizable variants, one test each. The window is not widened, and no solver parameter is tuned: the set-up is
+//! exactly the one that produced the values in the F-042 note (Standard 5.36-5.46, RNG 6.32-6.38, Realizable
+//! 6.40-6.51 as reported there). A variant whose measured value falls outside the window is recorded as a known miss
+//! (see the individual tests).
 
 use rcfd_fv::bc::FixedValue;
 use rcfd_fv::convection::ConvScheme;
@@ -38,9 +45,11 @@ fn reattachment(s: &SimpleSolver, l_in: f64) -> Option<f64> {
     out
 }
 
-#[test]
-#[ignore = "heavy: k-epsilon backward-facing step, run in release"]
-fn driver_seegmiller_step_k_epsilon() {
+/// Registered reattachment window: 6.26 +- 0.10 (Driver and Seegmiller 1985).
+const XR_REF: f64 = 6.26;
+const XR_TOL: f64 = 0.10;
+
+fn run_step(variant: KEpsilonVariant) {
     let re_h = 37500.0;
     let nu = 1.0 / re_h;
     let (l_in, l_out) = (env("LIN", 5.0), env("LOUT", 40.0));
@@ -90,11 +99,6 @@ fn driver_seegmiller_step_k_epsilon() {
         ConvScheme::LinearUpwind
     };
     let mut flow = SimpleSolver::new(geom.clone(), u, p, st);
-    let variant = match env::<String>("VAR", "std".into()).as_str() {
-        "rng" => KEpsilonVariant::Rng,
-        "real" => KEpsilonVariant::Realizable,
-        _ => KEpsilonVariant::Standard,
-    };
     let mut model = KEpsilon::new(variant, geom.clone(), nu, &["walls"], 1.5e-4, 1e-5).unwrap();
     model.relax_turb = env("AT", 0.6);
     model.wall_treatment = match env::<String>("WT", "smooth".into()).as_str() {
@@ -168,4 +172,36 @@ fn driver_seegmiller_step_k_epsilon() {
             info.max_du
         );
     }
+    // Registered criterion: x_r / h within 6.26 +- 0.10.
+    let xr = xr.expect("no reattachment point found");
+    assert!(
+        (xr - XR_REF).abs() <= XR_TOL,
+        "{variant:?}: x_r/h = {xr:.3} outside {XR_REF} +- {XR_TOL}"
+    );
+}
+
+// KNOWN MISSES (F-042), measured with the unchanged set-up (release, converged at 845 / 900 / 800 iterations):
+//   Realizable x_r/h = 6.402 (window upper edge 6.36: 0.042 outside)
+//   RNG        x_r/h = 6.373 (0.013 outside; the closest miss)
+//   Standard   x_r/h = 5.359 (0.80 below the lower edge 6.16)
+// The registered window [6.16, 6.36] is asserted unchanged; each test is #[ignore]d and named `known_miss`
+// because it fails by design. Run with `--ignored` to see the current values. If a later solver change brings a
+// variant inside the window, the test starts passing and the `_known_miss` suffix and the ignore should be dropped.
+
+#[test]
+#[ignore = "KNOWN MISS: Realizable x_r/h = 6.402, registered window 6.26 +- 0.10"]
+fn step_reattachment_realizable_known_miss() {
+    run_step(KEpsilonVariant::Realizable);
+}
+
+#[test]
+#[ignore = "KNOWN MISS: RNG x_r/h = 6.373, registered window 6.26 +- 0.10"]
+fn step_reattachment_rng_known_miss() {
+    run_step(KEpsilonVariant::Rng);
+}
+
+#[test]
+#[ignore = "KNOWN MISS: Standard x_r/h = 5.359, registered window 6.26 +- 0.10"]
+fn step_reattachment_standard_known_miss() {
+    run_step(KEpsilonVariant::Standard);
 }
