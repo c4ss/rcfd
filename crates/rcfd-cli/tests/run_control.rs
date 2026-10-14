@@ -251,6 +251,7 @@ fn journal_runs_the_recorded_case() {
         "entries": [
             {"op": "create", "source": {"toml": CASE}},
             {"op": "set", "path": "mesh.nx", "value": 9},
+            {"op": "set", "path": "mesh.ny", "value": 9},
         ],
     });
     std::fs::write(&j, journal.to_string()).unwrap();
