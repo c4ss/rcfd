@@ -382,6 +382,30 @@
         "notes": ""
       },
       "files": []
+    },
+    {
+      "id": "plot3d-bluntfin",
+      "title": "Blunt fin structured grid (Plot3D, single block 40x32x32, single precision, big-endian, no record markers) from the VTK example data",
+      "case": null,
+      "citation": "VTK example data bluntfinxyz.bin (blunt fin test case, NASA Ames), as mirrored in https://github.com/pyvista/vtk-data (cloned from VTKData)",
+      "status": "available",
+      "licence": {
+        "spdx": "Apache-2.0",
+        "name": "Apache License 2.0 (LICENSE of the pyvista/vtk-data repository that hosts the file)",
+        "url": "https://github.com/pyvista/vtk-data/blob/master/LICENSE",
+        "attribution": "pyvista/vtk-data, originally Kitware VTKData; blunt fin case from NASA",
+        "notes": "The repository licence is stated; a per-file licence for the underlying NASA data was not found. Fetched on the user's machine only and never vendored. Used by the Plot3D reader test, which skips when the file is absent."
+      },
+      "redistribute_in_repo": false,
+      "files": [
+        {
+          "path": "bluntfinxyz.bin",
+          "url": "https://raw.githubusercontent.com/pyvista/vtk-data/master/Data/bluntfinxyz.bin",
+          "retrieved": "2026-10-14",
+          "sha256": "b0748b066152c7001d2979245e729da32b44eb6f171b0c49cf6ed0eb84fe0e6a",
+          "bytes": 491532
+        }
+      ]
     }
   ]
 }

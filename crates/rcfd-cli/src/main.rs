@@ -6,6 +6,7 @@
 //! its convergence targets, 6 run diverged, 7 interrupted (stop file), 8 wall-clock limit
 //! reached (see docs/run-control.md).
 
+mod convert_formats;
 use rcfd_api::case::Case;
 use rcfd_api::runctl::{self, RunOptions};
 use rcfd_api::schema::case_schema;
@@ -66,7 +67,9 @@ COMMANDS:
                                run the tasks of a workflow on a case (exit code of the failing task)
     check-mesh <mesh|case>     quality report for a .msh file, an OpenFOAM polyMesh directory or a case
         --json                   machine-readable report
-    convert <in> <out>         convert a mesh: in = .msh or OpenFOAM dir; out = .vtu or an OpenFOAM dir
+    convert <in> <out>         convert a mesh: in = .msh, Plot3D grid (.x/.xyz/.p3d/.grd, --block n) or OpenFOAM dir;
+                               out = .vtu, an OpenFOAM dir, .stl (--patch a,b; --ascii), .dat (Tecplot ASCII) or .xmf
+                               (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
     serve [--addr <host:port>] [--root <dir>] [--stdio]
@@ -491,7 +494,7 @@ fn cmd_run(args: &[String]) -> u8 {
     outcome.exit_code
 }
 
-fn read_mesh(path: &str) -> Result<Mesh, String> {
+fn read_mesh(path: &str, args: &[String]) -> Result<Mesh, String> {
     let p = Path::new(path);
     if p.is_dir() {
         let dir = if p.join("polyMesh").is_dir() {
@@ -506,6 +509,8 @@ fn read_mesh(path: &str) -> Result<Mesh, String> {
             eprintln!("note: {n}");
         }
         Ok(mesh)
+    } else if convert_formats::is_plot3d(path) {
+        convert_formats::read_plot3d_mesh(path, args)
     } else if p.extension().is_some_and(|e| e == "toml" || e == "json") {
         let case = Case::load(p).map_err(|d| d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))?;
         rcfd_api::sim::build_mesh(&case).map_err(|d| d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "))
@@ -521,7 +526,7 @@ fn cmd_check_mesh(args: &[String]) -> u8 {
     let [path] = pos[..] else {
         return usage_error("check-mesh takes exactly one mesh or case");
     };
-    let mesh = match read_mesh(path) {
+    let mesh = match read_mesh(path, args) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("error: {e}");
@@ -564,11 +569,23 @@ fn cmd_check_mesh(args: &[String]) -> u8 {
 }
 
 fn cmd_convert(args: &[String]) -> u8 {
-    let pos = positionals(args, &[]);
+    let pos = positionals(args, &["--patch", "--block"]);
     let [input, output] = pos[..] else {
         return usage_error("convert takes <in> <out>");
     };
-    let mesh = match read_mesh(input) {
+    if let Some(r) = convert_formats::try_convert(input, output, args, &|p| read_mesh(p, args)) {
+        return match r {
+            Ok(msg) => {
+                println!("{msg}");
+                OK
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                FAIL
+            }
+        };
+    }
+    let mesh = match read_mesh(input, args) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("error: {e}");
