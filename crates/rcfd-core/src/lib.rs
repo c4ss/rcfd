@@ -4,6 +4,7 @@
 //! Clean-room note: everything here is derived from standard references
 //! (SI brochure for units, JSON Schema for schema export).
 
+pub mod eos_data;
 pub mod error;
 pub mod expr;
 pub mod fluids;
