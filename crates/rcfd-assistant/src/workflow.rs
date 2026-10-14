@@ -265,6 +265,25 @@ fn is_compressible(settings: &Value) -> bool {
     settings["solver"]["algorithm"] == "compressible"
 }
 
+/// Placeholder stagnation state `(p0, T0)` for a nozzle inlet from `compressible.initial.left`:
+/// isentropic `p0 = p (1 + (g-1)/2 M^2)^(g/(g-1))`, `T0 = T (1 + (g-1)/2 M^2)`, `T = p / (rho R)`.
+fn nozzle_total_state(settings: &Value) -> (f64, f64) {
+    let c = &settings["compressible"];
+    let left = &c["initial"]["left"];
+    let g = c["gamma"].as_f64().filter(|g| *g > 1.0).unwrap_or(1.4);
+    let r = c["gas_constant"].as_f64().filter(|r| *r > 0.0).unwrap_or(287.0);
+    let p = left["pressure"].as_f64().filter(|p| *p > 0.0).unwrap_or(101325.0);
+    let rho = left["density"].as_f64().filter(|d| *d > 0.0).unwrap_or(1.2);
+    let speed = left["velocity"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_f64).map(|x| x * x).sum::<f64>().sqrt())
+        .unwrap_or(0.0);
+    let t = p / (rho * r);
+    let m2 = speed * speed / (g * r * t);
+    let f = 1.0 + 0.5 * (g - 1.0) * m2;
+    (p * f.powf(g / (g - 1.0)), t * f)
+}
+
 /// [`suggest_boundary_conditions`] that also knows the physics selected in `settings`: with the
 /// k-epsilon model, inlets get turbulence-helper entries; with the compressible solver, every
 /// patch gets `compressible_bc` entries (the incompressible velocity and pressure entries are
@@ -284,7 +303,28 @@ pub fn suggest_boundary_conditions_for(patches: &Value, boundaries: &Value, sett
             let rationale = s["rationale"].as_str().unwrap_or_default().to_string();
             let mut extra: Vec<(&str, Value)> = vec![];
             if comp {
+                let nozzle_end =
+                    settings["mesh"]["generator"] == "nozzle_2d" && matches!(name.as_str(), "xmin" | "xmax");
                 match role.as_str() {
+                    // nozzle_2d types its end patches Wall, but they are the duct inlet and outlet (F-062, ADR 0006)
+                    _ if nozzle_end && name == "xmin" => {
+                        let (p0, t0) = nozzle_total_state(settings);
+                        extra.push(("compressible_bc", json!("total_inlet")));
+                        extra.push(("total_pressure_value", json!(p0)));
+                        extra.push(("temperature_value", json!(t0)));
+                        extra.push(("flow_direction", json!([1.0, 0.0, 0.0])));
+                        s["role"] = json!("inlet");
+                        s["rationale"] = json!("nozzle_2d: xmin is the duct inlet although the mesh types it Wall; a slip wall would close the duct. Subsonic total-pressure inlet (total_inlet, ADR 0006). The total pressure and temperature are PLACEHOLDERS derived from compressible.initial.left; set the real stagnation state");
+                    }
+                    _ if nozzle_end => {
+                        let p = settings["compressible"]["initial"]["left"]["pressure"]
+                            .as_f64()
+                            .unwrap_or(101325.0);
+                        extra.push(("compressible_bc", json!("pressure_outlet")));
+                        extra.push(("pressure_value", json!(p)));
+                        s["role"] = json!("outlet");
+                        s["rationale"] = json!("nozzle_2d: xmax is the duct outlet although the mesh types it Wall; a slip wall would close the duct. Static-pressure outlet (pressure_outlet, ADR 0006; supersonic outflow extrapolates). The back pressure is a PLACEHOLDER taken from compressible.initial.left.pressure; set the real back pressure");
+                    }
                     "inlet" => {
                         extra.push(("compressible_bc", json!("fixed")));
                         extra.push(("velocity_value", json!([1.0, 0.0, 0.0])));
