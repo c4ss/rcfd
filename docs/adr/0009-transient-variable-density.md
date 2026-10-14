@@ -2,6 +2,9 @@
 
 Status: accepted. Design, checks and numeric limits were written before any transient code existed. They are not
 changed after a run; a miss becomes an `#[ignore]`d `*_known_miss` test and a number in the roadmap entry.
+Corrected before any transient code ran (second commit): T1r heat source made self-consistent, inner stopping rule
+normalised by the absolute pressure, relaxation factors registered, T4 end time lengthened to 20 s (filling-time
+estimate), `max_courant` rejected, section 5 (adiabatic-wall energy BC) added.
 Roadmap items F-050 (energy equation, ideal-gas density) and F-061 (pressure-based compressible extension). Builds on
 ADR 0005 (steady kernel) and ADR 0007 (real gas).
 
@@ -65,14 +68,18 @@ radiation, variable `cp`.
 `solver.algorithm = "pimple"` with `fluid.density = ideal_gas | real_gas` runs transient: `solver.dt`,
 `solver.end_time`, `solver.time_scheme` (euler | bdf2) are the existing keys; new `fluid.inner_iterations` (maximum
 SIMPLE-inner iterations per step) and `fluid.inner_tolerance`; `energy.viscous_heating` (bool); `energy.heat_source`
-(W/m^3, uniform). `piso` and `coupled`/`compressible` remain validation errors; `max_courant` adaptive steps are
-accepted. Located validation errors for the combinations that do not exist (viscous heating without
+(W/m^3, uniform). `piso` and `coupled`/`compressible` remain validation errors; `solver.max_courant > 0` is a located
+error for the variable-density solver (the Courant helper takes a volumetric flux; fixed `dt` only). Located validation errors for the combinations that do not exist (viscous heating without
 `fluid.density`, `dt` with steady SIMPLE is still ignored as before).
 
 ## Pre-registered checks and limits
 
+Relaxation factors (registered, not tuned): T1, T1r, T2, T5, T6 use the `VdSettings` defaults `alpha_u = 0.9`,
+`alpha_p = 1.0` (SIMPLEC), `alpha_rho = 1` and `alpha_h = 1.0`; T3 all 1.0; T4 as stated below.
+
 Air `R = 287`, `gamma = 1.4`, `cp = gamma R/(gamma-1)`, `p0 = 101325 Pa`, `T0 = 300 K` unless stated. Inner stopping
-rule of every test: stop when `max(|dp|/max p, |dT|/max T, |du|/max a) < inner_tol` or `max_inner` is reached;
+rule of every test: stop when `max(|dp|/max P, |dT|/max T, |du|/max a) < inner_tol` or `max_inner` is reached, with `P`
+the absolute pressure (`p` in compressible mode, `P_th + p` in low-Mach mode, where `p` is the dynamic pressure);
 `inner_tol` and `max_inner` are given per check and are part of the registration.
 
 **Q1 No regression, constant density.** `cargo test -p rcfd-api --test baseline_hashes` unchanged and passing.
@@ -87,8 +94,8 @@ exact for Euler and BDF2 up to the inner-iteration tolerance. Run for Euler and 
 low-Mach mode (`P_th` is then the pressure). `inner_tol = 1e-12`, `max_inner = 60`. Limits at every step end:
 `|p/p_analytic - 1| <= 1e-6` (compressible: cell pressure; low-Mach: `P_th`), `|T/T_analytic - 1| <= 1e-6`,
 `|M/M_0 - 1| <= 1e-11`, `max|u| <= 1e-8 m/s`, spatial uniformity of `T` and `p` to `1e-9` relative.
-**T1r Same with the real gas** (CO2, Peng-Robinson, `p0 = 8 MPa`, `T0 = 330 K`, `q` giving a 40 K rise in 1 s with
-`dt = 0.05`, `heat_source = 2.0e5 W/m^3`): at constant density `rho (u_end - u_0) = q t` with the internal energy
+**T1r Same with the real gas** (CO2, Peng-Robinson, `p0 = 8 MPa`, `T0 = 330 K`, `heat_source = 7.0e6 W/m^3`, about a 40 K rise
+in 1 s with `rho` about 200 kg/m^3 and `cv` about 0.8 kJ/kg/K; 20 steps of `dt = 0.05 s`): at constant density `rho (u_end - u_0) = q t` with the internal energy
 `u = h(T,p) - p/rho` (first law); limits: relative energy balance error `<= 1e-6`, `|p/p_eos(rho0, T) - 1| <= 1e-6`,
 `|M/M_0 - 1| <= 1e-11`.
 
@@ -123,10 +130,12 @@ energy/momentum convection, `alpha_u = alpha_p = alpha_h = 1`.
 ADR 0005 (c): low-Mach, `T0 = 600 K`, `epsilon = 0.6`, `Ra = 1e6`, `Pr = 0.71`, constant properties, 96 x 96 graded 8,
 `linear_upwind`, SIMPLEC, started from rest at uniform `T0`, walls `T_h`/`T_c` imposed at `t = 0`. BDF2, `dt = 0.02 s`
 (the buoyant time scale `sqrt(L/(g epsilon))` is 0.107 s, the convective turnover time of the steady flow about 0.06 s),
-run to `t = 6 s`, `inner_tol = 1e-6`, `max_inner = 20`, `alpha_u = 0.8`, `alpha_h = 0.9` (the steady values). Limits at
-`t = 6 s`: hot and cold wall `Nu` within 1.0 % of 8.85978, `P_th/P0` within 0.3 % of 0.856338 (the steady limits of
+run to `t = 20 s` (the Patterson and Imberger 1980, J. Fluid Mech. 100, 65, boundary-layer filling time is of order
+`L^2/(kappa Ra^(1/4))` = 2 s here, so 20 s is ten of them), `inner_tol = 1e-6`, `max_inner = 20`, `alpha_u = 0.8`,
+`alpha_h = 0.9` (the steady values). Limits at
+`t = 20 s`: hot and cold wall `Nu` within 1.0 % of 8.85978, `P_th/P0` within 0.3 % of 0.856338 (the steady limits of
 ADR 0005), hot/cold heat flow equal to `2e-3` relative (transient, a stored-energy rate remains), and stationarity:
-`|Nu_hot(6 s) - Nu_hot(5 s)|/Nu_hot <= 1e-3`. Heavy (`#[ignore]`).
+`|Nu_hot(20 s) - Nu_hot(15 s)|/Nu_hot <= 1e-3`. Heavy (`#[ignore]`).
 
 **T5 Steady limit of a transient run equals the steady kernel.** The ADR 0005 (a1) subsonic duct on 100 x 6 cells,
 compressible mode, stagnation inlet, `linear_upwind`, SIMPLEC. Reference: the steady kernel, 3000 iterations
@@ -153,10 +162,21 @@ mode (total-enthalpy, viscous work) and low-Mach mode (dissipation). Limits at t
 values above (B top wall: absolute value `<= 1e-3` of the bottom one), `viscous_heating = false` leaves
 `max |T - T_w| <= 1e-6 K` (switch check).
 
-**T7 Case file.** A closed-box heating case and a Couette case through the case schema (`solver.algorithm = pimple`,
+**T7 Case file.** A closed-box heating case and a Couette case (`velocity_expression_x = U y/H` on the `xmin`/`xmax`
+patches, evaluated once at start: the expression is time independent) through the case schema (`solver.algorithm = pimple`,
 `fluid.density = ideal_gas`) reproduce the T1 (`|p/p_analytic - 1| <= 1e-6`) and T6 A (`1 %`) limits. Validation: `solver.algorithm = piso`
 with `fluid.density`, `energy.viscous_heating` or `energy.heat_source` without `fluid.density`, and
 `fluid.inner_iterations < 1` give located errors; every baseline case file still validates (`baseline_hashes`).
+
+### 5. Energy boundary condition at an adiabatic wall (pre-existing steady-kernel limitation, found before any run)
+
+For an adiabatic (zero-gradient `T`) patch the steady kernel prescribes `dh0/dn = cp dT/dn = 0` and, in the same
+equation, subtracts the kinetic-energy diffusion `Gamma (K_b - K_c)/dn |S|` on every boundary face (it turns the
+`h0` diffusion into the conduction `k grad T`). On a no-slip wall that moves tangentially this leaves a spurious heat
+flux `~ (k/cp) U^2/H`, about 1.4 times the viscous heating of case T6 B. The correct condition for `k dT/dn = 0` is
+`dh0/dn = cp dT/dn + (K_b - K_c)/dn`. It is applied only when the solver is transient or viscous heating is on, because
+slip faces of the warped steady nozzles have `K_b != K_c` and applying it there would change Q2. The steady kernel keeps
+this limitation (stationary no-slip adiabatic walls also see `Gamma K_c/dn`, small at low Mach number).
 
 ### Not claimed
 
