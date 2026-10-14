@@ -90,6 +90,15 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     _ => {}
                 }
             }
+            "register" if !crate::registers::names(case).contains(&gs(case, &p("register"))) => {
+                bad(
+                    p("register"),
+                    format!(
+                        "zone = \"register\" needs the name of a register (registers: {})",
+                        crate::registers::names(case).join(", ")
+                    ),
+                );
+            }
             "cell_zone" if gs(case, &p("cell_zone")).is_empty() => {
                 bad(
                     p("cell_zone"),
@@ -208,6 +217,10 @@ impl Sources {
                         .map(|c| (0..3).all(|k| c[k] >= lo[k] && c[k] <= hi[k]))
                         .collect()
                 }
+                "register" => match crate::registers::zone_from_setting(case, &p("register"), &geom.mesh) {
+                    Ok(z) => z,
+                    Err(e) => return Err(vec![e]),
+                },
                 "cell_zone" => {
                     let name = gs(case, &p("cell_zone"));
                     match geom.mesh.cell_zone(&name) {

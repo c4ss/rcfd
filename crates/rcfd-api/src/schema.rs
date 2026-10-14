@@ -328,7 +328,8 @@ pub fn case_schema() -> Schema {
                 .at_least(0.0)
                 .dim(Dimension::TEMPERATURE)
                 .doc("Initial temperature (energy equation)"),
-        );
+        )
+        .field("patches", crate::registers::initial_patches_schema());
 
     let energy = Schema::object()
         .doc("Energy (temperature) equation with Boussinesq buoyancy (steady algorithms only)")
@@ -1261,6 +1262,7 @@ pub fn case_schema() -> Schema {
         .field("energy", energy)
         .field("rheology", rheology)
         .field("initial", initial)
+        .field("registers", crate::registers::schema())
         .field(
             "boundaries",
             Schema::named(boundary).doc("Boundary conditions by patch name"),
@@ -1353,9 +1355,10 @@ pub fn case_schema() -> Schema {
                     )
                     .field(
                         "zone",
-                        Schema::enumeration("all", &["all", "box", "cell_zone"])
-                            .doc("Where the source acts: the whole mesh, the cells whose centres lie in the axis-aligned box [box_min, box_max], or a named mesh cell zone (imported meshes)"),
+                        Schema::enumeration("all", &["all", "box", "cell_zone", "register"])
+                            .doc("Where the source acts: the whole mesh, the cells whose centres lie in the axis-aligned box [box_min, box_max], a named mesh cell zone (imported meshes) or a cell register (registers.<name>)"),
                     )
+                    .field("register", Schema::string("").doc("Name of the register for zone = \"register\""))
                     .field("box_min", vec3([0.0; 3], "Lower corner [m] of the box zone"))
                     .field("box_max", vec3([0.0; 3], "Upper corner [m] of the box zone"))
                     .field("cell_zone", Schema::string("").doc("Name of the mesh cell zone"))

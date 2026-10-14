@@ -4,6 +4,7 @@ pub mod case;
 pub mod comp;
 pub mod exprs;
 pub mod properties;
+pub mod registers;
 pub mod rheology;
 pub mod runctl;
 pub mod scalars;
