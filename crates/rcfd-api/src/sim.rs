@@ -2028,7 +2028,7 @@ impl Simulation {
     }
 
     /// Initialise this simulation from a solution computed on another mesh (F-115, the
-    /// counterpart of Fluent `file/interpolate` and the CFX initial-file option). `src_case`
+    /// solution transfer between meshes for initialisation. `src_case`
     /// describes the source mesh and `checkpoint` is a checkpoint written for it; velocity,
     /// pressure and (when both cases solve the energy equation) temperature are interpolated onto
     /// this mesh, the face flux is rebuilt, and the iteration counter restarts at zero.

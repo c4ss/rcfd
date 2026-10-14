@@ -18,9 +18,9 @@
 //!   `S_eps = C1 S eps - C2 eps^2 / (k + sqrt(nu eps))`, `C1 = max(0.43, eta/(eta+5))`,
 //!   `C2 = 1.9`, `sigma_k = 1`, `sigma_e = 1.2`.
 //!
-//! The RNG and realizable constants were checked against the ANSYS Fluent theory guide, the
+//! The RNG and realizable constants were checked against published model documentation, the
 //! OpenFOAM class documentation and an arXiv RNG table (see docs/reference-data.md). Note that
-//! Shih et al.'s `A0` appears as 4.04 (Fluent, used here) and as 4.0 (OpenFOAM default).
+//! Shih et al.'s `A0` appears as 4.04 (used here) and as 4.0 (OpenFOAM default).
 //!
 //! Walls use the equilibrium log-law wall functions of [`crate::wall`]: in a wall cell
 //! `eps = C_mu^(3/4) k^(3/2) / (kappa y)` is imposed and the production is replaced by the
