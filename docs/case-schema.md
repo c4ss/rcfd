@@ -125,10 +125,25 @@ Initial condition `compressible.initial`: `mode = uniform` uses `left` everywher
 `mode = riemann` uses `left` for coordinates below `split_position` along `split_axis` (x, y or
 z) and `right` above. Each state has `density`, `velocity` (vector) and `pressure`.
 
-Boundaries: `compressible_bc` = `auto` | `slip` | `extrapolate` | `fixed`. `fixed` needs
+Boundaries: `compressible_bc` = `auto` | `slip` | `extrapolate` | `fixed` | `total_inlet` | `pressure_outlet` |
+`farfield` | `nonreflecting` (the last four are the characteristic conditions of ADR 0006, below). `fixed` needs
 `density_value`, `pressure_value` (positive) and optionally `velocity_value` (`temperature_value`
 may replace `density_value`). `auto` keeps the solver default by mesh patch kind: outlet patches extrapolate, all others are slip walls. The mesh generator `wedge_2d` (`ramp_start`, `ramp_angle`, plus `lx`, `ly`, `nx`,
 `ny`) builds the compression-ramp domain.
+
+Characteristic conditions (`docs/adr/0006-compressible-boundary-conditions.md`; one-dimensional
+characteristics normal to the face, a boundary face state whose physical flux is used):
+
+| `compressible_bc` | keys | meaning |
+|---|---|---|
+| `total_inlet` | `total_pressure_value` [Pa], `temperature_value` (total, K), `flow_direction` (vector; empty or zero = against the patch normal) | subsonic inflow; the outgoing invariant `u_n + 2a/(gamma-1)` comes from the interior, `p0`, `T0` and the direction are imposed. Uses `compressible.gas_constant`. |
+| `pressure_outlet` | `pressure_value` | static pressure on subsonic outflow; supersonic outflow (normal Mach >= 1) extrapolates. |
+| `nonreflecting` | `pressure_value`, `reflection_value` (sigma in [0, 1], default 0.02) | pressure outlet relaxed toward `pressure_value`; sigma 1 = `pressure_outlet`, sigma 0 = no pressure imposed. Only normally incident waves; waves slower than `dx/(sigma a)` are reflected (a 0.03-wide pulse on 400 cells: reflected/incident 0.94 for sigma 1, 0.46 for 0.02, 0.078 for 0.002, 0 for 0). |
+| `farfield` | `mach_value`, `flow_angle` (degrees from +x towards +y), `pressure_value`, `temperature_value` (static) | Riemann-invariant free-stream boundary with inflow/outflow and supersonic switching. No vortex correction for lifting bodies. |
+
+`validate` errors name the key: a missing or non-positive total/static pressure or temperature, a
+`flow_direction` that is not 3 components, a `reflection_value` outside [0, 1], a negative
+`mach_value`.
 
 Unsupported combinations that `validate` rejects, each with the key and line: forward Euler
 (`rk_order = 1`) with a limited reconstruction, a transient run with `end_time <= 0`,

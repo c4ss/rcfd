@@ -324,6 +324,7 @@ pub fn suggest_boundary_conditions_for(patches: &Value, boundaries: &Value, sett
     if let Some(notes) = out["notes"].as_array_mut() {
         if comp {
             notes.push(json!("Compressible solver: only compressible_bc, density_value, pressure_value and velocity_value apply; the incompressible pressure reference notes above do not."));
+            notes.push(json!("Compressible solver characteristic conditions (compressible_bc): total_inlet (total_pressure_value, temperature_value = total temperature, flow_direction) for a subsonic inlet; pressure_outlet or nonreflecting (pressure_value, reflection_value) for a subsonic outlet; farfield (mach_value, flow_angle, pressure_value, temperature_value) for an open external boundary."));
         }
         if ke {
             notes.push(json!("k-epsilon: walls need no extra entries (turbulence = auto gives them wall functions); at least one wall patch is required."));

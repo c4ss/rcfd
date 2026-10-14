@@ -7,6 +7,7 @@
 //! SSP-RK schemes; Darwish and Moukalled, Int. J. Heat Mass Transfer 46 (2003) 599-611 for
 //! the unstructured TVD reconstruction.
 
+use crate::compressible_bc::{self, TotalInlet};
 use crate::convection::TvdLimiter;
 use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
@@ -24,6 +25,23 @@ pub enum CompBc {
     Extrapolate,
     /// Fixed free-stream / inflow state (the Riemann problem against it is solved).
     Fixed(Prim),
+    /// Subsonic total pressure / total temperature inlet (ADR 0006).
+    TotalInlet(TotalInlet),
+    /// Static-pressure outlet with supersonic switching (ADR 0006).
+    PressureOutlet {
+        /// Static pressure.
+        p: f64,
+    },
+    /// Partially non-reflecting pressure outlet: `sigma = 1` is [`CompBc::PressureOutlet`],
+    /// `sigma = 0` imposes no pressure (ADR 0006).
+    NonReflecting {
+        /// Target static pressure.
+        p: f64,
+        /// Relaxation weight in `[0, 1]`.
+        sigma: f64,
+    },
+    /// Riemann-invariant far field for the given free-stream state (ADR 0006).
+    FarField(Prim),
 }
 
 /// Time integration scheme.
@@ -169,6 +187,19 @@ impl CompressibleSolver {
             CompBc::Slip => interior.mirrored(n),
             CompBc::Extrapolate => *interior,
             CompBc::Fixed(p) => p,
+            _ => *interior,
+        }
+    }
+
+    /// Boundary face state of the characteristic conditions (None for the ghost-state ones).
+    fn face_state(&self, pi: usize, interior: &Prim, n: Vec3) -> Option<Prim> {
+        let gas = self.gas;
+        match self.bcs[pi] {
+            CompBc::TotalInlet(t) => Some(compressible_bc::total_inlet(gas, &t, interior, n)),
+            CompBc::PressureOutlet { p } => Some(compressible_bc::pressure_outlet(gas, p, 1.0, interior, n)),
+            CompBc::NonReflecting { p, sigma } => Some(compressible_bc::pressure_outlet(gas, p, sigma, interior, n)),
+            CompBc::FarField(fs) => Some(compressible_bc::far_field(gas, &fs, interior, n)),
+            _ => None,
         }
     }
 
@@ -239,6 +270,7 @@ impl CompressibleSolver {
         };
         let mut ghost = vec![prim[0]; mesh.n_faces() - n_int];
         let mut bface = vec![prim[0]; mesh.n_faces() - n_int];
+        let mut direct = vec![false; mesh.n_faces() - n_int];
         for f in n_int..mesh.n_faces() {
             if self.geom.empty[f] {
                 continue;
@@ -248,6 +280,12 @@ impl CompressibleSolver {
             let g = self.ghost(pi, &prim[own[f]], n);
             ghost[f - n_int] = g;
             let pr = &prim[own[f]];
+            if let Some(fs) = self.face_state(pi, pr, n) {
+                ghost[f - n_int] = fs;
+                bface[f - n_int] = fs;
+                direct[f - n_int] = true;
+                continue;
+            }
             bface[f - n_int] = match self.bcs[pi] {
                 CompBc::Slip => Prim {
                     rho: pr.rho,
@@ -256,6 +294,7 @@ impl CompressibleSolver {
                 },
                 CompBc::Extrapolate => *pr,
                 CompBc::Fixed(p) => p,
+                _ => *pr,
             };
         }
         // reconstruction gradients of the 5 primitive variables
@@ -309,6 +348,8 @@ impl CompressibleSolver {
                     }
                 }
                 self.settings.solver.flux(gas, &pl, &pr, n)
+            } else if direct[f - n_int] {
+                ghost[f - n_int].flux(gas, n)
             } else {
                 self.settings.solver.flux(gas, &prim[o], &ghost[f - n_int], n)
             };

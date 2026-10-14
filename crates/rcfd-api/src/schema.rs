@@ -527,8 +527,44 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "compressible_bc",
-            Schema::enumeration("auto", &["auto", "slip", "extrapolate", "fixed"]).doc(
-                "Compressible solver condition: slip = wall / symmetry, extrapolate = supersonic outflow, fixed = free-stream or inflow state from velocity_value, pressure_value (static, Pa) and density_value (or temperature_value through the ideal gas law). auto: extrapolate on outlet patches, slip elsewhere",
+            Schema::enumeration(
+                "auto",
+                &[
+                    "auto",
+                    "slip",
+                    "extrapolate",
+                    "fixed",
+                    "total_inlet",
+                    "pressure_outlet",
+                    "farfield",
+                    "nonreflecting",
+                ],
+            )
+            .doc(
+                "Compressible solver condition: slip = wall / symmetry, extrapolate = supersonic outflow, fixed = free-stream or inflow state from velocity_value, pressure_value (static, Pa) and density_value (or temperature_value through the ideal gas law). Characteristic conditions (ADR 0006): total_inlet = subsonic inflow from total_pressure_value, temperature_value (total) and flow_direction; pressure_outlet = static pressure_value, switches to extrapolation when the outflow is supersonic; farfield = Riemann-invariant free stream from mach_value, flow_angle, pressure_value and temperature_value; nonreflecting = pressure outlet relaxed with reflection_value. auto: extrapolate on outlet patches, slip elsewhere",
+            ),
+        )
+        .field(
+            "flow_direction",
+            vec3(
+                [0.0; 3],
+                "Flow direction of a total_inlet (any length > 0, normalised; [0, 0, 0] = against the patch normal)",
+            ),
+        )
+        .field(
+            "mach_value",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Free-stream Mach number of a farfield condition"),
+        )
+        .field(
+            "flow_angle",
+            Schema::float(0.0).doc("Free-stream flow angle of a farfield condition, degrees from +x towards +y"),
+        )
+        .field(
+            "reflection_value",
+            Schema::float(0.02).at_least(0.0).doc(
+                "Relaxation weight sigma in [0, 1] of a nonreflecting outlet: 1 = fixed static pressure (fully reflecting), 0 = no pressure imposed (waves leave freely). Waves slower than the time scale dx/(sigma a) are reflected, so low values pass short pulses and hold the pressure only slowly",
             ),
         )
         .field(

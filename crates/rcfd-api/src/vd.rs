@@ -73,7 +73,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 let unset = if f == "inlet" {
                     get_s(case, &p) == "none"
                 } else {
-                    get_f(case, &p) == 0.0
+                    // total_pressure_value also serves compressible_bc = total_inlet (ADR 0006)
+                    get_f(case, &p) == 0.0 || get_s(case, "solver.algorithm") == "compressible"
                 };
                 if !unset {
                     out.push(diag(&p, "needs fluid.density = \"ideal_gas\""));
