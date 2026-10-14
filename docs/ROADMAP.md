@@ -149,9 +149,10 @@ Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F
 - [ ] **F-051** Conjugate heat transfer: solid zones, coupled interfaces, thermal BCs (T, flux, convection)
   - depends on: F-050
   - acceptance: 1D slab+fluid analytic CHT test within 1 percent
-- [ ] **F-052** Radiation: P1, surface-to-surface with view factors, discrete ordinates
+- [~] **F-052** Radiation: P1, surface-to-surface with view factors, discrete ordinates
   - depends on: F-050
   - acceptance: Gray enclosure benchmark matches analytic solution
+  - note: Partial (wave 12, ADR 0012, rcfd-api tests/radiation.rs). Delivered: grey P1 incident-radiation model with Marshak boundary conditions coupled to the steady energy equation (rcfd-fv radiation.rs, radiation.model = p1, wall emissivity, field G, radiative wall heat flow). Gray plate benchmark vs the analytic P1 solution: worst 2.6e-9 (limit 1e-3) for tau 0.1 to 10, unequal emissivities and scattering; energy balance 2e-12; absorbed power balance 3e-13. Not done: surface-to-surface with view factors, discrete ordinates, a true gray-enclosure benchmark with view factors; transient and ideal-gas runs.
 - [x] **F-053** Passive scalar and multicomponent species transport; temperature-dependent properties (polynomial, Sutherland)
   - depends on: F-050
   - acceptance: Mixing layer species mass conserved to machine precision
@@ -376,10 +377,10 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
   - depends on: F-054, F-125
   - acceptance: H2/air and CH4/air ignition delay agree with published GRI-Mech 3.0 based results within 5 percent; PSR blowout temperature trend matches literature
   - note: P2. Gap: 0D/1D reactor tools (perfectly stirred, plug flow) precede CFD coupling; gives chemistry validation without a CFD mesh. Reference mechanisms/results via the validation pack (F-125).
-- [ ] **F-113** Lumped zone components: fan curves, porous jump, radiator/heat-exchanger macro and 1D network boundaries
+- [~] **F-113** Lumped zone components: fan curves, porous jump, radiator/heat-exchanger macro and 1D network boundaries
   - depends on: F-031, F-051
   - acceptance: Fan curve BC reproduces the specified operating point in a duct; porous-jump pressure drop matches a Darcy-Forchheimer sheet; radiator heat duty balance within 1 percent
-  - note: P2. Gap: fan, exhaust-fan, porous-jump, radiator and network boundary types; shell-and-tube and porous domains.
+  - note: Acceptance met, scope partial (wave 12, ADR 0012, rcfd-api tests/lumped.rs, criteria registered in the ADR before running and unchanged). Delivered: components.<name> of type fan (piecewise-linear fan curve), porous_jump (Darcy-Forchheimer jump), heat_exchanger (fixed duty or effectiveness, K/s energy source over a zone) and network_outlet (lumped R1 Q + R2 Q|Q| outlet pressure); fan and jump are realised as pressure-jump planes in the SIMPLE kernel (rcfd-fv lumped.rs FaceJump, opt-in field, baseline hashes bit-identical), reusing the sources.rs zone selection. Measured: porous jump vs Darcy-Forchheimer sheet worst 1.0e-6 (limit 1e-3); fan plus jump operating point Q +0.061 percent (limit 0.5), fan rise +0.091 percent (limit 0.1), jump drop +0.030 percent (0.1); network Q -0.032 percent (0.5); heat-exchanger stream enthalpy balance 3e-12 and 1e-12 (limit 1e-6; acceptance 1 percent). Registered misses (ignored known_miss tests, criteria unchanged): network patch pressure vs R(Q) 8.5e-4 against 1e-4 (a small persistent flow two-cycle), effectiveness duty vs nominal-inlet formula 1.45e-6 against 1e-6 (axial conduction warms the inlet by 7e-5 K). First design (cell-based sink) missed Z1 by 17 percent and was replaced; fan and network relaxations are tuning (network test relax 0.02). Not done (reason for partial): general 1D network coupling beyond the lumped outlet relation, shell-and-tube and porous exchanger domains, exhaust-fan boundary types, transient and compressible runs.
 - [x] **F-114** Non-conformal mesh interfaces (general grid interface / mortar) with flux conservation
   - depends on: F-107
   - acceptance: Two non-matching blocks give the same channel solution as one conformal block within discretization error; fluxes conserved to round-off across the interface
@@ -456,10 +457,10 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
   - depends on: F-054, F-042
   - acceptance: A methane jet flame temperature profile and lift-off trend compare with a public benchmark (e.g. Sandia flames); the flamelet library reader is documented
   - note: P3 (stretch). Gap: flamelet-with-PDF, burning-velocity and extended coherent flame models; non-premixed and premixed combustion.
-- [ ] **F-130** Radiation extensions: Monte Carlo, Rosseland, spectral bands/WSGG, scattering and solar load
+- [~] **F-130** Radiation extensions: Monte Carlo, Rosseland, spectral bands/WSGG, scattering and solar load
   - depends on: F-052
   - acceptance: A participating-medium benchmark between plates matches the analytic result; the non-grey band model reproduces tabulated emissivity
-  - note: P3 (stretch). Gap: radiation models (Rosseland, P1, six-flux, discrete transfer, Monte Carlo; gray/multiband/multigray/WSGG).
+  - note: Partial (wave 12, ADR 0012). Delivered: Rosseland diffusion approximation (radiation.model = rosseland: Kirchhoff variable linear to 2.4e-5 and wall flux -0.003 percent against the closed form) and P1 with scattering; participating-medium plates benchmark: P1 matches the analytic P1 result to 2.6e-9 and the Milne transport asymptote to 0.41 percent at tau = 20 (the Milne constant 0.7104 and its equivalence to the plate problem are not verified against a primary source, see docs/reference-data.md). Not done (acceptance part 2 and scope): non-grey band model and tabulated emissivity, WSGG (no verifiable coefficient table), Monte Carlo, six-flux, solar load.
 - [ ] **F-131** Surface sizing and surface-mesh generation from STL/faceted geometry (size fields, feature capture, connect/seal)
   - depends on: F-010, F-011, F-108
   - acceptance: A closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks

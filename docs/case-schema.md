@@ -413,6 +413,37 @@ Limits: steady runs only, the viscous porous term uses `physics.nu`; the non-con
 interfaces only, so an MRF zone with a non-conformal interface is limited to interfaces perpendicular to the axis.
 Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
 
+## `components` lumped zone components (F-113, ADR 0012)
+
+`components.<name>` adds a lumped component to a steady constant-density run (`solver.algorithm` `simple` or `simplec`;
+other algorithms, the coupled solver and ideal-gas runs are a located diagnostic). `type`:
+
+| `type` | Keys | Meaning |
+| --- | --- | --- |
+| `fan` | `zone` (`all`, `box` with `box_min`/`box_max`, `cell_zone`), `direction` (flow direction, required), `curve_flow` [m^3/s] strictly increasing, `curve_pressure` [Pa], `relax` (default 0.5) | pressure rise `dp(Q)` (piecewise-linear fan curve, end values held) applied as a pressure jump on the internal faces of the downstream boundary of the zone; `Q` is the volume flow through them. The applied rise is under-relaxed (`relax`, first evaluation relaxed from zero) |
+| `porous_jump` | `zone`, `direction`, `thickness` t [m], `permeability` alpha [m^2], `inertial_resistance` C2 [1/m] | thin Darcy-Forchheimer jump `dp = (mu/alpha) t v + C2 t rho v^2/2` (`v` = face-normal superficial velocity) on the downstream boundary faces of the zone; the viscous part is implicit, `abs(v)` is lagged |
+| `heat_exchanger` | `zone`, `direction`, `mode` = `fixed_duty` (`duty` [W], negative for a radiator) or `effectiveness` (`effectiveness`, `secondary_temperature` [K], `secondary_capacity_rate` [W/K], 0 = infinite) | uniform energy source over the zone volume; effectiveness mode uses `Q = eps C_min (T_secondary - T_in)` with `T_in` the flux-weighted upstream temperature of the zone entry faces. Needs `energy.enabled` |
+| `network_outlet` | `patch` (fixed-pressure boundary), `reference_pressure` [Pa], `resistance_linear` R1 [Pa s/m^3], `resistance_quadratic` R2 [Pa s^2/m^6], `relax` | the patch pressure follows `p_ref + R1 Q + R2 Q abs(Q)` of the flow through the patch (lagged, relaxed) |
+
+Monitors: `<name>_flow` [m^3/s] and `<name>_dp` [Pa] (fan rise, analytic jump drop at the current flow, network patch
+pressure) or `<name>_duty` [W] and `<name>_t_in` [K]. Validation errors are located (`components.<name>.curve_flow`,
+`.direction`, `.patch`, `.effectiveness`, `.type`, `.zone`, `.thickness`, ...). A fan or jump zone needs an interior
+plane on its downstream side. Pressure-driven loops with little resistance are stiff: use a small `relax` (0.02 in
+the ADR 0012 network test). Not done: 1D network coupling beyond the lumped outlet relation, shell-and-tube or porous
+exchanger domains. Checks and measured results: ADR 0012, `crates/rcfd-api/tests/lumped.rs`.
+
+## `radiation` grey radiation (F-130, F-052, ADR 0012)
+
+`radiation.model` is `none` (default), `rosseland` or `p1`; both need `energy.enabled = true` and a steady
+SIMPLE/SIMPLEC run. Keys: `absorption_coefficient` a, `scattering_coefficient` sigma_s [1/m] (extinction a + sigma_s
+must be positive), `refractive_index` n. `rosseland` adds the radiative conductivity `16 sigma n^2 T^3 / (3 beta)` to
+the energy diffusion (optically thick media). `p1` solves the incident radiation `G` with Marshak boundary conditions
+using the wall emissivity `boundaries.<patch>.emissivity` in (0, 1] (default 1; patches with `velocity = symmetry` are
+reflecting), couples `a (G - 4 sigma n^2 T^4)` linearised into the energy equation, and exposes the field `G`
+(`field("G")`) and `Simulation::radiative_heat_flow(patch)`. Conductive wall heat flow is still the `heat_flow` report
+(set its `conductivity`). Not done: non-grey band models, WSGG, discrete ordinates, surface-to-surface radiation,
+transient and ideal-gas runs.
+
 ## `udf` user functions (F-122)
 
 `udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,
