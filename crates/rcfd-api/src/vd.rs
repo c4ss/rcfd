@@ -3,8 +3,11 @@
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{conv_scheme, get_b, get_f, get_i, get_s, get_v};
+use rcfd_core::eos_data::critical_data;
+use rcfd_core::fluids::{CubicEos, CubicKind, R_UNIVERSAL};
 use rcfd_core::vec3;
 use rcfd_fv::convection::ConvScheme;
+use rcfd_fv::realgas::RealGas;
 use rcfd_fv::simple::Coupling;
 use rcfd_fv::varden::{
     DensityMode, DensityScheme, IdealGas, Property, StagnationInlet, VarDensitySolver, VdInfo, VdSettings,
@@ -13,9 +16,98 @@ use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::PatchKind;
 use std::sync::Arc;
 
-/// Is the ideal-gas variable-density solver selected?
+/// Is the variable-density solver (ideal gas or real gas) selected?
 pub fn enabled(case: &Case) -> bool {
-    get_s(case, "fluid.density") == "ideal_gas"
+    matches!(get_s(case, "fluid.density").as_str(), "ideal_gas" | "real_gas")
+}
+
+/// Is the real-gas equation of state selected (ADR 0007)?
+pub fn real_gas(case: &Case) -> bool {
+    get_s(case, "fluid.density") == "real_gas"
+}
+
+/// `fluid.*` keys of the real-gas model and their defaults (a different value needs `density = real_gas`).
+const REAL_ONLY_FLOATS: [&str; 5] = [
+    "fluid.critical_temperature",
+    "fluid.critical_pressure",
+    "fluid.acentric_factor",
+    "fluid.molar_mass",
+    "fluid.specific_heat",
+];
+
+/// Build the real-gas model from the `fluid.*` keys: the critical data of `fluid.species` overridden by the explicit
+/// keys, the molar mass, the equation of state, and `cp0`.
+pub fn real_gas_model(case: &Case) -> Result<RealGas, Vec<Diagnostic>> {
+    let mut out = Vec::new();
+    let species = get_s(case, "fluid.species");
+    let lib = if species.is_empty() {
+        None
+    } else {
+        match critical_data(&species) {
+            Some(d) => Some(d),
+            None => {
+                out.push(diag(
+                    "fluid.species",
+                    format!(
+                        "unknown fluid '{species}' for the real-gas model; built-in fluids: {}; or leave fluid.species empty and set critical_temperature, critical_pressure and molar_mass",
+                        rcfd_core::eos_data::NAMES.join(", ")
+                    ),
+                ));
+                None
+            }
+        }
+    };
+    let pick = |key: &str, from_lib: Option<f64>, out: &mut Vec<Diagnostic>, needed: bool| -> f64 {
+        let v = get_f(case, &format!("fluid.{key}"));
+        if v > 0.0 {
+            v
+        } else if let Some(x) = from_lib {
+            x
+        } else {
+            if needed && species.is_empty() {
+                out.push(diag(
+                    &format!("fluid.{key}"),
+                    format!("fluid.density = \"real_gas\" needs fluid.species or a positive fluid.{key}"),
+                ));
+            }
+            0.0
+        }
+    };
+    let tc = pick("critical_temperature", lib.map(|d| d.tc), &mut out, true);
+    let pc = pick("critical_pressure", lib.map(|d| d.pc), &mut out, true);
+    let mm = pick("molar_mass", lib.map(|d| d.molar_mass), &mut out, true);
+    let omega = {
+        let v = get_f(case, "fluid.acentric_factor");
+        if v != 0.0 {
+            v
+        } else {
+            lib.map(|d| d.omega).unwrap_or(0.0)
+        }
+    };
+    let kind = if get_s(case, "fluid.eos") == "redlich_kwong" {
+        CubicKind::RedlichKwong
+    } else {
+        CubicKind::PengRobinson
+    };
+    if !out.is_empty() {
+        return Err(out);
+    }
+    let eos = CubicEos::new(kind, tc, pc, omega, mm).map_err(|e| vec![diag("fluid.eos", e.to_string())])?;
+    let r = R_UNIVERSAL / mm;
+    let gamma = get_f(case, "fluid.gamma");
+    let cp_given = get_f(case, "fluid.specific_heat");
+    let cp0 = if cp_given > 0.0 {
+        cp_given
+    } else {
+        gamma * r / (gamma - 1.0)
+    };
+    if cp0 <= r {
+        return Err(vec![diag(
+            "fluid.specific_heat",
+            format!("the ideal-gas specific heat {cp0} J/kg/K must exceed R = {r:.3} J/kg/K"),
+        )]);
+    }
+    Ok(RealGas { eos, cp0 })
 }
 
 fn diag(path: &str, message: impl Into<String>) -> Diagnostic {
@@ -50,6 +142,18 @@ const FLUID_DEFAULT_STRINGS: [(&str, &str); 4] = [
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let names = case.tree.names("boundaries").unwrap_or_default();
+    if !real_gas(case) {
+        for path in REAL_ONLY_FLOATS {
+            if get_f(case, path) != 0.0 {
+                out.push(diag(path, "this fluid setting needs fluid.density = \"real_gas\""));
+            }
+        }
+        for (path, d) in [("fluid.eos", "peng_robinson"), ("fluid.species", "")] {
+            if get_s(case, path) != d {
+                out.push(diag(path, "this fluid setting needs fluid.density = \"real_gas\""));
+            }
+        }
+    }
     if !enabled(case) {
         for (path, d) in FLUID_DEFAULT_FLOATS {
             if (get_f(case, path) - d).abs() > 1e-300 {
@@ -91,6 +195,29 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 "the ideal-gas variable-density solver is steady SIMPLE / SIMPLEC only (got \"{alg}\"); set solver.algorithm = \"simplec\""
             ),
         ));
+    }
+    if real_gas(case) {
+        if (get_f(case, "fluid.gas_constant") - 287.058).abs() > 1e-300 {
+            out.push(diag(
+                "fluid.gas_constant",
+                "the real-gas model derives R from the molar mass (R = 8.314462618 / molar_mass); remove fluid.gas_constant",
+            ));
+        }
+        if get_s(case, "fluid.mode") == "low_mach" {
+            out.push(diag(
+                "fluid.mode",
+                "fluid.density = \"real_gas\" supports the compressible mode only (the low_mach mode is ideal-gas)",
+            ));
+        }
+        if get_b(case, "fluid.hydrostatic_init") {
+            out.push(diag(
+                "fluid.hydrostatic_init",
+                "fluid.hydrostatic_init is not supported with fluid.density = \"real_gas\"",
+            ));
+        }
+        if let Err(d) = real_gas_model(case) {
+            out.extend(d);
+        }
     }
     if !get_b(case, "energy.enabled") {
         out.push(diag(
@@ -220,9 +347,20 @@ impl VdState {
             }
         }
         let low_mach = get_s(case, "fluid.mode") == "low_mach";
-        let r = get_f(case, "fluid.gas_constant");
+        let real = if real_gas(case) {
+            Some(real_gas_model(case)?)
+        } else {
+            None
+        };
+        let r = match &real {
+            Some(rg) => rg.r(),
+            None => get_f(case, "fluid.gas_constant"),
+        };
         let gamma = get_f(case, "fluid.gamma");
-        let cp = gamma * r / (gamma - 1.0);
+        let cp = match &real {
+            Some(rg) => rg.cp0,
+            None => gamma * r / (gamma - 1.0),
+        };
         let pr = get_f(case, "fluid.prandtl");
         let mu_ref = get_f(case, "fluid.viscosity");
         let (mu, k) = if get_s(case, "fluid.viscosity_model") == "sutherland" {
@@ -254,6 +392,7 @@ impl VdState {
             Coupling::Simplec
         };
         let mut s = VdSettings::new(IdealGas { r, cp }, mu, k, coupling);
+        s.real = real;
         s.mode = if low_mach {
             DensityMode::LowMach
         } else {

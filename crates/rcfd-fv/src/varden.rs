@@ -301,7 +301,10 @@ impl VarDensitySolver {
                 return Err(mismatch("fluid.mode", "a real gas needs the compressible mode"));
             }
             if (rg.cp0 / s.gas.cp - 1.0).abs() > 1e-9 || (rg.r() / s.gas.r - 1.0).abs() > 1e-9 {
-                return Err(mismatch("gas", "the ideal-gas settings must carry cp0 and R_u/M of the real gas"));
+                return Err(mismatch(
+                    "gas",
+                    "the ideal-gas settings must carry cp0 and R_u/M of the real gas",
+                ));
             }
         }
         if t.values.iter().any(|&x| x <= 0.0 || !x.is_finite()) {
@@ -344,10 +347,7 @@ impl VarDensitySolver {
         };
         sol.rec_inv = sol.build_reconstruction();
         sol.h.values = (0..sol.geom.n_cells())
-            .map(|c| {
-                sol.h_static(sol.p.values[c], sol.t.values[c])
-                    + 0.5 * vec3::dot(sol.u.values[c], sol.u.values[c])
-            })
+            .map(|c| sol.h_static(sol.p.values[c], sol.t.values[c]) + 0.5 * vec3::dot(sol.u.values[c], sol.u.values[c]))
             .collect();
         for inl in &sol.settings.inlets {
             if sol.geom.mesh.patch(&inl.patch).is_none() {
