@@ -1,0 +1,80 @@
+# Interchange formats, registers and GLB validation (F-119, F-124, F-117; ADR 0011)
+
+All parsers share the hostile-input rules of ADR 0011 section 1: no panic on any byte sequence (tested with every
+prefix of a valid file plus 3000 deterministic mutations), no allocation sized from an untrusted header count (counts
+are checked against the bytes that remain before anything is reserved), hard caps (file 1 GiB, 50 million items,
+4096 blocks) and located errors (`line N` for text, `byte offset N` / `record N` for binary, JSON pointers for GLB).
+`crates/rcfd-io/src/guard.rs` holds the caps and the fuzz helper.
+
+## `rcfd convert <in> <out>`
+
+| Direction | Extension | Notes |
+| --- | --- | --- |
+| mesh -> STL | `.stl` | boundary patches only: `--patch a,b` (default: all non-empty, non-cyclic patches); binary unless `--ascii`; polygonal faces are fan-triangulated outward-wound |
+| STL -> STL | `.stl` | re-encode only (ASCII <-> binary, vertex weld); an STL surface is not a volume mesh and cannot be converted to one |
+| mesh -> Tecplot | `.dat` | ASCII FE zone (tri, quad, tet, brick; pyramids and prisms as degenerate bricks), `BLOCK` packing, mesh geometry only (no fields from the CLI; the library writes cell-centred variables); cells with more than 6 faces or faces with more than 4 nodes are refused with the cell number |
+| mesh -> XDMF | `.xmf` | XML plus raw little-endian `Float64` / `Int64` `.bin` files next to it; mixed topology (triangle, quad, tet, pyramid, wedge, hex); polyhedra refused with the cell number |
+| Plot3D grid -> mesh | `.x` `.xyz` `.p3d` `.grd` | `--block n` (1-based, default 1); the block becomes a hexahedral mesh with patches `imin ... kmax` |
+
+Library entry points: `rcfd_io::stl`, `rcfd_io::tecplot` (also a reader for FE and ordered zones, BLOCK and POINT
+packing, `VARLOCATION`), `rcfd_io::plot3d` (multi-block, ASCII and Fortran-unformatted binary, single / double
+precision, either byte order, iblank, function files, headerless C-binary single-grid files via `read_grid_raw`),
+`rcfd_io::xdmf` (writer).
+
+## What is NOT done or not verified
+
+* No HDF5 heavy data: the XDMF writer uses raw binary data items only. The title of F-119 ("XDMF/HDF5 writer") is
+  therefore not met and the item stays `partial`.
+* No EnSight writer.
+* Tecplot polyhedral zones and binary `.plt` are not supported.
+* Verification against third-party readers was done with VTK 9.6.2 (`vtkSTLReader`, `vtkTecplotReader`,
+  `vtkXdmfReader`, `vtkMultiBlockPLOT3DReader`) through `scripts/check_interchange.py` (meshio is installed but not used by the checks); no commercial
+  viewer was available. VTK's Tecplot reader stores float32 coordinates, so a hand-built mixed mesh reads back with a
+  volume 3.2e-9 relative off (script tolerance 1e-7).
+* Plot3D function files and ASCII Plot3D were only checked against rcfd's own writer and VTK on small generated files.
+* The public sample `bluntfinxyz.bin` (NASA blunt fin, hosted in the pyvista vtk-data repository; see
+  `validation-data/manifest.json` and `docs/reference-data.md`) is read by `read_grid_raw` with the same block size
+  and bounds as VTK. Turning it into a mesh with `block_to_mesh` is refused ("degenerate face": the grid has a
+  collapsed edge), which is a recorded limitation.
+* VTK's XDMF reader gives negative cell volumes for wedges listed in the VTK/Exodus node order unless the triangle
+  winding is reversed, so the writer emits wedges as `[v0, v2, v1, v3, v5, v4]`; this was found by running the
+  reader and is covered by the external check.
+
+## Registers (F-124)
+
+A register is a named boolean cell mask (`rcfd_post::registers::Register`) built from
+
+* `type = "box"`: cell centres in `[box_min, box_max]` (inclusive; every component of `box_max` must exceed `box_min`),
+* `type = "expression"`: `above <= expression(x, y, z) <= below` at the cell centre (limits inclusive, `+-1e300` means
+  unbounded; lengths need units, for example `(x - 0.5 [m])*(x - 0.5 [m])`),
+* `type = "boundary_adjacent"`: cells owning a face on the listed `patches`, grown to `layers` face-neighbour layers,
+* `type = "cell_zone"`: a mesh cell zone,
+* `type = "combine"`: `operation` union / intersection / difference (first operand minus the others) / complement over
+  the registers named in `operands` (cycles are diagnosed),
+
+then optionally dilated by `grow` and eroded by `shrink` layers with `neighbours = "faces"` (cells sharing a face) or
+`"points"` (cells sharing a vertex). A 10^3 block grows to 1600 cells with face neighbours and to 12^3 = 1728 with point
+neighbours.
+
+Use in the settings tree:
+
+* `sources.<n>.zone = "register"` with `register = "<name>"` restricts a momentum source to the register;
+* `initial.patches.<n>` with `register`, `variable` (velocity, pressure, temperature) and `value` (3 numbers for velocity,
+  1 otherwise) overwrites the initial field inside the register, in name order, after the uniform and expression
+  initialisation; cells outside the register are not touched;
+* every register is built against the mesh when the simulation is created, so a bad register is reported even when
+  nothing uses it.
+
+Post-processing in the library (not yet exposed as case reports): `stats` / `stats_component` / `stats_magnitude` give
+count, volume, min, max, volume-weighted mean and integral of a cell field over a register (`None` for an empty
+register, never NaN); `Register::interface_area` is the area of internal faces between the register and the rest;
+`face_jump_indicator` is the largest absolute face jump of a field per cell and `mark_by_jump(values, tau, within)` marks
+cells with indicator `>= tau` (optionally only inside a register) and reports the count and the marked volume
+fraction. These marks are adaption-style flags only: there is no mesh adaption (refinement) in rcfd yet.
+
+## GLB validation (F-117)
+
+`rcfd_post::glb_check::validate_glb` implements rules G1-G8 of ADR 0011 section 4 (container, accessor and bufferView
+bounds and alignment, exact min / max of position data, index range and primitive-restart values, normal length, colour
+types, reference ranges, hostile input) with a JSON pointer in every error; `gltf::check_glb` delegates to it.
+`scripts/validate_glb.js` runs the Khronos `gltf-validator` (npm, run with node) on exported files.
