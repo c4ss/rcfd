@@ -14,6 +14,7 @@ rcfd-core.workspace = true
 rcfd-mesh.workspace = true
 rcfd-io.workspace = true
 rcfd-post.workspace = true
+rcfd-reactor.workspace = true
 rcfd-fv.workspace = true
 rcfd-api.workspace = true
 serde_json.workspace = true

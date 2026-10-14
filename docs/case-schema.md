@@ -480,3 +480,8 @@ behaviour are in `docs/udf-abi.md`.
 `variable` (`velocity`, `pressure`, `temperature`) and `value` (3 numbers for velocity, 1 otherwise) and overwrites the
 initial field inside the register. Errors name the setting, for example `sources.bed.register: unknown register 'x'
 (registers: core)` or `registers.x.patches: the mesh has no patch 'nope' (patches: ...)`.
+
+## Reactor cases and FW-H surface files (F-112, F-136)
+
+`rcfd reactor <case.json>` and `rcfd acoustics <surface.json>` take their own JSON documents, described with
+examples in [reactor-and-acoustics.md](reactor-and-acoustics.md); they are not sections of the CFD case file.

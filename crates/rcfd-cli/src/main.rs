@@ -6,6 +6,7 @@
 //! its convergence targets, 6 run diverged, 7 interrupted (stop file), 8 wall-clock limit
 //! reached (see docs/run-control.md).
 
+mod cmd_gapc;
 mod convert_formats;
 use rcfd_api::case::Case;
 use rcfd_api::runctl::{self, RunOptions};
@@ -77,6 +78,12 @@ COMMANDS:
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)
+    reactor <case.json> [--out <file.csv>]
+                               0D reactor (constant pressure/volume, PSR with blowout search, plug flow, equilibrium)
+                               from a CHEMKIN-format mechanism (docs/case-schema.md, \"Reactor cases\")
+    acoustics <surface.json> --observer x,y,z [--observer ...] [--times t0:t1:n] [--out <file.csv>]
+                               Ffowcs Williams-Hawkings far field (formulation 1A, permeable data surface
+                               of the rcfd-fwh-surface format); default times: the whole valid window
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
 
@@ -153,6 +160,8 @@ fn dispatch(args: &[String]) -> u8 {
         "cases" => cmd_cases(rest),
         "workflow" => cmd_workflow(rest),
         "data" => cmd_data(rest),
+        "reactor" => cmd_gapc::cmd_reactor(rest),
+        "acoustics" => cmd_gapc::cmd_acoustics(rest),
         other => usage_error(&format!("unknown command '{other}'")),
     }
 }
