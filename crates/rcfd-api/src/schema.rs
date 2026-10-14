@@ -1092,10 +1092,49 @@ pub fn case_schema() -> Schema {
         );
 
     let fluid = Schema::object()
-        .doc("Fluid model. density = constant keeps the incompressible solvers; density = ideal_gas selects the steady pressure-based variable-density SIMPLE/SIMPLEC solver (ADR 0005): ideal-gas density rho = p/(R T), total-enthalpy energy equation, laminar, solver.algorithm simple or simplec")
+        .doc("Fluid model. density = constant keeps the incompressible solvers; density = ideal_gas selects the steady pressure-based variable-density SIMPLE/SIMPLEC solver (ADR 0005): ideal-gas density rho = p/(R T), total-enthalpy energy equation, laminar, solver.algorithm simple or simplec; density = real_gas uses the same solver with a cubic equation of state (ADR 0007: Peng-Robinson or Redlich-Kwong density, enthalpy departure, real sound speed, isentropic stagnation inlet), compressible mode only")
         .field(
             "density",
-            Schema::enumeration("constant", &["constant", "ideal_gas"]).doc("constant: physics.rho; ideal_gas: rho = p / (R T)"),
+            Schema::enumeration("constant", &["constant", "ideal_gas", "real_gas"])
+                .doc("constant: physics.rho; ideal_gas: rho = p / (R T); real_gas: rho(p, T) from the cubic equation of state fluid.eos (needs fluid.species or the critical constants)"),
+        )
+        .field(
+            "eos",
+            Schema::enumeration("peng_robinson", &["peng_robinson", "redlich_kwong"])
+                .doc("real_gas only: cubic equation of state (Peng-Robinson 1976, Redlich-Kwong 1949)"),
+        )
+        .field(
+            "species",
+            Schema::string("").doc("real_gas only: built-in fluid whose critical data are used (N2, O2, AR, CO2, CH4, H2, H2O; case-insensitive); empty = give critical_temperature, critical_pressure and molar_mass"),
+        )
+        .field(
+            "critical_temperature",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::TEMPERATURE)
+                .doc("real_gas only: critical temperature [K]; 0 = from fluid.species"),
+        )
+        .field(
+            "critical_pressure",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::PRESSURE)
+                .doc("real_gas only: critical pressure [Pa]; 0 = from fluid.species"),
+        )
+        .field(
+            "acentric_factor",
+            Schema::float(0.0).doc("real_gas only (Peng-Robinson): acentric factor; 0 = from fluid.species (0 is the value of a simple fluid when no species is given)"),
+        )
+        .field(
+            "molar_mass",
+            Schema::float(0.0).at_least(0.0).doc("real_gas only: molar mass [kg/mol]; 0 = from fluid.species. The gas constant is R_u / molar_mass"),
+        )
+        .field(
+            "specific_heat",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::SPECIFIC_HEAT)
+                .doc("real_gas only: ideal-gas (zero-pressure) specific heat cp0 [J/kg/K], constant; 0 = gamma R/(gamma - 1) from fluid.gamma"),
         )
         .field(
             "mode",

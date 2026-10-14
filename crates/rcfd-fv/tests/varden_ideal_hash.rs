@@ -43,7 +43,12 @@ fn run() -> u64 {
         r,
         cp: gamma * r / (gamma - 1.0),
     };
-    let mut s = VdSettings::new(gas, Property::Constant(1.8e-5), Property::Constant(0.03), Coupling::Simplec);
+    let mut s = VdSettings::new(
+        gas,
+        Property::Constant(1.8e-5),
+        Property::Constant(0.03),
+        Coupling::Simplec,
+    );
     s.mode = DensityMode::Compressible;
     s.inlets = vec![StagnationInlet {
         patch: "xmin".into(),

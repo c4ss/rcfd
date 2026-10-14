@@ -78,7 +78,11 @@ fn r1_failures(skip: &[(&str, f64, f64)]) -> Vec<String> {
         );
         if let Some(tol) = tol {
             if err.abs() > tol {
-                fails.push(format!("{sp} {t} K {pm} MPa err {:+.2} % > {:.0} %", 100.0 * err, 100.0 * tol));
+                fails.push(format!(
+                    "{sp} {t} K {pm} MPa err {:+.2} % > {:.0} %",
+                    100.0 * err,
+                    100.0 * tol
+                ));
             }
         }
     }
@@ -191,13 +195,20 @@ fn r2_sound_speed_and_cp_change_vs_nist() {
         let e = c / c_n - 1.0;
         println!("{sp} {t} K {pm} MPa: c NIST {c_n} PR {c:.2} ({:+.3} %)", 100.0 * e);
         if e.abs() > tol {
-            fails.push(format!("{sp} {t} K {pm} MPa c {:+.2} % > {:.1} %", 100.0 * e, 100.0 * tol));
+            fails.push(format!(
+                "{sp} {t} K {pm} MPa c {:+.2} % > {:.1} %",
+                100.0 * e,
+                100.0 * tol
+            ));
         }
     }
     let g = gas("CO2", CubicKind::PengRobinson, 899.03);
     let dcp = g.cp(5.1e6, 350.0) - g.cp(0.1e6, 350.0);
     let dcp_n = (1.1963 - 0.89903) * 1e3;
-    println!("CO2 350 K dcp(5.1 MPa) NIST {dcp_n:.1} PR {dcp:.1} ({:+.2} %)", 100.0 * (dcp / dcp_n - 1.0));
+    println!(
+        "CO2 350 K dcp(5.1 MPa) NIST {dcp_n:.1} PR {dcp:.1} ({:+.2} %)",
+        100.0 * (dcp / dcp_n - 1.0)
+    );
     if (dcp / dcp_n - 1.0).abs() > 0.20 {
         fails.push(format!("cp change {:+.1} %", 100.0 * (dcp / dcp_n - 1.0)));
     }
@@ -243,13 +254,20 @@ fn r3_ideal_gas_limit_at_one_pascal_known_miss() {
 #[test]
 fn r3_ideal_gas_limit_registered_items_that_hold() {
     let fails = r3_failures();
-    let bad: Vec<_> = fails.iter().filter(|f| !(f.contains("h_dep") || f.contains("s_dep"))).collect();
+    let bad: Vec<_> = fails
+        .iter()
+        .filter(|f| !(f.contains("h_dep") || f.contains("s_dep")))
+        .collect();
     assert!(bad.is_empty(), "{bad:#?}");
     // supplementary (not a registered criterion): the departures vanish linearly with p (second-virial limit)
     for kind in [CubicKind::PengRobinson, CubicKind::RedlichKwong] {
         let g = gas("CO2", kind, 1000.0);
         let (h1, h2) = (g.h_departure(1.0, 300.0), g.h_departure(0.1, 300.0));
-        assert!((h1 / h2 / 10.0 - 1.0).abs() < 1e-3, "{kind:?} h_dep scaling {}", h1 / h2);
+        assert!(
+            (h1 / h2 / 10.0 - 1.0).abs() < 1e-3,
+            "{kind:?} h_dep scaling {}",
+            h1 / h2
+        );
         assert!(g.h_departure(1e-3, 300.0).abs() < 1e-10 * 1000.0 * 300.0);
     }
 }

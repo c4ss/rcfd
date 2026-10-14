@@ -160,7 +160,7 @@ is non-zero when fixed or extrapolating boundaries let mass through), and the mo
 `mass_flow` reports use the adjacent-cell density and velocity of the boundary face; `p` and `rho`
 reports carry pressure and density dimensions (the pressure is the absolute pressure, not kinematic).
 
-## `fluid` ideal-gas variable-density solver (F-050, F-061, ADR 0005)
+## `fluid` variable-density solver: ideal gas and real gas (F-050, F-061, ADR 0005, ADR 0007)
 
 `fluid.density = "constant"` (default) keeps the incompressible solvers. `fluid.density = "ideal_gas"` selects the
 steady pressure-based variable-density SIMPLE/SIMPLEC solver (`rcfd_fv::varden`): density rho = p/(R T), momentum
@@ -179,6 +179,19 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   is `initial.pressure` when positive, else this value), `fluid.density_scheme` (`upwind` | `central` |
   `linear_upwind`), `fluid.relax_density`, `fluid.hydrostatic_init` (start from the hydrostatic state of
   `physics.gravity`).
+* Real gas (`fluid.density = "real_gas"`, ADR 0007): the same solver with a cubic equation of state. `fluid.eos`
+  (`peng_robinson` default | `redlich_kwong`), `fluid.species` (`N2`, `O2`, `AR`, `CO2`, `CH4`, `H2`, `H2O`; the
+  critical temperature, pressure, acentric factor and molar mass come from a built-in table), or leave `species` empty and give
+  `fluid.critical_temperature` [K], `fluid.critical_pressure` [Pa], `fluid.molar_mass` [kg/mol] and
+  `fluid.acentric_factor` (Peng-Robinson); an explicit non-zero value overrides the table. The gas constant is
+  `R_u / molar_mass` (setting `fluid.gas_constant` is an error). `fluid.specific_heat` is the constant ideal-gas
+  (zero-pressure) `cp0` [J/kg/K]; 0 uses `gamma R/(gamma-1)` from `fluid.gamma` (set it: the default gamma 1.4 is
+  wrong for CO2). Density is the vapour-like root of the cubic, enthalpy is `cp0 T` plus the EOS departure, the
+  energy diffusivity uses `k/cp0`, the Mach number uses the real speed of sound, and a stagnation inlet follows the
+  real-gas isentrope (`s` and `h + |u|^2/2` conserved). Compressible mode only; no liquid root or phase change
+  (a state without a vapour-like root falls back to the ideal gas), `fluid.mode = "low_mach"` and
+  `fluid.hydrostatic_init` are errors, `mu` and `k` stay the user inputs (constant or Sutherland). van der Waals
+  is not available. All the keys above need `density = "real_gas"`.
 * Boundaries: `inlet = "stagnation"` with `total_pressure_value` [Pa] and the total `temperature_value` [K]
   (compressible mode only) replaces the velocity, pressure and temperature settings of the patch (zero-gradient
   velocity, static state from the isentropic relations). Fixed `pressure_value` is absolute in compressible mode
