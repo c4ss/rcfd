@@ -7,10 +7,12 @@ use rcfd_core::eos_data::critical_data;
 use rcfd_core::fluids::{CubicEos, CubicKind, R_UNIVERSAL};
 use rcfd_core::vec3;
 use rcfd_fv::convection::ConvScheme;
+use rcfd_fv::ddt::TimeScheme;
 use rcfd_fv::realgas::RealGas;
 use rcfd_fv::simple::Coupling;
 use rcfd_fv::varden::{
-    DensityMode, DensityScheme, IdealGas, Property, StagnationInlet, VarDensitySolver, VdInfo, VdSettings,
+    DensityMode, DensityScheme, IdealGas, Property, StagnationInlet, TransientSettings, VarDensitySolver, VdInfo,
+    VdSettings,
 };
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::PatchKind;
@@ -119,7 +121,7 @@ fn diag(path: &str, message: impl Into<String>) -> Diagnostic {
 }
 
 /// `fluid.*` keys and their defaults (a different value with `density = constant` is an error).
-const FLUID_DEFAULT_FLOATS: [(&str, f64); 9] = [
+const FLUID_DEFAULT_FLOATS: [(&str, f64); 10] = [
     ("fluid.gas_constant", 287.058),
     ("fluid.gamma", 1.4),
     ("fluid.viscosity", 1.8e-5),
@@ -129,6 +131,7 @@ const FLUID_DEFAULT_FLOATS: [(&str, f64); 9] = [
     ("fluid.conductivity", 0.0),
     ("fluid.reference_pressure", 101325.0),
     ("fluid.relax_density", 1.0),
+    ("fluid.inner_tolerance", 1e-8),
 ];
 
 const FLUID_DEFAULT_STRINGS: [(&str, &str); 4] = [
@@ -171,6 +174,24 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 "this fluid setting needs fluid.density = \"ideal_gas\"",
             ));
         }
+        if get_i(case, "fluid.inner_iterations") != 30 {
+            out.push(diag(
+                "fluid.inner_iterations",
+                "this fluid setting needs fluid.density = \"ideal_gas\"",
+            ));
+        }
+        if get_b(case, "energy.viscous_heating") {
+            out.push(diag(
+                "energy.viscous_heating",
+                "viscous heating needs fluid.density = \"ideal_gas\" (the Boussinesq energy equation has none)",
+            ));
+        }
+        if get_f(case, "energy.heat_source") != 0.0 {
+            out.push(diag(
+                "energy.heat_source",
+                "a volumetric heat source needs fluid.density = \"ideal_gas\"",
+            ));
+        }
         for n in &names {
             for f in ["inlet", "total_pressure_value"] {
                 let p = format!("boundaries.{n}.{f}");
@@ -188,13 +209,34 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         return out;
     }
     let alg = get_s(case, "solver.algorithm");
-    if !matches!(alg.as_str(), "simple" | "simplec") {
+    if !matches!(alg.as_str(), "simple" | "simplec" | "pimple") {
         out.push(diag(
             "solver.algorithm",
             format!(
-                "the ideal-gas variable-density solver is steady SIMPLE / SIMPLEC only (got \"{alg}\"); set solver.algorithm = \"simplec\""
+                "the ideal-gas variable-density solver supports steady SIMPLE / SIMPLEC and the transient \"pimple\" (SIMPLE-inner iterations per time step, ADR 0009), got \"{alg}\"; set solver.algorithm = \"simplec\" or \"pimple\""
             ),
         ));
+    }
+    if alg == "pimple" {
+        if get_f(case, "solver.max_courant") > 0.0 {
+            out.push(diag(
+                "solver.max_courant",
+                "adaptive time stepping is not supported with fluid.density = \"ideal_gas\"; use a fixed solver.dt (set solver.max_courant = 0)",
+            ));
+        }
+    } else {
+        if get_i(case, "fluid.inner_iterations") != 30 {
+            out.push(diag(
+                "fluid.inner_iterations",
+                "the inner iterations belong to the transient solver: set solver.algorithm = \"pimple\"",
+            ));
+        }
+        if (get_f(case, "fluid.inner_tolerance") - 1e-8).abs() > 1e-300 {
+            out.push(diag(
+                "fluid.inner_tolerance",
+                "the inner tolerance belongs to the transient solver: set solver.algorithm = \"pimple\"",
+            ));
+        }
     }
     if real_gas(case) {
         if (get_f(case, "fluid.gas_constant") - 287.058).abs() > 1e-300 {
@@ -318,6 +360,8 @@ pub(crate) struct VdState {
     pub last: Option<VdInfo>,
     /// Largest velocity change of the last iteration.
     pub max_du: f64,
+    /// Time steps taken (transient runs).
+    pub steps: usize,
 }
 
 /// Convection scheme of a `solver.convection` name, upwind if unknown.
@@ -411,6 +455,19 @@ impl VdState {
             "central" => DensityScheme::Central,
             _ => DensityScheme::LinearUpwind,
         };
+        s.viscous_heating = get_b(case, "energy.viscous_heating");
+        s.heat_source = get_f(case, "energy.heat_source");
+        if get_s(case, "solver.algorithm") == "pimple" {
+            s.transient = Some(TransientSettings {
+                scheme: if get_s(case, "solver.time_scheme") == "bdf2" {
+                    TimeScheme::Bdf2
+                } else {
+                    TimeScheme::ImplicitEuler
+                },
+                max_inner: get_i(case, "fluid.inner_iterations").max(1) as usize,
+                tol: get_f(case, "fluid.inner_tolerance"),
+            });
+        }
         s.p_ref = (
             get_i(case, "solver.p_ref_cell").max(0) as usize,
             get_f(case, "solver.p_ref_value"),
@@ -476,6 +533,7 @@ impl VdState {
             solver,
             last: None,
             max_du: f64::NAN,
+            steps: 0,
         })
     }
 

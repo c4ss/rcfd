@@ -184,7 +184,7 @@ fn t1r_closed_box_heating_real_gas() {
             Property::Constant(0.03),
             Coupling::Simplec,
         );
-        s.real = Some(rg.clone());
+        s.real = Some(rg);
         s.alpha_h = 1.0;
         s.heat_source = q;
         s.transient = Some(TransientSettings {
