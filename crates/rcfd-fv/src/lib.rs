@@ -4,6 +4,7 @@
 
 pub mod bc;
 pub mod compressible;
+pub mod compressible_bc;
 pub mod convection;
 pub mod coupled;
 pub mod ddt;

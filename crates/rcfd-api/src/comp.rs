@@ -9,6 +9,7 @@ use crate::case::{Case, Diagnostic};
 use crate::sim::{conv_scheme, get_b, get_f, get_i, get_s, get_v};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::compressible::{to_prim, CompBc, CompSettings, CompressibleSolver, Gas, Prim, RiemannSolver, RkScheme};
+use rcfd_fv::compressible_bc::TotalInlet;
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::PatchKind;
@@ -159,6 +160,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 ));
             }
         }
+        check_characteristic(case, &b, &mut out);
         if get_s(case, &format!("{b}.turbulence")) != "auto" {
             out.push(diag(
                 &format!("{b}.turbulence"),
@@ -188,6 +190,107 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Validation of the characteristic boundary conditions of one patch (ADR 0006).
+fn check_characteristic(case: &Case, b: &str, out: &mut Vec<Diagnostic>) {
+    let bc = get_s(case, &format!("{b}.compressible_bc"));
+    let positive = |key: &str, what: &str, out: &mut Vec<Diagnostic>| {
+        let p = format!("{b}.{key}");
+        if get_f(case, &p).partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+            out.push(diag(&p, format!("{bc} needs a positive {what} ({key})")));
+        }
+    };
+    match bc.as_str() {
+        "total_inlet" => {
+            positive("total_pressure_value", "total pressure [Pa]", out);
+            positive("temperature_value", "total temperature [K]", out);
+            let p = format!("{b}.flow_direction");
+            let d = get_v(case, &p, [0.0; 3]);
+            if !get_v_ok(case, &p) {
+                out.push(diag(&p, "expected 3 components [x, y, z]"));
+            } else if d != [0.0; 3] && !(vec3::norm(d) > 0.0 && vec3::norm(d).is_finite()) {
+                out.push(diag(&p, "flow_direction must have a finite non-zero length"));
+            }
+        }
+        "pressure_outlet" => positive("pressure_value", "static pressure [Pa]", out),
+        "nonreflecting" => {
+            positive("pressure_value", "target static pressure [Pa]", out);
+            let p = format!("{b}.reflection_value");
+            let s = get_f(case, &p);
+            if !(0.0..=1.0).contains(&s) {
+                out.push(diag(&p, format!("reflection_value must lie in [0, 1], got {s}")));
+            }
+        }
+        "farfield" => {
+            positive("pressure_value", "free-stream static pressure [Pa]", out);
+            positive("temperature_value", "free-stream static temperature [K]", out);
+            let p = format!("{b}.mach_value");
+            if get_f(case, &p).partial_cmp(&0.0) == Some(std::cmp::Ordering::Less) {
+                out.push(diag(&p, "mach_value must be >= 0"));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Mean outward unit normal of a patch.
+fn patch_normal(geom: &FvGeometry, patch: &str) -> Vec3 {
+    let mesh = &geom.mesh;
+    let sf = mesh.face_area_vectors();
+    let mut sum = [0.0; 3];
+    if let Some(p) = mesh.patches().iter().find(|p| p.name == patch) {
+        for f in p.faces() {
+            sum = vec3::add(sum, sf[f]);
+        }
+    }
+    let n = vec3::norm(sum);
+    if n > 0.0 {
+        vec3::scale(sum, 1.0 / n)
+    } else {
+        [1.0, 0.0, 0.0]
+    }
+}
+
+/// Characteristic boundary condition of a patch, if `compressible_bc` selects one.
+fn characteristic_bc(case: &Case, geom: &FvGeometry, patch: &str) -> Option<CompBc> {
+    let b = format!("boundaries.{patch}");
+    let r = get_f(case, "compressible.gas_constant");
+    let gamma = get_f(case, "compressible.gamma");
+    let p = get_f(case, &format!("{b}.pressure_value"));
+    Some(match get_s(case, &format!("{b}.compressible_bc")).as_str() {
+        "total_inlet" => {
+            let d = get_v(case, &format!("{b}.flow_direction"), [0.0; 3]);
+            let dir = if vec3::norm(d) > 0.0 {
+                vec3::scale(d, 1.0 / vec3::norm(d))
+            } else {
+                vec3::scale(patch_normal(geom, patch), -1.0)
+            };
+            CompBc::TotalInlet(TotalInlet {
+                p0: get_f(case, &format!("{b}.total_pressure_value")),
+                t0: get_f(case, &format!("{b}.temperature_value")),
+                r_gas: r,
+                dir,
+            })
+        }
+        "pressure_outlet" => CompBc::PressureOutlet { p },
+        "nonreflecting" => CompBc::NonReflecting {
+            p,
+            sigma: get_f(case, &format!("{b}.reflection_value")),
+        },
+        "farfield" => {
+            let t = get_f(case, &format!("{b}.temperature_value"));
+            let a = (gamma * r * t).sqrt();
+            let m = get_f(case, &format!("{b}.mach_value"));
+            let ang = get_f(case, &format!("{b}.flow_angle")).to_radians();
+            CompBc::FarField(Prim {
+                rho: p / (r * t),
+                u: [m * a * ang.cos(), m * a * ang.sin(), 0.0],
+                p,
+            })
+        }
+        _ => return None,
+    })
 }
 
 fn get_v_ok(case: &Case, path: &str) -> bool {
@@ -263,7 +366,10 @@ impl CompState {
                 "slip" => CompBc::Slip,
                 "extrapolate" => CompBc::Extrapolate,
                 "fixed" => CompBc::Fixed(boundary_state(case, &n)),
-                _ => continue,
+                _ => match characteristic_bc(case, geom, &n) {
+                    Some(bc) => bc,
+                    None => continue,
+                },
             };
             // unknown patch names are reported by the caller
             let _ = solver.set_bc(&n, bc);
