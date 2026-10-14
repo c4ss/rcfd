@@ -319,6 +319,10 @@ pub struct SimpleSolver {
     /// changes the packed-bed baseline hash, ADR 0010); the API switches it on for MRF zones and for
     /// `solver.component_diagonal = "corrected"`.
     pub component_diag_correction: bool,
+    /// Pressure jumps at internal faces (lumped fans and porous jumps, ADR 0012); `None` leaves the solver unchanged.
+    pub face_jump: Option<crate::lumped::FaceJump>,
+    /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
+    jump_state: Vec<f64>,
     iteration: usize,
     /// Wall pressure gradient used in the previous iteration at every boundary face (SIMPLEC wall treatment of
     /// `wall_pressure_trapezoid`).
@@ -402,6 +406,8 @@ impl SimpleSolver {
             nu_face: None,
             body_force: None,
             sink: None,
+            face_jump: None,
+            jump_state: Vec::new(),
             pseudo: None,
             driver: None,
             wall_pressure_trapezoid: false,
@@ -518,7 +524,16 @@ impl SimpleSolver {
         // wall pressure used by the cell gradients only: with the trapezoid option the wall gradient is the mean
         // of the cell-centre and face force (the matrix and the flux keep the face value, so mass stays balanced)
         let p_bvals_for_grad = self.gradient_wall_values(&pbc, body.as_ref(), &self.p.values);
-        let grad_p = green_gauss(&g, &self.p.values, &p_bvals_for_grad, 0);
+        let mut grad_p = green_gauss(&g, &self.p.values, &p_bvals_for_grad, 0);
+        if let Some(j) = &self.face_jump {
+            if self.jump_state.len() != j.rise.len() {
+                self.jump_state = vec![0.0; j.rise.len()];
+            }
+            let fix = j.gradient_fix(&g, &self.jump_state);
+            for (a, b) in grad_p.iter_mut().zip(&fix) {
+                *a = vec3::add(*a, *b);
+            }
+        }
         let mut a_p = vec![0.0; n];
         let mut h = vec![[0.0; 3]; n];
         let mut h1 = vec![0.0; n];
@@ -654,7 +669,7 @@ impl SimpleSolver {
                 }
             }
         }
-        let gamma_p = face_interpolate(&g, &r_atu);
+        let mut gamma_p = face_interpolate(&g, &r_atu);
         // HbyA at boundary faces: prescribed velocity or owner value
         let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a0);
         let mut phi_hby_a = face_flux(&g, &hby_a0, &hb);
@@ -681,6 +696,19 @@ impl SimpleSolver {
                 phi_hby_a[f] += corr[f];
             }
         }
+        if let Some(j) = &self.face_jump {
+            // jump faces: phi (1 + G K) = phiHbyA + G R_explicit - G snGrad(p) with G = gamma_p lap, the same face
+            // coefficient the flux correction uses (the jump is then exactly the removed part of the pressure)
+            for f in 0..n_int {
+                if g.empty[f] || (j.rise[f] == 0.0 && j.resist[f] == 0.0) {
+                    continue;
+                }
+                let gu = gamma_p[f] * g.lap_coeff[f];
+                let den = 1.0 + gu * j.resist[f];
+                phi_hby_a[f] = (phi_hby_a[f] + gu * j.rise[f]) / den;
+                gamma_p[f] /= den;
+            }
+        }
         let mut p_new = self.p.values.clone();
         let p_old = self.p.values.clone();
         let controls = PressureControls {
@@ -699,7 +727,17 @@ impl SimpleSolver {
             self.p.values[c] = p_old[c] + s.alpha_p * (p_new[c] - p_old[c]);
         }
         // velocity correction uses the new (unrelaxed-consistent) pressure gradient
-        let grad_corr = green_gauss(&g, &p_new, &bv_new, 0);
+        let mut grad_corr = green_gauss(&g, &p_new, &bv_new, 0);
+        if let Some(j) = &self.face_jump {
+            let r_new = j.totals(&self.phi);
+            let fix = j.gradient_fix(&g, &r_new);
+            for (st, r) in self.jump_state.iter_mut().zip(&r_new) {
+                *st += s.alpha_p * (r - *st);
+            }
+            for (a, b) in grad_corr.iter_mut().zip(&fix) {
+                *a = vec3::add(*a, *b);
+            }
+        }
         let mut max_du: f64 = 0.0;
         for c in 0..n {
             for k in 0..3 {
@@ -820,7 +858,13 @@ impl SimpleSolver {
             let (o, nb) = (mesh.owner()[f], mesh.neighbour()[f]);
             let dr = w * (r_atu[o] - r_au[o]) + (1.0 - w) * (r_atu[nb] - r_au[nb]);
             // phiHbyA += (rAtU - rAU) snGrad(p) |S|  ->  sign: HbyA' = HbyA - (rAU - rAtU) grad p
-            out[f] = dr * g.lap_coeff[f] * (p[nb] - p[o]);
+            // a pressure jump plane (face-jump hook) is not part of the smooth difference
+            let jump = if self.face_jump.is_some() {
+                self.jump_state.get(f).copied().unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            out[f] = dr * g.lap_coeff[f] * (p[nb] - p[o] - jump);
         }
         out
     }

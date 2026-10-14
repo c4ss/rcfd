@@ -8,11 +8,11 @@ use rcfd_fv::simple::BodyForce;
 use rcfd_fv::sources::{self as fvs, MrfZone, RotatingFrame};
 use rcfd_fv::{FvGeometry, VectorField};
 
-fn gf(c: &Case, p: &str) -> f64 {
+pub(crate) fn gf(c: &Case, p: &str) -> f64 {
     c.tree.get(p).ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
 }
 
-fn gs(c: &Case, p: &str) -> String {
+pub(crate) fn gs(c: &Case, p: &str) -> String {
     c.tree
         .get(p)
         .ok()
@@ -21,7 +21,7 @@ fn gs(c: &Case, p: &str) -> String {
 }
 
 /// A 3-vector setting; `None` when the list is empty, `Some(Err)` when it has the wrong length.
-fn gv(c: &Case, p: &str) -> Option<Option<Vec3>> {
+pub(crate) fn gv(c: &Case, p: &str) -> Option<Option<Vec3>> {
     let v = c.tree.get(p).ok()?;
     let a = v.as_array()?;
     match a.len() {
@@ -72,40 +72,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             Some(Some(v)) => Ok(Some(v)),
             None => Ok(None),
         };
-        match gs(case, &p("zone")).as_str() {
-            "box" => {
-                let (lo, hi) = (vec3_of("box_min"), vec3_of("box_max"));
-                for (f, r) in [("box_min", &lo), ("box_max", &hi)] {
-                    if let Err(m) = r {
-                        bad(p(f), m.clone());
-                    }
-                }
-                match (lo, hi) {
-                    (Ok(Some(l)), Ok(Some(h))) => {
-                        if (0..3).any(|k| l[k] >= h[k]) {
-                            bad(p("box_max"), "box_max must exceed box_min in every component".into());
-                        }
-                    }
-                    (Ok(_), Ok(_)) => bad(p("box_min"), "zone = \"box\" needs box_min and box_max".into()),
-                    _ => {}
-                }
-            }
-            "register" if !crate::registers::names(case).contains(&gs(case, &p("register"))) => {
-                bad(
-                    p("register"),
-                    format!(
-                        "zone = \"register\" needs the name of a register (registers: {})",
-                        crate::registers::names(case).join(", ")
-                    ),
-                );
-            }
-            "cell_zone" if gs(case, &p("cell_zone")).is_empty() => {
-                bad(
-                    p("cell_zone"),
-                    "zone = \"cell_zone\" needs the name of a mesh cell zone".into(),
-                );
-            }
-            _ => {}
+        for d in check_zone(case, &format!("sources.{n}")) {
+            bad(d.path, d.message);
         }
         match kind.as_str() {
             "porous" => {
@@ -171,6 +139,108 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
+/// Checks of the `zone` / `box_min` / `box_max` / `cell_zone` settings under `prefix` (shared with the lumped components).
+pub(crate) fn check_zone(case: &Case, prefix: &str) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let mut bad = |path: String, message: String| {
+        out.push(Diagnostic {
+            path,
+            line: None,
+            message,
+        })
+    };
+    let p = |f: &str| format!("{prefix}.{f}");
+    let vec3_of = |f: &str| match gv(case, &p(f)) {
+        Some(None) => Err(String::from(
+            "expected 3 components [x, y, z] (or an empty list for the default)",
+        )),
+        Some(Some(v)) => Ok(Some(v)),
+        None => Ok(None),
+    };
+    match gs(case, &p("zone")).as_str() {
+        "box" => {
+            let (lo, hi) = (vec3_of("box_min"), vec3_of("box_max"));
+            for (f, r) in [("box_min", &lo), ("box_max", &hi)] {
+                if let Err(m) = r {
+                    bad(p(f), m.clone());
+                }
+            }
+            match (lo, hi) {
+                (Ok(Some(l)), Ok(Some(h))) => {
+                    if (0..3).any(|k| l[k] >= h[k]) {
+                        bad(p("box_max"), "box_max must exceed box_min in every component".into());
+                    }
+                }
+                (Ok(_), Ok(_)) => bad(p("box_min"), "zone = \"box\" needs box_min and box_max".into()),
+                _ => {}
+            }
+        }
+        "register" if !crate::registers::names(case).contains(&gs(case, &p("register"))) => {
+            bad(
+                p("register"),
+                format!(
+                    "zone = \"register\" needs the name of a register (registers: {})",
+                    crate::registers::names(case).join(", ")
+                ),
+            );
+        }
+        "cell_zone" if gs(case, &p("cell_zone")).is_empty() => {
+            bad(
+                p("cell_zone"),
+                "zone = \"cell_zone\" needs the name of a mesh cell zone".into(),
+            );
+        }
+        _ => {}
+    }
+    out
+}
+
+/// Cells of the zone under `prefix` (`all`, `box`, `cell_zone`); a located diagnostic when it is empty or unknown.
+pub(crate) fn zone_cells(case: &Case, prefix: &str, geom: &FvGeometry) -> Result<Vec<bool>, Diagnostic> {
+    let p = |f: &str| format!("{prefix}.{f}");
+    let n_cells = geom.n_cells();
+    let cc = geom.mesh.cell_centres();
+    let zone: Vec<bool> = match gs(case, &p("zone")).as_str() {
+        "box" => {
+            let lo = gv(case, &p("box_min")).flatten().unwrap_or([0.0; 3]);
+            let hi = gv(case, &p("box_max")).flatten().unwrap_or([0.0; 3]);
+            cc.iter()
+                .map(|c| (0..3).all(|k| c[k] >= lo[k] && c[k] <= hi[k]))
+                .collect()
+        }
+        "register" => crate::registers::zone_from_setting(case, &p("register"), &geom.mesh)?,
+        "cell_zone" => {
+            let name = gs(case, &p("cell_zone"));
+            match geom.mesh.cell_zone(&name) {
+                Some(z) => {
+                    let mut m = vec![false; n_cells];
+                    for &i in &z.ids {
+                        m[i] = true;
+                    }
+                    m
+                }
+                None => {
+                    let known: Vec<&str> = geom.mesh.cell_zones().iter().map(|z| z.name.as_str()).collect();
+                    return Err(Diagnostic {
+                        path: p("cell_zone"),
+                        line: None,
+                        message: format!("the mesh has no cell zone '{name}' (zones: {})", known.join(", ")),
+                    });
+                }
+            }
+        }
+        _ => vec![true; n_cells],
+    };
+    if !zone.iter().any(|&z| z) {
+        return Err(Diagnostic {
+            path: p("zone"),
+            line: None,
+            message: "the zone contains no cells of the mesh".into(),
+        });
+    }
+    Ok(zone)
+}
+
 enum Kind {
     Porous { inv_k: f64, c2: f64 },
     Rotating(RotatingFrame),
@@ -205,53 +275,15 @@ impl Sources {
         }
         let mut items = Vec::new();
         let mut errs = Vec::new();
-        let n_cells = geom.n_cells();
-        let cc = geom.mesh.cell_centres();
         for n in names(case) {
             let p = |f: &str| format!("sources.{n}.{f}");
-            let zone: Vec<bool> = match gs(case, &p("zone")).as_str() {
-                "box" => {
-                    let lo = gv(case, &p("box_min")).flatten().unwrap_or([0.0; 3]);
-                    let hi = gv(case, &p("box_max")).flatten().unwrap_or([0.0; 3]);
-                    cc.iter()
-                        .map(|c| (0..3).all(|k| c[k] >= lo[k] && c[k] <= hi[k]))
-                        .collect()
+            let zone = match zone_cells(case, &format!("sources.{n}"), geom) {
+                Ok(z) => z,
+                Err(d) => {
+                    errs.push(d);
+                    continue;
                 }
-                "register" => match crate::registers::zone_from_setting(case, &p("register"), &geom.mesh) {
-                    Ok(z) => z,
-                    Err(e) => return Err(vec![e]),
-                },
-                "cell_zone" => {
-                    let name = gs(case, &p("cell_zone"));
-                    match geom.mesh.cell_zone(&name) {
-                        Some(z) => {
-                            let mut m = vec![false; n_cells];
-                            for &i in &z.ids {
-                                m[i] = true;
-                            }
-                            m
-                        }
-                        None => {
-                            let known: Vec<&str> = geom.mesh.cell_zones().iter().map(|z| z.name.as_str()).collect();
-                            errs.push(Diagnostic {
-                                path: p("cell_zone"),
-                                line: None,
-                                message: format!("the mesh has no cell zone '{name}' (zones: {})", known.join(", ")),
-                            });
-                            continue;
-                        }
-                    }
-                }
-                _ => vec![true; n_cells],
             };
-            if !zone.iter().any(|&z| z) {
-                errs.push(Diagnostic {
-                    path: p("zone"),
-                    line: None,
-                    message: "the zone contains no cells of the mesh".into(),
-                });
-                continue;
-            }
             let kind = match gs(case, &p("type")).as_str() {
                 "porous" => {
                     let (inv_k, c2) = if gs(case, &p("model")) == "ergun" {

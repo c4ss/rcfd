@@ -26,6 +26,7 @@ pub const FIELD_NAMES: &[&str] = &[
     "speed",
     "p",
     "T",
+    "G",
     "vorticity_z",
     "k",
     "epsilon",
@@ -501,6 +502,10 @@ pub fn case_schema() -> Schema {
         .field(
             "heat_flux_expression",
             Schema::string("").doc("Expression [W/m^2] for a prescribed wall heat flux into the domain (energy equation)"),
+        )
+        .field(
+            "emissivity",
+            Schema::float(1.0).doc("Wall emissivity in (0, 1] for the P1 radiation model (Marshak condition); patches with velocity = symmetry are reflecting"),
         )
         .field(
             "profile",
@@ -1396,6 +1401,107 @@ pub fn case_schema() -> Schema {
                     .field("acceleration", vec3([0.0; 3], "Constant acceleration [m/s^2] for type = acceleration")),
             )
             .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
+        )
+        .field(
+            "components",
+            Schema::named(
+                Schema::object()
+                    .doc("A lumped zone component (ADR 0012; steady SIMPLE/SIMPLEC runs, constant density)")
+                    .field(
+                        "type",
+                        Schema::enumeration("fan", &["fan", "porous_jump", "heat_exchanger", "network_outlet"])
+                            .doc("fan: pressure rise from a fan curve applied as a pressure jump on the downstream boundary faces of the zone; porous_jump: thin Darcy-Forchheimer pressure jump on the downstream boundary faces of the zone; heat_exchanger: radiator / heat-exchanger heat source in a zone (fixed duty or effectiveness; needs energy.enabled); network_outlet: fixed-pressure patch whose pressure follows a lumped downstream network"),
+                    )
+                    .field(
+                        "zone",
+                        Schema::enumeration("all", &["all", "box", "cell_zone"])
+                            .doc("Where the component acts (fan, porous_jump, heat_exchanger): the whole mesh, the cells whose centres lie in [box_min, box_max], or a named mesh cell zone"),
+                    )
+                    .field("box_min", vec3([0.0; 3], "Lower corner [m] of the box zone"))
+                    .field("box_max", vec3([0.0; 3], "Upper corner [m] of the box zone"))
+                    .field("cell_zone", Schema::string("").doc("Name of the mesh cell zone"))
+                    .field("direction", vec3([1.0, 0.0, 0.0], "Flow direction through the zone (fan, porous_jump, heat_exchanger); the zone needs faces on its downstream side for this direction"))
+                    .field(
+                        "curve_flow",
+                        Schema::list(Schema::float(0.0)).doc("fan: volume flow points [m^3/s] of the fan curve, strictly increasing (end values are held outside the range)"),
+                    )
+                    .field(
+                        "curve_pressure",
+                        Schema::list(Schema::float(0.0)).doc("fan: total pressure rise [Pa] at the points of curve_flow"),
+                    )
+                    .field(
+                        "thickness",
+                        Schema::float(0.0).dim(Dimension::LENGTH).doc("porous_jump: thickness t [m] of the jump: dp = (mu/permeability) t v + C2 t rho v^2/2"),
+                    )
+                    .field(
+                        "permeability",
+                        Schema::float(0.0).doc("porous_jump: face permeability alpha [m^2] (0 = no viscous term)"),
+                    )
+                    .field(
+                        "inertial_resistance",
+                        Schema::float(0.0).doc("porous_jump: pressure-jump coefficient C2 [1/m] (0 = no inertial term)"),
+                    )
+                    .field(
+                        "mode",
+                        Schema::enumeration("fixed_duty", &["fixed_duty", "effectiveness"])
+                            .doc("heat_exchanger: fixed_duty uses duty, effectiveness uses Q = eps C_min (T_secondary - T_in)"),
+                    )
+                    .field(
+                        "duty",
+                        Schema::float(0.0).doc("heat_exchanger, fixed_duty: heat added to the fluid [W] (negative for a radiator)"),
+                    )
+                    .field(
+                        "effectiveness",
+                        Schema::float(0.5).doc("heat_exchanger, effectiveness mode: effectiveness in (0, 1]"),
+                    )
+                    .field(
+                        "secondary_temperature",
+                        Schema::float(293.15).dim(Dimension::TEMPERATURE).doc("heat_exchanger, effectiveness mode: inlet temperature [K] of the secondary stream"),
+                    )
+                    .field(
+                        "secondary_capacity_rate",
+                        Schema::float(0.0).doc("heat_exchanger, effectiveness mode: capacity rate m cp [W/K] of the secondary stream (0 = infinite)"),
+                    )
+                    .field("patch", Schema::string("").doc("network_outlet: name of the boundary patch (its pressure must be fixed)"))
+                    .field(
+                        "reference_pressure",
+                        Schema::float(0.0).doc("network_outlet: pressure [Pa] at the far end of the network"),
+                    )
+                    .field(
+                        "resistance_linear",
+                        Schema::float(0.0).doc("network_outlet: linear resistance R1 [Pa s/m^3]"),
+                    )
+                    .field(
+                        "resistance_quadratic",
+                        Schema::float(0.0).doc("network_outlet: quadratic resistance R2 [Pa s^2/m^6]"),
+                    )
+                    .field(
+                        "relax",
+                        Schema::float(0.5).range(0.01, 1.0).doc("fan, network_outlet: under-relaxation of the lagged pressure update"),
+                    ),
+            )
+            .doc("Lumped zone components: fans, porous jumps, radiator / heat-exchanger heat sources and lumped network outlets (ADR 0012)"),
+        )
+        .field(
+            "radiation",
+            Schema::object()
+                .doc("Grey radiation in a participating medium coupled to the energy equation (steady SIMPLE/SIMPLEC, needs energy.enabled; ADR 0012)")
+                .field(
+                    "model",
+                    Schema::enumeration("none", &["none", "rosseland", "p1"]).doc("none, rosseland (diffusion approximation: effective radiative conductivity 16 sigma n^2 T^3 / (3 beta)) or p1 (incident radiation G with Marshak boundary conditions)"),
+                )
+                .field(
+                    "absorption_coefficient",
+                    Schema::float(0.0).doc("Grey absorption coefficient a [1/m]"),
+                )
+                .field(
+                    "scattering_coefficient",
+                    Schema::float(0.0).doc("Isotropic scattering coefficient [1/m]"),
+                )
+                .field(
+                    "refractive_index",
+                    Schema::float(1.0).doc("Refractive index n of the medium"),
+                ),
         )
         .field(
             "properties",

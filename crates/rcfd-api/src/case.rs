@@ -531,6 +531,8 @@ impl Case {
         out.extend(crate::rheology::check(self));
         out.extend(crate::registers::check(self));
         out.extend(crate::sources::check(self));
+        out.extend(crate::lumped::check(self));
+        out.extend(crate::radiation::check(self));
         out.extend(crate::scalars::check(self));
         out.extend(crate::properties::check(self));
         out.extend(crate::stats::check(self));

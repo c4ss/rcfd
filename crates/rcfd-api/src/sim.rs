@@ -5,7 +5,9 @@
 use crate::case::{Case, Diagnostic};
 use crate::comp::{self, CompState};
 use crate::exprs;
+use crate::lumped::Components;
 use crate::properties::Properties;
+use crate::radiation::Radiation;
 use crate::rheology::Rheology;
 use crate::scalars::ScalarState;
 use crate::sources::Sources;
@@ -576,6 +578,10 @@ pub struct Simulation {
     rheology: Option<Rheology>,
     /// Porous, rotating-frame and acceleration sources (F-031).
     sources: Option<Sources>,
+    /// Lumped zone components: fans, porous jumps, heat exchangers, network outlets (F-113).
+    components: Option<Components>,
+    /// Rosseland / P1 radiation (F-130).
+    radiation: Option<Radiation>,
     scalars: Option<ScalarState>,
     props: Option<Properties>,
     t_init: f64,
@@ -1149,6 +1155,8 @@ impl Simulation {
                     "user functions",
                 ),
                 (crate::sources::enabled(case), "sources", "momentum sources"),
+                (crate::lumped::enabled(case), "components", "lumped components"),
+                (crate::radiation::enabled(case), "radiation.model", "radiation"),
             ] {
                 if present {
                     return Err(diag(
@@ -1168,6 +1176,15 @@ impl Simulation {
         } else {
             Sources::from_case(case, &geom)?
         };
+        let components = if compressible || vdens {
+            None
+        } else {
+            Components::from_case(case, &geom)?
+        };
+        let radiation = match (&energy, compressible || vdens) {
+            (Some(en), false) => Radiation::from_case(case, &geom, &en.solver.t.values),
+            _ => None,
+        };
         Ok(Simulation {
             case: case.clone(),
             geom,
@@ -1184,6 +1201,8 @@ impl Simulation {
             udf_monitors,
             rheology,
             sources,
+            components,
+            radiation,
             scalars,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
@@ -1403,12 +1422,18 @@ impl Simulation {
                     Some(src) => src.evaluate(&self.geom, &s.u),
                     None => (None, None),
                 };
+                if let Some(cm) = &mut self.components {
+                    s.face_jump = cm.face_jump(&self.geom, &s.phi);
+                    for (patch, pk) in cm.network_pressures(&self.geom, &s.phi) {
+                        let _ = s.p.set_bc(&self.geom, &patch, Box::new(FixedValue::scalar(pk)));
+                    }
+                }
                 s.sink = src_sink;
                 s.conv_flux_offset = self.sources.as_ref().and_then(|x| x.frame_flux.clone());
                 s.component_diag_correction =
                     s.conv_flux_offset.is_some() || get_s(&self.case, "solver.component_diagonal") == "corrected";
                 s.wall_pressure_trapezoid =
-                    src_force.is_some() && self.sources.as_ref().map_or(true, |x| x.wall_pressure_trapezoid);
+                    src_force.is_some() && self.sources.as_ref().is_some_and(|x| x.wall_pressure_trapezoid);
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
                         en.buoyancy
@@ -1428,12 +1453,25 @@ impl Simulation {
                 }
                 let i = s.iterate();
                 if let Some(en) = &mut self.energy {
+                    let mut base_alpha = None;
                     if let Some(pr) = &self.props {
                         if let Some(a) = pr.alpha_faces(&self.geom, &en.solver.t) {
+                            base_alpha = Some(a.clone());
                             en.solver.alpha_face = Some(a);
                         }
                     }
-                    en.res_t = en.solver.iterate(&s.phi);
+                    if let Some(cm) = &mut self.components {
+                        en.solver.source = cm.heat_sources(&self.geom, &s.phi, &en.solver.t);
+                    }
+                    en.res_t = match &mut self.radiation {
+                        Some(r) => r.iterate_energy(&mut en.solver, &s.phi, base_alpha),
+                        None => en.solver.iterate(&s.phi),
+                    };
+                }
+                if let Some(cm) = &self.components {
+                    for (name, v) in cm.values() {
+                        self.monitors.push(&name, "", i.iteration as f64, v);
+                    }
                 }
                 let res_sc = self
                     .scalars
@@ -1762,6 +1800,15 @@ impl Simulation {
                     })
                 }
             },
+            "G" => match self.radiation.as_ref().and_then(|r| r.incident()) {
+                Some(g) => g.to_vec(),
+                None => {
+                    return Err(Error::InvalidValue {
+                        path: "G".into(),
+                        reason: "the incident radiation needs radiation.model = \"p1\"".into(),
+                    })
+                }
+            },
             "vorticity_z" => {
                 let g = &self.geom;
                 let ub = self.velocity().boundary_values(g);
@@ -1840,6 +1887,28 @@ impl Simulation {
             "rms": rms,
             "cells": f.len(),
         }))
+    }
+
+    /// Net radiative heat flow (W) out of the domain through a patch (`radiation.model` of `p1` or `rosseland`); the
+    /// conductive part is the `heat_flow` report.
+    pub fn radiative_heat_flow(&self, patch: &str) -> Result<f64> {
+        let (Some(r), Some(en)) = (&self.radiation, &self.energy) else {
+            return Err(Error::Other("no radiation model is active (radiation.model)".into()));
+        };
+        if self.geom.mesh.patch(patch).is_none() {
+            return Err(Error::PathNotFound(format!("patch '{patch}'")));
+        }
+        Ok(r.wall_flow_out(patch, &en.solver))
+    }
+
+    /// Net radiative absorption `integral a (G - 4 sigma n^2 T^4) dV` (W) of the P1 model.
+    pub fn radiative_absorption(&self) -> Result<f64> {
+        match (&self.radiation, &self.energy) {
+            (Some(r), Some(en)) => r
+                .absorbed_power(&en.solver.t.values)
+                .ok_or_else(|| Error::Other("the absorbed power needs radiation.model = \"p1\"".into())),
+            _ => Err(Error::Other("no radiation model is active (radiation.model)".into())),
+        }
     }
 
     /// Evaluate one report definition on the current solution.

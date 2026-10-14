@@ -3,7 +3,9 @@
 pub mod case;
 pub mod comp;
 pub mod exprs;
+pub mod lumped;
 pub mod properties;
+pub mod radiation;
 pub mod registers;
 pub mod rheology;
 pub mod runctl;

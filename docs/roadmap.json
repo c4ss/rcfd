@@ -392,8 +392,9 @@
     "deps": [
       "F-050"
     ],
-    "status": "todo",
-    "acceptance": "Gray enclosure benchmark matches analytic solution"
+    "status": "partial",
+    "acceptance": "Gray enclosure benchmark matches analytic solution",
+    "note": "Partial (wave 12, ADR 0012, rcfd-api tests/radiation.rs). Delivered: grey P1 incident-radiation model with Marshak boundary conditions coupled to the steady energy equation (rcfd-fv radiation.rs, radiation.model = p1, wall emissivity, field G, radiative wall heat flow). Gray plate benchmark vs the analytic P1 solution: worst 2.6e-9 (limit 1e-3) for tau 0.1 to 10, unequal emissivities and scattering; energy balance 2e-12; absorbed power balance 3e-13. Not done: surface-to-surface with view factors, discrete ordinates, a true gray-enclosure benchmark with view factors; transient and ideal-gas runs."
   },
   {
     "id": "F-053",
@@ -855,9 +856,9 @@
       "F-031",
       "F-051"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Fan curve BC reproduces the specified operating point in a duct; porous-jump pressure drop matches a Darcy-Forchheimer sheet; radiator heat duty balance within 1 percent",
-    "note": "P2. Gap: fan, exhaust-fan, porous-jump, radiator and network boundary types; shell-and-tube and porous domains."
+    "note": "Acceptance met, scope partial (wave 12, ADR 0012, rcfd-api tests/lumped.rs, criteria registered in the ADR before running and unchanged). Delivered: components.<name> of type fan (piecewise-linear fan curve), porous_jump (Darcy-Forchheimer jump), heat_exchanger (fixed duty or effectiveness, K/s energy source over a zone) and network_outlet (lumped R1 Q + R2 Q|Q| outlet pressure); fan and jump are realised as pressure-jump planes in the SIMPLE kernel (rcfd-fv lumped.rs FaceJump, opt-in field, baseline hashes bit-identical), reusing the sources.rs zone selection. Measured: porous jump vs Darcy-Forchheimer sheet worst 1.0e-6 (limit 1e-3); fan plus jump operating point Q +0.061 percent (limit 0.5), fan rise +0.091 percent (limit 0.1), jump drop +0.030 percent (0.1); network Q -0.032 percent (0.5); heat-exchanger stream enthalpy balance 3e-12 and 1e-12 (limit 1e-6; acceptance 1 percent). Registered misses (ignored known_miss tests, criteria unchanged): network patch pressure vs R(Q) 8.5e-4 against 1e-4 (a small persistent flow two-cycle), effectiveness duty vs nominal-inlet formula 1.45e-6 against 1e-6 (axial conduction warms the inlet by 7e-5 K). First design (cell-based sink) missed Z1 by 17 percent and was replaced; fan and network relaxations are tuning (network test relax 0.02). Not done (reason for partial): general 1D network coupling beyond the lumped outlet relation, shell-and-tube and porous exchanger domains, exhaust-fan boundary types, transient and compressible runs."
   },
   {
     "id": "F-114",
@@ -1058,9 +1059,9 @@
     "deps": [
       "F-052"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A participating-medium benchmark between plates matches the analytic result; the non-grey band model reproduces tabulated emissivity",
-    "note": "P3 (stretch). Gap: radiation models (Rosseland, P1, six-flux, discrete transfer, Monte Carlo; gray/multiband/multigray/WSGG)."
+    "note": "Partial (wave 12, ADR 0012). Delivered: Rosseland diffusion approximation (radiation.model = rosseland: Kirchhoff variable linear to 2.4e-5 and wall flux -0.003 percent against the closed form) and P1 with scattering; participating-medium plates benchmark: P1 matches the analytic P1 result to 2.6e-9 and the Milne transport asymptote to 0.41 percent at tau = 20 (the Milne constant 0.7104 and its equivalence to the plate problem are not verified against a primary source, see docs/reference-data.md). Not done (acceptance part 2 and scope): non-grey band model and tabulated emissivity, WSGG (no verifiable coefficient table), Monte Carlo, six-flux, solar load."
   },
   {
     "id": "F-131",

@@ -288,6 +288,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     );
     unsupported(crate::scalars::enabled(case), "scalars", "passive scalars and species");
     unsupported(crate::sources::enabled(case), "sources", "momentum sources");
+    unsupported(crate::lumped::enabled(case), "components", "lumped components");
+    unsupported(crate::radiation::enabled(case), "radiation.model", "radiation");
     unsupported(crate::stats::enabled(case), "statistics.enabled", "run-time statistics");
     unsupported(
         get_f(case, "solver.bulk_velocity") != 0.0,
