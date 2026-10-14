@@ -12,6 +12,7 @@ fn main() {
         ("title", json!("cavity from code")),
         ("mesh.generator", json!("cavity_2d")),
         ("mesh.nx", json!(16)),
+        ("mesh.ny", json!(16)),
         ("physics.nu", json!(0.01)),
         ("boundaries.lid.velocity", json!("fixed")),
         ("boundaries.lid.velocity_value", json!([1.0, 0.0, 0.0])),

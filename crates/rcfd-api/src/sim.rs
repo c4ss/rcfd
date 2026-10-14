@@ -145,6 +145,42 @@ fn wall_layer_grading(case: &Case) -> std::result::Result<Option<Grading>, Vec<D
     Ok(Some(g))
 }
 
+/// Reject mesh options the chosen generator does not apply (instead of silently ignoring them).
+fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), Vec<Diagnostic>> {
+    let mut out = Vec::new();
+    let mut bad = |path: &str, what: &str| {
+        out.push(
+            diag(
+                path,
+                format!("mesh.generator = \"{generator}\" does not use {what}; remove it"),
+            )
+            .remove(0),
+        );
+    };
+    if get_i(case, "mesh.wall_layers") > 0 && !matches!(generator, "box_2d" | "channel_2d") {
+        bad(
+            "mesh.wall_layers",
+            "boundary-layer inflation (box_2d and channel_2d only)",
+        );
+    }
+    let graded = (get_f(case, "mesh.grading") - 1.0).abs() > 1e-12;
+    if graded && matches!(generator, "cavity_2d" | "wedge_2d" | "nozzle_2d") {
+        bad("mesh.grading", "grading");
+    }
+    if generator != "box_2d" {
+        for p in ["mesh.periodic_x", "mesh.periodic_y"] {
+            if get_b(case, p) {
+                bad(p, "periodic pairs (box_2d only)");
+            }
+        }
+    }
+    if out.is_empty() {
+        Ok(())
+    } else {
+        Err(out)
+    }
+}
+
 /// Build the mesh described by the case.
 pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     let me = |e: Error| diag("mesh", e.to_string());
@@ -175,8 +211,9 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
         get_f(case, "mesh.depth"),
     );
     let grading = get_f(case, "mesh.grading");
+    check_mesh_options(case, &get_s(case, "mesh.generator"))?;
     match get_s(case, "mesh.generator").as_str() {
-        "cavity_2d" => gen::cavity_2d(nx, lx).map_err(me),
+        "cavity_2d" => gen::cavity_2d_rect(nx, ny, lx, ly).map_err(me),
         "box_2d" => {
             // grading != 1 clusters cells towards both walls of each direction (symmetric grading)
             let g = if (grading - 1.0).abs() < 1e-12 {
@@ -1361,7 +1398,8 @@ impl Simulation {
                 };
                 s.sink = src_sink;
                 s.conv_flux_offset = self.sources.as_ref().and_then(|x| x.frame_flux.clone());
-                s.component_diag_correction = s.conv_flux_offset.is_some();
+                s.component_diag_correction =
+                    s.conv_flux_offset.is_some() || get_s(&self.case, "solver.component_diagonal") == "corrected";
                 s.wall_pressure_trapezoid =
                     src_force.is_some() && self.sources.as_ref().map_or(true, |x| x.wall_pressure_trapezoid);
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {

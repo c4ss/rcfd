@@ -9,6 +9,7 @@ fn cavity() -> Case {
     for (path, value) in [
         ("mesh.generator", json!("cavity_2d")),
         ("mesh.nx", json!(16)),
+        ("mesh.ny", json!(16)),
         ("boundaries.lid.velocity", json!("fixed")),
         ("boundaries.lid.velocity_value", json!([1.0, 0.0, 0.0])),
         ("boundaries.walls.velocity", json!("fixed")),
