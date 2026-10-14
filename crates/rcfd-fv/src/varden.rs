@@ -16,6 +16,7 @@
 
 use crate::bc::{FaceCoeffs, FixedGradient, FixedValue, Profile};
 use crate::convection::{convection, face_flux, ConvScheme};
+use crate::ddt::TimeScheme;
 use crate::diffusion::laplacian;
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
@@ -115,6 +116,58 @@ pub struct StagnationInlet {
     pub t0: f64,
 }
 
+/// Time marching of the transient variable-density solver (ADR 0009).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransientSettings {
+    /// Euler or variable-step BDF2 (Crank-Nicolson is not supported).
+    pub scheme: TimeScheme,
+    /// Maximum SIMPLE-inner iterations per time step.
+    pub max_inner: usize,
+    /// Inner stopping tolerance: the largest of `|dP|/max P`, `|dT|/max T`, `|du|/max a` between two inner iterations.
+    pub tol: f64,
+}
+
+impl TransientSettings {
+    /// BDF2 with 30 inner iterations and tolerance 1e-8.
+    pub fn new(scheme: TimeScheme) -> Self {
+        TransientSettings {
+            scheme,
+            max_inner: 30,
+            tol: 1e-8,
+        }
+    }
+}
+
+/// Result of one time step.
+#[derive(Debug, Clone, Copy)]
+pub struct StepInfo {
+    /// Time after the step (s).
+    pub time: f64,
+    /// Inner iterations used.
+    pub inner: usize,
+    /// Inner change measure of the last iteration (see [`TransientSettings::tol`]).
+    pub change: f64,
+    /// Whether `change < tol` was reached.
+    pub converged: bool,
+    /// Diagnostics of the last inner iteration.
+    pub last: VdInfo,
+}
+
+/// A converged time level.
+#[derive(Debug, Clone)]
+struct Level {
+    rho: Vec<f64>,
+    u: Vec<Vec3>,
+    /// Energy variable (total enthalpy in compressible mode, temperature in low-Mach mode).
+    e: Vec<f64>,
+    /// Absolute pressure of the cells.
+    p: Vec<f64>,
+    /// Thermodynamic pressure (low-Mach mode).
+    p_th: f64,
+    phi: Vec<f64>,
+    mass: f64,
+}
+
 /// Solver settings.
 #[derive(Debug, Clone)]
 pub struct VdSettings {
@@ -161,6 +214,13 @@ pub struct VdSettings {
     pub pressure_solver: SolveControl,
     /// Linear solver controls for energy.
     pub energy_solver: SolveControl,
+    /// Uniform volumetric heat source (W/m^3).
+    pub heat_source: f64,
+    /// Viscous heating in the energy equation: the viscous work `div(tau . u)` (compressible mode) or the
+    /// dissipation `tau : grad u` (low-Mach mode). Default off.
+    pub viscous_heating: bool,
+    /// Time marching for [`VarDensitySolver::advance`]; `None` keeps the steady kernel.
+    pub transient: Option<TransientSettings>,
 }
 
 impl VdSettings {
@@ -204,6 +264,9 @@ impl VdSettings {
                 tol_rel: 1e-4,
                 max_iter: 500,
             },
+            heat_source: 0.0,
+            viscous_heating: false,
+            transient: None,
         }
     }
 }
@@ -258,6 +321,14 @@ pub struct VarDensitySolver {
     vflux: Vec<f64>,
     /// Inverse of `sum_f S S / |S|` per cell (face-to-cell vector reconstruction).
     rec_inv: Vec<[[f64; 3]; 3]>,
+    /// Simulation time of the transient run (s).
+    pub time: f64,
+    /// Converged time levels, newest first (at most two).
+    levels: Vec<Level>,
+    /// Step size of the last completed step (BDF2).
+    dt_old: Option<f64>,
+    /// Time-derivative coefficients `(c0, c1, c2)` of the step in progress.
+    coef: Option<(f64, f64, f64)>,
 }
 
 fn invert3(m: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
@@ -307,6 +378,17 @@ impl VarDensitySolver {
                 ));
             }
         }
+        if let Some(tr) = &s.transient {
+            if tr.scheme == TimeScheme::CrankNicolson {
+                return Err(mismatch(
+                    "solver.time_scheme",
+                    "Crank-Nicolson is not supported (euler or bdf2)",
+                ));
+            }
+            if tr.max_inner < 1 {
+                return Err(mismatch("fluid.inner_iterations", "needs at least one inner iteration"));
+            }
+        }
         if t.values.iter().any(|&x| x <= 0.0 || !x.is_finite()) {
             return Err(mismatch("temperature", "the temperature must be positive"));
         }
@@ -344,6 +426,10 @@ impl VarDensitySolver {
             body_ratio: Vec::new(),
             vflux: Vec::new(),
             rec_inv: Vec::new(),
+            time: 0.0,
+            levels: Vec::new(),
+            dt_old: None,
+            coef: None,
         };
         sol.rec_inv = sol.build_reconstruction();
         sol.h.values = (0..sol.geom.n_cells())
@@ -729,7 +815,7 @@ impl VarDensitySolver {
         let a = if first_relaxation { 1.0 } else { self.settings.alpha_rho };
         if self.settings.mode == DensityMode::LowMach && self.is_closed() {
             let inv_t: f64 = (0..n).map(|c| vol[c] / self.t.values[c]).sum();
-            self.p_th = self.mass * gas.r / inv_t;
+            self.p_th = self.mass_target() * gas.r / inv_t;
         }
         for c in 0..n {
             let pe = match self.settings.mode {
@@ -773,15 +859,237 @@ impl VarDensitySolver {
                     .h
                     .set_bc(&g, &patch.name, Box::new(FixedValue(Profile::PerFace(vals))));
             } else {
+                // ADR 0009 section 5: the kinetic-energy diffusion is subtracted on every boundary face, so a
+                // zero-conduction wall needs dh0/dn = cp dT/dn + (K_b - K_c)/dn. Transient / viscous-heating runs only.
+                let k_fix = self.settings.transient.is_some() || self.settings.viscous_heating;
                 let vals = patch
                     .faces()
-                    .map(|f| [cp * tc[f - g.n_internal].gradient(self.t.values[own[f]]), 0.0, 0.0])
+                    .map(|f| {
+                        let i = f - g.n_internal;
+                        let mut grad = cp * tc[i].gradient(self.t.values[own[f]]);
+                        if k_fix {
+                            let uc = self.u.values[own[f]];
+                            grad += (0.5 * vec3::dot(ub[i], ub[i]) - 0.5 * vec3::dot(uc, uc)) / g.dn[i];
+                        }
+                        [grad, 0.0, 0.0]
+                    })
                     .collect();
                 let _ = self
                     .h
                     .set_bc(&g, &patch.name, Box::new(FixedGradient(Profile::PerFace(vals))));
             }
         }
+    }
+
+    /// Viscous heating as an integrated cell source (W per unit mesh depth): the viscous work `div(tau . u)` of the
+    /// total-enthalpy equation (`compressible`) or the dissipation `tau : grad u` of the temperature equation.
+    fn viscous_source(&self, compressible: bool) -> Vec<f64> {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let n = g.n_cells();
+        let vol = mesh.cell_volumes();
+        let sf = mesh.face_area_vectors();
+        let ub = self.u.boundary_values(g);
+        let grad: Vec<Vec<Vec3>> = (0..3)
+            .map(|k| {
+                let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
+                let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
+                green_gauss(g, &cells, &bv, 0)
+            })
+            .collect();
+        // tau_ij = mu (d_i u_j + d_j u_i) - 2/3 mu div(u) delta_ij, with d_i u_j = grad[j][c][i]
+        let tau: Vec<[[f64; 3]; 3]> = (0..n)
+            .map(|c| {
+                let mu = self.settings.mu.at(self.t.values[c]);
+                let div = grad[0][c][0] + grad[1][c][1] + grad[2][c][2];
+                let mut t = [[0.0; 3]; 3];
+                for i in 0..3 {
+                    for j in 0..3 {
+                        t[i][j] = mu * (grad[j][c][i] + grad[i][c][j]);
+                    }
+                    t[i][i] -= 2.0 / 3.0 * mu * div;
+                }
+                t
+            })
+            .collect();
+        let mut src = vec![0.0; n];
+        if !compressible {
+            for c in 0..n {
+                let mut phi = 0.0;
+                for i in 0..3 {
+                    for j in 0..3 {
+                        phi += tau[c][i][j] * grad[j][c][i];
+                    }
+                }
+                src[c] = phi * vol[c];
+            }
+            return src;
+        }
+        let work = |t: &[[f64; 3]; 3], u: Vec3| [0, 1, 2].map(|i| t[i][0] * u[0] + t[i][1] * u[1] + t[i][2] * u[2]);
+        let w: Vec<Vec3> = (0..n).map(|c| work(&tau[c], self.u.values[c])).collect();
+        for f in 0..mesh.n_faces() {
+            if g.empty[f] {
+                continue;
+            }
+            let o = mesh.owner()[f];
+            if f < g.n_internal {
+                let nb = mesh.neighbour()[f];
+                let wt = g.weights[f];
+                let wf = [0, 1, 2].map(|k| wt * w[o][k] + (1.0 - wt) * w[nb][k]);
+                let flux = vec3::dot(wf, sf[f]);
+                src[o] += flux;
+                src[nb] -= flux;
+            } else {
+                let wb = work(&tau[o], ub[f - g.n_internal]);
+                src[o] += vec3::dot(wb, sf[f]);
+            }
+        }
+        src
+    }
+
+    /// Transient accumulation, pressure work, heat source and viscous heating of the energy equation (ADR 0009).
+    /// `m` is the matrix of the energy variable (`h0` in compressible mode, `T` in low-Mach mode, the latter divided by
+    /// `cp`).
+    fn add_energy_terms(&self, m: &mut FvMatrix, compressible: bool) {
+        let g = &self.geom;
+        let n = g.n_cells();
+        let vol = g.mesh.cell_volumes();
+        let s = &self.settings;
+        let cp = s.gas.cp;
+        let scale = if compressible { 1.0 } else { 1.0 / cp };
+        if let Some((c0, c1, c2)) = self.coef {
+            let l1 = &self.levels[0];
+            let l2 = (c2 != 0.0).then(|| &self.levels[1]);
+            let d_pth = c0 * self.p_th + c1 * l1.p_th + l2.map_or(0.0, |l| c2 * l.p_th);
+            let closed_lowmach = !compressible && self.is_closed();
+            for c in 0..n {
+                let (r2, e2, p2) = l2.map_or((0.0, 0.0, 0.0), |l| (l.rho[c], l.e[c], l.p[c]));
+                m.a.diag[c] -= vol[c] * (c1 * l1.rho[c] + c2 * r2);
+                m.b[c] -= vol[c] * (c1 * l1.rho[c] * l1.e[c] + c2 * r2 * e2);
+                if compressible {
+                    m.b[c] += vol[c] * (c0 * self.p.values[c] + c1 * l1.p[c] + c2 * p2);
+                } else if closed_lowmach {
+                    m.b[c] += vol[c] * d_pth * scale;
+                }
+            }
+        }
+        if s.heat_source != 0.0 {
+            for c in 0..n {
+                m.b[c] += vol[c] * s.heat_source * scale;
+            }
+        }
+        if s.viscous_heating {
+            let v = self.viscous_source(compressible);
+            for c in 0..n {
+                m.b[c] += v[c] * scale;
+            }
+        }
+    }
+
+    /// Mass the closed domain must hold after the iteration in progress: the initial mass for the steady kernel, the
+    /// discrete balance `(-sum_boundary m_f - c1 M^n - c2 M^(n-1))/c0` of the cell equations in a transient step.
+    fn mass_target(&self) -> f64 {
+        let Some((c0, c1, c2)) = self.coef else {
+            return self.mass;
+        };
+        let g = &self.geom;
+        let mb: f64 = (g.n_internal..g.mesh.n_faces())
+            .filter(|&f| !g.empty[f])
+            .map(|f| self.phi[f])
+            .sum();
+        let m2 = if c2 != 0.0 { self.levels[1].mass } else { 0.0 };
+        (-mb - c1 * self.levels[0].mass - c2 * m2) / c0
+    }
+
+    fn snapshot(&self) -> Level {
+        Level {
+            rho: self.rho.clone(),
+            u: self.u.values.clone(),
+            e: if self.settings.mode == DensityMode::Compressible {
+                self.h.values.clone()
+            } else {
+                self.t.values.clone()
+            },
+            p: self.absolute_pressure(),
+            p_th: self.p_th,
+            phi: self.phi.clone(),
+            mass: self.total_mass(),
+        }
+    }
+
+    /// Advance one time step of size `dt` (ADR 0009): SIMPLE-inner iterations at the new time level until the
+    /// iterate stops changing (`TransientSettings::tol`) or `max_inner` is reached.
+    pub fn advance(&mut self, dt: f64) -> Result<StepInfo> {
+        let tr = self
+            .settings
+            .transient
+            .ok_or_else(|| mismatch("solver.algorithm", "advance needs VdSettings::transient"))?;
+        if !(dt > 0.0 && dt.is_finite()) {
+            return Err(mismatch("solver.dt", "the time step must be positive"));
+        }
+        if self.levels.is_empty() {
+            let snap = self.snapshot();
+            self.levels.push(snap);
+        }
+        self.coef = Some(match (tr.scheme, self.levels.len(), self.dt_old) {
+            (TimeScheme::Bdf2, 2.., Some(dt_old)) => {
+                let r = dt / dt_old;
+                (
+                    (1.0 + 2.0 * r) / ((1.0 + r) * dt),
+                    -(1.0 + r) / dt,
+                    r * r / ((1.0 + r) * dt),
+                )
+            }
+            _ => (1.0 / dt, -1.0 / dt, 0.0),
+        });
+        let max_of = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max);
+        let mut inner = 0;
+        let mut change = f64::INFINITY;
+        let mut last = None;
+        while inner < tr.max_inner {
+            let (pa0, t0, u0) = (self.absolute_pressure(), self.t.values.clone(), self.u.values.clone());
+            let info = self.iterate();
+            inner += 1;
+            let pa = self.absolute_pressure();
+            let a_max = (0..self.geom.n_cells())
+                .map(|c| self.sound_speed_eos(self.p.values[c], self.t.values[c]))
+                .fold(0.0, f64::max);
+            let dp = pa.iter().zip(&pa0).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max) / max_of(&pa);
+            let dtemp = self
+                .t
+                .values
+                .iter()
+                .zip(&t0)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0, f64::max)
+                / max_of(&self.t.values);
+            let du = self
+                .u
+                .values
+                .iter()
+                .zip(&u0)
+                .map(|(a, b)| vec3::norm(vec3::sub(*a, *b)))
+                .fold(0.0, f64::max)
+                / a_max;
+            change = dp.max(dtemp).max(du);
+            last = Some(info);
+            if !change.is_finite() || change < tr.tol {
+                break;
+            }
+        }
+        let snap = self.snapshot();
+        self.levels.insert(0, snap);
+        self.levels.truncate(2);
+        self.dt_old = Some(dt);
+        self.coef = None;
+        self.time += dt;
+        Ok(StepInfo {
+            time: self.time,
+            inner,
+            change,
+            converged: change < tr.tol,
+            last: last.expect("max_inner >= 1"),
+        })
     }
 
     /// One energy sweep (total enthalpy or temperature); returns the normalised residual.
@@ -838,6 +1146,9 @@ impl VarDensitySolver {
                 }
             }
         }
+        if self.coef.is_some() || s.heat_source != 0.0 || s.viscous_heating {
+            self.add_energy_terms(&mut m, compressible);
+        }
         let res = normalised_residual(&m, &cells);
         m.relax(s.alpha_h, &cells);
         let mut x = cells;
@@ -867,6 +1178,13 @@ impl VarDensitySolver {
         self.iteration += 1;
         let u_old = self.u.values.clone();
         let p_old = self.p.values.clone();
+        // transient step in progress: time-derivative coefficients and the converged old levels (ADR 0009)
+        let coef = self.coef;
+        let levels: Vec<Level> = if coef.is_some() {
+            self.levels.clone()
+        } else {
+            Vec::new()
+        };
 
         self.update_inlets();
         let mut pbc = self.effective_pbc();
@@ -959,6 +1277,16 @@ impl VarDensitySolver {
             for c in 0..n {
                 m.a.diag[c] -= div_phi[c];
             }
+            if let Some((_c0, c1, c2)) = coef {
+                // V [c1 rho^n (u^n - u) + c2 rho^(n-1) (u^(n-1) - u)]: the accumulation with the continuity error removed
+                let l1 = &levels[0];
+                let l2 = (c2 != 0.0).then(|| &levels[1]);
+                for c in 0..n {
+                    let (r2, u2) = l2.map_or((0.0, 0.0), |l| (l.rho[c], l.u[c][k]));
+                    m.a.diag[c] -= vol[c] * (c1 * l1.rho[c] + c2 * r2);
+                    m.b[c] -= vol[c] * (c1 * l1.rho[c] * l1.u[c][k] + c2 * r2 * u2);
+                }
+            }
             m.relax(s.alpha_u, &cells);
             let mut hk = m.a.h_operator(&cells, &m.b);
             let off = m.a.off_diag_abs_sum();
@@ -1043,6 +1371,21 @@ impl VarDensitySolver {
                 q[f] += dr * g.lap_coeff[f] * (p_old[nb] - p_old[o]);
             }
         }
+        if let Some((_c0, c1, c2)) = coef {
+            // transient Rhie-Chow: the old-level mass flux replaces the interpolated old momentum (rAU_f times the defects)
+            let r_au_f = face_interpolate(&g, &r_au);
+            let zero_b = vec![[0.0; 3]; mesh.n_boundary_faces()];
+            let defect = |lv: &Level| -> Vec<f64> {
+                let fo = face_flux(&g, &lv.u, &zero_b);
+                let rf = face_interpolate(&g, &lv.rho);
+                (0..n_int).map(|f| lv.phi[f] - rf[f] * fo[f]).collect()
+            };
+            let d1 = defect(&levels[0]);
+            let d2 = (c2 != 0.0).then(|| defect(&levels[1]));
+            for f in 0..n_int {
+                q[f] += r_au_f[f] * (-c1 * d1[f] - d2.as_ref().map_or(0.0, |d| c2 * d[f]));
+            }
+        }
         // explicit mass flux and compressibility convection
         let rho_ho = self.density_faces(&q, &rho_b);
         let rho_lin = self.face_values(&self.rho, &rho_b);
@@ -1098,9 +1441,25 @@ impl VarDensitySolver {
                 None,
             ));
         }
+        if let Some((c0, c1, c2)) = coef {
+            // V ddt(rho) with rho = rho* + psi (p' - p*): the psi part to the matrix, the rest to the right-hand side
+            let l1 = &levels[0];
+            let l2 = (c2 != 0.0).then(|| &levels[1]);
+            for c in 0..n {
+                let psi = if compressible {
+                    self.psi_eos(p_old[c], self.t.values[c])
+                } else {
+                    0.0
+                };
+                let r2 = l2.map_or(0.0, |l| l.rho[c]);
+                let ddt_star = c0 * self.rho[c] + c1 * l1.rho[c] + c2 * r2;
+                pm.a.diag[c] += vol[c] * c0 * psi;
+                pm.b[c] += -vol[c] * ddt_star + vol[c] * c0 * psi * p_old[c];
+            }
+        }
         let res_p = normalised_residual(&pm, &p_old);
         let closed = !pbc.has_dirichlet();
-        if closed {
+        if closed && !(coef.is_some() && compressible) {
             // the level is pinned at the current value (a zero change); the level itself is restored below
             let cell = s.p_ref.0;
             let d = pm.a.diag[cell];
@@ -1215,10 +1574,17 @@ impl VarDensitySolver {
             let (mut num, mut den) = (0.0, 0.0);
             for c in 0..n {
                 let psi = self.psi_eos(self.p.values[c], self.t.values[c]);
-                num += vol[c] * psi * self.p.values[c];
+                // transient: Newton step on the mass with the actual equation of state (exact for the ideal gas, and
+                // right for a real gas whose density is not proportional to the pressure)
+                num += vol[c]
+                    * if coef.is_some() {
+                        self.rho_eos(self.p.values[c], self.t.values[c])
+                    } else {
+                        psi * self.p.values[c]
+                    };
                 den += vol[c] * psi;
             }
-            let shift = (self.mass - num) / den;
+            let shift = (self.mass_target() - num) / den;
             for pv in self.p.values.iter_mut() {
                 *pv += shift;
             }
@@ -1238,6 +1604,10 @@ impl VarDensitySolver {
                 } else {
                     -self.phi[f]
                 };
+            }
+            if let Some((c0, c1, c2)) = coef {
+                let r2 = if c2 != 0.0 { levels[1].rho[c] } else { 0.0 };
+                sum += vol[c] * (c0 * self.rho[c] + c1 * levels[0].rho[c] + c2 * r2);
             }
             cont = cont.max(sum.abs());
         }
