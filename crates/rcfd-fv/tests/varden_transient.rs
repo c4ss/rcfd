@@ -422,3 +422,132 @@ fn t3c_order_bdf2_posthoc_tall_strip() {
     let o = t3c_order(TimeScheme::Bdf2, NX, 0.1);
     println!("post-hoc BDF2 order, ly = 0.1: {o}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// T6: plane Couette flow with viscous heating (ADR 0009), analytic temperature profile.
+
+const H: f64 = 0.01;
+const U_WALL: f64 = 100.0;
+const MU: f64 = 1.8e-5;
+const K_C: f64 = 0.026;
+const TW: f64 = 300.0;
+
+struct Couette {
+    max_dt: f64,
+    q_bottom: f64,
+    q_top: f64,
+}
+
+/// `adiabatic_top`: case B (bottom isothermal, top adiabatic), otherwise case A (both isothermal).
+fn couette(mode: DensityMode, adiabatic_top: bool, viscous_heating: bool) -> Couette {
+    let mut s = settings(mode, TimeScheme::Bdf2, 40, 1e-10);
+    s.mu = Property::Constant(MU);
+    s.k = Property::Constant(K_C);
+    s.viscous_heating = viscous_heating;
+    let mesh = Arc::new(box_2d(4, 40, 0.004, H, false, false).unwrap());
+    let geom = Arc::new(FvGeometry::new(mesh).unwrap());
+    let cc = geom.mesh.cell_centres().to_vec();
+    let fc = geom.mesh.face_centres().to_vec();
+    let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
+    for (c, v) in cc.iter().zip(u.values.iter_mut()) {
+        *v = [U_WALL * c[1] / H, 0.0, 0.0];
+    }
+    u.set_bc(&geom, "ymin", Box::new(FixedValue::vector([0.0; 3]))).unwrap();
+    u.set_bc(&geom, "ymax", Box::new(FixedValue::vector([U_WALL, 0.0, 0.0])))
+        .unwrap();
+    for patch in ["xmin", "xmax"] {
+        let prof: Vec<[f64; 3]> = geom
+            .mesh
+            .patch(patch)
+            .unwrap()
+            .faces()
+            .map(|f| [U_WALL * fc[f][1] / H, 0.0, 0.0])
+            .collect();
+        u.set_bc(&geom, patch, Box::new(FixedValue(rcfd_fv::bc::Profile::PerFace(prof))))
+            .unwrap();
+    }
+    let p_init = if mode == DensityMode::Compressible { P0 } else { 0.0 };
+    let p = ScalarField::uniform("p", &geom, p_init);
+    let mut t = ScalarField::uniform("T", &geom, TW);
+    t.set_bc(&geom, "ymin", Box::new(FixedValue::scalar(TW))).unwrap();
+    if !adiabatic_top {
+        t.set_bc(&geom, "ymax", Box::new(FixedValue::scalar(TW))).unwrap();
+    }
+    let mut sol = VarDensitySolver::new(geom.clone(), u, p, t, s).unwrap();
+    let mut worst_change = 0.0f64;
+    for _ in 0..40 {
+        let info = sol.advance(0.5).unwrap();
+        worst_change = worst_change.max(info.change);
+    }
+    // the inner iteration of the first steps (flow Courant number ~5e4 through the imposed-velocity ends) stops at the
+    // 40 inner iterations below 1e-4; the final state is converged
+    assert!(worst_change < 1e-4, "Couette: worst inner change {worst_change:.2e}");
+    let scale = MU * U_WALL * U_WALL / (2.0 * K_C);
+    let mut max_dt = 0.0f64;
+    for (c, &tc) in cc.iter().zip(&sol.t.values) {
+        let y = c[1] / H;
+        let t_an = if adiabatic_top {
+            TW + scale * y * (2.0 - y)
+        } else {
+            TW + scale * y * (1.0 - y)
+        };
+        max_dt = max_dt.max(if viscous_heating {
+            (tc - t_an).abs() / scale
+        } else {
+            (tc - TW).abs()
+        });
+    }
+    let area = |patch: &str| -> f64 {
+        let sf = geom.mesh.face_area_vectors();
+        geom.mesh
+            .patch(patch)
+            .unwrap()
+            .faces()
+            .map(|f| rcfd_core::vec3::norm(sf[f]))
+            .sum()
+    };
+    let q_bottom = sol.heat_flow_out("ymin").unwrap() / area("ymin");
+    let q_top = sol.heat_flow_out("ymax").unwrap() / area("ymax");
+    Couette {
+        max_dt,
+        q_bottom,
+        q_top,
+    }
+}
+
+fn check_couette(mode: DensityMode, label: &str) {
+    let w = MU * U_WALL * U_WALL / H;
+    let a = couette(mode, false, true);
+    println!(
+        "T6 {label} A: max |dT|/scale {:.3e}, q_bottom/(w/2) {:.5}, q_top/(w/2) {:.5}",
+        a.max_dt,
+        a.q_bottom / (0.5 * w),
+        a.q_top / (0.5 * w)
+    );
+    assert!(a.max_dt <= 0.01, "{label} A profile {}", a.max_dt);
+    assert!((a.q_bottom / (0.5 * w) - 1.0).abs() <= 0.01, "{label} A bottom flux");
+    assert!((a.q_top / (0.5 * w) - 1.0).abs() <= 0.01, "{label} A top flux");
+    let b = couette(mode, true, true);
+    println!(
+        "T6 {label} B: max |dT|/scale {:.3e}, q_bottom/w {:.5}, |q_top|/q_bottom {:.3e}",
+        b.max_dt,
+        b.q_bottom / w,
+        b.q_top.abs() / b.q_bottom
+    );
+    assert!(b.max_dt <= 0.01, "{label} B profile {}", b.max_dt);
+    assert!((b.q_bottom / w - 1.0).abs() <= 0.01, "{label} B bottom flux");
+    assert!(b.q_top.abs() <= 1e-3 * b.q_bottom, "{label} B top flux");
+    let off = couette(mode, false, false);
+    println!("T6 {label} switch off: max |T - T_w| {:.3e} K", off.max_dt);
+    assert!(off.max_dt <= 1e-6, "{label} switch-off {}", off.max_dt);
+}
+
+#[test]
+fn t6_couette_viscous_heating_compressible() {
+    check_couette(DensityMode::Compressible, "compressible");
+}
+
+#[test]
+fn t6_couette_viscous_heating_low_mach() {
+    check_couette(DensityMode::LowMach, "low-mach");
+}

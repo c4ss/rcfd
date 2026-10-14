@@ -1401,8 +1401,18 @@ impl VarDensitySolver {
                 continue;
             }
             if f >= n_int && pbc.fixed_u[f - n_int] {
-                m_exp[f] = rho_b[f - n_int] * vec3::dot(ub[f - n_int], sf[f]);
+                let i = f - n_int;
+                let vb = vec3::dot(ub[i], sf[f]);
+                m_exp[f] = rho_b[i] * vb;
                 m_base[f] = m_exp[f];
+                if coef.is_some() && compressible && vb != 0.0 {
+                    // ADR 0009: a prescribed-velocity outflow face gets the same implicit upwind density linearisation as
+                    // the interior faces. Lagged, the outflow of a cell with a flow Courant number above one makes the
+                    // inner iteration diverge (found by the Couette check T6 with imposed end velocities).
+                    phid[f] = self.psi_eos(p_bvals[i], tb[i]) * vb;
+                    p_up_old[f] = p_old[mesh.owner()[f]];
+                    m_exp[f] -= phid[f] * p_up_old[f];
+                }
                 continue;
             }
             // mass flux = rho_lin * (volumetric flux) + deferred (rho_ho - rho_lin) * (previous volumetric flux)
@@ -1498,7 +1508,7 @@ impl VarDensitySolver {
             } else {
                 let i = f - n_int;
                 if pbc.fixed_u[i] {
-                    phi[f] = m_base[f];
+                    phi[f] = m_base[f] + phid[f] * dp[own[f]];
                 } else {
                     let co = &pbc.coeffs[i];
                     let g_old = co.gradient(p_old[own[f]]);
