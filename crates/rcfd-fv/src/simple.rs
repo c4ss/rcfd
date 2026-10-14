@@ -315,8 +315,9 @@ pub struct SimpleSolver {
     /// matrices have different diagonals (a symmetry plane puts a Dirichlet term on the normal component only) the
     /// H of component `k` gets `(a_p - a_k) u_k`, as OpenFOAM's `fvMatrix::H` does. Without it the converged
     /// tangential velocity next to such a plane is multiplied by `a_k / a_p < 1` (a spurious end-wall drag, found by the
-    /// MRF Taylor-Couette checks of ADR 0008). Off by default so that every earlier case stays bit-identical; the
-    /// API switches it on for MRF zones.
+    /// MRF Taylor-Couette checks of ADR 0008). Off by default so that every earlier case stays bit-identical (it
+    /// changes the packed-bed baseline hash, ADR 0010); the API switches it on for MRF zones and for
+    /// `solver.component_diagonal = "corrected"`.
     pub component_diag_correction: bool,
     iteration: usize,
     /// Wall pressure gradient used in the previous iteration at every boundary face (SIMPLEC wall treatment of

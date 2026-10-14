@@ -686,6 +686,10 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("euler", &["euler", "bdf2"]).doc("Time integration scheme (transient)"),
         )
         .field(
+            "component_diagonal",
+            Schema::enumeration("averaged", &["averaged", "corrected"]).doc("Momentum-diagonal treatment of the segregated SIMPLE/SIMPLEC kernels (steady constant-density and variable-density, and pimple variable density): averaged uses the mean of the component diagonals in the H operator and the pressure equation (historical default); corrected adds (a_P - a_k) u_k to the H operator of component k where a symmetry plane or another component-specific condition makes the component diagonals differ (ADR 0010). MRF zones always use corrected"),
+        )
+        .field(
             "n_outer",
             Schema::int(1)
                 .range(1.0, 50.0)

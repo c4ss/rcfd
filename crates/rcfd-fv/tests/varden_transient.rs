@@ -278,7 +278,7 @@ struct Wave {
     x: Vec<f64>,
 }
 
-fn wave(scheme: TimeScheme, nx: usize, ly: f64) -> Wave {
+fn wave(scheme: TimeScheme, nx: usize, ly: f64, corrected: bool) -> Wave {
     let mesh = Arc::new(box_2d(nx, 1, TUBE_L, ly, false, false).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
@@ -300,6 +300,7 @@ fn wave(scheme: TimeScheme, nx: usize, ly: f64) -> Wave {
     s.alpha_h = 1.0;
     s.convection = ConvScheme::Central;
     s.energy_convection = ConvScheme::Central;
+    s.component_diag_correction = corrected;
     Wave {
         sol: VarDensitySolver::new(geom, u, p, t, s).unwrap(),
         x,
@@ -311,8 +312,15 @@ fn omega() -> f64 {
 }
 
 /// Probe series `(t, p' at the closed-end cell)` over `periods` periods with `per_period` steps each.
-fn run_wave(scheme: TimeScheme, per_period: usize, periods: usize, nx: usize, ly: f64) -> (Wave, Vec<(f64, f64)>) {
-    let mut w = wave(scheme, nx, ly);
+fn run_wave(
+    scheme: TimeScheme,
+    per_period: usize,
+    periods: usize,
+    nx: usize,
+    ly: f64,
+    corrected: bool,
+) -> (Wave, Vec<(f64, f64)>) {
+    let mut w = wave(scheme, nx, ly, corrected);
     let tp = 2.0 * std::f64::consts::PI / omega();
     let dt = tp / per_period as f64;
     let mut series = vec![(0.0, w.sol.p.values[0] - P0)];
@@ -343,7 +351,7 @@ fn crossings(series: &[(f64, f64)], n: usize) -> Vec<f64> {
 }
 
 fn t3ab(scheme: TimeScheme) -> (f64, f64) {
-    let (_, series) = run_wave(scheme, 100, 4, NX, LY);
+    let (_, series) = run_wave(scheme, 100, 4, NX, LY, false);
     let c = crossings(&series, 8);
     assert_eq!(c.len(), 8, "crossings found: {}", c.len());
     let omega_num = std::f64::consts::PI * 7.0 / (c[7] - c[0]);
@@ -371,12 +379,12 @@ fn t3b_amplitude_bdf2() {
     assert!((0.98..=1.001).contains(&a), "amplitude ratio {a}");
 }
 
-fn t3c_order(scheme: TimeScheme, nx: usize, ly: f64) -> f64 {
+fn t3c_order(scheme: TimeScheme, nx: usize, ly: f64, corrected: bool) -> f64 {
     let tp = 2.0 * std::f64::consts::PI / omega();
     let e: Vec<f64> = [50usize, 100, 200]
         .iter()
         .map(|&n| {
-            let (w, _) = run_wave(scheme, n, 1, nx, ly);
+            let (w, _) = run_wave(scheme, n, 1, nx, ly, corrected);
             let sq: f64 =
                 w.x.iter()
                     .enumerate()
@@ -397,29 +405,43 @@ fn t3c_order(scheme: TimeScheme, nx: usize, ly: f64) -> f64 {
 
 #[test]
 fn t3c_order_euler() {
-    let o = t3c_order(TimeScheme::ImplicitEuler, NX, LY);
+    let o = t3c_order(TimeScheme::ImplicitEuler, NX, LY, false);
     assert!((0.85..=1.15).contains(&o), "Euler order {o}");
 }
 
-/// Registered limit `[1.80, 2.20]`; MISSED, measured 1.34 (errors 1.1e-2, 3.0e-3, 1.2e-3): the 200-cell spatial error of
-/// the acoustic phase (measured frequency error -1.3e-3 for both schemes) is not below the BDF2 temporal error at 200 steps
-/// per period. Kept as a known miss; the ADR estimate of a 1e-5 spatial floor was wrong.
 #[test]
-#[ignore = "known miss of the registered T3c BDF2 order limit (measured 1.34 vs [1.80, 2.20])"]
-fn t3c_order_bdf2_known_miss() {
-    let o = t3c_order(TimeScheme::Bdf2, NX, LY);
+fn t3c_order_euler_corrected_diagonal() {
+    let o = t3c_order(TimeScheme::ImplicitEuler, NX, LY, true);
+    assert!((0.85..=1.15).contains(&o), "Euler order {o}");
+}
+
+/// Registered limit `[1.80, 2.20]`, run unchanged with the component-consistent diagonal (ADR 0010,
+/// `solver.component_diagonal = "corrected"`): measured 2.08 (errors 1.05e-2, 2.37e-3, 5.6e-4). With the historical
+/// averaged diagonal it MISSES, see `t3c_order_bdf2_averaged_diagonal_known_miss` (1.34). The earlier explanation
+/// (a spatial floor) was wrong: the floor came from the averaged diagonal on the one-cell-high strip.
+#[test]
+fn t3c_order_bdf2() {
+    let o = t3c_order(TimeScheme::Bdf2, NX, LY, true);
     assert!((1.80..=2.20).contains(&o), "BDF2 order {o}");
 }
 
-/// Post-hoc diagnostic, NOT a registered gate (written after the miss above). The same order measurement on 800 cells
-/// gives the same errors (so the floor is not spatial); on a strip ten times higher (`ly = 0.1`) it gives order 2.07
-/// (errors 1.05e-2, 2.38e-3, 5.7e-4). Cause: the pressure-equation diagonal `a_P` is the mean of the component
-/// diagonals, and on the one-cell-high strip the Dirichlet normal component at the symmetry planes adds a viscous
-/// term `~ mu/ly^2` to the y diagonal, which reduces the acceleration of `u_x` by about 1e-5 per step.
+/// The same registered limit with the historical averaged diagonal (the default): MISSED, measured 1.34 (errors
+/// 1.1e-2, 3.0e-3, 1.2e-3). Cause: the pressure-equation diagonal `a_P` is the mean of the component diagonals, and
+/// on the one-cell-high strip the Dirichlet normal component at the symmetry planes adds a viscous term `~ mu/ly^2`
+/// to the y diagonal, which reduces the acceleration of `u_x` by about 1e-5 per step.
+#[test]
+#[ignore = "known miss of the registered T3c BDF2 order limit with the averaged diagonal (measured 1.34 vs [1.80, 2.20]); passes with component_diagonal = corrected"]
+fn t3c_order_bdf2_averaged_diagonal_known_miss() {
+    let o = t3c_order(TimeScheme::Bdf2, NX, LY, false);
+    assert!((1.80..=2.20).contains(&o), "BDF2 order {o}");
+}
+
+/// Post-hoc diagnostic, NOT a registered gate. Averaged diagonal on a strip ten times higher (`ly = 0.1`): order 2.07
+/// (errors 1.05e-2, 2.38e-3, 5.7e-4); this is what located the cause above.
 #[test]
 #[ignore = "post-hoc diagnostic (not a registered criterion)"]
 fn t3c_order_bdf2_posthoc_tall_strip() {
-    let o = t3c_order(TimeScheme::Bdf2, NX, 0.1);
+    let o = t3c_order(TimeScheme::Bdf2, NX, 0.1, false);
     println!("post-hoc BDF2 order, ly = 0.1: {o}");
 }
 
