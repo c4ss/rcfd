@@ -10,4 +10,5 @@ pub mod integrals;
 pub mod interpolate;
 pub mod monitors;
 pub mod registers;
+pub mod remap;
 pub mod render;
