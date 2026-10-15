@@ -254,7 +254,7 @@ impl TurbulenceModel for KEpsilonModel {
             max,
             doc,
         };
-        vec![
+        let mut v = vec![
             mk(
                 "c_mu",
                 m.c_mu,
@@ -281,7 +281,18 @@ impl TurbulenceModel for KEpsilonModel {
                 5.0,
                 "turbulent Prandtl number of epsilon",
             ),
-        ]
+        ];
+        if m.variant == KEpsilonVariant::Realizable {
+            v.push(mk(
+                "a0",
+                m.a0,
+                crate::kepsilon::REALIZABLE_A0_DEFAULT,
+                3.0,
+                5.0,
+                "realizable Cmu constant A0 (default 4.04; the original report prints 4.0), ADR 0017",
+            ));
+        }
+        v
     }
     fn set_coefficient(&mut self, name: &str, value: f64) -> std::result::Result<(), String> {
         check_range(&self.coefficients(), name, value)?;
@@ -300,6 +311,7 @@ impl TurbulenceModel for KEpsilonModel {
                 self.m.c1 = value;
             }
             "c2" => self.m.c2 = value,
+            "a0" => self.m.a0 = value,
             "sigma_k" => self.m.sigma_k = value,
             _ => self.m.sigma_e = value,
         }

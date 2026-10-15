@@ -20,7 +20,8 @@
 //!
 //! The RNG and realizable constants were checked against published model documentation, the
 //! OpenFOAM class documentation and an arXiv RNG table (see docs/reference-data.md). Note that
-//! Shih et al.'s `A0` appears as 4.04 (used here) and as 4.0 (OpenFOAM default).
+//! Shih et al.'s `A0` is 4.0 in the original report (NASA TM-106721, verified) and 4.04 in a commercial-code variant;
+//! 4.04 stays the default and `KEpsilon::a0` overrides it (ADR 0017).
 //!
 //! Walls use the equilibrium log-law wall functions of [`crate::wall`]: in a wall cell
 //! `eps = C_mu^(3/4) k^(3/2) / (kappa y)` is imposed and the production is replaced by the
@@ -211,6 +212,13 @@ pub(crate) fn velocity_gradient(geom: &FvGeometry, u: &VectorField) -> Vec<Vec<[
         .collect()
 }
 
+/// Default of the Realizable `A0`: 4.04, a commonly cited commercial-code variant. Shih et al. (NASA TM-106721) print 4.0;
+/// the default is kept so that existing results do not move (ADR 0017).
+pub const REALIZABLE_A0_DEFAULT: f64 = 4.04;
+
+/// The Realizable `A0` printed in the original report (NASA TM-106721).
+pub const REALIZABLE_A0_ORIGINAL: f64 = 4.0;
+
 /// Steady k-epsilon model state.
 pub struct KEpsilon {
     /// Variant.
@@ -249,6 +257,9 @@ pub struct KEpsilon {
     pub c1: f64,
     /// `C2`.
     pub c2: f64,
+    /// Realizable `A0` in `C_mu = 1 / (A0 + A_s U* k/eps)` (default [`REALIZABLE_A0_DEFAULT`] = 4.04; the original report
+    /// prints 4.0, see ADR 0017). Ignored by the other variants.
+    pub a0: f64,
     /// Prandtl number of k.
     pub sigma_k: f64,
     /// Prandtl number of epsilon.
@@ -316,6 +327,7 @@ impl KEpsilon {
             c_mu,
             c1,
             c2,
+            a0: REALIZABLE_A0_DEFAULT,
             sigma_k,
             sigma_e,
             wall_log: vec![false; geom.n_cells()],
@@ -441,11 +453,12 @@ impl KEpsilon {
         let kv = self.k.values.clone();
         let ev = self.eps.values.clone();
         let cmu = self.c_mu;
+        let a0 = self.a0;
         let c_mu_cell = |c: usize| -> f64 {
             if self.variant == KEpsilonVariant::Realizable {
                 let phi_a = (6f64.sqrt() * w_cos[c].clamp(-1.0, 1.0)).clamp(-1.0, 1.0).acos() / 3.0;
                 let a_s = 6f64.sqrt() * phi_a.cos();
-                1.0 / (4.04 + a_s * u_star[c] * kv[c] / ev[c])
+                1.0 / (a0 + a_s * u_star[c] * kv[c] / ev[c])
             } else {
                 cmu
             }
