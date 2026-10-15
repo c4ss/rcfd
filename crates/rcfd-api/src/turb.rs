@@ -117,7 +117,10 @@ pub fn role(case: &Case, patch: &str) -> Role {
         "inlet" => Role::Inlet,
         "zero_gradient" => Role::ZeroGradient,
         _ => {
-            if get_s(case, &format!("{b}.velocity")) == "fixed" {
+            if crate::wall_motion::is_wall_motion(case, patch) {
+                // moving, sheared, slipping and thermocapillary boundaries are impermeable walls (ADR 0016)
+                Role::Wall
+            } else if get_s(case, &format!("{b}.velocity")) == "fixed" {
                 if velocity_is_zero(case, &b) {
                     Role::Wall
                 } else {
@@ -299,6 +302,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         match role(case, n) {
             Role::Wall => {
                 walls += 1;
+                if crate::wall_motion::is_wall_motion(case, n) {
+                    out.push(diag(
+                        &format!("{b}.velocity"),
+                        "moving_wall, shear, partial_slip and marangoni walls are not supported by the turbulence wall treatments (they assume a no-slip wall at rest); use a laminar run",
+                    ));
+                }
                 if !velocity_is_zero(case, &b) && get_s(case, &format!("{b}.velocity")) == "fixed" {
                     out.push(diag(
                         &format!("{b}.turbulence"),
@@ -717,6 +726,17 @@ mod tests {
         c.set("boundaries.i.velocity_value", serde_json::json!([1.0, 0.0, 0.0]))
             .unwrap();
         c.set("boundaries.o.velocity", "zero_gradient".into()).unwrap();
+        for (i, k) in crate::wall_motion::KINDS.iter().enumerate() {
+            // D6: the wall-motion kinds are walls even with a non-zero velocity value
+            let n = format!("m{i}");
+            c.set(&format!("boundaries.{n}.velocity"), (*k).into()).unwrap();
+            c.set(
+                &format!("boundaries.{n}.velocity_value"),
+                serde_json::json!([1.0, 0.0, 0.0]),
+            )
+            .unwrap();
+            assert_eq!(role(&c, &n), Role::Wall, "{k}");
+        }
         assert_eq!(role(&c, "w"), Role::Wall);
         assert_eq!(role(&c, "i"), Role::Inlet);
         assert_eq!(role(&c, "o"), Role::ZeroGradient);

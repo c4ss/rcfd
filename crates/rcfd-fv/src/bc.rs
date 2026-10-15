@@ -225,6 +225,70 @@ impl Bc for Symmetry {
     }
 }
 
+/// Law of the tangential velocity on an impermeable boundary face of [`SlipWall`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SlipLaw {
+    /// Specified tangential traction: `du_t/dn_out` equals the per-face kinematic stress `tau/mu` of
+    /// [`SlipWall::stress`].
+    Shear,
+    /// Navier slip with slip length `l` relative to the wall velocity: `u_t - u_w,t = l du_t/dn_in`, discretely
+    /// `u_f,t = (l u_P,t + dn u_w,t)/(dn + l)`. `l = 0` is no-slip, `l -> infinity` a symmetry plane.
+    Navier(f64),
+}
+
+/// Impermeable boundary with a tangential law (specified shear, Navier slip, thermocapillary stress once the stress
+/// profile is filled in by the caller). The normal velocity component is zero; the cross coupling of the
+/// tangential projection is treated explicitly with the lagged cell value, like [`Symmetry`] (ADR 0016).
+#[derive(Debug, Clone)]
+pub struct SlipWall {
+    /// Tangential law.
+    pub law: SlipLaw,
+    /// Wall velocity per face (its normal part is projected out).
+    pub wall_velocity: Profile,
+    /// Kinematic outward-normal velocity gradient `tau/mu` per face (used by [`SlipLaw::Shear`]).
+    pub stress: Profile,
+}
+
+impl Bc for SlipWall {
+    fn type_name(&self) -> &'static str {
+        match self.law {
+            SlipLaw::Shear => "shear",
+            SlipLaw::Navier(_) => "partialSlip",
+        }
+    }
+    fn coeffs(&self, ctx: &BcCtx, comp: usize) -> FaceCoeffs {
+        if !ctx.is_vector {
+            return ZeroGradient.coeffs(ctx, comp);
+        }
+        let n = ctx.normal;
+        let tangential = |v: Vec3| {
+            let vn = n[0] * v[0] + n[1] * v[1] + n[2] * v[2];
+            [v[0] - n[0] * vn, v[1] - n[1] * vn, v[2] - n[2] * vn]
+        };
+        let (kappa, g) = match self.law {
+            SlipLaw::Shear => {
+                let t = tangential(self.stress.get(ctx.local_face));
+                (1.0, [ctx.dn * t[0], ctx.dn * t[1], ctx.dn * t[2]])
+            }
+            SlipLaw::Navier(l) => {
+                let w = tangential(self.wall_velocity.get(ctx.local_face));
+                let k = l / (ctx.dn + l);
+                let f = ctx.dn / (ctx.dn + l);
+                (k, [f * w[0], f * w[1], f * w[2]])
+            }
+        };
+        let others: f64 = (0..3).filter(|&j| j != comp).map(|j| n[j] * ctx.cell_value[j]).sum();
+        FaceCoeffs::from_value(
+            kappa * (1.0 - n[comp] * n[comp]),
+            -kappa * n[comp] * others + g[comp],
+            ctx.dn,
+        )
+    }
+    fn clone_box(&self) -> Box<dyn Bc> {
+        Box::new(self.clone())
+    }
+}
+
 /// Patch removed from the discretisation (2D reduction).
 #[derive(Debug, Clone, Copy)]
 pub struct Empty;
@@ -411,5 +475,57 @@ mod tests {
         let b: Box<dyn Bc> = Box::new(Robin);
         let b2 = b.clone();
         assert_eq!(b2.coeffs(&ctx(), 0).value(4.0), 2.0);
+    }
+
+    fn vctx(normal: Vec3, u: Vec3) -> BcCtx {
+        BcCtx {
+            normal,
+            dn: 0.1,
+            local_face: 0,
+            cell_value: u,
+            partner: None,
+            is_vector: true,
+        }
+    }
+
+    fn face_u(bc: &dyn Bc, c: &BcCtx) -> Vec3 {
+        [0, 1, 2].map(|k| bc.coeffs(c, k).value(c.cell_value[k]))
+    }
+
+    #[test]
+    fn slip_wall_laws() {
+        // oblique normal, so the cross coupling is exercised
+        let s = 1.0 / 2.0_f64.sqrt();
+        let c = vctx([s, s, 0.0], [1.0, 0.5, 0.2]);
+        let w = Profile::Uniform([-0.3, 0.3, 0.7]); // normal part (0) removed by the projection
+        let slip = |l: f64| SlipWall {
+            law: SlipLaw::Navier(l),
+            wall_velocity: w.clone(),
+            stress: Profile::Uniform([0.0; 3]),
+        };
+        // no normal velocity for any law
+        for l in [0.0, 0.3, 1e9] {
+            let u = face_u(&slip(l), &c);
+            assert!((u[0] * s + u[1] * s).abs() < 1e-12, "{l}: {u:?}");
+        }
+        // l = 0 is the wall velocity, l -> infinity the symmetry plane
+        let u0 = face_u(&slip(0.0), &c);
+        assert!(
+            [0, 1, 2].iter().all(|&k| (u0[k] - [-0.3, 0.3, 0.7][k]).abs() < 1e-12),
+            "{u0:?}"
+        );
+        let (ui, us) = (face_u(&slip(1e12), &c), face_u(&Symmetry, &c));
+        assert!([0, 1, 2].iter().all(|&k| (ui[k] - us[k]).abs() < 1e-9), "{ui:?} {us:?}");
+        // shear: tangential face value u_t + dn * tau_t/mu, tangential traction only
+        let sh = SlipWall {
+            law: SlipLaw::Shear,
+            wall_velocity: Profile::Uniform([0.0; 3]),
+            stress: Profile::Uniform([2.0, -2.0, 5.0]),
+        };
+        let u = face_u(&sh, &c);
+        let un = u[0] * s + u[1] * s;
+        assert!(un.abs() < 1e-12);
+        // z component: u_z + dn * 5
+        assert!((u[2] - (0.2 + 0.1 * 5.0)).abs() < 1e-12);
     }
 }
