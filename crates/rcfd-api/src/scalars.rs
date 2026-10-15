@@ -1,7 +1,11 @@
-//! Passive scalars and multicomponent species (F-053): `scalars.<name>` and `species.<name>`.
+//! Passive scalars and multicomponent species (F-053) and user transport equations (F-202):
+//! `scalars.<name>` and `species.<name>`.
 //!
-//! Both are transported with the shared steady scalar routine of `rcfd_fv::scalar` on the flux of the
-//! flow solver (`div(phi s) - div(D grad s) = S`, constant density). Species are mass fractions: all
+//! Both are transported with the shared scalar routine of `rcfd_fv::scalar` on the flux of the
+//! flow solver (`div(phi s) - div(D grad s) = S`, constant density), steady (iterations) or transient (time steps of
+//! the transient engine). A scalar can instead be a pure diffusion variable (`equation = "diffusive"`: transient,
+//! `"poisson"`: no time derivative) with a diffusivity and source given by expressions, or an algebraic variable
+//! (`equation = "algebraic"`: an expression of the coordinates, the temperature and the other scalars; ADR 0019 D3). Species are mass fractions: all
 //! but one are transported and the balance species (`remainder = true`, or the last one by name) is
 //! closed by difference `Y_N = 1 - sum Y_i`, so the fractions sum to one to round-off and each
 //! transported species is conserved separately (see `rcfd_fv::scalar::boundary_flux`).
@@ -11,9 +15,12 @@
 
 use crate::case::{Case, Diagnostic};
 use crate::exprs;
+use crate::zone_sources::{ZoneSources, ZoneTerms};
+use rcfd_core::expr::Compiled;
 use rcfd_core::{Dimension, Error, Result};
 use rcfd_fv::bc::{Bc, FixedGradient, FixedValue, Profile, ZeroGradient};
 use rcfd_fv::convection::ConvScheme;
+use rcfd_fv::ddt::TimeScheme;
 use rcfd_fv::scalar::{PatchFlux, ScalarTransport};
 use rcfd_fv::{FvGeometry, ScalarField};
 use std::sync::Arc;
@@ -39,7 +46,7 @@ const RESERVED: &[&str] = &[
 ];
 
 /// Name of the balance species (`remainder = true`, else the last species by name).
-fn balance_of(case: &Case) -> String {
+pub(crate) fn balance_of(case: &Case) -> String {
     let names = section_names(case, "species");
     names
         .iter()
@@ -91,16 +98,18 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     }
     let alg = gs(case, "solver.algorithm");
     let steady = matches!(alg.as_str(), "simple" | "simplec" | "coupled");
+    let transient = matches!(alg.as_str(), "piso" | "pimple");
+    let mut extra: Vec<Diagnostic> = Vec::new();
     let nu = gf(case, "physics.nu");
     let mut seen: Vec<String> = Vec::new();
     for section in SECTIONS {
         let names = section_names(case, section);
         for n in &names {
             let p = |f: &str| format!("{section}.{n}.{f}");
-            if !steady {
+            if !steady && !transient {
                 bad(
                     format!("{section}.{n}"),
-                    format!("scalar transport is available with the steady algorithms (simple, simplec, coupled), not with \"{alg}\""),
+                    format!("scalar transport is available with the steady algorithms (simple, simplec, coupled) and the transient incompressible algorithms (piso, pimple), not with \"{alg}\""),
                 );
             }
             if RESERVED.contains(&n.as_str()) || seen.contains(n) {
@@ -115,25 +124,47 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 // the balance species is closed by difference and needs no transport data
                 continue;
             }
-            if d > 0.0 && sc > 0.0 {
-                bad(p("schmidt"), "give either diffusivity or schmidt, not both".into());
-            } else if d <= 0.0 && sc <= 0.0 {
-                bad(
-                    p("diffusivity"),
-                    "needs a positive diffusivity [m^2/s] or a positive schmidt number".into(),
-                );
-            } else if sc > 0.0 && nu <= 0.0 {
-                bad(p("schmidt"), "a Schmidt number needs a positive physics.nu".into());
+            let eq = equation_of(case, section, n);
+            if section == "scalars" {
+                extra.extend(check_user_equation(case, n, &eq));
             }
-            if d < 0.0 {
-                bad(p("diffusivity"), "must not be negative".into());
-            }
-            if sc < 0.0 {
-                bad(p("schmidt"), "must not be negative".into());
+            let has_dexpr = !gs(case, &p("diffusivity_expression")).trim().is_empty();
+            if eq != "algebraic" {
+                if has_dexpr {
+                    if sc > 0.0 {
+                        bad(
+                            p("diffusivity_expression"),
+                            "give either diffusivity_expression or schmidt, not both".into(),
+                        );
+                    }
+                } else if d > 0.0 && sc > 0.0 {
+                    bad(p("schmidt"), "give either diffusivity or schmidt, not both".into());
+                } else if d <= 0.0 && sc <= 0.0 {
+                    bad(
+                        p("diffusivity"),
+                        "needs a positive diffusivity [m^2/s] or a positive schmidt number".into(),
+                    );
+                } else if sc > 0.0 && nu <= 0.0 {
+                    bad(p("schmidt"), "a Schmidt number needs a positive physics.nu".into());
+                }
+                if d < 0.0 {
+                    bad(p("diffusivity"), "must not be negative".into());
+                }
+                if sc < 0.0 {
+                    bad(p("schmidt"), "must not be negative".into());
+                }
             }
             let relax = gf(case, &p("relax"));
             if !(relax > 0.0 && relax <= 1.0) {
                 bad(p("relax"), "the relaxation factor must be in (0, 1]".into());
+            }
+            if eq == "algebraic" {
+                for b in case.tree.names(&p("boundaries")).unwrap_or_default() {
+                    bad(
+                        p(&format!("boundaries.{b}")),
+                        "an algebraic variable is evaluated from its expression and has no boundary conditions".into(),
+                    );
+                }
             }
             for b in case.tree.names(&p("boundaries")).unwrap_or_default() {
                 let t = gs(case, &p(&format!("boundaries.{b}.type")));
@@ -226,7 +257,113 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             }
         }
     }
+    out.extend(extra);
     out
+}
+
+/// The equation kind of an entry (`transport` for species and when unset).
+fn equation_of(case: &Case, section: &str, name: &str) -> String {
+    if section != "scalars" {
+        return "transport".into();
+    }
+    let e = gs(case, &format!("scalars.{name}.equation"));
+    if e.is_empty() {
+        "transport".into()
+    } else {
+        e
+    }
+}
+
+/// Symbol of an algebraic expression beyond the coordinates and time.
+#[derive(Debug, Clone, PartialEq)]
+enum Sym {
+    Temperature,
+    Scalar(String),
+}
+
+/// Context of an algebraic expression: `x, y, z, t` (slots 0..3), then `T` (energy on) and the other scalars / species.
+fn algebraic_context(case: &Case, name: &str) -> (rcfd_core::expr::Context, Vec<Sym>) {
+    let mut ctx = exprs::spatial_context(case);
+    let mut syms = Vec::new();
+    if case
+        .tree
+        .get("energy.enabled")
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        ctx.add_var("T", Dimension::TEMPERATURE);
+        syms.push(Sym::Temperature);
+    }
+    for s in SECTIONS {
+        for n in section_names(case, s) {
+            if n != name {
+                ctx.add_var(&n, Dimension::NONE);
+                syms.push(Sym::Scalar(n));
+            }
+        }
+    }
+    (ctx, syms)
+}
+
+/// Checks of the user-equation settings of `scalars.<name>` (ADR 0019 D3).
+fn check_user_equation(case: &Case, name: &str, eq: &str) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let p = |f: &str| format!("scalars.{name}.{f}");
+    let ctx = exprs::spatial_context(case);
+    if !matches!(eq, "transport" | "diffusive" | "poisson" | "algebraic") {
+        out.push(Diagnostic {
+            path: p("equation"),
+            line: None,
+            message: format!("unknown equation '{eq}' (transport, diffusive, poisson, algebraic)"),
+        });
+        return out;
+    }
+    let none_or_rate = [Dimension::NONE, Dimension::TIME.powi(-1)];
+    for (field, dims) in [
+        ("diffusivity_expression", vec![Dimension::KINEMATIC_VISCOSITY]),
+        ("source_expression", none_or_rate.to_vec()),
+        ("initial_expression", vec![Dimension::NONE]),
+    ] {
+        if let Err(e) = crate::zone_sources::compile_any(case, &p(field), &dims, &ctx) {
+            out.extend(e);
+        }
+    }
+    let expr = gs(case, &p("expression"));
+    if eq == "algebraic" {
+        if expr.trim().is_empty() {
+            out.push(Diagnostic {
+                path: p("expression"),
+                line: None,
+                message: "equation = \"algebraic\" needs an expression".into(),
+            });
+        } else {
+            let (actx, _) = algebraic_context(case, name);
+            if let Err(mut e) = crate::zone_sources::compile_any(case, &p("expression"), &[Dimension::NONE], &actx) {
+                for d in e.iter_mut() {
+                    d.message = format!(
+                        "{} (symbols: x, y, z, t, T when energy.enabled, and the other scalars and species; the variable cannot refer to itself)",
+                        d.message
+                    );
+                }
+                out.extend(e);
+            }
+        }
+    } else if !expr.trim().is_empty() {
+        out.push(Diagnostic {
+            path: p("expression"),
+            line: None,
+            message: "expression needs equation = \"algebraic\"".into(),
+        });
+    }
+    out
+}
+
+impl Entry {
+    /// `diffusive` and `poisson` entries have no convection.
+    fn is_diffusion_only(&self) -> bool {
+        matches!(self.equation.as_str(), "diffusive" | "poisson")
+    }
 }
 
 struct Entry {
@@ -235,6 +372,14 @@ struct Entry {
     /// Schmidt number when the diffusivity follows the viscosity.
     schmidt: f64,
     res: f64,
+    equation: String,
+    /// Diffusivity expression (face centres), source expression (cell centres).
+    diff_expr: Option<Compiled>,
+    src_expr: Option<Compiled>,
+    /// Uniform part of the source.
+    base_source: f64,
+    /// Algebraic expression with the symbols it reads (slots from 4).
+    alg: Option<(Compiled, Vec<Sym>)>,
 }
 
 /// Configured scalars and species.
@@ -299,8 +444,30 @@ fn make(
     errs: &mut Vec<Diagnostic>,
 ) -> Entry {
     let p = |f: &str| format!("{section}.{name}.{f}");
+    let eq = equation_of(case, section, name);
+    let ctx = exprs::spatial_context(case);
+    let n_cells = geom.n_cells();
+    let cc = geom.mesh.cell_centres();
     let mut field = ScalarField::uniform(name, geom, gf(case, &p("initial")));
-    if with_bcs {
+    if section == "scalars" {
+        match crate::zone_sources::compile_any(case, &p("initial_expression"), &[Dimension::NONE], &ctx) {
+            Ok(Some(c)) => {
+                for (v, x) in field.values.iter_mut().zip(cc) {
+                    *v = c.eval(&[x[0], x[1], x[2], 0.0]);
+                }
+                if field.values.iter().any(|v| !v.is_finite()) {
+                    errs.push(Diagnostic {
+                        path: p("initial_expression"),
+                        line: None,
+                        message: "the expression is not finite at some cells".into(),
+                    });
+                }
+            }
+            Ok(None) => {}
+            Err(e) => errs.extend(e),
+        }
+    }
+    if with_bcs && eq != "algebraic" {
         for b in case.tree.names(&p("boundaries")).unwrap_or_default() {
             if geom.mesh.patch(&b).is_none() {
                 let known: Vec<&str> = geom.mesh.patches().iter().map(|q| q.name.as_str()).collect();
@@ -326,13 +493,106 @@ fn make(
     t.relax = gf(case, &p("relax"));
     let src = gf(case, &p("source"));
     if src != 0.0 {
-        t.source = Some(vec![src; geom.n_cells()]);
+        t.source = Some(vec![src; n_cells]);
+    }
+    let mut diff_expr = None;
+    let mut src_expr = None;
+    let mut alg = None;
+    if section == "scalars" {
+        match crate::zone_sources::compile_any(
+            case,
+            &p("diffusivity_expression"),
+            &[Dimension::KINEMATIC_VISCOSITY],
+            &ctx,
+        ) {
+            Ok(c) => diff_expr = c,
+            Err(e) => errs.extend(e),
+        }
+        if let Some(c) = &diff_expr {
+            let fc = geom.mesh.face_centres();
+            let bad = (0..geom.mesh.n_faces()).any(|f| {
+                let v = c.eval(&[fc[f][0], fc[f][1], fc[f][2], 0.0]);
+                !geom.empty[f] && !(v.is_finite() && v > 0.0)
+            });
+            if bad {
+                errs.push(Diagnostic {
+                    path: p("diffusivity_expression"),
+                    line: None,
+                    message: "the diffusivity must be finite and positive on every face".into(),
+                });
+            }
+        }
+        match crate::zone_sources::compile_any(
+            case,
+            &p("source_expression"),
+            &[Dimension::NONE, Dimension::TIME.powi(-1)],
+            &ctx,
+        ) {
+            Ok(c) => src_expr = c,
+            Err(e) => errs.extend(e),
+        }
+        if eq == "algebraic" {
+            let (actx, syms) = algebraic_context(case, name);
+            match crate::zone_sources::compile_any(case, &p("expression"), &[Dimension::NONE], &actx) {
+                Ok(Some(c)) => alg = Some((c, syms)),
+                Ok(None) => {}
+                Err(e) => errs.extend(e),
+            }
+        }
     }
     Entry {
         name: name.to_string(),
         transport: t,
         schmidt,
         res: 1.0,
+        equation: eq,
+        diff_expr,
+        src_expr,
+        base_source: src,
+        alg,
+    }
+}
+
+/// What the scalar equations need from the rest of the simulation at one step.
+#[derive(Clone, Copy, Default)]
+pub struct StepCtx<'a> {
+    /// Zone sources and fixed values.
+    pub zone: Option<&'a ZoneSources>,
+    /// Temperature cells (for algebraic expressions that read `T`).
+    pub temperature: Option<&'a [f64]>,
+    /// Time of the level being solved (0 for steady runs).
+    pub time: f64,
+}
+
+/// Bring the source, implicit sink, fixed cells and diffusivity of an entry to the current time.
+fn refresh(e: &mut Entry, ctx: &StepCtx) {
+    let geom = e.transport.geom.clone();
+    let n = geom.n_cells();
+    let cc = geom.mesh.cell_centres();
+    let zone: Option<ZoneTerms> = ctx.zone.and_then(|z| z.terms(Some(&e.name), ctx.time));
+    if e.src_expr.is_some() || zone.is_some() {
+        let mut s = vec![e.base_source; n];
+        if let Some(c) = &e.src_expr {
+            for i in 0..n {
+                s[i] += c.eval(&[cc[i][0], cc[i][1], cc[i][2], ctx.time]);
+            }
+        }
+        if let Some(z) = zone {
+            for i in 0..n {
+                s[i] += z.source[i];
+            }
+            e.transport.sink = z.sink;
+            e.transport.fixed = z.fixed;
+        }
+        e.transport.source = Some(s);
+    }
+    if let Some(c) = &e.diff_expr {
+        let fc = geom.mesh.face_centres();
+        e.transport.diffusivity_face = Some(
+            (0..geom.mesh.n_faces())
+                .map(|f| c.eval(&[fc[f][0], fc[f][1], fc[f][2], ctx.time]))
+                .collect(),
+        );
     }
 }
 
@@ -376,18 +636,89 @@ impl ScalarState {
 
     /// One sweep of every scalar and species on the flux `phi`. `nu_face` (the flow solver's face
     /// viscosity) drives the diffusivity of Schmidt-number entries. Returns the largest residual.
-    pub fn iterate(&mut self, phi: &[f64], nu_face: Option<&[f64]>) -> f64 {
+    pub fn iterate(&mut self, phi: &[f64], nu_face: Option<&[f64]>, ctx: &StepCtx) -> f64 {
         let mut worst: f64 = 0.0;
+        let zeros = if self.passive.iter().any(|e| e.is_diffusion_only()) {
+            vec![0.0; phi.len()]
+        } else {
+            Vec::new()
+        };
         for e in self.passive.iter_mut().chain(self.species.iter_mut()) {
+            if e.alg.is_some() {
+                e.res = 0.0;
+                continue;
+            }
+            refresh(e, ctx);
             if e.schmidt > 0.0 {
                 if let Some(nf) = nu_face {
                     e.transport.diffusivity_face = Some(nf.iter().map(|v| v / e.schmidt).collect());
                 }
             }
-            e.res = e.transport.iterate(phi);
+            e.res = e.transport.iterate(if e.is_diffusion_only() { &zeros } else { phi });
             worst = worst.max(e.res);
         }
+        self.update_algebraic(ctx);
         worst
+    }
+
+    /// One transient step of size `dt` of every scalar and species on the flux `phi` (the flux of the new level);
+    /// `ctx.time` is the time of the new level. `poisson` entries are solved without a time derivative.
+    pub fn advance(&mut self, phi: &[f64], dt: f64, scheme: TimeScheme, nu_face: Option<&[f64]>, ctx: &StepCtx) -> f64 {
+        let mut worst: f64 = 0.0;
+        let zeros = if self.passive.iter().any(|e| e.is_diffusion_only()) {
+            vec![0.0; phi.len()]
+        } else {
+            Vec::new()
+        };
+        for e in self.passive.iter_mut().chain(self.species.iter_mut()) {
+            if e.alg.is_some() {
+                e.res = 0.0;
+                continue;
+            }
+            refresh(e, ctx);
+            if e.schmidt > 0.0 {
+                if let Some(nf) = nu_face {
+                    e.transport.diffusivity_face = Some(nf.iter().map(|v| v / e.schmidt).collect());
+                }
+            }
+            e.res = match e.equation.as_str() {
+                "poisson" => e.transport.iterate(&zeros),
+                "diffusive" => e.transport.advance(&zeros, dt, scheme),
+                _ => e.transport.advance(phi, dt, scheme),
+            };
+            worst = worst.max(e.res);
+        }
+        self.update_algebraic(ctx);
+        worst
+    }
+
+    /// Evaluate the algebraic variables from their expressions with the current values of the other fields.
+    pub fn update_algebraic(&mut self, ctx: &StepCtx) {
+        for idx in 0..self.passive.len() {
+            let Some((expr, syms)) = self.passive[idx].alg.clone() else {
+                continue;
+            };
+            let geom = self.passive[idx].transport.geom.clone();
+            let cc = geom.mesh.cell_centres();
+            let columns: Vec<Vec<f64>> = syms
+                .iter()
+                .map(|s| match s {
+                    Sym::Temperature => ctx.temperature.map_or_else(|| vec![0.0; cc.len()], |t| t.to_vec()),
+                    Sym::Scalar(n) => self.field(n).unwrap_or_else(|| vec![0.0; cc.len()]),
+                })
+                .collect();
+            let mut slots = vec![0.0; 4 + syms.len()];
+            let vals: Vec<f64> = (0..cc.len())
+                .map(|i| {
+                    slots[..4].copy_from_slice(&[cc[i][0], cc[i][1], cc[i][2], ctx.time]);
+                    for (k, col) in columns.iter().enumerate() {
+                        slots[4 + k] = col[i];
+                    }
+                    expr.eval(&slots)
+                })
+                .collect();
+            self.passive[idx].transport.field.values = vals;
+        }
     }
 
     /// Residual of the last sweep per entry.
@@ -510,6 +841,7 @@ impl ScalarState {
         {
             if e.transport.field.values.len() == values.len() {
                 e.transport.field.values.copy_from_slice(values);
+                e.transport.history.old = values.to_vec();
             }
         }
     }

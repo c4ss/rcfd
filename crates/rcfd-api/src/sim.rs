@@ -9,13 +9,14 @@ use crate::lumped::Components;
 use crate::properties::Properties;
 use crate::radiation::Radiation;
 use crate::rheology::Rheology;
-use crate::scalars::ScalarState;
+use crate::scalars::{ScalarState, StepCtx};
 use crate::sources::Sources;
 use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
 use crate::vd::{self, VdState};
 use crate::wall_motion;
+use crate::zone_sources::ZoneSources;
 use rcfd_core::expr::Compiled;
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
@@ -610,6 +611,8 @@ pub struct Simulation {
     /// Rosseland / P1 radiation (F-130).
     radiation: Option<Radiation>,
     scalars: Option<ScalarState>,
+    /// Zone sources and fixed values of the temperature and the scalars (F-201).
+    zone_sources: Option<ZoneSources>,
     props: Option<Properties>,
     t_init: f64,
     /// Run-time statistics of transient runs (F-116).
@@ -1249,6 +1252,11 @@ impl Simulation {
         } else {
             ScalarState::from_case(case, &geom, conv, nu)?
         };
+        let zone_sources = if compressible || vdens {
+            None
+        } else {
+            ZoneSources::from_case(case, &geom)?
+        };
         let sources = if compressible || vdens {
             None
         } else {
@@ -1283,6 +1291,7 @@ impl Simulation {
             components,
             radiation,
             scalars,
+            zone_sources,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
             stats,
@@ -1317,6 +1326,14 @@ impl Simulation {
             limit_s,
             clipped: 0,
         };
+        if let Some(sc) = &mut sim.scalars {
+            let ctx = StepCtx {
+                zone: None,
+                temperature: sim.energy.as_ref().map(|e| e.solver.t.values.as_slice()),
+                time: 0.0,
+            };
+            sc.update_algebraic(&ctx);
+        }
         sim.apply_initial_method(case)?;
         Ok(sim)
     }
@@ -1720,6 +1737,14 @@ impl Simulation {
                     if let Some(cm) = &mut self.components {
                         en.solver.source = cm.heat_sources(&self.geom, &s.phi, &en.solver.t);
                     }
+                    if let Some(zs) = &self.zone_sources {
+                        let base = if self.components.is_some() {
+                            en.solver.source.clone()
+                        } else {
+                            None
+                        };
+                        zs.apply_temperature(&mut en.solver, base, 0.0);
+                    }
                     en.res_t = match &mut self.radiation {
                         Some(r) => r.iterate_energy(&mut en.solver, &s.phi, base_alpha),
                         None => en.solver.iterate(&s.phi),
@@ -1730,10 +1755,15 @@ impl Simulation {
                         self.monitors.push(&name, "", i.iteration as f64, v);
                     }
                 }
+                let sctx = StepCtx {
+                    zone: self.zone_sources.as_ref(),
+                    temperature: self.energy.as_ref().map(|e| e.solver.t.values.as_slice()),
+                    time: 0.0,
+                };
                 let res_sc = self
                     .scalars
                     .as_mut()
-                    .map_or(0.0, |sc| sc.iterate(&s.phi, s.nu_face.as_deref()));
+                    .map_or(0.0, |sc| sc.iterate(&s.phi, s.nu_face.as_deref(), &sctx));
                 let converged = i.res_u < self.tol_u
                     && i.res_p < self.tol_p
                     && res_sc < self.tol_u
@@ -1751,7 +1781,10 @@ impl Simulation {
             }
             Engine::Coupled(s) => {
                 let i = s.iterate();
-                let res_sc = self.scalars.as_mut().map_or(0.0, |sc| sc.iterate(&s.phi, None));
+                let res_sc = self
+                    .scalars
+                    .as_mut()
+                    .map_or(0.0, |sc| sc.iterate(&s.phi, None, &StepCtx::default()));
                 let converged = i.res_u < self.tol_u && i.res_p < self.tol_p && res_sc < self.tol_u;
                 StepSummary {
                     index: i.iteration,
@@ -1893,6 +1926,9 @@ impl Simulation {
                 }
                 if let Some(en) = &mut self.energy {
                     // temperature first, on the flux of the previous step; the flow then sees the new buoyancy
+                    if let Some(zs) = &self.zone_sources {
+                        zs.apply_temperature(&mut en.solver, None, s.time + dt);
+                    }
                     en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
                     let bous = en
                         .buoyancy
@@ -1907,6 +1943,14 @@ impl Simulation {
                     s.body_force = total;
                 }
                 let i = s.step(dt);
+                if let Some(sc) = &mut self.scalars {
+                    let sctx = StepCtx {
+                        zone: self.zone_sources.as_ref(),
+                        temperature: self.energy.as_ref().map(|e| e.solver.t.values.as_slice()),
+                        time: s.time,
+                    };
+                    sc.advance(&s.phi, dt, s.settings.time_scheme, s.nu_face.as_deref(), &sctx);
+                }
                 self.monitors.push("courant", "", i.time, i.courant);
                 self.monitors.push("dt", "s", i.time, i.dt);
                 StepSummary {

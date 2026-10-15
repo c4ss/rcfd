@@ -1458,6 +1458,7 @@ pub fn case_schema() -> Schema {
         .field("rheology", rheology)
         .field("initial", initial)
         .field("registers", crate::registers::schema())
+        .field("zone_sources", crate::zone_sources::schema())
         .field(
             "boundaries",
             Schema::named(boundary).doc("Boundary conditions by patch name"),
@@ -1746,6 +1747,29 @@ fn scalar_schema(species: bool) -> Schema {
             "relax",
             Schema::float(1.0).doc("Implicit under-relaxation of the sweep (1 for the linear frozen-flow problem)"),
         );
+    if !species {
+        s = s
+            .field(
+                "equation",
+                Schema::enumeration("transport", &["transport", "diffusive", "poisson", "algebraic"]).doc("transport: convection-diffusion-source (steady iterations or transient steps); diffusive: d s/dt = div(D grad s) + S without convection; poisson: div(D grad s) + S = 0 solved at every step without a time derivative; algebraic: s = expression, no transport (ADR 0019)"),
+            )
+            .field(
+                "diffusivity_expression",
+                Schema::string("").doc("Diffusivity [m^2/s] as an expression of x, y, z and t, evaluated at the face centres; replaces diffusivity (not with schmidt)"),
+            )
+            .field(
+                "source_expression",
+                Schema::string("").doc("Source as an expression of x, y, z and t at the cell centres, dimensionless or 1/s (value per second); added to source"),
+            )
+            .field(
+                "initial_expression",
+                Schema::string("").doc("Dimensionless initial field as an expression of x, y, z; replaces initial"),
+            )
+            .field(
+                "expression",
+                Schema::string("").doc("equation = algebraic: the value as an expression of x, y, z, t, T (with energy.enabled) and the names of the other scalars and species (dimensionless result)"),
+            );
+    }
     if species {
         s = s.field(
             "remainder",
