@@ -216,3 +216,20 @@ experiments are therefore registered now, before they are run; they do not repla
   `res_u` changes by a factor >= 10 downwards; it is excluded iff the final `res_u` is within [1/3, 3] of the baseline.
 * **X8 (pressure-equation residual in a closed domain).** The X6 closed cavity: the pressure-equation residual parts
   `(num, N_ref, S)` at 6000 iterations; the X2 rule is applied to them (the same thresholds).
+
+## Addendum A2: third normalisation `scaled`, registered after the X1b / E2 / X8 results and before any use (no limit changed)
+
+Reason. E2 with the registered mesh (X2/X4) is a round-off floor amplified by the reference normalisation
+(`res_bwd` 6e-17, `N_ref/S` 1.4e-5); X1b shows that `backward` fixes the stall of a component whose exact value is
+non-zero but not of a component whose exact value is zero (`uy`, and the pressure `p`, in the uniform-flow ducts), for which
+every iterate-relative denominator is itself round-off. An iterate-independent common scale is needed:
+
+* `ResidualNorm::Scaled` (`solver.residual_norm = "scaled"`): momentum `res_u = max_k num_k / max_j S_j` (the
+  largest summed-term magnitude over the active components, common to all components); pressure
+  `res_p = num_p / max(S_p, T)` with `T = 0.5 sum_f |phiHbyA_f|` (half the total absolute face flux, a throughput
+  scale that does not vanish with the pressure level). `Reference` stays the default and bit-identical.
+* Registered checks F1-F4 of this ADR use `residual_norm = scaled` (instead of `backward`; the sentence "backward ONLY IF X1/X2
+  supports" is superseded by this addendum; limits, targets, caps and accuracy limits are unchanged). A diagnostic that the
+  scaled residual is not weaker than meaningful: the F tests also assert the accuracy limits of ADR 0022, and the
+  scaled residual of the cavity P1 run must satisfy `res_scaled <= 1e-3` at the iteration where the reference residual first
+  drops below `1e-6` (the scaled number does not hide an unconverged state; reported for P1 only).
