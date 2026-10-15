@@ -655,3 +655,17 @@ here, not against the papers.
 | Channel Re_tau = 395 mean velocity (U+ at y+ = 30, 50, 100, 150, 300 = 13.493, 14.856, 16.534, 17.646, 19.745; centreline 20.133; bulk 17.545) | Moser, Kim and Mansour (1999) DNS | UNVERIFIED, from memory; used as the ML4/ML5 targets with a 10 percent limit |
 | Taylor-Green vortex decay `exp(-2 nu t)` and the velocity field `(sin x cos y, -cos x sin y)` | analytic solution of the Navier-Stokes equations | derived |
 | Decaying isotropic turbulence slope | none | not verified, not run, no claim made |
+
+## Wave 18B combustion constants (ADR 0027)
+
+None of the constants below could be checked against a primary source in this environment. The checks of ADR 0027 test the
+implementation against the formulas as written here, not against published flame data.
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Eddy-dissipation rate `A rho (eps/k) min(Y_R/(nu' W_R), B Y_P/sum nu'' W)`, A = 4.0, B = 0.5 | Magnussen and Hjertager (1977) | UNVERIFIED: values from secondary lecture notes and forum posts; the primary paper was not accessed |
+| EDC fine-structure fraction `xi* = C_xi (nu eps/k^2)^(1/4)`, residence time `tau* = C_tau (nu/eps)^(1/2)`, C_xi = 2.1377, C_tau = 0.4082 | Magnussen (1981, 1989); Gran and Magnussen (1996) | secondary: values stated in arXiv:2101.08764, which cites Gran and Magnussen; primary papers not accessed. The relations `C_xi = (3 C_D2 / (4 C_D1^2))^(1/4)`, `C_tau = sqrt(C_D2/3)` with C_D1 = 0.134, C_D2 = 0.5 reproduce both values; C_D1 and C_D2 are UNVERIFIED (from memory) |
+| EDC reacting-fraction exchange rate `m = xi*^2 / (tau* (1 - xi*^3))` | same | read in arXiv:2101.08764 (eq. 7, reacting fraction taken as 1); secondary |
+| Extended Zeldovich closed form `d[NO]/dt = 2(k1f k2f [O][N2][O2] - k1r k2r [NO]^2 [O]) / (k1r [NO] + k2f [O2])` | Zeldovich (1946); Lavoie, Heywood and Keck (1970) | derived in ADR 0027 K10 under the steady-state-N approximation; no rate constants bundled |
+| Zeldovich rate constants (O + N2 = NO + N etc.) | Hanson and Salimian evaluation | UNVERIFIED: the primary evaluation was not accessed, the only confirmation found was in vendor documentation, which is excluded here; the tests use invented constants |
+| Nine-coefficient polynomial `cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4`, with `h/RT` and `s/R` obtained by integration | NASA Glenn thermodynamic polynomial form | functional form as commonly stated, UNVERIFIED against the report; the integrated forms are verified by derivative consistency (K12a). The text file layout of the public database is NOT implemented |
