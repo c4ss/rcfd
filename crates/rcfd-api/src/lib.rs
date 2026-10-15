@@ -9,6 +9,7 @@ pub mod exprs;
 pub mod inflate;
 pub mod init;
 pub mod lumped;
+pub mod particles;
 pub mod postproc;
 pub mod properties;
 pub mod radiation;
