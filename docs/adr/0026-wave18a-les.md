@@ -246,7 +246,33 @@ parser; recorded in an addendum if it differs).
 
 ## Results
 
-(to be appended after the runs)
+Measured on the final code (release, `CARGO_TARGET_DIR=<target dir>`). Limits are those registered above; none was changed.
+
+**S1 closed forms** (`rcfd-turb/tests/sgs_closed_forms.rs`): all seven tests met; every closed form reproduced to 1e-12 relative; near-wall WALE slope 2.999972 (limit 3 +- 1e-3), Smagorinsky slope 0.000005 (0 +- 1e-3), van Driest exponent within 1e-3 of 2.
+**S2 mesh** (`sgs_mesh.rs`): linear field on the graded box, max relative error Smagorinsky 7.8e-16, WALE 3.1e-15 (limit 1e-12); face viscosity error 0; uniform field max 9.9e-19 / 3.0e-19 (limit 1e-14); rigid rotation Smagorinsky 1.0e-17 (limit 1e-12), WALE relative 6.0e-16 (limit 1e-10).
+**S3 van Driest wiring** (Couette box): max relative error 6.5e-16 (limit 1e-12).
+**TG** (`sgs_taylor_green.rs`): TG0 Smagorinsky mean nu_t 9.0022e-4 against 9.0313e-4 (-0.32 %, limit 5 %), max/top 0.9840 (limit 0.9 to 1.0); WALE mean 1.0045e-3 against 1.0115e-3 (-0.70 %, limit 8 %). TG2 met (no energy increase; min nu_t 2.88e-4 Smagorinsky, 1.45e-50 WALE). TG4 met (cs = 0 equals laminar, difference 0). TG3 `K_S(4)/K_L(4)` 0.95593 (limit 0.97) met, `K_W(4)/K_L(4)` 0.94632 (limit 0.995) met.
+**Misses of the registered checks (two, both ignored `*_known_miss` tests with the registered assertion intact):** TG1 measured 3.74549e-3 against the closed form 6.32683e-3 (ratio 0.5920, limit 0.85 to 1.15); TG3 ordering `K_W > K_S` measured `K_W/K_S` = 0.98995. Cause: addendum A1 (viscous term of the solver in Laplacian form). Replacement checks of A1, limits fixed by the derivation before the re-run: TG1b Smagorinsky ratio 0.9472 (limit 1 +- 0.15) met; TG1c WALE measured 4.75828e-3 against 5.03325e-3, ratio 0.9454 (limit 1 +- 0.15) met; TG3b `K_W(4) < K_S(4)` met. The earlier prediction `K_S/K_L` = 0.920 assumed the full stress divergence; the measured 0.956 is consistent with the Laplacian form.
+**T1 to T5** (`rcfd-api/tests/sgs_tree.rs`): all met. T1 tree nu_t against the library function: difference 0 for both models (limit 1e-12). T2 constant x 1.2 scales nu_t by 1.44 to 6.2e-16 (Smagorinsky) and 5.0e-16 (WALE) of the maximum (limit 1e-9); cs = 0 equals the laminar run exactly (limit 1e-13); explicit defaults equal omitted keys bit for bit. T3 live switch keeps u, v, p bit-identical; next-step nu_t differs by 1.6 of its maximum (limit > 1e-9); a switch to k_epsilon in the transient session is refused and leaves the run untouched. T4 located errors as registered, with one deviation: cs = 2 is refused by `Case::set` (range check, located message naming `turbulence.coefficients.smagorinsky.cs`) rather than by the semantic check, so the test asserts the located error of `set`. T5 schema lists the models, groups, docs and ranges.
+**ML1, ML2** (`rcfd-turb/tests/mixing_length.rs`): met; max relative error about 2.9e-16.
+**ML3** (channel, 80 rows in y with 30 wall layers of growth 1.1 and first cell 1/395, centre at y+ = 0.5; simplec; 7100 iterations, largest velocity change per iteration 9.3e-11 over a 50-iteration chunk): maximum relative difference to the 1D reduction 2.12e-3 over 39 rows (limit 0.02) met. The convergence measure is defined as the largest change of the cell velocity over 50 iterations divided by 50 (the ADR said "max_du"; this is the exact definition used).
+**ML4** (linear profile with van Driest, against DNS at Re_tau 395): U+ at y+ = 30, 50, 100, 150, 300: 12.955 (-3.99 %), 14.420 (-2.94 %), 16.054 (-2.90 %), 17.197 (-2.55 %), 19.887 (+0.72 %); centreline 20.704 (+2.83 %); bulk 17.423 (-0.69 %); worst 3.99 % (limit 10 %) met. Printed only: y+ = 5, 10, 15, 20 give 4.837, 8.308, 10.294, 11.513 (DNS 4.82, 8.44, 10.657, 12.007).
+**ML5** (Nikuradse profile with R = h and van Driest, a channel analogy of the pipe formula, reported as such): 13.324 (-1.25 %), 14.987 (+0.88 %), 17.000 (+2.82 %), 18.174 (+2.99 %), 20.220 (+2.41 %); centreline 20.761 (+3.12 %); bulk 17.979 (+2.47 %); worst 3.12 % (limit 10 %) met.
+**ML6** (tree against a plug-in factory that builds `MixingLengthModel` from the library, 60 iterations): difference 0 for default, Nikuradse, kappa 0.38, l_max_ratio 0.07 and wall_damping none (limit 1e-12); the four changed variants differ from the default by 0.38, 0.24, 0.19 and 1.9 in velocity (limit > 1e-6).
+**H1** `baseline_hashes` passes unchanged and is not re-recorded.
+
+### Deviations and disclosures
+* The centreline value of ML4/ML5 is the value of the cell row next to the centreline (centre within half a row height); no extrapolation.
+* The channel mesh of ML3 to ML5 has first cell height 1/395 and the y+ = 0.5 of the registered text refers to its cell centre.
+* Subgrid and mixing-length viscosity enter through the existing face-viscosity path (`div(nu_eff grad u)`); the transposed stress term is absent (named gap).
+* In transient runs the algebraic models are evaluated explicitly from the velocity at the start of the step, not under-relaxed.
+* The plug-in twin of ML6 builds the library model itself because `turbulence.length_scale`, `mixing_profile` and `wall_damping` are refused for `model = "plugin"`.
+
+### Unverified references
+Smagorinsky 0.17 and 0.1 to 0.2 range, WALE 0.325, van Driest 25 and 26, Nikuradse 0.14, 0.08, 0.06, and the Re_tau 395 DNS values (U+ at the listed y+, centreline 20.133, bulk 17.545) were written from memory of the published literature and could not be checked against the papers here; they are marked in `docs/reference-data.md`. No Nikuradse pipe data and no decaying-isotropic-turbulence spectrum or slope exist in the tree: no slope or pipe-data claim is made.
+
+### Not delivered
+DES-class hybrid (the Spalart-Allmaras model is a steady pseudo-time sweep with no time derivative); dynamic Smagorinsky, Vreman, sigma, WMLES, SAS, delayed DES, stress-blended models; decaying isotropic turbulence (no periodic 3D box, no verified reference); channel LES; the full subgrid-stress divergence (transposed term); SGS in the compressible and variable-density engines; SGS heat and scalar flux, Pr_t/Sc_t; F-207 entirely; the "pipe vs Nikuradse data" acceptance; Baldwin-Lomax style zero-equation models; v2-f, EARSM, curvature correction; per-coefficient expression override. F-045 and F-206 stay `partial`.
 
 ### Addendum A1 (written after the first run of the Taylor-Green tests; registered limits above are NOT changed)
 
