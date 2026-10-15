@@ -655,6 +655,16 @@ fn a8_validation_errors_are_located() {
         let t_coupled = t.replace("algorithm = \"simplec\"", "algorithm = \"coupled\"");
         expect_error(&format!("V1 {kind} coupled"), &t_coupled, "boundaries.inlet.bc_kind");
     }
+    // V1 variable density
+    let vd = base(
+        "",
+        MF,
+        PO,
+        WALL,
+        "[fluid]
+density = \"ideal_gas\"",
+    );
+    expect_error("V1 variable density", &vd, "boundaries.inlet.bc_kind");
     // V2 the kind owns the velocity and pressure conditions
     expect_error(
         "V2 velocity",
@@ -1498,4 +1508,22 @@ fn r2_defaults_are_inactive() {
     let c = parse(&with_keys);
     assert!(rcfd_api::bc_cat::check(&c).is_empty());
     println!("R2 bc_kind defaults to none; catalogue keys are inert without a kind");
+}
+
+#[test]
+fn d6b_potential_initialisation_with_a_mass_flow_inlet() {
+    let text = channel(MF_INLET, P_OUTLET, 1.0, "").replace(
+        "[solver]
+",
+        "[initial]
+method = \"potential\"
+[solver]
+",
+    );
+    let s = build(&text);
+    // the potential-flow initial velocity is the plug flow of the prescribed mass flow (U = 1)
+    let ux = s.field("ux").unwrap();
+    let worst = ux.iter().map(|v| (v - 1.0).abs()).fold(0.0_f64, f64::max);
+    println!("D6b potential initialisation: max |u_x - 1| = {worst:.2e} (potential plug flow of the mass-flow inlet)");
+    assert!(worst <= 1e-6, "{worst}");
 }

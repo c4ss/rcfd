@@ -688,6 +688,63 @@ report (first and last heights, thickness, growth, quality). Exit codes: 1 for a
 2 for usage errors, 4 if the inflated mesh has quality errors. The service method is `mesh.inflate`. There is no case-tree key
 that inflates a mesh yet.
 
+## Wave 16B: boundary-condition catalogue `bc_kind` (F-200, ADR 0022)
+
+`boundaries.<patch>.bc_kind` (default `none`: the entry is read exactly as before) selects one of the kinds below for the
+constant-density segregated algorithms (`simple`, `simplec`, `piso`, `pimple`). With a kind the kind owns the velocity and
+pressure conditions: leave `velocity = "fixed"`, `pressure = "zero_gradient"` and `velocity_value` zero, and do not give
+`velocity_expression_*`, `velocity_udf` or `profile` (located errors). `temperature`, `turbulence` and scalar keys keep their
+meaning. A key that belongs to other kinds only, with a non-default value, is a located error that names the kinds. Compressible,
+variable-density and `coupled` runs reject every kind at `boundaries.<patch>.bc_kind`. Pressures of the new kinds are in Pa
+(`bc_pressure`, converted with `physics.rho`; the older `pressure_value` stays kinematic).
+
+| Kind | Meaning |
+|---|---|
+| `mass_flow` | Prescribed mass flow (inlet, or outlet when negative). Exact: `rho sum u.S = -mass_flow_value`. |
+| `outflow` | Outlet that takes a weighted share of the total inflow (the flow entering through every non-`outflow` patch). |
+| `pressure_outlet` | Static pressure `bc_pressure` with backflow options. |
+| `opening` | `pressure_outlet` with total-pressure backflow and normal backflow direction (entrainment); no further keys. |
+| `vent` | Loss law `p = bc_pressure + K u_n |u_n| / 2` (kinematic, relaxed 0.5), either flow direction. |
+| `total_pressure_inlet` | Total pressure `bc_pressure`, direction and swirl; `p = p0 - |u|^2/2` on inflow faces. |
+| `radial_equilibrium_outlet` | Outlet pressure profile with `dp/dr = rho w^2 / r` about an axis. |
+| `target_mass_flow_outlet` | Uniform outlet pressure updated each iteration toward `target_mass_flow`. |
+
+| Key | Default | Used by |
+|---|---|---|
+| `mass_flow_value` [kg/s, positive INTO the domain] | 0 | mass_flow |
+| `mass_flow_shape_expression` (velocity-dimensioned expression of x, y, z; only the shape counts, non-negative) | "" (uniform) | mass_flow |
+| `mass_flow_source_patch`, `mass_flow_fraction` in (0, 1] | "", 1 | mass_flow: recirculation, `m = fraction * max(outward flow of the source patch, 0)`, replaces `mass_flow_value` |
+| `flow_direction` | zero = along the inward normal | mass_flow, total_pressure_inlet |
+| `swirl_rate` [rad/s], `swirl_axis`, `swirl_origin` | 0, [0,0,1], origin | mass_flow, total_pressure_inlet (axis and origin also radial_equilibrium_outlet) |
+| `bc_pressure` [Pa] | 0 | pressure_outlet, opening, vent, total_pressure_inlet, radial_equilibrium_outlet, target_mass_flow_outlet (initial value) |
+| `backflow_direction` `normal` or `zero_gradient` | normal | pressure_outlet |
+| `backflow_pressure` `static` or `total` | static | pressure_outlet |
+| `prevent_reverse_flow` | false | pressure_outlet (backflow faces are closed), outflow (negative shape clipped) |
+| `pressure_average` `none` or `area` | none | pressure_outlet: area mean of the applied static pressure equals `bc_pressure` |
+| `loss_coefficient` K >= 0 | 0 | vent |
+| `flow_rate_weight` > 0 | 1 | outflow |
+| `radial_reference` `hub` or `area_average` | hub | radial_equilibrium_outlet |
+| `target_mass_flow` [kg/s, positive OUT], `pressure_update` `bernoulli` or `secant`, `pressure_relax` [0.01, 1] | 0, bernoulli, 0.5 | target_mass_flow_outlet |
+
+Signs: `mass_flow_value` is positive into the domain, `target_mass_flow` positive out of the domain, and the `mass_flow` report
+positive out. Located errors (see `bc_cat.rs`): a direction that does not enter (`flow_direction`), unknown, own, cyclic or doubly
+given source (`mass_flow_source_patch`), fraction outside (0, 1], `flow_rate_weight <= 0`, negative `loss_coefficient`, a shape
+expression with a compile error, negative values or zero total, negative `target_mass_flow`, a zero `swirl_axis`, a radial
+outlet face on the axis, `initial.method = "potential"` with any kind but `mass_flow`, and a turbulence model on a
+`total_pressure_inlet` or on a sourced `mass_flow` inlet unless `turbulence_spec = "values"` (their speed is a result).
+`turbulence = auto` gives the role Inlet to `mass_flow` with a positive value (or sourced) and `total_pressure_inlet`, and
+zero gradient to every other kind; the inlet speed for the turbulence helpers is `|m| / (rho A)` of the patch. A turbulence model
+whose only inlet speed is a result (total-pressure inlet, sourced or negative mass flow) needs `turbulence.k_initial` and the
+initial epsilon / omega.
+
+Practical notes. Dynamic-head conditions (total backflow, `total_pressure_inlet`, `vent`, `radial_equilibrium_outlet`) are
+lagged with a fixed relaxation weight 0.5. A frictionless duct driven by two pressure ends does not start from rest with plain
+under-relaxation (the first iterations diverge); use `solver.pseudo_mode = "physical"` with a small `pseudo_dt`. Walls that behave
+as symmetry planes need `solver.component_diagonal = "corrected"`. `pressure_update = "secant"` is a known miss (diverges on the
+registered case, ADR 0022 addendum); use `bernoulli`. Not delivered: solid circular-pipe mesh, compressible, variable-density
+and coupled support, temperature of a recirculated stream and per-boundary thermal conditions (F-051), time-varying mass flow,
+`pressure_average` on other kinds.
+
 ## Reactor cases and FW-H surface files (F-112, F-136)
 
 `rcfd reactor <case.json>` and `rcfd acoustics <surface.json>` take their own JSON documents, described with
