@@ -233,3 +233,23 @@ every iterate-relative denominator is itself round-off. An iterate-independent c
   scaled residual is not weaker than meaningful: the F tests also assert the accuracy limits of ADR 0022, and the
   scaled residual of the cavity P1 run must satisfy `res_scaled <= 1e-3` at the iteration where the reference residual first
   drops below `1e-6` (the scaled number does not hide an unconverged state; reported for P1 only).
+
+## Addendum A3: controller law v1 missed P1-P4 as registered; symmetric law `ser2` registered before its first run
+
+Observation (first run of D1 as registered; limits untouched). With the law of D1 (`ser`) the scale ratchets to its cap: P1 (cavity,
+start cfl 1) ends after 6000 iterations with residual 0.18 and the scale at 1000; P2 physical, P3 starts 0.5 and 10 and P4 (step,
+res 8.9e-5 after 4000 iterations, scale in [1, 1000]) also miss. The fixed-step references converge (cfl 5 in 346, cfl 2
+in 637, cfl 1 in 1148 iterations), so the controller, not the problem, is at fault. Diagnosis: the registered law grows the scale on
+every iteration in which the residual falls and reduces it only when one iteration raises the residual by more than a factor 2. A
+residual that oscillates with an amplitude below 2 therefore gains scale on every falling half-cycle and never loses it (a one-way
+ratchet), whatever the mean trend; the published switched-evolution-relaxation rule is symmetric (the step follows the
+inverse of the residual in both directions), which the D1 safeguard clause broke. The v1 tests are kept as ignored
+`*_known_miss` records with their registered limits.
+
+Registered now, before any run of it: `pseudo_control = "ser2"` (library `PseudoLaw::Symmetric`, otherwise the same controller
+type and constants): `s <- clamp(s * clamp(r_{n-1} / r_n, backoff, growth), min_scale, max_scale)` with `growth = 2`,
+`backoff = 0.5`, `min_scale = 1/64`, `max_scale = pseudo_scale_max` (1000); a non-finite `r_n` halves `s`; the first iteration
+leaves `s = 1`. No other clause. Checks P1, P2, P3 (both), P4 and F1-F4 are repeated with `ser2` with the identical limits
+(tests `*_ser2`); the F tests are run with both laws when practical, and only the `ser2` ones are expected to be informative. If
+`ser2` also misses, the misses are recorded as `*_ser2_known_miss` and nothing is tuned (constants growth, backoff, scale
+caps stay).
