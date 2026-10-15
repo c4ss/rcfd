@@ -669,3 +669,17 @@ implementation against the formulas as written here, not against published flame
 | Extended Zeldovich closed form `d[NO]/dt = 2(k1f k2f [O][N2][O2] - k1r k2r [NO]^2 [O]) / (k1r [NO] + k2f [O2])` | Zeldovich (1946); Lavoie, Heywood and Keck (1970) | derived in ADR 0027 K10 under the steady-state-N approximation; no rate constants bundled |
 | Zeldovich rate constants (O + N2 = NO + N etc.) | Hanson and Salimian evaluation | UNVERIFIED: the primary evaluation was not accessed, the only confirmation found was in vendor documentation, which is excluded here; the tests use invented constants |
 | Nine-coefficient polynomial `cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4`, with `h/RT` and `s/R` obtained by integration | NASA Glenn thermodynamic polynomial form | functional form as commonly stated, UNVERIFIED against the report; the integrated forms are verified by derivative consistency (K12a). The text file layout of the public database is NOT implemented |
+
+## Wave 19B meshing references (ADR 0030)
+
+No published source for the following was accessed in this environment; the algorithms were written from memory and are tested
+against closed-form or exact-arithmetic checks only.
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Incremental Delaunay insertion (cavity of circumspheres), boundary recovery by Steiner points | Bowyer (1981), Watson (1981) | UNVERIFIED: from memory, primary papers not accessed |
+| Exact orient3d / insphere with floating-point filter and expansion arithmetic | Shewchuk (1997) | UNVERIFIED: technique from memory; correctness checked against exact i128 arithmetic (T9), not against the paper's code or constants |
+| Radius-edge bound 2.0 for Delaunay refinement | Ruppert / Shewchuk refinement literature | UNVERIFIED: value taken as the commonly stated bound, from memory; the bound is not proven for this implementation (boundary splitting off) |
+| Incremental isotropic surface remeshing (split 4/3 h, collapse 4/5 h, valence flip, tangential smoothing) | Botsch and Kobbelt (2004) | UNVERIFIED: ratios from memory |
+| Curvature from vertex normals, size = theta / kappa | project definition | no source; checked on sphere and cylinder closed forms |
+

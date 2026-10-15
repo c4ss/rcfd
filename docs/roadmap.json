@@ -1086,9 +1086,9 @@
       "F-011",
       "F-108"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks",
-    "note": "P3 (stretch). Gap: mesh size controls and fields, surface remeshing, connection and wrapping tools. Do not link AGPL/GPL meshers (TetGen, Gmsh) into rcfd; external-process use only. SCOPE (merged review): add curvature, proximity, hard/soft and body-of-influence size controls and geometric, volumetric and geodesic size fields; quality measures in F-233; diagnostics and wrapping in F-232."
+    "note": "Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::surface_remesh with uniform, curvature, proximity and box size fields (gradient-limited), feature-preserving split/collapse/flip/smooth remeshing projected on the input surface; checks on a sphere (Hausdorff 0.0147 vs limit 0.025, 99 percent edges within 0.7-1.4 of target, min angle 44.5 deg), cube (features and area exact), torus (chi 0, 98.8 percent edges in band) and a tagged cylinder in a box pass. One registered check missed and is an ignored known_miss test: torus volume change 4.18 percent vs 3 percent (limit under-derived: the inscribed-polygon angle allows about 5.9 percent; post-hoc bound test passes). Pipeline remesh then tetrahedralize of a cylinder in a box passes watertightness and check_mesh. NOT done: hard/soft controls, geodesic and volumetric fields, body-of-influence beyond a box, connect/seal and wrapping, anisotropic sizes, brute-force closest point (small surfaces only), CLI and case hooks. Literature attributions unverified. P3 (stretch). Gap: mesh size controls and fields, surface remeshing, connection and wrapping tools. Do not link AGPL/GPL meshers (TetGen, Gmsh) into rcfd; external-process use only. SCOPE (merged review): add curvature, proximity, hard/soft and body-of-influence size controls and geometric, volumetric and geodesic size fields; quality measures in F-233; diagnostics and wrapping in F-232."
   },
   {
     "id": "F-132",
@@ -1098,9 +1098,9 @@
       "F-131",
       "F-102"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Meshes closed STL geometry with boundary layers; cell quality within thresholds; polyhedral conversion preserves volume",
-    "note": "P4 (long-term). Gap: volume fill (tet, poly, hexcore). Implement from public algorithms; no GPL/AGPL linkage. SCOPE (merged review): Cartesian-core fill and prism integration are tracked in F-234."
+    "note": "Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::tetmesh with exact predicates; Delaunay tetrahedralization of a closed surface with boundary recovery, radius-edge refinement, size control, bistellar sliver improvement, conversion to rcfd Mesh with tag patches. Cube, sphere (volume to 1e-10), torus and cylinder-in-box meshes pass euler/volume/check_mesh, determinism and located error messages; Laplace smoke test on the generated sphere mesh gives relative L2 error 1.1e-2 (limit 0.05). One registered check missed and is an ignored known_miss test: radius-edge fraction on the coarse anisotropic torus 0.634 vs 0.99 (boundary splitting off by default because it does not terminate on small-angle surfaces); after surface remeshing the fraction is 1.0. Slivers remain (cylinder in box: min dihedral 3.3 deg). NOT done: boundary layers, polyhedral dual conversion (F-102 stays todo), hexcore (F-234), sliver optimisation, CLI and case hooks. Literature attributions unverified. P4 (long-term). Gap: volume fill (tet, poly, hexcore). Implement from public algorithms; no GPL/AGPL linkage. SCOPE (merged review): Cartesian-core fill and prism integration are tracked in F-234."
   },
   {
     "id": "F-133",
@@ -1718,9 +1718,9 @@
       "F-010",
       "F-011"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "On a public defective surface set the detector reports exact defect counts; repair of a seeded-defect sphere and cube removes all defects with volume preserved within 0.5 percent; wrapping a leaky public model yields a closed manifold with enclosed volume within 2 percent",
-    "note": "Priority P2. Size L. Area: mesh. Merged diagnostic, repair and wrap work."
+    "note": "Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::surface diagnoses free, non-manifold and misoriented edges, duplicate and degenerate triangles, slivers, small edges, open loops, multi-connected vertices and components; repair removes degenerates and duplicates, orients, optionally inverts inward closed components, fills holes and compacts. Seeded-defect sphere and cube are repaired to closed manifolds with volume within 0.5 percent (sphere hole case F=318, chi=2). One registered test had a set-up error (vertex 0 fan size) and was replaced by a corrected test, the old one kept ignored. NOT done: self-intersection detection, spikes, leak-tolerant shrink-wrap with material points, a public defective surface set (only generated defects), CLI. Acceptance not met in full. Priority P2. Size L. Area: mesh. Merged diagnostic, repair and wrap work."
   },
   {
     "id": "F-233",

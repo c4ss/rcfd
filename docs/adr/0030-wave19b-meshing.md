@@ -226,4 +226,72 @@ re-recorded. On a `git archive` of the final commit: `cargo fmt --check`, `cargo
 
 ## Results
 
-(filled in after the runs)
+Measured values against the registered limits (release build, all runs deterministic).
+
+| Check | Registered limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S1, S2, S4-S7 (surface diagnostics, repair) | as registered | all pass | pass |
+| S3 repair outcomes | F=318, chi=2, volume within 0.5 percent | see "Set-up defect" below | old test kept ignored, corrected test passes with the same limits |
+| T1 cube | as registered | pass | pass |
+| T2 sphere | volume equality, chi, `check_mesh` | 320 cells, volume error <= 1e-10, V-E+F-C = 1 | pass |
+| T3 torus | V-E+F-C = 0 | 0 | pass |
+| T4 cylinder in box | V-E+F-C = 2, two patches | 2, two patches | pass |
+| T5 cube | radius-edge fraction >= 0.99, min dihedral, min volume | fraction 1.0, min dihedral 29.5 deg | pass |
+| T5 sphere | same | fraction 1.0, min dihedral 55.05 deg | pass |
+| T5 torus | radius-edge fraction >= 0.99 | 0.634 (min dihedral 6.8 deg, min volume 5.7e-4 positive) | MISS, `t5_torus_known_miss` (ignored) |
+| T6 size | cells within 0.3-3.0 of nominal, circumradius <= 1.5 h | 823 cells vs nominal 1271.9, max circumradius within 1.5 h | pass |
+| T7 determinism | bit equal | equal | pass |
+| T8 located errors | "3 free edge", "6 free edge", "3 misoriented edge" | all three messages | pass |
+| T9 exact predicates | 2000 near-degenerate cases, exact zeros | 4000 cases incl. many exact degeneracies | pass (file and reference differ, see below) |
+| T10 sphere | relative L2 <= 0.05, >= 1000 cells | 1277 cells, 1.10e-2 (max error 1.24e-2) | pass |
+| T10 cube | relative L2 <= 0.05 | 597 cells, 4.9e-14 | pass |
+| R1 curvature | sphere 0.9-1.1, cylinder 1.8-2.2 | within | pass |
+| R2 proximity | 0.2 within 1e-9 | within | pass |
+| R3 uniform sphere | Hausdorff <= 0.4 h^2 = 0.025; edge fraction >= 0.90; valence 6 >= 0.60; min angle >= 10; fraction >= 30 deg >= 0.80 | 0.01473; 0.990; 0.815; 44.5 deg; 1.0; 536 triangles | pass |
+| R4 cube features | corners kept, edge fraction >= 0.80 | 274 triangles, 0.990, area and volume exact | pass |
+| R5 torus | closed, chi = 0, edge fraction >= 0.75, vertices within 1e-9 | closed, 0, 0.988, within | pass |
+| R5 torus volume | change <= 3 percent | 4.18 percent | MISS, `r5_volume_known_miss` (ignored) |
+| R6 determinism | bit equal | equal | pass |
+| R7 tags | tags kept, chi = 4, two components, volume within 3 percent | 372 triangles, all hold | pass |
+
+### Addenda and disclosures
+
+* **S3 set-up defect.** The registered text says vertex 0 of the icosahedron-based sphere has a six-triangle fan with four fill
+  triangles. Vertex 0 has valence 5 (five-triangle fan, three fill triangles; F = 318 coincidentally the same). The old test
+  `s3_repair_outcomes` is kept `#[ignore]` as a record; the new test `s3c_repair_outcomes` uses vertex 12 (valence 6) with the
+  registered limits unchanged (F = 318, chi = 2, volume within 0.5 percent) and passes.
+* **T9 location and reference.** The test is in `crates/rcfd-mesh/tests/predicates.rs`, not `tetmesh.rs`. The reference is exact
+  `i128` arithmetic on lattice points `k 2^-30` with small integer `k` (not "one-ulp perturbed" points); many cases are exactly
+  degenerate. 4000 cases instead of 2000.
+* **T5 torus miss, diagnosed not tuned.** Input is the coarse anisotropic 24x12 torus (edges 0.26-0.65 across a tube of diameter
+  1.0). Circumcentres of bad tetrahedra encroach on the surface and boundary splitting is disabled by default (see next point),
+  so the radius-edge bound cannot be reached. The limit is kept at 0.99. Non-registered extra test `t5b_torus_after_remesh`
+  (surface first remeshed with F-131): 1297 cells, radius-edge fraction 1.0, min dihedral 5.26 deg.
+* **R5 volume miss, diagnosed.** The size field is theta/kappa with theta = 0.6 rad per segment; an inscribed polygon with that
+  angle has area ratio sin(0.6)/0.6 = 0.941, i.e. 5.9 percent loss in the tube cross-section, so the registered 3 percent was
+  under-derived. The ignored test keeps the 3 percent. Post-hoc, non-registered test `r5b_volume_matches_the_angle_derived_bound`
+  checks the change is at most 1 - sin(theta)/theta (passes at 4.18 percent).
+* **Non-registered extra test** `p1_pipeline_cylinder_in_box` (remesh then tetrahedralize then `to_mesh`): 1061 cells, radius-edge
+  fraction 0.927, min dihedral 3.34 deg, volume and `check_mesh` ok. Sliver tetrahedra with small dihedral angles remain; there is
+  no sliver exudation or optimisation.
+* **Algorithm additions beyond ADR text.** (i) `TetOptions::split_boundary` (default false): splitting surface edges during
+  refinement ran away on small-angle surfaces (Steiner budget exhausted), so it is experimental and off; (ii) bistellar
+  improvement (2-3 flips and edge removal for 3..7 incident tetrahedra, `sliver_q = 0.03`) and (iii) `split_flat_boundary`
+  (flat tetrahedra with two surface faces: split the shared surface edge) were added after flat boundary slivers appeared on the
+  torus (125 of 1061 tetrahedra, down to 3 after flips, 0 after the flat split). `TetReport` gained `flips` and `flat_split`.
+* **Remesher choices.** Curvature uses vertex normals as registered; closest-point queries are brute force (O(n) per query, fine
+  to a few thousand triangles, not for large surfaces); tag boundaries are treated as feature edges.
+* **Existing clippy findings** (newer toolchain) in two lines of my earlier committed files were fixed in the F-131 commit.
+
+### Unverified references
+
+All literature attributions in the code and docs (Bowyer-Watson insertion, Shewchuk-style adaptive predicates, Delaunay
+refinement radius-edge criterion, Botsch-Kobbelt style incremental remeshing, bistellar flips) are from memory; no primary source
+was consulted. The implementations are tested against the registered closed-form and exact-arithmetic checks, not against the
+papers.
+
+### Not delivered
+
+F-102 polyhedral dual and solution-based adaption, F-234 (Cartesian core with prism layers), F-235 (sweep and multizone hex),
+shrink-wrap and self-intersection detection, sliver optimisation beyond flips and flat splitting, anisotropic sizes, boundary
+layers, CLI and case-file hooks. F-131, F-132 and F-232 stay `partial`.
