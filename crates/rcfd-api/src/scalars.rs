@@ -486,6 +486,20 @@ impl ScalarState {
             .collect()
     }
 
+    /// Clip every transported scalar and species to `[lo, hi]`; returns the number of cells changed.
+    pub fn clip(&mut self, lo: f64, hi: f64) -> usize {
+        let mut n = 0;
+        for e in self.passive.iter_mut().chain(self.species.iter_mut()) {
+            for v in e.transport.field.values.iter_mut() {
+                if *v < lo || *v > hi {
+                    *v = v.clamp(lo, hi);
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
     /// Restore values (checkpoint); unknown names are ignored.
     pub fn restore(&mut self, name: &str, values: &[f64]) {
         if let Some(e) = self
