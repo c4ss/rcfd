@@ -335,7 +335,8 @@ Measured on the final code (dates 2026-10). Limits are the registered ones above
   -2.473156 (relative error -1.596e-2), 64 -2.492650 (-8.206e-3), 128 -2.502450 (-4.307e-3); limit 1 percent at the finest met;
   observed order 0.93 (first order, as predicted for the wall-adjacent half-cell treatment). The n_r = 128 run did not reach the
   1e-11 tolerance in 6000 iterations (converged flag false); a diagnostic (`d5_finest_grid_convergence_diagnostic`, ignored)
-  was added to show its residuals, and its values are not part of the verdict.
+  was added; it shows res_u 1.76e-11 and res_p 1.37e-11 after 6000 iterations (just above the 1e-11 target), torque
+  unchanged at -2.502450. Not part of the verdict.
 * D5b rigid rotation (both cylinders at Omega = 1): torque relative to the D5 exact 1.04e-4 (n_r = 32), 1.46e-5 (n_r = 64)
   (limit 1e-3) met. MISS: max |u_theta - r| = 1.413e-5 at n_r = 32 against the registered 1e-6
   (`d5b_known_miss_rigid_rotation_velocity`, ignored, assertion unchanged); 9.913e-7 at n_r = 64 (the ADR did not name n_r;
