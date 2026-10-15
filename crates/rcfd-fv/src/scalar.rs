@@ -50,6 +50,9 @@ pub struct SweepExtras<'a> {
     /// Cells held at a value; their equation is replaced by `phi_c = value` and their column is moved to the
     /// right-hand sides of the neighbours, so a symmetric system stays symmetric.
     pub fixed: Option<&'a [Option<f64>]>,
+    /// Capacity weight per cell multiplying the cell volume in the time derivative (conjugate heat transfer, ADR 0024
+    /// D1: `(rho cp)_c / (rho cp)_ref`); `None` is the plain derivative and leaves the existing path untouched.
+    pub ddt_weight: Option<&'a [f64]>,
 }
 
 /// One implicit sweep of the transport equation for `field`; returns the normalised residual
@@ -86,7 +89,13 @@ pub fn sweep_ext(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs, 
         }
     }
     if let Some((scheme, dt, hist)) = inp.ddt {
-        m = add_ddt(scheme, m, geom.mesh.cell_volumes(), dt, hist);
+        m = match ext.ddt_weight {
+            Some(w) => {
+                let vol: Vec<f64> = geom.mesh.cell_volumes().iter().zip(w).map(|(v, w)| v * w).collect();
+                add_ddt(scheme, m, &vol, dt, hist)
+            }
+            None => add_ddt(scheme, m, geom.mesh.cell_volumes(), dt, hist),
+        };
     }
     if let Some(fx) = ext.fixed {
         impose_fixed(&mut m, fx);
@@ -265,6 +274,7 @@ impl ScalarTransport {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                ..Default::default()
             },
         )
     }
@@ -289,6 +299,7 @@ impl ScalarTransport {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                ..Default::default()
             },
         );
         self.history.push(self.field.values.clone(), dt);
