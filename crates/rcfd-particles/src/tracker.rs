@@ -442,38 +442,14 @@ fn advance_particle(
             }
             Walk::Lost => return err(format!("particle {}: the cell walk did not terminate", p.id)),
             Walk::Boundary { cell, face, point } => {
-                let n = loc.face_normal(face);
-                let fa = loc.face_apex(face);
-                let sdist = |xx: Vec3| dot(sub(xx, fa), n);
-                // Refine the hit time on the integrated path.
-                let (h_hit, x_hit, v_hit) = if sdist(x1) <= 0.0 {
-                    // Warped face: the chord crossed the triangulated surface but the end point is below the plane.
-                    let len = norm(sub(x1, x0));
-                    let frac = if len > 0.0 { norm(sub(point, x0)) / len } else { 1.0 };
-                    (h * frac, point, add(v0, scale(sub(v1, v0), frac)))
-                } else {
-                    let (mut lo, mut hi) = (0.0, h);
-                    for _ in 0..60 {
-                        let mid = 0.5 * (lo + hi);
-                        let (xm, _) = step_particle(
-                            opts.scheme,
-                            opts.drag,
-                            fl,
-                            p.d,
-                            p.rho,
-                            opts.gravity,
-                            x0,
-                            v0,
-                            mid,
-                            &mut u_at,
-                        );
-                        if sdist(xm) > 0.0 {
-                            hi = mid;
-                        } else {
-                            lo = mid;
-                        }
-                    }
-                    let (xh, vh) = step_particle(
+                // Refine the hit time on the integrated path. The predicate is the one the tracker itself uses: the chord from the
+                // start of the sub-step to the end of the shortened step leaves the domain. (A bisection on the distance to the
+                // plane of one face is not enough: near an edge or corner the curved path can leave through another face first.)
+                let (mut lo, mut hi) = (0.0, h);
+                let (mut hit_face, mut hit_pt, mut hit_cell, mut v_hit) = (face, point, cell, v1);
+                for _ in 0..60 {
+                    let mid = 0.5 * (lo + hi);
+                    let (xm, vm) = step_particle(
                         opts.scheme,
                         opts.drag,
                         fl,
@@ -482,11 +458,23 @@ fn advance_particle(
                         opts.gravity,
                         x0,
                         v0,
-                        hi,
+                        mid,
                         &mut u_at,
                     );
-                    (hi, sub(xh, scale(n, sdist(xh))), vh)
-                };
+                    match loc.walk(cell0, x0, xm) {
+                        Walk::Boundary { cell, face, point } => {
+                            hi = mid;
+                            hit_face = face;
+                            hit_pt = point;
+                            hit_cell = cell;
+                            v_hit = vm;
+                        }
+                        _ => lo = mid,
+                    }
+                }
+                let (face, cell) = (hit_face, hit_cell);
+                let n = loc.face_normal(face);
+                let (h_hit, x_hit) = (hi, hit_pt);
                 p.x = x_hit;
                 p.v = v_hit;
                 p.cell = cell;
