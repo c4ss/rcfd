@@ -18,5 +18,6 @@ pub mod stats;
 pub mod turb;
 pub mod udf;
 pub mod vd;
+pub mod wall_motion;
 pub mod wall_opts;
 pub mod workflow;

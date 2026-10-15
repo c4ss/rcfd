@@ -449,12 +449,44 @@ pub fn case_schema() -> Schema {
         .doc("Boundary conditions for one mesh patch")
         .field(
             "velocity",
-            Schema::enumeration("fixed", &["fixed", "zero_gradient", "symmetry", "freestream"])
-                .doc("Velocity condition (fixed with value 0 is a no-slip wall)"),
+            Schema::enumeration("fixed", &["fixed", "zero_gradient", "symmetry", "freestream", "moving_wall", "shear", "partial_slip", "marangoni"])
+                .doc("Velocity condition (fixed with value 0 is a no-slip wall). moving_wall: impermeable wall moving with velocity_value (tangential) plus an optional rotation (wall_rotation_*); shear: specified tangential traction shear_stress; partial_slip: Navier slip (slip_length, or specularity with mean_free_path); marangoni: thermocapillary stress marangoni_coefficient * tangential temperature gradient (needs the energy equation). All four are walls for the turbulence model (ADR 0016)"),
         )
         .field(
             "velocity_value",
-            vec3([0.0; 3], "Velocity vector for fixed / freestream conditions"),
+            vec3([0.0; 3], "Velocity vector for fixed / freestream / moving_wall / partial_slip conditions"),
+        )
+        .field(
+            "wall_rotation_rate",
+            Schema::float(0.0).doc("moving_wall / partial_slip: rotation rate [rad/s] about wall_rotation_axis through wall_rotation_origin; the wall velocity is velocity_value + Omega x (x - origin)"),
+        )
+        .field(
+            "wall_rotation_axis",
+            vec3([0.0, 0.0, 1.0], "Rotation axis direction (any non-zero length) of the wall rotation"),
+        )
+        .field(
+            "wall_rotation_origin",
+            vec3([0.0; 3], "Point on the rotation axis [m]"),
+        )
+        .field(
+            "shear_stress",
+            vec3([0.0; 3], "shear: tangential traction [Pa] exerted on the fluid by the boundary (its normal part is ignored); mu du_t/dn_out equals this value"),
+        )
+        .field(
+            "slip_length",
+            Schema::float(0.0).at_least(0.0).doc("partial_slip: Navier slip length [m]; 0 is no-slip"),
+        )
+        .field(
+            "specularity",
+            Schema::float(-1.0).doc("partial_slip: Maxwell specularity in [0, 1) used with mean_free_path instead of slip_length (slip length = mean_free_path (1 + s)/(1 - s)); negative = not used"),
+        )
+        .field(
+            "mean_free_path",
+            Schema::float(0.0).at_least(0.0).doc("partial_slip: mean free path [m] of the specularity form"),
+        )
+        .field(
+            "marangoni_coefficient",
+            Schema::float(0.0).doc("marangoni: d sigma/d T [N/(m K)] of the surface tension; the stress on the fluid is this times the tangential temperature gradient"),
         )
         .field(
             "pressure",

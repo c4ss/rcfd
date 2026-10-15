@@ -15,6 +15,7 @@ use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
 use crate::vd::{self, VdState};
+use crate::wall_motion;
 use rcfd_core::expr::Compiled;
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
@@ -589,6 +590,8 @@ pub struct Simulation {
     pub monitors: MonitorStore,
     reports: Vec<ReportDef>,
     expr_bcs: Vec<ExprBc>,
+    /// Patches with a thermocapillary stress (`marangoni`): patch name and d sigma/d T.
+    marangoni: Vec<(String, f64)>,
     energy: Option<EnergyState>,
     turb: Option<TurbState>,
     /// Uniform body acceleration of the momentum equation (steady runs).
@@ -696,6 +699,7 @@ impl Simulation {
             &mut temp.values,
         ));
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
+        let mut marangoni: Vec<(String, f64)> = Vec::new();
         let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
         errs.extend(udf_diags);
         let flagged = |flag: &str| udfs.keys().find(|n| get_b(case, &format!("udf.{n}.{flag}"))).cloned();
@@ -774,6 +778,36 @@ impl Simulation {
                         value: vval,
                         fixed_on_inflow: true,
                     }),
+                    k if wall_motion::KINDS.contains(&k) => {
+                        if k == "marangoni" {
+                            if !matches!(
+                                get_s(case, "solver.algorithm").as_str(),
+                                "simple" | "simplec" | "piso" | "pimple"
+                            ) {
+                                errs.push(Diagnostic {
+                                    path: format!("{b}.velocity"),
+                                    line: None,
+                                    message:
+                                        "marangoni is available with the simple, simplec, piso and pimple algorithms"
+                                            .into(),
+                                });
+                            }
+                            marangoni.push((patch.name.clone(), get_f(case, &format!("{b}.marangoni_coefficient"))));
+                        }
+                        match wall_motion::build(
+                            case,
+                            &geom,
+                            &patch.name,
+                            &b,
+                            get_f(case, "physics.rho") * get_f(case, "physics.nu"),
+                        ) {
+                            Ok(bc) => bc,
+                            Err(e) => {
+                                errs.extend(e);
+                                Box::new(FixedValue::vector([0.0; 3]))
+                            }
+                        }
+                    }
                     _ => Box::new(FixedValue::vector(vval)),
                 }
             };
@@ -1236,6 +1270,7 @@ impl Simulation {
             monitors: MonitorStore::new(if steady { "iteration" } else { "time" }),
             reports,
             expr_bcs,
+            marangoni,
             energy,
             turb,
             base_body,
@@ -1459,6 +1494,7 @@ impl Simulation {
 
     /// Advance one iteration (steady) or time step (transient) and record monitors.
     pub fn step(&mut self) -> StepSummary {
+        self.update_marangoni();
         let mut reason_override: Option<String> = None;
         let mut udf_error: Option<String> = None;
         let summary = match &mut self.engine {
@@ -1831,6 +1867,27 @@ impl Simulation {
         self.converged = summary.converged;
         self.last = Some(summary);
         summary
+    }
+
+    /// Refresh the thermocapillary stress of every `marangoni` patch from the current temperature field (the
+    /// tangential part of the boundary-cell least-squares gradient times d sigma/d T over the viscosity).
+    fn update_marangoni(&mut self) {
+        if self.marangoni.is_empty() {
+            return;
+        }
+        let Some(en) = &self.energy else { return };
+        let t = &en.solver.t;
+        let grad = rcfd_fv::gradient::least_squares(&self.geom, &t.values, &t.boundary_values(&self.geom));
+        let mu = get_f(&self.case, "physics.rho") * get_f(&self.case, "physics.nu");
+        let u = match &mut self.engine {
+            Engine::Steady(s) => &mut s.u,
+            Engine::Transient(s) => &mut s.u,
+            _ => return,
+        };
+        for (patch, coeff) in &self.marangoni {
+            let stress = wall_motion::marangoni_stress(&self.geom, patch, &grad, *coeff, mu);
+            let _ = u.set_bc(&self.geom, patch, wall_motion::marangoni_bc(stress));
+        }
     }
 
     /// Clip temperature and transported scalars to the configured bands (off by default). Clipping after the solve is
