@@ -247,3 +247,24 @@ parser; recorded in an addendum if it differs).
 ## Results
 
 (to be appended after the runs)
+
+### Addendum A1 (written after the first run of the Taylor-Green tests; registered limits above are NOT changed)
+
+First run of `sgs_taylor_green.rs`: TG0, TG2 and the Smagorinsky/WALE parts of TG3 met; TG1 missed (measured extra dissipation 0.592
+of the registered closed form, limit 0.85 to 1.15) and the ordering `K_W(4) > K_S(4)` of TG3 missed (measured `K_W/K_S` = 0.98995).
+Diagnosis (derivation, not tuning): the registered closed forms used the dissipation of the full stress divergence,
+`2 nu_sgs S:S`. The momentum solver discretises the viscous term as `div(nu_eff grad u)` with a face viscosity (the same
+form that the RANS models use); the transposed part `div(nu_sgs (grad u)^T)` is not present. For a variable `nu_sgs` this is a
+different operator, whose energy dissipation is `nu_sgs g_ij g_ij` (`g_ij g_ij = 2 (a^2 + b^2)` for this vortex) instead of
+`2 nu_sgs S:S` (`4 a^2`). Closed forms of the mean initial dissipation (2D quadrature, 4000^2 points): Smagorinsky
+`nu_sgs g:g` gives `0.900633 (Cs Delta)^2` (exactly `4 (Cs Delta)^2 [(4/(3 pi))^2 + (2/(3 pi))^2]`, against 1.44101 for the
+`2 nu S:S` form; ratio 0.625, and the measured/registered ratio 0.592 is that 0.625 times the Green-Gauss factor of 0.95 for the
+16-cell wave); WALE `nu g:g` gives `0.313661 (Cw Delta)^2` (against 0.070217 for the `2 nu S:S` form: WALE is largest where
+`S` is small and `q = a^2 - b^2` is not, which is exactly where the two forms differ most). So WALE dissipates more than
+Smagorinsky in this solver (initial `5.109e-3` against `4.014e-3` at `n = 16`), the opposite of the registered ordering.
+The omission of the transposed term is a property of the existing viscous discretisation (rcfd-fv `pimple.rs`, shared); it is
+NOT changed here and is a named gap of F-045 ("subgrid-stress divergence in Laplacian form only").
+The original assertions stay as ignored `*_known_miss` tests. New corrected checks, limits fixed here from the derivation:
+* TG1b (replaces TG1 for the Laplacian-form solver): `|((K_L(tau) - K_S(tau))/tau) / (0.900633 (Cs Delta)^2 (1 - e^{-6 nu tau})/(6 nu tau)) - 1| <= 0.15`.
+* TG1c: the same for WALE with `0.313661 (Cw Delta)^2`, limit `0.15`.
+* TG3b (replaces the ordering of TG3): `K_W(4) < K_S(4)`.
