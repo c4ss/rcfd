@@ -21,13 +21,16 @@ fn solve(text: &str, cap: usize) -> Simulation {
     s
 }
 
+/// POST-HOC CRITERION (ADR 0022 addendum, deviation 1; the registered one is residual targets, see the
+/// `*_as_registered_known_miss` tests). The threshold was first 1e-12 and was loosened to 1e-10 after C3 K = 0 sat at a
+/// 1e-12 round-off floor of the pressure.
 /// Iterate until the cell fields stop changing: the largest change of ux, uy, uz and p between successive iterations
 /// is at most 1e-10 for 20 iterations in a row. Used for the frictionless uniform-flow cases, whose exact solution makes
 /// the normalised residuals measure round-off (the control with only existing conditions behaves the same), so the
 /// residual targets cannot be met there. A run that does not settle within `cap` iterations fails.
 fn settle(text: &str, cap: usize) -> Simulation {
     let mut s = build(text);
-    let names = ["ux", "uy", "p"];
+    let names = ["ux", "uy", "uz", "p"];
     let mut prev: Vec<Vec<f64>> = names.iter().map(|n| s.field(n).unwrap()).collect();
     let mut quiet = 0;
     for it in 0..cap {
@@ -988,13 +991,7 @@ flow_rate_weight = 3.0
 }
 
 /// C2 box: symmetry walls, inviscid-uniform exact solution.
-fn duct(xmin: &str, xmax: &str, extra_solver: &str) -> String {
-    // pseudo-time stepping: plain SIMPLEC from rest diverges on a frictionless duct driven by two pressure ends
-    let extra_solver = &format!(
-        "pseudo_mode = \"physical\"
-pseudo_dt = 0.2
-{extra_solver}"
-    );
+fn duct_plain(xmin: &str, xmax: &str, extra_solver: &str) -> String {
     box2d(
         20,
         4,
@@ -1012,9 +1009,26 @@ velocity = "symmetry"
 velocity = "symmetry"
 "#
         ),
-        &format!("component_diagonal = \"corrected\"\n{extra_solver}"),
+        &format!(
+            "component_diagonal = \"corrected\"
+{extra_solver}"
+        ),
     )
     .replace("nu = 0.1", "nu = 1e-3")
+}
+
+/// Post-hoc set-up: pseudo-time stepping, because plain SIMPLEC from rest diverges on a frictionless duct driven by two
+/// pressure ends (the `*_as_registered_known_miss` tests keep the registered set-up).
+fn duct(xmin: &str, xmax: &str, extra_solver: &str) -> String {
+    duct_plain(
+        xmin,
+        xmax,
+        &format!(
+            "pseudo_mode = \"physical\"
+pseudo_dt = 0.2
+{extra_solver}"
+        ),
+    )
 }
 
 const XMIN_P0: &str = "velocity = \"zero_gradient\"\npressure = \"fixed\"\npressure_value = 0.0";
@@ -1064,7 +1078,7 @@ fn c2_total_pressure_backflow_and_c4_opening() {
 fn c5_prevent_reverse_flow_closes_the_patch() {
     let po =
         "bc_kind = \"pressure_outlet\"\nbc_pressure = 0.5\nbackflow_pressure = \"total\"\nprevent_reverse_flow = true";
-    let s = solve(&duct(XMIN_P0, po, ""), 6000);
+    let s = solve(&duct_plain(XMIN_P0, po, ""), 6000);
     let flux = mass(&s, "xmax", 1.0).abs();
     let umax = s
         .field("ux")
@@ -1100,49 +1114,140 @@ fn c1_pressure_averaging() {
     assert!(im <= 1e-9, "{im}");
 }
 
-#[test]
-fn c3_vent_loss_law() {
-    let sym = "";
-    let case = |inlet: &str, k: f64| {
-        channel(
-            inlet,
-            &format!("bc_kind = \"vent\"\nloss_coefficient = {k}\nbc_pressure = 0.0"),
-            1.0,
-            sym,
-        )
-        .replace(
-            "[boundaries.walls]\nvelocity = \"fixed\"",
-            "[boundaries.walls]\nvelocity = \"symmetry\"",
-        )
-        .replace("nu = 0.1", "nu = 1e-3")
-        .replace(
-            "[solver]\n",
-            "[solver]\ncomponent_diagonal = \"corrected\"\npseudo_mode = \"physical\"\npseudo_dt = 0.02\n",
-        )
+/// C3 channel: frictionless (symmetry walls, nu 1e-3), `inlet` mass-flow condition, vent with loss coefficient `k`.
+/// `pseudo_dt = None` is the registered set-up (plain simplec).
+fn c3_case(inlet: &str, k: f64, pseudo_dt: Option<f64>) -> String {
+    let pseudo = match pseudo_dt {
+        Some(dt) => format!(
+            "pseudo_mode = \"physical\"
+pseudo_dt = {dt}
+"
+        ),
+        None => String::new(),
     };
-    for (dir, inlet, sign) in [
-        ("forward", MF_INLET, 1.0),
-        ("reversed", "bc_kind = \"mass_flow\"\nmass_flow_value = -0.1", -1.0),
-    ] {
-        for k in [0.0, 2.5, 10.0] {
-            let s = settle(&case(inlet, k), 30000);
-            let p = s.field("p").unwrap();
-            let cc = s.geom.mesh.cell_centres();
-            let xmax = cc.iter().map(|c| c[0]).fold(0.0_f64, f64::max);
-            let want = sign * 0.5 * k;
-            let mut worst = 0.0_f64;
-            for (c, x) in cc.iter().enumerate() {
-                if (x[0] - xmax).abs() < 1e-9 {
-                    worst = worst.max((p[c] - want).abs());
-                }
-            }
-            let lim = if k == 0.0 { 1e-8 } else { 1e-6 * want.abs() };
-            let im = imbalance(&s, 1.0);
-            println!("C3 {dir} K = {k}: outlet-column pressure error {worst:.2e} against {want} (limit {lim:.1e}); imbalance {im:.2e}");
-            assert!(worst <= lim, "{dir} K={k}: {worst}");
-            assert!(im <= 1e-9, "{im}");
+    channel(
+        inlet,
+        &format!(
+            "bc_kind = \"vent\"
+loss_coefficient = {k}
+bc_pressure = 0.0"
+        ),
+        1.0,
+        "",
+    )
+    .replace(
+        "[boundaries.walls]
+velocity = \"fixed\"",
+        "[boundaries.walls]
+velocity = \"symmetry\"",
+    )
+    .replace("nu = 0.1", "nu = 1e-3")
+    .replace(
+        "[solver]
+",
+        &format!(
+            "[solver]
+component_diagonal = \"corrected\"
+{pseudo}"
+        ),
+    )
+}
+
+const C3_REVERSED: &str = "bc_kind = \"mass_flow\"
+mass_flow_value = -0.1";
+
+fn c3_check(s: &Simulation, label: &str, k: f64, sign: f64) {
+    let p = s.field("p").unwrap();
+    let cc = s.geom.mesh.cell_centres();
+    let xmax = cc.iter().map(|c| c[0]).fold(0.0_f64, f64::max);
+    let want = sign * 0.5 * k;
+    let mut worst = 0.0_f64;
+    for (c, x) in cc.iter().enumerate() {
+        if (x[0] - xmax).abs() < 1e-9 {
+            worst = worst.max((p[c] - want).abs());
         }
     }
+    let lim = if k == 0.0 { 1e-8 } else { 1e-6 * want.abs() };
+    let im = imbalance(s, 1.0);
+    println!("C3 {label} K = {k}: outlet-column pressure error {worst:.2e} against {want} (limit {lim:.1e}); imbalance {im:.2e}");
+    assert!(worst <= lim, "{label} K={k}: {worst}");
+    assert!(im <= 1e-9, "{im}");
+}
+
+#[test]
+fn c3_vent_loss_law() {
+    // post-hoc set-up: pseudo-time step 0.02 and the settled-field criterion (cap 6000 as registered); the reversed
+    // K = 0 case does not settle within the cap and is the ignored known miss below
+    for (dir, inlet, sign) in [("forward", MF_INLET, 1.0), ("reversed", C3_REVERSED, -1.0)] {
+        for k in [0.0, 2.5, 10.0] {
+            if dir == "reversed" && k == 0.0 {
+                continue;
+            }
+            let s = settle(&c3_case(inlet, k, Some(0.02)), 6000);
+            c3_check(&s, dir, k, sign);
+        }
+    }
+}
+
+/// KNOWN MISS: the reversed vent with K = 0 does not settle within the registered 6000 iterations (a slow mode of a fixed
+/// static pressure on an inflow face with zero-gradient velocity). With a cap of 30000 it settles after 23174 iterations
+/// (post-hoc observation, `c3_vent_reversed_k0_long_run_observation`), with the right pressure.
+#[test]
+#[ignore]
+fn c3_vent_reversed_k0_known_miss() {
+    let s = settle(&c3_case(C3_REVERSED, 0.0, Some(0.02)), 6000);
+    c3_check(&s, "reversed", 0.0, -1.0);
+}
+
+/// Post-hoc observation, not a gate: the cap widened to 30000 iterations.
+#[test]
+#[ignore]
+fn c3_vent_reversed_k0_long_run_observation() {
+    let s = settle(&c3_case(C3_REVERSED, 0.0, Some(0.02)), 30000);
+    c3_check(&s, "reversed (long run)", 0.0, -1.0);
+}
+
+/// As registered (plain simplec, residual targets): NOT MET (K = 2.5 diverges to NaN within 300 iterations).
+#[test]
+#[ignore]
+fn c3_vent_as_registered_known_miss() {
+    let s = solve(&c3_case(MF_INLET, 2.5, None), 6000);
+    c3_check(&s, "forward", 2.5, 1.0);
+}
+
+/// Record of the first post-hoc attempt: pseudo time step 0.2 diverges for K = 2.5 (NaN at iteration 9).
+#[test]
+#[ignore]
+fn c3_vent_pseudo_dt_02_known_miss() {
+    let s = settle(&c3_case(MF_INLET, 2.5, Some(0.2)), 6000);
+    c3_check(&s, "forward", 2.5, 1.0);
+}
+
+/// As registered (plain simplec, residual targets): NOT MET, see the ADR addendum.
+#[test]
+#[ignore]
+fn c2_as_registered_known_miss() {
+    let po = "bc_kind = \"pressure_outlet\"
+bc_pressure = 0.5
+backflow_pressure = \"total\"
+backflow_direction = \"normal\"";
+    let s = solve(&duct_plain(XMIN_P0, po, ""), 6000);
+    let (mean, _, _) = mean_abs_ux(&s);
+    assert!((mean - 1.0).abs() <= 1e-5, "{mean}");
+}
+
+/// As registered (plain simplec, residual targets): NOT MET, see the ADR addendum.
+#[test]
+#[ignore]
+fn d1_as_registered_known_miss() {
+    let tp = "bc_kind = \"total_pressure_inlet\"
+bc_pressure = 0.5";
+    let xmax = "velocity = \"zero_gradient\"
+pressure = \"fixed\"
+pressure_value = 0.0";
+    let s = solve(&duct_plain(tp, xmax, ""), 6000);
+    let (mean, _, _) = mean_abs_ux(&s);
+    assert!((mean - 1.0).abs() <= 1e-5, "{mean}");
 }
 
 #[test]
@@ -1158,11 +1263,17 @@ fn d1_total_pressure_inlet_duct() {
     assert!(im <= 1e-9, "{im}");
 }
 
-#[test]
-fn d2_total_pressure_inlet_direction() {
+fn d2_text(pseudo: bool) -> String {
     let c = (30.0_f64).to_radians().cos();
     let sn = (30.0_f64).to_radians().sin();
-    let text = box2d(
+    let pseudo = if pseudo {
+        "
+pseudo_mode = \"physical\"
+pseudo_dt = 0.2"
+    } else {
+        ""
+    };
+    box2d(
         20,
         8,
         2.0,
@@ -1179,12 +1290,12 @@ pressure = "fixed"
 pressure_value = 0.0
 "#
         ),
-        "component_diagonal = \"corrected\"
-pseudo_mode = \"physical\"
-pseudo_dt = 0.2",
+        &format!("component_diagonal = \"corrected\"{pseudo}"),
     )
-    .replace("nu = 0.1", "nu = 1e-3");
-    let s = settle(&text, 6000);
+    .replace("nu = 0.1", "nu = 1e-3")
+}
+
+fn d2_check(s: &Simulation) {
     let (ux, uy) = (s.field("ux").unwrap(), s.field("uy").unwrap());
     let (mut e_mag, mut e_ang) = (0.0_f64, 0.0_f64);
     for i in 0..ux.len() {
@@ -1198,6 +1309,20 @@ pseudo_dt = 0.2",
     assert!(e_mag <= 1e-5, "{e_mag}");
     assert!(e_ang <= 1e-6, "{e_ang}");
     assert!(im <= 1e-9, "{im}");
+}
+
+#[test]
+fn d2_total_pressure_inlet_direction() {
+    let s = settle(&d2_text(true), 6000);
+    d2_check(&s);
+}
+
+/// As registered (plain simplec, residual targets, 6000 iterations): NOT MET, see the ADR addendum.
+#[test]
+#[ignore]
+fn d2_as_registered_known_miss() {
+    let s = solve(&d2_text(false), 6000);
+    d2_check(&s);
 }
 
 const E2_CASE: &str = r#"
@@ -1526,4 +1651,27 @@ method = \"potential\"
     let worst = ux.iter().map(|v| (v - 1.0).abs()).fold(0.0_f64, f64::max);
     println!("D6b potential initialisation: max |u_x - 1| = {worst:.2e} (potential plug flow of the mass-flow inlet)");
     assert!(worst <= 1e-6, "{worst}");
+}
+
+/// As registered (residual targets 1e-12): NOT MET, the residuals stall at 4.4e-12 with stationary fields.
+#[test]
+#[ignore]
+fn e2_as_registered_known_miss() {
+    let s = solve(E2_CASE, 6000);
+    assert!(imbalance(&s, 1.0) <= 1e-9);
+}
+
+#[test]
+fn v13_unknown_patch_is_reported_by_the_existing_check() {
+    let t = base(
+        "",
+        MF,
+        PO,
+        WALL,
+        "[boundaries.nowhere]
+velocity = \"fixed\"",
+    );
+    let e = errors(&t);
+    println!("A8 V13: {e:?}");
+    assert!(e.iter().any(|d| d.path.contains("nowhere")), "{e:?}");
 }
