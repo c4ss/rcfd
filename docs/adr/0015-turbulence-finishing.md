@@ -221,7 +221,130 @@ retuned.
 
 ## Results
 
-(filled in after the runs, without changing anything above)
+Measured 2026-10-15, release builds, `CARGO_TARGET_DIR=<target dir>`. No registered limit was changed. Misses are
+ignored `*_known_miss` tests. "PASS"/"MISS" refer to the limits registered above.
+
+### F-042 k-epsilon family on the corrected step (A1 to A5)
+
+Root-cause audit: the three variants match the published definitions (no defect found), and the registered set-up
+differences (Re_h 37500 vs 36000, inlet plane x/h = -5 vs -4, power-law 1/7 profile and guessed u_tau for k/epsilon vs the
+measured profile, free-stream k 1.5e-4 vs measured about 4.6e-4) were removed in BFS-C. They do not move the answer.
+
+| Variant | coarse | medium (A1 value) | fine | A1 [6.16, 6.36] on medium | A2 abs(fine - medium) <= 0.10 |
+| --- | --- | --- | --- | --- | --- |
+| Standard | 5.140 | 5.350 | 5.452 | MISS (0.81 below) | 0.102, not grid-converged |
+| RNG | 6.255 | 6.334 | 6.348 | PASS | 0.014, grid-converged |
+| Realizable | 6.234 | 6.413 | 6.520 | MISS (0.05 above) | 0.107, not grid-converged |
+
+All nine runs met the convergence criterion (max update < 1e-7, nu_t change < 1e-6). Only the RNG pass is grid-converged;
+Realizable is outside the window on the medium and the fine mesh and drifts upward with refinement, Standard drifts
+upward too (still 0.7 below the window on the fine mesh). The Standard under-prediction (-14.5 percent of the measured 6.26) is
+the known behaviour of the model (A5, no pass/fail).
+
+A3 single-factor sensitivities (medium mesh, change of x_r/h; "responsible" iff it moves x_r by >= 0.10 toward the window):
+
+| Variant | old set-up | (a) old + linearUpwind k, eps | (d) old + inlet plane x/h = -4 | BFS-C | (b) free-stream k 1.5e-4 | (c) Re_h 37500 | (e) BFS-C + linearUpwind k, eps |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Standard | 5.359 | -0.101 | +0.006 | 5.350 | +0.000 | -0.000 | -0.072 |
+| RNG | 6.373 | -0.129 | +0.004 | 6.334 | +0.000 | +0.002 | -0.107 |
+| Realizable | 6.402 | -0.164 | +0.006 | 6.413 | +0.000 | -0.007 | -0.140 |
+
+* Inlet plane, free-stream k and Reynolds number each move x_r/h by less than 0.01: none is responsible for anything.
+  The bundle "measured inlet profile" (old to BFS-C, other factors removed) changes x_r by -0.04 (RNG), -0.01 (Standard) and
+  +0.01 (Realizable); this bundle was not decomposed further (u, k and epsilon profile shapes).
+* The only factor with a >= 0.10 effect is the order of the k/epsilon convection scheme (the library default is first-order
+  upwind): second-order moves x_r down by 0.07 to 0.16 for all variants. For RNG and Realizable that is toward or inside the
+  window (Realizable BFS-C + linearUpwind 6.273, RNG 6.227: inside), for Standard away from it (5.278). The registered A1
+  limits were set on the default scheme, so this does not change a verdict; it shows that the remaining Realizable miss
+  (+0.05) is within the discretisation error of the first-order turbulence transport. The RNG pass is not the result of the
+  corrected inlet (that moved it by -0.04, its old miss was 0.013) and it is within the scheme sensitivity (-0.11).
+* A4: `component_diagonal = corrected` is bitwise identical to the averaged diagonal on the step mesh (max |du| = 0, 200
+  iterations): the step mesh has no symmetry plane, so the correction is a no-op there. PASS.
+
+Standard and Realizable are therefore model/discretisation limits of this implementation at the registered scheme, not set-up
+bugs. F-042 stays `partial`: the merged-review scope (energy and moving-wall sub-criteria, low-Re variants) is not addressed
+and, of the registered BFS window, only RNG meets it.
+
+### F-043 SST / BSL (B1 to B7)
+
+| Check | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| B1 SST vs CFL3D SST-V at x = 0.5, 0.97, 1.5 | -0.80, -1.04, -1.18 % | 3 % | PASS |
+| B2 vs 6-112a | -5.41, -2.23, +0.19 % | 5 % | MISS (x = 0.5, leading-edge region) |
+| B2 vs 6-121 | -7.19, -7.63, -7.67 % | 5 % | MISS |
+| B2 vs 6-134 (White) | -8.17, -7.36, -6.86 % | 5 % | MISS |
+| B3 BSL vs CFL3D | +1.58, +1.21, +0.99 % | 5 % | PASS |
+| B3 BSL vs SST | +2.40, +2.27, +2.20 % | 5 % | PASS |
+| B4 SST automatic, Cf(0.97) at y+ 2 / 1 / 0.5 | 2.573e-3 / 2.609e-3 / 2.663e-3, spread 3.45 % | 3 % | MISS (all converged) |
+| B4 BSL | 2.631e-3 / 2.669e-3 / 2.723e-3, spread 3.45 % | 3 % | MISS |
+| B4 SST low_re | 2.584e-3 / 2.611e-3 / 2.663e-3, spread 3.03 % | 3 % | MISS (by 0.03 points) |
+| B6 corrected diagonal, Cf(0.97) | 0.000 % | 1 % | PASS (the plate has a symmetry plane, the correction changes nothing visible) |
+| B5 BFS-C SST/BSL wall-resolved | see below | | MISS / not converged |
+| B7 NACA0012 | not attempted | | n/a |
+
+Root causes. The miss against White is a model-versus-correlation property, not an implementation error: the NASA TMR CFL3D
+SST-V result is itself 6.4 percent below the White formula at x = 0.97 (7.4 percent at 0.5), and this implementation matches that
+reference within 1.2 percent. The Cf trend with first-cell y+ (+3.5 percent between y+ 2 and y+ 0.5 for SST automatic and BSL; 3.0
+percent for the low_re wall condition) is present in the pure low_re run too, so the automatic Spalding blend is not the cause; it
+is a discretisation property of the wall shear from the first cell with this grid series (the F-043 channel study showed the
+error falling from +5.4 to +1.4 percent between y+ 2 and 0.25). BSL differs from SST by +2.2 to +2.4 percent in Cf, inside the registered
+5 percent (BSL constants as described in docs/reference-data.md; sigma_k1 = 0.5 from memory, unverified).
+
+B5 (backward-facing step with wall-resolved SST/BSL). First attempt (original B5 tests in step_sst.rs): the first-cell height
+was misinterpreted (realised y+ maxima 0.77, 0.4, 0.2 instead of 2, 1, 0.5) and both models diverged to NaN within 50 iterations
+on the finer meshes; SST y+ 2 did not converge in 8000 iterations; BSL y+ 2 converged with x_r/h = 5.95 on a mesh whose floor y+
+ranged 0.03 to 0.77. B5b (Addendum A, corrected first-cell heights and layer counts, alpha_u 0.8): see Addendum A results at the end.
+
+### F-203 near-wall catalogue (C1 to C5)
+
+| Check | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| C1 SST automatic y+ ~ 30 (29.6 to 32.9): average Cf L = 1 / 2 vs Prandtl-Schlichting | -0.51 / -0.69 % | 5 % | PASS |
+| C1 SST automatic y+ ~ 1 (0.96 to 1.06) | -8.44 / -7.76 % | 5 % | MISS (same SST-versus-correlation offset as B2; the y+ 30 wall function lies about 7 percent above the resolved result) |
+| C2 k-epsilon Standard y+ ~ 30 | -6.15 / -4.42 % | 5 % | MISS (Cf(0.5) is identical to Scalable's, so the difference comes from the leading-edge cells with y* < 11.2 where Scalable raises the shear) |
+| C2 Scalable y+ ~ 30 | -4.01 / -3.10 % | 5 % | PASS |
+| C2 Scalable y+ ~ 1 (0.99 to 1.09) | -4.56 / -3.13 % | 5 % | PASS (mesh independent to 0.6 points: the purpose of the scalable form) |
+| C2 Enhanced y+ ~ 1 | not converged (8000 its, du 9.0e-7, nu_t change 2.8e-5); Cf(0.5) 3.051e-3 | converge + 5 % | MISS |
+| C2 Enhanced y+ ~ 30 | not converged (8000 its, du 4.1e-6, nu_t change 1.2e-3); Cf(0.5) 3.080e-3 | converge + 5 % | MISS |
+| C3 k-epsilon Standard + roughness, x = 0.5 / 1.0 / 1.5 | -1.01 / +0.25 / +6.34 %; rough/smooth Cf 2.71 / 2.40 / 2.33 | 10 % | PASS |
+| C3 SST automatic + roughness | -22.2 / -18.8 / -17.5 %; run not converged (du 4.4e-9 vs 1e-9; the smooth contrast also stalls at 5.4e-9) | 10 % | MISS (not converged) |
+| C4 unit checks (wall.rs, kepsilon.rs) | all assertions pass | as registered | PASS |
+| C5 schema validation / located errors (`rcfd-api/tests/wall_options.rs`) | pass | as registered | PASS |
+| C5 tree run equals library run to 1e-12 | not run | 1e-12 | NOT MET (see below) |
+
+* Enhanced wall treatment: implemented (two-layer scales blended for Re_y < 200, Kader's law) but not converged on either mesh;
+  it is an unvalidated option and no accuracy is claimed. The cause of the non-convergence was not diagnosed.
+* Non-equilibrium wall functions: not attempted (formulas not verifiable in the allowed literature).
+* SST with roughness misses and does not converge; k-epsilon with roughness meets the fully rough correlation. The cause of the
+  SST rough-wall shortfall was not diagnosed.
+* C5 wiring: `turbulence.wall_function` {standard, scalable, enhanced}, `roughness_height`, `roughness_constant`, `wall_omega`
+  {automatic, low_re}, `sst_variant` {sst, bsl} are in the schema and `docs/case-schema.md`, validated by
+  `crates/rcfd-api/src/wall_opts.rs` (hooked from `case.rs`). The simulation builds its model as a `Box<dyn TurbulenceModel>`
+  in `turb.rs`/`model.rs` (owned by the plugin work) and the trait has no way to reach the concrete `KEpsilon`/`KOmegaSst`. Until the
+  hook exists every non-default value is rejected with a located error (`wall_opts::BUILD_HOOK_INSTALLED = false`), so nothing is
+  silently ignored. Hook needed: a defaulted trait method `fn apply_wall_options(&mut self, _o: &WallOptions) -> Result<(), String>`
+  in `model.rs`, implemented in `KEpsilonModel` (calls `wall_opts::apply_kepsilon(o, &mut self.m)`) and `SstModel`
+  (`apply_sst`), one call after `create_model` in `TurbState::new` (`turb.rs`, near the coefficient overrides), then set
+  `BUILD_HOOK_INSTALLED = true` and replace the rejection test by the tree-equals-library test.
+
+### Status
+
+F-042, F-043: stay `partial`. F-203: `partial` (library: scalable, roughness, SST BSL/low_re; Enhanced unvalidated; non-equilibrium
+absent; schema hook missing), not `done`.
+
+### Disclosed tunings and deviations
+
+* Roughness shift Delta B uses the exact constants theta = (pi/2) ln(ks+/2.25)/ln 40 and ln 2.25 in place of the rounded 0.4258 and
+  0.811 (the rounded ones jump by 6e-5 at ks+ = 2.25), and is limited below by zero in the transitional range (with the
+  Nikuradse-consistent C_s about 0.3 the raw bracket is below 1 just above 2.25).
+* C_s = exp(-kappa (8.5 - B)), the value that makes the fully rough law reproduce the Nikuradse constant 8.5 (kappa 0.41, E 9.8).
+* Two-layer constants A_mu = 70, A_eps = 2 c_l, blend Re_y* = 200 with width 0.1 (Chen and Patel 1988; Jongen 1998), Kader blending
+  and the Grotjans-Menter scalable form: from memory, unverified (docs/reference-data.md).
+* BSL constants through the consistency relation gamma_i = beta_i/beta* - sigma_wi kappa^2/sqrt(beta*) (0.5532 / 0.4403 with kappa 0.41).
+* First-cell heights of the BFS meshes from assumed friction velocities (0.04 in B5, 0.03 in B5b); layers limited by the 0.5 stack rule.
+* Test-bench values not in the registered text: plate runs use momentum linearUpwind, alpha_u 0.8, turbulence relax 0.6, 140 x
+  60/110 cells; measured profile at x/H = -4 with w'w' = v'v' and a mirrored top-wall profile (assumed), epsilon from the mixing
+  length l = min(kappa d, 0.09 x 1.5).
 
 ## Addendum A: B5b, registered 2026-10-15 before any B5b run
 
@@ -252,3 +375,23 @@ layers of growth 1.25 from 3.7e-3 are thicker than the 1.0 step segment): the nu
 integer <= 20 for which the layer stack is at most 0.5 of the step segment (15 layers at y+ 2); first-cell heights and growth
 are unchanged. The alpha_u probe (300 iterations, y+ 0.5 mesh, SST) was finite for 0.8, 0.5 and 0.3, so by the rule above
 alpha_u = 0.8 is used.
+
+### Addendum A results (B5b, measured 2026-10-15; limits of B5 unchanged)
+
+Realised floor y+ maxima equal the targets (2.02 / 1.02 / 0.51 BSL, 1.98 / 0.99 / 0.50 SST); the alpha_u probe was finite for all three values so
+alpha_u = 0.8 was used; each run is a separate 8000-iteration run on the 17440-cell mesh.
+
+| Target y+ | SST: converged | SST x_r/h | BSL: converged | BSL x_r/h |
+| --- | --- | --- | --- | --- |
+| 2 | no (du 4.9e-2, nu_t change 2.0e-1) | 6.47 (not usable) | no (du 3.9e-2, nu_t change 1.5) | 5.82 (not usable) |
+| 1 | yes (5703 its) | 6.554 | yes (4811 its) | 5.956 |
+| 0.5 | no (du 4.9e-8, nu_t change 7.3e-6) | 6.51 (not usable) | yes (6937 its) | 5.910 |
+
+* Window [6.16, 6.36] on the y+ ~ 1 mesh: SST 6.554 (0.19 above), BSL 5.956 (0.20 below): MISS for both. The spread check
+  is not decided for either model, because the y+ 2 runs (both) and the SST y+ 0.5 run did not converge. BSL, whose three
+  runs have x_r/h 5.82 / 5.96 / 5.91, converged only at y+ 1 and 0.5 (spread of the two converged runs 0.05).
+* B5 verdict: MISS (not converged at y+ 2; window missed at y+ ~ 1). No claim is made on the reattachment of SST/BSL beyond that:
+  SST over-predicts (+0.29) and BSL under-predicts (-0.30) the experimental 6.26 at y+ ~ 1, the difference between them (0.6) being
+  larger than the grid effect seen for the k-epsilon models. The cause of the y+ 2 non-convergence (a limit cycle of the
+  shear layer on the first-order turbulence transport) was not diagnosed; a pseudo-transient fallback was not tried.
+* The first attempt with the set-up defects (original B5 tests) stays in the file as a record.

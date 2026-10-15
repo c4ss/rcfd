@@ -31,7 +31,7 @@
 
 use crate::eddy::{effective_viscosity, patch_faces};
 use crate::kepsilon::velocity_gradient;
-use crate::wall::{wall_distance, SpaldingLaw};
+use crate::wall::{wall_distance, Roughness, SpaldingLaw};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
@@ -48,6 +48,31 @@ const SIGMA_K: [f64; 2] = [0.85, 1.0];
 const SIGMA_W: [f64; 2] = [0.5, 0.856];
 const BETA: [f64; 2] = [0.075, 0.0828];
 const GAMMA: [f64; 2] = [5.0 / 9.0, 0.44];
+
+/// Model variant (F-043, ADR 0015).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SstVariant {
+    /// Menter 2003 SST (the NASA TMR form), default.
+    Sst,
+    /// Menter 1994 baseline model: `nu_t = k/omega` (no a1 limiter, no F2), `sigma_k1 = 0.5`, `gamma_i` from the
+    /// consistency relation `beta_i/beta* - sigma_wi kappa^2/sqrt(beta*)` with `kappa = 0.41`.
+    Bsl,
+}
+
+/// Wall omega / wall-shear options (F-203 wall-omega options, ADR 0015).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SstWallMode {
+    /// Spalding wall law for the shear and strain, cell omega fixed for `y+ > 5` (default, see the module docs).
+    Automatic,
+    /// Plain low-Re boundary conditions of the TMR page: `k = 0` and `omega = 10 * 6 nu/(beta1 y1^2)` on the wall
+    /// face, laminar wall shear, no wall law, no cell fixing. Needs `y+` of order 1.
+    LowRe,
+}
+
+/// BSL `gamma_i = beta_i/beta* - sigma_wi kappa^2/sqrt(beta*)`.
+pub fn bsl_gamma(i: usize) -> f64 {
+    BETA[i] / BETA_STAR - SIGMA_W[i] * 0.41f64.powi(2) / BETA_STAR.sqrt()
+}
 
 /// Blending function `F1` from the local state (`d` wall distance, `cd` the cross-diffusion
 /// `2 sigma_w2/omega grad k . grad omega`).
@@ -90,6 +115,13 @@ pub struct KOmegaSst {
     pub relax_nut: f64,
     /// Linear solver controls.
     pub solver: SolveControl,
+    /// Model variant (default [`SstVariant::Sst`]).
+    pub variant: SstVariant,
+    /// Wall treatment mode (default [`SstWallMode::Automatic`]); change it with [`KOmegaSst::set_wall_mode`].
+    pub wall_mode: SstWallMode,
+    /// Equivalent-sand-grain roughness of the wall patches (default smooth; `Automatic` mode only).
+    pub roughness: Roughness,
+    wall_names: Vec<String>,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
     cell_wall_face: Vec<usize>,
@@ -150,6 +182,10 @@ impl KOmegaSst {
                 tol_rel: 1e-6,
                 max_iter: 500,
             },
+            variant: SstVariant::Sst,
+            wall_mode: SstWallMode::Automatic,
+            roughness: Roughness::SMOOTH,
+            wall_names: walls.iter().map(|w| w.to_string()).collect(),
             wall_dist,
             wall_faces,
             cell_wall_face,
@@ -158,6 +194,35 @@ impl KOmegaSst {
             geom,
             started: false,
         })
+    }
+
+    /// Select the wall treatment. `LowRe` sets `k = 0` on the wall faces; `Automatic` restores zero gradient.
+    pub fn set_wall_mode(&mut self, mode: SstWallMode) -> Result<()> {
+        self.wall_mode = mode;
+        for name in self.wall_names.clone() {
+            let bc: Box<dyn rcfd_fv::bc::Bc> = match mode {
+                SstWallMode::LowRe => Box::new(rcfd_fv::bc::FixedValue::scalar(0.0)),
+                SstWallMode::Automatic => Box::new(rcfd_fv::ZeroGradient),
+            };
+            self.k.set_bc(&self.geom, &name, bc)?;
+        }
+        Ok(())
+    }
+
+    /// Model coefficients `(sigma_k, sigma_w, beta, gamma)` (sets 1 and 2) of the active variant.
+    fn coeffs(&self) -> ([f64; 2], [f64; 2], [f64; 2], [f64; 2]) {
+        match self.variant {
+            SstVariant::Sst => (SIGMA_K, SIGMA_W, BETA, GAMMA),
+            SstVariant::Bsl => ([0.5, 1.0], SIGMA_W, BETA, [bsl_gamma(0), bsl_gamma(1)]),
+        }
+    }
+
+    /// Eddy viscosity from the local state (`s` strain magnitude, `f2` blending function).
+    fn nut_of(&self, k: f64, w: f64, s: f64, f2: f64) -> f64 {
+        match self.variant {
+            SstVariant::Sst => A1 * k / (A1 * w).max(s * f2).max(1e-30),
+            SstVariant::Bsl => k / w.max(1e-30),
+        }
     }
 
     /// Wall distance of every cell centre.
@@ -230,17 +295,30 @@ impl KOmegaSst {
         let mut wall_g: Vec<Option<f64>> = vec![None; n];
         let mut wall_w: Vec<Option<f64>> = vec![None; n];
         let wall_cells: Vec<usize> = (0..n).filter(|&c| self.cell_wall_face[c] != usize::MAX).collect();
+        let low_re = self.wall_mode == SstWallMode::LowRe;
+        let rough = self.roughness.is_rough();
         for &c in &wall_cells {
+            if low_re {
+                break;
+            }
             let f = self.cell_wall_face[c];
             let y = g.dn[f - g.n_internal];
             let uu = self.tangential_speed(u, f);
-            let ut = self.law.u_tau(nu, uu, y);
+            let ut = if rough {
+                self.law.u_tau_rough(nu, uu, y, &self.roughness)
+            } else {
+                self.law.u_tau(nu, uu, y)
+            };
             if ut <= 0.0 {
                 continue;
             }
             // u+ at the cell centre from the law (invert y+ = y+(u+) by u+ = U/u_tau)
             let up = uu / ut;
-            let dy_du = self.law.dy_du(up);
+            let dy_du = if rough {
+                self.law.dy_du_with_e(up, self.law.e_rough(nu, ut, &self.roughness))
+            } else {
+                self.law.dy_du(up)
+            };
             let dudy = ut * ut / nu / dy_du;
             let f_t = 1.0 - 1.0 / dy_du;
             s_mag[c] = dudy;
@@ -268,13 +346,12 @@ impl KOmegaSst {
         }
         self.f1 = f1.clone();
         let mix = |f: f64, a: [f64; 2]| f * a[0] + (1.0 - f) * a[1];
+        let (c_sigma_k, c_sigma_w, c_beta, c_gamma) = self.coeffs();
 
         // eddy viscosity used in the transport equations (consistent with the strain used here)
-        let nut_now: Vec<f64> = (0..n)
-            .map(|c| A1 * kv[c] / (A1 * wv[c]).max(s_mag[c] * f2[c]).max(1e-30))
-            .collect();
-        let gam_k: Vec<f64> = (0..n).map(|c| mix(f1[c], SIGMA_K) * nut_now[c]).collect();
-        let gam_w: Vec<f64> = (0..n).map(|c| mix(f1[c], SIGMA_W) * nut_now[c]).collect();
+        let nut_now: Vec<f64> = (0..n).map(|c| self.nut_of(kv[c], wv[c], s_mag[c], f2[c])).collect();
+        let gam_k: Vec<f64> = (0..n).map(|c| mix(f1[c], c_sigma_k) * nut_now[c]).collect();
+        let gam_w: Vec<f64> = (0..n).map(|c| mix(f1[c], c_sigma_w) * nut_now[c]).collect();
         let gk_f = effective_viscosity(&g, nu, &gam_k, &[]);
         let gw_f = effective_viscosity(&g, nu, &gam_w, &[]);
 
@@ -300,8 +377,8 @@ impl KOmegaSst {
         // ---- omega equation
         let mut mw = self.transport(&self.omega, phi, &gw_f);
         for c in 0..n {
-            let beta = mix(f1[c], BETA);
-            let gamma = mix(f1[c], GAMMA);
+            let beta = mix(f1[c], c_beta);
+            let gamma = mix(f1[c], c_gamma);
             let nut_c = nut_now[c].max(1e-30);
             mw.b[c] += gamma * ptil[c] / nut_c * vol[c];
             mw.a.diag[c] += beta * wv[c] * vol[c];
@@ -331,7 +408,7 @@ impl KOmegaSst {
         let mut change: f64 = 0.0;
         let alpha = if self.started { self.relax_nut } else { 1.0 };
         for c in 0..n {
-            let new = (A1 * kc[c] / (A1 * wcv[c]).max(s_mag[c] * f2[c]).max(1e-30)).min(cap);
+            let new = self.nut_of(kc[c], wcv[c], s_mag[c], f2[c]).min(cap);
             let upd = alpha * new + (1.0 - alpha) * self.nut[c];
             change = change.max((upd - self.nut[c]).abs() / (self.nut[c] + nu));
             self.nut[c] = upd;
@@ -347,9 +424,17 @@ impl KOmegaSst {
             .map(|(i, &f)| {
                 let y = g.dn[f - g.n_internal];
                 let uu = self.tangential_speed(u, f);
-                let ut = if uu > 0.0 { law.u_tau(nu, uu, y) } else { 0.0 };
+                let ut = if uu <= 0.0 {
+                    0.0
+                } else if low_re {
+                    (nu * uu / y).sqrt()
+                } else if rough {
+                    law.u_tau_rough(nu, uu, y, &self.roughness)
+                } else {
+                    law.u_tau(nu, uu, y)
+                };
                 yp[i] = ut * y / nu;
-                let new = if uu > 0.0 {
+                let new = if uu > 0.0 && !low_re {
                     (ut * ut * y / uu - nu).max(0.0)
                 } else {
                     0.0
@@ -369,6 +454,23 @@ impl KOmegaSst {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ADR 0015 unit checks: BSL constants and eddy viscosity.
+    #[test]
+    fn bsl_constants_and_eddy_viscosity() {
+        assert!((bsl_gamma(0) - 0.5532).abs() < 5e-4, "{}", bsl_gamma(0));
+        assert!((bsl_gamma(1) - 0.4403).abs() < 5e-4, "{}", bsl_gamma(1));
+        let mesh = rcfd_mesh::gen::box_2d(4, 4, 1.0, 1.0, false, false).unwrap();
+        let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+        let mut sst = KOmegaSst::new(geom, 1e-3, &["ymin"], 1e-3, 10.0).unwrap();
+        sst.variant = SstVariant::Bsl;
+        // BSL: nu_t = k/omega whatever the strain and F2
+        assert!((sst.nut_of(2.0, 40.0, 1e6, 1.0) - 0.05).abs() < 1e-15);
+        sst.variant = SstVariant::Sst;
+        // SST: a1 limiter active for large strain
+        let nut = sst.nut_of(2.0, 40.0, 1e6, 1.0);
+        assert!((nut - 0.31 * 2.0 / 1e6).abs() < 1e-18);
+    }
 
     #[test]
     fn blending_functions_limits() {

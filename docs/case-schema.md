@@ -27,7 +27,10 @@ Example cases (all run in seconds to a minute in a debug build):
 | `model` | `laminar` | `laminar`, `k_epsilon`, `k_omega_sst` (Menter 2003), `spalart_allmaras` (SA-noft2) or `plugin` (see below) |
 | `variant` | `standard` | `standard`, `rng`, `realizable` (k-epsilon only; rejected for SST) |
 | `wall_treatment` | `smooth` | k-epsilon wall cells: `smooth` (compound viscous/log epsilon and blended production, no switch), `hysteresis` (+-10 percent dead band on the y* = 11.225 switch) or `switch` (original hard switch; its nu_t never settles, see docs/bfs-convergence-findings.md) |
-| `wall_function` | `standard` | log-law wall functions (the only option; `standard` variant constants) |
+| `wall_function` | `standard` | k-epsilon wall treatment: `standard` (log-law wall functions), `scalable` (y* limited below the viscous/log intersection) or `enhanced` (two-layer near-wall scales plus Kader's blended law, wall-resolved meshes); k_epsilon only. Library options (rcfd-turb); the build path does not apply non-default values yet, they are rejected with a located error (ADR 0015) |
+| `roughness_height`, `roughness_constant` | 0, 0 | sand-grain roughness k_s (0: smooth) and constant C_s (0: Nikuradse value derived from `kappa`, `e_wall`); k_epsilon (standard or scalable) and k_omega_sst (`wall_omega = automatic`) |
+| `wall_omega` | `automatic` | k_omega_sst: `automatic` or `low_re` (k = 0 on the wall, wall-resolved) |
+| `sst_variant` | `sst` | k_omega_sst: `sst` (Menter 2003) or `bsl` (baseline) |
 | `kappa`, `e_wall` | 0.41, 9.8 | log-law constants |
 | `convection` | `upwind` | scheme for k and epsilon transport |
 | `relax`, `relax_nut` | 0.7, 0.5 | under-relaxation of k/epsilon and of the eddy viscosity |

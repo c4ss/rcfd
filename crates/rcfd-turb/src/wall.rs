@@ -165,6 +165,202 @@ impl SpaldingLaw {
     }
 }
 
+/// Equivalent-sand-grain roughness with a velocity-shift law (F-203, ADR 0015):
+/// `u+ = ln(E y+)/kappa - Delta B(k_s+)`, `k_s+ = k_s u_tau / nu` (`C_mu^(1/4) sqrt(k)` replaces `u_tau` in the
+/// k-based k-epsilon wall functions).
+///
+/// `Delta B` after Cebeci and Bradshaw (1977), recalled from memory (not re-fetched): zero for `k_s+ <= 2.25`,
+/// `(1/kappa) ln[(k_s+ - 2.25)/87.75 + C_s k_s+] sin[0.4258 (ln k_s+ - 0.811)]` for `2.25 < k_s+ < 90` (implemented with
+/// the exact constants `0.4258 -> (pi/2)/ln 40`, `0.811 -> ln 2.25`, see [`Roughness::delta_b`]), and
+/// `(1/kappa) ln(1 + C_s k_s+)` in the fully rough regime. `C_s` defaults to the value that makes the fully rough
+/// law reproduce Nikuradse's `u+ = ln(y/k_s)/kappa + 8.5` for the smooth law's own constants
+/// ([`Roughness::nikuradse_cs`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Roughness {
+    /// Equivalent sand-grain height (length units); 0 = smooth wall.
+    pub ks: f64,
+    /// Roughness constant `C_s`.
+    pub cs: f64,
+}
+
+impl Roughness {
+    /// Smooth wall.
+    pub const SMOOTH: Roughness = Roughness { ks: 0.0, cs: 0.0 };
+
+    /// `C_s = exp(-kappa (8.5 - B))`, `B = ln(E)/kappa`.
+    pub fn nikuradse_cs(kappa: f64, e: f64) -> f64 {
+        (-kappa * (8.5 - e.ln() / kappa)).exp()
+    }
+
+    /// Rough wall of height `ks` with the Nikuradse-consistent `C_s` of the given smooth log law.
+    pub fn new(ks: f64, kappa: f64, e: f64) -> Self {
+        Roughness {
+            ks,
+            cs: Self::nikuradse_cs(kappa, e),
+        }
+    }
+
+    /// Whether the wall is rough.
+    pub fn is_rough(&self) -> bool {
+        self.ks > 0.0
+    }
+
+    /// Velocity shift `Delta B(k_s+)`.
+    pub fn delta_b(&self, ks_plus: f64, kappa: f64) -> f64 {
+        if ks_plus <= 2.25 {
+            0.0
+        } else if ks_plus < 90.0 {
+            // The published constants 0.4258 and 0.811 are rounded forms of (pi/2)/ln(90/2.25) and ln(2.25); the exact
+            // forms make Delta B continuous at both ends (the rounded ones jump by 6e-5 at 2.25 and 3e-8 at 90).
+            let theta = std::f64::consts::FRAC_PI_2 * (ks_plus / 2.25).ln() / 40f64.ln();
+            // limited below by zero: with the Nikuradse-consistent C_s (about 0.3) the bracket is below 1 just above
+            // 2.25 and the raw formula would give a (non-physical) friction reduction of up to 1e-3 in u+
+            (((ks_plus - 2.25) / 87.75 + self.cs * ks_plus).ln() / kappa * theta.sin()).max(0.0)
+        } else {
+            (1.0 + self.cs * ks_plus).ln() / kappa
+        }
+    }
+
+    /// Effective log-law constant `E exp(-kappa Delta B)` at the given `k_s+`.
+    pub fn e_eff(&self, ks_plus: f64, kappa: f64, e: f64) -> f64 {
+        e * (-kappa * self.delta_b(ks_plus, kappa)).exp()
+    }
+}
+
+impl WallConstants {
+    /// Rough-wall version of [`WallConstants::nut_wall_from_k`]: the log-law constant is replaced by
+    /// `E exp(-kappa Delta B(k_s*))`, `k_s* = C_mu^(1/4) sqrt(k) k_s/nu`. The logarithm is limited below by 1
+    /// (the cell centre must lie above the roughness height; the caller warns otherwise).
+    pub fn nut_wall_from_k_rough(&self, nu: f64, k: f64, y: f64, rough: &Roughness) -> f64 {
+        let ustar = self.cmu.powf(0.25) * k.max(0.0).sqrt();
+        let ystar = ustar * y / nu;
+        if ystar < self.y_plus_lam() {
+            0.0
+        } else {
+            let e_eff = rough.e_eff(ustar * rough.ks / nu, self.kappa, self.e);
+            let ln = (e_eff * ystar).ln().max(1.0);
+            (nu * (ystar * self.kappa / ln - 1.0)).max(0.0)
+        }
+    }
+
+    /// Scalable wall function (Grotjans and Menter, ECCOMAS 1998, as recalled; not re-fetched): the logarithm uses
+    /// `max(y*, y*_lam)`. Returns the EFFECTIVE wall-face viscosity `nu + nu_t,w` (it can be below `nu` when
+    /// `y* < y*_lam`) with a floor of `0.05 nu`.
+    pub fn nu_eff_wall_scalable(&self, nu: f64, k: f64, y: f64, rough: &Roughness) -> f64 {
+        let ustar = self.cmu.powf(0.25) * k.max(0.0).sqrt();
+        let ystar = (ustar * y / nu).max(1e-12);
+        let yt = ystar.max(self.y_plus_lam());
+        let e_eff = if rough.is_rough() {
+            rough.e_eff(ustar * rough.ks / nu, self.kappa, self.e)
+        } else {
+            self.e
+        };
+        let ln = (e_eff * yt).ln().max(1.0);
+        (nu * ystar * self.kappa / ln).max(0.05 * nu)
+    }
+}
+
+impl SpaldingLaw {
+    /// `y+(u+)` with an explicit log-law constant `e` (rough walls: `e` = effective constant).
+    pub fn y_plus_with_e(&self, u_plus: f64, e: f64) -> f64 {
+        let ku = self.kappa * u_plus;
+        u_plus + (ku.exp() - 1.0 - ku - 0.5 * ku * ku - ku * ku * ku / 6.0) / e
+    }
+
+    /// `d y+/d u+` with an explicit log-law constant `e`.
+    pub fn dy_du_with_e(&self, u_plus: f64, e: f64) -> f64 {
+        let ku = self.kappa * u_plus;
+        1.0 + self.kappa / e * (ku.exp() - 1.0 - ku - 0.5 * ku * ku)
+    }
+
+    /// Effective constant `E exp(-kappa Delta B(k_s u_tau/nu))` of a rough wall at friction velocity `ut`.
+    pub fn e_rough(&self, nu: f64, ut: f64, rough: &Roughness) -> f64 {
+        rough.e_eff(ut * rough.ks / nu, self.kappa, self.e)
+    }
+
+    /// Friction velocity over a rough wall (bisection; `k_s+` follows `u_tau` inside the iteration).
+    pub fn u_tau_rough(&self, nu: f64, u: f64, y: f64, rough: &Roughness) -> f64 {
+        let u = u.abs();
+        if u == 0.0 {
+            return 0.0;
+        }
+        let g = |ut: f64| self.y_plus_with_e(u / ut, self.e_rough(nu, ut, rough)) - y * ut / nu;
+        let mut hi = 2.0 * u.max((nu * u / y).sqrt());
+        let mut lo = hi * 1e-8;
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if g(mid) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+            if hi - lo < 1e-14 * hi {
+                break;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+}
+
+/// Kader's (1981) smooth blend of the viscous and logarithmic laws, used by the enhanced wall treatment
+/// (constants recalled from memory, not re-fetched): `u+ = exp(Gamma) y+ + exp(1/Gamma) ln(E y+)/kappa`,
+/// `Gamma = -0.01 y+^4/(1 + 5 y+)`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KaderLaw {
+    /// von Karman constant.
+    pub kappa: f64,
+    /// Log-law constant `E`.
+    pub e: f64,
+}
+
+impl Default for KaderLaw {
+    fn default() -> Self {
+        KaderLaw { kappa: 0.41, e: 9.8 }
+    }
+}
+
+impl KaderLaw {
+    /// `u+` as a function of `y+`.
+    pub fn u_plus(&self, y_plus: f64) -> f64 {
+        if y_plus <= 0.0 {
+            return 0.0;
+        }
+        let gamma = -0.01 * y_plus.powi(4) / (1.0 + 5.0 * y_plus);
+        let turb = (self.e * y_plus).ln() / self.kappa;
+        gamma.exp() * y_plus + (1.0 / gamma).exp() * turb
+    }
+
+    /// `d u+/d y+` (central difference of the closed form).
+    pub fn du_dy(&self, y_plus: f64) -> f64 {
+        let h = 1e-5 * y_plus.max(1e-3);
+        (self.u_plus(y_plus + h) - self.u_plus((y_plus - h).max(0.0))) / (y_plus + h - (y_plus - h).max(0.0))
+    }
+
+    /// Friction velocity from the tangential speed `u` at distance `y` (bisection; `u_tau u+(y u_tau/nu)` is
+    /// monotone in `u_tau`).
+    pub fn u_tau(&self, nu: f64, u: f64, y: f64) -> f64 {
+        let u = u.abs();
+        if u == 0.0 {
+            return 0.0;
+        }
+        let g = |ut: f64| ut * self.u_plus(y * ut / nu) - u;
+        let mut hi = 2.0 * u.max((nu * u / y).sqrt());
+        let mut lo = hi * 1e-8;
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if g(mid) > 0.0 {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+            if hi - lo < 1e-14 * hi {
+                break;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+}
+
 /// Distance from `p` to the triangle `(a, b, c)`.
 fn point_triangle_distance(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> f64 {
     // Ericson, Real-Time Collision Detection, section 5.1.5 (closest point on a triangle).
@@ -373,6 +569,75 @@ mod tests {
             assert!((got / ut - 1.0).abs() < 1e-9, "{got} vs {ut} (y+ {yp})");
         }
         assert_eq!(sp.u_tau(nu, 0.0, 0.01), 0.0);
+    }
+
+    /// ADR 0015 C4: velocity-shift law of the equivalent sand grain.
+    #[test]
+    fn roughness_shift_is_continuous_monotone_and_fully_rough_is_nikuradse() {
+        let c = WallConstants::default();
+        let r = Roughness::new(1.0, c.kappa, c.e);
+        // continuity at 2.25 and 90
+        assert!((r.delta_b(2.25 + 1e-12, c.kappa) - r.delta_b(2.25, c.kappa)).abs() < 1e-9);
+        let (lo, hi) = (r.delta_b(90.0 - 1e-9, c.kappa), r.delta_b(90.0, c.kappa));
+        assert!((lo - hi).abs() < 1e-8, "{lo} {hi}");
+        // non-decreasing
+        let mut prev = 0.0;
+        for i in 0..4000 {
+            let ks = 0.01 * 1.003f64.powi(i);
+            let d = r.delta_b(ks, c.kappa);
+            assert!(d >= prev - 1e-12, "k_s+ {ks}: {d} < {prev}");
+            prev = d;
+        }
+        // fully rough: u+ = ln(E_eff y+)/kappa equals ln(y/k_s)/kappa + 8.5 within 0.05 at k_s+ = 1000
+        let (ks_plus, y_over_ks) = (1000.0, 30.0);
+        let u_plus = (r.e_eff(ks_plus, c.kappa, c.e) * (y_over_ks * ks_plus)).ln() / c.kappa;
+        let nik = y_over_ks.ln() / c.kappa + 8.5;
+        assert!((u_plus - nik).abs() < 0.05, "{u_plus} vs {nik}");
+        // smooth limit: rough friction velocity equals the smooth one for k_s+ << 2.25
+        let sp = SpaldingLaw::default();
+        let nu = 1.5e-5;
+        let r_small = Roughness::new(1e-9, c.kappa, c.e);
+        let (u, y) = (10.0, 0.01);
+        assert!((sp.u_tau_rough(nu, u, y, &r_small) / sp.u_tau(nu, u, y) - 1.0).abs() < 1e-9);
+        // rough wall gives a larger friction velocity at the same velocity
+        let r_big = Roughness::new(2e-3, c.kappa, c.e);
+        assert!(sp.u_tau_rough(nu, u, y, &r_big) > 1.2 * sp.u_tau(nu, u, y));
+    }
+
+    /// ADR 0015 C4: scalable wall function and Kader blend limits.
+    #[test]
+    fn scalable_and_kader_limits() {
+        let c = WallConstants::default();
+        let nu = 1e-3;
+        let y = 1e-2;
+        let k_for = |yst: f64| (yst * nu / (c.cmu.powf(0.25) * y)).powi(2);
+        // identical to the standard wall function where y* >= y*_lam
+        for &ys in &[12.0, 30.0, 100.0, 1000.0] {
+            let k = k_for(ys);
+            let std_eff = nu + c.nut_wall_from_k(nu, k, y);
+            let sc = c.nu_eff_wall_scalable(nu, k, y, &Roughness::SMOOTH);
+            assert!((sc / std_eff - 1.0).abs() < 1e-14, "y* {ys}: {sc} {std_eff}");
+        }
+        // below y*_lam the standard wall function gives nu (viscous), the scalable one a smaller viscosity
+        let k = k_for(3.0);
+        let sc = c.nu_eff_wall_scalable(nu, k, y, &Roughness::SMOOTH);
+        assert!(sc < nu && sc > 0.0, "{sc}");
+        // Kader: viscous and log limits
+        let kd = KaderLaw::default();
+        for &yp in &[0.1, 0.5, 1.0] {
+            assert!((kd.u_plus(yp) / yp - 1.0).abs() < 0.01, "y+ {yp}: {}", kd.u_plus(yp));
+        }
+        for &yp in &[50.0, 100.0, 1000.0] {
+            let log = (kd.e * yp).ln() / kd.kappa;
+            assert!((kd.u_plus(yp) / log - 1.0).abs() < 0.01, "y+ {yp}");
+        }
+        // inversion
+        let nu = 1.5e-5;
+        for &(ut, y) in &[(0.5, 0.01), (1.0, 0.002), (0.05, 0.0008), (0.3, 3e-5)] {
+            let u = ut * kd.u_plus(ut * y / nu);
+            let got = kd.u_tau(nu, u, y);
+            assert!((got / ut - 1.0).abs() < 1e-9, "{got} vs {ut}");
+        }
     }
 
     #[test]

@@ -29,7 +29,7 @@
 //! uses the nearest one.
 
 use crate::eddy::{effective_viscosity, patch_faces};
-use crate::wall::{wall_distance, WallConstants};
+use crate::wall::{wall_distance, KaderLaw, Roughness, WallConstants};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
@@ -74,6 +74,45 @@ pub enum WallTreatment {
     Smooth,
 }
 
+/// Wall function family of the k-epsilon models (F-203, ADR 0015). `Standard` is the default and is the
+/// unchanged Launder-Spalding treatment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WallFunction {
+    /// Equilibrium log law with the viscous/log intersection (see [`WallTreatment`]).
+    Standard,
+    /// Scalable wall function: `y*` is limited below by the intersection value in the wall shear, epsilon and the
+    /// log-law production, so refining the wall mesh below `y* = y*_lam` does not change the model's validity.
+    Scalable,
+    /// Enhanced wall treatment: two-layer (Wolfstein) near-wall length scales blended with the transported values
+    /// for `Re_y = sqrt(k) d / nu` below 200, wall shear from Kader's blended law.
+    Enhanced,
+}
+
+/// Constants of the two-layer model (Chen and Patel 1988; Jongen 1998 blending), recalled from memory.
+pub const TWO_LAYER_RE_Y: f64 = 200.0;
+const TWO_LAYER_A_MU: f64 = 70.0;
+const TWO_LAYER_BLEND_WIDTH: f64 = 0.1;
+
+/// Two-layer length scales at wall distance `d`: `(nu_t,2L, epsilon_2L, lambda)` where `lambda` is the weight of the
+/// transported (outer) values (0 at the wall, 1 for `Re_y >> 200`).
+pub fn two_layer(c_mu: f64, kappa: f64, nu: f64, k: f64, d: f64) -> (f64, f64, f64) {
+    let k = k.max(0.0);
+    let rey = k.sqrt() * d / nu;
+    let cl = kappa * c_mu.powf(-0.75);
+    let a_eps = 2.0 * cl;
+    let l_mu = cl * d * (1.0 - (-rey / TWO_LAYER_A_MU).exp());
+    let l_eps = cl * d * (1.0 - (-rey / a_eps).exp());
+    let nut = c_mu * k.sqrt() * l_mu;
+    let eps = if l_eps > 0.0 {
+        k.powf(1.5) / l_eps
+    } else {
+        2.0 * nu * k / (d * d)
+    };
+    let a_b = TWO_LAYER_BLEND_WIDTH * TWO_LAYER_RE_Y / 0.98f64.atanh();
+    let lambda = 0.5 * (1.0 + ((rey - TWO_LAYER_RE_Y) / a_b).tanh());
+    (nut, eps, lambda)
+}
+
 /// Production and dissipation imposed in a wall-adjacent cell with turbulent kinetic energy `k`,
 /// wall distance `y` and tangential speed `u_t`, as `(G, epsilon)`. `in_log` is the remembered
 /// branch used by [`WallTreatment::Hysteresis`].
@@ -86,13 +125,55 @@ pub fn wall_cell_sources(
     y: f64,
     u_t: f64,
 ) -> (f64, f64) {
+    wall_cell_sources_ext(
+        treatment,
+        WallFunction::Standard,
+        &Roughness::SMOOTH,
+        in_log,
+        wc,
+        nu,
+        k,
+        y,
+        u_t,
+    )
+}
+
+/// [`wall_cell_sources`] with the wall function family and a roughness. `Enhanced` is handled by the model (it needs
+/// the velocity law), here it behaves like `Standard`.
+#[allow(clippy::too_many_arguments)]
+pub fn wall_cell_sources_ext(
+    treatment: WallTreatment,
+    wf: WallFunction,
+    rough: &Roughness,
+    in_log: &mut bool,
+    wc: &WallConstants,
+    nu: f64,
+    k: f64,
+    y: f64,
+    u_t: f64,
+) -> (f64, f64) {
     let k = k.max(0.0);
     let c25 = wc.cmu.powf(0.25);
+    if wf == WallFunction::Scalable {
+        // y* limited below by the intersection value everywhere in the wall cell
+        let ustar = c25 * k.sqrt();
+        let yst = (ustar * y / nu).max(1e-12);
+        let y_eff = y * yst.max(wc.y_plus_lam()) / yst;
+        let nu_eff = wc.nu_eff_wall_scalable(nu, k, y, rough);
+        let eps = ustar.powi(3) / (wc.kappa * y_eff);
+        let g = nu_eff * u_t / y * ustar / (wc.kappa * y_eff);
+        return (g, eps);
+    }
     let yst = c25 * k.sqrt() * y / nu;
     let ylam = wc.y_plus_lam();
     let eps_log = c25.powi(3) * k.powf(1.5) / (wc.kappa * y);
     let eps_vis = 2.0 * nu * k / (y * y);
-    let log_prod = (nu + wc.nut_wall_from_k(nu, k, y)) * u_t / y * c25 * k.sqrt() / (wc.kappa * y);
+    let nut_w = if rough.is_rough() {
+        wc.nut_wall_from_k_rough(nu, k, y, rough)
+    } else {
+        wc.nut_wall_from_k(nu, k, y)
+    };
+    let log_prod = (nu + nut_w) * u_t / y * c25 * k.sqrt() / (wc.kappa * y);
     match treatment {
         WallTreatment::Smooth => {
             let r = (yst / ylam).powi(6);
@@ -158,6 +239,10 @@ pub struct KEpsilon {
     pub solver: SolveControl,
     /// Wall-cell treatment around the viscous/log intersection.
     pub wall_treatment: WallTreatment,
+    /// Wall function family (default [`WallFunction::Standard`]).
+    pub wall_function: WallFunction,
+    /// Equivalent-sand-grain roughness of all wall patches (default smooth).
+    pub roughness: Roughness,
     /// Model constants.
     pub c_mu: f64,
     /// `C1` (standard and RNG).
@@ -226,6 +311,8 @@ impl KEpsilon {
                 max_iter: 500,
             },
             wall_treatment: WallTreatment::Smooth,
+            wall_function: WallFunction::Standard,
+            roughness: Roughness::SMOOTH,
             c_mu,
             c1,
             c2,
@@ -243,6 +330,48 @@ impl KEpsilon {
     /// Wall distance of every cell centre.
     pub fn wall_distance(&self) -> &[f64] {
         &self.wall_dist
+    }
+
+    /// Enhanced wall treatment in the wall-adjacent cell: `(G, epsilon)` from Kader's wall law and the two-layer
+    /// epsilon (blended with the transported value `eps_prev` by the `Re_y` weight).
+    fn enhanced_wall_cell(&self, k: f64, y: f64, u_t: f64, eps_prev: f64) -> (f64, f64) {
+        let nu = self.nu;
+        let kd = KaderLaw {
+            kappa: self.wc.kappa,
+            e: self.wc.e,
+        };
+        let ut = kd.u_tau(nu, u_t, y);
+        let yp = ut * y / nu;
+        let s_w = if yp > 0.0 { ut * ut / nu * kd.du_dy(yp) } else { 0.0 };
+        let g = (ut * ut - nu * s_w).max(0.0) * s_w;
+        let (_, eps2, lam) = two_layer(self.c_mu, self.wc.kappa, nu, k, y);
+        (g, lam * eps_prev + (1.0 - lam) * eps2)
+    }
+
+    /// Wall-face eddy viscosity of the active wall function.
+    fn wall_face_nut(&self, k: f64, y: f64, u: &VectorField, f: usize) -> f64 {
+        match self.wall_function {
+            WallFunction::Standard => {
+                if self.roughness.is_rough() {
+                    self.wc.nut_wall_from_k_rough(self.nu, k, y, &self.roughness)
+                } else {
+                    self.wc.nut_wall_from_k(self.nu, k, y)
+                }
+            }
+            WallFunction::Scalable => self.wc.nu_eff_wall_scalable(self.nu, k, y, &self.roughness) - self.nu,
+            WallFunction::Enhanced => {
+                let uu = self.tangential_speed(u, f);
+                if uu <= 0.0 {
+                    return 0.0;
+                }
+                let kd = KaderLaw {
+                    kappa: self.wc.kappa,
+                    e: self.wc.e,
+                };
+                let ut = kd.u_tau(self.nu, uu, y);
+                (ut * ut * y / uu - self.nu).max(0.0)
+            }
+        }
     }
 
     /// Effective face viscosity `nu + nu_t` (wall faces from the wall function) for the momentum equation.
@@ -334,15 +463,21 @@ impl KEpsilon {
             let f = self.cell_wall_face[c];
             let y = g.dn[f - g.n_internal];
             let u_t = self.tangential_speed(u, f);
-            let (pc, ec) = wall_cell_sources(
-                self.wall_treatment,
-                &mut self.wall_log[c],
-                &self.wc,
-                self.nu,
-                kv[c],
-                y,
-                u_t,
-            );
+            let (pc, ec) = if self.wall_function == WallFunction::Enhanced {
+                self.enhanced_wall_cell(kv[c], y, u_t, ev[c])
+            } else {
+                wall_cell_sources_ext(
+                    self.wall_treatment,
+                    self.wall_function,
+                    &self.roughness,
+                    &mut self.wall_log[c],
+                    &self.wc,
+                    self.nu,
+                    kv[c],
+                    y,
+                    u_t,
+                )
+            };
             prod[c] = pc;
             wall_eps[c] = Some(ec);
         }
@@ -401,6 +536,20 @@ impl KEpsilon {
         let mut enew = ev.clone();
         me.solve(&mut enew, &self.solver);
         enew.iter_mut().for_each(|x| *x = x.max(1e-10));
+        // enhanced wall treatment: blend the transported epsilon and the eddy viscosity with the two-layer values
+        // for Re_y < 200 (lambda = weight of the transported values)
+        let mut nut_outer: Vec<Option<(f64, f64, f64)>> = vec![None; n];
+        if self.wall_function == WallFunction::Enhanced {
+            for c in 0..n {
+                let (nut2, eps2, lam) = two_layer(self.c_mu, self.wc.kappa, self.nu, kv2[c], self.wall_dist[c]);
+                if lam < 1.0 - 1e-9 {
+                    nut_outer[c] = Some((nut2, lam, enew[c]));
+                    if wall_eps[c].is_none() {
+                        enew[c] = (lam * enew[c] + (1.0 - lam) * eps2).max(1e-10);
+                    }
+                }
+            }
+        }
         self.eps.values = enew;
 
         // ---- eddy viscosity
@@ -409,7 +558,11 @@ impl KEpsilon {
         let mut change: f64 = 0.0;
         let alpha = if self.started { self.relax_nut } else { 1.0 };
         for c in 0..n {
-            let new = (c_mu_cell(c) * kc[c] * kc[c] / ec[c]).min(cap);
+            let mut new = (c_mu_cell(c) * kc[c] * kc[c] / ec[c]).min(cap);
+            if let Some((nut2, lam, eps_solved)) = nut_outer[c] {
+                let outer = (c_mu_cell(c) * kc[c] * kc[c] / eps_solved).min(cap);
+                new = (lam * outer + (1.0 - lam) * nut2).min(cap);
+            }
             let upd = alpha * new + (1.0 - alpha) * self.nut[c];
             change = change.max((upd - self.nut[c]).abs() / (self.nut[c] + self.nu));
             self.nut[c] = upd;
@@ -423,7 +576,7 @@ impl KEpsilon {
             .map(|(i, &f)| {
                 let c = g.mesh.owner()[f];
                 let y = g.dn[f - g.n_internal];
-                let new = self.wc.nut_wall_from_k(self.nu, kc[c], y);
+                let new = self.wall_face_nut(kc[c], y, u, f);
                 let v = match old.get(i) {
                     Some(&(_, o)) => alpha * new + (1.0 - alpha) * o,
                     None => new,
@@ -474,6 +627,25 @@ mod tests {
         let k = k_for(&wc, nu, y, 100.0);
         let eps_l = wc.cmu.powf(0.75) * k.powf(1.5) / (wc.kappa * y);
         assert!((log.1 / eps_l - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn two_layer_blending_limits() {
+        let (cmu, kappa, nu, d) = (0.09, 0.41, 1e-5, 1e-3);
+        let k_for_rey = |rey: f64| (rey * nu / d).powi(2);
+        // Re_y << 200: pure two-layer (lambda -> 0); Re_y = 200: one half; Re_y >> 200: transported values (lambda -> 1)
+        assert!(two_layer(cmu, kappa, nu, k_for_rey(20.0), d).2 < 1e-6);
+        assert!((two_layer(cmu, kappa, nu, k_for_rey(200.0), d).2 - 0.5).abs() < 1e-12);
+        assert!(two_layer(cmu, kappa, nu, k_for_rey(2000.0), d).2 > 1.0 - 1e-6);
+        // far from the wall the two-layer scales reduce to the log-layer ones: l_mu = l_eps = c_l d
+        let k = k_for_rey(1e5);
+        let (nut, eps, _) = two_layer(cmu, kappa, nu, k, d);
+        let cl = kappa * cmu.powf(-0.75);
+        assert!((nut / (cmu * k.sqrt() * cl * d) - 1.0).abs() < 1e-9);
+        assert!((eps / (k.powf(1.5) / (cl * d)) - 1.0).abs() < 1e-9);
+        // at the wall the eddy viscosity vanishes like Re_y^2 while epsilon stays finite
+        let (nut0, eps0, _) = two_layer(cmu, kappa, nu, k_for_rey(0.01), d);
+        assert!(nut0 < 1e-6 * nu * 1e3 && eps0.is_finite() && eps0 > 0.0);
     }
 
     #[test]
