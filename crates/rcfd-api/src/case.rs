@@ -540,6 +540,8 @@ impl Case {
         out.extend(crate::properties::check(self));
         out.extend(crate::stats::check(self));
         out.extend(crate::stats::check_output(self));
+        out.extend(crate::decomp::check(self));
+        out.extend(crate::postproc::check(self));
         out
     }
 }

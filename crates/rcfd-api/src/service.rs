@@ -516,6 +516,42 @@ impl Service {
                     "patches": mesh.patches().iter().map(|p| json!({"name": p.name, "faces": p.size, "kind": format!("{:?}", p.kind)})).collect::<Vec<_>>(),
                 }))
             }
+            "mesh.partition" => {
+                let s = self.session(p)?;
+                let case = lock(&s.inner).case.clone();
+                self.check_case_paths(&case)?;
+                let over: Vec<(String, Value)> = crate::decomp::OVERRIDE_KEYS
+                    .iter()
+                    .filter_map(|k| p.get(*k).map(|v| (k.to_string(), v.clone())))
+                    .collect();
+                let case = crate::decomp::with_overrides(&case, &over).map_err(RpcError::validation)?;
+                let mesh = crate::sim::build_mesh(&case).map_err(RpcError::validation)?;
+                let report = crate::decomp::run(&case, &mesh).map_err(RpcError::validation)?;
+                let with_parts = p.get("with_parts").and_then(Value::as_bool).unwrap_or(false);
+                Ok(crate::decomp::report_json(&report, with_parts))
+            }
+            "mesh.inflate" => {
+                let s = self.session(p)?;
+                let case = lock(&s.inner).case.clone();
+                self.check_case_paths(&case)?;
+                let mesh = crate::sim::build_mesh(&case).map_err(RpcError::validation)?;
+                let req = crate::inflate::InflateRequest::from_json(p).map_err(|e| RpcError::params(e.to_string()))?;
+                crate::inflate::inflate(&mesh, &req)
+                    .map(|(_, doc)| doc)
+                    .map_err(|e| RpcError::params(e.to_string()))
+            }
+            "field.sample" => {
+                let s = self.session(p)?;
+                let sim = self.sim(&s)?;
+                let sim = lock(&sim);
+                let spec = crate::postproc::spec_from_json(p).map_err(RpcError::params)?;
+                let set = crate::postproc::sample(&sim, &spec).map_err(RpcError::params)?;
+                Ok(json!({
+                    "names": set.names, "n_samples": set.len(), "n_inside": set.n_inside(),
+                    "inside": set.cells.iter().map(Option::is_some).collect::<Vec<_>>(),
+                    "csv": set.to_csv(),
+                }))
+            }
             "run.initialize" => {
                 let s = self.session(p)?;
                 self.require_idle(&s)?;
@@ -1722,6 +1758,9 @@ pub const METHODS: &[&str] = &[
     "settings.remove",
     "settings.validate",
     "mesh.check",
+    "mesh.partition",
+    "mesh.inflate",
+    "field.sample",
     "run.initialize",
     "run.start",
     "run.pause",
