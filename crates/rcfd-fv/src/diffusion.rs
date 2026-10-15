@@ -11,6 +11,7 @@
 use crate::bc::FaceCoeffs;
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
+use crate::gradient::{limiter, Limiter};
 use rayon::prelude::*;
 use rcfd_core::vec3::{self, Vec3};
 
@@ -21,6 +22,67 @@ use rcfd_core::vec3::{self, Vec3};
 /// * `grad` – cell gradients for the non-orthogonal correction; `None`
 ///   disables the correction.
 pub fn laplacian(geom: &FvGeometry, gamma: &[f64], bc: &[FaceCoeffs], grad: Option<&[Vec3]>) -> FvMatrix {
+    laplacian_impl(geom, gamma, bc, grad, None)
+}
+
+/// Treatment of the explicit non-orthogonal flux on Dirichlet boundary faces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BoundaryGradient {
+    /// Owner-cell gradient (the behaviour of [`laplacian`]).
+    #[default]
+    Owner,
+    /// Owner-cell gradient with its component along the cell-to-face vector replaced by the one-sided difference
+    /// `(phi_b - phi_P)/|d|`.
+    Corrected,
+    /// No explicit non-orthogonal flux on boundary faces.
+    Dropped,
+}
+
+/// Options of the explicit non-orthogonal (secondary-gradient) flux of [`laplacian_with`] (ADR 0016, F-208).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct GradientOptions {
+    /// Replace the component of the interpolated face gradient along the cell-centre line by the compact difference
+    /// `(phi_N - phi_P)/|d|` (face-gradient correction).
+    pub face_correction: bool,
+    /// Limit the cell gradients entering the secondary flux (`None` = unlimited).
+    pub secondary_limiter: Option<Limiter>,
+    /// Boundary treatment.
+    pub boundary: BoundaryGradient,
+}
+
+/// [`laplacian`] with [`GradientOptions`]; `cells` and `bvals` are the current cell and boundary-face values (used by
+/// the face-gradient correction and the limiter; the corrections are lagged, i.e. deferred).
+/// `GradientOptions::default()` reproduces [`laplacian`] to round-off.
+pub fn laplacian_with(
+    geom: &FvGeometry,
+    gamma: &[f64],
+    bc: &[FaceCoeffs],
+    grad: Option<&[Vec3]>,
+    cells: &[f64],
+    bvals: &[f64],
+    opts: GradientOptions,
+) -> FvMatrix {
+    laplacian_impl(geom, gamma, bc, grad, Some((cells, bvals, opts)))
+}
+
+fn laplacian_impl(
+    geom: &FvGeometry,
+    gamma: &[f64],
+    bc: &[FaceCoeffs],
+    grad: Option<&[Vec3]>,
+    ext: Option<(&[f64], &[f64], GradientOptions)>,
+) -> FvMatrix {
+    let limited: Option<Vec<Vec3>> = match (grad, ext) {
+        (Some(gr), Some((cells, bvals, o))) => o.secondary_limiter.map(|kind| {
+            let psi = limiter(geom, cells, bvals, gr, kind);
+            gr.iter().zip(&psi).map(|(g, p)| vec3::scale(*g, *p)).collect()
+        }),
+        _ => None,
+    };
+    let grad: Option<&[Vec3]> = match &limited {
+        Some(l) => Some(l.as_slice()),
+        None => grad,
+    };
     let mesh = &geom.mesh;
     let n_int = geom.n_internal;
     let sf = mesh.face_area_vectors();
@@ -38,7 +100,15 @@ pub fn laplacian(geom: &FvGeometry, gamma: &[f64], bc: &[FaceCoeffs], grad: Opti
                     let k = vec3::sub(sf[f], delta);
                     let w = geom.weights[f];
                     let (o, n) = (own[f], mesh.neighbour()[f]);
-                    let gf = [0, 1, 2].map(|i| w * gr[o][i] + (1.0 - w) * gr[n][i]);
+                    let mut gf = [0, 1, 2].map(|i| w * gr[o][i] + (1.0 - w) * gr[n][i]);
+                    if let Some((cells, _, opts)) = ext {
+                        if opts.face_correction {
+                            let len = vec3::norm(d);
+                            let e = vec3::scale(d, 1.0 / len);
+                            let c = (cells[n] - cells[o]) / len - vec3::dot(gf, e);
+                            vec3::axpy(&mut gf, c, e);
+                        }
+                    }
                     gamma[f] * vec3::dot(k, gf)
                 }
                 None => 0.0,
@@ -77,7 +147,19 @@ pub fn laplacian(geom: &FvGeometry, gamma: &[f64], bc: &[FaceCoeffs], grad: Opti
                     if let (Some(gr), true) = (grad, co.a == 0.0) {
                         let d = geom.delta[f];
                         let k = vec3::sub(sf[f], vec3::scale(d, a * a / vec3::dot(sf[f], d)));
-                        rhs += gamma[f] * vec3::dot(k, gr[c]);
+                        match ext.map(|(_, _, o)| o.boundary).unwrap_or_default() {
+                            BoundaryGradient::Owner => rhs += gamma[f] * vec3::dot(k, gr[c]),
+                            BoundaryGradient::Dropped => {}
+                            BoundaryGradient::Corrected => {
+                                let (cells, bvals, _) = ext.expect("corrected boundary needs values");
+                                let len = vec3::norm(d);
+                                let e = vec3::scale(d, 1.0 / len);
+                                let mut gb = gr[c];
+                                let corr = (bvals[f - n_int] - cells[c]) / len - vec3::dot(gb, e);
+                                vec3::axpy(&mut gb, corr, e);
+                                rhs += gamma[f] * vec3::dot(k, gb);
+                            }
+                        }
                     }
                 }
             }
