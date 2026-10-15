@@ -9,10 +9,12 @@
 pub mod amg;
 pub mod matrix;
 pub mod precond;
+pub mod reorder;
 pub mod solvers;
 pub mod vecops;
 
 pub use amg::{Amg, AmgSettings};
 pub use matrix::{CsrMatrix, LduAddressing, LduMatrix};
 pub use precond::{Ic0, Identity, Ilu0, Jacobi, Preconditioner};
+pub use reorder::{bandwidth, inverse_permutation, rcm_order};
 pub use solvers::{bicgstab, cg, gmres, LinearOperator, SolveControl, SolveStats};
