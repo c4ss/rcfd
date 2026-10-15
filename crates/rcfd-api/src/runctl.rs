@@ -419,6 +419,7 @@ pub fn write_results(sim: &Simulation, dir: &Path) -> Result<(), Box<dyn std::er
     std::fs::write(dir.join("monitors.json"), sim.monitors.to_json().to_string())?;
     std::fs::write(dir.join("report.html"), sim.html_report())?;
     std::fs::write(dir.join("monitors.csv"), sim.monitors.to_csv())?;
+    crate::postproc::write_outputs(sim, dir)?;
     Ok(())
 }
 

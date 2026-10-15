@@ -966,7 +966,7 @@ pub fn case_schema() -> Schema {
             "conductivity",
             Schema::float(0.0)
                 .at_least(0.0)
-                .doc("Thermal conductivity for heat_flow; 0 (unset) uses physics.conductivity, a positive value overrides it (ignored when properties.conductivity is temperature-dependent: the law is used at the wall temperature)"),
+                .doc("Thermal conductivity for heat_flow (constant-density energy equation); 0 (unset) uses physics.conductivity, a positive value overrides it (ignored when properties.conductivity is temperature-dependent: the law is used at the wall temperature). The variable-density solver (fluid.density = ideal_gas or real_gas) takes its conductivity from fluid.* and does not read this key: a positive value there is a validation error (ADR 0021)"),
         );
 
     let convergence = Schema::object()
@@ -1720,6 +1720,8 @@ pub fn case_schema() -> Schema {
         )
         .field("statistics", statistics)
         .field("output", output)
+        .field("decomposition", crate::decomp::schema())
+        .field("postprocessing", crate::postproc::schema())
 }
 
 /// Settings of one passive scalar or species.

@@ -144,6 +144,20 @@ const FLUID_DEFAULT_STRINGS: [(&str, &str); 4] = [
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let names = case.tree.names("boundaries").unwrap_or_default();
+    if enabled(case) {
+        // the variable-density heat_flow evaluation takes the conductivity from fluid.* and never reads the report key
+        // (ADR 0021 D6): a positive value would be silently ignored
+        for r in case.tree.names("reports").unwrap_or_default() {
+            let base = format!("reports.{r}");
+            if get_s(case, &format!("{base}.type")) == "heat_flow" && get_f(case, &format!("{base}.conductivity")) > 0.0
+            {
+                out.push(diag(
+                    &format!("{base}.conductivity"),
+                    "the variable-density solver takes the conductivity from fluid.* and ignores this key; remove it",
+                ));
+            }
+        }
+    }
     if !real_gas(case) {
         for path in REAL_ONLY_FLOATS {
             if get_f(case, path) != 0.0 {

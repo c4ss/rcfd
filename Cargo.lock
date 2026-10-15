@@ -2347,6 +2347,7 @@ dependencies = [
  "rcfd-core",
  "rcfd-fv",
  "rcfd-io",
+ "rcfd-linalg",
  "rcfd-mesh",
  "rcfd-post",
  "rcfd-turb",

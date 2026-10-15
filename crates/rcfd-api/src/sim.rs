@@ -1335,6 +1335,11 @@ impl Simulation {
             sc.update_algebraic(&ctx);
         }
         sim.apply_initial_method(case)?;
+        let mut post_diags = crate::postproc::check_sim(&sim);
+        post_diags.extend(crate::decomp::check_mesh(case, &sim.geom.mesh));
+        if !post_diags.is_empty() {
+            return Err(post_diags);
+        }
         Ok(sim)
     }
 
@@ -2181,7 +2186,7 @@ impl Simulation {
     }
 
     /// Boundary-face values (indexed `f - n_internal`) of a named field.
-    fn boundary_field(&self, name: &str) -> Result<Vec<f64>> {
+    pub fn boundary_field(&self, name: &str) -> Result<Vec<f64>> {
         let g = &self.geom;
         if let Some(t) = &self.turb {
             match name {
@@ -2747,6 +2752,32 @@ impl Simulation {
                     values: VtkValues::Scalar(v),
                 });
             }
+        }
+        let derived = crate::postproc::derived_cells(self).map_err(Error::Other)?;
+        for (n, v) in &derived.vectors {
+            fields.push(VtkField {
+                name: n,
+                values: VtkValues::Vector(v),
+            });
+        }
+        for (n, v) in &derived.scalars {
+            fields.push(VtkField {
+                name: n,
+                values: VtkValues::Scalar(v),
+            });
+        }
+        let partition = if get_b(&self.case, "decomposition.write_field") {
+            let report = crate::decomp::run(&self.case, &self.geom.mesh)
+                .map_err(|d| Error::Other(d.iter().map(ToString::to_string).collect::<Vec<_>>().join("; ")))?;
+            Some(crate::decomp::part_field(&report))
+        } else {
+            None
+        };
+        if let Some(p) = &partition {
+            fields.push(VtkField {
+                name: "partition",
+                values: VtkValues::Scalar(p),
+            });
         }
         let path = dir.join(format!("{name}.vtu"));
         rcfd_io::vtk::write_vtu(&path, &self.geom.mesh, &fields)?;

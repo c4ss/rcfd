@@ -2,9 +2,12 @@
 
 pub mod case;
 pub mod comp;
+pub mod decomp;
 pub mod exprs;
+pub mod inflate;
 pub mod init;
 pub mod lumped;
+pub mod postproc;
 pub mod properties;
 pub mod radiation;
 pub mod registers;

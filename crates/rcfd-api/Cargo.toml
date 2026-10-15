@@ -13,6 +13,7 @@ workspace = true
 rcfd-core.workspace = true
 rcfd-fv.workspace = true
 rcfd-io.workspace = true
+rcfd-linalg.workspace = true
 rcfd-mesh.workspace = true
 rcfd-post.workspace = true
 rcfd-turb.workspace = true
