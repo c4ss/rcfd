@@ -35,5 +35,5 @@ pub use bc::{
 };
 pub use field::{ScalarField, VectorField};
 pub use fvmatrix::FvMatrix;
-pub use thermal_bc::ConvectiveWall;
 pub use geometry::FvGeometry;
+pub use thermal_bc::ConvectiveWall;
