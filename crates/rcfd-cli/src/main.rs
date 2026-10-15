@@ -475,6 +475,9 @@ fn cmd_run(args: &[String]) -> u8 {
         }
     }
     let cont = opt(args, "--continue-from");
+    if rcfd_api::restart::requested(&case) && (cont.is_some() || interp_case.is_some()) {
+        return usage_error("restart.from / --restart-from cannot be combined with --continue-from or --interpolate-*");
+    }
     if cont.is_none() && interp_case.is_none() {
         match rcfd_api::restart::apply_case(&mut sim, &case) {
             Ok(Some(r)) => eprintln!("restarted: {r}"),
