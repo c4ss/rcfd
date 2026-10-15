@@ -1068,7 +1068,7 @@ impl Service {
         let sim = self.sim(s)?;
         if let Some(c) = &cont {
             lock(&sim)
-                .load_checkpoint(c)
+                .load_restart(c)
                 .map_err(|e| RpcError::params(format!("continue_from: {e}")))?;
         }
         if let Some(src) = opt_path("interpolate_case")? {

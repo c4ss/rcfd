@@ -46,6 +46,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod restart;
+
 pub(crate) fn diag(path: &str, message: impl Into<String>) -> Vec<Diagnostic> {
     vec![Diagnostic {
         path: path.into(),
