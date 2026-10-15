@@ -16,6 +16,10 @@ pub const CONVECTION_SCHEMES: &[&str] = &[
     "tvd_superbee",
     "tvd_muscl",
     "tvd_koren",
+    "blended",
+    "high_resolution",
+    "compressive",
+    "bounded_central",
 ];
 
 /// Names of fields that can be requested from a simulation.
@@ -696,7 +700,25 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "time_scheme",
-            Schema::enumeration("euler", &["euler", "bdf2"]).doc("Time integration scheme (transient)"),
+            Schema::enumeration("euler", &["euler", "bdf2", "bdf2_bounded"]).doc("Time integration scheme (transient): euler, bdf2, or bdf2_bounded (second order, falls back toward euler at temporal extrema; ADR 0016)"),
+        )
+        .field(
+            "blend_factor",
+            Schema::float(0.75)
+                .range(0.0, 1.0)
+                .doc("Blend factor of solver.convection = blended: (1 - f) upwind + f central (0 is upwind, 1 is central)"),
+        )
+        .field(
+            "high_resolution_beta",
+            Schema::float(0.2)
+                .range(0.1, 0.5)
+                .doc("Parameter beta_m of solver.convection = high_resolution (bounded blend of central and upwind on the normalised variable diagram; smaller is more central)"),
+        )
+        .field(
+            "compressive_k",
+            Schema::float(1.5)
+                .range(0.0, 2.0)
+                .doc("Slope parameter k of solver.convection = compressive (limiter max(0, min(k r, 1), min(r, k)): 0 first order, 1 minmod, 2 superbee)"),
         )
         .field(
             "component_diagonal",

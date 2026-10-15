@@ -2,12 +2,11 @@
 //! `fluid.density = "ideal_gas"` selects `rcfd_fv::varden` instead of the incompressible kernels.
 
 use crate::case::{Case, Diagnostic};
-use crate::sim::{conv_scheme, get_b, get_f, get_i, get_s, get_v};
+use crate::sim::{get_b, get_f, get_i, get_s, get_v};
 use rcfd_core::eos_data::critical_data;
 use rcfd_core::fluids::{CubicEos, CubicKind, R_UNIVERSAL};
 use rcfd_core::vec3;
 use rcfd_fv::convection::ConvScheme;
-use rcfd_fv::ddt::TimeScheme;
 use rcfd_fv::realgas::RealGas;
 use rcfd_fv::simple::Coupling;
 use rcfd_fv::varden::{
@@ -368,7 +367,7 @@ pub(crate) struct VdState {
 
 /// Convection scheme of a `solver.convection` name, upwind if unknown.
 fn scheme(case: &Case) -> ConvScheme {
-    conv_scheme(&get_s(case, "solver.convection")).unwrap_or(ConvScheme::Upwind)
+    crate::sim::solver_conv_scheme(case)
 }
 
 impl VdState {
@@ -461,11 +460,7 @@ impl VdState {
         s.heat_source = get_f(case, "energy.heat_source");
         if get_s(case, "solver.algorithm") == "pimple" {
             s.transient = Some(TransientSettings {
-                scheme: if get_s(case, "solver.time_scheme") == "bdf2" {
-                    TimeScheme::Bdf2
-                } else {
-                    TimeScheme::ImplicitEuler
-                },
+                scheme: crate::sim::solver_time_scheme(case),
                 max_inner: get_i(case, "fluid.inner_iterations").max(1) as usize,
                 tol: get_f(case, "fluid.inner_tolerance"),
             });
