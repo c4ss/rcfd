@@ -222,6 +222,8 @@ fn q1g_warped_hexahedron() {
     );
 }
 
+/// Record: coded with relative 1e-9, looser than the registered absolute 1e-12 for dimensionless ratios.
+/// The corrected test is `q1h_size_change_registered_tolerance`.
 #[test]
 fn q1h_size_change() {
     let m = box_mesh(
@@ -233,6 +235,26 @@ fn q1h_size_change() {
     let r = cell_measures(&m);
     rel(r.cell_size_change[0], 4.0, 1e-9, "cell 0");
     rel(r.cell_size_change[1], 0.25, 1e-9, "cell 1");
+    let mx = r.cell_size_change.iter().copied().fold(0.0, f64::max);
+    near(
+        mx,
+        check_mesh(&m).max_volume_ratio,
+        TOL,
+        "max equals existing volume ratio",
+    );
+}
+
+#[test]
+fn q1h_size_change_registered_tolerance() {
+    let m = box_mesh(
+        [2, 1, 1],
+        [1.0; 3],
+        [Grading::Expansion(4.0), Grading::Uniform, Grading::Uniform],
+    )
+    .unwrap();
+    let r = cell_measures(&m);
+    near(r.cell_size_change[0], 4.0, TOL, "cell 0");
+    near(r.cell_size_change[1], 0.25, TOL, "cell 1");
     let mx = r.cell_size_change.iter().copied().fold(0.0, f64::max);
     near(
         mx,
