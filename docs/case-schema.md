@@ -745,6 +745,13 @@ registered case, ADR 0022 addendum); use `bernoulli`. Not delivered: solid circu
 and coupled support, temperature of a recirculated stream and per-boundary thermal conditions (F-051), time-varying mass flow,
 `pressure_average` on other kinds.
 
+Convergence controls (ADR 0023). `solver.residual_norm` = `reference` (default) | `backward` | `scaled` selects the normalisation of the
+monitored residuals; `scaled` divides by sum(|A||x| + |b|) (momentum) and by the larger of the pressure-equation scale and half the
+sum of the flux magnitudes (pressure), which stays meaningful for uniform or exactly zero components and does not amplify round-off. Use
+it when `reference` stalls at 1e-12 on a converged field. `solver.pseudo_control` = `off` (default) | `ser` | `ser2` scales the pseudo time
+step automatically (needs `solver.pseudo_mode` other than `off`, else a located error); `solver.pseudo_scale_max` (default 1000) caps the
+scale. The controllers are NOT validated (known misses, ADR 0023 addendum A8); fixed `pseudo_cfl` is the reliable setting.
+
 ## Reactor cases and FW-H surface files (F-112, F-136)
 
 `rcfd reactor <case.json>` and `rcfd acoustics <surface.json>` take their own JSON documents, described with

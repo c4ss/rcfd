@@ -191,6 +191,22 @@ pub fn solve_pressure(
     p: &mut [f64],
     ctl: &PressureControls,
 ) -> (f64, usize) {
+    let (r, it, _) = solve_pressure_parts(geom, gamma_p, bc, phi_hby_a, p, ctl, false);
+    (r, it)
+}
+
+/// [`solve_pressure`] that can also return the parts of the initial residual (diagnostic, ADR 0023; `None` unless
+/// `want_parts`). The solution is identical either way.
+pub fn solve_pressure_parts(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    want_parts: bool,
+) -> (f64, usize, Option<crate::simple::ResidualParts>) {
+    let mut parts = None;
     let div = divergence(geom, phi_hby_a);
     let gamma_eff = coupled_gamma(geom, bc, gamma_p);
     let (own, sf) = (geom.mesh.owner(), geom.mesh.face_area_vectors());
@@ -242,6 +258,16 @@ pub fn solve_pressure(
         let (pm, extras) = assemble(grad.as_deref());
         if pass == 0 {
             res0 = residual(&pm, &extras, p);
+            if want_parts {
+                parts = Some(if extras.is_empty() {
+                    crate::simple::residual_parts(&pm, p)
+                } else {
+                    let mut t = ldu_triplets(&pm.a);
+                    t.extend_from_slice(&extras);
+                    let csr = CsrMatrix::from_triplets(p.len(), t);
+                    crate::simple::residual_parts_csr(&csr, &pm.b, p)
+                });
+            }
         }
         if extras.is_empty() {
             iters += if ctl.amg {
@@ -258,7 +284,7 @@ pub fn solve_pressure(
             iters += cg(&csr, &pm.b, p, &amg, &ctl.solver).iterations;
         }
     }
-    (res0, iters)
+    (res0, iters, parts)
 }
 
 /// Conservative face flux `phiHbyA - gamma snGrad(p) |S|` (prescribed flux on

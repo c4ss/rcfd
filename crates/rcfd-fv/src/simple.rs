@@ -22,8 +22,8 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure, PressureBc,
-    PressureControls,
+    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure_parts,
+    PressureBc, PressureControls,
 };
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
@@ -257,6 +257,156 @@ pub fn normalised_residual_csr(a: &rcfd_linalg::CsrMatrix, b: &[f64], x: &[f64])
     num / (norm + 1e-30)
 }
 
+/// Normalisation of the momentum residual (ADR 0023). `Reference` is the long-standing definition
+/// ([`normalised_residual`]); `Backward` divides by the magnitude of the summed terms instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ResidualNorm {
+    /// `sum|b - A x| / sum(|A x - A xbar| + |b - A xbar|)` (default; unchanged).
+    #[default]
+    Reference,
+    /// Normwise backward error `sum|b - A x| / sum_i(sum_j |a_ij||x_j| + |b_i|)`: does not vanish with the
+    /// variation of the iterate, so a (nearly) uniform exact solution can reach round-off level.
+    Backward,
+    /// Iterate-independent common scale (ADR 0023 addendum A2): momentum `max_k num_k / max_j S_j` over the
+    /// active components; pressure `num / max(S, T)` with `T` half the total absolute face flux of `phiHbyA`.
+    Scaled,
+}
+
+/// Parts of a normalised residual (diagnostic, ADR 0023): `num = sum|b - A x|`, `norm_ref` the denominator of
+/// the reference residual and `scale = sum_i(sum_j |a_ij||x_j| + |b_i|)` (round-off size of `num` is `eps * scale`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ResidualParts {
+    /// Numerator `sum|b - A x|`.
+    pub num: f64,
+    /// Denominator of the reference normalisation.
+    pub norm_ref: f64,
+    /// Magnitude of the summed terms.
+    pub scale: f64,
+}
+
+impl ResidualParts {
+    /// Reference-normalised residual.
+    pub fn res_ref(&self) -> f64 {
+        self.num / (self.norm_ref + 1e-30)
+    }
+    /// Backward-error residual.
+    pub fn res_bwd(&self) -> f64 {
+        self.num / (self.scale + 1e-30)
+    }
+}
+
+/// Parts of the residual of `m` at `x` (see [`ResidualParts`]).
+pub fn residual_parts(m: &FvMatrix, x: &[f64]) -> ResidualParts {
+    residual_parts_csr(&m.a.to_csr(), &m.b, x)
+}
+
+/// [`residual_parts`] for a CSR system.
+pub fn residual_parts_csr(csr: &rcfd_linalg::CsrMatrix, b: &[f64], x: &[f64]) -> ResidualParts {
+    let n = x.len();
+    let xbar = x.iter().sum::<f64>() / n as f64;
+    let mut ax = vec![0.0; n];
+    csr.matvec(x, &mut ax);
+    let mut axb = vec![0.0; n];
+    csr.matvec(&vec![xbar; n], &mut axb);
+    let num: f64 = (0..n).map(|i| (b[i] - ax[i]).abs()).sum();
+    let norm_ref: f64 = (0..n).map(|i| (ax[i] - axb[i]).abs() + (b[i] - axb[i]).abs()).sum();
+    let mut scale = 0.0;
+    for i in 0..n {
+        let mut row = b[i].abs();
+        for k in csr.row_ptr[i]..csr.row_ptr[i + 1] {
+            row += csr.val[k].abs() * x[csr.col[k]].abs();
+        }
+        scale += row;
+    }
+    ResidualParts { num, norm_ref, scale }
+}
+
+/// Update law of the [`PseudoController`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PseudoLaw {
+    /// ADR 0023 D1 (settings value `ser`): grows on every falling residual, backs off only on a rise by more than
+    /// `rise`. A one-way ratchet for oscillating residuals (registered misses, addendum A3); kept for the record.
+    Ratchet,
+    /// ADR 0023 addendum A3 (settings value `ser2`): switched evolution relaxation, the scale follows the inverse
+    /// residual ratio in both directions, clamped to `[backoff, growth]` per iteration.
+    Symmetric,
+}
+
+/// Automatic pseudo-time-step controller (ADR 0023 D1, A3): switched evolution relaxation.
+/// The pseudo time step of every cell is multiplied by `scale`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PseudoController {
+    /// Update law.
+    pub law: PseudoLaw,
+    /// Largest growth factor of the scale per iteration.
+    pub growth: f64,
+    /// Factor applied to the scale when the residual rises by more than `rise` or is not finite.
+    pub backoff: f64,
+    /// Residual rise ratio that triggers the back-off.
+    pub rise: f64,
+    /// Smallest scale.
+    pub min_scale: f64,
+    /// Largest scale.
+    pub max_scale: f64,
+    /// Current scale.
+    pub scale: f64,
+    prev: f64,
+}
+
+impl PseudoController {
+    /// Controller with the registered constants (growth 2, back-off 0.5, rise 2, minimum 1/64) and the given cap.
+    pub fn new(max_scale: f64) -> Self {
+        PseudoController {
+            law: PseudoLaw::Ratchet,
+            growth: 2.0,
+            backoff: 0.5,
+            rise: 2.0,
+            min_scale: 1.0 / 64.0,
+            max_scale,
+            scale: 1.0,
+            prev: f64::INFINITY,
+        }
+    }
+
+    /// Controller with the symmetric law of addendum A3 and the same constants.
+    pub fn new_symmetric(max_scale: f64) -> Self {
+        PseudoController {
+            law: PseudoLaw::Symmetric,
+            ..Self::new(max_scale)
+        }
+    }
+
+    /// Update the scale from the residual `r` of the iteration just finished.
+    pub fn update(&mut self, r: f64) {
+        if !r.is_finite() {
+            self.scale = (self.backoff * self.scale).max(self.min_scale);
+            return;
+        }
+        if self.law == PseudoLaw::Symmetric {
+            if self.prev.is_finite() {
+                let ratio = if r > 0.0 { self.prev / r } else { self.growth };
+                self.scale =
+                    (self.scale * ratio.clamp(self.backoff, self.growth)).clamp(self.min_scale, self.max_scale);
+            }
+            self.prev = r;
+            return;
+        }
+        if self.prev.is_finite() {
+            if r > self.rise * self.prev {
+                self.scale = (self.backoff * self.scale).max(self.min_scale);
+            } else {
+                let ratio = if r > 0.0 {
+                    (self.prev / r).clamp(1.0, self.growth)
+                } else {
+                    self.growth
+                };
+                self.scale = (self.scale * ratio).min(self.max_scale);
+            }
+        }
+        self.prev = r;
+    }
+}
+
 /// Residual-based stopping criteria (all given tolerances must be met).
 #[derive(Debug, Clone, Copy)]
 pub struct ConvergenceCriteria {
@@ -301,6 +451,18 @@ pub struct SimpleSolver {
     pub sink: Option<Vec<f64>>,
     /// Pseudo-transient (local time stepping) option.
     pub pseudo: Option<PseudoTransient>,
+    /// Automatic pseudo-time-step controller (ADR 0023); needs `pseudo`. `None` keeps the step as configured.
+    pub pseudo_control: Option<PseudoController>,
+    /// Scale applied to the pseudo time step in every iteration performed (filled when the controller is on).
+    pub pseudo_scale_history: Vec<f64>,
+    /// Normalisation of the momentum residual (default [`ResidualNorm::Reference`], the historical definition).
+    pub residual_norm: ResidualNorm,
+    /// Record the residual parts of every momentum component in every iteration (diagnostic, off by default).
+    pub record_parts: bool,
+    /// Residual parts per iteration and active component (filled when `record_parts` is on).
+    pub parts_history: Vec<Vec<ResidualParts>>,
+    /// Parts of the initial pressure-equation residual per iteration (filled when `record_parts` is on).
+    pub pressure_parts_history: Vec<Option<ResidualParts>>,
     /// Bulk-velocity driver for periodic flows.
     pub driver: Option<MeanVelocityDriver>,
     /// Wall pressure used by the cell gradients next to fixed-velocity walls with a body force: chosen so that the
@@ -409,6 +571,12 @@ impl SimpleSolver {
             face_jump: None,
             jump_state: Vec::new(),
             pseudo: None,
+            pseudo_control: None,
+            pseudo_scale_history: Vec::new(),
+            residual_norm: ResidualNorm::Reference,
+            record_parts: false,
+            parts_history: Vec::new(),
+            pressure_parts_history: Vec::new(),
             driver: None,
             wall_pressure_trapezoid: false,
             conv_flux_offset: None,
@@ -456,7 +624,8 @@ impl SimpleSolver {
                 vec![len / umax; n]
             }
         };
-        Some(dt.into_iter().map(|d| d * ps.factor).collect())
+        let scale = self.pseudo_control.map_or(1.0, |c| c.scale);
+        Some(dt.into_iter().map(|d| d * ps.factor * scale).collect())
     }
 
     /// Run one SIMPLE/SIMPLEC iteration.
@@ -539,6 +708,8 @@ impl SimpleSolver {
         let mut h1 = vec![0.0; n];
         let mut n_active = 0.0;
         let mut res_u: f64 = 0.0;
+        let mut parts_now: Vec<ResidualParts> = Vec::new();
+        let mut scaled_parts: Vec<ResidualParts> = Vec::new();
         let mut comp_diag: Vec<Vec<f64>> = vec![Vec::new(); 3];
         let mut comp_x: Vec<Vec<f64>> = vec![Vec::new(); 3];
         let ub = self.u.boundary_values(&g);
@@ -592,7 +763,21 @@ impl SimpleSolver {
                     sys.b[c] += vol[c] * bf.cell[c][k];
                 }
             }
-            res_u = res_u.max(normalised_residual(&sys, &cells));
+            let r_k = if self.record_parts || self.residual_norm != ResidualNorm::Reference {
+                let parts = residual_parts(&sys, &cells);
+                if self.record_parts {
+                    parts_now.push(parts);
+                }
+                scaled_parts.push(parts);
+                match self.residual_norm {
+                    ResidualNorm::Reference => normalised_residual(&sys, &cells),
+                    ResidualNorm::Backward => parts.res_bwd(),
+                    ResidualNorm::Scaled => 0.0,
+                }
+            } else {
+                normalised_residual(&sys, &cells)
+            };
+            res_u = res_u.max(r_k);
             let mut x = cells;
             sys.solve(&mut x, &s.momentum_solver);
             if s.h_from_solution && self.driver.is_none() {
@@ -610,6 +795,11 @@ impl SimpleSolver {
                 h[c][k] = hk[c];
                 self.u.values[c][k] = x[c];
             }
+        }
+        if self.residual_norm == ResidualNorm::Scaled {
+            let s_max = scaled_parts.iter().map(|p| p.scale).fold(0.0, f64::max);
+            let n_max = scaled_parts.iter().map(|p| p.num).fold(0.0, f64::max);
+            res_u = n_max / (s_max + 1e-30);
         }
         for c in 0..n {
             a_p[c] /= n_active;
@@ -717,7 +907,29 @@ impl SimpleSolver {
             solver: s.pressure_solver,
             amg: false,
         };
-        let (res_p, p_iters) = solve_pressure(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls);
+        let (res_p, p_iters, p_parts) = solve_pressure_parts(
+            &g,
+            &gamma_p,
+            &pbc,
+            &phi_hby_a,
+            &mut p_new,
+            &controls,
+            self.record_parts || self.residual_norm == ResidualNorm::Scaled,
+        );
+        let res_p = match (self.residual_norm, p_parts) {
+            (ResidualNorm::Scaled, Some(pp)) => {
+                let t: f64 = (0..mesh.n_faces())
+                    .filter(|&f| !g.empty[f])
+                    .map(|f| phi_hby_a[f].abs())
+                    .sum::<f64>()
+                    * 0.5;
+                pp.num / (pp.scale.max(t) + 1e-30)
+            }
+            _ => res_p,
+        };
+        if self.record_parts {
+            self.pressure_parts_history.push(p_parts);
+        }
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
         let bv_new = self.gradient_wall_values(&pbc, body.as_ref(), &p_new);
         self.phi = corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
@@ -784,6 +996,13 @@ impl SimpleSolver {
             res_u,
             res_p,
         };
+        if self.record_parts {
+            self.parts_history.push(parts_now);
+        }
+        if let Some(c) = self.pseudo_control.as_mut() {
+            self.pseudo_scale_history.push(c.scale);
+            c.update(res_u.max(res_p));
+        }
         self.history.push(info);
         info
     }

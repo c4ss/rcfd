@@ -318,3 +318,32 @@ E1b = E1 with `abs_ref = Some(max|u(0)|)` (= 1), same tolerance and bounds and t
 a constant decay rate the controlled step then grows as `exp(lambda t / 2)` which is what a global absolute error target rewards. E2 (TG)
 is run as registered (relative), and E2b with `abs_ref = Some(1.0)` (the initial maximum speed), with the same two limits; E2/E2b misses
 become `*_known_miss` tests.
+
+## Addendum A8: results (wave 17A)
+
+All numbers measured in release builds; limits are the registered ones, none widened.
+
+Task 1 diagnosis (tests in `crates/rcfd-api/tests/convergence_diagnosis.rs`, ignored diagnostics, plus `defaults_are_inert`):
+- E2 annulus (48 x 12 x 24): the reference residual stalls at 4.4e-12 from iteration 500 to 6000 while the residual numerator is 2.3e-13, the
+  backward-normalised residual 6.2e-17 (below machine epsilon), the field change per iteration 8.9e-16 and continuity 9e-15. The
+  solver is converged to round-off; the reference denominator sum(|Ax - A xbar| + |b - A xbar|) is 1.4e-5 of sum(|A||x| + |b|) and amplifies the
+  floor. H1 (normalisation) holds; H2 (linear-solver tolerance floor) rejected (tol_abs 0, tol_rel 1e-9, caps 5000: final 7.4e-12 vs 4.4e-12);
+  flux round-off accumulation (X4) is a noise band. With `residual_norm = scaled` E2 converges in 183 iterations (F4 passes: accuracy 0.408 / 0.032 /
+  2.669 %, balance 1.9e-15, imbalance 7.1e-14).
+- Frictionless duct C2/D1/D2: the reference residual stays 0.3 to 0.95 because uniform or exactly zero components make the denominator track the
+  numerator (the registered X1 rules by themselves came out REJECTED/inconclusive for several parts because of a flaw in the settle-point definition,
+  which is disclosed; X1b showed `backward` fixes only D2). With `scaled` and a fixed physical step 0.2: F1c (C2) 689 iterations, F2c (D1) 711, F3c (D2) 310;
+  all pass their registered accuracy limits.
+- X5: first-iteration max|u| after plain SIMPLEC from rest scales 1/nu (u1*nu = 0.36643 constant): diagonal-limited step, not a defect.
+- X6 closed cavity: momentum converges below 1e-12 by iteration ~1000, pressure floors at 6.8e-12 with the same amplification pattern (inconclusive by rule).
+- D5b n_r = 128: still falling by about x4 per 500 iterations at 6000: slow convergence, not a floor.
+- Nozzle: flat at 2.619e-5 from iteration 500 to 3000; none of the single-change variants (linear tolerance, upwind, alpha_u 0.5, pressure tolerance) changes it.
+  UNDIAGNOSED (variable-density kernel offers no backward residual).
+- Verdict: the residual stalls of the incompressible known misses are a normalisation artefact; the option `residual_norm` (default `reference`, bit-identical,
+  baseline hashes unchanged) is the delivered remedy. No solver defect found.
+
+Task 2: F-106 controller `pseudo_control` (`ser`, `ser2`) is NOT validated: P1 to P4 and F1 to F3 (b variants) all missed or diverged (numbers in A3 to A6 and in
+the `*_known_miss` tests); fixed pseudo CFL still converges (cavity cfl 5/10/20/50 in 346/333/458/979 iterations, fails at 100). F-209 E1: relative scale 81 vs 76
+steps (MISS, registered limit 0.8), E1b absolute reference 46 steps (error 6.4e-3) vs 36 uniform (MISS). Both recorded as ignored known-miss unit tests in
+`crates/rcfd-fv/src/ddt.rs`. E2/E2b (Taylor-Green), E3 and F-210 were NOT run or implemented (no `PimpleSolver::run_error_controlled`); the
+`ErrorController` is a library building block only, not wired to the tree.
