@@ -402,3 +402,5 @@ alpha_u = 0.8 was used; each run is a separate 8000-iteration run on the 17440-c
   larger than the grid effect seen for the k-epsilon models. The cause of the y+ 2 non-convergence (a limit cycle of the
   shear layer on the first-order turbulence transport) was not diagnosed; a pseudo-transient fallback was not tried.
 * The first attempt with the set-up defects (original B5 tests) stays in the file as a record.
+* Note (2026-10, wave 13, ADR 0016): the C5 row above (build path hook missing) is superseded. The hook is installed and C5/C5b
+  now run: tree equals library run to 0 (limit 1e-12) for all seven option runs. F-203 stays partial.
