@@ -8,9 +8,10 @@
 //! `turbulence.model = "plugin"`, `turbulence.plugin = "<key>"`.
 
 use crate::eddy::patch_faces;
-use crate::kepsilon::{KEpsilon, KEpsilonVariant, WallTreatment};
+use crate::kepsilon::{KEpsilon, KEpsilonVariant, WallFunction, WallTreatment};
 use crate::sa::{SLimiter, SaWallMode, SpalartAllmaras};
-use crate::sst::KOmegaSst;
+use crate::sst::{KOmegaSst, SstVariant, SstWallMode};
+use crate::wall::Roughness;
 use rcfd_core::{Error, Result};
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
@@ -72,6 +73,53 @@ pub struct ModelContext {
     pub relax_nut: f64,
 }
 
+/// The near-wall options of a case (F-203, F-043, ADR 0015): `turbulence.wall_function`, `roughness_height`,
+/// `roughness_constant`, `wall_omega`, `sst_variant`. The settings-tree reading lives in `rcfd-api`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallOptions {
+    /// k-epsilon wall treatment.
+    pub wall_function: WallFunction,
+    /// Sand-grain roughness height (0: smooth).
+    pub roughness_height: f64,
+    /// Roughness constant `C_s` (0: derived from the smooth log law, the Nikuradse value).
+    pub roughness_constant: f64,
+    /// SST wall omega treatment.
+    pub wall_omega: SstWallMode,
+    /// Menter variant.
+    pub sst_variant: SstVariant,
+}
+
+impl WallOptions {
+    /// Roughness for a log law with the given constants.
+    pub fn roughness(&self, kappa: f64, e: f64) -> Roughness {
+        if self.roughness_height > 0.0 {
+            if self.roughness_constant > 0.0 {
+                Roughness {
+                    ks: self.roughness_height,
+                    cs: self.roughness_constant,
+                }
+            } else {
+                Roughness::new(self.roughness_height, kappa, e)
+            }
+        } else {
+            Roughness::SMOOTH
+        }
+    }
+}
+
+/// Put the options on a k-epsilon model (uses its own log-law constants for the derived roughness constant).
+pub fn apply_kepsilon(o: &WallOptions, m: &mut KEpsilon) {
+    m.wall_function = o.wall_function;
+    m.roughness = o.roughness(m.wc.kappa, m.wc.e);
+}
+
+/// Put the options on a k-omega SST model.
+pub fn apply_sst(o: &WallOptions, m: &mut KOmegaSst) -> Result<()> {
+    m.variant = o.sst_variant;
+    m.roughness = o.roughness(m.law.kappa, m.law.e);
+    m.set_wall_mode(o.wall_omega)
+}
+
 /// A RANS turbulence closure.
 pub trait TurbulenceModel: Send {
     /// Registry key (`k_epsilon`, `k_omega_sst`, `spalart_allmaras`, or a plugin's).
@@ -98,6 +146,12 @@ pub trait TurbulenceModel: Send {
     fn set_coefficient(&mut self, name: &str, value: f64) -> std::result::Result<(), String>;
     /// Start from the eddy viscosity of another model.
     fn initialize_from_nut(&mut self, nut: &[f64]);
+    /// Apply the near-wall options of the case (called once after construction). The default accepts the
+    /// default options only for models without wall options; an option set that the model cannot honour is
+    /// reported, not ignored.
+    fn apply_wall_options(&mut self, _o: &WallOptions) -> std::result::Result<(), String> {
+        Ok(())
+    }
 }
 
 fn check_range(infos: &[CoefficientInfo], name: &str, v: f64) -> std::result::Result<usize, String> {
@@ -146,6 +200,10 @@ impl KEpsilonModel {
 }
 
 impl TurbulenceModel for KEpsilonModel {
+    fn apply_wall_options(&mut self, o: &WallOptions) -> std::result::Result<(), String> {
+        apply_kepsilon(o, &mut self.m);
+        Ok(())
+    }
     fn key(&self) -> &str {
         "k_epsilon"
     }
@@ -309,6 +367,9 @@ impl SstModel {
 }
 
 impl TurbulenceModel for SstModel {
+    fn apply_wall_options(&mut self, o: &WallOptions) -> std::result::Result<(), String> {
+        apply_sst(o, &mut self.m).map_err(|e| e.to_string())
+    }
     fn key(&self) -> &str {
         "k_omega_sst"
     }

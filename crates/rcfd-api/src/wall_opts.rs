@@ -5,42 +5,28 @@
 //!
 //! [`check`] validates the keys (called from `Case::validate`); [`WallOptions::from_case`] reads them and
 //! [`apply_kepsilon`] / [`apply_sst`] put them on a library model. The turbulence model of a running simulation is a
-//! `Box<dyn TurbulenceModel>` built in `turb.rs`; that trait has no way to reach the concrete `KEpsilon` /
-//! `KOmegaSst`, so the build path calls [`apply_kepsilon`] / [`apply_sst`] only once `turb.rs` and `model.rs`
-//! provide a hook (see [`BUILD_HOOK_INSTALLED`]). Until then [`check`] rejects every non-default value with a located
-//! error instead of silently ignoring it.
+//! `Box<dyn TurbulenceModel>` built in `turb.rs`; `TurbState::new` hands the options to it through
+//! `TurbulenceModel::apply_wall_options` (see [`BUILD_HOOK_INSTALLED`]).
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_f, get_s};
 use rcfd_turb::kepsilon::WallFunction;
 use rcfd_turb::sst::{SstVariant, SstWallMode};
-use rcfd_turb::wall::Roughness;
-use rcfd_turb::{KEpsilon, KOmegaSst};
 
-/// Whether the simulation build path applies [`WallOptions`] to the model it constructs. It needs a trait method on
-/// `rcfd_turb::TurbulenceModel` (for example `fn apply_wall_options(&mut self, o: &WallOptions) -> Result<(), String>`
-/// implemented by `KEpsilonModel` and `SstModel` with [`apply_kepsilon`] / [`apply_sst`]) and one call in
-/// `TurbState::new` after `create_model`. `false` while those two files are owned by the plugin work.
-pub const BUILD_HOOK_INSTALLED: bool = false;
+/// Whether the simulation build path applies [`WallOptions`] to the model it constructs: it does, through
+/// `TurbulenceModel::apply_wall_options`, called once in `TurbState::new` after `create_model`.
+pub const BUILD_HOOK_INSTALLED: bool = true;
 
-/// The wall options of a case.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WallOptions {
-    /// k-epsilon wall treatment.
-    pub wall_function: WallFunction,
-    /// Sand-grain roughness height (0: smooth).
-    pub roughness_height: f64,
-    /// Roughness constant `C_s` (0: derived from the smooth log law, the Nikuradse value).
-    pub roughness_constant: f64,
-    /// SST wall omega treatment.
-    pub wall_omega: SstWallMode,
-    /// Menter variant.
-    pub sst_variant: SstVariant,
+pub use rcfd_turb::model::{apply_kepsilon, apply_sst, WallOptions};
+
+/// Reading the wall options from a case (the struct itself lives in `rcfd-turb`, which `rcfd-api` depends on).
+pub trait WallOptionsFromCase {
+    /// Read the options (schema defaults when absent).
+    fn from_case(case: &Case) -> Self;
 }
 
-impl WallOptions {
-    /// Read the options (schema defaults when absent).
-    pub fn from_case(case: &Case) -> Self {
+impl WallOptionsFromCase for WallOptions {
+    fn from_case(case: &Case) -> Self {
         WallOptions {
             wall_function: match get_s(case, "turbulence.wall_function").as_str() {
                 "scalable" => WallFunction::Scalable,
@@ -59,35 +45,6 @@ impl WallOptions {
             },
         }
     }
-
-    /// Roughness for a log law with the given constants.
-    pub fn roughness(&self, kappa: f64, e: f64) -> Roughness {
-        if self.roughness_height > 0.0 {
-            if self.roughness_constant > 0.0 {
-                Roughness {
-                    ks: self.roughness_height,
-                    cs: self.roughness_constant,
-                }
-            } else {
-                Roughness::new(self.roughness_height, kappa, e)
-            }
-        } else {
-            Roughness::SMOOTH
-        }
-    }
-}
-
-/// Put the options on a k-epsilon model (uses its own log-law constants for the derived roughness constant).
-pub fn apply_kepsilon(o: &WallOptions, m: &mut KEpsilon) {
-    m.wall_function = o.wall_function;
-    m.roughness = o.roughness(m.wc.kappa, m.wc.e);
-}
-
-/// Put the options on a k-omega SST model.
-pub fn apply_sst(o: &WallOptions, m: &mut KOmegaSst) -> rcfd_core::Result<()> {
-    m.variant = o.sst_variant;
-    m.roughness = o.roughness(m.law.kappa, m.law.e);
-    m.set_wall_mode(o.wall_omega)
 }
 
 fn diag(path: &str, message: impl Into<String>) -> Diagnostic {
@@ -160,24 +117,6 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             "turbulence.roughness_constant",
             "turbulence.roughness_constant has no effect without turbulence.roughness_height > 0",
         ));
-    }
-    if !BUILD_HOOK_INSTALLED {
-        let pending = [
-            ("wall_function", o.wall_function != WallFunction::Standard),
-            ("roughness_height", o.roughness_height > 0.0),
-            ("wall_omega", o.wall_omega != SstWallMode::Automatic),
-            ("sst_variant", o.sst_variant != SstVariant::Sst),
-        ];
-        for (k, set) in pending {
-            if set && !out.iter().any(|d| d.path == format!("turbulence.{k}")) {
-                out.push(diag(
-                    &format!("turbulence.{k}"),
-                    format!(
-                        "turbulence.{k} is implemented in the rcfd-turb library but the simulation build path does not apply it yet (docs/adr/0015-turbulence-finishing.md, check C5); the value is rejected rather than ignored"
-                    ),
-                ));
-            }
-        }
     }
     out
 }
