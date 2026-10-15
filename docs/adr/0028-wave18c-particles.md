@@ -242,10 +242,11 @@ against the limits registered above.
 | PT4b Schiller-Naumann: monotone, final, faster than Stokes | 1e-6 | monotone; 1.1e-15; 0.7415 vs 0.6321 | met |
 | PT5 solid-body rotation, position error at 0.1 s / 0.25 s, cells crossed | 1e-8; >= 3 | 3.68e-8 / 4.05e-9; 2 cells | MISS |
 | PT5b Couette (analytic, gradient), v and x relative | 1e-10 | 0 and 3.4e-16 | met |
-| PT5c Couette cell-centre equals piecewise-constant solution; differs from PT5b | 1e-12; > 1e-3 | 0 and 1.8e-16; 0.400 | met |
+| PT5c Couette cell-centre equals piecewise-constant solution; differs from PT5b; all sub-steps in one cell row (asserted in A2) | 1e-12; > 1e-3; y in [0.3, 0.4] each step | 0 and 1.8e-16; 0.400; y = 0.37 +- 1e-14 each of 40 steps | met |
 | PT6 reflection (1000 random), e = 1 and e = 0.6 | 1e-14 | 8.5e-16 | met |
 | PT6b bouncing ball apex height / velocity | 1e-9 | 3.5e-14 rel; vz -6.5e-14 | met |
-| PT7 injection conservation (dt 0.01 and 0.0073) | exact | 490 = 38 + 428 + 0 + 24 (and 36 + 430 + 0 + 24); real 1225 | met |
+| PT7 injection conservation (dt 0.01 and 0.0073), after the A2 fix | exact | 490 = 0 + 431 + 0 + 59 (and 0 + 433 + 0 + 57); real 1225 | met |
+| PT7 regression added in A2: no active particle outside the box over 300 steps | 0 | 0 | met |
 | PT8 (a) warped mesh, pure walk from a random cell | 0 mismatches | 1522 of 99 510 in-domain points | MISS (strict) |
 | PT8 (b) graded + sheared mesh, pure walk | 0 mismatches | 0 of 100 000 | met |
 | PT9 deposition ballistic: time, x, y | 1e-9 | rel ~1e-15 | met |
@@ -255,7 +256,9 @@ against the limits registered above.
 | PT11 Rosin-Rammler: inversion round trip; 3 fractions; truncated fraction | 1e-12; 5 sigma | passes; largest deviation 5.5e-4 vs bound 5.4e-3 | met |
 | PT12 linear-field interpolation, warped mesh | 1e-12 | 8.9e-16 | met |
 | PT13 VTP round trip | exact | exact | met |
-| PT14 tree: frozen Couette v / x relative; transient settling; located errors; output file | 1e-6; 1e-6 | 0 / 8.6e-16; 5.6e-12 | met |
+| PT14 tree: frozen Couette v / x relative; transient settling; located errors (paths asserted, incl. schema `particles.drag`, `particles.restitution`); output file | 1e-6; 1e-6 | 0 / 8.6e-16; 5.6e-12; paths found | met |
+| PT14 disabled section: 60-iteration cavity run bit-identical, equal to the registered `cavity-simple` hash 07e7461c36893384 (whole `baseline_hashes.rs` also unchanged) | exact | identical | met |
+| PT14 disabled section: settings-tree hash unchanged | exact | changes (hash covers schema defaults) | MISS (ill-posed, see A2) |
 
 Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a git archive copy of the final commit.
 
@@ -267,7 +270,7 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   count as meeting the registered check.
 * PT5 (`pt5_known_miss_solid_body_rotation`): two failures. (1) The position error at t = 0.1 s is 3.68e-8 against 1e-8 (4.05e-9 at
   0.25 s is met). The ADR's prediction of about 1e-10 was an estimate made without a computation; the error is the RK4 time-stepping
-  error, since `dt_flow = 0.005 = tau_p/10`: the diagnostic `pt5b_rotation_time_error_diagnostic` (a different start point, see
+  error, since `dt_flow = 0.005 = tau_p/10`: the diagnostic `pt5d_rotation_time_error_diagnostic` (a different start point, see
   below) shows errors 5.16e-8, 3.09e-9, 1.89e-10 for dt 0.005, 0.0025, 0.00125 with observed order 4.06 and 4.03. (2) The "at least
   3 cells" precondition fails (2 cells): the registered start point (3, 2, 0.5) lies on cell faces and the particle moves along one
   cell column for 0.6 m. This is a set-up defect of the precondition; the diagnostic uses the start (3.4, 2, 0.45) (4 cells crossed).
@@ -279,10 +282,40 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   additional test `pt8b_location_warped_with_fallback`: 0 mismatches inside, 0 outside, 490 points outside the faceted domain. The graded
   and sheared mesh (convex domain) has 0 mismatches with the pure walk.
 
+* PT14 tree hash (`pt14_known_miss_tree_hash_unchanged`, ignored): `SettingsTree::content_hash` is an FNV hash of the whole data tree
+  including schema defaults, so adding the `particles` section changes the hash of every case. The registered sub-check cannot be
+  met by any additive section; it was not tested in the first commit (only that no error is raised and `enabled` is false). The
+  assertion kept in the ignored test is that the tree carries no `particles` key. What is verified instead (a different measurement,
+  and it is the behaviour that matters): the flow solution of the registered cavity is bit-identical with and without a disabled
+  populated section and equals the registered baseline hash (`pt14_disabled_section_leaves_the_cavity_run_bit_identical`).
+
+### Addendum A2: corrections after review of the first implementation commit (8d48571)
+
+* Tracker bug found while diagnosing the PT7 `stuck` count. The first commit refined a wall hit by bisecting on the signed distance
+  to the plane of the single face found by the walk. Near an edge or corner (observed at the x = 1 / z = 0 edge of the PT7 box with the
+  segment lying in the y = 0.5 face plane) the curved path can leave through a different face first, so the hit point was projected
+  onto the wrong plane and the particle was left slightly outside the box; the walk then reported `Inside` and the particle drifted
+  away with the fluid (in the first PT7 run, tens of `Active` parcels at x about 2, z down to -4.4). Fix: the bisection now uses the
+  tracker's own predicate (the chord from the sub-step start to the shortened step leaves the domain) and takes the face and hit
+  point from the last bisection iterate that left. No tolerance, limit or scenario was changed (`max_bounces` stays 1000).
+  Regression test `pt7c_no_particle_leaves_the_domain_regression` (300 steps, no active parcel outside the box); it failed before the fix.
+* PT7 numbers after the fix: 490 = 0 + 431 + 0 + 59 (dt 0.01) and 0 + 433 + 0 + 57 (dt 0.0073). The earlier 38 / 36 "inside" and 24
+  stuck counts included the mis-tracked particles and are superseded. The registered identity holds exactly.
+* Why parcels are `stuck`: all listed stuck parcels sit on the reflecting wall x = 1 with a tiny negative `v_x` (1e-5 to 3e-4 m/s), sliding down it
+  at nearly the settling speed, while the uniform fluid velocity (0.3, 0, -0.2) pushes them into that wall. Each reflection is followed by a
+  return to the wall in a time that shrinks, so more than `max_bounces` reflections occur in one flow step (Zeno accumulation of resting
+  contact). This matches the observation but the mechanism is read from positions and velocities, not from a bounce-by-bounce trace.
+  Resting contact is not modelled (F-128 wall interaction); the parcels are counted and reported, not hidden.
+* The ADR text of D6 above says "more than 100 reflections"; the implementation and `docs/particles.md` use 1000. This was a text
+  inconsistency from the design stage, found now; the implementation value was never tuned.
+* The first-commit rows for PT14 and PT5c overstated what was tested: PT14 did not test the tree-hash sub-check and asserted only
+  `is_err()` for the two schema errors; PT5c did not assert the one-cell-row precondition. Both are now asserted (rows above), the
+  tree-hash sub-check is a recorded miss.
+* The diagnostic formerly named `pt5b_rotation_time_error_diagnostic` is renamed `pt5d_...` because `PT5b` is the registered Couette label.
+
 ### Disclosures
 
-* PT7: 24 of 490 parcels end as `stuck` (more than 1000 reflections in one flow step): small particles with the flow pushing them
-  onto a reflecting side wall (e = 1) chatter. Counted and reported; the identity `injected = inside + deposited + escaped + stuck` holds exactly.
+* PT7: see A2 for the corrected counts and the diagnosis of the `stuck` parcels. The identity `injected = inside + deposited + escaped + stuck` holds exactly.
 * The PT6b text of this ADR was rewritten before any code ran (the first version described a procedure that was dropped).
 * D7: `equal_mass` parcel weighting is not implemented (stated there as a non-default option; the default documented simplification is what is
   implemented). Surface injection offsets the parcel 1e-9 L_c into the cell.

@@ -411,7 +411,7 @@ fn pt5_known_miss_solid_body_rotation() {
 /// Diagnostic for the PT5 miss: the error is temporal (4th order in the flow step). Uses a start point that crosses more
 /// cells ((3.4, 2, 0.45)). Asserts the observed order only; the errors are printed.
 #[test]
-fn pt5b_rotation_time_error_diagnostic() {
+fn pt5d_rotation_time_error_diagnostic() {
     let mut errs = Vec::new();
     for dt in [0.005, 0.0025, 0.00125] {
         let (e1, e2, cells, active) = rotation_run([3.4, 2.0, 0.45], dt);
@@ -452,6 +452,12 @@ fn couette(interp: Interp) -> (f64, f64, f64, f64) {
     };
     for _ in 0..40 {
         tr.advance(&flow, 0.01).unwrap();
+        // registered precondition of PT5c: every sub-step stays in one cell row (ny = 10, row 3 is y in [0.3, 0.4])
+        let y = tr.particles[0].x[1];
+        assert!(
+            y > 0.3 && y < 0.4 && (y - 0.37).abs() <= 1e-14,
+            "left the cell row: y = {y}"
+        );
     }
     let p = &tr.particles[0];
     let t = 0.4;
@@ -883,5 +889,66 @@ fn pt13_vtp_round_trip() {
             assert_eq!(pts[3 * i + k], p.x[k]);
         }
         assert_eq!(dia[i], p.d);
+    }
+}
+
+/// Regression for a tracker bug found while diagnosing the PT7 'stuck' count (ADR 0028 addendum A2): after a wall hit near an
+/// edge/corner the particle was left outside the box and kept drifting with the fluid. No active particle may be outside.
+#[test]
+fn pt7c_no_particle_leaves_the_domain_regression() {
+    let mesh = quiet_box([8, 8, 8], [1.0, 1.0, 1.0]);
+    let opts = Options {
+        drag: DragLaw::SchillerNaumann,
+        scheme: Scheme::Analytic,
+        interp: Interp::CellCentre,
+        gravity: [0.0, 0.0, -G],
+        ..Options::default()
+    };
+    let mut tr = Tracker::new(
+        mesh.clone(),
+        opts,
+        &[("zmin".into(), WallAction::Stick), ("zmax".into(), WallAction::Escape)],
+    )
+    .unwrap();
+    let dist = SizeDist::RosinRammler {
+        d_bar: 1e-4,
+        n: 2.5,
+        d_min: None,
+        d_max: None,
+    };
+    tr.add_injector(InjectorSpec {
+        name: "point".into(),
+        kind: InjKind::Point([0.5, 0.5, 0.5]),
+        rate: 800.0,
+        t_start: 0.0,
+        t_end: 0.5,
+        velocity: VelMode::Fluid,
+        dist,
+        density: RHO_P,
+        parcel_count: 2.5,
+        seed: 7,
+    })
+    .unwrap();
+    let u = vec![[0.3, 0.0, -0.2]; mesh.n_cells()];
+    let flow = Flow {
+        u: &u,
+        grad: None,
+        rho: RHO_F,
+        mu: MU,
+    };
+    let mut prev: Vec<Particle> = Vec::new();
+    for step in 0..300 {
+        tr.advance(&flow, 0.01).unwrap();
+        for (i, p) in tr.particles.iter().enumerate() {
+            let out = p.x.iter().any(|&c| c < -1e-9 || c > 1.0 + 1e-9);
+            if out && p.state == State::Active {
+                let before = prev.get(i).map(|q| q.x);
+                panic!(
+                    "step {step}: active particle {i} outside the box at {:?} (previous {before:?})",
+                    p.x
+                );
+            }
+        }
+        prev = tr.particles.clone();
     }
 }

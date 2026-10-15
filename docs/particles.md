@@ -39,8 +39,9 @@ rejected.
 
 Per patch: `reflect` (specular, restitution `e`: normal component times `-e`, tangential kept), `stick` (deposited), `escape`.
 Defaults: wall patches follow `particles.wall_interaction`, symmetry and empty patches reflect with `e = 1`, other patches escape.
-More than `max_bounces` (1000) reflections inside one flow step stop the parcel (state `stuck`, reported; this is the Zeno case of a
-tiny particle pressed onto a wall by the flow).
+More than `max_bounces` (1000) reflections inside one flow step stop the parcel (state `stuck`, reported; in the PT7 test this happens to small
+particles that slide along a reflecting wall the flow presses them onto: resting contact is not modelled, so the reflections accumulate
+(Zeno); see ADR 0028 addendum A2).
 
 Injection `point` or `surface` (uniform by area), `rate` parcels/s between `start_time` and `end_time` (count `floor(rate (t - t0))`,
 independent of the step), `parcel_count` real particles per parcel, initial velocity given or the fluid velocity, diameter constant or
