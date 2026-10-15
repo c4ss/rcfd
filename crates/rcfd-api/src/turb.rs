@@ -13,6 +13,7 @@
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_s, get_v};
+use crate::wall_opts::WallOptionsFromCase as _;
 use rcfd_core::vec3;
 use rcfd_fv::bc::{FixedValue, Profile};
 use rcfd_fv::FvGeometry;
@@ -523,6 +524,14 @@ impl TurbState {
                 e.to_string(),
             )]
         })?;
+
+        // near-wall options (ADR 0015 C5); a plugin model owns its wall treatment, the case validation rejects
+        // wall options on it, and applying the defaults here would overwrite what its factory chose
+        if get_s(case, "turbulence.model") != "plugin" {
+            model
+                .apply_wall_options(&crate::wall_opts::WallOptions::from_case(case))
+                .map_err(|e| vec![diag("turbulence", e)])?;
+        }
 
         // coefficient overrides from the settings tree
         let mut errs = Vec::new();

@@ -1,17 +1,19 @@
 //! Near-wall options in the settings tree (F-203, F-043, ADR 0015 check C5): validation with located errors and the
 //! apply functions on library models.
 //!
-//! The run-through-the-tree equals library-run check of C5 is NOT part of this file: the simulation build path
-//! does not apply the options yet (`wall_opts::BUILD_HOOK_INSTALLED` is false, see ADR 0015 results), so every
-//! non-default value is rejected with a located error instead of being ignored. The test
-//! `non_default_values_are_rejected_until_the_build_path_applies_them` records that state and must be replaced by the
-//! equality check when the hook exists.
+//! The build path applies the options through `TurbulenceModel::apply_wall_options` (hook installed in wave 13);
+//! `c5_tree_run_equals_library_run` is the registered equality check. The earlier test that recorded the rejection
+//! state was replaced, as ADR 0015 prescribed.
 
 use rcfd_api::case::Case;
-use rcfd_api::wall_opts::{apply_kepsilon, apply_sst, WallOptions, BUILD_HOOK_INSTALLED};
+use rcfd_api::sim::Simulation;
+use rcfd_api::wall_opts::{apply_kepsilon, apply_sst, WallOptions, WallOptionsFromCase, BUILD_HOOK_INSTALLED};
 use rcfd_turb::kepsilon::WallFunction;
+use rcfd_turb::model::{KEpsilonModel, SstModel};
 use rcfd_turb::sst::{SstVariant, SstWallMode};
 use rcfd_turb::{KEpsilon, KEpsilonVariant, KOmegaSst};
+use rcfd_turb::{ModelContext, TurbulenceModel};
+use std::sync::Arc;
 
 const SST_RAW: &str = include_str!("../../../cases/channel/sst_channel.toml");
 const KE_RAW: &str = include_str!("../../../cases/channel/kepsilon_channel.toml");
@@ -88,23 +90,149 @@ fn located_errors_for_misplaced_and_invalid_options() {
     ));
 }
 
-// Compile-time record: replace this test and flip the constant together when the hook exists.
-const _: () = assert!(!BUILD_HOOK_INSTALLED);
+/// C5 (registered in ADR 0015): the run through the settings tree equals the direct library run to 1e-12 after 60
+/// iterations. The "library run" is the same case with the model supplied as a registered plugin that builds the
+/// library model and sets the options on it directly (no `apply_wall_options`, no `wall_opts` code).
+fn library_run_key(name: &'static str, build: fn(&ModelContext) -> Box<dyn TurbulenceModel>) -> String {
+    rcfd_turb::register_model(
+        name,
+        "library run (test)",
+        Arc::new(move |ctx: &ModelContext| Ok(build(ctx))),
+    );
+    name.to_string()
+}
+
+fn run60(text: &str) -> Simulation {
+    let c = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut s = Simulation::new(&c).unwrap_or_else(|e| panic!("{e:?}"));
+    for _ in 0..60 {
+        s.step();
+    }
+    s
+}
+
+fn max_diff(a: &Simulation, b: &Simulation, names: &[&str]) -> f64 {
+    let mut m = 0.0_f64;
+    for n in names {
+        let (x, y) = (a.field(n).unwrap(), b.field(n).unwrap());
+        assert_eq!(x.len(), y.len());
+        assert!(x.iter().all(|v| v.is_finite()));
+        for (p, q) in x.iter().zip(&y) {
+            m = m.max((p - q).abs());
+        }
+    }
+    m
+}
+
+fn plugin_text(base: &str, key: &str) -> String {
+    // the plugin path rejects the model-specific keys; the factory below sets those values on the context instead
+    let mut out = String::new();
+    for l in base.lines() {
+        let t = l.trim_start();
+        if [
+            "wall_function",
+            "variant",
+            "k_initial",
+            "epsilon_initial",
+            "omega_initial",
+        ]
+        .iter()
+        .any(|k| t.starts_with(&format!("{k} =")))
+        {
+            continue;
+        }
+        if t.starts_with("model = \"k_epsilon\"") || t.starts_with("model = \"k_omega_sst\"") {
+            out.push_str(&format!(
+                "model = \"plugin\"
+plugin = \"{key}\"
+"
+            ));
+        } else {
+            out.push_str(l);
+            out.push_str("\n");
+        }
+    }
+    out
+}
 
 #[test]
-fn non_default_values_are_rejected_until_the_build_path_applies_them() {
-    for (t, path) in [
-        (with_ke("wall_function = \"scalable\""), "turbulence.wall_function"),
-        (with_ke("roughness_height = 1.0e-3"), "turbulence.roughness_height"),
-        (with_sst("wall_omega = \"low_re\""), "turbulence.wall_omega"),
-        (with_sst("sst_variant = \"bsl\""), "turbulence.sst_variant"),
-    ] {
-        let e = errors(&t);
-        assert!(
-            e.iter().any(|d| d.0 == path && d.1.contains("does not apply it yet")),
-            "{path}: {e:?}"
-        );
+fn c5_tree_run_equals_library_run() {
+    const _: () = assert!(BUILD_HOOK_INSTALLED);
+    fn ke_ctx(ctx: &ModelContext) -> ModelContext {
+        let mut c = ctx.clone();
+        c.k0 = 1.0; // values of the k-epsilon case file
+        c.eps0 = 0.36;
+        c
     }
+    fn ke_scalable(ctx: &ModelContext) -> Box<dyn TurbulenceModel> {
+        let mut m = KEpsilonModel::new(&ke_ctx(ctx)).unwrap();
+        m.m.wall_function = WallFunction::Scalable;
+        Box::new(m)
+    }
+    fn ke_rough(ctx: &ModelContext) -> Box<dyn TurbulenceModel> {
+        let mut m = KEpsilonModel::new(&ke_ctx(ctx)).unwrap();
+        m.m.roughness = rcfd_turb::wall::Roughness::new(2.0e-2, m.m.wc.kappa, m.m.wc.e);
+        Box::new(m)
+    }
+    fn sst_with(ctx: &ModelContext, bsl: bool, low_re: bool, ks: f64) -> Box<dyn TurbulenceModel> {
+        let mut ctx = ctx.clone();
+        ctx.k0 = 1.0; // values of the SST case file (k_initial, omega_initial)
+        ctx.omega0 = 39.5;
+        ctx.eps0 = 0.0;
+        let mut m = SstModel::new(&ctx).unwrap();
+        if bsl {
+            m.m.variant = SstVariant::Bsl;
+        }
+        if low_re {
+            m.m.set_wall_mode(SstWallMode::LowRe).unwrap();
+        }
+        if ks > 0.0 {
+            m.m.roughness = rcfd_turb::wall::Roughness::new(ks, m.m.law.kappa, m.m.law.e);
+        }
+        Box::new(m)
+    }
+    fn ke_plain(ctx: &ModelContext) -> Box<dyn TurbulenceModel> {
+        Box::new(KEpsilonModel::new(&ke_ctx(ctx)).unwrap())
+    }
+    {
+        let key = library_run_key("c5_ke_plain", ke_plain);
+        let a = run60(&lf(KE_RAW));
+        let b = run60(&plugin_text(&lf(KE_RAW), &key));
+        for n in ["ux", "p", "nut", "k", "epsilon"] {
+            println!("CONTROL plain {n}: {:.3e}", max_diff(&a, &b, &[n]));
+        }
+    }
+    let k1 = library_run_key("c5_ke_scalable", ke_scalable);
+    let k2 = library_run_key("c5_ke_rough", ke_rough);
+    let k3 = library_run_key("c5_sst_bsl", |c| sst_with(c, true, false, 0.0));
+    let k4 = library_run_key("c5_sst_low_re", |c| sst_with(c, false, true, 0.0));
+    let k5 = library_run_key("c5_sst_rough", |c| sst_with(c, false, false, 2.0e-2));
+    let ke_names = ["ux", "p", "nut", "k", "epsilon"];
+    let sst_names = ["ux", "p", "nut", "k", "omega"];
+    let mut worst = 0.0_f64;
+    let cases: Vec<(&str, String, String, &[&str])> = vec![
+        ("ke scalable", with_ke("wall_function = \"scalable\""), k1, &ke_names),
+        ("ke roughness", with_ke("roughness_height = 2.0e-2"), k2, &ke_names),
+        ("sst bsl", with_sst("sst_variant = \"bsl\""), k3, &sst_names),
+        ("sst low_re", with_sst("wall_omega = \"low_re\""), k4, &sst_names),
+        ("sst roughness", with_sst("roughness_height = 2.0e-2"), k5, &sst_names),
+    ];
+    for (label, tree_text, key, names) in cases {
+        let base = if names[4] == "omega" { lf(SST_RAW) } else { lf(KE_RAW) };
+        let tree = run60(&tree_text);
+        let lib = run60(&plugin_text(&base, &key));
+        let default = run60(&base);
+        for n in names {
+            println!("   {label} {n}: {:.3e}", max_diff(&tree, &lib, &[n]));
+        }
+        let d = max_diff(&tree, &lib, names);
+        let eff = max_diff(&tree, &default, names);
+        println!("C5 {label}: tree vs library max |diff| = {d:.3e}; option effect (max over fields) vs default run = {eff:.3e}");
+        assert!(d <= 1e-12, "{label}: {d:e}");
+        assert!(eff > 0.0, "{label}: the option changed nothing");
+        worst = worst.max(d);
+    }
+    println!("C5 worst difference {worst:.3e} (limit 1e-12)");
 }
 
 #[test]
