@@ -615,7 +615,7 @@ compressible engines.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `equation` | `transport` | `transport` (convection-diffusion-source, steady or transient), `diffusive` (`ds/dt = div(D grad s) + S`, no convection), `poisson` (`div(D grad s) + S = 0` solved at every step without a time derivative) or `algebraic` (`s = expression`) |
+| `equation` | `transport` | `transport` (convection-diffusion-source, steady or transient), `diffusive` (`ds/dt = div(D grad s) + S`, no convection; in a steady run the time derivative is absent and it is the steady diffusion problem), `poisson` (`div(D grad s) + S = 0` solved at every step without a time derivative) or `algebraic` (`s = expression`) |
 | `diffusivity_expression` | none | diffusivity [m^2/s] as an expression of x, y, z, t at the face centres; replaces `diffusivity`; not together with `schmidt`; must be finite and positive |
 | `source_expression` | none | source (dimensionless or 1/s, read as per second) at the cell centres, added to `source` |
 | `initial_expression` | none | dimensionless initial field of x, y, z; replaces `initial` |

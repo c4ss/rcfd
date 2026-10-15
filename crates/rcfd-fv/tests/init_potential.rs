@@ -114,7 +114,7 @@ fn run(start: Start) -> Run {
 
 #[test]
 #[ignore = "known miss: potential start 258 iterations against 253 (uniform) and 258 (zero); see ADR 0019 results"]
-fn i2_known_miss_potential_start_needs_fewer_iterations_on_the_backward_facing_step() {
+fn i2_potential_start_needs_fewer_iterations_on_the_backward_facing_step_known_miss() {
     let a = run(Start::UniformX);
     let b = run(Start::Zero);
     let c = run(Start::Potential);

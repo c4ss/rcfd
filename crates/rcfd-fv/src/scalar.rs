@@ -1,4 +1,4 @@
-//! Steady scalar transport `div(phi s) - div(D grad s) = S` shared by the temperature equation
+//! Scalar transport `div(phi s) - div(D grad s) = S` (steady iterations or transient steps) shared by the temperature equation
 //! (F-050), passive scalars and multicomponent species (F-053).
 //!
 //! [`sweep`] is the one implicit sweep (convection and diffusion operators of momentum, optional
