@@ -498,7 +498,7 @@ Known misses added by ADR 0015 (limits as registered, never widened; ignored `*_
 | F-203 k-epsilon Standard y+ ~ 30 | 5 % | -6.15 / -4.42 % | `c2_kepsilon_standard_y30_known_miss` |
 | F-203 Enhanced y+ ~ 1 and ~ 30 | converged, 5 % | not converged | `c2_kepsilon_enhanced_y{1,30}_known_miss` |
 | F-203 SST + roughness | 10 % | -22 to -17 %, field stationary (max update 4.4e-9 vs registered 1e-9) | `c3_rough_plate_sst_known_miss` |
-| F-203 C5 tree equals library run | 1e-12 | not run: build path hook missing | `rcfd-api/tests/wall_options.rs` (see ADR 0015 results) |
+| F-203 C5 tree equals library run | 1e-12 | wave 13: max abs difference 0 in all seven option runs (ADR 0016 results) | `rcfd-api/tests/wall_options.rs` |
 
 Reference values and sources:
 
@@ -517,3 +517,21 @@ Reference values and sources:
 | Kader blended law (Gamma = -0.01 y+^4/(1 + 5 y+)) | Kader (1981) | wave 13: confirmed (secondary) in the Fluent theory guide (a = 0.01, b = 5, same form) and in a heat-transfer paper writing the equivalent positive-Gamma form; the 1981 paper was not read |
 | Standard k-epsilon under-predicts BFS reattachment by 10 to 20 percent | general literature statement | not tied to a specific source here; the measured 14.5 percent is consistent |
 | Non-equilibrium wall functions (Kim and Choudhury) | not used | not attempted: formulas not verifiable |
+
+## Wave 13 numerics and wall motion (F-211, F-208, F-204, ADR 0016)
+
+Every literature statement below was written from memory while building; none was checked against a source in this wave (no web
+access to the papers). They are marked unverified and none of the registered checks depends on them: the checks use exact solutions
+(manufactured, linear profiles, the Taylor-Couette solution derived in the ADR) or equivalences between options.
+
+| Item | Source | Status |
+| --- | --- | --- |
+| Gamma scheme (normalised-variable blend, beta_m range 0.1 to 0.5) | Jasak, Weller and Gosman (1999), Int. J. Numer. Meth. Fluids 31:431 | unverified (memory); bounds measured in W1, not assumed |
+| Compressive family psi_k(r) = max(0, min(k r, 1), min(r, k)); k = 1 minmod, k = 2 superbee | Roe (1985), Sweby (1984) | unverified (memory); the extension to k in [0, 1) is project-defined |
+| Convection boundedness criterion | Gaskell and Lau (1988) | unverified (memory); not used as a pass criterion |
+| Bounded central differencing equals minmod in normalised variables | Jasak (1996) thesis | unverified (memory); equivalence to `Tvd(Minmod)` is tested bitwise (B3), the literature identification is not claimed |
+| `Bdf2Bounded` time scheme | project-defined | no source; accuracy measured (T1) and boundedness measured (T2) |
+| Face-gradient correction (compact difference replaces the component along the cell-centre line) | Jasak (1996) thesis; Mathur and Murthy (1997) | unverified (memory); effect measured in M1 to M4 |
+| Maxwell slip law and the slip length l = lambda (1 + s)/(1 - s) | Maxwell (1879) | unverified (memory); D3 checks the discrete law against its own closed form, not the slip law |
+| Thermocapillary layer u = (tau h/(4 mu)) (3 xi^2 - 2 xi) | derived in ADR 0016 (parallel flow, zero net flux) | derived, checked by hand in the ADR; no external source |
+| Taylor-Couette u_theta = A r + B/r and torque 4 pi mu B | derived in ADR 0016 (standard solution) | derived; D5b (rigid rotation) separately confirms the torque evaluation has no spurious transpose term |

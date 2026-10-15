@@ -315,6 +315,40 @@ with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, 
 then the flow step sees the Boussinesq buoyancy of the new temperature (first-order coupling in time; a steady state is independent of it).
 Temperature-dependent `properties`, scalars and species stay steady-only.
 
+## Wave 13: schemes, wall motion, solution limits (F-211, F-204, F-208, ADR 0016)
+
+**Convection schemes** (`solver.convection`): `blended`
+(`solver.blend_factor` in 0..1, default 0.75: face value `upwind + f (central - upwind)`; 0 is `upwind`, 1 is `central`),
+`high_resolution` (Gamma scheme, `solver.high_resolution_beta` in 0.1..0.5, default 0.2), `compressive`
+(`solver.compressive_k` in 0..2, default 1.5; k = 0 is upwind, k = 1 minmod-like, k = 2 the sharpest member) and
+`bounded_central` (normalised-variable form of central differencing; identical to the `tvd_minmod` limiter). The limited schemes
+are deferred-correction schemes: a steady run converges only if the corrections settle, and the compressive members can stall in a limit
+cycle of the limiter switching (ADR 0016 results). **Time scheme** `solver.time_scheme = "bdf2_bounded"`: per cell, BDF2 blended
+towards implicit Euler by the ratio of the last two backward difference quotients, so a temporal extremum or an accelerating front falls back to the monotone Euler (project-defined, no verified source, ADR 0016 D1).
+
+**Velocity kinds** of `boundaries.<patch>.velocity` (all impermeable, all `turbulence` role `wall`; the turbulence wall treatments
+themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error):
+* `moving_wall`: wall velocity `velocity_value` (must be tangential on every face, located error otherwise) plus an optional rotation
+  `wall_rotation_rate` [rad/s] about `wall_rotation_axis` (default z) through `wall_rotation_origin`; `u_w = u_t + Omega x (x - x0)`.
+* `shear`: tangential traction `shear_stress` [Pa] exerted on the fluid, `mu du_t/dn_out = tau` with `mu = physics.rho * physics.nu`.
+* `partial_slip`: Navier slip with `slip_length` [m] (0 is no-slip, large is symmetry) relative to the wall velocity of the
+  `moving_wall` keys; alternatively `specularity` in [0, 1) with `mean_free_path` (Maxwell, `l = lambda (1 + s)/(1 - s)`; 1 is a located error).
+* `marangoni`: `marangoni_coefficient` = d sigma/d T times the tangential temperature gradient of the boundary cell as a shear stress,
+  refreshed every iteration / step; needs `energy.enabled` and one of simple, simplec, piso, pimple.
+`shear`, `partial_slip` and `marangoni` behave like a symmetry plane in the momentum matrices: use `solver.component_diagonal = "corrected"`
+with the steady algorithms, otherwise the iteration stalls (ADR 0010; reproduced for the existing `symmetry` kind in ADR 0016).
+
+**Solution limits** `limits.temperature.{enabled, min, max}` and `limits.scalar.{enabled, min, max}` (off by default): after every
+iteration or step, cells outside the band are clipped to it (temperature needs `energy.enabled`; scalar covers every transported scalar
+and species). Clipping breaks conservation locally; the number of clipped cells so far is `clipped_cells` in the run status.
+
+**Wall options** (`turbulence.wall_function`, `wall_omega`, `sst_variant`, `roughness_height`, `roughness_constant`, ADR 0015): the
+build path now applies them to the model it creates (`TurbulenceModel::apply_wall_options`), with the equality check of ADR 0015 C5;
+they are no longer rejected. Plugin models keep their own settings.
+
+Not in the settings tree: the gradient options of F-208 (face-gradient correction, secondary-gradient limiter, boundary treatments) exist in
+`rcfd-fv` (`diffusion::GradientOptions`, `laplacian_with`) and are exercised by the library tests only.
+
 ## `tables` and profile inputs (F-105)
 
 `tables.<name>` reads a lookup table or profile from CSV (`file`, relative to the case file, or inline
