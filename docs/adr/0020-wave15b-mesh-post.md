@@ -285,4 +285,90 @@ New module `rcfd-post::derived` (post already depends on fv and mesh). Fields ar
 
 ## Results
 
-(filled in after the runs)
+Measured on the final code (2026-10). Limits are the registered ones above; none was changed, widened, replaced or deleted. Every
+registered check passed at its first run; there are no `*_known_miss` tests.
+
+### F-236 (`rcfd-mesh/tests/partition_strategies.rs`, `rcfd-linalg/tests/reorder.rs`, `rcfd-fv/tests/reorder.rs`)
+
+* P1 cover and cut consistency: pass for 8 strategies x 3 meshes x 15 part counts (360 partitions); `Decomposition::edge_cut`
+  equals the independent pair count in every case.
+* P2 balance (limit 0.05): worst imbalance 0.0300 (M1, `GraphPartitioner`, n = 10; its refinement tolerance is 0.03, the other
+  strategies are below that).
+* P3 node weighting (limit 0.05): worst weighted imbalance 0.0296; positive control: unweighted `Rcb` on the same weights
+  reaches 0.613 (n = 2..=16, M1), so the weights matter.
+* P4 edge cut: `GraphPartitioner` cut `<=` `Rcb` cut in all 45 cases (M1, M2, M3 x n = 2..=16); strictly lower in 31, equal in
+  14 (equal where the coordinate seed is already a local optimum of the move rule, for example n = 2, 4 on all three meshes). Examples
+  (rcb / graph): M1 n=3 167 / 117, M1 n=16 598 / 511, M2 n=5 388 / 316, M3 n=5 94 / 79. The cuts of the cycle and inertial
+  variants are printed by the test (cycle is much worse on the O-grid: M3 n=16 564, inertial 144, rcb 204, graph 196);
+  inertial beats the graph partitioner on several O-grid counts (M3 n=7: 100 against 114), so the registered criterion (graph
+  against `Rcb` only) says nothing about which strategy is best. M1 n=2: graph cut 50 (limit 50).
+* P5 smoothing: (a) the slab assignment is restored exactly, 10 moves, cut 50; (b) after smoothing the cut never increased and
+  the imbalance stayed within `max(before, 0.05)` for all 360 partitions (unit weights; weighted smoothing is covered only
+  through P3's graph partitioner, which shares the code).
+* P6 sectors: key bands monotone and sizes within 1 for M1 and M3, n = 2..=16; the 8x8x1 quadrant closed form holds exactly.
+* P7 inertial: the tilted slab is cut across, cut 8 and 128 / 128 cells; positive control `Rcb` cut 12 (> 8).
+* R1, R2: permutations valid and deterministic; the shuffled 200-node path has RCM bandwidth 1 (shuffled labels: at least 100,
+  positive control).
+* R3: `box_mesh([40,8,8])` natural bandwidth 320, RCM 72 (derived bound 127); shuffled labels: bandwidth 2526, RCM 65.
+  `box_mesh([40,6,1])` natural 40, RCM 7 (bound 11); shuffled 231, RCM 6. All limits met.
+* R4: `B (P x)` against `P (A x)` relative error 3.0e-16 (limit 1e-12); the bandwidths agree; permuting back with the inverse
+  gives the original CSR matrix.
+* Acceptance (balance within 5 percent for 2 to 16 parts; graph cut not worse than coordinate bisection; RCM reduces bandwidth
+  on a stretched mesh): met. Not done and not claimed: a multilevel graph partitioner (the graph method is seed plus greedy
+  refinement), any use of the partitioners or the ordering from the case file, CLI, solvers or GUI, renumbering of a `Mesh`.
+
+### F-108 (`rcfd-mesh/tests/inflate.rs`)
+
+* I1 box patch: volume relative error 1.1e-15 (limit 1e-12), layer plane error 0 (1e-12), side area error 0, first/last/growth
+  within 1e-12, quality: `max_aspect_ratio` 100.00000000000213 (relative 2.1e-14 against 1e-9), `max_non_orthogonality`
+  1.2e-6 degrees (limit 1e-4; the acos noise known from ADR 0018), `max_skewness` 5.7e-14 (limit 1e-9).
+* I2 triangle prism patch (72 triangles, 5 layers): volume error 1.5e-14, side area error 6.1e-16, every new cell has 5 faces
+  and 6 points, valid, `check_mesh` ok.
+* I3 O-grid inner wall: added volume 0.7662955179398452 against the closed form 0.766295517939847 (relative 2.3e-15, limit
+  1e-10); layer radii error 2.2e-16 (1e-12).
+* I4 sizing types, I5 invalid inputs, I6 y+ target (0.8 recovered to 1e-12), I7 report (JSON round trip, thickness spread 0):
+  pass.
+* H1: all earlier `rcfd-mesh` tests (including `edit.rs`) pass unchanged after the `extrude_patch` refactor.
+* Status: the acceptance sentence is met for block meshes (wave 7 solved flat-plate check), and layers are now generated and
+  reported on unstructured wall patches at the shell level. The item stays `partial`: the layers are added on the outward side
+  of a boundary patch, not carved into a fluid domain (no merge with a bulk mesh, F-234), the report is not exposed through
+  the CLI, case schema or GUI, and the solved y+ check was not repeated on an unstructured layered mesh.
+
+### F-072 (`rcfd-post/tests/derived.rs`)
+
+* D1 linear field on the graded mesh: vorticity error 3.3e-15, Q error 2.9e-15 (limit 1e-10) in every cell including boundary cells.
+* D2 Taylor-Green: N = 16 vorticity error 4.91e-2 (limit h^2/3 = 5.14e-2), Q error 4.65e-2 (limit h^2 = 0.154); N = 32
+  vorticity error 1.270e-2 (limit 1.285e-2, a margin of 1.2 percent: the derived bound is nearly tight), Q error 1.254e-2
+  (limit 3.86e-2); error ratio 3.86 (limit 3.5).
+* D3 Couette: wall shear and y+ worst relative error 7.5e-15 (limit 1e-12) on both walls.
+* D4 Poiseuille: estimate error 2.4e-16; relative difference to the exact wall shear 0.03125000000000026 against the limit
+  0.03125 (1 + 1e-9).
+* D5: Mach and total pressure formulas match to 1e-12; low-Mach difference 1.094e-6 against the limit 1.1375e-6 (96 percent of
+  the limit; the limit is the first neglected series term, so a small margin is expected).
+* S1: line values error 3.3e-16 (1e-10), arc length exact, CSV header and 41 rows, bit-exact parse back; a line leaving the
+  cube flags exactly the 5 outside points (empty field, `inside` 0). S2: plane integral 0.75 exactly (error 0), 400 of 400 inside.
+* Status `partial`: derived fields and sampling exist as library functions with CSV text output; they are not reachable from
+  the CLI, case schema, service or GUI, there is no VTK writer for the derived fields, further vortex criteria (lambda2) are
+  not provided, and wall shear uses the one-sided first-cell estimate (first order, error `dn/H` in D4), not a wall-function value.
+
+### Deviations and disclosures
+
+* ADR typo: A3 P7 says "64 cells each" for the two halves of the `[32,4,2]` box (256 cells); the correct halves are 128 cells
+  each (16 slices of 8). The test asserts 128 / 128; the registered substance (cut exactly 8, parts are the halves of the
+  slices) is unchanged.
+* A3 P5(b) is registered as "weighted imbalance"; the sweep over strategies uses unit weights (weighted smoothing is exercised
+  only through the weighted graph partitioner of P3). This is narrower than the wording suggests.
+* A1 point 3 says the graph seed is weighted `Bisection::Longest`; with unit weights this is identical to `Rcb` by
+  construction (same rounding rule and tie-breaking), so P4 holds trivially where no move helps; P4 measures the refinement only.
+* A1 point 4 says smoothing visits every cell while the graph partitioner visits boundary cells; both use one code path that
+  skips cells without foreign neighbours (an interior cell has gain below 0 anyway).
+* `extrude_patch` was refactored into a private core shared with `inflate_patch` (planned in B1); its arithmetic is unchanged and
+  the existing tests pass.
+* `is_none_or` (stable since Rust 1.82) tripped the workspace MSRV lint (1.75) in a test and was replaced by `map_or`; no
+  criterion involved.
+* Scratch files were kept in `<scratch dir>` and the session scratchpad, not in system temp.
+
+### Unverified references
+
+All literature attributions are from memory and listed in `docs/reference-data.md` (wave 15B section); none of the registered
+checks depends on them.
