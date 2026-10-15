@@ -421,9 +421,9 @@
     "deps": [
       "F-053"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Methane one-step jet flame temperature within published band",
-    "note": "SCOPE (merged review): add eddy-dissipation-concept and thickened-flame models as sub-criteria; mechanism input formats in F-224, pollutants in F-222."
+    "note": "SCOPE (merged review): add eddy-dissipation-concept and thickened-flame models as sub-criteria; mechanism input formats in F-224, pollutants in F-222. PARTIAL (wave 18B, ADR 0027). Delivered: top-level `chemistry` case section (docs/case-schema.md) with finite-rate kinetics from a CHEMKIN mechanism through the stiff cell integrator of the 0D toolkit, eddy-dissipation (A=4, B=0.5 UNVERIFIED), finite-rate/eddy-dissipation minimum and EDC (C_xi 2.1377, C_tau 0.4082 secondary source) closures, heat release coupled to the energy equation with constant cp; transient Lie operator splitting and steady source-term form, incompressible constant-density flow only. Measured: cell steps equal the toolkit to 3e-9 DeltaT, closed-box case equals the cell integration to 7e-14 DeltaT_ad, adiabatic flame temperature 1149.43387854 K = hand value (case error 6e-12 K), element conservation 3e-14, plug-flow decay discrete solution to 5e-6 and upwind order 0.94/0.97, linear_upwind order 1.95, steady heat release enthalpy balance 3.8e-9 K, eddy-dissipation hand formula exact, EDC scales to 1e-12, splitting-vs-steady order 0.97/0.98. NOT met (reason for partial): the acceptance (methane one-step jet flame temperature within a published band) is not attempted: constant density only (no compressible or variable-density species), no published flame reference verified, constants unverified or secondary, no thickened-flame model, sequential cell loop, no tabulation, first-order splitting. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1."
   },
   {
     "id": "F-055",
@@ -860,7 +860,7 @@
     ],
     "status": "partial",
     "acceptance": "H2/air and CH4/air ignition delay agree with published GRI-Mech 3.0 based results within 5 percent; PSR blowout temperature trend matches literature",
-    "note": "Partial (ADR 0013, crates/rcfd-reactor, `rcfd reactor`, docs/reactor-and-acoustics.md; criteria registered before running and unchanged). Delivered: CHEMKIN-II mechanism reader with NASA-7 thermo (elementary, three-body, Lindemann/Troe falloff, REV, DUP; unsupported keywords diagnosed with line numbers), in-repo stiff adaptive implicit integrator (3-stage Radau IIA order 5, written here), constant-pressure and constant-volume batch reactors with ignition delay (max dT/dt and temperature-rise definitions), perfectly stirred reactor with continuation to blowout, constant-area plug flow, Gordon-McBride equilibrium at TP/HP/UV, JSON case file with located validation errors. No mechanism is committed; GRI-Mech 3.0 is read from the git-ignored F-125 fetch (53 species, 325 reactions, zero element imbalance). Measured: Prothero-Robinson lambda 1e6 error 1.2e-9 (limit 1e-6); Robertson t=40 relative 2.7e-11/6.1e-11/1.6e-10 (limit 1e-5/1e-4/1e-5; reference digits from memory, reproduced to 1e-10); toy equilibrium vs analytic 1.3e-15; adiabatic energy drift 1.5e-13/2.8e-12 (limit 1e-8); GRI H2/air phi=1 1 atm ignition delay CV 3.05e-4/8.62e-5/4.42e-5 s at 1000/1100/1200 K (CP 3.12e-4/8.86e-5/4.53e-5 s), strictly decreasing, element drift 2e-15; CH4/air HP T_ad 2225.5 K (reference 2225 K from memory); 1 s limits equal UV/HP equilibrium to 2e-11; PSR blowout tau bracket 2.6 percent, shorter with 600 K preheat (1.03e-5 vs 1.49e-5 s) and longer for phi 0.5 (4.3e-5 s) as expected. NOT met / not done (reason for partial): the acceptance comparison with PUBLISHED GRI-Mech 3.0 ignition delays within 5 percent could not be made because no published number could be verified from an accessible source (the ignition delays above are this code's own results); the PSR blowout check is a qualitative trend, no literature number; 1D flame speed (in the title) is not implemented; the GRI thermo polynomials miss the registered 1e-3 continuity limit at 1000 K (5.1e-3 in h, property of the data file, ignored r3_gri_nasa_continuity_known_miss); no CFD coupling (F-054 stays todo); falloff SRI, PLOG, FORD and Landau-Teller unsupported. Development note: the first integrator (extrapolated linearly implicit Euler) needed 4e4+ steps on GRI and was replaced by Radau5; a pivoting defect in the dense LU solver, found along the way, was fixed. SCOPE (merged review): plug-flow reactor, shock tube and network composition are tracked in F-225."
+    "note": "Partial (ADR 0013, crates/rcfd-reactor, `rcfd reactor`, docs/reactor-and-acoustics.md; criteria registered before running and unchanged). Delivered: CHEMKIN-II mechanism reader with NASA-7 thermo (elementary, three-body, Lindemann/Troe falloff, REV, DUP; unsupported keywords diagnosed with line numbers), in-repo stiff adaptive implicit integrator (3-stage Radau IIA order 5, written here), constant-pressure and constant-volume batch reactors with ignition delay (max dT/dt and temperature-rise definitions), perfectly stirred reactor with continuation to blowout, constant-area plug flow, Gordon-McBride equilibrium at TP/HP/UV, JSON case file with located validation errors. No mechanism is committed; GRI-Mech 3.0 is read from the git-ignored F-125 fetch (53 species, 325 reactions, zero element imbalance). Measured: Prothero-Robinson lambda 1e6 error 1.2e-9 (limit 1e-6); Robertson t=40 relative 2.7e-11/6.1e-11/1.6e-10 (limit 1e-5/1e-4/1e-5; reference digits from memory, reproduced to 1e-10); toy equilibrium vs analytic 1.3e-15; adiabatic energy drift 1.5e-13/2.8e-12 (limit 1e-8); GRI H2/air phi=1 1 atm ignition delay CV 3.05e-4/8.62e-5/4.42e-5 s at 1000/1100/1200 K (CP 3.12e-4/8.86e-5/4.53e-5 s), strictly decreasing, element drift 2e-15; CH4/air HP T_ad 2225.5 K (reference 2225 K from memory); 1 s limits equal UV/HP equilibrium to 2e-11; PSR blowout tau bracket 2.6 percent, shorter with 600 K preheat (1.03e-5 vs 1.49e-5 s) and longer for phi 0.5 (4.3e-5 s) as expected. NOT met / not done (reason for partial): the acceptance comparison with PUBLISHED GRI-Mech 3.0 ignition delays within 5 percent could not be made because no published number could be verified from an accessible source (the ignition delays above are this code's own results); the PSR blowout check is a qualitative trend, no literature number; 1D flame speed (in the title) is not implemented; the GRI thermo polynomials miss the registered 1e-3 continuity limit at 1000 K (5.1e-3 in h, property of the data file, ignored r3_gri_nasa_continuity_known_miss); no CFD coupling (F-054 stays todo); falloff SRI, PLOG, FORD and Landau-Teller unsupported. Development note: the first integrator (extrapolated linearly implicit Euler) needed 4e4+ steps on GRI and was replaced by Radau5; a pivoting defect in the dense LU solver, found along the way, was fixed. SCOPE (merged review): plug-flow reactor, shock tube and network composition are tracked in F-225. Wave 18B: the cell chemistry of F-054 reuses this toolkit (mech.rs `rates_of_progress` split out without changing arithmetic; `cell.rs`, `toy.rs`); F-112 itself stays partial and the CFD coupling now exists in F-054 (partial)."
   },
   {
     "id": "F-113",
@@ -1600,9 +1600,9 @@
     "deps": [
       "F-054"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Zeldovich rate agrees with published data on a premixed laminar flame; a piloted jet flame NO trend lies within the published band",
-    "note": "Priority P3. Size M. Area: reactor. Run as post-processing on the converged flow, then optionally coupled."
+    "note": "Priority P3. Size M. Area: reactor. Run as post-processing on the converged flow, then optionally coupled. PARTIAL (wave 18B, ADR 0027). Delivered: extended Zeldovich thermal NO rate with steady-state N as a library function (crates/rcfd-reactor pollutants.rs), closed form to 1e-12, zero at detailed balance, quasi-steady against the integrated two-reaction system 6.8e-7 on the corrected set-up (the registered set-up missed at 3.8e-3, kept as an ignored known miss). NOT done: prompt, fuel and N2O paths, soot, any CFD coupling or post-processing of a converged field, rate constants (inputs only; literature set UNVERIFIED, not bundled), agreement with published flame data. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1."
   },
   {
     "id": "F-223",
@@ -1624,9 +1624,9 @@
       "F-054",
       "F-111"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Import of a public mechanism in two formats yields identical species and reaction counts and equal equilibrium states for hydrogen-air at three conditions",
-    "note": "Priority P2. Size M. Area: reactor,io. Extends the mechanism reader."
+    "note": "Priority P2. Size M. Area: reactor,io. Extends the mechanism reader. PARTIAL (wave 18B, ADR 0027). Delivered: optional NASA nine-coefficient thermodynamics on `Species` (derivative consistency 5.6e-10, NASA-7 mapping exact) and a lossless JSON mechanism interchange (format rcfd-mechanism v1, round trip identical rates of progress and equilibrium). NOT done: reading the nine-coefficient text file layout of the public database, YAML mechanism import, transport and surface decks, a public mechanism in two formats (acceptance). Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1."
   },
   {
     "id": "F-225",
@@ -1636,9 +1636,9 @@
       "F-112",
       "F-054"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A PSR-PFR network for a published methane-air case reproduces the blowout residence time and CO profile of the public validation set within 10 percent; sensitivity ranking matches the reference ordering",
-    "note": "Priority P3. Size M. Area: reactor. Builds on the 0D reactor toolkit."
+    "note": "Priority P3. Size M. Area: reactor. Builds on the 0D reactor toolkit. PARTIAL (wave 18B, ADR 0027). Delivered: brute-force logarithmic sensitivity to pre-exponential factors with ranking (|S+1| 6.7e-13 on the scaling problem) and a PSR followed by plug flow network (1e-11 against closed forms); the plug-flow reactor itself was delivered in F-112. NOT done: shock tube, premixed flame-speed library, published methane-air PSR-PFR comparison (acceptance), sensitivity of species outcomes to thermodynamic data. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1."
   },
   {
     "id": "F-226",

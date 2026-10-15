@@ -530,6 +530,38 @@ Limits: steady runs only, the viscous porous term uses `physics.nu`; the non-con
 interfaces only, so an MRF zone with a non-conformal interface is limited to interfaces perpendicular to the axis.
 Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
 
+## `chemistry` finite-rate and turbulent combustion chemistry (F-054, ADR 0027)
+
+Reactions between the `species.<name>` mass fractions of a constant-density incompressible case (steady or transient;
+compressible and variable-density engines are refused). The mechanism is a CHEMKIN-format file (`mechanism`, plus `thermo`)
+or inline text (`mechanism_text`, `thermo_text`); every mechanism species must be a `species` entry and vice versa
+(species not in the mechanism are refused), located by path, with the line inside the mechanism text in the message. Files are confined to the sandbox when
+there is one. No mechanism is shipped.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `model` | `off` | `off` \| `finite_rate` (Arrhenius) \| `eddy_dissipation` (irreversible reactions, needs `k_epsilon` or `k_omega_sst`; epsilon = 0.09 k omega for SST) \| `finite_rate_eddy_dissipation` (minimum of the two for a positive kinetic rate) \| `edc` (Eddy Dissipation Concept, fine-structure reactor integrated over tau*) |
+| `density` | -1 (unset) | cell density for the rates; required, must equal `physics.rho` (relative 1e-12) |
+| `heat_release` | false | couple the enthalpy release to `energy` (constant `cp`: `dT/dt = -sum h_k omega_k / (rho cp)`); requires `energy.enabled` |
+| `heat_capacity` | -1 (unset) | required with `heat_release`, must equal `physics.cp` |
+| `temperature` | -1 (unset) | fixed temperature of the chemistry (K) when the energy equation is off; refused when it is on |
+| `minimum_temperature` | 0 (off) | cells colder than this are not integrated |
+| `rtol`, `atol_species`, `atol_temperature` | 1e-8, 1e-14, 1e-8 | tolerances of the stiff cell integrator |
+| `eddy_dissipation_a`, `eddy_dissipation_b` | 4.0, 0.5 | Magnussen-Hjertager constants (UNVERIFIED, see `docs/reference-data.md`) |
+| `eddy_dissipation_product_limit` | true | include the product-limited term; false is the reactant-only form |
+| `edc_c_xi`, `edc_c_tau` | 2.1377, 0.4082 | EDC constants (secondary source, see `docs/reference-data.md`) |
+
+Transient runs (`piso`, `pimple`) use Lie operator splitting: after the flow step and the transport sweeps every cell is advanced
+by the stiff integrator over `dt` and the species and temperature are written back (first order in `dt`). Steady runs use a source
+form: the net rate is an explicit source with a diagonal implicit sink (finite-difference, plus Patankar's coefficient for
+negative sources), the heat release a lagged source of the energy equation. A chemistry failure stops the run with the cell
+index. Limits: constant density, sequential cell loop (no parallel or tabulated chemistry), no Strang splitting, no thickened-flame
+or flamelet models, no comparison with published flames (F-054 stays `partial`).
+
+Library additions in `rcfd-reactor` (no case keys): `pollutants` (extended Zeldovich thermal NO rate, rate constants as inputs),
+`network` (pre-exponential sensitivities, PSR into plug flow), `json` (mechanism interchange, format `rcfd-mechanism` version 1)
+and optional NASA nine-coefficient thermodynamics in `Species::nasa9`.
+
 ## `components` lumped zone components (F-113, ADR 0012)
 
 `components.<name>` adds a lumped component to a steady constant-density run (`solver.algorithm` `simple` or `simplec`;
