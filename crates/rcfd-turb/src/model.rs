@@ -9,9 +9,11 @@
 
 use crate::eddy::patch_faces;
 use crate::kepsilon::{KEpsilon, KEpsilonVariant, WallFunction, WallTreatment};
+use crate::les::{sgs_infos, AlgebraicSgs, SgsKind, A_PLUS_SGS, CS_DEFAULT, CW_DEFAULT};
 use crate::sa::{SLimiter, SaWallMode, SpalartAllmaras};
 use crate::sst::{KOmegaSst, SstVariant, SstWallMode};
 use crate::wall::Roughness;
+use crate::zeroeq::{mixing_length_infos, MixingLengthModel, MixingProfile, A_PLUS_ML};
 use rcfd_core::{Error, Result};
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
@@ -71,6 +73,14 @@ pub struct ModelContext {
     pub relax_turb: f64,
     /// Eddy-viscosity under-relaxation.
     pub relax_nut: f64,
+    /// Van Driest wall damping of the algebraic models (`turbulence.wall_damping`, ADR 0026).
+    pub wall_damping: bool,
+    /// Length scale `R` of the mixing length [m] (`turbulence.length_scale`).
+    pub length_scale: f64,
+    /// Mixing-length profile (`turbulence.mixing_profile`).
+    pub mixing_profile: MixingProfile,
+    /// The run is time-accurate (transient algorithm): algebraic models evaluate explicitly, without relaxation.
+    pub time_accurate: bool,
 }
 
 /// The near-wall options of a case (F-203, F-043, ADR 0015): `turbulence.wall_function`, `roughness_height`,
@@ -629,6 +639,34 @@ impl TurbulenceModel for SpalartAllmaras {
     }
 }
 
+// ---------------------------------------------------------------- algebraic models (ADR 0026)
+
+/// Coefficient list of the Smagorinsky model for the settings schema (defaults).
+pub fn smagorinsky_coefficient_table() -> Vec<CoefficientInfo> {
+    sgs_infos(SgsKind::Smagorinsky, CS_DEFAULT, CW_DEFAULT, A_PLUS_SGS)
+}
+
+/// Coefficient list of the WALE model for the settings schema (defaults).
+pub fn wale_coefficient_table() -> Vec<CoefficientInfo> {
+    sgs_infos(SgsKind::Wale, CS_DEFAULT, CW_DEFAULT, A_PLUS_SGS)
+}
+
+/// Coefficient list of the mixing-length model for the settings schema (defaults).
+pub fn mixing_length_coefficient_table() -> Vec<CoefficientInfo> {
+    mixing_length_infos(0.41, 0.09, A_PLUS_ML)
+}
+
+/// Is the built-in model `key` usable with the transient algorithms? The subgrid models are transient only
+/// ([`is_sgs_key`]); the mixing length works in both; the RANS transport models and plug-ins are steady only.
+pub fn supports_transient(key: &str) -> bool {
+    matches!(key, "smagorinsky" | "wale" | "mixing_length")
+}
+
+/// Is `key` a subgrid-scale (large-eddy) model, which is not defined for the steady algorithms?
+pub fn is_sgs_key(key: &str) -> bool {
+    matches!(key, "smagorinsky" | "wale")
+}
+
 // ---------------------------------------------------------------- registry
 
 /// A model factory.
@@ -663,6 +701,21 @@ fn registry() -> &'static Mutex<Vec<Entry>> {
                 "spalart_allmaras",
                 "Spalart-Allmaras one-equation model (SA-noft2, SA-neg)",
                 Arc::new(|c| Ok(Box::new(new_spalart_allmaras(c)?) as Box<dyn TurbulenceModel>)),
+            ),
+            b(
+                "smagorinsky",
+                "Smagorinsky subgrid-scale model for large-eddy simulation (transient algorithms)",
+                Arc::new(|c| Ok(Box::new(AlgebraicSgs::new(SgsKind::Smagorinsky, c)?) as Box<dyn TurbulenceModel>)),
+            ),
+            b(
+                "wale",
+                "WALE subgrid-scale model for large-eddy simulation (transient algorithms)",
+                Arc::new(|c| Ok(Box::new(AlgebraicSgs::new(SgsKind::Wale, c)?) as Box<dyn TurbulenceModel>)),
+            ),
+            b(
+                "mixing_length",
+                "Prandtl mixing-length zero-equation closure (linear or Nikuradse profile, optional van Driest damping)",
+                Arc::new(|c| Ok(Box::new(MixingLengthModel::new(c)?) as Box<dyn TurbulenceModel>)),
             ),
         ])
     })

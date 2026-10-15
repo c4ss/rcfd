@@ -80,12 +80,41 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 rejected for this model with a located diagnostic. Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the
 TMR CFL3D SA value (y+ 0.5 and y+ 30 meshes: +3.0 and +5.8 percent).
 
+### `smagorinsky`, `wale` and `mixing_length` (F-045, F-206, ADR 0026)
+
+Algebraic eddy-viscosity models: no transported scalar, `nut` is computed from the velocity gradient (Green-Gauss) of the
+current field. Fields: `nut` (and `wall_distance`, `y_plus` where a wall exists).
+
+| Model | Algorithms | `nut` |
+| --- | --- | --- |
+| `smagorinsky` | `piso`, `pimple` only (large-eddy subgrid model; a steady algorithm is a located error at `turbulence.model`) | `(Cs Delta f)^2 sqrt(2 S_ij S_ij)`, `Delta = V^(1/3)` (cell volume), `f` the optional van Driest damping |
+| `wale` | `piso`, `pimple` only | Nicoud-Ducros wall-adapting local eddy viscosity `(Cw Delta)^2 (Sd:Sd)^(3/2) / ((S:S)^(5/2) + (Sd:Sd)^(5/4))`; 0 where the denominator is 0; no damping option (it scales as `y^3` at a wall by construction) |
+| `mixing_length` | `simple`, `simplec`, `piso`, `pimple` | `l^2 sqrt(2 S_ij S_ij)`; steady runs relax `nut` with `turbulence.relax_nut` (Picard), transient runs evaluate it explicitly each step |
+
+Keys: `turbulence.wall_damping` (`none` | `van_driest`; Smagorinsky and mixing length only; needs a wall patch;
+`f = 1 - exp(-y+/A+)`, y+ from the nearest wall face, wall shear from the first cell); `turbulence.length_scale` (m;
+required and positive for `mixing_length`, the half height of a channel or the radius of a pipe; a located error at
+`turbulence.length_scale` for any other model); `turbulence.mixing_profile` (`linear`: `l = min(kappa d f, l_max_ratio R)`
+| `nikuradse`: `l = R (0.14 - 0.08 (1 - d/R)^2 - 0.06 (1 - d/R)^4) f`, the pipe formula; used for a channel it is an analogy).
+Coefficients in `turbulence.coefficients.smagorinsky` (`cs` 0.17 in [0, 0.5], `a_plus` 25), `.wale` (`cw` 0.325 in [0, 1])
+and `.mixing_length` (`kappa` 0.41, `l_max_ratio` 0.09, `a_plus` 26). The wall faces carry `nut = 0` (wall resolved; no wall
+function). Subgrid models need no wall patch unless `wall_damping = van_driest`. They switch live like the other models
+(`settings.set turbulence.model`; the flow is kept). Restrictions: no energy equation, no compressible or variable-density
+engine; `k_initial`, `epsilon_initial` and the other transported-model keys are rejected. **Known limitations:** the
+subgrid-stress divergence is discretised in Laplacian form `div(nu_eff grad u)` as for the RANS models (the transposed part
+`div(nu_t (grad u)^T)` is missing, which changes the dissipation of a variable `nu_t`, ADR 0026 addendum A1); no SGS heat or
+scalar flux; DES-class hybrid models, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, Pr_t/Sc_t are not available.
+Validation: closed-form checks and a Taylor-Green vortex (ADR 0026); mixing length on the periodic Re_tau 395 channel
+within 4 percent of the DNS mean velocity (linear, van Driest) and 3 percent (Nikuradse analogy). Decaying isotropic
+turbulence and pipe data were not run.
+
 ### Model coefficients, plugin models and live switching (F-044)
 
 `turbulence.coefficients.<model>.<name>` lists the coefficients of every model with their documentation and ranges in the
 exported JSON schema: `k_epsilon` (`c_mu`, `c1`, `c2`, `sigma_k`, `sigma_e`; 0 keeps the value of the selected `variant`),
 `k_omega_sst` (the eleven Menter 2003 values; **shown, not editable**: a non-default value is rejected because the
-constants are compiled into the model), `sa` (`sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`). A
+constants are compiled into the model), `sa` (`sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`),
+`smagorinsky`, `wale` and `mixing_length` (above). A
 value outside its range is rejected when it is set; a non-default value in the group of a model that is not selected, or
 `k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available: overriding
 a coefficient by an expression or a user function.

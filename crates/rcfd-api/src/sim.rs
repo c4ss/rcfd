@@ -2114,6 +2114,12 @@ impl Simulation {
                     sc.advance(&s.phi, dt, s.settings.time_scheme, s.nu_face.as_deref(), &sctx);
                 }
                 self.monitors.push("courant", "", i.time, i.courant);
+                if let Some(t) = &mut self.turb {
+                    // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
+                    // velocity and flux of the old time level, no relaxation
+                    t.change = t.model.update(&s.u, &s.phi);
+                    s.nu_face = Some(t.model.nu_face());
+                }
                 self.monitors.push("dt", "s", i.time, i.dt);
                 StepSummary {
                     index: i.step,
@@ -2288,7 +2294,7 @@ impl Simulation {
             return Err(Error::InvalidValue {
                 path: name.into(),
                 reason: format!(
-                    "field '{name}' needs a RANS model (turbulence.model = \"k_epsilon\", \"k_omega_sst\", \"spalart_allmaras\" or \"plugin\")"
+                    "field '{name}' needs a turbulence model (turbulence.model = \"k_epsilon\", \"k_omega_sst\", \"spalart_allmaras\", \"smagorinsky\", \"wale\", \"mixing_length\" or \"plugin\")"
                 ),
             });
         }
@@ -2704,6 +2710,7 @@ impl Simulation {
         c.put_f64s("u", &st.u.iter().flatten().copied().collect::<Vec<_>>());
         c.put_f64s("p", &st.p);
         c.put_f64s("phi", &st.phi);
+                        m @ ("smagorinsky" | "wale" | "mixing_length") => m.to_string(),
         if let Some(en) = &self.energy {
             c.put_f64s("T", &en.solver.t.values);
         }

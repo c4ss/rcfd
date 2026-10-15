@@ -355,9 +355,9 @@
       "F-029",
       "F-043"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Decaying isotropic turbulence spectrum and channel LES sanity check",
-    "note": "SCOPE (merged review): enumerate dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES variants and stress-blended hybrid as sub-criteria; see F-207 for embedded zones and inflow generators."
+    "note": "PARTIAL (wave 18A, ADR 0026): delivered Smagorinsky and WALE as explicit algebraic eddy-viscosity models in the transient piso/pimple algorithms (filter width from the cell volume, optional van Driest wall damping for Smagorinsky, coefficients cs/cw/a_plus in the settings tree, live switching, located validation errors); closed forms, linear-field mesh checks and a Taylor-Green vortex met, except two registered Taylor-Green checks that missed (TG1 extra dissipation 0.59 of the closed form, WALE-less-dissipative-than-Smagorinsky ordering) because the solver discretises the viscous term in Laplacian form, so the transposed subgrid-stress term is missing (ignored known_miss tests, corrected checks in addendum A1). NOT delivered: decaying isotropic turbulence spectrum (no periodic 3D box, no verified reference; no claim made) and channel LES sanity check (the acceptance is NOT met), DES/SAS hybrids (the SA model has no time derivative), dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES, stress-blended hybrid, SGS in the compressible engines, SGS heat flux; F-207 not started. The constants Cs 0.17, Cw 0.325 and A+ 25 are from memory, unverified. SCOPE (merged review): enumerate dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES variants and stress-blended hybrid as sub-criteria; see F-207 for embedded zones and inflow generators."
   },
   {
     "id": "F-046",
@@ -1411,9 +1411,9 @@
     "deps": [
       "F-044"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Mixing-length pipe profile agrees with the Nikuradse data; v2-f channel at Re_tau 395 within 10 percent of the published DNS profile; rotating-channel and U-duct cases show the published stabilising effect of curvature correction",
-    "note": "Priority P2. Size L. Area: turb. Each model is registered through the model plugin interface with coefficients exposed in the settings tree."
+    "note": "PARTIAL (wave 18A, ADR 0026): delivered the algebraic mixing-length closure (linear l = min(kappa d, 0.09 R) or Nikuradse pipe profile, optional van Driest damping, coefficients kappa/l_max_ratio/a_plus and turbulence.length_scale/mixing_profile in the settings tree, steady and transient, live switching, located errors). Checks met: closed forms, 1D reduction of the channel (0.2 percent), and the periodic Re_tau 395 channel against the DNS mean velocity (worst 4.0 percent linear, 3.1 percent Nikuradse analogy, limit 10 percent; DNS and Nikuradse constants quoted from memory, unverified). The acceptance as written (pipe profile against Nikuradse data) is NOT met: there is no pipe generator and no Nikuradse data in the tree. NOT delivered: Baldwin-Lomax style zero-equation models, v2-f, explicit algebraic Reynolds-stress variants, generalised two-equation model, curvature correction and its rotating-channel/U-duct cases, production limiters, turbulent Prandtl and Schmidt options, coefficient override by expression. Priority P2. Size L. Area: turb. Each model is registered through the model plugin interface with coefficients exposed in the settings tree."
   },
   {
     "id": "F-207",
