@@ -289,6 +289,65 @@ impl Bc for SlipWall {
     }
 }
 
+/// Velocity condition with a prescribed flow direction (ADR 0022): the face-normal flux component is zero
+/// gradient, the direction of the face velocity is `dir` (the face normal when `None`) and a tangential velocity `t`
+/// (swirl) is added: `u_f = e (n.u_P)/(n.e) + t`. With `dir = None` this is `u_f = n (n.u_P)`, the usual
+/// "backflow normal to the boundary" condition. The cross coupling uses the lagged cell value, like [`Symmetry`].
+#[derive(Debug, Clone)]
+pub struct Directed {
+    /// Flow direction (any non-zero length); `None` = the face normal.
+    pub dir: Option<Vec3>,
+    /// Tangential velocity per face (its normal part must vanish).
+    pub tangential: Profile,
+}
+
+impl Bc for Directed {
+    fn type_name(&self) -> &'static str {
+        "directed"
+    }
+    fn coeffs(&self, ctx: &BcCtx, comp: usize) -> FaceCoeffs {
+        if !ctx.is_vector {
+            return ZeroGradient.coeffs(ctx, comp);
+        }
+        let n = ctx.normal;
+        let e = self.dir.map_or(n, rcfd_core::vec3::unit);
+        let nd = n[0] * e[0] + n[1] * e[1] + n[2] * e[2];
+        let t = self.tangential.get(ctx.local_face);
+        let others: f64 = (0..3).filter(|&j| j != comp).map(|j| n[j] * ctx.cell_value[j]).sum();
+        FaceCoeffs::from_value(e[comp] * n[comp] / nd, e[comp] * others / nd + t[comp], ctx.dn)
+    }
+    fn clone_box(&self) -> Box<dyn Bc> {
+        Box::new(self.clone())
+    }
+}
+
+/// Per-face choice between two conditions (ADR 0022: backflow handling). `mask[local_face]` true selects `on`.
+#[derive(Debug, Clone)]
+pub struct Switched {
+    /// One flag per face of the patch.
+    pub mask: Vec<bool>,
+    /// Condition on flagged faces.
+    pub on: Box<dyn Bc>,
+    /// Condition on the other faces.
+    pub off: Box<dyn Bc>,
+}
+
+impl Bc for Switched {
+    fn type_name(&self) -> &'static str {
+        "switched"
+    }
+    fn coeffs(&self, ctx: &BcCtx, comp: usize) -> FaceCoeffs {
+        if self.mask[ctx.local_face] {
+            self.on.coeffs(ctx, comp)
+        } else {
+            self.off.coeffs(ctx, comp)
+        }
+    }
+    fn clone_box(&self) -> Box<dyn Bc> {
+        Box::new(self.clone())
+    }
+}
+
 /// Patch removed from the discretisation (2D reduction).
 #[derive(Debug, Clone, Copy)]
 pub struct Empty;

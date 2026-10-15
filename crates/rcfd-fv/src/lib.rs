@@ -15,6 +15,7 @@ pub mod fvmatrix;
 pub mod geometry;
 pub mod gradient;
 pub mod lumped;
+pub mod outlets;
 pub mod pimple;
 pub mod potential;
 pub mod pressure;
@@ -27,8 +28,8 @@ pub mod sources;
 pub mod varden;
 
 pub use bc::{
-    Bc, BcCtx, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Symmetry,
-    ZeroGradient,
+    Bc, BcCtx, Directed, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Switched,
+    Symmetry, ZeroGradient,
 };
 pub use field::{ScalarField, VectorField};
 pub use fvmatrix::FvMatrix;
