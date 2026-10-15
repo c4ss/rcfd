@@ -524,6 +524,7 @@ impl Case {
             }
         }
         out.extend(crate::turb::check(self));
+        out.extend(crate::wall_opts::check(self));
         out.extend(crate::comp::check(self));
         out.extend(crate::vd::check(self));
         out.extend(crate::exprs::check_case_expressions(self));

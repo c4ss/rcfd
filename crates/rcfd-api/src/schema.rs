@@ -1038,8 +1038,32 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "wall_function",
-            Schema::enumeration("standard", &["standard"]).doc(
-                "Wall treatment: standard equilibrium log-law wall functions (Launder and Spalding 1974). Scalable wall functions and rough walls are not available",
+            Schema::enumeration("standard", &["standard", "scalable", "enhanced"]).doc(
+                "k-epsilon wall treatment: standard equilibrium log-law wall functions (Launder and Spalding 1974), scalable (y* limited below the viscous/log intersection, Grotjans and Menter 1998) or enhanced (two-layer near-wall length scales blended with the transported values for Re_y < 200 and Kader's blended law, wall-resolved meshes). k_epsilon only",
+            ),
+        )
+        .field(
+            "roughness_height",
+            Schema::float(0.0).range(0.0, 1.0e3).doc(
+                "Sand-grain roughness height k_s of the walls in metres (0: smooth). Cebeci and Bradshaw shift of the log law; k_epsilon with the standard or scalable wall function and k_omega_sst with wall_omega automatic",
+            ),
+        )
+        .field(
+            "roughness_constant",
+            Schema::float(0.0).range(0.0, 10.0).doc(
+                "Roughness constant C_s of the fully rough shift Delta B = ln(1 + C_s k_s+)/kappa (0: the Nikuradse-consistent value derived from kappa and e_wall, about 0.3)",
+            ),
+        )
+        .field(
+            "wall_omega",
+            Schema::enumeration("automatic", &["automatic", "low_re"]).doc(
+                "k_omega_sst wall treatment: automatic (Spalding law blend, y+ about 1 to the log layer) or low_re (k = 0 and the Menter omega on the wall, nu_t = 0 at the wall; needs y+ of order 1)",
+            ),
+        )
+        .field(
+            "sst_variant",
+            Schema::enumeration("sst", &["sst", "bsl"]).doc(
+                "k_omega_sst variant: sst (Menter 2003) or bsl (baseline, no shear-stress limiter; Menter 1994)",
             ),
         )
         .field(
