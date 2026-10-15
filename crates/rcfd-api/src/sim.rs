@@ -1136,8 +1136,28 @@ impl Simulation {
             if mi > 0 {
                 s.linear.max_iter = mi as usize;
             }
-            let solver =
-                CoupledSolver::new(geom.clone(), u, p, s).map_err(|e| diag("solver.algorithm", e.to_string()))?;
+            // solid zones are excluded from the pressure-velocity system (ADR 0029 D3)
+            let mask = cht
+                .as_ref()
+                .filter(|m| m.has_solids)
+                .map(|m| m.label.iter().map(|&l| l > 0).collect::<Vec<bool>>());
+            let first_solid = cht.as_ref().and_then(|m| m.names.first().cloned());
+            let mut solver = CoupledSolver::with_solids(geom.clone(), u, p, s, mask).map_err(|e| match e {
+                rcfd_core::Error::InvalidValue { path, reason } => {
+                    let path = match (path.as_str(), &first_solid) {
+                        ("solids", Some(n)) => format!("solids.{n}.zone"),
+                        _ => path,
+                    };
+                    diag(&path, reason)
+                }
+                e => diag("solver.algorithm", e.to_string()),
+            })?;
+            let bf = get_v(case, "physics.body_force", [0.0; 3]);
+            if vec3::norm(bf) > 0.0 {
+                let b = BodyForce::uniform(&geom, bf);
+                solver.body_force = Some(b.clone());
+                base_body = Some(b);
+            }
             Engine::Coupled(Box::new(solver))
         } else if steady_alg {
             let coupling = if alg == "simple" {
@@ -1235,7 +1255,7 @@ impl Simulation {
         };
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
         let transient_alg = matches!(alg.as_str(), "piso" | "pimple");
-        let energy = if energy_on && !vdens && (steady_alg || transient_alg) {
+        let energy = if energy_on && !vdens && (steady_alg || transient_alg || coupled_alg) {
             let rho = get_f(case, "physics.rho");
             let (cp, kth) = (get_f(case, "physics.cp"), get_f(case, "physics.conductivity"));
             let mut solver = EnergySolver::new(geom.clone(), temp, kth / (rho * cp));
@@ -1973,6 +1993,21 @@ impl Simulation {
                 }
             }
             Engine::Coupled(s) => {
+                if self.energy.is_some() {
+                    // uniform body force plus Boussinesq buoyancy of the current temperature (ADR 0029 D2, D5)
+                    let bous = self.energy.as_ref().and_then(|en| {
+                        en.buoyancy
+                            .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref))
+                    });
+                    let mut total = self.base_body.clone();
+                    if let Some(part) = bous {
+                        match &mut total {
+                            Some(t) => t.add(&part),
+                            None => total = Some(part),
+                        }
+                    }
+                    s.body_force = total;
+                }
                 let i = s.iterate();
                 if let Some(ch) = &self.chem {
                     if let Err(e) = crate::chemistry::apply_steady(ch, self.scalars.as_mut(), None, self.turb.as_ref())
@@ -1980,11 +2015,17 @@ impl Simulation {
                         udf_error = Some(e);
                     }
                 }
+                if let Some(en) = &mut self.energy {
+                    en.res_t = en.solver.iterate(&s.phi);
+                }
                 let res_sc = self
                     .scalars
                     .as_mut()
                     .map_or(0.0, |sc| sc.iterate(&s.phi, None, &StepCtx::default()));
-                let converged = i.res_u < self.tol_u && i.res_p < self.tol_p && res_sc < self.tol_u;
+                let converged = i.res_u < self.tol_u
+                    && i.res_p < self.tol_p
+                    && res_sc < self.tol_u
+                    && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u);
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,

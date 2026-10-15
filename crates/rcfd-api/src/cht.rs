@@ -136,6 +136,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     let alg = gs(case, "solver.algorithm");
     let frozen_flow = frozen(case);
     let energy_on = flag(case, "energy.enabled");
+    // a solved flow with the block-coupled algorithm may share the domain with solid zones (ADR 0029)
+    let solved_coupled = alg == "coupled" && !frozen_flow;
     if frozen_flow {
         if !energy_on {
             out.push(d(
@@ -207,9 +209,16 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 "the compressible / variable-density solvers",
             ),
             (crate::lumped::enabled(case), "components", "lumped components"),
-            (alg == "coupled", "solver.algorithm", "the coupled algorithm"),
+            // the coupled algorithm solves the flow with the solid cells excluded (ADR 0029 D3); with a prescribed flow it
+            // has nothing to prescribe
             (
-                flag(case, "energy.buoyancy")
+                alg == "coupled" && frozen_flow,
+                "solver.algorithm",
+                "the coupled algorithm",
+            ),
+            (
+                !solved_coupled
+                    && flag(case, "energy.buoyancy")
                     && gf(case, "physics.thermal_expansion") != 0.0
                     && list_f(case, "physics.gravity").iter().any(|g| *g != 0.0),
                 "energy.buoyancy",
@@ -247,10 +256,10 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         if !energy_on {
             out.push(d("solids", "solid zones need energy.enabled = true"));
         }
-        if !frozen_flow {
+        if !frozen_flow && !solved_coupled {
             out.push(d(
                 "solver.frozen_flow",
-                "solid zones need solver.frozen_flow = true: a solved flow coupled to solid zones is not available (ADR 0024 D5)",
+                "solid zones need either solver.frozen_flow = true (prescribed flow, ADR 0024 D5) or solver.algorithm = \"coupled\" (solved flow with the solid cells excluded, ADR 0029); the segregated algorithms do not solve a flow next to solid zones",
             ));
         }
     }

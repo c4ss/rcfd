@@ -64,7 +64,9 @@ fn unsupported_combinations_are_diagnosed() {
     let open = "[boundaries.lid]\nvelocity = \"zero_gradient\"\n";
     let _ = open;
     for (extra, path) in [
-        ("\n[energy]\nenabled = true\n", "energy.enabled"),
+        // wave 19A (ADR 0029 D5): the energy equation is now supported by the coupled algorithm (see
+        // `coupled_energy_is_supported`); this row uses a turbulence model, which still is not
+        ("\n[turbulence]\nmodel = \"k_epsilon\"\n", "turbulence.model"),
         (
             "\n[sources.s]\ntype = \"acceleration\"\nzone = \"all\"\nacceleration = [1.0, 0.0, 0.0]\n",
             "sources",
@@ -77,4 +79,52 @@ fn unsupported_combinations_are_diagnosed() {
         };
         assert!(err.iter().any(|d| d.path.starts_with(path)), "{path}: {err:?}");
     }
+}
+
+/// Wave 19A (ADR 0029 D5): the energy equation and Boussinesq buoyancy are accepted by the coupled algorithm; a hot lid
+/// heats a lid-driven cavity and the temperature stays between the two boundary values.
+#[test]
+fn coupled_energy_is_supported() {
+    let text = r#"
+[mesh]
+generator = "cavity_2d"
+nx = 12
+ny = 12
+[physics]
+nu = 0.01
+rho = 1.0
+cp = 1.0
+conductivity = 0.01
+[energy]
+enabled = true
+relax = 1.0
+[initial]
+temperature = 300.0
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+temperature = "fixed"
+temperature_value = 310.0
+[boundaries.walls]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 300.0
+[solver]
+algorithm = "coupled"
+convection = "upwind"
+max_iterations = 400
+tolerance_u = 1e-8
+tolerance_p = 1e-8
+"#;
+    let sim = solve(text);
+    let t = sim.field("T").unwrap();
+    let (lo, hi) = t
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), v| (a.min(*v), b.max(*v)));
+    eprintln!(
+        "coupled cavity with energy: {} its, T in [{lo:.4}, {hi:.4}]",
+        sim.iteration()
+    );
+    assert!(lo >= 300.0 - 1e-6 && hi <= 310.0 + 1e-6);
+    assert!(hi > 305.0, "the lid heat must reach the cells below it");
 }
