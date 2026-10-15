@@ -304,7 +304,7 @@ tree tests (C3, D, E) `4d2eb38`. Measured values are printed by the tests (`carg
 | B2 stratified rest | max phi 9.4e-5 | 2e-3 | pass |
 | B3 Ra = 1e3 (32 x 32): Nu / u_max / v_max against 1.118 / 3.649 / 3.697 | 1.1167 (-0.11 %) / 3.622 (-0.74 %) / 3.678 (-0.52 %) | 2 % | pass |
 | B3 Ra = 1e4 (40 x 40): against 2.243 / 16.178 / 19.617 | 2.2434 (+0.02 %) / 16.162 (-0.10 %) / 19.516 (-0.51 %) | 2 % | pass |
-| B3 flux imbalance (1e3, 1e4); coupled vs SIMPLEC Nu | 8.0e-9, 5.9e-9; 7e-8, 5.6e-6 | 1e-6; 5e-3 | pass |
+| B3 hot/cold wall flux imbalance (1e3, 1e4); coupled vs SIMPLEC Nu (SIMPLEC: default alpha_u, momentum/pressure tol_rel 1e-10; 385 / 379 outer) | 8.0e-9, 5.9e-9; 3.1e-6, 7.0e-6 | 1e-6; 5e-3 | pass |
 | C1 slab: solid u == 0, flux on solid faces | exactly 0.0, exactly 0.0 | exactly 0 | pass |
 | C1 vs discrete / v / analytic (3.906e-3 predicted) / Q (7.812e-3 predicted) / continuity | 5.4e-11 / 7e-15 / 3.906e-3 / 7.812e-3 / 4e-15 | 1e-7 / 1e-7 / 1e-2 / 1e-2 / 1e-10 | pass |
 | C2 obstacle: leak, in+out flux, continuity, change with rel-tol 1e-12 | 0.0, 2.3e-15, 8.3e-14, 4.7e-15 | 0, 1e-10, 1e-10, 1e-6 | pass |
@@ -318,6 +318,13 @@ tree tests (C3, D, E) `4d2eb38`. Measured values are printed by the tests (`carg
 | D4 (a) whole domain / (c) fluid zone | 3.2e-11 / 1.6e-12 q L_x | 1e-9 | pass |
 | D4 (b) solid zone as registered (no end conduction) | 2.55e-5 q L_x | 1e-9 | MISS (known-miss test) |
 | E1 to E7 located errors | all asserted by path (E7: periodic at `solver.algorithm`, zone_sources at `zone_sources.q`; the bc_kind row is covered by the unchanged V1 test of `bc_catalogue.rs`) | | pass |
+
+Run settings: B1, B2 and B3 use the registered coupled linear solver (GMRES `tol_rel` 1e-10, `tol_abs` 1e-14, 400 iterations; the first
+runs of B1/B2/B3 did not set all of them, and B3's SIMPLEC run used `alpha_u = 0.8` and the default linear tolerance; they were
+rerun with the registered settings and gave the same coupled numbers, SIMPLEC changed only in the iteration count and the
+coupled-vs-SIMPLEC Nu difference, rows above). B3 follows its own registered stop text (residual below 1e-9 within 12000 iterations,
+both algorithms) rather than the generic `max du < 1e-11` outer stop of the stop-criteria section; both converged below 1e-9 in
+fewer than 420 iterations. The flux imbalance of B3 is the hot-versus-cold wall Nu difference, the quantity of the segregated test.
 
 ### Diagnoses of the misses (diagnosed, not tuned)
 
@@ -333,7 +340,7 @@ tree tests (C3, D, E) `4d2eb38`. Measured values are printed by the tests (`carg
   fixed-velocity inlet (column-to-column drops 0.71, 0.18, 0.55, 0.29, 0.48, 0.34, 0.45 against 0.40 for the coupled solver, similar
   with a different phase for SIMPLEC), the first column seeing the one-sided zero-gradient inlet pressure that the registered text
   anticipated. The mode was not removed (no inlet pressure treatment was changed). The coupled-vs-SIMPLEC difference of 4.6e-3 U_max
-  is the difference of the two modulations. Known-miss tests: `a3_pressure_drop_known_miss`, `a3_coupled_vs_simplec_known_miss`. The
+  is the difference of the two modulations. At `nx = 8` the target positions L/8 and 7L/8 fall between two columns; the drops over the other admissible column pairings (measured in a debug dump, not asserted) are about 4.5, 6.4, 7.3 and 7.9 percent short, so the miss does not depend on the pairing chosen. Known-miss tests: `a3_pressure_drop_known_miss`, `a3_coupled_vs_simplec_known_miss`. The
   velocity profile against the parabola (5.0e-3 U_max) passes.
 * D4 (b). The registered statement omitted the conduction through the solid rows of the fixed-temperature inlet and outlet patches.
   In the discrete solution it is not zero: the two ends carry -2.55e-5 q L_x net. With that term the solid-zone balance closes to
@@ -341,15 +348,22 @@ tree tests (C3, D, E) `4d2eb38`. Measured values are printed by the tests (`carg
   test `d4_solid_registered_form_known_miss` and the corrected one is `d4_energy_balances`. The interface heat flow used by (b) and
   (c) is recomputed in the test from the temperature field with the harmonic face conductivity (valid for the uniform duct mesh and
   no contact resistance), it is not read from the solver.
+* E4 location: a split fluid region is reported at `solids.<first solid name in sorted order>.zone`; with several solids this may name
+  a solid that is not the one causing the split (the message states the cause). Known limitation.
 * A set-up slip in the first C3 run: the test compared the interface heat flow with `Q_xmin` with the wrong sign (ratio 2.0). The sign
   was corrected in the same test before it was committed (the criterion, 1e-9 relative, was not touched); the corrected value is
   7.8e-10.
 
 ### Deviations from the registered plan (disclosed)
 
+* Procedure: the C3 sign slip was fixed in place in the uncommitted test instead of keeping the wrong-sign test as an ignored one
+  (the rule asks for a corrected new test with the old kept); the sign error is documented above and the criterion was not touched.
+
 * `crates/rcfd-api/tests/coupled.rs::unsupported_combinations_are_diagnosed`: the `energy.enabled` row became a `turbulence.model`
   row because the energy equation is now supported (D5); the new test `coupled_energy_is_supported` covers the supported case.
-* A7 (reported only): outer iterations to 1e-11 on the Couette cases 47-49 (coupled) against 117-120 (SIMPLEC); on A2 `ny = 32` both
+* A7 (reported only; measured differently from the registered text): iteration counts are to a `max du` of 1e-11 (Couette, A2) or a
+  residual of 1e-9 (B3), not to the registered residual of 1e-8; linear (GMRES) iterations are given for A2 only; the A6 cavity was not
+  measured. Outer iterations to 1e-11 on the Couette cases 47-49 (coupled) against 117-120 (SIMPLEC); on A2 `ny = 32` both
   need 529 outer iterations, the coupled solver with 10851 GMRES iterations in total; on the cavities of B3 (residual 1e-9, TVD)
   coupled needs 384 and 376, SIMPLEC 378 and 418 outer iterations. The coupled solver is therefore not shown faster in outer
   iterations on these cases and each of its iterations costs more. The cavity of A6 was not re-measured.
