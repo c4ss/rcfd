@@ -112,6 +112,9 @@ Options a generator does not apply are rejected with a located diagnostic instea
 `mesh.wall_layers` (`box_2d` and `channel_2d` only), `mesh.periodic_x` / `periodic_y` (`box_2d` only) and
 `mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`).
 
+The mesh quality report returned by `rcfd check-mesh`, `mesh.check` and `run --check-only` has an extended-measure summary and a
+poor-mesh list since wave 14 (F-233); see `docs/mesh-quality.md`.
+
 ### Non-conformal interface (`mesh.generator = "channel_2d_interface"`, F-114)
 
 A `channel_2d` made of two blocks that meet at `x = lx/2`: the first has `nx` x `ny` cells, the second

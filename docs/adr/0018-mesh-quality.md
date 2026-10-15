@@ -248,4 +248,62 @@ quality check") is met by E1 and E4; the remaining title items not attempted kee
 
 ## Results
 
-(To be written after the runs.)
+Measured on the final code (2026-10). Limits are the registered ones above; none was changed.
+
+### F-233 (`rcfd-mesh/tests/measures.rs`)
+
+* Q1a, Q1c, Q1e, Q1f, Q1h, Q2a, Q2b, Q2c, Q2d (corrected), Q2e, Q3 (P1 to P5), Q4: pass at the registered limits.
+* Q1b right-corner tetrahedron: ortho-skew = inverse OQ 0.09546596626670922 against `1 - 3/sqrt(11)` = 0.09546596626670911
+  (difference 1.1e-16; limit 1e-12). Correction of a typo: the decimal expansion printed in A3 ("0.09546532...") is wrong in the
+  fifth digit; the registered formula `1 - 3/sqrt(11)` is what the test uses and the right value is 0.095465966...
+* Q1d sheared hexahedron: `s = 2` angles 26.565051177077994 / 153.434948822922 (exact 26.565051177078, 153.434948822922), ortho-skew
+  0.5527864045000422 (exact 0.5527864045000421).
+* Q1g warped hexahedron: `h = 0.5` warp 36.86989764584404 deg (exact 36.86989764584401), `h = 1` 59.99999999999999 (exact 60); only the top
+  face is non-zero (asserted); polygon function gives 60 deg for the `h = 1` quad, the other split gives 54.7356 deg.
+* Q1i invariance to 1e-9 for translation, rotation, scaling: pass (after the fix below).
+* Q5: the four existing `quality.rs` unit tests pass untouched (the stretched mesh still gives exactly 2 old warnings);
+  `mesh.check` and `rcfd check-mesh` carry the old keys and the new ones (`rcfd-api/tests/mesh_quality.rs`,
+  `rcfd-cli/tests/cli.rs::check_mesh_reports_extended_measures`).
+* H1: `baseline_hashes` passes unmodified (3 passed, the pre-existing ignored rotating-channel test unchanged).
+* Acceptance (Q1b, Q1d, Q1g, Q2a, Q2b, Q2c, Q2d): met. F-233 `done`.
+
+Defects found by the first run (disclosed, limits untouched):
+1. Warp of planar faces came out 1.2e-6 degrees against the registered limit 1e-12 (Q1d, Q1i). Root cause: the angle between
+   triangle normals was computed as `acos(cos)`, whose conditioning is 1/sin(angle): rounding noise 1e-16 in the cosine becomes
+   1e-8 rad. This was a defect of the new code, not of the criterion; `angle_between` now uses `atan2(|a x b|, a . b)`. No
+   limit was changed. (The same conditioning affects the EXISTING non-orthogonality metric, see E1 below, which is not edited.)
+2. Q2d first version had a set-up defect: the neighbour centre was put on the inward side of the outward area vector (`cos beta`
+   = -1, inverse OQ 2). The old test is kept as an ignored record (`q2d_zero_volume_cell`), the corrected test is
+   `q2d_zero_volume_cell_corrected` (same registered limit, exact 1).
+3. The first `rcfd-api` mesh-check test had a wrong cell-size arithmetic (aspect 50 instead of the intended > 100); the test
+   input was changed (`ly = 0.002`). This test only checks presence of keys and a poor-list entry, not a registered number.
+
+### F-231 (`rcfd-mesh/tests/edit.rs`)
+
+* E1 transforms (3 base meshes x 7 maps = 21 runs): worst cell volume ratio error 2.7e-15 (limit 1e-12), worst face area vector error
+  2.7e-15 (limit 1e-12), patch areas, closed-form patch areas after anisotropic scaling (2.25, 12, 3), mirrors valid with reversed
+  loops and unchanged owner/neighbour/patches, aspect ratio and the new inverse orthogonal quality unchanged to 1e-9: pass.
+* E1 non-orthogonality invariance to 1e-9: MISS, kept as `e1_non_orthogonality_invariance_known_miss` (ignored, limit intact). Worst
+  change 1.48e-6 degrees (for example 8.5e-7 degrees against exactly 0 for the same orthogonal face after a translation). Cause: the
+  existing `compute_metrics` uses `acos(cos)` (conditioning 1/sin of the angle); the roadmap note says existing measures are
+  unchanged, so it was not edited. `e1_non_orthogonality_noise_diagnosis` asserts the noise stays below 1e-5 degrees (a diagnostic,
+  not a registered criterion).
+* E2 merge and copy: (a) 16 cells / 28 internal / 40 boundary, volume 2, patch areas 1, 1, 2, 2, 2, 2, equals the `box_mesh([4,2,2])`
+  counts, `check_mesh` ok; (b) gap 16 / 24 / 48, `xmin`, `xmax` 8 faces each; (c) 32 cells, volume 4, internal faces equal the
+  8x2x2 box; (d) zone `[0, 1, 8]`: pass.
+* E3 extrude: 30 cells, volume 18, cap area 6, side area 20, `Normal(2)` equals the vector extrusion to 1e-14, slanted volume 18,
+  inward vector refused: pass.
+* E4 repair on all three bases for "every fifth face", "all faces", "one boundary face": rejected before (positive control), repaired
+  mesh `content_hash` equals the original, flip counts equal the corrupted counts, `check_mesh` ok; already-correct topology 0 flips;
+  swapped owner/neighbour stays an error: pass.
+* E5 patch operations: merged `ywalls` area is the sum, cell volumes bit-identical (the summation order of faces per cell did not
+  change the result), face-zone centres identical, separation returns the original areas, gapped two-box `zmin` separates into two
+  patches of area 1, connected patch unchanged, periodic patches refused: pass.
+* Acceptance sentence ("analytic transforms keep volumes and areas exact; repaired inverted-face test meshes pass the quality check"):
+  met (E1, E4). F-231 stays `partial`: slit, cell-zone merge and separate, face zones through merge and extrude, ordering repair
+  and any CLI, case-tree or GUI entry were not attempted (B1).
+
+### Unverified references (see `docs/reference-data.md`)
+
+All literature attributions in A1 (warpage idea, orthogonal quality cosines, default limits) are from memory and unverified;
+none of the registered checks uses them.

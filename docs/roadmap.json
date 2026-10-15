@@ -1705,9 +1705,9 @@
       "F-010",
       "F-011"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Analytic transforms keep volumes and areas exact; repaired inverted-face test meshes pass the quality check",
-    "note": "Priority P2. Size M. Area: mesh. Bandwidth reordering is part of the partitioning item."
+    "note": "Priority P2. Size M. Area: mesh. Bandwidth reordering is part of the partitioning item. Wave 14 PARTIAL (ADR 0018, docs/mesh-quality.md): library rcfd_mesh::edit has translate, rotate, scale and mirror (volumes and area vectors exact to 3e-15, handedness repaired for mirrors), merge of meshes with stitching and copy by offset, patch extrusion (vector or planar normal), face-orientation repair on raw topologies (repaired meshes equal the originals and pass check_mesh), merge of patches and separation of a patch into connected components. The acceptance sentence is met. NOT done: slit/baffle, cell-zone merge and separate, face zones through merge and extrude, owner/neighbour order repair, any CLI, case-tree or GUI entry point. One registered check missed and is kept as an ignored known_miss test: invariance of the existing non-orthogonality angle under rigid maps to 1e-9 (worst 1.5e-6 deg, acos conditioning of the existing metric)."
   },
   {
     "id": "F-232",
@@ -1729,9 +1729,9 @@
     "deps": [
       "F-011"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "All measures evaluated on a reference tetrahedron, hexahedron and a degenerate cell match closed-form values",
-    "note": "Priority P1. Size S. Area: mesh. Adds measures; existing ones unchanged. Includes a poor-mesh warning list."
+    "note": "Priority P1. Size S. Area: mesh. Adds measures; existing ones unchanged. Includes a poor-mesh warning list. Wave 14 (ADR 0018, docs/mesh-quality.md): rcfd-mesh measures.rs adds face warp, face angle (min and max), ortho-skew, inverse orthogonal quality, size change and face edge-length ratio as project definitions (literature attributions unverified); QualityReport gains a measure summary and a separate poor-mesh list (counts, worst offenders, text lines) that does not alter ok/warnings/errors/exit codes; surfaced by mesh.check, MCP check_mesh, run --check-only and rcfd check-mesh. Closed-form checks (unit cube, right-corner and regular tetrahedra, sheared, warped and sliver hexahedra, collapsed and collinear polygons, zero-volume cell) pass at 1e-12 / 1e-9 deg; baseline hashes unchanged. Two defects of the first run disclosed in the ADR (acos conditioning of the warp, a test set-up error). Not done: GUI display, case-level limits."
   },
   {
     "id": "F-234",
