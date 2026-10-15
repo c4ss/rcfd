@@ -288,3 +288,18 @@ Corrected set-up (a set-up defect of the check, not of the limits), registered b
 `pseudo_mode = physical`, `pseudo_dt = 0.2` (the start step of ADR 0022 C2/D1/D2), `pseudo_control = ser2`,
 `residual_norm = scaled`; limits, targets (1e-12), cap (6000 iterations) and accuracy limits unchanged. If a limit is missed it is
 recorded as `f?b_known_miss`.
+
+## Addendum A6: F1b-F3b missed (controller diverges); F1c-F3c (scaled norm, fixed physical step, no controller) registered
+
+F1b, F2b, F3b (physical start 0.2 with the `ser2` controller) MISS: the run ends with non-finite fields (res_p NaN) in all three. A
+trace of the first iterations of C2 (the only look taken before this paragraph; it covers four set-ups, 400 iterations each) shows
+why: with `ser2` the scale doubles in the first iterations (the residual falls fast in the start-up transient), reaches about 31 in
+12 iterations and the iteration blows up at about iteration 39 (the step 0.2 x 31 is beyond the stability limit of this
+frictionless pressure-driven duct), the same ratchet-to-instability mechanism as for the cavity (addendum A4). The same trace shows
+that with the fixed step 0.2 and `residual_norm = scaled` and NO controller the residual falls monotonically by about a factor 5
+per 50 iterations (3e-8 at iteration 400) while the reference normalisation sits at 0.95. The three tests are kept as ignored
+`f?b_*_known_miss` records.
+
+Registered now, before the full runs: F1c, F2c, F3c = F1-F3 with `pseudo_mode = physical`, `pseudo_dt = 0.2`, no controller,
+`residual_norm = scaled`, identical targets (1e-12), cap (6000 iterations) and accuracy limits. A miss becomes `f?c_*_known_miss`.
+These pass or fail on the normalisation alone; they say nothing in favour of the controller.
