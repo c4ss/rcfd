@@ -681,6 +681,96 @@ pub fn case_schema() -> Schema {
                 .at_least(0.0)
                 .dim(Dimension::DENSITY)
                 .doc("Density of a fixed compressible state; 0 = derive from pressure_value and temperature_value"),
+        )
+        .field(
+            "bc_kind",
+            Schema::enumeration(
+                "none",
+                &[
+                    "none",
+                    "mass_flow",
+                    "outflow",
+                    "pressure_outlet",
+                    "opening",
+                    "vent",
+                    "total_pressure_inlet",
+                    "radial_equilibrium_outlet",
+                    "target_mass_flow_outlet",
+                ],
+            )
+            .doc("Boundary-condition catalogue kind (ADR 0022, constant-density simple/simplec/piso/pimple only). none: the patch is read from velocity / pressure as before. mass_flow: prescribed mass flow with direction, profile shape, swirl or a recirculation source patch; outflow: outflow patch sharing the net inflow by flow_rate_weight; pressure_outlet: static pressure with backflow and averaging options; opening: pressure boundary with entrainment at the external total pressure; vent: pressure loss law with loss_coefficient; total_pressure_inlet: total pressure with direction and swirl; radial_equilibrium_outlet: swirl-consistent pressure profile; target_mass_flow_outlet: back pressure adjusted to a target mass flow. With a kind the velocity, pressure and velocity_value keys must keep their defaults"),
+        )
+        .field(
+            "mass_flow_value",
+            Schema::float(0.0).doc("mass_flow: mass flow rate [kg/s], positive INTO the domain (negative = a prescribed outflow)"),
+        )
+        .field(
+            "mass_flow_shape_expression",
+            Schema::string("").doc("mass_flow: profile shape as an expression of x, y, z with the dimension of a velocity (only the shape matters, it is scaled to the mass flow; tables can be called); empty = uniform"),
+        )
+        .field(
+            "mass_flow_source_patch",
+            Schema::string("").doc("mass_flow: take the mass flow from the outflow of this patch times mass_flow_fraction (outlet-to-inlet recirculation); not together with mass_flow_value"),
+        )
+        .field(
+            "mass_flow_fraction",
+            Schema::float(1.0).doc("mass_flow: fraction in (0, 1] of the source patch outflow that re-enters"),
+        )
+        .field(
+            "swirl_rate",
+            Schema::float(0.0).doc("mass_flow, total_pressure_inlet: swirl angular velocity [rad/s] about swirl_axis; the tangential velocity Omega x (x - swirl_origin) is added to the inflow"),
+        )
+        .field(
+            "swirl_axis",
+            vec3([0.0, 0.0, 1.0], "Axis direction of the swirl (mass_flow, total_pressure_inlet) or of the radial_equilibrium_outlet"),
+        )
+        .field(
+            "swirl_origin",
+            vec3([0.0; 3], "A point on the swirl / radial-equilibrium axis [m]"),
+        )
+        .field(
+            "bc_pressure",
+            Schema::float(0.0).dim(Dimension::PRESSURE).doc("Pressure [Pa] of the catalogue pressure kinds (static for pressure_outlet, vent and target_mass_flow_outlet (its start value), total for opening and total_pressure_inlet, the radial_reference value for radial_equilibrium_outlet); converted to the kinematic pressure of the solver with physics.rho"),
+        )
+        .field(
+            "backflow_direction",
+            Schema::enumeration("normal", &["normal", "zero_gradient"]).doc("pressure_outlet: velocity direction on faces where fluid enters: normal to the boundary or zero gradient"),
+        )
+        .field(
+            "backflow_pressure",
+            Schema::enumeration("static", &["static", "total"]).doc("pressure_outlet: pressure on faces where fluid enters: the set static value, or the value reduced by the dynamic head (total pressure specified)"),
+        )
+        .field(
+            "prevent_reverse_flow",
+            Schema::boolean(false).doc("pressure_outlet: close faces where fluid would enter (velocity zero); outflow: clip the outflow shape to non-negative normal velocity"),
+        )
+        .field(
+            "pressure_average",
+            Schema::enumeration("none", &["none", "area"]).doc("pressure_outlet: area: the specified pressure is the area-average of the face pressures (the profile shape follows the interior)"),
+        )
+        .field(
+            "loss_coefficient",
+            Schema::float(0.0).at_least(0.0).doc("vent: loss coefficient K of the pressure drop law p = p_ext + K rho u_n |u_n| / 2 (u_n outward)"),
+        )
+        .field(
+            "flow_rate_weight",
+            Schema::float(1.0).doc("outflow: weight of the patch in the split of the net inflow over all outflow patches (must be positive)"),
+        )
+        .field(
+            "radial_reference",
+            Schema::enumeration("hub", &["hub", "area_average"]).doc("radial_equilibrium_outlet: bc_pressure is the pressure of the smallest-radius face (hub) or the area-average pressure"),
+        )
+        .field(
+            "target_mass_flow",
+            Schema::float(0.0).doc("target_mass_flow_outlet: mass flow rate [kg/s] leaving the domain through the patch"),
+        )
+        .field(
+            "pressure_update",
+            Schema::enumeration("bernoulli", &["bernoulli", "secant"]).doc("target_mass_flow_outlet: pressure update from the mass-flow error: dynamic-head sensitivity or safeguarded secant slope"),
+        )
+        .field(
+            "pressure_relax",
+            Schema::float(0.5).range(0.01, 1.0).doc("target_mass_flow_outlet: relaxation of the pressure update"),
         );
 
     let solver = Schema::object()

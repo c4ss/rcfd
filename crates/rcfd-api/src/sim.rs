@@ -593,6 +593,8 @@ pub struct Simulation {
     expr_bcs: Vec<ExprBc>,
     /// Patches with a thermocapillary stress (`marangoni`): patch name and d sigma/d T.
     marangoni: Vec<(String, f64)>,
+    /// Boundary-condition catalogue patches (ADR 0022), refreshed before every iteration or step.
+    catalogue: Option<crate::bc_cat::Catalogue>,
     energy: Option<EnergyState>,
     turb: Option<TurbState>,
     /// Uniform body acceleration of the momentum equation (steady runs).
@@ -888,6 +890,20 @@ impl Simulation {
             let _ = u.set_bc(&geom, &patch.name, ubc);
             let _ = p.set_bc(&geom, &patch.name, pbc);
         }
+        let mut catalogue = if compressible || vdens {
+            None
+        } else {
+            match crate::bc_cat::Catalogue::from_case(case, &geom) {
+                Ok(c) => c,
+                Err(e) => {
+                    errs.extend(e);
+                    None
+                }
+            }
+        };
+        if let Some(c) = &mut catalogue {
+            c.refresh(&geom, &mut u, &mut p, &vec![0.0; geom.mesh.n_faces()]);
+        }
         if let Ok(names) = case.tree.names("boundaries") {
             for n in names {
                 if geom.mesh.patch(&n).is_none() {
@@ -1019,6 +1035,11 @@ impl Simulation {
                             .find(|e| e.patch == n)
                             .and_then(|e| e.profile(&geom, 0.0, &mut udfs).ok())
                         {
+                            // catalogue kinds (ADR 0022): the speed of the refreshed boundary velocity
+                            _ if crate::bc_cat::kind(case, &n) != "none" => {
+                                let bv = u.boundary_values(&geom);
+                                patch.faces().map(|f| vec3::norm(bv[f - geom.n_internal])).collect()
+                            }
                             Some(Profile::PerFace(v)) => v.iter().map(|x| vec3::norm(*x)).collect(),
                             Some(Profile::Uniform(v)) => vec![vec3::norm(v); nf],
                             None => {
@@ -1279,6 +1300,7 @@ impl Simulation {
             reports,
             expr_bcs,
             marangoni,
+            catalogue,
             energy,
             turb,
             base_body,
@@ -1730,6 +1752,9 @@ impl Simulation {
                 if let Some(e) = &udf_error {
                     reason_override = Some(e.clone());
                 }
+                if let Some(cat) = &mut self.catalogue {
+                    cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
+                }
                 let i = s.iterate();
                 if let Some(en) = &mut self.energy {
                     let mut base_alpha = None;
@@ -1946,6 +1971,9 @@ impl Simulation {
                         }
                     }
                     s.body_force = total;
+                }
+                if let Some(cat) = &mut self.catalogue {
+                    cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
                 }
                 let i = s.step(dt);
                 if let Some(sc) = &mut self.scalars {
