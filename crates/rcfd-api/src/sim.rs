@@ -631,6 +631,11 @@ pub struct Simulation {
     min_iterations: usize,
     stop_reason: Option<String>,
     failure: Option<String>,
+    /// Solution limits (`limits.*`, ADR 0016): `(enabled, min, max)` for temperature and transported scalars.
+    limit_t: (bool, f64, f64),
+    limit_s: (bool, f64, f64),
+    /// Cells clipped by the solution limits so far (counted per cell and step).
+    clipped: usize,
 }
 
 impl Simulation {
@@ -642,6 +647,25 @@ impl Simulation {
         let mut u = VectorField::uniform("U", &geom, uinit);
         let mut p = ScalarField::uniform("p", &geom, get_f(case, "initial.pressure"));
         let energy_on = get_b(case, "energy.enabled");
+        let limit_of = |k: &str| {
+            (
+                get_b(case, &format!("limits.{k}.enabled")),
+                get_f(case, &format!("limits.{k}.min")),
+                get_f(case, &format!("limits.{k}.max")),
+            )
+        };
+        let (limit_t, limit_s) = (limit_of("temperature"), limit_of("scalar"));
+        for (k, l) in [("temperature", limit_t), ("scalar", limit_s)] {
+            if l.0 && l.1 >= l.2 {
+                return Err(diag(
+                    &format!("limits.{k}.min"),
+                    format!("min {} must be below max {}", l.1, l.2),
+                ));
+            }
+        }
+        if limit_t.0 && !get_b(case, "energy.enabled") {
+            return Err(diag("limits.temperature.enabled", "needs energy.enabled = true"));
+        }
         let compressible = comp::enabled(case);
         let vdens = vd::enabled(case);
         let mut temp = ScalarField::uniform("T", &geom, get_f(case, "initial.temperature"));
@@ -1254,6 +1278,9 @@ impl Simulation {
             min_iterations: get_i(case, "solver.min_iterations").max(0) as usize,
             stop_reason: None,
             failure: None,
+            limit_t,
+            limit_s,
+            clipped: 0,
         })
     }
 
@@ -1764,6 +1791,7 @@ impl Simulation {
                 }
             }
         }
+        self.apply_solution_limits();
         let mut summary = summary;
         if udf_error.is_none() {
             udf_error = self.udf_monitor_step(x);
@@ -1803,6 +1831,33 @@ impl Simulation {
         self.converged = summary.converged;
         self.last = Some(summary);
         summary
+    }
+
+    /// Clip temperature and transported scalars to the configured bands (off by default). Clipping after the solve is
+    /// a robustness measure that breaks conservation locally; the count is reported in the status.
+    fn apply_solution_limits(&mut self) {
+        let (on_t, lo_t, hi_t) = self.limit_t;
+        if on_t {
+            if let Some(en) = &mut self.energy {
+                for v in en.solver.t.values.iter_mut() {
+                    if *v < lo_t || *v > hi_t {
+                        *v = v.clamp(lo_t, hi_t);
+                        self.clipped += 1;
+                    }
+                }
+            }
+        }
+        let (on_s, lo_s, hi_s) = self.limit_s;
+        if on_s {
+            if let Some(sc) = &mut self.scalars {
+                self.clipped += sc.clip(lo_s, hi_s);
+            }
+        }
+    }
+
+    /// Cells clipped by the solution limits so far.
+    pub fn clipped_cells(&self) -> usize {
+        self.clipped
     }
 
     /// Step until done or `max_steps` have been taken; returns steps taken.
@@ -2191,6 +2246,7 @@ impl Simulation {
             "done": self.done,
             "converged": self.converged,
             "stop_reason": self.stop_reason,
+            "clipped_cells": self.clipped,
             "res_u": l.map(|s| s.res_u),
             "res_p": l.map(|s| s.res_p),
             "continuity": l.map(|s| s.continuity),

@@ -1383,12 +1383,28 @@ pub fn case_schema() -> Schema {
                 .doc("ideal_gas, solver.algorithm = pimple only: inner stopping tolerance, the largest of |dP|/max P, |dT|/max T and |du|/max(sound speed) between two inner iterations"),
         );
 
+    let band = |what: &str| {
+        Schema::object()
+            .doc(&format!("Solution limits of {what}: after each step cells outside [min, max] are clipped to the band (a robustness measure; it breaks conservation locally, the clipped count is in the run status). Off by default"))
+            .field(
+                "enabled",
+                Schema::boolean(false).doc("Clip after every iteration or time step"),
+            )
+            .field("min", Schema::float(0.0).doc("Lower bound"))
+            .field("max", Schema::float(1.0e30).doc("Upper bound"))
+    };
+    let limits = Schema::object()
+        .doc("Solution limits (ADR 0016)")
+        .field("temperature", band("the temperature (needs energy.enabled)"))
+        .field("scalar", band("every transported scalar and species"));
+
     Schema::object()
         .doc("rcfd case definition")
         .field("title", Schema::string("untitled").doc("Case title"))
         .field("mesh", mesh)
         .field("physics", physics)
         .field("energy", energy)
+        .field("limits", limits)
         .field("rheology", rheology)
         .field("initial", initial)
         .field("registers", crate::registers::schema())
