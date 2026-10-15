@@ -95,8 +95,32 @@ pub fn conv_scheme(name: &str) -> Option<ConvScheme> {
         "tvd_superbee" => ConvScheme::Tvd(TvdLimiter::Superbee),
         "tvd_muscl" => ConvScheme::Tvd(TvdLimiter::Muscl),
         "tvd_koren" => ConvScheme::Tvd(TvdLimiter::Koren),
+        "blended" => ConvScheme::Blended(0.75),
+        "high_resolution" => ConvScheme::Tvd(TvdLimiter::Gamma(0.2)),
+        "compressive" => ConvScheme::Tvd(TvdLimiter::Compressive(1.5)),
+        "bounded_central" => ConvScheme::Tvd(TvdLimiter::BoundedCentral),
         _ => return None,
     })
+}
+
+/// Scheme of `solver.convection` with its parameters (`solver.blend_factor`, `solver.high_resolution_beta`,
+/// `solver.compressive_k`) from the case, upwind if the name is unknown.
+pub fn solver_conv_scheme(case: &Case) -> ConvScheme {
+    match get_s(case, "solver.convection").as_str() {
+        "blended" => ConvScheme::Blended(get_f(case, "solver.blend_factor")),
+        "high_resolution" => ConvScheme::Tvd(TvdLimiter::Gamma(get_f(case, "solver.high_resolution_beta"))),
+        "compressive" => ConvScheme::Tvd(TvdLimiter::Compressive(get_f(case, "solver.compressive_k"))),
+        name => conv_scheme(name).unwrap_or(ConvScheme::Upwind),
+    }
+}
+
+/// Time scheme of `solver.time_scheme`.
+pub fn solver_time_scheme(case: &Case) -> TimeScheme {
+    match get_s(case, "solver.time_scheme").as_str() {
+        "bdf2" => TimeScheme::Bdf2,
+        "bdf2_bounded" => TimeScheme::Bdf2Bounded,
+        _ => TimeScheme::ImplicitEuler,
+    }
 }
 
 /// y grading from the boundary-layer inflation settings (`mesh.wall_layers`), or `None` when off.
@@ -912,7 +936,7 @@ impl Simulation {
         }
         let nu = get_f(case, "physics.nu");
         let alg = get_s(case, "solver.algorithm");
-        let conv = conv_scheme(&get_s(case, "solver.convection")).unwrap_or(ConvScheme::Upwind);
+        let conv = solver_conv_scheme(case);
         let coupled_alg = alg == "coupled";
         let steady_alg = matches!(alg.as_str(), "simple" | "simplec");
         let n_cells = geom.n_cells();
@@ -1070,11 +1094,7 @@ impl Simulation {
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             s.ddt_correction = get_b(case, "solver.ddt_correction");
             linear_controls!(s);
-            s.time_scheme = if get_s(case, "solver.time_scheme") == "bdf2" {
-                TimeScheme::Bdf2
-            } else {
-                TimeScheme::ImplicitEuler
-            };
+            s.time_scheme = solver_time_scheme(case);
             s.amg_pressure = geom.n_cells() > 2000;
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };

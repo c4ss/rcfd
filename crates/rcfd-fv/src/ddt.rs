@@ -13,6 +13,10 @@ pub enum TimeScheme {
     Bdf2,
     /// Second-order Crank-Nicolson for the spatial operator.
     CrankNicolson,
+    /// Bounded second-order scheme (ADR 0016, project-defined): per cell a blend `theta BDF2 + (1 - theta) Euler` with
+    /// `theta = clamp(rho, 0, 1)`, `rho` the ratio of the last two backward difference quotients; Euler on the first
+    /// step, BDF2 on the second.
+    Bdf2Bounded,
 }
 
 /// Solution history needed by the multi-step schemes.
@@ -24,6 +28,10 @@ pub struct History {
     pub older: Option<Vec<f64>>,
     /// Previous step size `t^n - t^{n-1}` (BDF2).
     pub dt_old: Option<f64>,
+    /// Values at level `n-2` (bounded BDF2).
+    pub oldest: Option<Vec<f64>>,
+    /// Step size `t^{n-1} - t^{n-2}` (bounded BDF2).
+    pub dt_older: Option<f64>,
 }
 
 impl History {
@@ -33,11 +41,15 @@ impl History {
             old,
             older: None,
             dt_old: None,
+            oldest: None,
+            dt_older: None,
         }
     }
 
     /// Advance after a step of size `dt` that produced `new`.
     pub fn push(&mut self, new: Vec<f64>, dt: f64) {
+        self.oldest = self.older.take();
+        self.dt_older = self.dt_old;
         self.older = Some(std::mem::replace(&mut self.old, new));
         self.dt_old = Some(dt);
     }
@@ -69,6 +81,25 @@ pub fn add_ddt(scheme: TimeScheme, mut spatial: FvMatrix, vol: &[f64], dt: f64, 
             }
             _ => return add_ddt(TimeScheme::ImplicitEuler, spatial, vol, dt, hist),
         },
+        TimeScheme::Bdf2Bounded => match (&hist.older, hist.dt_old) {
+            (Some(older), Some(dt_old)) => {
+                let r = dt / dt_old;
+                let (c0, c1, c2) = ((1.0 + 2.0 * r) / (1.0 + r), 1.0 + r, r * r / (1.0 + r));
+                for i in 0..n {
+                    let theta = match (&hist.oldest, hist.dt_older) {
+                        (Some(oldest), Some(dt_older)) => {
+                            bounded_theta(hist.old[i], older[i], oldest[i], dt_old, dt_older)
+                        }
+                        _ => 1.0,
+                    };
+                    // theta BDF2 + (1 - theta) Euler
+                    spatial.a.diag[i] += vol[i] / dt * (theta * c0 + (1.0 - theta));
+                    spatial.b[i] +=
+                        vol[i] / dt * (theta * (c1 * hist.old[i] - c2 * older[i]) + (1.0 - theta) * hist.old[i]);
+                }
+            }
+            _ => return add_ddt(TimeScheme::ImplicitEuler, spatial, vol, dt, hist),
+        },
         TimeScheme::CrankNicolson => {
             let mut ax = vec![0.0; n];
             spatial.a.matvec(&hist.old, &mut ax);
@@ -83,6 +114,20 @@ pub fn add_ddt(scheme: TimeScheme, mut spatial: FvMatrix, vol: &[f64], dt: f64, 
         }
     }
     spatial
+}
+
+/// Weight of BDF2 in the bounded second-order scheme: `clamp(rho, 0, 1)`, `rho = s_n / s_{n-1}` the ratio of the last two
+/// backward difference quotients of the history `(p0 = phi^n, p1 = phi^{n-1}, p2 = phi^{n-2})`. Quiescent history: 1.
+fn bounded_theta(p0: f64, p1: f64, p2: f64, dt_old: f64, dt_older: f64) -> f64 {
+    let s_n = (p0 - p1) / dt_old;
+    let s_p = (p1 - p2) / dt_older;
+    let thr = 1e-12 * (p0.abs() + p1.abs() + p2.abs());
+    let (qn, qp) = ((p0 - p1).abs() <= thr, (p1 - p2).abs() <= thr);
+    match (qn, qp) {
+        (true, true) => 1.0,
+        (false, true) => 0.0,
+        _ => (s_n / s_p).clamp(0.0, 1.0),
+    }
 }
 
 impl FvMatrix {

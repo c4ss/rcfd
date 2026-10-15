@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use rcfd_core::vec3::{self, Vec3};
 
 /// Flux-limiter functions `psi(r)` for TVD schemes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TvdLimiter {
     /// `max(0, min(1, r))`
     Minmod,
@@ -27,6 +27,14 @@ pub enum TvdLimiter {
     Muscl,
     /// `max(0, min(2r, (1 + 2r)/3, 2))`
     Koren,
+    /// High-resolution bounded blend of central and upwind (Gamma scheme, ADR 0016): `min(1, phi~_C / beta_m)` with
+    /// `phi~_C = r/(1 + r)` for `r > 0`, zero otherwise. The parameter is `beta_m` in `[0.1, 0.5]`.
+    Gamma(f64),
+    /// Roe-Sweby compressive family `max(0, min(k r, 1), min(r, k))`, `k` in `[0, 2]` (0 upwind-like, 1 minmod, 2 superbee).
+    Compressive(f64),
+    /// Bounded central differencing: central where the normalised variable is in the bounded region, upwind elsewhere
+    /// (`clamp(r, 0, 1)`, the minmod curve on the normalised variable diagram).
+    BoundedCentral,
 }
 
 impl TvdLimiter {
@@ -45,12 +53,21 @@ impl TvdLimiter {
             TvdLimiter::Superbee => (2.0 * r).min(1.0).max(r.min(2.0)).max(0.0),
             TvdLimiter::Muscl => (2.0 * r).min(0.5 * (1.0 + r)).clamp(0.0, 2.0),
             TvdLimiter::Koren => (2.0 * r).min((1.0 + 2.0 * r) / 3.0).clamp(0.0, 2.0),
+            TvdLimiter::Gamma(beta_m) => {
+                if r > 0.0 {
+                    (r / (1.0 + r) / beta_m).min(1.0)
+                } else {
+                    0.0
+                }
+            }
+            TvdLimiter::Compressive(k) => (k * r).min(1.0).max(r.min(k)).max(0.0),
+            TvdLimiter::BoundedCentral => r.clamp(0.0, 1.0),
         }
     }
 }
 
 /// Face interpolation scheme for convected quantities.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConvScheme {
     /// First-order upwind.
     Upwind,
@@ -62,12 +79,26 @@ pub enum ConvScheme {
     Quick,
     /// Limited second-order (TVD) with the given limiter.
     Tvd(TvdLimiter),
+    /// Specified blend `(1 - beta) upwind + beta central` (`beta = 0` upwind, `beta = 1` central).
+    Blended(f64),
 }
 
 impl ConvScheme {
     /// Whether the scheme needs cell gradients.
     pub fn needs_gradient(self) -> bool {
-        !matches!(self, ConvScheme::Upwind | ConvScheme::Central)
+        !matches!(self, ConvScheme::Upwind | ConvScheme::Central | ConvScheme::Blended(_))
+    }
+
+    /// Fraction of the central correction applied on periodic (coupled) faces, whose neighbour value is lagged. The
+    /// existing schemes apply all of it (unbounded there, kept for bit-identical baselines); the schemes added in
+    /// ADR 0016 keep the upwind matrix there (`Blended` scales the correction by its factor).
+    fn periodic_correction(self) -> f64 {
+        match self {
+            ConvScheme::Upwind => 0.0,
+            ConvScheme::Blended(b) => b,
+            ConvScheme::Tvd(TvdLimiter::Gamma(_) | TvdLimiter::Compressive(_) | TvdLimiter::BoundedCentral) => 0.0,
+            _ => 1.0,
+        }
     }
 }
 
@@ -90,6 +121,7 @@ fn face_value(
     match scheme {
         ConvScheme::Upwind => pu,
         ConvScheme::Central => w * cells[o] + (1.0 - w) * cells[n],
+        ConvScheme::Blended(beta) => pu + beta * (w * cells[o] + (1.0 - w) * cells[n] - pu),
         ConvScheme::LinearUpwind => {
             let g = grad.expect("gradient required")[u];
             pu + vec3::dot(g, vec3::sub(mesh.face_centres()[f], mesh.cell_centres()[u]))
@@ -188,8 +220,11 @@ pub fn convection(
                             rhs -= fl * q;
                             q
                         };
-                        if scheme != ConvScheme::Upwind {
+                        let k = scheme.periodic_correction();
+                        if k == 1.0 {
                             rhs -= fl * (co.a * cells[c] + co.b - ud);
+                        } else if k != 0.0 {
+                            rhs -= k * fl * (co.a * cells[c] + co.b - ud);
                         }
                     } else {
                         diag += flux[f] * co.a;
