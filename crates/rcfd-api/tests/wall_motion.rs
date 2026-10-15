@@ -435,3 +435,24 @@ fn d5b_rigid_rotation_has_no_torque_and_the_velocity_error_shrinks() {
     println!("D5b velocity error ratio (n_r 32 / 64): {:.2}", u32_ / u64_);
     assert!(u64_ < u32_);
 }
+
+/// Diagnostic (not a registered check): how far the n_r = 128 Taylor-Couette run is from converged when it stops.
+#[test]
+#[ignore = "diagnostic, about 5 minutes"]
+fn d5_finest_grid_convergence_diagnostic() {
+    let c = Case::parse_toml(&taylor_couette(128, 1.0, -0.5, Some(1.0))).unwrap();
+    let mut s = Simulation::new(&c).unwrap();
+    s.run(6000);
+    let t1 = s.monitors.last("torque").unwrap();
+    let l = s.last().unwrap();
+    println!(
+        "D5 diag after 6000 its: torque {t1:.6}, res_u {:.3e}, res_p {:.3e}",
+        l.res_u, l.res_p
+    );
+    // continue (the iteration cap of the case is 6000, so this checks the stop rather than the solver)
+    println!(
+        "D5 diag: converged {}, stop reason {:?}",
+        s.is_converged(),
+        s.stop_reason()
+    );
+}
