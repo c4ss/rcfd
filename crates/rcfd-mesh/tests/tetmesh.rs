@@ -207,3 +207,43 @@ fn t8_located_errors() {
     let e = tetrahedralize(&rev, &TetOptions::default()).unwrap_err().to_string();
     assert!(e.contains("3 misoriented edge"), "{e}");
 }
+
+/// Added after the registered checks (not part of ADR 0030 C3): the intended pipeline, surface remeshing and then volume
+/// meshing, on the cylinder-in-box case of the F-131 acceptance sentence.
+#[test]
+fn p1_pipeline_cylinder_in_box() {
+    use rcfd_mesh::surface_remesh::{remesh, RemeshOptions, SizeField};
+    let s = cyl_in_box();
+    let f = SizeField::Curvature {
+        theta: 0.5,
+        h_min: 0.1,
+        h_max: 1.0,
+    };
+    let (r, _) = remesh(&s, &f, &RemeshOptions::default()).unwrap();
+    assert!(diagnose(&r, &DiagOptions::default()).is_closed_manifold());
+    let (tm, m) = run(&r, &TetOptions::default());
+    let e = common(&r, &tm, &m);
+    assert!(e <= 1e-10, "volume error {e}");
+    assert_eq!(euler_ball(&m), 2);
+    assert!(check_mesh(&m).is_ok());
+    let q = tet_quality(&tm, 2.0);
+    eprintln!("P1: {} cells {:?} {q:?}", m.n_cells(), tm.report);
+}
+
+/// Added after the T5 torus miss (not registered): the same torus after surface remeshing to curvature sizing.
+#[test]
+fn t5b_torus_after_remesh() {
+    use rcfd_mesh::surface_remesh::{remesh, RemeshOptions, SizeField};
+    let s = torus(2.0, 0.5, 48, 24);
+    let f = SizeField::Curvature {
+        theta: 0.6,
+        h_min: 0.05,
+        h_max: 0.8,
+    };
+    let (r, _) = remesh(&s, &f, &RemeshOptions::default()).unwrap();
+    let (tm, m) = run(&r, &TetOptions::default());
+    let e = common(&r, &tm, &m);
+    assert!(e <= 1e-10);
+    let q = tet_quality(&tm, 2.0);
+    eprintln!("T5b: {} cells {:?} {q:?}", m.n_cells(), tm.report);
+}

@@ -194,7 +194,7 @@ impl Del {
 
     fn cavity(&mut self, p: Vec3, t0: usize) -> Result<Cavity> {
         let q = self.tp(t0);
-        if q.iter().any(|x| *x == p) {
+        if q.contains(&p) {
             return merr("duplicate point in tetrahedralisation");
         }
         self.mark.resize(self.tets.len(), 0);
@@ -660,14 +660,6 @@ impl Ctx {
             return merr("Steiner point budget exhausted during boundary recovery or refinement");
         }
         let m = midpoint(self.d.pts[a], self.d.pts[b]);
-        if std::env::var("W19B_DBG2").is_ok() && self.rep.steiner_surface % 200 == 0 {
-            eprintln!(
-                "split {a}-{b} len {:e} pts {} n={}",
-                norm(sub(self.d.pts[a], self.d.pts[b])),
-                self.d.pts.len(),
-                self.rep.steiner_surface
-            );
-        }
         let mi = self.d.insert(m)?;
         self.rep.steiner_surface += 1;
         self.s.split_edge(a, b, mi);
@@ -684,14 +676,6 @@ impl Ctx {
                 .copied()
                 .filter(|&(a, b)| !self.d.has_edge(a, b))
                 .collect();
-            if std::env::var("W19B_DBG3").is_ok() {
-                eprintln!(
-                    "recover: missing edges {} surf tris {} pts {}",
-                    missing.len(),
-                    self.s.faces.len(),
-                    self.d.pts.len()
-                );
-            }
             if !missing.is_empty() {
                 for (a, b) in missing {
                     if self.s.edges.contains_key(&(a, b)) && !self.d.has_edge(a, b) {
@@ -1054,15 +1038,6 @@ fn refine(ctx: &mut Ctx, opt: &TetOptions) -> Result<()> {
             .filter(|&t| ctx.d.alive[t] && ctx.d.inside[t] == 1 && is_bad(&ctx.d.tp(t), opt))
             .collect();
         ctx.rep.bad_left = bad.len();
-        if std::env::var("W19B_DBG").is_ok() {
-            eprintln!(
-                "round {round}: bad {} pts {} surf {} int {}",
-                bad.len(),
-                ctx.d.pts.len(),
-                ctx.rep.steiner_surface,
-                ctx.rep.steiner_interior
-            );
-        }
         if bad.is_empty() {
             return Ok(());
         }

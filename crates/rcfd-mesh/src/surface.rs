@@ -545,7 +545,7 @@ pub fn diagnose(s: &TriSurface, opt: &DiagOptions) -> Diagnostics {
         // union-find over the incident triangles; adjacent when they share an edge through v
         let n = ts.len();
         let mut parent: Vec<usize> = (0..n).collect();
-        fn find(p: &mut Vec<usize>, x: usize) -> usize {
+        fn find(p: &mut [usize], x: usize) -> usize {
             let mut r = x;
             while p[r] != r {
                 r = p[r];
