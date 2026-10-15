@@ -64,12 +64,33 @@ pub fn variant_of(case: &Case) -> KEpsilonVariant {
     }
 }
 
-/// Is a RANS turbulence model (k-epsilon, k-omega SST, Spalart-Allmaras or a plugin) selected?
+/// Is a turbulence model (k-epsilon, k-omega SST, Spalart-Allmaras, a subgrid-scale model, the mixing length or a plugin)
+/// selected?
 pub fn enabled(case: &Case) -> bool {
     matches!(
         get_s(case, "turbulence.model").as_str(),
-        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "plugin"
+        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "smagorinsky" | "wale" | "mixing_length" | "plugin"
     )
+}
+
+/// Is a subgrid-scale (large-eddy) model selected (ADR 0026)?
+pub fn is_sgs(case: &Case) -> bool {
+    matches!(get_s(case, "turbulence.model").as_str(), "smagorinsky" | "wale")
+}
+
+/// Is the mixing-length closure selected (ADR 0026)?
+pub fn is_mixing_length(case: &Case) -> bool {
+    get_s(case, "turbulence.model") == "mixing_length"
+}
+
+/// Is one of the algebraic models without transported scalars (subgrid models, mixing length) selected?
+pub fn is_algebraic(case: &Case) -> bool {
+    is_sgs(case) || is_mixing_length(case)
+}
+
+/// Does the case use a transient algorithm (piso, pimple)?
+pub fn is_transient(case: &Case) -> bool {
+    matches!(get_s(case, "solver.algorithm").as_str(), "piso" | "pimple")
 }
 
 /// Is k-omega SST selected?
@@ -96,6 +117,9 @@ pub fn model_label(case: &Case) -> String {
         "k_omega_sst" => "k-omega SST".to_string(),
         "k_epsilon" => format!("k-epsilon ({})", get_s(case, "turbulence.variant")),
         "spalart_allmaras" => "Spalart-Allmaras".to_string(),
+        "smagorinsky" => "Smagorinsky (LES)".to_string(),
+        "wale" => "WALE (LES)".to_string(),
+        "mixing_length" => "mixing length".to_string(),
         "plugin" => format!("plugin ({})", get_s(case, "turbulence.plugin")),
         _ => "laminar".to_string(),
     }
@@ -163,6 +187,7 @@ fn reference_speed(case: &Case, geom: Option<&rcfd_fv::FvGeometry>) -> f64 {
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let names = case.tree.names("boundaries").unwrap_or_default();
+    check_algebraic_options(case, &mut out);
     if !enabled(case) {
         for n in &names {
             let p = format!("boundaries.{n}.turbulence");
@@ -185,15 +210,20 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     }
     let sst = is_sst(case);
     let sa = is_sa(case);
+    let sgs = is_sgs(case);
+    let alg = is_algebraic(case);
     let plugin = get_s(case, "turbulence.model") == "plugin";
     let mname = match get_s(case, "turbulence.model").as_str() {
         "k_omega_sst" => "k-omega SST".to_string(),
         "spalart_allmaras" => "Spalart-Allmaras".to_string(),
+        "smagorinsky" => "Smagorinsky".to_string(),
+        "wale" => "WALE".to_string(),
+        "mixing_length" => "mixing_length".to_string(),
         "plugin" => format!("plugin model '{}'", get_s(case, "turbulence.plugin")),
         _ => "k-epsilon".to_string(),
     };
     let mname = mname.as_str();
-    let ke = !sst && !sa && !plugin;
+    let ke = !sst && !sa && !plugin && !alg;
     if plugin && !rcfd_turb::is_registered(&get_s(case, "turbulence.plugin")) {
         out.push(diag(
             "turbulence.plugin",
@@ -241,7 +271,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ));
         }
     }
-    if (sst || sa || plugin) && get_f(case, "turbulence.epsilon_initial") > 0.0 {
+    if (sst || sa || plugin || alg) && get_f(case, "turbulence.epsilon_initial") > 0.0 {
         out.push(diag(
             "turbulence.epsilon_initial",
             format!("turbulence.epsilon_initial applies to k_epsilon only, not to {mname}"),
@@ -259,6 +289,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             "Spalart-Allmaras has no k: use turbulence.nutilde_ratio for the initial nuTilda",
         ));
     }
+    if alg && get_f(case, "turbulence.k_initial") > 0.0 {
+        out.push(diag(
+            "turbulence.k_initial",
+            format!("{mname} is algebraic and has no transported k"),
+        ));
+    }
     if !sa {
         for (k, v) in [("sa.wall_mode", "auto"), ("sa.limiter", "allmaras")] {
             if get_s(case, &format!("turbulence.{k}")) != v {
@@ -270,12 +306,30 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         }
     }
     check_coefficients(case, &mut out);
-    let alg = get_s(case, "solver.algorithm");
-    if !matches!(alg.as_str(), "simple" | "simplec") {
+    let algorithm = get_s(case, "solver.algorithm");
+    if sgs {
+        if !is_transient(case) {
+            out.push(diag(
+                "turbulence.model",
+                format!(
+                    "{mname} is a large-eddy subgrid model and is available with the transient algorithms (piso, pimple) only, not with solver.algorithm = \"{algorithm}\""
+                ),
+            ));
+        }
+    } else if is_mixing_length(case) {
+        if !matches!(algorithm.as_str(), "simple" | "simplec" | "piso" | "pimple") {
+            out.push(diag(
+                "turbulence.model",
+                format!(
+                    "{mname} is available with the segregated algorithms (simple, simplec, piso, pimple) only, not with solver.algorithm = \"{algorithm}\""
+                ),
+            ));
+        }
+    } else if !matches!(algorithm.as_str(), "simple" | "simplec") {
         out.push(diag(
             "turbulence.model",
             format!(
-                "{mname} is available with the steady algorithms (simple, simplec) only, not with solver.algorithm = \"{alg}\""
+                "{mname} is available with the steady algorithms (simple, simplec) only, not with solver.algorithm = \"{algorithm}\""
             ),
         ));
     }
@@ -332,7 +386,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     ));
                 }
             }
-            Role::Inlet if sa || plugin => {}
+            Role::Inlet if sa || plugin || alg => {}
             Role::Inlet => {
                 let spec = get_s(case, &format!("{b}.turbulence_spec"));
                 let speed = match crate::bc_cat::nominal_speed(case, None, n) {
@@ -372,10 +426,19 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             Role::ZeroGradient => {}
         }
     }
-    if walls == 0 {
+    let van_driest = get_s(case, "turbulence.wall_damping") == "van_driest";
+    if walls == 0 && !(sgs && !van_driest) {
+        // a subgrid model without wall damping is valid in a periodic box (ADR 0026)
+        let (path, why) = if van_driest && alg {
+            ("turbulence.wall_damping", "with wall_damping = van_driest needs")
+        } else {
+            ("turbulence.model", "needs")
+        };
         out.push(diag(
-            "turbulence.model",
-            format!("{mname} needs at least one wall patch (a boundary with a fixed zero velocity or turbulence = \"wall\")"),
+            path,
+            format!(
+                "{mname} {why} at least one wall patch (a boundary with a fixed zero velocity or turbulence = \"wall\")"
+            ),
         ));
     }
     // y_plus reports need a wall patch
@@ -393,17 +456,69 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
+/// Keys that belong to the algebraic models (`wall_damping`, `length_scale`, `mixing_profile`, ADR 0026).
+fn check_algebraic_options(case: &Case, out: &mut Vec<Diagnostic>) {
+    let model = get_s(case, "turbulence.model");
+    let damping = get_s(case, "turbulence.wall_damping");
+    if damping != "none" && !matches!(model.as_str(), "smagorinsky" | "mixing_length") {
+        out.push(diag(
+            "turbulence.wall_damping",
+            if model == "wale" {
+                "WALE has no wall damping (its operator already scales as y^3 at a wall): leave turbulence.wall_damping = \"none\""
+                    .to_string()
+            } else {
+                format!(
+                    "turbulence.wall_damping applies to turbulence.model = \"smagorinsky\" or \"mixing_length\", not to \"{model}\""
+                )
+            },
+        ));
+    }
+    let r = get_f(case, "turbulence.length_scale");
+    if model == "mixing_length" {
+        if r <= 0.0 {
+            out.push(diag(
+                "turbulence.length_scale",
+                "mixing_length needs a positive turbulence.length_scale [m] (half height of a channel, radius of a pipe)",
+            ));
+        }
+    } else if r != 0.0 {
+        out.push(diag(
+            "turbulence.length_scale",
+            "turbulence.length_scale applies to turbulence.model = \"mixing_length\" only",
+        ));
+    }
+    if model != "mixing_length" && get_s(case, "turbulence.mixing_profile") != "linear" {
+        out.push(diag(
+            "turbulence.mixing_profile",
+            "turbulence.mixing_profile applies to turbulence.model = \"mixing_length\" only",
+        ));
+    }
+}
+
 /// Coefficient overrides in `turbulence.coefficients.*`: every group is validated; only the active model's group may differ
 /// from the defaults (k-epsilon: 0 = variant default).
 fn check_coefficients(case: &Case, out: &mut Vec<Diagnostic>) {
     let active = get_s(case, "turbulence.model");
-    let groups: [(&str, &str, Vec<rcfd_turb::CoefficientInfo>, bool); 3] = [
+    let groups: [(&str, &str, Vec<rcfd_turb::CoefficientInfo>, bool); 6] = [
         ("k_epsilon", "k_epsilon", rcfd_turb::ke_coefficient_table(), true),
         ("k_omega_sst", "k_omega_sst", rcfd_turb::sst_coefficient_table(), false),
         (
             "sa",
             "spalart_allmaras",
             rcfd_turb::sa_infos(rcfd_turb::SaCoefficients::default()),
+            false,
+        ),
+        (
+            "smagorinsky",
+            "smagorinsky",
+            rcfd_turb::smagorinsky_coefficient_table(),
+            false,
+        ),
+        ("wale", "wale", rcfd_turb::wale_coefficient_table(), false),
+        (
+            "mixing_length",
+            "mixing_length",
+            rcfd_turb::mixing_length_coefficient_table(),
             false,
         ),
     ];
@@ -487,7 +602,8 @@ impl TurbState {
             .filter(|n| role(case, n) == Role::Wall && geom.mesh.patch(n).is_some())
             .cloned()
             .collect();
-        if walls.is_empty() {
+        let needs_wall = is_mixing_length(case) || get_s(case, "turbulence.wall_damping") == "van_driest";
+        if walls.is_empty() && (!is_sgs(case) || needs_wall) {
             return Err(vec![diag(
                 "turbulence.model",
                 "the turbulence model found no wall patch among the mesh patches",
@@ -544,6 +660,13 @@ impl TurbState {
                 .unwrap_or(rcfd_fv::convection::ConvScheme::Upwind),
             relax_turb: get_f(case, "turbulence.relax"),
             relax_nut: get_f(case, "turbulence.relax_nut"),
+            wall_damping: get_s(case, "turbulence.wall_damping") == "van_driest",
+            length_scale: get_f(case, "turbulence.length_scale"),
+            mixing_profile: match get_s(case, "turbulence.mixing_profile").as_str() {
+                "nikuradse" => rcfd_turb::MixingProfile::Nikuradse,
+                _ => rcfd_turb::MixingProfile::Linear,
+            },
+            time_accurate: is_transient(case),
         };
         let key = model_key(case);
         let mut model = rcfd_turb::create_model(&key, &ctx).map_err(|e| {
@@ -571,6 +694,9 @@ impl TurbState {
             "k_epsilon" => ("k_epsilon", true),
             "k_omega_sst" => ("k_omega_sst", false),
             "spalart_allmaras" => ("sa", false),
+            "smagorinsky" => ("smagorinsky", false),
+            "wale" => ("wale", false),
+            "mixing_length" => ("mixing_length", false),
             _ => ("", false),
         };
         if !group.is_empty() {

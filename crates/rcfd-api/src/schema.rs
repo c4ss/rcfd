@@ -1210,6 +1210,30 @@ pub fn case_schema() -> Schema {
                 "Spalart-Allmaras coefficients (TMR values); cw1 follows from cb1, cb2, sigma and kappa",
                 false,
             ),
+        )
+        .field(
+            "smagorinsky",
+            coef_obj(
+                rcfd_turb::smagorinsky_coefficient_table(),
+                "Smagorinsky subgrid-scale model coefficients (turbulence.model = smagorinsky, ADR 0026)",
+                false,
+            ),
+        )
+        .field(
+            "wale",
+            coef_obj(
+                rcfd_turb::wale_coefficient_table(),
+                "WALE subgrid-scale model coefficient (turbulence.model = wale, ADR 0026)",
+                false,
+            ),
+        )
+        .field(
+            "mixing_length",
+            coef_obj(
+                rcfd_turb::mixing_length_coefficient_table(),
+                "Prandtl mixing-length model coefficients (turbulence.model = mixing_length, ADR 0026)",
+                false,
+            ),
         );
     let sa_group = Schema::object()
         .doc("Spalart-Allmaras options")
@@ -1227,10 +1251,10 @@ pub fn case_schema() -> Schema {
         );
 
     let turbulence = Schema::object()
-        .doc("Turbulence modelling (steady SIMPLE / SIMPLEC runs)")
+        .doc("Turbulence modelling (RANS models: steady SIMPLE / SIMPLEC runs; smagorinsky and wale: transient runs; mixing_length: both)")
         .field(
             "model",
-            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "plugin"]).doc("laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
+            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "smagorinsky", "wale", "mixing_length", "plugin"]).doc("smagorinsky and wale are algebraic subgrid-scale models for large-eddy simulation (transient algorithms piso/pimple only; resolved walls, nu_sgs = 0 on wall faces, filter width = cell volume^(1/3); ADR 0026), mixing_length is the Prandtl algebraic closure (steady or transient, needs a wall and turbulence.length_scale; ADR 0026). Otherwise: laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
         )
         .field(
             "variant",
@@ -1340,6 +1364,21 @@ pub fn case_schema() -> Schema {
         .field(
             "plugin",
             Schema::string("").doc("Key of the registered turbulence model used when model = plugin (see rcfd_turb::register_model); an unregistered key is a validation error"),
+        )
+        .field(
+            "wall_damping",
+            Schema::enumeration("none", &["none", "van_driest"]).doc("smagorinsky and mixing_length: van Driest damping 1 - exp(-y+/A+) of the length scale (A+ from the model coefficient a_plus), with y+ from the wall shear velocity of the nearest wall face; needs a wall patch. WALE has no damping (located error)"),
+        )
+        .field(
+            "length_scale",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::LENGTH)
+                .doc("mixing_length: length scale R [m] (half height of a channel, radius of a pipe): the linear profile is capped at l_max_ratio R and the Nikuradse profile is a function of d/R. Required > 0 for mixing_length"),
+        )
+        .field(
+            "mixing_profile",
+            Schema::enumeration("linear", &["linear", "nikuradse"]).doc("mixing_length profile: linear (l = min(kappa d, l_max_ratio R)) or nikuradse (Nikuradse's pipe formula l/R = 0.14 - 0.08 (1 - d/R)^2 - 0.06 (1 - d/R)^4)"),
         )
         .field(
             "nutilde_ratio",
