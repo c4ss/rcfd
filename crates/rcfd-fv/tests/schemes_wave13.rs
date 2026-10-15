@@ -320,9 +320,7 @@ fn decay_error(scheme: TimeScheme, dt: f64) -> f64 {
     let steps = (1.0 / dt).round() as usize;
     for _ in 0..steps {
         let mut m = FvMatrix::zeros(&geom);
-        for i in 0..n {
-            m.a.diag[i] = vol[i]; // lambda = 1
-        }
+        m.a.diag[..n].copy_from_slice(&vol[..n]); // lambda = 1
         let m = add_ddt(scheme, m, &vol, dt, &hist);
         let new: Vec<f64> = (0..n).map(|i| m.b[i] / m.a.diag[i]).collect();
         hist.push(new, dt);

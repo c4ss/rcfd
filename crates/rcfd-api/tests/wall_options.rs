@@ -149,7 +149,7 @@ plugin = \"{key}\"
             ));
         } else {
             out.push_str(l);
-            out.push_str("\n");
+            out.push('\n');
         }
     }
     out
