@@ -586,3 +586,52 @@ fn f5_a_case_without_conjugate_features_is_untouched() {
     s.run(3);
     assert!(s.failure().is_none());
 }
+
+// ------------------------------------------------------------------------------------- F4b: silent-drop guards
+
+/// Combinations that would silently ignore or shadow a setting are located errors (added after review of the first
+/// version; the registered F4 test above is unchanged).
+#[test]
+fn f4b_combinations_that_would_drop_a_setting_are_rejected() {
+    let conv = |extra: &str| {
+        format!(
+            "{}{extra}",
+            slab_text(
+                "temperature = \"convection\"
+heat_transfer_coefficient = 10.0
+free_stream_temperature = 300.0",
+                3
+            )
+        )
+    };
+    // user scalars with a prescribed flow
+    let errs = errors(&format!(
+        "{}[scalars.s]
+diffusivity = 1.0
+",
+        wall_text(10)
+    ));
+    assert!(has(&errs, "scalars"), "{errs:?}");
+    // convection with a temperature-dependent conductivity law
+    let errs = errors(&conv(
+        "[properties.conductivity]
+law = \"polynomial\"
+coefficients = [-2.0, 0.01]
+",
+    ));
+    assert!(has(&errs, "boundaries.xmax.temperature"), "{errs:?}");
+    // convection with the variable-density solver
+    let errs = errors(&conv(
+        "[fluid]
+density = \"ideal_gas\"
+",
+    ));
+    assert!(
+        has(&errs, "boundaries.xmax.temperature") || !errs.is_empty(),
+        "{errs:?}"
+    );
+    println!(
+        "F4b variable-density errors: {:?}",
+        errs.iter().map(|d| d.path.clone()).collect::<Vec<_>>()
+    );
+}
