@@ -245,19 +245,23 @@ A3 single-factor sensitivities (medium mesh, change of x_r/h; "responsible" iff 
 
 | Variant | old set-up | (a) old + linearUpwind k, eps | (d) old + inlet plane x/h = -4 | BFS-C | (b) free-stream k 1.5e-4 | (c) Re_h 37500 | (e) BFS-C + linearUpwind k, eps |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Standard | 5.359 | -0.101 | +0.006 | 5.350 | +0.000 | -0.000 | -0.072 |
+| Standard | 5.359 | -0.101 (NOT converged: 6000 its, du 8.1e-3) | +0.006 | 5.350 | +0.000 | -0.000 | -0.072 (NOT converged: du 3.9e-3) |
 | RNG | 6.373 | -0.129 | +0.004 | 6.334 | +0.000 | +0.002 | -0.107 |
 | Realizable | 6.402 | -0.164 | +0.006 | 6.413 | +0.000 | -0.007 | -0.140 |
 
 * Inlet plane, free-stream k and Reynolds number each move x_r/h by less than 0.01: none is responsible for anything.
   The bundle "measured inlet profile" (old to BFS-C, other factors removed) changes x_r by -0.04 (RNG), -0.01 (Standard) and
   +0.01 (Realizable); this bundle was not decomposed further (u, k and epsilon profile shapes).
-* The only factor with a >= 0.10 effect is the order of the k/epsilon convection scheme (the library default is first-order
-  upwind): second-order moves x_r down by 0.07 to 0.16 for all variants. For RNG and Realizable that is toward or inside the
-  window (Realizable BFS-C + linearUpwind 6.273, RNG 6.227: inside), for Standard away from it (5.278). The registered A1
-  limits were set on the default scheme, so this does not change a verdict; it shows that the remaining Realizable miss
-  (+0.05) is within the discretisation error of the first-order turbulence transport. The RNG pass is not the result of the
-  corrected inlet (that moved it by -0.04, its old miss was 0.013) and it is within the scheme sensitivity (-0.11).
+* All A3 runs converged (max update < 1e-7, nu_t change < 1e-6) except the two Standard runs with second-order k/epsilon
+  convection, (a) and (e): they did not converge in 6000 iterations (du 8.1e-3 and 3.9e-3), so their deltas (-0.101, -0.072) decide
+  nothing and no statement is made about the Standard variant's response to the convection scheme.
+* For RNG and Realizable (all runs converged) the only factor with a >= 0.10 effect is the order of the k/epsilon convection
+  scheme (library default first-order upwind): second-order moves x_r down by 0.11 to 0.16 (Realizable BFS-C + linearUpwind
+  6.273, RNG 6.227: both inside the window). The registered A1 limits were set on the default scheme, so this does not change a
+  verdict; it shows that the Realizable miss (+0.05) is smaller than the sensitivity to the transport discretisation.
+* The RNG pass is marginal and is not credited to any single factor: the old set-up gave 6.373 (0.013 above the window), the
+  measured-profile bundle moved x_r by -0.039 (below the 0.10 threshold) to 6.334 (inside, 0.026 below the upper edge on the medium
+  mesh; fine mesh 6.348, 0.012 below the edge), and the scheme sensitivity (-0.107) is larger than the pass margin.
 * A4: `component_diagonal = corrected` is bitwise identical to the averaged diagonal on the step mesh (max |du| = 0, 200
   iterations): the step mesh has no symmetry plane, so the correction is a no-op there. PASS.
 
@@ -300,14 +304,14 @@ ranged 0.03 to 0.77. B5b (Addendum A, corrected first-cell heights and layer cou
 | Check | Measured | Limit | Verdict |
 | --- | --- | --- | --- |
 | C1 SST automatic y+ ~ 30 (29.6 to 32.9): average Cf L = 1 / 2 vs Prandtl-Schlichting | -0.51 / -0.69 % | 5 % | PASS |
-| C1 SST automatic y+ ~ 1 (0.96 to 1.06) | -8.44 / -7.76 % | 5 % | MISS (same SST-versus-correlation offset as B2; the y+ 30 wall function lies about 7 percent above the resolved result) |
-| C2 k-epsilon Standard y+ ~ 30 | -6.15 / -4.42 % | 5 % | MISS (Cf(0.5) is identical to Scalable's, so the difference comes from the leading-edge cells with y* < 11.2 where Scalable raises the shear) |
+| C1 SST automatic y+ ~ 1 (0.96 to 1.06) | -8.44 / -7.76 % | 5 % | MISS (same SST-versus-correlation offset as B2; the y+ 30 result lies 8.7 percent (L = 1) and 7.6 percent (L = 2) above the resolved one) |
+| C2 k-epsilon Standard y+ ~ 30 | -6.15 / -4.42 % | 5 % | MISS (Cf(0.5) is identical to Scalable's to four digits; hypothesis, not verified by a run: the difference sits in the leading-edge cells with y* < 11.2 where Scalable raises the shear) |
 | C2 Scalable y+ ~ 30 | -4.01 / -3.10 % | 5 % | PASS |
 | C2 Scalable y+ ~ 1 (0.99 to 1.09) | -4.56 / -3.13 % | 5 % | PASS (mesh independent to 0.6 points: the purpose of the scalable form) |
 | C2 Enhanced y+ ~ 1 | not converged (8000 its, du 9.0e-7, nu_t change 2.8e-5); Cf(0.5) 3.051e-3 | converge + 5 % | MISS |
 | C2 Enhanced y+ ~ 30 | not converged (8000 its, du 4.1e-6, nu_t change 1.2e-3); Cf(0.5) 3.080e-3 | converge + 5 % | MISS |
 | C3 k-epsilon Standard + roughness, x = 0.5 / 1.0 / 1.5 | -1.01 / +0.25 / +6.34 %; rough/smooth Cf 2.71 / 2.40 / 2.33 | 10 % | PASS |
-| C3 SST automatic + roughness | -22.2 / -18.8 / -17.5 %; run not converged (du 4.4e-9 vs 1e-9; the smooth contrast also stalls at 5.4e-9) | 10 % | MISS (not converged) |
+| C3 SST automatic + roughness | -22.2 / -18.8 / -17.5 %; rough/smooth Cf 2.13 / 2.06 / 2.03 (k-epsilon 2.71 / 2.40 / 2.33); max update stalled at 4.4e-9 (registered 1e-9), nu_t change 2e-12, i.e. the field is effectively stationary | 10 % | MISS |
 | C4 unit checks (wall.rs, kepsilon.rs) | all assertions pass | as registered | PASS |
 | C5 schema validation / located errors (`rcfd-api/tests/wall_options.rs`) | pass | as registered | PASS |
 | C5 tree run equals library run to 1e-12 | not run | 1e-12 | NOT MET (see below) |
@@ -315,8 +319,11 @@ ranged 0.03 to 0.77. B5b (Addendum A, corrected first-cell heights and layer cou
 * Enhanced wall treatment: implemented (two-layer scales blended for Re_y < 200, Kader's law) but not converged on either mesh;
   it is an unvalidated option and no accuracy is claimed. The cause of the non-convergence was not diagnosed.
 * Non-equilibrium wall functions: not attempted (formulas not verifiable in the allowed literature).
-* SST with roughness misses and does not converge; k-epsilon with roughness meets the fully rough correlation. The cause of the
-  SST rough-wall shortfall was not diagnosed.
+* SST with roughness misses by 17 to 22 percent while the smooth plates of both models on that mesh agree (2.685e-3 SST, 2.684e-3
+  k-epsilon at x = 0.5), so the deficit is specific to the SST rough path. Reading `sst.rs`: the wall shear, wall-cell strain and
+  production do use the rough law (`u_tau_rough`, `e_rough`), so the smooth law does not leak in. Cause not established; untested
+  hypothesis: the wall-cell omega is fixed to the smooth-wall form (viscous 6 nu/(beta1 y^2) combined with the log form) and has no
+  rough-wall counterpart, which limits the eddy viscosity next to a rough wall. Not fixed, not rerun.
 * C5 wiring: `turbulence.wall_function` {standard, scalable, enhanced}, `roughness_height`, `roughness_constant`, `wall_omega`
   {automatic, low_re}, `sst_variant` {sst, bsl} are in the schema and `docs/case-schema.md`, validated by
   `crates/rcfd-api/src/wall_opts.rs` (hooked from `case.rs`). The simulation builds its model as a `Box<dyn TurbulenceModel>`
