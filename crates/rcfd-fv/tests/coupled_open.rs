@@ -98,6 +98,15 @@ fn run_alg(
     }
 }
 
+/// Linear-solver settings registered for all coupled library runs (ADR 0029, stop criteria).
+fn registered_linear() -> SolveControl {
+    SolveControl {
+        tol_abs: 1e-14,
+        tol_rel: 1e-10,
+        max_iter: 400,
+    }
+}
+
 /// Largest |sum of face fluxes| over the cells.
 fn max_imbalance(geom: &FvGeometry, phi: &[f64]) -> f64 {
     let mesh = &geom.mesh;
@@ -479,7 +488,7 @@ fn b1_hydrostatic() {
     let (geom, u, p) = closed_box(12);
     let g = 10.0;
     let mut s = CoupledSolver::new(geom.clone(), u, p, CoupledSettings::new(0.01)).unwrap();
-    s.settings.linear.tol_rel = 1e-10;
+    s.settings.linear = registered_linear();
     s.body_force = Some(BodyForce::uniform(&geom, [0.0, -g, 0.0]));
     for _ in 0..500 {
         s.iterate();
@@ -503,7 +512,9 @@ fn b1_hydrostatic() {
 fn b2_stably_stratified_fluid_stays_at_rest() {
     let pr = 0.71;
     let (geom, u, p) = closed_box(12);
-    let mut s = CoupledSolver::new(geom.clone(), u, p, CoupledSettings::new(pr)).unwrap();
+    let mut cs = CoupledSettings::new(pr);
+    cs.linear = registered_linear();
+    let mut s = CoupledSolver::new(geom.clone(), u, p, cs).unwrap();
     let mut t = ScalarField::uniform("T", &geom, 0.0);
     for (c, x) in geom.mesh.cell_centres().iter().enumerate() {
         t.values[c] = x[1];
@@ -567,7 +578,7 @@ fn cavity(alg: Alg, ra: f64, n: usize, grading: f64) -> Cav {
         Alg::Coupled => {
             let mut cs = CoupledSettings::new(PR);
             cs.convection = scheme;
-            cs.linear.tol_rel = 1e-10;
+            cs.linear = registered_linear();
             let mut sol = CoupledSolver::new(geom.clone(), u, p, cs).unwrap();
             while it < 12000 {
                 sol.body_force = Some(boussinesq_force(&geom, &energy.t, 1.0, gravity, 0.5));
@@ -585,7 +596,8 @@ fn cavity(alg: Alg, ra: f64, n: usize, grading: f64) -> Cav {
         Alg::Simplec => {
             let mut ss = SimpleSettings::new(PR, Coupling::Simplec);
             ss.convection = scheme;
-            ss.alpha_u = 0.8;
+            ss.momentum_solver.tol_rel = 1e-10;
+            ss.pressure_solver.tol_rel = 1e-10;
             let mut sol = SimpleSolver::new(geom.clone(), u, p, ss);
             while it < 12000 {
                 sol.body_force = Some(boussinesq_force(&geom, &energy.t, 1.0, gravity, 0.5));
