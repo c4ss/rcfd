@@ -125,6 +125,7 @@ fn geometric_sum(first: f64, g: f64, n: usize) -> f64 {
 }
 
 #[test]
+#[ignore = "record: set-up defect, layer order measured from the original surface (thinnest layer on the wrong side of the wall cap); see i1c/i3c/i4c/i6c and ADR 0020 addendum"]
 fn i1_block_patch() {
     let m = box_top();
     assert_eq!(m.n_cells(), 24);
@@ -208,6 +209,7 @@ fn i2_unstructured_triangle_patch() {
 }
 
 #[test]
+#[ignore = "record: set-up defect, layer order measured from the original surface (thinnest layer on the wrong side of the wall cap); see i1c/i3c/i4c/i6c and ADR 0020 addendum"]
 fn i3_curved_patch() {
     let m = cylinder_ogrid(24, 3, 1.0, 2.0, Grading::Uniform, 0.5).unwrap();
     let v0 = m.total_volume();
@@ -257,6 +259,7 @@ fn heights_of(out: &Mesh, z0: f64) -> Vec<f64> {
 }
 
 #[test]
+#[ignore = "record: set-up defect, layer order measured from the original surface (thinnest layer on the wrong side of the wall cap); see i1c/i3c/i4c/i6c and ADR 0020 addendum"]
 fn i4_sizing_types() {
     let boxm = box_top();
     let tri = tri_prism_mesh();
@@ -391,4 +394,179 @@ fn i7_report() {
     let json = serde_json::to_string(&rep).unwrap();
     let back: InflateReport = serde_json::from_str(&json).unwrap();
     assert_eq!(back, rep);
+}
+
+// ---- Corrected tests (ADR 0020 addendum): the far cap is the wall, the thinnest layer lies against it. ----
+
+/// Owner-cell height of every cap face of a flat patch: cell volume over face area.
+fn cap_cell_heights(m: &Mesh, patch: &str) -> Vec<f64> {
+    m.patch(patch)
+        .unwrap()
+        .faces()
+        .map(|f| m.cell_volumes()[m.owner()[f]] / m.face_area(f))
+        .collect()
+}
+
+#[test]
+fn i1c_block_patch_thinnest_layer_at_wall() {
+    let m = box_top();
+    let (out, rep) = inflate_patch(
+        &m,
+        "zmax",
+        LayerSizing::FirstGrowth {
+            first: 0.01,
+            growth: 1.2,
+            layers: 8,
+        },
+    )
+    .unwrap();
+    let t = geometric_sum(0.01, 1.2, 8);
+    assert!(rel(out.total_volume(), 24.0 + 12.0 * t) <= 1e-12);
+    // planes counted from the wall (cap at 2 + t): wall - cum_k
+    let levels = levels_above(&out, 2.0);
+    assert_eq!(levels.len(), 8);
+    assert!((levels[7] - (2.0 + t)).abs() <= 1e-12, "cap at {}", levels[7]);
+    let mut worst = 0.0f64;
+    let mut cum = 0.0;
+    for k in 0..8 {
+        worst = worst.max((levels[7 - k] - (2.0 + t - cum)).abs());
+        cum += 0.01 * 1.2f64.powi(k as i32);
+    }
+    println!("I1c layer plane max error {worst:e}");
+    assert!(worst <= 1e-12);
+    // the cell against the wall has the first height, the cell against the original surface the last
+    for h in cap_cell_heights(&out, "zmax") {
+        assert!((h - 0.01).abs() <= 1e-12, "{h}");
+    }
+    let lowest = 2.0;
+    let last = 0.01 * 1.2f64.powi(7);
+    for c in 24..out.n_cells() {
+        let p = out.cell_centres()[c];
+        if p[2] < lowest + last {
+            assert!((out.cell_volumes()[c] - last).abs() <= 1e-12);
+        }
+    }
+    assert!(rel(rep.quality.max_aspect_ratio, 100.0) <= 1e-9);
+    assert!(rep.quality.max_non_orthogonality <= 1e-4 && rep.quality.max_skewness <= 1e-9);
+    assert!(rep.quality.is_ok());
+}
+
+#[test]
+fn i3c_curved_patch_radii_from_the_wall() {
+    let m = cylinder_ogrid(24, 3, 1.0, 2.0, Grading::Uniform, 0.5).unwrap();
+    let v0 = m.total_volume();
+    let (out, _) = inflate_patch(
+        &m,
+        "cylinder",
+        LayerSizing::FirstGrowth {
+            first: 0.05,
+            growth: 1.25,
+            layers: 4,
+        },
+    )
+    .unwrap();
+    let t = geometric_sum(0.05, 1.25, 4);
+    let n = 24.0f64;
+    let exact = 0.5 * (n / 2.0) * (2.0 * std::f64::consts::PI / n).sin() * (1.0 - (1.0 - t) * (1.0 - t));
+    assert!(rel(out.total_volume() - v0, exact) <= 1e-10);
+    // wall (cap) at radius 1 - t, planes at 1 - t + cum_k (cum from the wall)
+    let mut expect = Vec::new();
+    let mut cum = 0.0;
+    for k in 0..4 {
+        expect.push(1.0 - t + cum);
+        cum += 0.05 * 1.25f64.powi(k);
+    }
+    let mut seen = [false; 4];
+    let mut worst = 0.0f64;
+    for p in &out.points()[m.n_points()..] {
+        let r = (p[0] * p[0] + p[1] * p[1]).sqrt();
+        let (k, d) = (0..4)
+            .map(|k| (k, (r - expect[k]).abs()))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap();
+        seen[k] = true;
+        worst = worst.max(d);
+    }
+    println!("I3c layer radius max error {worst:e}");
+    assert!(worst <= 1e-12 && seen.iter().all(|&s| s));
+    // the cylinder patch is now the cap at radius 1 - t
+    for f in out.patch("cylinder").unwrap().faces() {
+        let c = out.face_centres()[f];
+        let r = (c[0] * c[0] + c[1] * c[1]).sqrt();
+        assert!(r < 1.0 - t + 0.01);
+    }
+    assert!(check_mesh(&out).is_ok());
+}
+
+#[test]
+fn i4c_sizing_types_from_the_wall() {
+    let boxm = box_top();
+    let tri = tri_prism_mesh();
+    let from_wall = |out: &Mesh, z0: f64| -> Vec<f64> {
+        let mut h = heights_of(out, z0);
+        h.reverse();
+        h
+    };
+    for (m, z0) in [(&boxm, 2.0), (&tri, 1.0)] {
+        let (out, _) = inflate_patch(m, "zmax", LayerSizing::Uniform { total: 0.3, layers: 6 }).unwrap();
+        for x in from_wall(&out, z0) {
+            assert!((x - 0.05).abs() <= 1e-12);
+        }
+    }
+    for (m, s, z0) in [(&boxm, 1.0, 2.0), (&tri, (1.0f64 / 72.0).sqrt(), 1.0)] {
+        let (out, _) = inflate_patch(
+            m,
+            "zmax",
+            LayerSizing::AspectRatio {
+                aspect: 20.0,
+                growth: 1.15,
+                layers: 5,
+            },
+        )
+        .unwrap();
+        let h = from_wall(&out, z0);
+        assert!((h[0] - s / 20.0).abs() <= 1e-12, "{h:?}");
+        for w in h.windows(2) {
+            assert!((w[1] / w[0] - 1.15).abs() <= 1e-12);
+        }
+    }
+    let (out, _) = inflate_patch(
+        &boxm,
+        "zmax",
+        LayerSizing::LastRatio {
+            first: 0.01,
+            last_ratio: 0.5,
+            layers: 6,
+        },
+    )
+    .unwrap();
+    let h = from_wall(&out, 2.0);
+    let g = 50.0f64.powf(0.2);
+    assert!((h[0] - 0.01).abs() <= 1e-12 && (h[5] - 0.5).abs() <= 1e-12, "{h:?}");
+    for w in h.windows(2) {
+        assert!((w[1] / w[0] - g).abs() <= 1e-12);
+    }
+}
+
+#[test]
+fn i6c_wall_adjacent_cell_meets_the_y_plus_target() {
+    let first = first_cell_height_from_y_plus(0.8, 0.05, 1e-5);
+    let tri = tri_prism_mesh();
+    let (out, _) = inflate_patch(
+        &tri,
+        "zmax",
+        LayerSizing::FirstGrowth {
+            first,
+            growth: 1.2,
+            layers: 6,
+        },
+    )
+    .unwrap();
+    let hs = cap_cell_heights(&out, "zmax");
+    assert_eq!(hs.len(), 72);
+    for h in hs {
+        assert!(rel(h, 3.2e-4) <= 1e-9, "{h}");
+        let yp = y_plus_of_first_cell(h, 0.05, 1e-5);
+        assert!(rel(yp, 0.8) <= 1e-9, "{yp}");
+    }
 }

@@ -1,5 +1,8 @@
 //! Prismatic inflation layers on arbitrary (unstructured) boundary patches (F-108, ADR 0020 part B).
 //!
+//! The far cap of the extrusion is the new wall (it keeps the patch name and kind): layer 1 of the sizing is the
+//! layer against the cap, the last layer lies against the original surface.
+//!
 //! The wall patch is extruded outward along the per-point averaged normals in `layers` steps whose
 //! heights follow a [`LayerSizing`]: uniform, geometric from a first height (for example the one
 //! given by a `y+` target through [`crate::layers::first_cell_height_from_y_plus`]), geometric from
@@ -156,7 +159,9 @@ pub struct InflateReport {
 pub fn inflate_patch(mesh: &Mesh, patch: &str, sizing: LayerSizing) -> Result<(Mesh, InflateReport)> {
     sizing.validate()?;
     let layers = sizing.layers();
-    let cum = |s: f64, k: usize| -> f64 { sizing.heights(s)[..k].iter().sum() };
+    // The far cap keeps the patch name and kind (it is the wall), so the thinnest layer must lie against the
+    // cap: layer k counted from the original surface is the (layers - k + 1)-th layer counted from the wall.
+    let cum = |s: f64, k: usize| -> f64 { sizing.heights(s).iter().rev().take(k).sum() };
     let (out, sizes) = extrude_core(mesh, patch, layers, Displacement::Layered(&cum))?;
     let mut rep = InflateReport {
         layers,

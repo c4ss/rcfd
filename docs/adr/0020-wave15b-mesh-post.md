@@ -372,3 +372,26 @@ registered check passed at its first run; there are no `*_known_miss` tests.
 
 All literature attributions are from memory and listed in `docs/reference-data.md` (wave 15B section); none of the registered
 checks depends on them.
+
+## Addendum 1: layer order defect found in review (F-108), fixes and further disclosures
+
+Limits are unchanged. Review of the first F-108 implementation found a specification and code defect: `extrude_core` keeps the patch
+name and kind on the FAR cap (the new wall), but the first version stacked the layers with the first (thinnest) layer against the
+ORIGINAL surface, so the cell against the wall was the thickest, `first * g^(layers-1)`, and a y+ target would have been missed (the
+y+ 0.8 case would have given about 2.0). ADR B2 and the registered checks I1, I3, I4 measured distances from the original surface and
+therefore encoded the wrong orientation; I6 only passed the input value through the report, so none of them could see it. The code
+now orders the layers so that layer 1 (height `first`) lies against the cap (wall) and the last layer against the original surface;
+total thickness, added volume, side areas, report fields and all closed forms of B2 are unchanged. As with ADR 0018 Q2d, the old tests
+`i1_block_patch`, `i3_curved_patch`, `i4_sizing_types` are kept as ignored records (they fail on the corrected code, which confirms the
+defect) and new tests assert the same limits with the layer planes, radii and heights counted from the wall:
+`i1c_block_patch_thinnest_layer_at_wall` (planes `2 + T - cum_k`, error 0; every cap-cell height 0.01 to 1e-12; max aspect ratio 100),
+`i3c_curved_patch_radii_from_the_wall` (radii `1 - T + cum_k`, error 2.2e-16; volume closed form unchanged), `i4c_sizing_types_from_the_wall`,
+and the post-registration check `i6c_wall_adjacent_cell_meets_the_y_plus_target` (owner-cell height of every cap face equals 3.2e-4 and its
+y+ equals 0.8, both to relative 1e-9). The old `i6` is kept and passes but only checks the report value. The earlier result lines for I1, I3
+above were measured on the defective ordering; the corrected numbers are those quoted here.
+
+Further disclosures:
+* P4 (graph cut `<=` RCB cut) is guaranteed by construction (unit-weight seed is `Rcb`, every move lowers the cut), in every case, not only
+  where no move helps; the evidence of the refinement is the 31 strict reductions out of 45.
+* R3 "stretched mesh": the meshes are elongated index spaces of cubic cells. Bandwidth depends only on connectivity, so a geometrically
+  graded or stretched mesh with the same index space gives identical numbers.
