@@ -75,6 +75,11 @@ impl MonitorStore {
             .collect()
     }
 
+    /// Like [`MonitorStore::plot_points`] but reduced to at most `max_points` by [`decimate_minmax`].
+    pub fn plot_points_decimated(&self, name: &str, log: bool, max_points: usize) -> Vec<[f64; 2]> {
+        decimate_minmax(&self.plot_points(name, log), max_points)
+    }
+
     /// Names of series that are residual-like (used for the residual plot).
     pub fn residual_names(&self) -> Vec<String> {
         self.series
@@ -92,4 +97,48 @@ impl MonitorStore {
             .cloned()
             .collect()
     }
+}
+
+/// Points handed to a plot per series (see [`decimate_minmax`]).
+pub const MAX_PLOT_POINTS: usize = 4000;
+
+/// Reduce `points` (x increasing) to at most `max_points` while keeping the first and last point and, for every
+/// bucket of consecutive samples, the sample with the smallest and the one with the largest y (in original order).
+/// The result is a subsequence of the input; short inputs are returned unchanged.
+pub fn decimate_minmax(points: &[[f64; 2]], max_points: usize) -> Vec<[f64; 2]> {
+    let n = points.len();
+    if n <= max_points {
+        return points.to_vec();
+    }
+    if max_points < 4 {
+        return vec![points[0], points[n - 1]];
+    }
+    // Interior samples 1..n-1 are split into `nb` buckets; each keeps at most two.
+    let nb = (max_points - 2) / 2;
+    let inner = n - 2;
+    let mut keep: Vec<usize> = Vec::with_capacity(2 * nb + 2);
+    keep.push(0);
+    for b in 0..nb {
+        let (s, e) = (1 + b * inner / nb, 1 + (b + 1) * inner / nb);
+        if s >= e {
+            continue;
+        }
+        let (mut imin, mut imax) = (s, s);
+        for i in s..e {
+            if points[i][1] < points[imin][1] {
+                imin = i;
+            }
+            if points[i][1] > points[imax][1] {
+                imax = i;
+            }
+        }
+        if imin == imax {
+            keep.push(imin);
+        } else {
+            keep.push(imin.min(imax));
+            keep.push(imin.max(imax));
+        }
+    }
+    keep.push(n - 1);
+    keep.into_iter().map(|i| points[i]).collect()
 }

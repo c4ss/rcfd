@@ -7,6 +7,8 @@
 use crate::chat::{CardState, Entry};
 use crate::files;
 use crate::layout::{self, Panel};
+use crate::monitors::MAX_PLOT_POINTS;
+use crate::raster::{hover_cell, tick_fraction};
 use crate::schema_model::{format_value, matches_filter, value_at, Kind, Node};
 use crate::state::{AppState, Prompt, QuickAction};
 use crate::theme::{Prefs, Theme};
@@ -581,9 +583,9 @@ fn viewport_panel(ui: &mut egui::Ui, st: &mut AppState) {
             }
         }
         hover = resp.hover_pos().filter(|p| fit.contains(*p)).and_then(|p| {
-            let c = (((p.x - fit.min.x) / cw) as usize).min(g.cols - 1);
-            let r = (((p.y - fit.min.y) / ch) as usize).min(g.rows - 1);
-            g.values[r * g.cols + c].map(|v| format!("{} = {v:.5e}", g.name))
+            let fx = f64::from((p.x - fit.min.x) / fit.width());
+            let fy = f64::from((p.y - fit.min.y) / fit.height());
+            hover_cell(g, fx, fy).map(|(_, _, v)| format!("{} = {v:.5e}", g.name))
         });
     } else {
         let s = st.ctrl.slice.as_ref().unwrap();
@@ -635,7 +637,7 @@ fn viewport_panel(ui: &mut egui::Ui, st: &mut AppState) {
         );
     }
     for t in legend_ticks(lo, hi, 5) {
-        let y = lg.max.y - lg.height() * ((t - lo) / (hi - lo).max(1e-300)) as f32;
+        let y = lg.max.y - lg.height() * tick_fraction(lo, hi, t) as f32;
         painter.text(
             Pos2::new(lg.max.x + 4.0, y),
             Align2::LEFT_CENTER,
@@ -718,7 +720,7 @@ fn monitors_panel(ui: &mut egui::Ui, st: &mut AppState) {
         .y_axis_label(if log { "log10 residual" } else { "residual" })
         .show(ui, |plot| {
             for n in &names {
-                let pts = st.ctrl.monitors.plot_points(n, log);
+                let pts = st.ctrl.monitors.plot_points_decimated(n, log, MAX_PLOT_POINTS);
                 plot.line(egui_plot::Line::new(egui_plot::PlotPoints::new(pts)).name(n));
             }
         });
@@ -727,7 +729,7 @@ fn monitors_panel(ui: &mut egui::Ui, st: &mut AppState) {
             .legend(egui_plot::Legend::default())
             .show(ui, |plot| {
                 for n in &reports {
-                    let pts = st.ctrl.monitors.plot_points(n, false);
+                    let pts = st.ctrl.monitors.plot_points_decimated(n, false, MAX_PLOT_POINTS);
                     plot.line(egui_plot::Line::new(egui_plot::PlotPoints::new(pts)).name(n));
                 }
             });

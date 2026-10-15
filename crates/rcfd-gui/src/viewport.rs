@@ -214,3 +214,8 @@ pub fn cell_square_size(extent: (f64, f64, f64, f64), n: usize) -> f64 {
     let area = ((x1 - x0) * (y1 - y0)).max(1e-30);
     (area / n.max(1) as f64).sqrt()
 }
+
+/// Relative luma (Rec. 709 weights) of an 8-bit colour, in 0..=255.
+pub fn luminance(c: [u8; 3]) -> f64 {
+    0.2126 * f64::from(c[0]) + 0.7152 * f64::from(c[1]) + 0.0722 * f64::from(c[2])
+}
