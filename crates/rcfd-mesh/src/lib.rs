@@ -10,6 +10,7 @@
 
 pub mod gen;
 pub mod layers;
+pub mod measures;
 pub mod mesh;
 pub mod non_conformal;
 pub mod partition;

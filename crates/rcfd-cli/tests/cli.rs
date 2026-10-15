@@ -164,6 +164,27 @@ fn check_mesh_and_convert_round_trip() {
 }
 
 #[test]
+fn check_mesh_reports_extended_measures() {
+    let d = tmp("measures");
+    let case = d.join("c.toml");
+    std::fs::write(&case, CASE).unwrap();
+    let o = rcfd(&["check-mesh", case.to_str().unwrap(), "--json"]);
+    assert_eq!(o.status.code(), Some(0));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    // 2D cavity: all faces are rectangles, no warp, and the old keys are still there
+    assert!(v["measures"]["max_warp"].as_f64().unwrap() < 1e-9, "{v}");
+    assert!((v["measures"]["min_face_angle"].as_f64().unwrap() - 90.0).abs() < 1e-9);
+    assert!(v["poor_list"].as_array().unwrap().is_empty());
+    assert!(v["max_non_orthogonality"].is_number() && v["warnings"].is_array());
+    let o = rcfd(&["check-mesh", case.to_str().unwrap()]);
+    let t = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        t.contains("warp max") && t.contains("inverse orthogonal quality"),
+        "{t}"
+    );
+}
+
+#[test]
 fn serve_over_stdio_answers_requests() {
     use std::io::Write;
     use std::process::Stdio;

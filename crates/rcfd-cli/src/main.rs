@@ -562,8 +562,20 @@ fn cmd_check_mesh(args: &[String]) -> u8 {
             "skewness max {:.3}  aspect ratio max {:.2}  volume ratio max {:.2}",
             q.max_skewness, q.max_aspect_ratio, q.max_volume_ratio
         );
+        let ms = &q.measures;
+        println!(
+            "warp max {:.2} deg  face angle {:.1} to {:.1} deg  edge-length ratio max {:.2}",
+            ms.max_warp, ms.min_face_angle, ms.max_face_angle, ms.max_edge_length_ratio
+        );
+        println!(
+            "ortho-skew max {:.3}  inverse orthogonal quality max {:.3}  size change max {:.2}",
+            ms.max_ortho_skew, ms.max_inverse_orthogonal, ms.max_size_change
+        );
         for w in &q.warnings {
             println!("warning: {w}");
+        }
+        for w in &q.poor_warnings {
+            println!("poor mesh: {w}");
         }
         for e in &q.errors {
             println!("error: {e}");
