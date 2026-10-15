@@ -1350,9 +1350,9 @@
       "F-031",
       "F-053"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "1D slab with a uniform volumetric heat source gives the analytic parabolic temperature profile; a species decay source matches exp(-k t); a fixed-value cell zone holds its value exactly",
-    "note": "Priority P1. Size M. Area: fv,api. Sources are attached to cell zones or registers; expressions allowed for magnitudes."
+    "note": "Priority P1. Size M. Area: fv,api. Sources are attached to cell zones or registers; expressions allowed for magnitudes. Wave 15A (ADR 0019): zone_sources.<name> for the temperature and for scalars/species (sources by value or expression, implicit linear part, fixed-value cells, zone/box/cell zone/register) in steady simple/simplec and transient piso/pimple; slab parabola (error 2.4e-4, order 2.0), exp(-k t) decay (BDF2 order 2.07) and exact fixed-value cells all met. Not delivered: mass sources, momentum sources/fixed values by expression, sources and fixed values for turbulence quantities, variable-density and compressible engines."
   },
   {
     "id": "F-202",
@@ -1363,9 +1363,9 @@
       "F-020",
       "F-053"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Diffusive scalar with fixed-value walls reproduces the analytic 1D steady conduction profile with second-order grid convergence; the Poisson variant shows manufactured-solution convergence order 2",
-    "note": "Priority P2. Size M. Area: fv,api. Generalises the passive-scalar machinery; coefficients, sources and boundary values come from the expression language."
+    "note": "Priority P2. Size M. Area: fv,api. Generalises the passive-scalar machinery; coefficients, sources and boundary values come from the expression language. Wave 15A (ADR 0019): scalars.<name>.equation transport|diffusive|poisson|algebraic with diffusivity/source/initial expressions, transient scalars and species in piso/pimple; diffusive profile order 2.00 (RMS 6.5e-6 at 128 cells) and Poisson manufactured solution order 2.00 met, transient eigenmode Euler/BDF2 and advection-diffusion-reaction orders as designed. Not delivered: the vector variant and coupling of user variables into properties, turbulence or other equations."
   },
   {
     "id": "F-203",
@@ -1400,9 +1400,9 @@
       "F-124",
       "F-028"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Potential-flow initialisation around a circular cylinder reproduces the analytic surface velocity distribution within 3 percent; an initialised backward-facing-step case converges in fewer iterations than uniform initial values",
-    "note": "Priority P2. Size M. Area: fv. Uses registers for patching; initial fields remain overridable by restart."
+    "note": "Priority P2. Size M. Area: fv. Uses registers for patching; initial fields remain overridable by restart. Wave 15A (ADR 0019): initial.method uniform|potential|coarse and localised turbulence initialisation by registers delivered; cylinder potential flow within 3 percent (surface 9.7e-4 of 2A on the fine mesh, order 2.0) and the 40x40 cavity coarse start (112 against 165 iterations) met; the backward-facing-step check MISSED (potential 258 iterations against 253 uniform and 258 zero; kept as ignored known-miss test, diagnosis in the ADR), so the item stays partial."
   },
   {
     "id": "F-206",
