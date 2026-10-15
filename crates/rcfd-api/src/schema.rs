@@ -964,9 +964,9 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "conductivity",
-            Schema::float(1.0)
+            Schema::float(0.0)
                 .at_least(0.0)
-                .doc("Thermal conductivity for heat_flow (ignored when properties.conductivity is temperature-dependent: the law is used at the wall temperature)"),
+                .doc("Thermal conductivity for heat_flow; 0 (unset) uses physics.conductivity, a positive value overrides it (ignored when properties.conductivity is temperature-dependent: the law is used at the wall temperature)"),
         );
 
     let convergence = Schema::object()

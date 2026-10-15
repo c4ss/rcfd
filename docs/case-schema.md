@@ -315,6 +315,8 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 Energy (`energy.*`) and pseudo-transient (`solver.pseudo_*`) settings were already in the schema
 and are unchanged.
 
+`heat_flow` reports (constant-density energy equation): `reports.<n>.conductivity` is optional and has no effective default (0 = unset). Unset, the report uses `physics.conductivity`; a positive value overrides it for that report; a temperature-dependent `properties.conductivity` law takes precedence over both and is evaluated at the wall temperature. Before this fix the key defaulted to 1.0 and silently replaced `physics.conductivity` (wave 15A set-up defect E1/E5, ADR 0019); cases that relied on that now need an explicit report value to get the old number.
+
 `energy.enabled` also works with the transient `piso` and `pimple` algorithms (F-050): the temperature equation is advanced
 with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, `energy.relax` unused) on the flux of the previous step,
 then the flow step sees the Boussinesq buoyancy of the new temperature (first-order coupling in time; a steady state is independent of it).
