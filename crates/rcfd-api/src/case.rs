@@ -523,6 +523,7 @@ impl Case {
                 }
             }
         }
+        out.extend(crate::bc_cat::check(self));
         out.extend(crate::turb::check(self));
         out.extend(crate::wall_opts::check(self));
         out.extend(crate::comp::check(self));

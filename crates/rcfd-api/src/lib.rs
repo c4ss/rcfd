@@ -1,5 +1,6 @@
 //! Case definitions, simulation sessions and the solver service API.
 
+pub mod bc_cat;
 pub mod case;
 pub mod comp;
 pub mod decomp;

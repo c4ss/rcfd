@@ -117,7 +117,10 @@ pub fn role(case: &Case, patch: &str) -> Role {
         "inlet" => Role::Inlet,
         "zero_gradient" => Role::ZeroGradient,
         _ => {
-            if crate::wall_motion::is_wall_motion(case, patch) {
+            if let Some(r) = crate::bc_cat::role(case, patch) {
+                // boundary-condition catalogue kinds (ADR 0022 D6b): their velocity/velocity_value are inert
+                r
+            } else if crate::wall_motion::is_wall_motion(case, patch) {
                 // moving, sheared, slipping and thermocapillary boundaries are impermeable walls (ADR 0016)
                 Role::Wall
             } else if get_s(case, &format!("{b}.velocity")) == "fixed" {
@@ -142,15 +145,15 @@ fn diag(path: &str, message: impl Into<String>) -> Diagnostic {
 }
 
 /// Largest velocity magnitude the case prescribes (initial and non-wall boundary values).
-fn reference_speed(case: &Case) -> f64 {
+fn reference_speed(case: &Case, geom: Option<&rcfd_fv::FvGeometry>) -> f64 {
     let mut u = vec3::norm(get_v(case, "initial.velocity", [0.0; 3]));
     for n in case.tree.names("boundaries").unwrap_or_default() {
         if role(case, &n) == Role::Inlet {
-            u = u.max(vec3::norm(get_v(
-                case,
-                &format!("boundaries.{n}.velocity_value"),
-                [0.0; 3],
-            )));
+            u = u.max(match crate::bc_cat::nominal_speed(case, geom, &n) {
+                // boundary-condition catalogue kind: its speed comes from the flow rate (ADR 0022 D6b)
+                Some(s) => s,
+                None => vec3::norm(get_v(case, &format!("boundaries.{n}.velocity_value"), [0.0; 3])),
+            });
         }
     }
     u
@@ -304,7 +307,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             },
             format!("set both turbulence.k_initial and turbulence.{second}, or neither"),
         ));
-    } else if k0 <= 0.0 && reference_speed(case) <= 0.0 {
+    } else if k0 <= 0.0 && reference_speed(case, None) <= 0.0 {
         out.push(diag(
             "turbulence.k_initial",
             "the initial k cannot be derived (no initial or boundary velocity): set turbulence.k_initial and the initial epsilon / omega",
@@ -332,7 +335,10 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             Role::Inlet if sa || plugin => {}
             Role::Inlet => {
                 let spec = get_s(case, &format!("{b}.turbulence_spec"));
-                let speed = vec3::norm(get_v(case, &format!("{b}.velocity_value"), [0.0; 3]));
+                let speed = match crate::bc_cat::nominal_speed(case, None, n) {
+                    Some(s) => s,
+                    None => vec3::norm(get_v(case, &format!("{b}.velocity_value"), [0.0; 3])),
+                };
                 let has_expr = ["x", "y", "z"]
                     .iter()
                     .any(|c| !get_s(case, &format!("{b}.velocity_expression_{c}")).trim().is_empty());
@@ -499,7 +505,10 @@ impl TurbState {
             ),
         );
         if k0 <= 0.0 {
-            k0 = k_from_intensity(get_f(case, "turbulence.initial_intensity"), reference_speed(case));
+            k0 = k_from_intensity(
+                get_f(case, "turbulence.initial_intensity"),
+                reference_speed(case, Some(&**geom)),
+            );
             e0 = epsilon_from_viscosity_ratio(cmu, k0, nu, get_f(case, "turbulence.initial_viscosity_ratio"));
             if sst {
                 e0 /= cmu * k0; // omega = epsilon / (beta* k)
