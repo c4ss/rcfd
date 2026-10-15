@@ -272,8 +272,10 @@ fn v6_cell_view_puts_colours_at_cell_centres_with_y_up() {
 
 #[test]
 fn v7_range_logic() {
-    let mut vs = ViewState::default();
-    vs.range = Range::Fixed(1.0, 3.0);
+    let mut vs = ViewState {
+        range: Range::Fixed(1.0, 3.0),
+        ..Default::default()
+    };
     assert_eq!(vs.effective_range(-5.0, 9.0), (1.0, 3.0));
     vs.range = Range::Fixed(3.0, 3.0);
     assert_eq!(vs.effective_range(-5.0, 9.0), (-5.0, 9.0));
