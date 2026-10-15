@@ -423,7 +423,8 @@ correctors. The pressure level is fixed by `solver.p_ref_cell` / `solver.p_ref_v
 ## `scalars`, `species` and `properties` (F-053)
 
 `scalars.<name>` and `species.<name>` transport extra variables on the flow flux of a steady run
-(`simple`, `simplec`, `coupled`; other algorithms are rejected with a located diagnostic):
+(`simple`, `simplec`, `coupled`) or a transient incompressible run (`piso`, `pimple`, wave 15A: one implicit step per
+time step with `solver.time_scheme`; other algorithms are rejected with a located diagnostic):
 `div(phi s) - div(D grad s) = S` with constant density, the momentum convection scheme (`solver.convection`) and the
 shared scalar routine that also solves the temperature (`rcfd_fv::scalar`). Per entry: `diffusivity` [m^2/s] or
 `schmidt` (D = nu/Sc, which follows a temperature-dependent or non-Newtonian face viscosity), `initial`, `source`
@@ -441,7 +442,8 @@ initial fractions and the fixed values on a patch must sum to one (diagnosed). E
 separately: the net boundary outflow (convection plus diffusion, from the same boundary coefficients as the matrix)
 vanishes to round-off, and the balance species inherits the flow solver's mass imbalance, which
 `solver.pressure_abs_tol` (default tolerance-limited at about 1e-11 of the volume flow) can drive to 1e-16. Not covered: variable density, mixture-averaged or multicomponent
-diffusion (a constant diffusivity per species), reactions, and transient scalar transport.
+diffusion (a constant diffusivity per species) and reactions (a first-order sink can be given as a zone source, see
+"Wave 15A" below).
 
 `properties.viscosity` (dynamic, Pa s), `properties.conductivity` and `properties.specific_heat` each take
 `law` = `constant` (the `physics` value, default) | `polynomial` (`coefficients` c0, c1, ... of T in kelvin) | `sutherland`
@@ -561,9 +563,68 @@ behaviour are in `docs/udf-abi.md`.
 | `grow`, `shrink`, `neighbours` | 0, 0, `faces` | dilate / erode the result; adjacency by faces or by points |
 
 `sources.<n>.zone = "register"` with `register = "<name>"` restricts a source. `initial.patches.<n>` has `register`,
-`variable` (`velocity`, `pressure`, `temperature`) and `value` (3 numbers for velocity, 1 otherwise) and overwrites the
-initial field inside the register. Errors name the setting, for example `sources.bed.register: unknown register 'x'
+`variable` (`velocity`, `pressure`, `temperature`, and the turbulence quantities `k`, `epsilon`, `omega`, `nutilde`) and
+`value` (3 numbers for velocity, 1 otherwise) and overwrites the initial field inside the register (a turbulence
+variable needs a turbulence model that has it, else a located error at `initial.patches.<n>.variable`). Errors name the setting, for example `sources.bed.register: unknown register 'x'
 (registers: core)` or `registers.x.patches: the mesh has no patch 'nope' (patches: ...)`.
+
+## Wave 15A: initialisation methods, zone sources, user transport equations (F-205, F-201, F-202, ADR 0019)
+
+### `initial.method` (F-205)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `initial.method` | `uniform` | `uniform` (the existing start, bit-identical), `potential` or `coarse` |
+| `initial.coarse_factor` | 2 | `coarse`: the cell counts of the generated mesh are divided by this factor (2 to 8) |
+| `initial.coarse_iterations` | 200 | `coarse`: iteration cap of the coarse pre-solve |
+
+`potential` solves a Laplace problem `div(grad psi) = 0` for a scalar potential with the normal velocity of the velocity
+boundary conditions as Neumann data (and `psi = 0` on patches with a fixed pressure) and starts from `u = grad psi` and the
+Bernoulli pressure `p = H - |u|^2 / 2`; it needs the velocity of every patch or a fixed pressure on it, balanced fluxes for a
+closed set of inlets and walls, and rejects periodic patches, all with located errors at `initial.method` or the patch.
+`coarse` runs the same case on a mesh with the cell counts divided by `coarse_factor` (generated meshes only: `box_2d`,
+`channel_2d`, `cavity_2d`, `wedge_2d`, `nozzle_2d`, `cylinder_ogrid`, `annulus_3d` and the two interface variants; the counts
+must divide) with `initial.method = "uniform"` and `solver.max_iterations = coarse_iterations`, and interpolates the result
+(non-conservative) to the fine mesh. Both methods apply to the steady `simple` / `simplec` algorithms. The start only
+changes the initial field; the converged answer is the one the case defines. Not verified: that a potential start reduces
+the iterations of a recirculating flow (it did not for the backward-facing step, ADR 0019 I2).
+
+### `zone_sources.<name>` (F-201)
+
+A volumetric source or a fixed value for the temperature or a `scalars` / transported `species` entry in a cell zone.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `target` | `temperature` | `temperature` (needs `energy.enabled`) or a scalar / species name (the balance species is a located error) |
+| `kind` | `source` | `source` or `fixed_value` |
+| `zone`, `register`, `box_min`, `box_max`, `cell_zone` | `all` | the zone, as for `sources.<n>` |
+| `value` | 0 | source: W/m^3 for the temperature (divided by `physics.rho * physics.cp`), value per second for a scalar; fixed_value: K or the scalar's unit |
+| `value_expression` | none | expression of x, y, z, t at the cell centres, re-evaluated every step / iteration; overrides `value`. Dimension-checked: temperature source W/m^3, temperature fixed value K, scalar fixed value dimensionless, scalar source dimensionless or 1/s |
+| `linear_coefficient`, `reference` | 0, 0 | source only: `S = value - k (phi - reference)` with `k >= 0` [1/s], treated implicitly |
+
+Sources on one target add. A fixed-value cell has its equation replaced by `phi = value`, its column moved to the neighbours'
+right-hand sides (a symmetric system stays symmetric) and the solved value overwritten, so it holds the value exactly.
+Located errors: unknown target, balance species, negative `linear_coefficient`, `fixed_value` with a linear part, overlapping
+fixed zones of one target, a zone without cells, an expression of the wrong dimension or not finite, `coupled`, variable
+density and compressible runs, and temperature sources together with the radiation model. They act in the steady `simple` /
+`simplec` and the transient `piso` / `pimple` runs. Not delivered: mass sources, momentum sources or fixed values by
+expression (the `sources` of F-031 remain), sources and fixed values for turbulence quantities, the variable-density and
+compressible engines.
+
+### User transport equations in `scalars.<name>` (F-202)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `equation` | `transport` | `transport` (convection-diffusion-source, steady or transient), `diffusive` (`ds/dt = div(D grad s) + S`, no convection), `poisson` (`div(D grad s) + S = 0` solved at every step without a time derivative) or `algebraic` (`s = expression`) |
+| `diffusivity_expression` | none | diffusivity [m^2/s] as an expression of x, y, z, t at the face centres; replaces `diffusivity`; not together with `schmidt`; must be finite and positive |
+| `source_expression` | none | source (dimensionless or 1/s, read as per second) at the cell centres, added to `source` |
+| `initial_expression` | none | dimensionless initial field of x, y, z; replaces `initial` |
+| `expression` | none | `algebraic` only: expression of x, y, z, t, `T` (with `energy.enabled`) and the names of the other scalars and species (their latest values); dimensionless result; the variable cannot refer to itself; no boundary conditions |
+
+The Poisson equation uses the sign `-div(D grad s) = S`, like the transport equation. Not delivered: the vector variant
+(three-component diffusive / Poisson / algebraic variables), feeding user variables into properties, turbulence or other
+equations, and species with user equations. Errors are located at the key (`scalars.s.diffusivity_expression`,
+`scalars.s.expression`, ...).
 
 ## Reactor cases and FW-H surface files (F-112, F-136)
 
