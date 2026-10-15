@@ -7,6 +7,7 @@
 //! reached (see docs/run-control.md).
 
 mod cmd_gapc;
+mod cmd_wiring;
 mod convert_formats;
 use rcfd_api::case::Case;
 use rcfd_api::runctl::{self, RunOptions};
@@ -68,6 +69,21 @@ COMMANDS:
                                run the tasks of a workflow on a case (exit code of the failing task)
     check-mesh <mesh|case>     quality report for a .msh file, an OpenFOAM polyMesh directory or a case
         --json                   machine-readable report
+    partition <case|mesh> [--method bisection|inertial|sectors|graph] [--parts n] [--rule longest|cycle|x|y|z]
+                        [--sector-kind circumferential|radial] [--origin x,y,z] [--axis x,y,z] [--reference x,y,z]
+                        [--weights-box x0,y0,z0:x1,y1,z1:inside:outside] [--tolerance t] [--max-passes n]
+                        [--smooth] [--reorder] [--out parts.vtu] [--json] [--parts-vector]
+                               partition the mesh (settings of the `decomposition` section, overridable here);
+                               reports cells per part, imbalance, edge cut, ghost cells (and bandwidths with
+                               --reorder); --out writes the part id as the cell array `partition`
+    sample <case> [--line x0,y0,z0:x1,y1,z1 [--points n]] [--plane o:e1:e2:ext1:ext2:n1:n2] [--fields a,b]
+                        [--no-gradient] [--max-iterations n] [--out file-or-dir]
+                               run the case (n = 0: initial field) and write a line or plane sample as CSV;
+                               without --line/--plane the `postprocessing.samples` of the case are written
+    inflate <case|mesh> --patch p --layers n (--first h | --y-plus y --u-tau u --nu nu | --uniform total |
+                        --aspect a | --last-ratio r --first h) [--growth g] [--out inflated.vtu] [--json]
+                               add prismatic layers on a boundary patch and report first/last height, thickness,
+                               growth and the quality of the resulting mesh
     convert <in> <out>         convert a mesh: in = .msh, Plot3D grid (.x/.xyz/.p3d/.grd, --block n) or OpenFOAM dir;
                                out = .vtu, an OpenFOAM dir, .stl (--patch a,b; --ascii), .dat (Tecplot ASCII) or .xmf
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
@@ -153,6 +169,9 @@ fn dispatch(args: &[String]) -> u8 {
         "schema" => cmd_schema(rest),
         "run" => cmd_run(rest),
         "check-mesh" => cmd_check_mesh(rest),
+        "partition" => cmd_wiring::cmd_partition(rest),
+        "sample" => cmd_wiring::cmd_sample(rest),
+        "inflate" => cmd_wiring::cmd_inflate(rest),
         "convert" => cmd_convert(rest),
         "post" => cmd_post(rest),
         "serve" => cmd_serve(rest),
