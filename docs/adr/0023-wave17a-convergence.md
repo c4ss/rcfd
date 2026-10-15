@@ -253,3 +253,16 @@ leaves `s = 1`. No other clause. Checks P1, P2, P3 (both), P4 and F1-F4 are repe
 (tests `*_ser2`); the F tests are run with both laws when practical, and only the `ser2` ones are expected to be informative. If
 `ser2` also misses, the misses are recorded as `*_ser2_known_miss` and nothing is tuned (constants growth, backoff, scale
 caps stay).
+
+## Addendum A4: `ser2` also missed P1-P4; diagnosis experiment X9 registered before its run
+
+Observation (first run of `ser2`, limits and constants untouched): P1 ends after 6000 iterations at residual 1.6e-2 with the
+scale between 57 and 107 (max 107, final 57); P2 physical, P3 starts 0.5 (7.9e-3 after 3000) and 10 (9.0e-2 after 3500) and P4
+(7.7e-5 after 4000, scale near its cap 988) miss. All are recorded as ignored `*_ser2_known_miss` tests. No constant is changed.
+
+* **X9 (is there a stability limit of the underlying iteration below the scales the controller reaches?).** Fixed local pseudo-Courant
+  numbers 5, 10, 20, 50, 100, 1000 on the P1 problem (no controller, 4000 iterations, tolerance 1e-6), and the same on the P4 step
+  problem. Rule: the controller's limit cycle is explained by a stability limit of the fixed-step iteration iff the fixed runs
+  converge for cfl <= 5 and fail to converge for every cfl >= the controller's final scale times the start cfl (57 for P1); the
+  controller's residual-ratio law has no information about that limit (it grows the step whenever the residual falls). If the fixed
+  runs converge up to cfl 100 the limit-cycle explanation is rejected.
