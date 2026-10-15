@@ -266,3 +266,25 @@ scale between 57 and 107 (max 107, final 57); P2 physical, P3 starts 0.5 (7.9e-3
   converge for cfl <= 5 and fail to converge for every cfl >= the controller's final scale times the start cfl (57 for P1); the
   controller's residual-ratio law has no information about that limit (it grows the step whenever the residual falls). If the fixed
   runs converge up to cfl 100 the limit-cycle explanation is rejected.
+
+## Addendum A5: X9 result, F1-F3 as registered missed (local pseudo mode from rest); corrected set-up F1b-F3b registered before its run
+
+X9 (rule of addendum A4 applied to the measured numbers). Cavity (P1): fixed local cfl 5, 10, 20, 50 converge (346, 333, 458, 979
+iterations), cfl 100 and 1000 do not (residual 9.0e-2, 0.19 after 4000): the stability limit of the fixed-step iteration lies
+between cfl 50 and 100, which is where the `ser2` controller ends up (scale 57 to 107): the limit-cycle explanation holds for the
+cavity (cfl 57 itself was not run; the nearest runs bracket it). Step (P4): fixed cfl 5 does NOT converge (4.9e-2), cfl 10 converges
+(603), cfl 20, 50, 100, 1000 do not (4.2e-1, 2.9e-5, 3.5e-5, 3.1e-3): the first clause of the rule (converge for cfl <= 5) fails, so
+the explanation is REJECTED for the step: its convergence is not monotone in the step (the wave-6 observation that Re_h = 400 converges only for
+particular scheme/coupling combinations is of the same kind) and no residual-ratio law can find a "largest stable" step there.
+
+F1, F2, F3 (C2, D1, D2 with `pseudo_mode = local`, `pseudo_cfl = 1`, controller on, `residual_norm = scaled`; plain `simplec`
+otherwise) MISS as registered: F1 ends at residual 0.21 (res_p 3.2e-2) after 6000 iterations, F2 and F3 end with a non-finite
+pressure residual. F4 (E2) is met (see results). Diagnosis (same as X5): at rest the local pseudo step has no convective rate,
+`dt_c = cfl V / (0.5 sum|phi| + nu lap)` is set by the viscosity 1e-3 alone and is thousands of times the step that works
+(0.2), so the first iteration over-shoots exactly like the plain run (u1 = 366 in X5); the controller reacts after the damage. The three
+registered tests are kept as ignored `*_known_miss` records.
+
+Corrected set-up (a set-up defect of the check, not of the limits), registered before it is run: F1b, F2b, F3b are F1-F3 with
+`pseudo_mode = physical`, `pseudo_dt = 0.2` (the start step of ADR 0022 C2/D1/D2), `pseudo_control = ser2`,
+`residual_norm = scaled`; limits, targets (1e-12), cap (6000 iterations) and accuracy limits unchanged. If a limit is missed it is
+recorded as `f?b_known_miss`.
