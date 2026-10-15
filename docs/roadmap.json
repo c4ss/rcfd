@@ -1378,7 +1378,7 @@
     ],
     "status": "partial",
     "acceptance": "Flat-plate skin friction matches the Prandtl-Schlichting correlation within 5 percent at y+ near 30 and near 1 for smooth walls; rough-wall Cf matches the fully-rough correlation within 10 percent",
-    "note": "Priority P1. Size M. Area: turb,api. The schema currently accepts a single wall-function value; this adds the other treatments and roughness as enum values. ADR 0015 (turbulence finishing), PARTIAL in the library: scalable wall functions (Grotjans-Menter form), equivalent-sand-grain roughness with the Cebeci-Bradshaw velocity shift (k-epsilon and SST automatic), SST low_re wall-omega option and BSL variant, and an Enhanced treatment (two-layer scales + Kader law; implemented but NOT converging on the flat plate, unvalidated). Non-equilibrium wall functions NOT attempted. Measured: smooth plate average Cf vs Prandtl-Schlichting (5 percent): SST automatic y+ 30 -0.5 / -0.7 percent PASS, y+ 1 -8.4 / -7.8 MISS; Scalable y+ 30 -4.0 / -3.1 and y+ 1 -4.6 / -3.1 PASS; Standard y+ 30 -6.2 MISS; rough plate (10 percent): k-epsilon Standard + roughness -1.0 / +0.3 / +6.3 PASS, SST + roughness -22 to -17 MISS (field stationary, deficit specific to the SST rough path, cause not established). Schema keys turbulence.wall_function {standard, scalable, enhanced}, roughness_height, roughness_constant, wall_omega, sst_variant exist with located validation (rcfd-api wall_opts.rs) but non-default values are rejected until turb.rs / model.rs apply them (hook described in ADR 0015); the tree-equals-library check is unmet."
+    "note": "Priority P1. Size M. Area: turb,api. The schema currently accepts a single wall-function value; this adds the other treatments and roughness as enum values. ADR 0015 (turbulence finishing), PARTIAL in the library: scalable wall functions (Grotjans-Menter form), equivalent-sand-grain roughness with the Cebeci-Bradshaw velocity shift (k-epsilon and SST automatic), SST low_re wall-omega option and BSL variant, and an Enhanced treatment (two-layer scales + Kader law; implemented but NOT converging on the flat plate, unvalidated). Non-equilibrium wall functions NOT attempted. Measured: smooth plate average Cf vs Prandtl-Schlichting (5 percent): SST automatic y+ 30 -0.5 / -0.7 percent PASS, y+ 1 -8.4 / -7.8 MISS; Scalable y+ 30 -4.0 / -3.1 and y+ 1 -4.6 / -3.1 PASS; Standard y+ 30 -6.2 MISS; rough plate (10 percent): k-epsilon Standard + roughness -1.0 / +0.3 / +6.3 PASS, SST + roughness -22 to -17 MISS (field stationary, deficit specific to the SST rough path, cause not established). Schema keys turbulence.wall_function {standard, scalable, enhanced}, roughness_height, roughness_constant, wall_omega, sst_variant exist with located validation (rcfd-api wall_opts.rs) but non-default values are rejected until turb.rs / model.rs apply them (hook described in ADR 0015); the tree-equals-library check is unmet. Wave 13 (ADR 0016): the build-path hook now applies wall options from the case tree (tree equals library run to 0, ADR 0015 C5); wall options are no longer rejected. Non-equilibrium wall functions still absent, so partial."
   },
   {
     "id": "F-204",
@@ -1388,9 +1388,9 @@
       "F-020",
       "F-028"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Plane Couette flow and a thermocapillary layer match closed-form profiles; Taylor-Couette torque agrees with the analytic value within 1 percent",
-    "note": "Priority P2. Size S. Area: fv. Wall velocity and shear specification independent of the turbulence model."
+    "note": "ADR 0016 wave 13. New velocity kinds moving_wall (translation and rotation), shear, partial_slip (slip length or Maxwell specularity with mean free path) and marangoni (thermocapillary stress from the temperature gradient). MET: plane Couette 1e-13 (limit 1e-8), specified-shear and slip layers to 1e-11 or better (with solver.component_diagonal = corrected; the averaged diagonal stalls on shear-driven layers, a known ADR 0010 issue), thermocapillary layer 3.25e-5 (limit 7.5e-4), Taylor-Couette torque -0.43 percent at 128 radial cells (limit 1 percent; first order), rigid-rotation torque 1.5e-5. MISS: rigid-rotation velocity error 1.4e-5 at 32 radial cells against the registered 1e-6 (9.9e-7 at 64), in an ignored known-miss test. Not delivered: turbulence combined with these kinds (located error), MRF Taylor-Couette. Statused partial because of those gaps, although the three acceptance checks are met."
   },
   {
     "id": "F-205",
@@ -1434,9 +1434,9 @@
       "F-021",
       "F-011"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Manufactured-solution order-of-accuracy test on skewed, warped and stretched meshes recovers the design order and the options do not degrade it on good meshes",
-    "note": "Priority P2. Size M. Area: fv. Adds positivity and range limits on solved quantities as case-level controls."
+    "note": "ADR 0016 wave 13. Library: GradientOptions (face-gradient correction, secondary limiter, boundary-gradient treatment) in rcfd-fv; case-level solution limits limits.temperature/scalar with clipped-cell count. MET: MMS order on skewed, warped and stretched meshes (>= 1.7 with the options off and with correction, >= 1.5 with the limiter; measured 1.76 to 2.04 except stretched 1.74 at n=32, all in limit), options cost <= 4.6 percent error on near-orthogonal meshes; limits clip to the band to 1e-14. On the affine skewed mesh the correction raises the error constant (2.1x) while keeping the order: no benefit is claimed. Registered mild mesh missed its non-orthogonality precondition (13.96 deg) and was replaced by a 0.015 amplitude mesh (disclosed). NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face correction, case-tree wiring of the gradient options."
   },
   {
     "id": "F-209",
@@ -1470,9 +1470,9 @@
       "F-022",
       "F-024"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Order-of-accuracy test on a smooth advected profile gives the nominal order; square-wave advection stays within physical bounds; blend factor 0 and 1 reproduce the upwind and central results",
-    "note": "Priority P2. Size S. Area: fv. Small additions to the scheme registry."
+    "note": "ADR 0016 wave 13. Added: blended(beta) (0 = upwind and 1 = central to 0), gamma(beta_m), compressive(k) (Roe-Sweby family, k project-extended below 1), bounded_central (bitwise minmod in NVD form) convection schemes and the bdf2_bounded time scheme. MET: B1 blend 0/1 equal upwind/central (0, 0); order on a smooth profile (central, blended(1), gamma, bounded_central 2.0000; first-order members 0.98 to 1.003); square wave within 1e-3 of the bounds for gamma, compressive and bounded_central (dt = 0.1 h; the registered 0.5 h gave a toothless control); temporal orders. MISS: O1c convergence for compressive(1.5) and compressive(2) (limit cycle at 1e-8 per sweep from limiter switching; orders in band), kept in an ignored known-miss test. Set-up deviations disclosed in the ADR results. Literature references unverified (docs/reference-data.md)."
   },
   {
     "id": "F-212",

@@ -247,4 +247,109 @@ MRF-frame Taylor-Couette (ADR 0008) is not attempted.
 
 ## Results
 
-(To be filled in after the runs.)
+Measured on the final code (dates 2026-10). Limits are the registered ones above; none was changed.
+
+### Item 0 (F-203 C5, wall-options hook)
+
+* C5 tree equals library run: max abs difference 0.000e0 (limit 1e-12) for scalable k-epsilon (ks 2e-2), SST BSL, SST low_re, SST
+  roughness (ks 2e-2) and, C5b, enhanced wall treatment with roughness_constant. Each option changes the result against the
+  default (max effect 5.1e-1, 3.05, 5.08e1, 3.67e2, 1.57e2, 1.29e1, 5.34 over the seven runs), so the comparison has teeth.
+* Limit of the claim: the "library run" is the same case with the model built by a registered plugin factory that sets the fields
+  directly. This proves that the tree applies the options as the library does; it does not validate the options physically.
+* Set-up bugs: (1) the hook overwrote the fields a plugin factory had set; `TurbState::new` now applies the hook only to
+  built-in models (production change motivated by the harness). (2) roughness 1e-3 gives k_s+ about 0.4 (hydraulically smooth,
+  no effect); the test uses 2e-2 (k_s+ about 8).
+* The ADR 0015 row "C5 not run: build path hook missing" is superseded (dated note added there). F-203 stays `partial`:
+  non-equilibrium wall functions are still absent.
+
+### F-211 schemes
+
+* O1 (order of accuracy). The first run (`o1_order_of_accuracy`, ignored record) had a set-up bug: a Dirichlet value on the
+  outflow boundary leaves the last cell row without a diagonal for upwind-type schemes, all orders about 0.5. DEVIATION: the
+  corrected set-up `o1c` uses phi = 1 + sin(pi x/2) (zero slope at the outlet), inlet Dirichlet, outlet zero gradient, instead of
+  exp(x) with two Dirichlet ends. The sweep budget of the registered 600 was too small for the deferred-correction schemes at
+  n = 256 (`o1b_known_miss_convergence_cap`, ignored, record); `o1c` uses 20000 sweeps with change <= 1e-13 times the solution
+  range as the convergence test.
+  Measured orders (two finest pairs): central, blended(1), gamma(0.2), bounded_central 2.00007 / 2.00002 (band [1.85, 2.3]);
+  upwind 0.9972 / 0.9986, blended(0.5) 1.0029 / 1.0014, compressive(0) 0.9972 / 0.9986, compressive(0.5) 0.9832 / 0.9917
+  (band [0.9, 1.15]); all converged.
+  MISS: compressive(1.5) and compressive(2) have orders in band (1.981 / 1.991 and 1.982 / 1.991) but do NOT converge: the change
+  per sweep stalls at 7e-8 and 1.4e-8 at n = 256 (4.7e-6 and 9.4e-7 at n = 64), identical after 600 and 60000 sweeps, a limit
+  cycle from non-smooth limiter switching. The registered "all runs converged" is not met for these two
+  (`o1c_known_miss_compressive_convergence`, ignored, assertion unchanged). Root cause identified (limiter switching under
+  deferred correction); no remedy (e.g. smoothing the limiter) was applied because that would change the scheme.
+* B1 |blended(0) - upwind| = 0, |blended(1) - central| = 0 (limits 1e-12, 1e-10). B3 bounded_central equals Tvd(Minmod)
+  bitwise. B2 (cavity Re 100, SIMPLEC, 60 iterations): 0 and 0 (limit 1e-10); controls |upwind - central| 6.76e-2,
+  |blended(0.5) - upwind| 2.85e-2.
+* W1 (square wave). At the registered dt = 0.5 h the positive control failed (central overshoot 0.0043, undershoot 0.0178, below
+  the 0.02 threshold), so the bounded schemes were not examined (`w1_square_wave_stays_bounded`, ignored record). DEVIATION:
+  `w1b` uses dt = 0.1 h. Central: over 0.1469, under 0.1318 (control ok). Largest excess over 1 / undershoot / width of
+  0.1 < phi < 0.9: gamma(0.2) -3.05e-5 / 1e-26 / 28 cells; compressive(1.5) -1.22e-5 / 1.9e-33 / 24; compressive(2) -5.0e-11 /
+  1.5e-13 / 24; bounded_central -1.83e-3 / 1.7e-33 / 32; upwind width 70. Bounds limit 1e-3 met by all. Sharpness
+  (<= 0.6 x upwind width) met by gamma (0.40) and compressive(2) (0.34), the schemes it was registered for.
+* T1 temporal order (two finest pairs): Euler 0.971 / 0.985 (band [0.9, 1.15]); BDF2 2.071 / 2.028 and Bdf2Bounded 1.914 /
+  1.958 (band [1.8, 2.3]). T2 overshoot of BDF2 2.467e-2 (>= 0.02, so the test has teeth), Bdf2Bounded 1.16e-9 (<= 0.25 x BDF2
+  and <= 0.02), met. T3: `bdf2_bounded` accepted and differs from `bdf2` by 0.276 on an impulsively started cavity; a bad name is a
+  located error at `solver.time_scheme`.
+* Verdict: F-211 `partial`, because O1c convergence is missed for two compressive members (by the ADR's own rule H4).
+* Disclosures: `Eq` removed from the derive lists of `ConvScheme` and `TvdLimiter` (they carry an f64). On periodic faces the
+  existing TVD behaviour is unchanged and the new schemes fall back to upwind or beta-scaled upwind. Bounded central is the
+  minmod limiter in normalised variables. Bdf2Bounded is project-defined.
+
+### F-208 poor-mesh numerics
+
+* Preconditions at n = 16. MISS: registered G2 (amplitude 0.02) has max non-orthogonality 13.96 degrees > 12 (the estimate in
+  this ADR was wrong; `m0_g2_precondition`, ignored record). DEVIATION: mesh G3 (amplitude 0.015) is used as the mild mesh,
+  10.50 degrees (met). K 38.31 degrees (>= 25), W 61.27 degrees and non-planarity 2.306e-2 (>= 20, >= 1e-4), S aspect ratio
+  13.40 (>= 10), all met.
+* Orders (n = 8 to 16, 16 to 32), all runs converged. C0 default, C1 face correction + corrected boundary gradient, C2 = C1 +
+  Venkatakrishnan secondary limiter. G: 1.988 / 1.996 for all three. G2: C0 2.013 / 2.003, C1 2.008 / 2.001, C2 2.006 / 1.965.
+  G3: 2.004 / 2.000, 2.001 / 1.999, 2.001 / 1.976. K: 2.040 / 2.002, 2.032 / 2.019, 1.990 / 1.756. W: 1.872 / 1.939,
+  1.896 / 1.959, 1.883 / 1.866. S: 1.594 / 1.744 for all three (the options are inert on the orthogonal stretched mesh).
+  M1 (>= 1.7 for C0, C1) and M2 (>= 1.5 for C2) met.
+* M3 error ratio at n = 32 (limits 1.10 for C1/C0, 1.25 for C2/C0): G 1.0000 / 1.0000; G2 1.0215 / 1.0455; G3 1.0125 / 1.0268; met.
+* M4, reported without a limit: K C1/C0 2.1437, C2/C0 2.6617 (n = 32 errors 3.84e-5 and 8.24e-5: the face correction raises the
+  error constant on the affine skewed mesh while keeping the order); W 1.1544 / 1.2409; S 1.0 / 1.0. Dropping the boundary gradient
+  on K is 60.6 times worse. The options therefore do not help the manufactured problem on these meshes; they were validated
+  not to degrade it on good meshes and to keep design order on poor ones. No benefit is claimed.
+* Default options reproduce `laplacian` bit-exactly (test). L1 solution limits: free heated cavity T in [0.0221, 0.9779], clipped
+  count 0; with the band [0.2, 0.8] T lies in [0.2, 0.8] to 1e-14 with 1692 clipped cell events; an invalid band is a located
+  error at `limits.temperature.min`.
+* NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face correction, wiring of the
+  gradient options into the case tree (library level only). F-208 stays `partial`.
+
+### F-204 wall motion and shear
+
+* D1 plane Couette: max error 1.059e-13 for a wall at rest against a moving wall, 4.77e-14 counter-translating (limit 1e-8).
+* D2/D3 set-up: with the default averaged component diagonal the specified-shear run stalls (res_u 0.145, relative error 0.79).
+  The root cause is not the new condition: an existing `symmetry` + body force Poiseuille case stalls identically (error 4.0;
+  ADR 0010 documents the averaged-diagonal issue). `d2b` and `d3b` use `solver.component_diagonal = "corrected"`; the first
+  versions are kept ignored as records. D2b error 9.29e-12 (limit 1e-8; the converged flag is false only because the residual
+  tolerance 1e-12 was not reached in 3000 iterations). D3b slip length l = 0.3: 1.70e-13; l = 0 equals no-slip: 0;
+  s = 0.5, lambda = 0.1 equals l = 0.3: 0 (limit 1e-12); s = 1 is a located error at `boundaries.ymin.specularity`; a moving
+  wall with a normal component is a located error at `boundaries.ymin.velocity_value`.
+* D4 thermocapillary layer (box_2d(160, 24, 20, 1), T = 1 K/m x): column at x = 10.0625, max error 3.25e-5 (limit 7.5e-4),
+  190 iterations, converged. D4b `marangoni` equals the explicit shear coefficients: 1.94e-16 (limit 1e-12).
+* D5 Taylor-Couette torque (exact 2.513274). Set-up slip: the first run left `mesh.depth` at its default 0.1 instead of the
+  registered 1 (torque off by 10; `d5_taylor_couette_torque`, ignored record). `d5c` (depth 1, viscous moment): n_r = 32
+  -2.473156 (relative error -1.596e-2), 64 -2.492650 (-8.206e-3), 128 -2.502450 (-4.307e-3); limit 1 percent at the finest met;
+  observed order 0.93 (first order, as predicted for the wall-adjacent half-cell treatment). The n_r = 128 run did not reach the
+  1e-11 tolerance in 6000 iterations (converged flag false); a diagnostic (`d5_finest_grid_convergence_diagnostic`, ignored)
+  was added to show its residuals, and its values are not part of the verdict.
+* D5b rigid rotation (both cylinders at Omega = 1): torque relative to the D5 exact 1.04e-4 (n_r = 32), 1.46e-5 (n_r = 64)
+  (limit 1e-3) met. MISS: max |u_theta - r| = 1.413e-5 at n_r = 32 against the registered 1e-6
+  (`d5b_known_miss_rigid_rotation_velocity`, ignored, assertion unchanged); 9.913e-7 at n_r = 64 (the ADR did not name n_r;
+  n_r = 128 not run). The error falls by 14.3 per halving, which is consistent with discretisation error of the centripetal
+  balance on a polygonal ring rather than a boundary-condition defect; only that decrease was verified.
+* D6: the four kinds are walls for the turbulence role even with a non-zero velocity_value (unit test). Turbulence combined
+  with these kinds is a located error in `turb::check`. `marangoni` needs the energy equation and a simple, simplec, piso or
+  pimple algorithm.
+* NOT delivered: MRF Taylor-Couette variant, turbulence with the new kinds.
+* Verdict: the three acceptance items (Couette, thermocapillary, torque within 1 percent) are met on the registered cases. F-204
+  is marked `partial` because of the D5b velocity miss and the unsupported combinations, which an honest reading of the
+  registered checks does not allow to be called complete.
+
+### Tunings
+
+No parameter was tuned to pass a check. The deviations are the ones listed above (O1 profile and sweep budget, W1b time step,
+G3 mesh, corrected component diagonal for D2/D3/D4, depth in D5).
