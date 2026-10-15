@@ -321,6 +321,26 @@ pub enum ExtrudeDir {
 /// cap) and a `Generic` patch `<patch>_side` with the new lateral faces. Cell zones are kept,
 /// face zones are dropped.
 pub fn extrude_patch(mesh: &Mesh, patch: &str, dir: ExtrudeDir, layers: usize) -> Result<Mesh> {
+    extrude_core(mesh, patch, layers, Displacement::Dir(dir)).map(|(m, _)| m)
+}
+
+/// How the points of the extruded layers are placed (see [`extrude_core`]).
+pub(crate) enum Displacement<'a> {
+    /// A plain [`ExtrudeDir`] with equal layers.
+    Dir(ExtrudeDir),
+    /// Cumulative distance along the point normal after layer `k` (1-based) for a point whose local
+    /// size (mean square root of the incident patch face areas) is the first argument.
+    Layered(&'a dyn Fn(f64, usize) -> f64),
+}
+
+/// Shared extrusion core. Returns the new mesh and the local size of every patch point (in order of
+/// first appearance in the patch faces).
+pub(crate) fn extrude_core(
+    mesh: &Mesh,
+    patch: &str,
+    layers: usize,
+    disp_rule: Displacement<'_>,
+) -> Result<(Mesh, Vec<f64>)> {
     if layers == 0 {
         return err("extrude: at least one layer is required");
     }
@@ -335,18 +355,26 @@ pub fn extrude_patch(mesh: &Mesh, patch: &str, dir: ExtrudeDir, layers: usize) -
     let mut local: HashMap<usize, usize> = HashMap::new();
     let mut base: Vec<usize> = Vec::new();
     let mut normal_sum: Vec<Vec3> = Vec::new();
+    let mut size_sum: Vec<f64> = Vec::new();
+    let mut size_cnt: Vec<usize> = Vec::new();
     for f in p.faces() {
         let s = mesh.face_area_vectors()[f];
+        let root_area = vec3::norm(s).sqrt();
         for &q in mesh.face_points(f) {
             let j = *local.entry(q).or_insert_with(|| {
                 base.push(q);
                 normal_sum.push(vec3::ZERO);
+                size_sum.push(0.0);
+                size_cnt.push(0);
                 base.len() - 1
             });
             normal_sum[j] = vec3::add(normal_sum[j], vec3::unit(s));
+            size_sum[j] += root_area;
+            size_cnt[j] += 1;
         }
     }
-    if let ExtrudeDir::Vector(v) = dir {
+    let local_size: Vec<f64> = size_sum.iter().zip(&size_cnt).map(|(s, &n)| s / n as f64).collect();
+    if let Displacement::Dir(ExtrudeDir::Vector(v)) = disp_rule {
         for f in p.faces() {
             if vec3::dot(v, mesh.face_area_vectors()[f]) <= 0.0 {
                 return err(format!(
@@ -361,9 +389,10 @@ pub fn extrude_patch(mesh: &Mesh, patch: &str, dir: ExtrudeDir, layers: usize) -
     for k in 1..=layers {
         let frac = k as f64 / layers as f64;
         for (j, &q) in base.iter().enumerate() {
-            let disp = match dir {
-                ExtrudeDir::Vector(v) => vec3::scale(v, frac),
-                ExtrudeDir::Normal(d) => vec3::scale(vec3::unit(normal_sum[j]), d * frac),
+            let disp = match &disp_rule {
+                Displacement::Dir(ExtrudeDir::Vector(v)) => vec3::scale(*v, frac),
+                Displacement::Dir(ExtrudeDir::Normal(d)) => vec3::scale(vec3::unit(normal_sum[j]), d * frac),
+                Displacement::Layered(cum) => vec3::scale(vec3::unit(normal_sum[j]), cum(local_size[j], k)),
             };
             points.push(vec3::add(mesh.points()[q], disp));
         }
@@ -433,7 +462,7 @@ pub fn extrude_patch(mesh: &Mesh, patch: &str, dir: ExtrudeDir, layers: usize) -
     for z in mesh.cell_zones() {
         out.add_cell_zone(&z.name, z.ids.clone())?;
     }
-    Ok(out)
+    Ok((out, local_size))
 }
 
 /// What [`repair_face_orientation`] did.

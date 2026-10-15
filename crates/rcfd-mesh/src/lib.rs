@@ -10,6 +10,7 @@
 
 pub mod edit;
 pub mod gen;
+pub mod inflate;
 pub mod layers;
 pub mod measures;
 pub mod mesh;
