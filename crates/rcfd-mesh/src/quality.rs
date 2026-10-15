@@ -9,10 +9,16 @@
 //! * **aspect ratio** of a cell: longest edge over shortest edge among the
 //!   edges of its faces;
 //! * **volume ratio** of an internal face: larger over smaller adjacent cell volume.
+//!
+//! The extended catalogue (warp, face angles, ortho-skew, inverse orthogonal quality, size change,
+//! face edge-length ratio) lives in [`crate::measures`]; its summary and the poor-mesh list are
+//! part of [`QualityReport`] (ADR 0018). They never affect `is_ok`, `warnings` or `errors`.
 
+use crate::measures::{compute_measures, REPORT_INF};
 use crate::mesh::Mesh;
 use rcfd_core::vec3;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Per-element metric arrays.
 #[derive(Debug, Clone)]
@@ -29,6 +35,7 @@ pub struct Metrics {
 
 /// Limits above which a mesh is flagged.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Thresholds {
     /// Maximum acceptable non-orthogonality, degrees (warning).
     pub non_orthogonality_warn: f64,
@@ -40,6 +47,20 @@ pub struct Thresholds {
     pub aspect_ratio_warn: f64,
     /// Maximum acceptable volume ratio.
     pub volume_ratio_warn: f64,
+    /// Face warp above which a face is listed as poor, degrees.
+    pub warp_warn: f64,
+    /// Smallest face angle below which a cell is listed as poor, degrees.
+    pub face_angle_min_warn: f64,
+    /// Largest face angle above which a cell is listed as poor, degrees.
+    pub face_angle_max_warn: f64,
+    /// Inverse orthogonal quality above which a cell is listed as poor.
+    pub inverse_orthogonal_warn: f64,
+    /// Ortho-skew above which a cell is listed as poor.
+    pub ortho_skew_warn: f64,
+    /// Face edge-length ratio above which a face is listed as poor.
+    pub edge_length_ratio_warn: f64,
+    /// Largest number of offenders listed per measure.
+    pub poor_list_cap: usize,
 }
 
 impl Default for Thresholds {
@@ -50,8 +71,50 @@ impl Default for Thresholds {
             skewness_warn: 4.0,
             aspect_ratio_warn: 1000.0,
             volume_ratio_warn: 100.0,
+            warp_warn: 15.0,
+            face_angle_min_warn: 20.0,
+            face_angle_max_warn: 160.0,
+            inverse_orthogonal_warn: 0.9,
+            ortho_skew_warn: 0.85,
+            edge_length_ratio_warn: 100.0,
+            poor_list_cap: 10,
         }
     }
+}
+
+/// Extremes of the extended measures (ADR 0018). Infinity is stored as `1e30`.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct MeasureSummary {
+    /// Largest face warp, degrees.
+    pub max_warp: f64,
+    /// Smallest interior face angle, degrees.
+    pub min_face_angle: f64,
+    /// Largest interior face angle, degrees.
+    pub max_face_angle: f64,
+    /// Largest ortho-skew.
+    pub max_ortho_skew: f64,
+    /// Largest inverse orthogonal quality.
+    pub max_inverse_orthogonal: f64,
+    /// Largest size change.
+    pub max_size_change: f64,
+    /// Largest face edge-length ratio.
+    pub max_edge_length_ratio: f64,
+}
+
+/// One entry of the poor-mesh list.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PoorEntry {
+    /// Measure name (`warp`, `face_angle_min`, `face_angle_max`, `ortho_skew`, `inverse_orthogonal`,
+    /// `size_change`, `edge_length_ratio`).
+    pub measure: String,
+    /// `"face"` or `"cell"`.
+    pub element: String,
+    /// Face or cell index.
+    pub index: usize,
+    /// Measured value.
+    pub value: f64,
+    /// The limit that was passed.
+    pub limit: f64,
 }
 
 /// Serializable summary of a mesh check.
@@ -85,6 +148,18 @@ pub struct QualityReport {
     pub warnings: Vec<String>,
     /// Human-readable errors (mesh should not be used).
     pub errors: Vec<String>,
+    /// Extremes of the extended measures.
+    #[serde(default)]
+    pub measures: MeasureSummary,
+    /// Number of offenders per measure (only measures with at least one).
+    #[serde(default)]
+    pub poor_counts: BTreeMap<String, usize>,
+    /// Worst offenders per measure, worst first (capped per measure).
+    #[serde(default)]
+    pub poor_list: Vec<PoorEntry>,
+    /// One line per measure that has offenders (separate from `warnings`).
+    #[serde(default)]
+    pub poor_warnings: Vec<String>,
 }
 
 impl QualityReport {
@@ -186,7 +261,12 @@ pub fn check_mesh_with(mesh: &Mesh, th: &Thresholds) -> QualityReport {
         max_volume_ratio: m.volume_ratio.iter().copied().fold(1.0, f64::max),
         warnings: vec![],
         errors: vec![],
+        measures: MeasureSummary::default(),
+        poor_counts: BTreeMap::new(),
+        poor_list: vec![],
+        poor_warnings: vec![],
     };
+    poor_mesh_report(mesh, th, &mut r);
     if let Err(e) = mesh.validate() {
         r.errors.push(e.to_string());
     }
@@ -225,6 +305,110 @@ pub fn check_mesh_with(mesh: &Mesh, th: &Thresholds) -> QualityReport {
         ));
     }
     r
+}
+
+fn cap(v: f64) -> f64 {
+    if v.is_finite() {
+        v.min(REPORT_INF)
+    } else {
+        REPORT_INF
+    }
+}
+
+/// Fill the extended-measure summary and the poor-mesh list of `r` (read-only on the mesh).
+fn poor_mesh_report(mesh: &Mesh, th: &Thresholds, r: &mut QualityReport) {
+    let m = compute_measures(mesh);
+    let mx = |v: &[f64]| cap(v.iter().copied().fold(0.0, f64::max));
+    r.measures = MeasureSummary {
+        max_warp: mx(&m.face_warp),
+        min_face_angle: m
+            .cell_face_angle_min
+            .iter()
+            .copied()
+            .fold(f64::INFINITY, f64::min)
+            .min(REPORT_INF),
+        max_face_angle: mx(&m.cell_face_angle_max),
+        max_ortho_skew: mx(&m.cell_ortho_skew),
+        max_inverse_orthogonal: mx(&m.cell_inverse_orthogonal),
+        max_size_change: mx(&m.cell_size_change),
+        max_edge_length_ratio: mx(&m.face_edge_ratio),
+    };
+    // (name, element, values, limit, limit is an upper bound?)
+    let specs: [(&str, &str, &[f64], f64, bool); 7] = [
+        ("warp", "face", &m.face_warp, th.warp_warn, true),
+        (
+            "face_angle_min",
+            "cell",
+            &m.cell_face_angle_min,
+            th.face_angle_min_warn,
+            false,
+        ),
+        (
+            "face_angle_max",
+            "cell",
+            &m.cell_face_angle_max,
+            th.face_angle_max_warn,
+            true,
+        ),
+        ("ortho_skew", "cell", &m.cell_ortho_skew, th.ortho_skew_warn, true),
+        (
+            "inverse_orthogonal",
+            "cell",
+            &m.cell_inverse_orthogonal,
+            th.inverse_orthogonal_warn,
+            true,
+        ),
+        ("size_change", "cell", &m.cell_size_change, th.volume_ratio_warn, true),
+        (
+            "edge_length_ratio",
+            "face",
+            &m.face_edge_ratio,
+            th.edge_length_ratio_warn,
+            true,
+        ),
+    ];
+    for (name, element, values, limit, upper) in specs {
+        let mut bad: Vec<(f64, usize)> = values
+            .iter()
+            .enumerate()
+            .filter(|&(_, &v)| if upper { v > limit } else { v < limit })
+            .map(|(i, &v)| {
+                let sev = if upper {
+                    v / limit
+                } else if v > 0.0 {
+                    limit / v
+                } else {
+                    f64::INFINITY
+                };
+                (sev, i)
+            })
+            .collect();
+        if bad.is_empty() {
+            continue;
+        }
+        bad.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.1.cmp(&b.1))
+        });
+        r.poor_counts.insert(name.to_string(), bad.len());
+        r.poor_warnings.push(format!(
+            "{} {element}s with {name} {} {limit} (worst {:.4} at {element} {})",
+            bad.len(),
+            if upper { "above" } else { "below" },
+            cap(values[bad[0].1]),
+            bad[0].1
+        ));
+        for &(_, i) in bad.iter().take(th.poor_list_cap) {
+            r.poor_list.push(PoorEntry {
+                measure: name.to_string(),
+                element: element.to_string(),
+                index: i,
+                value: cap(values[i]),
+                limit,
+            });
+        }
+    }
 }
 
 #[cfg(test)]
