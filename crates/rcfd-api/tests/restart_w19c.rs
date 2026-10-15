@@ -304,7 +304,9 @@ fn steps_to_distance(s: &mut Simulation, reference: &[f64], limit: f64) -> Optio
 /// S5: reported numbers; pass/fail as registered (S5a iterations to tolerance, S5b iterations to a
 /// 1e-2 relative L2 distance of the speed from the converged fine solution). The assertions of the
 /// methods that miss are in the ignored `s5_*_known_miss` tests.
-fn s5_numbers() -> Vec<(String, usize, usize, Option<usize>, Option<usize>)> {
+type S5Row = (String, usize, usize, Option<usize>, Option<usize>);
+
+fn s5_numbers() -> Vec<S5Row> {
     let dir = tmp("s5");
     let mut coarse = Simulation::new(&steady(12, 1e-7)).unwrap();
     run_to_done(&mut coarse);

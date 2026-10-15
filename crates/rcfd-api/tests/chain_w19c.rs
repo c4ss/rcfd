@@ -95,7 +95,7 @@ fn manual(dir: &Path) -> Simulation {
     let ck = dir.join("manual_steady.rcfd");
     let (_, o) = drive_to_end(Simulation::new(&steady).unwrap(), Some(ck.clone()));
     assert_eq!(o.exit_code, 0);
-    let text = BASE.replace("algorithm = \"simplec\"", &TRANSIENT_SOLVER.trim().replace('\n', "\n"));
+    let text = BASE.replace("algorithm = \"simplec\"", TRANSIENT_SOLVER.trim());
     let transient = Case::parse_toml(&text).unwrap();
     let mut sim = Simulation::new(&transient).unwrap();
     sim.restart_from(&ck, rcfd_post::remap::RemapMethod::Gradient, None)
