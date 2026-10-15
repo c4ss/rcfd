@@ -813,3 +813,29 @@ Ta^4)` at the external surface; the nonlinear boundary equation is solved by New
 to its exact solution. These keys on a patch whose `temperature` is not `convection` are an error. Constants only (no expression forms).
 `heat_flux` and the `heat_flow` report use the conductivity of the owner cell of each face when solids exist (a report-level
 `conductivity` is then an error).
+
+## `particles`
+
+One-way coupled Lagrangian particle tracking (F-056, ADR 0028, `docs/particles.md`). `particles.enabled = false` by default; every
+numeric key has the sentinel `-1` = unset with a located error when needed. The section is read by `rcfd_api::particles`
+(`track_frozen`, `track_transient`); `rcfd run` does not call it yet.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | enable the section (needs constant `physics.rho`, `physics.nu`; not with the compressible / variable-density solvers) |
+| `density` | `-1` | particle density [kg/m^3], must be set (> 0) |
+| `drag` | `schiller_naumann` | `schiller_naumann`, `stokes`, `none` |
+| `integration` | `analytic` | `analytic`, `euler`, `rk2`, `rk4` |
+| `interpolation` | `gradient` | `gradient` (cell value + least-squares gradient) or `cell_centre` |
+| `gravity` | `true` | apply `physics.gravity` with buoyancy |
+| `dt` | `-1` | tracking step of `track_frozen` (`-1` = `solver.dt`) |
+| `end_time` | `-1` | end of tracking [s], must be set |
+| `seed` | `1` | random seed |
+| `wall_interaction`, `restitution` | `reflect`, `1` | action of wall patches and restitution in [0, 1] |
+| `walls.<patch>.interaction`, `.restitution` | `default`, `-1` | per-patch `reflect`, `stick`, `escape`; `-1` = `particles.restitution` |
+| `injection.<n>.kind` | `unset` | `point` (`position`) or `surface` (`patch`); `unset` is an error |
+| `injection.<n>.rate`, `start_time`, `end_time` | `-1`, `0`, `-1` | parcels/s (must be set), window (`-1` = `particles.end_time`) |
+| `injection.<n>.velocity_mode`, `velocity` | `given`, `[]` | initial velocity (empty list = at rest) or the local fluid velocity |
+| `injection.<n>.parcel_count` | `1` | real particles per parcel |
+| `injection.<n>.distribution` | `constant` | `constant` (`diameter`) or `rosin_rammler` (`rr_d_bar`, `rr_n`, optional `d_min`, `d_max`) |
+| `output_file`, `output_every` | `""`, `0` | VTK PolyData file, extra files every n tracking steps |

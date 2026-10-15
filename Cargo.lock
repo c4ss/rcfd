@@ -2349,6 +2349,7 @@ dependencies = [
  "rcfd-io",
  "rcfd-linalg",
  "rcfd-mesh",
+ "rcfd-particles",
  "rcfd-post",
  "rcfd-turb",
  "serde",
@@ -2454,6 +2455,14 @@ dependencies = [
  "rcfd-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rcfd-particles"
+version = "0.1.0"
+dependencies = [
+ "rcfd-core",
+ "rcfd-mesh",
 ]
 
 [[package]]

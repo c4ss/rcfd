@@ -9,6 +9,7 @@ members = [
     "crates/rcfd-io",
     "crates/rcfd-post",
     "crates/rcfd-reactor",
+    "crates/rcfd-particles",
     "crates/rcfd-cli",
     "crates/rcfd-api",
     "crates/rcfd-mcp",
@@ -39,6 +40,7 @@ rcfd-turb = { path = "crates/rcfd-turb" }
 rcfd-io = { path = "crates/rcfd-io" }
 rcfd-post = { path = "crates/rcfd-post" }
 rcfd-reactor = { path = "crates/rcfd-reactor" }
+rcfd-particles = { path = "crates/rcfd-particles" }
 rcfd-api = { path = "crates/rcfd-api" }
 rcfd-mcp = { path = "crates/rcfd-mcp" }
 rcfd-assistant = { path = "crates/rcfd-assistant" }
