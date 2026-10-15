@@ -306,8 +306,9 @@
     "deps": [
       "F-040"
     ],
-    "status": "todo",
-    "acceptance": "Flat plate Cf within 5 percent of correlation"
+    "status": "partial",
+    "acceptance": "Flat plate Cf within 5 percent of correlation",
+    "note": "Wave 8, PARTIAL: model and settings-tree wiring done, but the registered power-law check misses (ADR 0014). rcfd-turb sa.rs SpalartAllmaras: SA-noft2 of the NASA TMR page (constants sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 verified by web fetch; Allmaras 2012 S~ limiter, SA-neg), wall modes auto (Spalding law of the wall, wall-cell nuTilda matched for y+ > 5; works from y+ ~1 to the log layer) and resolved, first-order upwind convection; turbulence.model = spalart_allmaras with turbulence.sa.*, nutilde_ratio, boundaries.<patch>.nutilde_value, nuTilda field. FLAT PLATE (tests/flat_plate_sa.rs, ignored, release; TMR set-up Re 5e6/m, nuTilda_inf = 3 nu, 140x110 cells, 70 layers, y+ 0.5, converged 2204 iterations): Cf(0.97) = 0.002786: +2.97% vs TMR CFL3D SA 2.70565e-3 (PASS, limit 5%; the grid behind that file value is unverified); vs TMR theory curves +2.29/-3.36/-3.08% (PASS); vs White -4.1/-3.6/-3.1/-3.0% at x 0.4/0.6/0.97/1.0 (PASS); vs power law 0.0576 Re_x^-0.2 +0.8/+2.7/+5.29% at x 0.4/0.6/1.0 (MISS at x = 1.0, limit 5%; ignored test sa_flat_plate_cf_vs_power_law_known_miss; +7.2/+9.2% at x 1.4/1.99 reported only). Wall-function mesh (y+ 31.7): +5.81% vs TMR SA (PASS, 10%); resolved mode identical. No tuning. Deviations: plate turbulent from x = 0 (no upstream symmetry segment), upwind turbulence convection. NOT DONE: no mesh study, no other validation case (BFS, airfoil). Constants/limits registered before running in docs/adr/0014-sa-and-turbulence-interface.md."
   },
   {
     "id": "F-042",
@@ -342,9 +343,9 @@
       "F-042",
       "F-005"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Switch models at runtime via settings tree; coefficient override test",
-    "note": "SCOPE (merged review): require per-coefficient override by expression or user function for models with calibratable coefficients."
+    "note": "Wave 8, PARTIAL (ADR 0014). rcfd-turb model.rs: trait TurbulenceModel + CoefficientInfo + ModelContext, adapters for k-epsilon, SST and SA, process-wide registry (register_model/create_model); rcfd-api turb.rs holds Box<dyn TurbulenceModel>. Settings tree: turbulence.coefficients.k_epsilon (5), k_omega_sst (11), sa (10) with docs and ranges in the JSON schema, turbulence.model = plugin with turbulence.plugin and plugin_coefficients; located validation errors. Runtime switching: settings.set on turbulence.* in a Ready/Paused session rebuilds only the model, keeping velocity, pressure, iteration counter and monitors; verified bit-identical flow across the switch (R1) and a 6000-iteration-per-phase k_epsilon -> SST -> SA -> k_epsilon run reproducing fresh runs to 2e-11 (R2, ignored). Coefficient override tests: SA cb1 +20% changes max nut by 15% and k-eps c2 by 29%, explicit defaults bit-identical. Plugin test: const_nut equals laminar 10 nu exactly. NOT DONE: SST coefficients are compile-time constants (shown, non-default values rejected); per-coefficient override by expression or user function; switching from/to laminar and finished sessions still restart; the other agent's new wall-function/roughness/BSL keys are not wired into ModelContext. SCOPE (merged review): require per-coefficient override by expression or user function for models with calibratable coefficients."
   },
   {
     "id": "F-045",

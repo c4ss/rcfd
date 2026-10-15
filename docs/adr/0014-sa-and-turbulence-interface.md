@@ -140,4 +140,54 @@ Regression and hygiene:
 
 ## Results
 
-(filled in after the runs, without changing anything above)
+Measured after the runs; nothing above was changed. Clarification: the SA coefficient group in the tree is
+`turbulence.coefficients.sa.*` (K1 and K4 use `sa`; K3 uses `k_omega_sst`, K2 `k_epsilon`). K1 ran on the coarse 30x30
+`box_2d` flat plate (layer_walls "lower", 18 layers, growth 1.2, target y+ 1) through the settings tree.
+
+### Flat plate (TMR set-up, Re 5e6 per m, plate 0..2, nuTilda_inf = 3 nu, 140 x 110 cells, 70 layers, y+ 0.5)
+
+Converged in 2204 iterations (du 1e-9, dnut 0). First-cell y+ at x = 0.97: 0.52. Cf(0.97) = 0.002786.
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| S1 vs TMR CFL3D SA 2.70565e-3 | +2.97 % | 5 % | pass |
+| S2 vs power law 0.0576 Re_x^-0.2 at x = 0.4 / 0.6 / 1.0 | +0.8 / +2.7 / +5.29 % | 5 % | MISS at x = 1.0 (ignored `sa_flat_plate_cf_vs_power_law_known_miss`; x = 1.4 / 1.99 are +7.2 / +9.2 %, reported only) |
+| S3 vs White at x = 0.4 / 0.6 / 0.97 / 1.0 | -4.1 / -3.6 / -3.1 / -3.0 % | 5 % | pass |
+| S4 vs TMR theory curves 1 / 2 / 3 at x = 0.97 | +2.29 / -3.36 / -3.08 % | 5 % | pass |
+| S5 wall-function mesh (y+ 31.7 at 0.97, 354 iterations) vs TMR SA | +5.81 % (Cf 0.002863) | 10 % | pass |
+| S6 `resolved` mode, y+ 0.5 vs TMR SA | +2.97 % (identical to `auto`: Spalding is linear for y+ < 5) | 5 % | pass |
+
+F-041 acceptance reading: met only if S1, S2 and S3 pass; S2 misses, so F-041 is **partial**. No tuning was done
+(relax_turb 0.6 as in the SST test). Deviations: the plate is turbulent from x = 0 (no upstream symmetry segment as in the
+TMR grid); turbulence convection is first-order upwind; the TMR grid behind 2.70565e-3 is not stated in the data file.
+
+### Units, coefficients, runtime switching, plugin
+
+- U1-U3 pass (sa.rs unit tests). H2/H3 hygiene: fmt of own files, clippy clean for own targets.
+- K1 pass: max nut 6.97758e-5 default vs 8.042632e-5 with cb1 +20 % (relative change 0.1526 > 0.01); explicit 0.1355
+  bit-identical; readback exact. K2 pass: k-eps c2 2.112 vs 1.92 changes max nut 6.065434e-2 -> 7.806509e-2 (0.287 > 1e-3);
+  explicit 1.92 bit-identical. K3 pass: SST a1 = 0.31 accepted, 0.4 rejected at `turbulence.coefficients.k_omega_sst.a1`.
+  K4 pass: 5 / 11 / 10 coefficients with documentation and ranges in the JSON schema; out-of-range and wrong-model values
+  are located errors.
+- R1 pass (quick): ux, uy, p bit-identical across each switch, iteration counter continues. R2 pass (ignored, release,
+  6000 iterations per phase, 390 s): k_epsilon -> k_omega_sst -> spalart_allmaras -> k_epsilon; bulk velocity vs a fresh
+  run differs by 0 / 1.9e-11 / 1.6e-11 / 1.9e-12 relative (bulk ux 18.44106 / 16.91965 / 17.14194). R3 pass (unregistered
+  plugin: located diagnostic at `turbulence.plugin`, old model keeps running). R4 pass (plugin `const_nut` equals the
+  laminar 10 nu run exactly, bulk 13.301175; unknown plugin coefficient located).
+
+### Regression and hygiene
+
+- H1: `baseline_hashes::shipped_cases_match_registered_hashes` fails on `kepsilon_channel` (60 iterations, got
+  da0ee795fd177d8e, registered 6ddc55969af2a835). A pristine `git archive HEAD` copy gives the identical failing hash, so
+  the failure pre-dates this work and the SA/interface changes are bit-identical for k-epsilon. Hashes were not re-recorded.
+- Other suites pass (rcfd-api lib 52, physics_schema, sst_schema, physics_service, service_tcp, workflow, library_api,
+  runctl; rcfd-turb channel_sst, channel_kepsilon).
+- A stray `cargo fmt --all` touched whitespace in other agents' in-progress files; no logic change.
+
+### Not delivered
+
+- SST coefficients are `const` in sst.rs (owned by the other turbulence agent): visible in the tree, override rejected.
+- Per-coefficient override by expression or user function (F-044 scope note).
+- The other agent's new keys (scalable/enhanced wall functions, roughness, BSL, wall_omega) are not wired into
+  `ModelContext` yet.
+- Switching from or to `laminar`, and changing a finished/stopped session, restart the simulation.

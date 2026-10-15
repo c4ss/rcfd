@@ -16,7 +16,8 @@ use crate::sim::{get_b, get_f, get_s, get_v};
 use rcfd_core::vec3;
 use rcfd_fv::bc::{FixedValue, Profile};
 use rcfd_fv::FvGeometry;
-use rcfd_turb::{patch_faces, KEpsilon, KEpsilonVariant, KOmegaSst, WallTreatment};
+use rcfd_turb::model::ModelContext;
+use rcfd_turb::{KEpsilonVariant, SLimiter, SaWallMode, TurbulenceModel, WallTreatment};
 use std::sync::Arc;
 
 /// What a boundary patch does in the turbulence model.
@@ -62,9 +63,12 @@ pub fn variant_of(case: &Case) -> KEpsilonVariant {
     }
 }
 
-/// Is a RANS turbulence model (k-epsilon or k-omega SST) selected?
+/// Is a RANS turbulence model (k-epsilon, k-omega SST, Spalart-Allmaras or a plugin) selected?
 pub fn enabled(case: &Case) -> bool {
-    matches!(get_s(case, "turbulence.model").as_str(), "k_epsilon" | "k_omega_sst")
+    matches!(
+        get_s(case, "turbulence.model").as_str(),
+        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "plugin"
+    )
 }
 
 /// Is k-omega SST selected?
@@ -72,56 +76,27 @@ pub fn is_sst(case: &Case) -> bool {
     get_s(case, "turbulence.model") == "k_omega_sst"
 }
 
-/// The turbulence model of a running simulation.
-pub(crate) enum TurbModel {
-    /// k-epsilon family with wall functions.
-    Ke(Box<KEpsilon>),
-    /// k-omega SST.
-    Sst(Box<KOmegaSst>),
+/// Is Spalart-Allmaras selected?
+pub fn is_sa(case: &Case) -> bool {
+    get_s(case, "turbulence.model") == "spalart_allmaras"
 }
 
-impl TurbModel {
-    /// One sweep; returns the largest relative change of the eddy viscosity.
-    pub fn update(&mut self, u: &rcfd_fv::VectorField, phi: &[f64]) -> f64 {
-        match self {
-            TurbModel::Ke(m) => m.update(u, phi),
-            TurbModel::Sst(m) => m.update(u, phi),
-        }
+/// Registry key of the selected model (`turbulence.plugin` for `model = plugin`).
+pub fn model_key(case: &Case) -> String {
+    match get_s(case, "turbulence.model").as_str() {
+        "plugin" => get_s(case, "turbulence.plugin"),
+        other => other.to_string(),
     }
-    /// Effective face viscosity for the momentum equation.
-    pub fn nu_face(&self) -> Vec<f64> {
-        match self {
-            TurbModel::Ke(m) => m.nu_face(),
-            TurbModel::Sst(m) => m.nu_face(),
-        }
-    }
-    /// Turbulent kinetic energy.
-    pub fn k(&self) -> &rcfd_fv::ScalarField {
-        match self {
-            TurbModel::Ke(m) => &m.k,
-            TurbModel::Sst(m) => &m.k,
-        }
-    }
-    /// Second transported scalar (epsilon or omega) and its field name.
-    pub fn second(&self) -> (&'static str, &rcfd_fv::ScalarField) {
-        match self {
-            TurbModel::Ke(m) => ("epsilon", &m.eps),
-            TurbModel::Sst(m) => ("omega", &m.omega),
-        }
-    }
-    /// Eddy viscosity of the cells.
-    pub fn nut(&self) -> &[f64] {
-        match self {
-            TurbModel::Ke(m) => &m.nut,
-            TurbModel::Sst(m) => &m.nut,
-        }
-    }
-    /// Wall distance of the cells.
-    pub fn wall_distance(&self) -> &[f64] {
-        match self {
-            TurbModel::Ke(m) => m.wall_distance(),
-            TurbModel::Sst(m) => m.wall_distance(),
-        }
+}
+
+/// Name of the selected model for reports.
+pub fn model_label(case: &Case) -> String {
+    match get_s(case, "turbulence.model").as_str() {
+        "k_omega_sst" => "k-omega SST".to_string(),
+        "k_epsilon" => format!("k-epsilon ({})", get_s(case, "turbulence.variant")),
+        "spalart_allmaras" => "Spalart-Allmaras".to_string(),
+        "plugin" => format!("plugin ({})", get_s(case, "turbulence.plugin")),
+        _ => "laminar".to_string(),
     }
 }
 
@@ -187,7 +162,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             if get_s(case, &p) != "auto" {
                 out.push(diag(
                     &p,
-                    "the turbulence role of a patch needs a RANS turbulence.model (k_epsilon or k_omega_sst); the model is laminar",
+                    "the turbulence role of a patch needs a RANS turbulence.model (k_epsilon, k_omega_sst, spalart_allmaras or plugin); the model is laminar",
                 ));
             }
         }
@@ -195,39 +170,85 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             if get_s(case, &format!("reports.{r}.type")) == "y_plus" {
                 out.push(diag(
                     &format!("reports.{r}.type"),
-                    "a y_plus report needs turbulence.model = \"k_epsilon\" or \"k_omega_sst\"",
+                    "a y_plus report needs a RANS turbulence.model (k_epsilon, k_omega_sst, spalart_allmaras or plugin)",
                 ));
             }
         }
         return out;
     }
     let sst = is_sst(case);
-    let mname = if sst { "k-omega SST" } else { "k-epsilon" };
-    if sst {
+    let sa = is_sa(case);
+    let plugin = get_s(case, "turbulence.model") == "plugin";
+    let mname = match get_s(case, "turbulence.model").as_str() {
+        "k_omega_sst" => "k-omega SST".to_string(),
+        "spalart_allmaras" => "Spalart-Allmaras".to_string(),
+        "plugin" => format!("plugin model '{}'", get_s(case, "turbulence.plugin")),
+        _ => "k-epsilon".to_string(),
+    };
+    let mname = mname.as_str();
+    let ke = !sst && !sa && !plugin;
+    if plugin && !rcfd_turb::is_registered(&get_s(case, "turbulence.plugin")) {
+        out.push(diag(
+            "turbulence.plugin",
+            format!(
+                "no turbulence model is registered as '{}' (registered: {})",
+                get_s(case, "turbulence.plugin"),
+                rcfd_turb::model_keys()
+                    .iter()
+                    .map(|k| k.0.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    } else if !plugin && !get_s(case, "turbulence.plugin").is_empty() {
+        out.push(diag(
+            "turbulence.plugin",
+            "turbulence.plugin needs turbulence.model = \"plugin\"",
+        ));
+    }
+    if !ke {
         if get_s(case, "turbulence.variant") != "standard" {
             out.push(diag(
                 "turbulence.variant",
-                "turbulence.variant applies to k_epsilon only; k_omega_sst has a single (Menter 2003) formulation",
+                format!("turbulence.variant applies to k_epsilon only, not to {mname}"),
             ));
         }
         if get_s(case, "turbulence.wall_treatment") != "smooth" {
             out.push(diag(
                 "turbulence.wall_treatment",
-                "turbulence.wall_treatment applies to k_epsilon only; k_omega_sst uses its automatic wall treatment",
+                format!("turbulence.wall_treatment applies to k_epsilon only; {mname} has its own wall treatment"),
             ));
         }
-        if get_f(case, "turbulence.epsilon_initial") > 0.0 {
-            out.push(diag(
-                "turbulence.epsilon_initial",
-                "k_omega_sst transports omega: use turbulence.omega_initial",
-            ));
-        }
-    } else if get_f(case, "turbulence.omega_initial") > 0.0 {
+    }
+    if (sst || sa || plugin) && get_f(case, "turbulence.epsilon_initial") > 0.0 {
         out.push(diag(
-            "turbulence.omega_initial",
-            "turbulence.omega_initial needs turbulence.model = \"k_omega_sst\"; k_epsilon uses epsilon_initial",
+            "turbulence.epsilon_initial",
+            format!("turbulence.epsilon_initial applies to k_epsilon only, not to {mname}"),
         ));
     }
+    if !sst && get_f(case, "turbulence.omega_initial") > 0.0 {
+        out.push(diag(
+            "turbulence.omega_initial",
+            "turbulence.omega_initial needs turbulence.model = \"k_omega_sst\"",
+        ));
+    }
+    if sa && get_f(case, "turbulence.k_initial") > 0.0 {
+        out.push(diag(
+            "turbulence.k_initial",
+            "Spalart-Allmaras has no k: use turbulence.nutilde_ratio for the initial nuTilda",
+        ));
+    }
+    if !sa {
+        for (k, v) in [("sa.wall_mode", "auto"), ("sa.limiter", "allmaras")] {
+            if get_s(case, &format!("turbulence.{k}")) != v {
+                out.push(diag(
+                    &format!("turbulence.{k}"),
+                    "turbulence.sa options need turbulence.model = \"spalart_allmaras\"",
+                ));
+            }
+        }
+    }
+    check_coefficients(case, &mut out);
     let alg = get_s(case, "solver.algorithm");
     if !matches!(alg.as_str(), "simple" | "simplec") {
         out.push(diag(
@@ -254,7 +275,9 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         get_f(case, "turbulence.k_initial"),
         get_f(case, &format!("turbulence.{second}")),
     );
-    if (k0 > 0.0) != (e0 > 0.0) {
+    if !(ke || sst) {
+        // SA and plugins: nothing to pair
+    } else if (k0 > 0.0) != (e0 > 0.0) {
         out.push(diag(
             &if k0 > 0.0 {
                 format!("turbulence.{second}")
@@ -282,6 +305,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     ));
                 }
             }
+            Role::Inlet if sa || plugin => {}
             Role::Inlet => {
                 let spec = get_s(case, &format!("{b}.turbulence_spec"));
                 let speed = vec3::norm(get_v(case, &format!("{b}.velocity_value"), [0.0; 3]));
@@ -339,16 +363,75 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
+/// Coefficient overrides in `turbulence.coefficients.*`: every group is validated; only the active model's group may differ
+/// from the defaults (k-epsilon: 0 = variant default).
+fn check_coefficients(case: &Case, out: &mut Vec<Diagnostic>) {
+    let active = get_s(case, "turbulence.model");
+    let groups: [(&str, &str, Vec<rcfd_turb::CoefficientInfo>, bool); 3] = [
+        ("k_epsilon", "k_epsilon", rcfd_turb::ke_coefficient_table(), true),
+        ("k_omega_sst", "k_omega_sst", rcfd_turb::sst_coefficient_table(), false),
+        (
+            "sa",
+            "spalart_allmaras",
+            rcfd_turb::sa_infos(rcfd_turb::SaCoefficients::default()),
+            false,
+        ),
+    ];
+    for (group, model, table, zero_default) in groups {
+        for c in table {
+            let path = format!("turbulence.coefficients.{group}.{}", c.name);
+            let v = get_f(case, &path);
+            let default = if zero_default { 0.0 } else { c.default };
+            if v == default {
+                continue;
+            }
+            if active != model {
+                out.push(diag(
+                    &path,
+                    format!(
+                        "{} = {v} is set but only applies to turbulence.model = \"{model}\" (the model is \"{active}\")",
+                        c.name
+                    ),
+                ));
+            } else if model == "k_omega_sst" {
+                out.push(diag(
+                    &path,
+                    format!(
+                        "the k-omega SST coefficients are fixed at their published values in this version; {} = {v} differs from {}",
+                        c.name, c.default
+                    ),
+                ));
+            } else if model == "k_epsilon" && c.name == "c1" && variant_of(case) == KEpsilonVariant::Realizable {
+                out.push(diag(
+                    &path,
+                    "c1 does not apply to the realizable variant (its C1 = max(0.43, eta/(eta+5)) is variable)",
+                ));
+            }
+        }
+    }
+    if active != "plugin" {
+        for n in case.tree.names("turbulence.plugin_coefficients").unwrap_or_default() {
+            out.push(diag(
+                &format!("turbulence.plugin_coefficients.{n}"),
+                "plugin coefficients need turbulence.model = \"plugin\"",
+            ));
+        }
+    }
+}
+
 /// Runtime state of a RANS turbulence run.
 pub(crate) struct TurbState {
     /// The model.
-    pub model: TurbModel,
+    pub model: Box<dyn TurbulenceModel>,
     /// Largest relative change of the eddy viscosity in the last sweep.
     pub change: f64,
     /// Wall patch names.
     pub walls: Vec<String>,
     /// Wall faces of all wall patches (global indices).
     pub wall_faces: Vec<usize>,
+    /// Per-face speed of each inlet patch (kept to rebuild the model in a live session).
+    pub inlet_speeds: Vec<(String, Vec<f64>)>,
+    geom: Arc<FvGeometry>,
 }
 
 impl TurbState {
@@ -361,6 +444,7 @@ impl TurbState {
     ) -> Result<Self, Vec<Diagnostic>> {
         let nu = get_f(case, "physics.nu");
         let sst = is_sst(case);
+        let sa = is_sa(case);
         let variant = variant_of(case);
         let cmu = if sst {
             rcfd_turb::sst::BETA_STAR
@@ -376,7 +460,7 @@ impl TurbState {
         if walls.is_empty() {
             return Err(vec![diag(
                 "turbulence.model",
-                "k-epsilon found no wall patch among the mesh patches",
+                "the turbulence model found no wall patch among the mesh patches",
             )]);
         }
         let (mut k0, mut e0) = (
@@ -397,113 +481,158 @@ impl TurbState {
                 e0 /= cmu * k0; // omega = epsilon / (beta* k)
             }
         }
-        let wall_refs: Vec<&str> = walls.iter().map(String::as_str).collect();
-        if sst {
-            return Self::new_sst(case, geom, inlet_speeds, nu, &walls, &wall_refs, k0, e0);
-        }
-        let mut model = KEpsilon::new(variant, geom.clone(), nu, &wall_refs, k0, e0)
-            .map_err(|e| vec![diag("turbulence.model", e.to_string())])?;
-        model.wc.kappa = get_f(case, "turbulence.kappa");
-        model.wc.e = get_f(case, "turbulence.e_wall");
-        model.wall_treatment = match get_s(case, "turbulence.wall_treatment").as_str() {
-            "switch" => WallTreatment::Switch,
-            "hysteresis" => WallTreatment::Hysteresis { band: 0.1 },
-            _ => WallTreatment::Smooth,
+        let ctx = ModelContext {
+            geom: geom.clone(),
+            nu,
+            walls: walls.clone(),
+            k0,
+            eps0: if sst { 0.0 } else { e0 },
+            omega0: if sst { e0 } else { 0.0 },
+            nutilde0: get_f(case, "turbulence.nutilde_ratio") * nu,
+            variant,
+            wall_treatment: match get_s(case, "turbulence.wall_treatment").as_str() {
+                "switch" => WallTreatment::Switch,
+                "hysteresis" => WallTreatment::Hysteresis { band: 0.1 },
+                _ => WallTreatment::Smooth,
+            },
+            sa_wall_mode: match get_s(case, "turbulence.sa.wall_mode").as_str() {
+                "resolved" => SaWallMode::Resolved,
+                _ => SaWallMode::Auto,
+            },
+            sa_limiter: match get_s(case, "turbulence.sa.limiter").as_str() {
+                "min_0p3" => SLimiter::Min03,
+                "positive" => SLimiter::Positive,
+                _ => SLimiter::Allmaras,
+            },
+            sa_negative: get_b(case, "turbulence.sa.negative_nutilde"),
+            kappa: get_f(case, "turbulence.kappa"),
+            e_wall: get_f(case, "turbulence.e_wall"),
+            convection: crate::sim::conv_scheme(&get_s(case, "turbulence.convection"))
+                .unwrap_or(rcfd_fv::convection::ConvScheme::Upwind),
+            relax_turb: get_f(case, "turbulence.relax"),
+            relax_nut: get_f(case, "turbulence.relax_nut"),
         };
-        model.relax_turb = get_f(case, "turbulence.relax");
-        model.relax_nut = get_f(case, "turbulence.relax_nut");
-        model.convection = crate::sim::conv_scheme(&get_s(case, "turbulence.convection"))
-            .unwrap_or(rcfd_fv::convection::ConvScheme::Upwind);
+        let key = model_key(case);
+        let mut model = rcfd_turb::create_model(&key, &ctx).map_err(|e| {
+            vec![diag(
+                if get_s(case, "turbulence.model") == "plugin" {
+                    "turbulence.plugin"
+                } else {
+                    "turbulence.model"
+                },
+                e.to_string(),
+            )]
+        })?;
+
+        // coefficient overrides from the settings tree
+        let mut errs = Vec::new();
+        let (group, zero_default) = match get_s(case, "turbulence.model").as_str() {
+            "k_epsilon" => ("k_epsilon", true),
+            "k_omega_sst" => ("k_omega_sst", false),
+            "spalart_allmaras" => ("sa", false),
+            _ => ("", false),
+        };
+        if !group.is_empty() {
+            for c in model.coefficients() {
+                let path = format!("turbulence.coefficients.{group}.{}", c.name);
+                let v = get_f(case, &path);
+                if zero_default && v == 0.0 {
+                    continue;
+                }
+                if let Err(e) = model.set_coefficient(c.name, v) {
+                    errs.push(diag(&path, e));
+                }
+            }
+        } else {
+            for n in case.tree.names("turbulence.plugin_coefficients").unwrap_or_default() {
+                let path = format!("turbulence.plugin_coefficients.{n}.value");
+                let known: Vec<&'static str> = model.coefficients().iter().map(|c| c.name).collect();
+                match known.iter().find(|k| **k == n) {
+                    Some(name) => {
+                        if let Err(e) = model.set_coefficient(name, get_f(case, &path)) {
+                            errs.push(diag(&path, e));
+                        }
+                    }
+                    None => errs.push(diag(
+                        &format!("turbulence.plugin_coefficients.{n}"),
+                        format!(
+                            "the plugin model has no coefficient '{n}' (it has: {})",
+                            known.join(", ")
+                        ),
+                    )),
+                }
+            }
+        }
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+
+        // inlet values
+        let cmu_now = model
+            .coefficients()
+            .iter()
+            .find(|c| c.name == "c_mu")
+            .map_or(cmu, |c| c.value);
         for (patch, speeds) in inlet_speeds {
             let b = format!("boundaries.{patch}");
-            let (mut kf, mut ef) = (Vec::with_capacity(speeds.len()), Vec::with_capacity(speeds.len()));
-            for &u in speeds {
-                let (k, e) = inlet_values(case, &b, model.c_mu, nu, u);
-                kf.push([k, 0.0, 0.0]);
-                ef.push([e, 0.0, 0.0]);
+            let per_scalar: Vec<(&str, Vec<f64>)> = if sa {
+                let v = get_f(case, &format!("{b}.nutilde_value"));
+                let v = if v > 0.0 { v } else { ctx.nutilde0 };
+                vec![("nuTilda", vec![v; speeds.len()])]
+            } else if sst {
+                let (mut kf, mut wf) = (Vec::new(), Vec::new());
+                for &u in speeds {
+                    let (k, w) = inlet_values_sst(case, &b, nu, u);
+                    kf.push(k);
+                    wf.push(w);
+                }
+                vec![("k", kf), ("omega", wf)]
+            } else if get_s(case, "turbulence.model") == "k_epsilon" {
+                let (mut kf, mut ef) = (Vec::new(), Vec::new());
+                for &u in speeds {
+                    let (k, e) = inlet_values(case, &b, cmu_now, nu, u);
+                    kf.push(k);
+                    ef.push(e);
+                }
+                vec![("k", kf), ("epsilon", ef)]
+            } else {
+                Vec::new()
+            };
+            for (name, vals) in per_scalar {
+                let pf: Vec<[f64; 3]> = vals.iter().map(|&v| [v, 0.0, 0.0]).collect();
+                if let Some(f) = model.scalar_mut(name) {
+                    let _ = f.set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(pf))));
+                }
             }
-            let _ = model.k.set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(kf))));
-            let _ = model
-                .eps
-                .set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(ef))));
         }
-        let wall_faces = patch_faces(geom, &wall_refs);
+        let wall_faces = model.wall_faces();
         Ok(TurbState {
-            model: TurbModel::Ke(Box::new(model)),
+            model,
             change: f64::INFINITY,
             walls,
             wall_faces,
+            inlet_speeds: inlet_speeds.to_vec(),
+            geom: geom.clone(),
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn new_sst(
-        case: &Case,
-        geom: &Arc<FvGeometry>,
-        inlet_speeds: &[(String, Vec<f64>)],
-        nu: f64,
-        walls: &[String],
-        wall_refs: &[&str],
-        k0: f64,
-        w0: f64,
-    ) -> Result<Self, Vec<Diagnostic>> {
-        let mut model = KOmegaSst::new(geom.clone(), nu, wall_refs, k0, w0)
-            .map_err(|e| vec![diag("turbulence.model", e.to_string())])?;
-        model.law.kappa = get_f(case, "turbulence.kappa");
-        model.law.e = get_f(case, "turbulence.e_wall");
-        model.relax_turb = get_f(case, "turbulence.relax");
-        model.relax_nut = get_f(case, "turbulence.relax_nut");
-        model.convection = crate::sim::conv_scheme(&get_s(case, "turbulence.convection"))
-            .unwrap_or(rcfd_fv::convection::ConvScheme::Upwind);
-        for (patch, speeds) in inlet_speeds {
-            let b = format!("boundaries.{patch}");
-            let (mut kf, mut wf) = (Vec::with_capacity(speeds.len()), Vec::with_capacity(speeds.len()));
-            for &u in speeds {
-                let (k, w) = inlet_values_sst(case, &b, nu, u);
-                kf.push([k, 0.0, 0.0]);
-                wf.push([w, 0.0, 0.0]);
-            }
-            let _ = model.k.set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(kf))));
-            let _ = model
-                .omega
-                .set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(wf))));
-        }
-        Ok(TurbState {
-            model: TurbModel::Sst(Box::new(model)),
-            change: f64::INFINITY,
-            walls: walls.to_vec(),
-            wall_faces: patch_faces(geom, wall_refs),
-        })
-    }
-
-    /// Wall-function `y* = Cmu^(1/4) sqrt(k) y / nu` of each wall face's adjacent cell (aligned with `wall_faces`).
+    /// Wall-face `y+` of each wall face (aligned with `wall_faces`), from the model.
     pub fn y_plus_faces(&self) -> Vec<f64> {
-        let m = match &self.model {
-            TurbModel::Ke(m) => m,
-            // SST: y+ = u_tau y / nu from the law of the wall, kept by the model
-            TurbModel::Sst(m) => return m.y_plus().to_vec(),
-        };
-        let g = &m.geom;
-        let c25 = m.c_mu.powf(0.25);
-        self.wall_faces
-            .iter()
-            .map(|&f| {
-                let c = g.mesh.owner()[f];
-                c25 * m.k.values[c].max(0.0).sqrt() * g.dn[f - g.n_internal] / m.nu
-            })
-            .collect()
+        self.model.y_plus_faces()
     }
 
-    fn geom(&self) -> &Arc<FvGeometry> {
-        match &self.model {
-            TurbModel::Ke(m) => &m.geom,
-            TurbModel::Sst(m) => &m.geom,
-        }
+    /// A transported scalar by name (`k`, `epsilon`, `omega`, `nuTilda`, ...).
+    pub fn scalar(&self, name: &str) -> Option<&rcfd_fv::ScalarField> {
+        self.model
+            .scalars()
+            .into_iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, f)| f)
     }
 
     /// Cell field `y+` (the largest wall-face value of a wall cell, 0 elsewhere).
     pub fn y_plus_cells(&self) -> Vec<f64> {
-        let g = self.geom();
+        let g = &self.geom;
         let mut out = vec![0.0_f64; g.n_cells()];
         for (&f, y) in self.wall_faces.iter().zip(self.y_plus_faces()) {
             let c = g.mesh.owner()[f];
@@ -514,7 +643,7 @@ impl TurbState {
 
     /// Boundary-face field `y+` (indexed `f - n_internal`, 0 on non-wall faces).
     pub fn y_plus_boundary(&self) -> Vec<f64> {
-        let g = self.geom();
+        let g = &self.geom;
         let mut out = vec![0.0; g.mesh.n_faces() - g.n_internal];
         for (&f, y) in self.wall_faces.iter().zip(self.y_plus_faces()) {
             out[f - g.n_internal] = y;

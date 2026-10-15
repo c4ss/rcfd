@@ -1288,6 +1288,55 @@ impl Simulation {
         self.failure.as_deref()
     }
 
+    /// Registry key and label of the active turbulence model (`None` for laminar runs).
+    pub fn turbulence_model(&self) -> Option<(String, String)> {
+        self.turb
+            .as_ref()
+            .map(|t| (t.model.key().to_string(), turb::model_label(&self.case)))
+    }
+
+    /// Coefficients (name, value) of the active turbulence model.
+    pub fn turbulence_coefficients(&self) -> Vec<(String, f64)> {
+        self.turb.as_ref().map_or_else(Vec::new, |t| {
+            t.model
+                .coefficients()
+                .into_iter()
+                .map(|c| (c.name.to_string(), c.value))
+                .collect()
+        })
+    }
+
+    /// Change the turbulence model or its settings in a live simulation (F-044): the turbulence state is rebuilt from
+    /// `new_case` while the velocity, pressure, flux, iteration counter and monitors are kept. The new model starts from
+    /// the current eddy viscosity. Only RANS-to-RANS changes are possible (the laminar and RANS engines differ), and the
+    /// rest of `new_case` must equal the case the simulation was built from. Errors leave the simulation unchanged.
+    pub fn reconfigure_turbulence(&mut self, new_case: &Case) -> std::result::Result<(), Vec<Diagnostic>> {
+        let Some(old) = self.turb.as_ref() else {
+            return Err(diag(
+                "turbulence.model",
+                "this simulation was built without a RANS turbulence model: rebuild it to switch from laminar",
+            ));
+        };
+        if !turb::enabled(new_case) {
+            return Err(diag(
+                "turbulence.model",
+                "a running RANS simulation cannot be switched to laminar: rebuild it",
+            ));
+        }
+        let errs = turb::check(new_case);
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+        let mut st = TurbState::new(new_case, &self.geom, &old.inlet_speeds)?;
+        st.model.initialize_from_nut(old.model.nut());
+        self.turb = Some(st);
+        self.case = new_case.clone();
+        self.done = false;
+        self.converged = false;
+        self.stop_reason = None;
+        Ok(())
+    }
+
     /// Evaluate the user-function monitors on the current fields; returns an error text on failure.
     fn udf_monitor_step(&mut self, x: f64) -> Option<String> {
         if self.udf_monitors.is_empty() || matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
@@ -1764,18 +1813,19 @@ impl Simulation {
         }
         if let Some(t) = &self.turb {
             match name {
-                "k" => return Ok(t.model.k().values.clone()),
-                "epsilon" | "omega" if t.model.second().0 == name => return Ok(t.model.second().1.values.clone()),
+                "k" | "epsilon" | "omega" | "nuTilda" if t.scalar(name).is_some() => {
+                    return Ok(t.scalar(name).map(|f| f.values.clone()).unwrap_or_default())
+                }
                 "nut" => return Ok(t.model.nut().to_vec()),
                 "wall_distance" => return Ok(t.model.wall_distance().to_vec()),
                 "y_plus" => return Ok(t.y_plus_cells()),
                 _ => {}
             }
-        } else if matches!(name, "k" | "epsilon" | "omega" | "nut" | "y_plus") {
+        } else if matches!(name, "k" | "epsilon" | "omega" | "nuTilda" | "nut" | "y_plus") {
             return Err(Error::InvalidValue {
                 path: name.into(),
                 reason: format!(
-                    "field '{name}' needs a RANS model (turbulence.model = \"k_epsilon\" or \"k_omega_sst\")"
+                    "field '{name}' needs a RANS model (turbulence.model = \"k_epsilon\", \"k_omega_sst\", \"spalart_allmaras\" or \"plugin\")"
                 ),
             });
         }
@@ -1835,8 +1885,11 @@ impl Simulation {
         if let Some(t) = &self.turb {
             match name {
                 "y_plus" => return Ok(t.y_plus_boundary()),
-                "k" => return Ok(t.model.k().boundary_values(g)),
-                "epsilon" | "omega" if t.model.second().0 == name => return Ok(t.model.second().1.boundary_values(g)),
+                "k" | "epsilon" | "omega" | "nuTilda" => {
+                    if let Some(f) = t.scalar(name) {
+                        return Ok(f.boundary_values(g));
+                    }
+                }
                 _ => {}
             }
         }
@@ -1993,9 +2046,7 @@ impl Simulation {
             ReportKind::Maximum => self.field(&r.field)?.into_iter().fold(f64::NEG_INFINITY, f64::max),
             ReportKind::YPlus => {
                 let t = self.turb.as_ref().ok_or_else(|| {
-                    Error::Other(
-                        "y_plus needs a RANS model (turbulence.model = \"k_epsilon\" or \"k_omega_sst\")".into(),
-                    )
+                    Error::Other("y_plus needs a RANS turbulence model (turbulence.model other than laminar)".into())
                 })?;
                 let patch = g
                     .mesh
@@ -2091,8 +2142,7 @@ impl Simulation {
             (
                 "Turbulence".to_string(),
                 match &self.turb {
-                    Some(_) if turb::is_sst(&self.case) => "k-omega SST".to_string(),
-                    Some(_) => format!("k-epsilon ({})", get_s(&self.case, "turbulence.variant")),
+                    Some(_) => turb::model_label(&self.case),
                     None => "laminar".into(),
                 },
             ),
@@ -2128,7 +2178,13 @@ impl Simulation {
                 let y = t.y_plus_faces();
                 json!({
                     "model": get_s(&self.case, "turbulence.model"),
-                    "variant": if turb::is_sst(&self.case) { "menter_2003".to_string() } else { get_s(&self.case, "turbulence.variant") },
+                    "key": turb::model_key(&self.case),
+                    "variant": match get_s(&self.case, "turbulence.model").as_str() {
+                        "k_omega_sst" => "menter_2003".to_string(),
+                        "spalart_allmaras" => "sa_noft2".to_string(),
+                        "plugin" => get_s(&self.case, "turbulence.plugin"),
+                        _ => get_s(&self.case, "turbulence.variant"),
+                    },
                     "wall_patches": t.walls,
                     "y_plus_min": y.iter().cloned().fold(f64::INFINITY, f64::min),
                     "y_plus_max": y.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
@@ -2323,9 +2379,9 @@ impl Simulation {
             })
             .unwrap_or_default();
         if let Some(t) = &self.turb {
-            extra.push(("k", t.model.k().values.clone()));
-            let (second_name, second) = t.model.second();
-            extra.push((second_name, second.values.clone()));
+            for (name, f) in t.model.scalars() {
+                extra.push((name, f.values.clone()));
+            }
             extra.push(("nut", t.model.nut().to_vec()));
             extra.push(("wall_distance", t.model.wall_distance().to_vec()));
             extra.push(("y_plus", t.y_plus_cells()));

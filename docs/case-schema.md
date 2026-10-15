@@ -24,7 +24,7 @@ Example cases (all run in seconds to a minute in a debug build):
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `model` | `laminar` | `laminar`, `k_epsilon` or `k_omega_sst` (Menter 2003, see below) |
+| `model` | `laminar` | `laminar`, `k_epsilon`, `k_omega_sst` (Menter 2003), `spalart_allmaras` (SA-noft2) or `plugin` (see below) |
 | `variant` | `standard` | `standard`, `rng`, `realizable` (k-epsilon only; rejected for SST) |
 | `wall_treatment` | `smooth` | k-epsilon wall cells: `smooth` (compound viscous/log epsilon and blended production, no switch), `hysteresis` (+-10 percent dead band on the y* = 11.225 switch) or `switch` (original hard switch; its nu_t never settles, see docs/bfs-convergence-findings.md) |
 | `wall_function` | `standard` | log-law wall functions (the only option; `standard` variant constants) |
@@ -56,6 +56,48 @@ to 300) both work; y+ between about 3 and 20 is the least accurate range and
 and `e_wall` define the Spalding law. Boundary values: `turbulence_spec = values` takes
 `k_value` and `omega_value`; the other inlet specifications derive `omega = epsilon/(beta* k)`.
 Outputs add the field `omega`.
+
+### `spalart_allmaras`
+
+Spalart-Allmaras one-equation model, SA-noft2 form of the NASA Turbulence Modeling Resource page
+(https://tmbwg.github.io/turbmodels/spalart.html, ADR 0014): working variable `nuTilda`, `nut = nuTilda fv1`,
+coefficients sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 (`cw1` derived). Same restrictions as
+the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `nutilde_ratio` | 3 | `nuTilda / nu` of the initial field and of inlets without `nutilde_value` (TMR: 3 to 5) |
+| `boundaries.<patch>.nutilde_value` | 0 | inlet `nuTilda` in m^2/s (0: use `nutilde_ratio`); `turbulence_spec` and the k/epsilon/omega values are not used |
+| `sa.wall_mode` | `auto` | `auto`: Spalding law of the wall for the wall shear, plus a wall-cell `nuTilda` matching the law for wall-cell y+ > 5 (works from y+ about 1 into the log layer); `resolved`: `nuTilda = 0` on the wall and no wall function (y+ of order 1) |
+| `sa.limiter` | `allmaras` | `S~` limiter: `allmaras` (Allmaras, Johnson and Spalart 2012, c2 0.7, c3 0.9), `min_0p3` (`S~ >= 0.3 Omega`), `positive` |
+| `sa.negative_nutilde` | true | SA-neg treatment of negative `nuTilda` (production `cb1 Omega nuTilda`, destruction `+cw1 (nuTilda/d)^2`, diffusion `nu + fn nuTilda`, `nut = 0`); off: clip at zero |
+
+`convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
+`wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are
+rejected for this model with a located diagnostic. Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the
+TMR CFL3D SA value (y+ 0.5 and y+ 30 meshes: +3.0 and +5.8 percent).
+
+### Model coefficients, plugin models and live switching (F-044)
+
+`turbulence.coefficients.<model>.<name>` lists the coefficients of every model with their documentation and ranges in the
+exported JSON schema: `k_epsilon` (`c_mu`, `c1`, `c2`, `sigma_k`, `sigma_e`; 0 keeps the value of the selected `variant`),
+`k_omega_sst` (the eleven Menter 2003 values; **shown, not editable**: a non-default value is rejected because the
+constants are compiled into the model), `sa` (`sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`). A
+value outside its range is rejected when it is set; a non-default value in the group of a model that is not selected, or
+`k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available: overriding
+a coefficient by an expression or a user function.
+
+`turbulence.model = "plugin"` with `turbulence.plugin = "<key>"` selects a model registered by the embedding program with
+`rcfd_turb::register_model` (trait `rcfd_turb::TurbulenceModel`); an unregistered key is a located error at
+`turbulence.plugin`. The plugin's coefficients are set in `turbulence.plugin_coefficients.<name>.value`.
+
+**Live switching.** In a service session that holds a built simulation in the `ready` or `paused` state, `settings.set`
+on any `turbulence.*` path (for example `turbulence.model` from `k_epsilon` to `k_omega_sst` or `spalart_allmaras`, or a
+coefficient) rebuilds only the turbulence state: velocity, pressure, flux, iteration counter and monitors are kept, the
+new model starts from the current eddy viscosity, and the next iteration uses it. Errors (unregistered plugin, invalid or
+non-editable coefficient, a case the model cannot run) are returned with their path and leave the run unchanged. Switching
+from or to `laminar` needs a rebuild (other settings still reset the simulation as before). The session's
+`run.status` reports `simulation.turbulence.key`.
 
 ### Mesh generator parameters
 

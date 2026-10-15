@@ -421,7 +421,12 @@ impl Service {
                     .get("value")
                     .cloned()
                     .ok_or_else(|| RpcError::params("missing 'value'"))?;
-                if matches!(s.state(), RunState::Running | RunState::Paused) {
+                // turbulence settings of a built simulation that is Ready or Paused are applied live (F-044): the flow
+                // field, the iteration counter and the monitors are kept and only the turbulence state is rebuilt
+                let live_turb = path.starts_with("turbulence.")
+                    && matches!(s.state(), RunState::Ready | RunState::Paused)
+                    && lock(&s.inner).sim.is_some();
+                if matches!(s.state(), RunState::Running) || (matches!(s.state(), RunState::Paused) && !live_turb) {
                     return Err(RpcError::new(code::BAD_STATE, "stop the run before changing settings"));
                 }
                 let mut inner = lock(&s.inner);
@@ -437,7 +442,18 @@ impl Service {
                     let _ = inner.case.set(path, old);
                     return Err(e);
                 }
-                inner.sim = None;
+                if live_turb {
+                    if let Some(sim) = inner.sim.clone() {
+                        let new_case = inner.case.clone();
+                        let res = lock(&sim).reconfigure_turbulence(&new_case);
+                        if let Err(diags) = res {
+                            let _ = inner.case.set(path, old);
+                            return Err(RpcError::validation(diags));
+                        }
+                    }
+                } else {
+                    inner.sim = None;
+                }
                 if p.get("_workflow") != Some(&Value::Bool(true)) {
                     if let Some(w) = inner.workflow.as_mut() {
                         w.invalidate_all();
@@ -446,8 +462,11 @@ impl Service {
                 let stored = inner.case.get(path).unwrap_or(Value::Null);
                 inner.journal.push(json!({"op": "set", "path": path, "value": stored}));
                 drop(inner);
-                s.set_state(RunState::Defined);
-                self.events.emit(&s.id, "setting_changed", json!({"path": path}));
+                if !live_turb {
+                    s.set_state(RunState::Defined);
+                }
+                self.events
+                    .emit(&s.id, "setting_changed", json!({"path": path, "live": live_turb}));
                 Ok(json!({"path": path, "value": lock(&s.inner).case.get(path).ok()}))
             }
             "settings.remove" => {
