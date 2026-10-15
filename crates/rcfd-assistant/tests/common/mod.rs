@@ -26,12 +26,12 @@ impl Req {
             .find(|(k, _)| k.eq_ignore_ascii_case(name))
             .map(|(_, v)| v.as_str())
     }
-    /// Everything except the Authorization header, as one string (for leak scans).
+    /// Everything except the credential headers (Authorization; x-api-key, which the Anthropic protocol uses), as one string (for leak scans).
     pub fn everything_but_auth(&self) -> String {
         let h: Vec<String> = self
             .headers
             .iter()
-            .filter(|(k, _)| !k.eq_ignore_ascii_case("authorization"))
+            .filter(|(k, _)| !k.eq_ignore_ascii_case("authorization") && !k.eq_ignore_ascii_case("x-api-key"))
             .map(|(k, v)| format!("{k}: {v}"))
             .collect();
         format!("{} {}\n{}\n{}", self.method, self.path, h.join("\n"), self.body)
