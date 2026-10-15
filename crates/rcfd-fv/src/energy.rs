@@ -45,6 +45,9 @@ pub struct EnergySolver {
     pub sink: Option<Vec<f64>>,
     /// Cells held at a temperature, see [`SweepExtras`].
     pub fixed: Option<Vec<Option<f64>>>,
+    /// Capacity weight `(rho cp)_c / (rho cp)_ref` per cell of the time derivative (conjugate heat transfer), see
+    /// [`SweepExtras::ddt_weight`]; `None` for a single material.
+    pub ddt_weight: Option<Vec<f64>>,
 }
 
 impl EnergySolver {
@@ -67,6 +70,7 @@ impl EnergySolver {
             history,
             sink: None,
             fixed: None,
+            ddt_weight: None,
         }
     }
 
@@ -94,6 +98,7 @@ impl EnergySolver {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                ddt_weight: self.ddt_weight.as_deref(),
             },
         )
     }
@@ -122,6 +127,7 @@ impl EnergySolver {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                ddt_weight: self.ddt_weight.as_deref(),
             },
         );
         self.history.push(self.t.values.clone(), dt);

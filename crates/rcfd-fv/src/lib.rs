@@ -3,6 +3,7 @@
 //! time integration and the pressure-velocity coupled solvers.
 
 pub mod bc;
+pub mod cht;
 pub mod compressible;
 pub mod compressible_bc;
 pub mod convection;
@@ -25,6 +26,7 @@ pub mod riemann;
 pub mod scalar;
 pub mod simple;
 pub mod sources;
+pub mod thermal_bc;
 pub mod varden;
 
 pub use bc::{
@@ -33,4 +35,5 @@ pub use bc::{
 };
 pub use field::{ScalarField, VectorField};
 pub use fvmatrix::FvMatrix;
+pub use thermal_bc::ConvectiveWall;
 pub use geometry::FvGeometry;
