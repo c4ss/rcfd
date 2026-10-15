@@ -41,3 +41,20 @@ are stitched into internal faces, same-name patches and cell zones are combined,
 
 Not done: slit (baffle) creation, cell-zone merge or split, face zones through merge/extrude, repair of owner/neighbour
 or face ordering, and any CLI, case-tree or GUI entry point for these operations.
+
+## Post-hoc note: non-orthogonality angle formulation
+
+The registered ADR 0018 E1 check (non-orthogonality unchanged by rigid and uniform maps to 1e-9) was first recorded as a known miss
+(1.479e-6 degrees) because `compute_metrics` evaluated `acos(cos)` of the angle between the cell-centre vector and the face normal,
+which has conditioning 1/sin(angle) and so loses half the digits for (nearly) orthogonal faces. It now uses
+`atan2(|d x n|, d . n)`, the formulation the extended measures already used. This was the only `acos`-of-cosine geometric angle in
+the mesh metrics. The definition is unchanged: it is the same angle, evaluated stably. Degenerate inputs keep their old values (zero
+centre vector: 0 degrees; zero-area face: 90 degrees).
+
+Effect, measured with `rcfd check-mesh --json` before and after on the shipped case meshes (channel variants, packed bed, rotating
+channel, sod, wedge) and the Gmsh test meshes (hex, prism, tet): max and mean non-orthogonality change by at most 1.21e-6 degrees; no
+warning, error or exit code changed (all exit 0, identical warning and error lists). The solver does not read this angle (the
+`non_orthogonal_correctors` setting uses the geometric face vectors), and the baseline hash tests pass unchanged without
+re-recording. The invariance test is now `e1_non_orthogonality_invariance` (renamed from `..._known_miss`, un-ignored; the
+assertion and the 1e-9 limit are untouched); the worst change under the E1 maps fell from 1.479e-6 to 3.5e-13 degrees. ADR 0018 itself
+is not edited: its results text records the miss as it was at the time.

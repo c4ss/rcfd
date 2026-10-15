@@ -190,12 +190,19 @@ pub fn compute_metrics(mesh: &Mesh) -> Metrics {
             (vec3::sub(fcs[f], cc[o]), cc[o])
         };
         let dm = vec3::norm(d);
-        let cos = if dm > 0.0 {
-            (vec3::dot(d, n_hat) / dm).clamp(-1.0, 1.0)
+        // Angle between d and the face normal as atan2(|d x n|, d . n): well conditioned near 0 and 90 degrees,
+        // where acos(cos) loses half the digits (ADR 0018 results, F-231). Degenerate cases keep their old
+        // values: d = 0 gives 0 degrees, a zero-area face gives 90 degrees.
+        let angle = if dm == 0.0 {
+            0.0
+        } else if vec3::norm(n_hat) == 0.0 {
+            90.0
         } else {
-            1.0
+            vec3::norm(vec3::cross(d, n_hat))
+                .atan2(vec3::dot(d, n_hat))
+                .to_degrees()
         };
-        non_orth.push(cos.acos().to_degrees());
+        non_orth.push(angle);
         let dn = vec3::dot(d, n_hat);
         let fi = if dn.abs() > 0.0 {
             vec3::add(base, vec3::scale(d, vec3::dot(vec3::sub(fcs[f], base), n_hat) / dn))

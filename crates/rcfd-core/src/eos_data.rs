@@ -1,7 +1,8 @@
 //! Critical constants and acentric factors for the cubic equations of state (ADR 0007).
 //!
 //! Published critical-point data of the common gases (NIST Chemistry WebBook fluid pages / Reid, Prausnitz and Poling).
-//! The numbers were written from memory of those sources and are listed as unverified in `docs/reference-data.md`.
+//! The numbers were first written from memory; each one was re-read against the NIST WebBook fluid pages and the
+//! result is recorded in `docs/verification-report.md` (all confirmed after the argon acentric factor fix).
 
 use crate::fluids::species;
 
@@ -29,7 +30,7 @@ pub fn critical_data(name: &str) -> Option<CriticalData> {
     let (tc, pc, omega) = match upper.as_str() {
         "N2" => (126.192, 3.3958e6, 0.0372),
         "O2" => (154.581, 5.0430e6, 0.0222),
-        "AR" => (150.687, 4.8630e6, -0.002),
+        "AR" => (150.687, 4.8630e6, -0.00219),
         "CO2" => (304.1282, 7.3773e6, 0.22394),
         "CH4" => (190.564, 4.5992e6, 0.01142),
         "H2" => (33.145, 1.2964e6, -0.219),

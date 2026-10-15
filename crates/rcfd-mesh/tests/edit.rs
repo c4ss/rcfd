@@ -113,7 +113,7 @@ fn e1_transforms_keep_volumes_and_areas_exact() {
                 }
                 // dimensionless quality is invariant
                 // (the non-orthogonality part of this registered check is in
-                // `e1_non_orthogonality_invariance_known_miss`, see the ADR results)
+                // `e1_non_orthogonality_invariance`)
                 let (m0, m1) = (compute_metrics(&base), compute_metrics(&m));
                 for (x, y) in m0.aspect_ratio.iter().zip(&m1.aspect_ratio) {
                     assert!(
@@ -132,13 +132,11 @@ fn e1_transforms_keep_volumes_and_areas_exact() {
 }
 
 /// Registered limit (ADR 0018 E1): the existing non-orthogonality is unchanged by rigid and uniform maps to
-/// 1e-9 (absolute below 1 degree, relative above). MISSED: the existing `compute_metrics` evaluates
-/// `acos(cos)`, which has a conditioning of 1/sin(angle): for a (near) orthogonal face the rounding noise of the
-/// cosine, about 1e-16, becomes about 1e-8 rad = 1e-6 degrees. The limit stays; the metric is "unchanged" by the
-/// roadmap note, so it is not edited. See `e1_non_orthogonality_noise_diagnosis` for the measured noise.
+/// 1e-9 (absolute below 1 degree, relative above). This was first a known miss (1.479e-6 degrees) because
+/// `compute_metrics` evaluated `acos(cos)`, conditioning 1/sin(angle); it now uses `atan2(|d x n|, d . n)` and the
+/// assertion below is the registered one, unchanged. See docs/mesh-quality.md (post-hoc note).
 #[test]
-#[ignore = "known miss: acos conditioning of the existing non-orthogonality metric, ADR 0018 results"]
-fn e1_non_orthogonality_invariance_known_miss() {
+fn e1_non_orthogonality_invariance() {
     for (bname, base) in bases() {
         for (mname, a, invariant, _) in maps() {
             if !invariant {
@@ -156,8 +154,8 @@ fn e1_non_orthogonality_invariance_known_miss() {
     }
 }
 
-/// Diagnosis of the miss above (print only, no pass criterion): the change in non-orthogonality is rounding noise of
-/// order sqrt(machine epsilon) in radians. The measured worst value is recorded in the ADR results.
+/// Diagnosis (print only, no pass criterion), kept as a record: before the atan2 form the change was rounding noise of
+/// order sqrt(machine epsilon) in radians (1.479e-6 degrees, ADR results); it is now 3.5e-13 degrees.
 #[test]
 fn e1_non_orthogonality_noise_diagnosis() {
     let mut worst = 0.0f64;
