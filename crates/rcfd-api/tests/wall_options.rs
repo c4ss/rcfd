@@ -275,3 +275,45 @@ fn apply_functions_set_the_library_model() {
     apply_kepsilon(&o3, &mut ke);
     assert_eq!((ke.roughness.ks, ke.roughness.cs), (2.0e-3, 0.5));
 }
+
+/// C5 completion (wave 13): the two settings the first equality test did not cover, `wall_function = "enhanced"` and an
+/// explicit `roughness_constant`. Same method and the same 1e-12 limit as `c5_tree_run_equals_library_run`.
+#[test]
+fn c5b_enhanced_and_explicit_roughness_constant() {
+    fn ke_ctx(ctx: &ModelContext) -> ModelContext {
+        let mut c = ctx.clone();
+        c.k0 = 1.0;
+        c.eps0 = 0.36;
+        c
+    }
+    fn ke_enhanced(ctx: &ModelContext) -> Box<dyn TurbulenceModel> {
+        let mut m = KEpsilonModel::new(&ke_ctx(ctx)).unwrap();
+        m.m.wall_function = WallFunction::Enhanced;
+        Box::new(m)
+    }
+    fn ke_rough_cs(ctx: &ModelContext) -> Box<dyn TurbulenceModel> {
+        let mut m = KEpsilonModel::new(&ke_ctx(ctx)).unwrap();
+        m.m.roughness = rcfd_turb::wall::Roughness { ks: 2.0e-2, cs: 0.5 };
+        Box::new(m)
+    }
+    let k1 = library_run_key("c5b_ke_enhanced", ke_enhanced);
+    let k2 = library_run_key("c5b_ke_rough_cs", ke_rough_cs);
+    let names = ["ux", "p", "nut", "k", "epsilon"];
+    for (label, tree_text, key) in [
+        ("ke enhanced", with_ke("wall_function = \"enhanced\""), k1),
+        (
+            "ke roughness + explicit constant",
+            with_ke("roughness_height = 2.0e-2\nroughness_constant = 0.5"),
+            k2,
+        ),
+    ] {
+        let tree = run60(&tree_text);
+        let lib = run60(&plugin_text(&lf(KE_RAW), &key));
+        let default = run60(&lf(KE_RAW));
+        let d = max_diff(&tree, &lib, &names);
+        let eff = max_diff(&tree, &default, &names);
+        println!("C5b {label}: tree vs library max |diff| = {d:.3e}; option effect vs default run = {eff:.3e}");
+        assert!(d <= 1e-12, "{label}: {d:e}");
+        assert!(eff > 0.0, "{label}: the option changed nothing");
+    }
+}
