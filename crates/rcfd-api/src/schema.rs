@@ -566,6 +566,13 @@ pub fn case_schema() -> Schema {
                 .doc("Specific dissipation rate of an inlet (k_omega_sst with turbulence_spec = values)"),
         )
         .field(
+            "nutilde_value",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .dim(Dimension::KINEMATIC_VISCOSITY)
+                .doc("Spalart-Allmaras working variable nuTilda of an inlet [m^2/s]; 0 = turbulence.nutilde_ratio times physics.nu"),
+        )
+        .field(
             "compressible_bc",
             Schema::enumeration(
                 "auto",
@@ -967,11 +974,61 @@ pub fn case_schema() -> Schema {
             Schema::list(Schema::string("")).doc("Cell fields to accumulate: ux, uy, uz, speed, p (empty = ux, uy, uz, p). Results are the fields <name>_mean, _rms, _std, _min, _max in solution.vtu, probes and reports"),
         );
 
+    let coef_obj = |table: Vec<rcfd_turb::CoefficientInfo>, doc: &str, zero_default: bool| {
+        let mut o = Schema::object().doc(doc);
+        for c in table {
+            let d = if zero_default { 0.0 } else { c.default };
+            let lo = if zero_default { 0.0 } else { c.min };
+            o = o.field(c.name, Schema::float(d).range(lo, c.max).doc(c.doc));
+        }
+        o
+    };
+    let coefficients = Schema::object()
+        .doc("Model coefficients, visible for every model; only the group of the active model is used (a non-default value in another group is a validation error)")
+        .field(
+            "k_epsilon",
+            coef_obj(
+                rcfd_turb::ke_coefficient_table(),
+                "k-epsilon coefficients; 0 keeps the value of the selected variant",
+                true,
+            ),
+        )
+        .field(
+            "k_omega_sst",
+            coef_obj(
+                rcfd_turb::sst_coefficient_table(),
+                "k-omega SST coefficients (Menter 2003, NASA TMR values). Shown for reference: this version rejects a non-default value",
+                false,
+            ),
+        )
+        .field(
+            "sa",
+            coef_obj(
+                rcfd_turb::sa_infos(rcfd_turb::SaCoefficients::default()),
+                "Spalart-Allmaras coefficients (TMR values); cw1 follows from cb1, cb2, sigma and kappa",
+                false,
+            ),
+        );
+    let sa_group = Schema::object()
+        .doc("Spalart-Allmaras options")
+        .field(
+            "wall_mode",
+            Schema::enumeration("auto", &["auto", "resolved"]).doc("auto: Spalding law of the wall for the wall shear and, for wall-cell y+ > 5, a wall-cell nuTilda matching the law, so that y+ from about 1 into the log layer works; resolved: nuTilda = 0 on the wall, no wall function (needs y+ of order 1)"),
+        )
+        .field(
+            "limiter",
+            Schema::enumeration("allmaras", &["allmaras", "min_0p3", "positive"]).doc("Limiter of S~: Allmaras, Johnson and Spalart (2012), S~ >= 0.3 Omega, or S~ > 0 only (NASA TMR options c, b, a)"),
+        )
+        .field(
+            "negative_nutilde",
+            Schema::boolean(true).doc("SA-neg treatment of a negative nuTilda (Allmaras, Johnson and Spalart 2012); off: nuTilda is clipped at zero"),
+        );
+
     let turbulence = Schema::object()
         .doc("Turbulence modelling (steady SIMPLE / SIMPLEC runs)")
         .field(
             "model",
-            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst"]).doc("laminar, the k-epsilon eddy-viscosity family with wall functions, or k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer"),
+            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "plugin"]).doc("laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
         )
         .field(
             "variant",
@@ -1047,6 +1104,27 @@ pub fn case_schema() -> Schema {
             Schema::float(10.0)
                 .range(1e-3, 1e6)
                 .doc("Viscosity ratio nut/nu used to derive the initial epsilon"),
+        )
+        .field(
+            "plugin",
+            Schema::string("").doc("Key of the registered turbulence model used when model = plugin (see rcfd_turb::register_model); an unregistered key is a validation error"),
+        )
+        .field(
+            "nutilde_ratio",
+            Schema::float(3.0)
+                .range(0.0, 1e4)
+                .doc("Spalart-Allmaras: nuTilda/nu of the initial field and of inlets without nutilde_value (TMR: 3 to 5 for far-field values)"),
+        )
+        .field("sa", sa_group)
+        .field("coefficients", coefficients)
+        .field(
+            "plugin_coefficients",
+            Schema::named(
+                Schema::object()
+                    .field("value", Schema::float(0.0).doc("Value of the plugin coefficient with this name"))
+                    .doc("Coefficient of the plugin model"),
+            )
+            .doc("Coefficients of the plugin model by name; the plugin lists the names it accepts, others are rejected with a located diagnostic"),
         );
 
     let state = |name: &str, rho: f64, p: f64| {
