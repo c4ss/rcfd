@@ -584,3 +584,13 @@ re-derived in the ADR or checked numerically as stated. No vendor data is used.
 | Vent loss law `dp = K rho u |u| / 2` | common engineering practice | unverified (memory); the quadratic law with the dynamic head `rho u^2/2` as the unit is a project definition |
 | Inlet turbulence `k = 1.5 (I U)^2`, `eps = Cmu^(3/4) k^(3/2) / l`, `eps = Cmu k^2 / (nu ratio)`, `omega = eps / (beta* k)` | standard | pre-existing helpers (F-044); the registered values 3.75e-3, 5.390521e-4, 1.597191, 1.265625e-6 are arithmetic of these formulas; unverified (memory) |
 | Secant and dynamic-head sensitivity updates of the target-mass-flow pressure | generic root finding | project design; the secant option is a documented known miss (ADR 0022 addendum) |
+
+## Wave 17C GUI, assistant and renderer (F-143, F-144, F-149, F-150, F-073, ADR 0025)
+
+No physical reference value is introduced. Conventions used by the checks, all from memory and unverified as citations: Rec. 709 luma
+weights (0.2126, 0.7152, 0.0722) for the colour-map luminance test; the "1-2-5" family (with 2.5) of tick steps; min/max bucket
+decimation for plot data. The OpenAI-compatible wire format (`POST /v1/chat/completions`, `GET /v1/models`, SSE `data:` events with
+`[DONE]`, `Authorization: Bearer`) and the default local ports (Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000) are
+recalled from memory and unverified against current documentation; they were checked only against the loopback mock server written
+for the tests, which shares the author's understanding of the format, so agreement is not independent evidence about any real server.
+The lid-driven cavity logic check (top-row mean ux, return flow) is a sanity bound, not a benchmark comparison.

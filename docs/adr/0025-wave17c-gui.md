@@ -208,3 +208,74 @@ New: `crates/rcfd-gui/src/raster.rs`, `crates/rcfd-gui/tests/{viewport_raster,mo
 `crates/rcfd-assistant/tests/{key_security,local_endpoints}.rs` and a small shared `tests/common` mock server module,
 `crates/rcfd-post/tests/render_pixels.rs`. Edited: `crates/rcfd-gui/src/{monitors,viewport,ui,lib}.rs`,
 `crates/rcfd-gui/Cargo.toml`, docs and roadmap.
+
+## Addendum A: results and disclosed deviations (written after the first runs; registered limits above are unchanged)
+
+Environment: Windows 11, release builds (`cargo test --release`), loopback only. Nobody looked at any screen.
+
+| Check | Result | Measured vs limit |
+| --- | --- | --- |
+| V1 colour map endpoints, clamping, NaN, degenerate range | pass | endpoints exact; rise 200.4 vs >= 150 |
+| V1 luminance non-decreasing over 1001 samples, tolerance 0 | MISS (known miss) | largest decrease 0.2126 luma (see below) |
+| V2 raster pixels (68 x 36 px, all pixels) | pass | 0 wrong of 2448 (expected exact) |
+| V3 hover mapping | pass on the corrected test `v3b` (see deviations) | 148 defined cells, corners, outside, undefined |
+| V4 legend ticks, 12 fixed ranges | pass | all limits |
+| V4 legend ticks, 300 random ranges | pass on the corrected test `v4b` (see deviations) | all limits |
+| V5 legend image, V6 cell view (144 of 144), V7 range logic, V8 PNG (0 differing pixels) | pass | as registered |
+| V9 headless frame at 1280 x 800: painted fills contain every colour of the raster output with at least the expected multiplicity (cells plus 48 legend swatches); min and max colours painted; 7 of 7 sizes run with finite geometry | pass | |
+| V10 cavity logic check (300 iterations) | pass | top-row mean ux 0.573 (limit > 0.1), min ux -0.182 (limit < 0), speed maximum within the top two rows |
+| M1 log mapping | pass | `log10` bit-identical; worst `10^v / y - 1` = 4.2e-15 (limit 1e-12); decades within 1e-12 |
+| M2 filtering | pass | 100 log points, 103 linear points, none non-finite |
+| M3 decimation, N up to 1e6 | pass | length <= 2000, first/last kept, global min/max bit-identical, every bucket extremum present |
+| M4 stream ingest, 3 x 100 000 points with overlapping chunks | pass | 300 000 added, 0 dropped, values bitwise equal |
+| M5 poll a running case | pass | worst `poll` 22 ms (limit 1 s); a poll saw `running` with fewer than 60 iterations; `res_u` has exactly 60 samples |
+| M6 3 x 200 000 points, frame | pass | <= 4000 points per series, frame draws |
+| K1 precedence | pass | 4 of 4 |
+| K2 planted canary (assistant crate and through the GUI state with the key box, both keychain-ok and keychain-failing-and-echoing) | pass | 0 occurrences in every captured string; the canary reached the server in the credential header (non-vacuous); scanner self-test flags a planted string |
+| K3 file store | pass (Windows) | unix 0600 branch not run |
+| L1 presets | pass on the corrected test `l1b` | 4 of 4: path `/v1/chat/completions`, no auth header, documented default ports |
+| L2 probe, L3 streaming (chunked, 5-fragment tool arguments, cut stream is an error), L4 keyed header, L5 connectivity (refused, hang with 1 s timeout under 3 s, short body) | pass | |
+| L6 quick actions with a configured local endpoint | pass | 4 of 4 produced chat entries; the mock saw 0 connections |
+| R1 pixels | pass | 20 of 20 within 1/255 |
+| R2 1 M cells | pass | render 1.033 s (limit 2 s), PNG encode 0.057 s, release, mesh generation excluded, machine possibly shared with other builds |
+| R3 PNG | pass | 0 differing pixels |
+
+Mutation check (not registered): with `Secret::scrub` disabled the K2 scan flags 18 captured strings, so the scan is not vacuous; the
+change was reverted.
+
+### Misses and diagnosis
+
+* V1 luminance, 1001 samples, tolerance 0: missed. The control-point ramp is linear in each channel, but the colours are rounded to
+  8 bits per channel; the luma `0.2126 R + 0.7152 G + 0.0722 B` of neighbouring samples (step 0.001) can therefore fall by up to one
+  red quantum, 0.2126. This is quantisation, not a non-monotone ramp: at 101 samples the luma is strictly non-decreasing and the
+  largest decrease at 1001 samples is 0.2126 (< 1.0). Registered assertion kept in the ignored test
+  `v1_luminance_non_decreasing_1001_samples_known_miss`; the post-hoc test `v1_posthoc_luminance_monotone_up_to_quantisation` is NOT
+  a registered check (its limits were chosen after the diagnosis).
+
+### Set-up defects (old tests kept ignored, corrected tests added)
+
+* V3: the test grid left cell index 152 (the corner (16, 8)) undefined, so "corners clamp to the corner cells" could not hold for it.
+  Old `v3_hover_mapping` kept ignored; `v3b_hover_mapping_corrected_setup` uses a different undefined set. Limits unchanged.
+* V4: the random-range generator produced ranges with span below 1e-7 of |lo| (for example (-1166.5694769, -1166.5693925)), where
+  f64 tick positions carry about 2e-13 absolute error, making the registered 1e-9 relative spacing check unattainable for any f64
+  implementation. Old test kept ignored (`v4_legend_ticks_random_ranges_unguarded`); `v4b_...` requires span >= 1e-4 |lo|. The fixed
+  12 ranges (a separate passing test) were unaffected. Ticks are produced by repeated addition; not changed.
+* L1: registered text said the body has `stream: false`; the adapter omits the key when not streaming (the documented default).
+  Old test kept ignored; `l1b` accepts absent-or-false and checks the streaming test sends `stream: true`.
+* K2 harness: "credential header" means `Authorization` and the Anthropic `x-api-key`; the first run excluded only `Authorization`
+  and flagged `x-api-key`, which is the credential header of that protocol. The helper now excludes both; no assertion text changed.
+
+### Other deviations
+
+* The field name for V10 is `ux` (the schema's name), not `u`; the lid speed of the template is 1.0.
+* V9 compares fills as a multiset (each expected colour occurs at least as often as expected), which is slightly stronger than the
+  registered "at least the number of defined cells".
+* The mock server initially sent bare newlines instead of CRLF in the chunked reply (a bug in the test harness, fixed before any
+  streaming result was accepted); the client was not at fault.
+* Test file layout differs from the "Files" list: the GUI-side key flow and L6 are in `rcfd-gui/tests/key_security.rs`.
+
+### Unverified and not delivered (unchanged by this wave)
+
+Visual correctness of the viewport and plots; human-perceived update latency; the real OS keychain, native file dialogs and unix
+0600 permissions; any real hosted provider or local model server and the tool-calling quality of small models; behaviour on
+other hardware for R2. F-094's optional real-model run is not done. The wave did not touch the Claude Code mod extras (F-092, F-093).
