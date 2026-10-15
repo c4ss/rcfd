@@ -303,3 +303,18 @@ per 50 iterations (3e-8 at iteration 400) while the reference normalisation sits
 Registered now, before the full runs: F1c, F2c, F3c = F1-F3 with `pseudo_mode = physical`, `pseudo_dt = 0.2`, no controller,
 `residual_norm = scaled`, identical targets (1e-12), cap (6000 iterations) and accuracy limits. A miss becomes `f?c_*_known_miss`.
 These pass or fail on the normalisation alone; they say nothing in favour of the controller.
+
+## Addendum A7: E1 missed as registered (relative error scale); absolute-reference variant E1b / E2b registered before its run
+
+E1 as registered (library unit test in `ddt.rs`): the error-controlled run takes 81 steps to a final error 2.96e-3, the uniform step
+count that reaches that error is 76, so the limit `N_c <= 0.8 N_f` is MISSED (the other limit, `E_c <= 10 tol`, is met). Diagnosis
+(analytic): the registered estimate divides by the current maximum of the solution, so for the scale-invariant exponential decay the
+relative local error `0.5 (lambda dt)^2` does not depend on `u` and the controller holds a constant step; it cannot beat uniform
+stepping (and pays the start-up from `dt0 = 1e-3`). The registered test is kept, ignored, as `e1_*_known_miss`.
+
+Registered now, before it is run: `ErrorController.abs_ref: Option<f64>`; with `Some(r)` the divisor is the fixed `r` instead of the
+current maximum (an absolute error target relative to a reference magnitude; default `None` keeps the registered relative behaviour).
+E1b = E1 with `abs_ref = Some(max|u(0)|)` (= 1), same tolerance and bounds and the same limits (`N_c <= 0.8 N_f`, `E_c <= 10 tol`); at
+a constant decay rate the controlled step then grows as `exp(lambda t / 2)` which is what a global absolute error target rewards. E2 (TG)
+is run as registered (relative), and E2b with `abs_ref = Some(1.0)` (the initial maximum speed), with the same two limits; E2/E2b misses
+become `*_known_miss` tests.
