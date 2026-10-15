@@ -756,3 +756,60 @@ scale. The controllers are NOT validated (known misses, ADR 0023 addendum A8); f
 
 `rcfd reactor <case.json>` and `rcfd acoustics <surface.json>` take their own JSON documents, described with
 examples in [reactor-and-acoustics.md](reactor-and-acoustics.md); they are not sections of the CFD case file.
+
+## Wave 17B: conjugate heat transfer (F-051, ADR 0024)
+
+Solid cell zones with their own conductivity, density and specific heat, thermal contact resistance between materials, and a
+convection / thin-wall / radiation-to-ambient wall condition. Every new key has an explicit unset sentinel (`-1`, `""` or an
+empty list) and a located error when it is needed and unset; none shadows another value. All of it is additive: a case without
+these keys behaves bit-identically to before.
+
+The temperature equation is kept in the conductive form normalised by the fluid `physics.rho * physics.cp`; a solid enters through
+per-cell conductivity and heat capacity (face conductivity is the distance-weighted harmonic mean, so the interface flux is exact
+for equal-sized cells). A conforming interface and a non-conformal one (`mesh.generator = "channel_2d_interface"`, joined faces
+are ordinary internal faces) are treated alike. Volumetric heat generation in a solid is a `zone_sources` entry on the temperature.
+
+### `solids.<name>`
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `zone` | `"unset"` (an error) | `all`, `box`, `cell_zone` or `register`; with `box_min`, `box_max`, `cell_zone`, `register` as for `zone_sources` |
+| `conductivity` | `-1` (an error) | W/m/K, constant, isotropic |
+| `density` | `-1` (an error) | kg/m^3 |
+| `specific_heat` | `-1` (an error) | J/kg/K |
+| `initial_temperature` | `-1` = use `initial.temperature` | K |
+
+Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and `solver.frozen_flow = true`.
+
+### `thermal_interfaces.<name>`
+
+`solid_a`, `solid_b` (a `solids` name or `"fluid"`; empty is an error; the two must differ) and `resistance` (m^2 K/W, `-1` = unset
+is an error, `0` = perfect contact). The resistance is added in series on the internal faces between exactly these two materials.
+
+### `solver.frozen_flow`
+
+Default `false`. When `true`, momentum and pressure are not solved: the face flux is `u(x_f) . S_f` from `initial.velocity` and
+`initial.velocity_expression_x/y/z` evaluated at the FACE centres. Patches whose velocity condition is `symmetry`, a wall type
+(`moving_wall`, `shear`, `partial_slip`, `marangoni`) or a `fixed` zero velocity carry no flux. Located errors when the flux does not
+vanish on a face touching a solid (`initial.velocity_expression_x`), when the largest cell imbalance exceeds 1e-6 of the largest
+face flux (`initial.velocity`), and for solids or a prescribed flow combined with `properties` laws, radiation, a turbulence model,
+the compressible / variable-density solvers, `components`, `coupled`, buoyancy (thermal expansion with gravity), rheology, user
+functions or `fixed_value` zone sources. Available with `simple`, `simplec`, `piso`, `pimple`; steady runs iterate the energy
+equation (`solver.tolerance_u` is its residual target), transient runs advance it with `solver.dt`, `solver.time_scheme`. A solved
+(pressure or buoyancy driven) flow coupled to solids is NOT available (named gap of F-051).
+
+### `boundaries.<patch>.temperature = "convection"`
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `heat_transfer_coefficient` | `-1` (an error); `0` allowed | W/m^2/K to the free stream |
+| `free_stream_temperature` | `-1`; required when `h > 0` | K |
+| `wall_thickness`, `wall_conductivity` | empty = no thin wall | lists of equal length: steady series resistance `sum t_i/k_i`, no thermal capacity |
+| `wall_emissivity` | `0` = no radiation | emissivity of the external surface in [0, 1]; a separate key from `emissivity` (the P1 radiation wall) so that existing cases keep their meaning |
+| `radiation_temperature` | `-1`; required when `wall_emissivity > 0` | ambient K the surface radiates to |
+
+Heat leaves through the chain half cell `dn/k` (conductivity of the owner cell), wall layers, then `h (Ts - T_inf) + eps sigma (Ts^4 -
+Ta^4)` at the external surface; the nonlinear boundary equation is solved by Newton and linearised exactly, so steady runs iterate
+to its exact solution. These keys on a patch whose `temperature` is not `convection` are an error. Constants only (no expression forms).
+`heat_flux` and the `heat_flow` report use the conductivity of the owner cell of each face when solids exist (a report-level
+`conductivity` is then an error).

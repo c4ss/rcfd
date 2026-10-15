@@ -246,3 +246,71 @@ Solved (pressure/buoyancy-driven) flow coupled to solids; temperature-dependent 
 shell/thin-wall thermal capacity (steady resistance only); expression forms of the new boundary keys; radiation between surfaces
 (only radiation to an ambient temperature); per-region model sets (F-216), solidification (F-212), Joule heating (F-213); curved or
 partially overlapping non-conformal interfaces (F-114 limits).
+
+## Addendum: results, deviations and what was not delivered
+
+Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/{cht,thermal_bc}.rs` (commit 7491a22), case checks in
+`crates/rcfd-api/tests/cht_case.rs`. "Measured" values are printed by the tests (`--nocapture`).
+
+### Results (measured against the registered limit)
+
+| Check | Limit | Measured |
+| --- | --- | --- |
+| A1 convection slab, temperature / heat flow | 1e-10 dT | 1.6e-14 / 3.2e-14 (case level 2.5e-15) |
+| A2 thin wall | 1e-10 | 1.4e-14 |
+| A3 convection + radiation (surface 740.950376 K); A3b pure radiation (752.690728 K) | 1e-9 | 4.6e-14; 2.2e-14 (case level A3b 8.4e-15) |
+| A4 balance | 1e-12 | met |
+| A5 fin (2-D vs 1-D formula; refinement change) | 1e-2; 2e-3 | 3.34e-4; 3.1e-5 |
+| A6 lumped slab at tau / 2 tau | 1e-2 | 3.58e-3; 7.18e-3 |
+| B1 three-layer wall uniform / graded | 1e-10 | 3.4e-13; 4.5e-13 |
+| B2 interface flux continuity | 1e-10 relative | 1.2e-12; 9.2e-12 |
+| B3 zone balances (1-D, global; warped mesh) | 1e-9 | 1.3e-13, 1.4e-13; 6.8e-15 |
+| B4 transient contact errors (320, 640, 1280), orders | 1e-3 finest; order >= 1.5 | 6.57e-4, 1.64e-4, 4.10e-5; 2.000, 2.002 |
+| B5 enthalpy drift Euler / BDF2 | 1e-12 | 3.5e-13; 4.9e-13 |
+| C1 non-conformal (library): error, ratio, conservation | 1e-2; 1.5; 1e-9 | 3.2e-5 (finest), 1.98, 8.6e-14 |
+| C2 same through the tree | same | 3.2e-5, 1.98, 2.3e-13 |
+| D1 duct n_f = 16 (central scheme, see deviation 3) | 1e-2 | 1.5e-4 |
+| D2 orders (16, 32, 64) | 1.8 | 1.9989, 1.9997 |
+| D3 balance / interface flux (n_f = 32) | 1e-9 / 1e-3 | 1.2e-11 / 5.3e-5 |
+| D4 case-level duct, n_f = 32, midpoint flux | 1e-2 | 1.2e-5 |
+| E1 contact resistance temperature / jump | 1e-10 | 1.4e-14 / 2.3e-14 |
+| E2 thin wall equals resolved layers | 1e-10 | 1.9e-14 |
+| F1 composite wall through the tree | 1e-9 dT | 2.8e-13 |
+| F2 transient contact through the tree (N = 640) | 1e-3 | 1.64e-4 |
+| F3 heat_flow reports (solid and fluid patch) | 1e-9 | 6.7e-12; 3.5e-13 |
+| F4 located validation errors (19 cases) | each asserted by path | all met |
+| F5 baseline hashes | unchanged | `baseline_hashes` passes unchanged (no hash re-recorded) |
+
+### Deviations from the registered text (disclosed, none loosens a limit)
+
+1. **Steady stop criterion.** The registered library stop "change below 1e-13 in at most 400 sweeps" is unattainable: every sweep restarts
+   the linear solve with `tol_rel = 1e-13`, so the change stagnates at 1e-12 to 1e-11 (noise of order `tol_rel T`). The library harness
+   stops at 1e-11 (sanity assertion 1e-10). The accuracy limits above are unchanged.
+2. **A3 set-up defect.** The first A3/A3b tests asserted the heat flow with the sign of an inflow. The tests `a3_radiation_with_convection`
+   and `a3b_pure_radiation` are kept as ignored records; the corrected `*_v2` tests pass.
+3. **D set-up defect (diagnosed, not tuned).** The ADR sentence "upwind convection (exact for a linear profile in x)" is wrong at the
+   Dirichlet inlet face: there the boundary face value is carried, while interior faces carry the upstream CELL value, which is an O(dx)
+   discrepancy independent of `n_f`. With upwind the errors were 8.4e-3, 8.36e-3, 8.33e-3 (orders 0.02, 0.005; D2 failed), D3 interface
+   flux 2.95e-3 (> 1e-3); D1 passed only by coincidence. The corrected tests `*_central` use central convection (second order, exact
+   for a linear profile) and meet all limits; the upwind tests are kept as ignored records. The case-level D4 uses `solver.convection =
+   "central"`. Energy conservation was fine with either scheme (7e-12 with upwind).
+4. **Key name.** The registered `emissivity` key of the convection condition collides with the existing P1-radiation `boundaries.*.emissivity`
+   (default 1.0). It is `wall_emissivity` (default 0 = none) so that no existing value changes meaning.
+5. **Which patches carry no prescribed flux.** The ADR text says "wall patches"; `box_2d` labels every patch a wall, so the rule is by the
+   velocity condition instead: `symmetry`, any wall type, or `fixed` with zero velocity and no expression or user function.
+6. **Buoyancy conflict** is raised only when `energy.buoyancy` (default true) can act, i.e. `physics.thermal_expansion` and `physics.gravity` are
+   non-zero, not on the bare default.
+7. **Additional unregistered checks** (supplementary evidence, same limits as the library counterparts): `convection_wall_through_the_tree`
+   (A1 and A3b through the settings tree) and the ignored upwind records.
+
+### Not delivered (final)
+
+* A SOLVED flow coupled to solid zones (pressure-driven or buoyancy-driven). `solids` require `solver.frozen_flow = true`. The cell flux
+  through solids cannot be removed without changing the pressure-velocity core (wave 17A's files); a penalty approach was examined and
+  rejected (Rhie-Chow face interpolation across fluid/solid faces leaves a bypass leak). This is the principal gap behind `partial`.
+* Temperature-dependent and orthotropic solid conductivity (F-220); thermal capacity of thin wall layers (steady resistance only);
+  expression forms of the new boundary keys; surface-to-surface radiation (only radiation to an ambient temperature); solids with
+  turbulence, radiation, `properties` laws, compressible flow (each a located error).
+* F-216 (per-region model sets), F-212 (solidification) and F-213 (Joule heating as a dedicated feature; a `zone_sources` source in a solid
+  works) were not attempted. F-215 (interface physics) is NOT marked done: only the contact-resistance and thin-wall evidence (E1, E2) exists.
+* Curved or partially overlapping non-conformal interfaces (F-114 limits); an unequal-area non-conformal solid-solid check beyond C1/C2.

@@ -3,6 +3,7 @@
 //! CLI, the solver service and the MCP tools.
 
 use crate::case::{Case, Diagnostic};
+use crate::cht::ChtModel;
 use crate::comp::{self, CompState};
 use crate::exprs;
 use crate::lumped::Components;
@@ -615,6 +616,10 @@ pub struct Simulation {
     scalars: Option<ScalarState>,
     /// Zone sources and fixed values of the temperature and the scalars (F-201).
     zone_sources: Option<ZoneSources>,
+    /// Conjugate heat transfer: solid zones, contact resistances, prescribed flow (ADR 0024).
+    cht: Option<ChtModel>,
+    /// Iterations performed with a prescribed flow (the flow solver is not advanced).
+    frozen_iter: usize,
     props: Option<Properties>,
     t_init: f64,
     /// Run-time statistics of transient runs (F-116).
@@ -703,6 +708,11 @@ impl Simulation {
             &mut p.values,
             &mut temp.values,
         ));
+        let cht = if compressible || vdens {
+            None
+        } else {
+            ChtModel::from_case(case, &geom, solver_conv_scheme(case).needs_gradient())?
+        };
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
         let mut marangoni: Vec<(String, f64)> = Vec::new();
         let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
@@ -856,6 +866,9 @@ impl Simulation {
                             }
                         }
                     }
+                    "convection" if cht.is_some() => {
+                        crate::cht::convective_bc(case, cht.as_ref().expect("checked"), &geom, &patch.name)
+                    }
                     "heat_flux" => {
                         if kth <= 0.0 {
                             errs.push(Diagnostic {
@@ -868,8 +881,23 @@ impl Simulation {
                         match exprs::compile_bc(case, &format!("{b}.heat_flux_expression"), Dimension::HEAT_FLUX, &sctx)
                         {
                             // heat flux into the domain q = k dT/dn_out
-                            Ok(Some(c)) => Box::new(FixedGradient(per_face(&c, inv_k))),
-                            Ok(None) => Box::new(FixedGradient(Profile::scalar(qval * inv_k))),
+                            Ok(Some(c)) => match &cht {
+                                Some(m) => {
+                                    let q: Vec<f64> = match per_face(&c, 1.0) {
+                                        Profile::PerFace(v) => v.iter().map(|x| x[0]).collect(),
+                                        Profile::Uniform(v) => vec![v[0]; patch.faces().count()],
+                                    };
+                                    crate::cht::heat_flux_bc(m, &geom, &patch.name, &q)
+                                }
+                                None => Box::new(FixedGradient(per_face(&c, inv_k))),
+                            },
+                            Ok(None) => match &cht {
+                                Some(m) => {
+                                    let q = vec![qval; patch.faces().count()];
+                                    crate::cht::heat_flux_bc(m, &geom, &patch.name, &q)
+                                }
+                                None => Box::new(FixedGradient(Profile::scalar(qval * inv_k))),
+                            },
                             Err(e) => {
                                 errs.extend(e);
                                 Box::new(ZeroGradient)
@@ -1214,6 +1242,9 @@ impl Simulation {
                 solver.solver.tol_abs = 1e-300;
                 solver.solver.max_iter = 2000;
             }
+            if let Some(m) = &cht {
+                m.configure(&geom, &mut solver);
+            }
             Some(EnergyState {
                 solver,
                 beta: get_f(case, "physics.thermal_expansion"),
@@ -1226,6 +1257,14 @@ impl Simulation {
         } else {
             None
         };
+        let mut engine = engine;
+        if let Some(phi) = cht.as_ref().and_then(|m| m.frozen_flux.as_ref()) {
+            match &mut engine {
+                Engine::Steady(s) => s.phi = phi.clone(),
+                Engine::Transient(s) => s.phi = phi.clone(),
+                _ => {}
+            }
+        }
         let dt = get_f(case, "solver.dt");
         let max_cfl = get_f(case, "solver.max_courant");
         for (name, role, flag) in [
@@ -1334,6 +1373,8 @@ impl Simulation {
             radiation,
             scalars,
             zone_sources,
+            cht,
+            frozen_iter: 0,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
             stats,
@@ -1702,7 +1743,59 @@ impl Simulation {
         self.update_marangoni();
         let mut reason_override: Option<String> = None;
         let mut udf_error: Option<String> = None;
+        let frozen = self.cht.as_ref().is_some_and(|c| c.frozen_flux.is_some());
         let summary = match &mut self.engine {
+            Engine::Steady(s) if frozen => {
+                // prescribed flow (ADR 0024 D5): only the energy equation is iterated
+                self.frozen_iter += 1;
+                let iteration = self.frozen_iter;
+                if let Some(en) = &mut self.energy {
+                    if let Some(zs) = &self.zone_sources {
+                        zs.apply_temperature(&mut en.solver, None, 0.0);
+                    }
+                    en.res_t = en.solver.iterate(&s.phi);
+                }
+                let converged = self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u);
+                StepSummary {
+                    index: iteration,
+                    time: 0.0,
+                    res_u: 0.0,
+                    res_p: 0.0,
+                    continuity: 0.0,
+                    done: converged || iteration >= self.max_iter,
+                    converged,
+                }
+            }
+            Engine::Transient(s) if frozen => {
+                let dt = self.dt.min((self.end_time - s.time).max(1e-12));
+                if let Some(en) = &mut self.energy {
+                    if let Some(zs) = &self.zone_sources {
+                        zs.apply_temperature(&mut en.solver, None, s.time + dt);
+                    }
+                    en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
+                }
+                s.time += dt;
+                let step = s.history.len() + 1;
+                s.history.push(rcfd_fv::pimple::StepInfo {
+                    step,
+                    time: s.time,
+                    dt,
+                    courant: 0.0,
+                    continuity: 0.0,
+                    res_u: 0.0,
+                    res_p: 0.0,
+                    p_iters: 0,
+                });
+                StepSummary {
+                    index: step,
+                    time: s.time,
+                    res_u: 0.0,
+                    res_p: 0.0,
+                    continuity: 0.0,
+                    done: s.time >= self.end_time - 1e-12,
+                    converged: false,
+                }
+            }
             Engine::Steady(s) => {
                 if let Some(t) = &mut self.turb {
                     // eddy viscosity from the current flux, then the momentum step with it
@@ -2393,6 +2486,16 @@ impl Simulation {
                 })?;
                 if g.mesh.patch(&r.patch).is_none() {
                     return Err(Error::PathNotFound(format!("patch '{}'", r.patch)));
+                }
+                if let Some(m) = self.cht.as_ref().filter(|m| m.has_solids) {
+                    if r.conductivity > 0.0 {
+                        return Err(Error::Other(
+                            "heat_flow: a report-level conductivity is not used with solid zones (each face takes the conductivity of its cell)".into(),
+                        ));
+                    }
+                    return m
+                        .heat_flow_out(g, &en.solver, &r.patch)
+                        .ok_or_else(|| Error::PathNotFound(format!("patch '{}'", r.patch)));
                 }
                 // conductive heat flow out of the domain; a report-level conductivity overrides physics.conductivity
                 match &self.props {
