@@ -224,6 +224,20 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ));
         }
     }
+    let a0 = get_f(case, "turbulence.realizable_a0");
+    if a0 != 0.0 {
+        if get_s(case, "turbulence.model") != "k_epsilon" || variant_of(case) != KEpsilonVariant::Realizable {
+            out.push(diag(
+                "turbulence.realizable_a0",
+                "turbulence.realizable_a0 applies to turbulence.model = \"k_epsilon\" with variant = \"realizable\" only",
+            ));
+        } else if !(3.0..=5.0).contains(&a0) {
+            out.push(diag(
+                "turbulence.realizable_a0",
+                format!("realizable_a0 = {a0} is outside [3, 5] (the published values are 4.0 and 4.04; 0 keeps 4.04)"),
+            ));
+        }
+    }
     if (sst || sa || plugin) && get_f(case, "turbulence.epsilon_initial") > 0.0 {
         out.push(diag(
             "turbulence.epsilon_initial",
@@ -551,7 +565,16 @@ impl TurbState {
             _ => ("", false),
         };
         if !group.is_empty() {
+            let a0 = get_f(case, "turbulence.realizable_a0");
+            if group == "k_epsilon" && a0 != 0.0 {
+                if let Err(e) = model.set_coefficient("a0", a0) {
+                    errs.push(diag("turbulence.realizable_a0", e));
+                }
+            }
             for c in model.coefficients() {
+                if c.name == "a0" {
+                    continue;
+                }
                 let path = format!("turbulence.coefficients.{group}.{}", c.name);
                 let v = get_f(case, &path);
                 if zero_default && v == 0.0 {

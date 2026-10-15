@@ -9,7 +9,9 @@ pub mod sst;
 pub mod wall;
 
 pub use eddy::{effective_viscosity, patch_faces, MixingLength};
-pub use kepsilon::{wall_cell_sources, KEpsilon, KEpsilonVariant, WallTreatment};
+pub use kepsilon::{
+    wall_cell_sources, KEpsilon, KEpsilonVariant, WallTreatment, REALIZABLE_A0_DEFAULT, REALIZABLE_A0_ORIGINAL,
+};
 pub use model::{
     create_model, is_registered, ke_coefficient_table, model_keys, register_model, sa_infos, sst_coefficient_table,
     CoefficientInfo, ModelContext, TurbulenceModel,

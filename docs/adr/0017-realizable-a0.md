@@ -82,3 +82,38 @@ MESH_MEDIUM / MESH_FINE of `tests/common/step.rs`.
 
 `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --release
 --no-fail-fast` on a `git archive` copy of the final commit; `CARGO_TARGET_DIR=<target dir>`.
+
+## Results
+
+Measured 2026-10-15, release builds, `CARGO_TARGET_DIR=<target dir>`, BFS-C, Realizable. All six runs met the
+convergence criterion (max update < 1e-7, nu_t change < 1e-6; 489 to 1635 iterations). No registered limit was changed.
+
+| Check | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| P1 A0 = 4.0, medium x_r/h | 6.3486 | [6.16, 6.36] | PASS, marginal (0.011 below the upper edge) |
+| P2 explicit 4.04 vs default | 6.412696 vs 6.412696 (bit-equal); default vs 6.413 | `==`; within 5e-4 | PASS |
+| P3 A0 = 4.0 coarse / medium / fine | 6.174 / 6.349 / 6.453 | abs(fine - medium) <= 0.10 | MISS (0.105; not grid-converged) |
+| P4 delta x_r(4.0) - x_r(4.04), medium | -0.064 | hypothesis abs(delta) < 0.053 | hypothesis REFUTED (A0 alone moves x_r by 0.064) |
+| P5 baseline hashes and existing turbulence/API tests | `baseline_hashes` and `turb_models` unchanged and passing | bit-identical | PASS |
+| P6 schema and tree run | `crates/rcfd-api/tests/realizable_a0.rs` passes | as registered | PASS |
+
+For reference, the default (A0 = 4.04) series of ADR 0015 is 6.234 / 6.413 / 6.520 (coarse / medium / fine); with A0 = 4.0
+every mesh is lower by 0.060 / 0.064 / 0.067.
+
+Reading, with the caveats registered above:
+
+* A0 = 4.0 moves the Realizable medium-mesh value from a miss (6.413, 0.053 above the window) to a pass (6.349, 0.011
+  below the upper edge). The P4 hypothesis (that a 0.4 percent change of C_mu cannot flip the verdict) was wrong; the
+  response is larger than that estimate, about 0.064 for a 0.4 percent C_mu change, so the step flow is sensitive to the
+  C_mu level.
+* The pass is marginal by the registered definition: it is within 0.14 h of a window edge (0.011), it is smaller than the
+  0.14 shift that second-order k/epsilon convection causes (ADR 0015), and it fails the grid check P3 (|fine - medium| =
+  0.105). On the fine mesh x_r = 6.453 is outside the window (0.093 above the edge), and x_r still increases with
+  refinement. The window verdict therefore depends on the mesh used; the pass is not a grid-converged result and it is
+  not evidence that 4.0 makes the model correct, only that the previous 0.05 excess was within the sensitivity to A0.
+* The default stays 4.04. The decision to change it is left to the user. The ignored test
+  `step_c_realizable_a0_4_grid_study_known_miss` records the P3 miss; `step_c_realizable_a0_4_window` passes (ignored as
+  heavy). The old Realizable known-miss tests (A0 = 4.04) stay as they are and still miss.
+* No set-up defect was found. The old set-up (ADR 0015 "old") was not rerun with A0 = 4.0.
+* F-042 stays `partial`: of the registered step window only RNG meets it grid-converged; Realizable with A0 = 4.0 meets it
+  on the medium mesh only.

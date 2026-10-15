@@ -1127,6 +1127,12 @@ pub fn case_schema() -> Schema {
             ),
         )
         .field(
+            "realizable_a0",
+            Schema::float(0.0).doc(
+                "Realizable k-epsilon constant A0 in Cmu = 1/(A0 + A_s U* k/eps), allowed 3 to 5; 0 keeps the default 4.04 (a commonly cited commercial-code variant). The original report (Shih et al., NASA TM-106721) prints 4.0. realizable variant only (ADR 0017)",
+            ),
+        )
+        .field(
             "kappa",
             Schema::float(0.41).range(0.2, 0.6).doc("von Karman constant of the log law"),
         )

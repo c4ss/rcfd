@@ -78,6 +78,8 @@ pub struct StepCfg {
     pub sst_mode: SstWallMode,
     /// Wall-resolved mesh: first-cell height on the walls (`None`: the wall-function grading of `grading`).
     pub wall_first: Option<f64>,
+    /// Realizable `A0` override (`None`: the library default 4.04; ADR 0017).
+    pub a0: Option<f64>,
 }
 
 pub const MESH_COARSE: [usize; 4] = [16, 107, 27, 13];
@@ -115,6 +117,7 @@ impl StepCfg {
             sst_variant: SstVariant::Sst,
             sst_mode: SstWallMode::Automatic,
             wall_first: None,
+            a0: None,
         }
     }
 }
@@ -262,6 +265,9 @@ pub fn run_step(cfg: &StepCfg) -> StepOut {
             let mut m = KEpsilon::new(v, geom.clone(), nu, &["walls"], 1.5e-4, 1e-5).unwrap();
             m.relax_turb = cfg.relax_turb;
             m.wall_treatment = cfg.wall_treatment;
+            if let Some(a0) = cfg.a0 {
+                m.a0 = a0;
+            }
             m.convection = cfg.turb_conv;
             m.k.set_bc(&geom, "inlet", Box::new(FixedValue(Profile::PerFace(prof(&|s| s.1)))))
                 .unwrap();

@@ -90,6 +90,8 @@ value outside its range is rejected when it is set; a non-default value in the g
 `k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available: overriding
 a coefficient by an expression or a user function.
 
+`turbulence.realizable_a0` (float, default 0): the constant A0 of the Realizable variable `C_mu = 1/(A0 + A_s U* k/eps)`. 0 keeps the default 4.04, a commonly cited commercial-code variant; the original report (Shih et al., NASA TM-106721, checked against the report text) prints 4.0. Allowed 3 to 5; `turbulence.model = "k_epsilon"` with `variant = "realizable"` only, otherwise a located error at `turbulence.realizable_a0`. It is a separate key because the `k_epsilon` coefficient table is fixed at five entries (ADR 0014 K4). The default is unchanged and bit-identical; ADR 0017 records the effect of 4.0 on the step reattachment.
+
 `turbulence.model = "plugin"` with `turbulence.plugin = "<key>"` selects a model registered by the embedding program with
 `rcfd_turb::register_model` (trait `rcfd_turb::TurbulenceModel`); an unregistered key is a located error at
 `turbulence.plugin`. The plugin's coefficients are set in `turbulence.plugin_coefficients.<name>.value`.
