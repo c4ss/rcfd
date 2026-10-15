@@ -2,6 +2,7 @@
 
 pub mod checkpoint;
 pub mod convergence;
+pub mod derived;
 pub mod fwh;
 pub mod glb_check;
 pub mod gltf;
