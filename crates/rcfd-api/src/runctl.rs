@@ -201,7 +201,7 @@ pub fn drive(
     let save = |seq: &mut u64, sink: &mut dyn FnMut(&Value), why: &str| {
         let Some(path) = &opts.checkpoint else { return };
         let g = lock_sim(sim);
-        if !g.supports_checkpoint() {
+        if !g.supports_restart() {
             if !matches!(why, "interrupted" | "time_limit" | "periodic") {
                 return;
             }
@@ -209,7 +209,7 @@ pub fn drive(
                 "warning",
                 seq,
                 t0.elapsed().as_secs_f64(),
-                json!({"message": "this run cannot be checkpointed (steady SIMPLE/SIMPLEC without turbulence only)"}),
+                json!({"message": "this run cannot be restarted (supported: steady SIMPLE/SIMPLEC without turbulence, and transient laminar PISO/PIMPLE without energy, scalars or statistics)"}),
             ));
             return;
         }
@@ -227,7 +227,7 @@ pub fn drive(
         } else {
             path.clone()
         };
-        match g.save_checkpoint(&target) {
+        match g.save_restart(&target) {
             Ok(()) => {
                 if numbered {
                     prune_numbered(path, keep);

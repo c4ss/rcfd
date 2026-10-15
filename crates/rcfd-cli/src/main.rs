@@ -438,7 +438,7 @@ fn cmd_run(args: &[String]) -> u8 {
     }
     let cont = opt(args, "--continue-from");
     if let Some(c) = cont {
-        if let Err(e) = sim.load_checkpoint(Path::new(c)) {
+        if let Err(e) = sim.load_restart(Path::new(c)) {
             eprintln!("error: --continue-from {c}: {e}");
             return FAIL;
         }

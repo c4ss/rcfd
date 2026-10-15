@@ -429,6 +429,103 @@ fn ddt_history_weights(scheme: &TimeScheme, hist: &History, dt: f64) -> (f64, f6
     }
 }
 
+/// Restartable state of the transient solver: fields, time, step counter and the time-level
+/// history that the multi-step schemes read (wave 19C, ADR 0031 D3).
+#[derive(Debug, Clone)]
+pub struct PimpleState {
+    /// Cell velocity.
+    pub u: Vec<Vec3>,
+    /// Kinematic pressure.
+    pub p: Vec<f64>,
+    /// Face flux.
+    pub phi: Vec<f64>,
+    /// Time.
+    pub time: f64,
+    /// Number of steps taken.
+    pub step_no: usize,
+    /// History of the three velocity components.
+    pub hist_u: [History; 3],
+    /// History of the face flux.
+    pub phi_hist: History,
+    /// Record of the last step (restored as the only history entry).
+    pub last: Option<StepInfo>,
+}
+
+impl PimpleSolver {
+    /// Capture the restartable state.
+    pub fn snapshot(&self) -> PimpleState {
+        PimpleState {
+            u: self.u.values.clone(),
+            p: self.p.values.clone(),
+            phi: self.phi.clone(),
+            time: self.time,
+            step_no: self.step_no,
+            hist_u: self.hist_u.clone(),
+            phi_hist: self.phi_hist.clone(),
+            last: self.history.last().copied(),
+        }
+    }
+
+    /// Restore a state captured with [`snapshot`](Self::snapshot) (sizes must match the mesh).
+    pub fn restore(&mut self, st: &PimpleState) -> rcfd_core::Result<()> {
+        let (nc, nf) = (self.geom.n_cells(), self.geom.mesh.n_faces());
+        if st.u.len() != nc
+            || st.p.len() != nc
+            || st.phi.len() != nf
+            || !st.hist_u.iter().all(|h| h.old.len() == nc)
+            || st.phi_hist.old.len() != nf
+        {
+            return Err(rcfd_core::Error::InvalidValue {
+                path: "checkpoint".into(),
+                reason: "state size does not match the mesh".into(),
+            });
+        }
+        self.u.values = st.u.clone();
+        self.p.values = st.p.clone();
+        self.phi = st.phi.clone();
+        self.time = st.time;
+        self.step_no = st.step_no;
+        self.hist_u = st.hist_u.clone();
+        self.phi_hist = st.phi_hist.clone();
+        self.history.clear();
+        self.history.extend(st.last);
+        Ok(())
+    }
+
+    /// Start afresh from the given fields at time `time` with an empty history, as
+    /// [`new`](Self::new) does; the face flux is rebuilt from the velocity when `phi` is `None`.
+    pub fn reinitialise(
+        &mut self,
+        u: Vec<Vec3>,
+        p: Vec<f64>,
+        phi: Option<Vec<f64>>,
+        time: f64,
+    ) -> rcfd_core::Result<()> {
+        let (nc, nf) = (self.geom.n_cells(), self.geom.mesh.n_faces());
+        if u.len() != nc || p.len() != nc || phi.as_ref().is_some_and(|f| f.len() != nf) {
+            return Err(rcfd_core::Error::InvalidValue {
+                path: "initial fields".into(),
+                reason: "field size does not match the mesh".into(),
+            });
+        }
+        self.u.values = u;
+        self.p.values = p;
+        self.phi = match phi {
+            Some(f) => f,
+            None => {
+                let bu = self.u.boundary_values(&self.geom);
+                face_flux(&self.geom, &self.u.values, &bu)
+            }
+        };
+        self.hist_u = [0, 1, 2].map(|k| History::new(self.u.values.iter().map(|v| v[k]).collect()));
+        self.phi_hist = History::new(self.phi.clone());
+        self.time = time;
+        self.step_no = 0;
+        self.history.clear();
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
