@@ -30,8 +30,12 @@ fn opt_all<'a>(args: &'a [String], name: &str) -> Vec<&'a str> {
 }
 
 fn absolute(p: &str) -> String {
-    std::path::absolute(p)
-        .map(|a| a.display().to_string())
+    let path = Path::new(p);
+    if path.is_absolute() {
+        return p.to_string();
+    }
+    std::env::current_dir()
+        .map(|d| d.join(path).display().to_string())
         .unwrap_or_else(|_| p.to_string())
 }
 
