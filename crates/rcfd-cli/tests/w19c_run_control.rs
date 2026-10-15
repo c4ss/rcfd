@@ -299,3 +299,11 @@ fn rules_warnings_reach_the_status_stream_with_the_rule_id() {
     assert_eq!(code(&v), 0);
     assert!(String::from_utf8_lossy(&v.stderr).contains("SV105"));
 }
+
+#[test]
+fn restart_from_cannot_be_combined_with_continue_from() {
+    let d = tmp("combo");
+    let case = write(&d, "case.toml", CASE);
+    let o = rcfd(&["run", &case, "--restart-from", "a.rcfd", "--continue-from", "b.rcfd"]);
+    assert_eq!(code(&o), 2, "{}", String::from_utf8_lossy(&o.stderr));
+}
