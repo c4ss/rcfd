@@ -334,6 +334,18 @@ pub fn case_schema() -> Schema {
                 .dim(Dimension::TEMPERATURE)
                 .doc("Initial temperature (energy equation)"),
         )
+        .field(
+            "method",
+            Schema::enumeration("uniform", &["uniform", "potential", "coarse"]).doc("How the initial velocity and pressure are built (steady simple/simplec): uniform (the values above), potential (potential-flow solve, div(grad psi) = 0, u = grad psi, Bernoulli pressure; ADR 0019), coarse (a pre-solve on a mesh coarsened by coarse_factor, interpolated to the fine mesh)"),
+        )
+        .field(
+            "coarse_factor",
+            Schema::int(2).range(2.0, 8.0).doc("method = coarse: the cell counts of the generator are divided by this factor for the pre-solve"),
+        )
+        .field(
+            "coarse_iterations",
+            Schema::int(200).range(1.0, 1e6).doc("method = coarse: SIMPLE iterations of the coarse pre-solve"),
+        )
         .field("patches", crate::registers::initial_patches_schema());
 
     let energy = Schema::object()

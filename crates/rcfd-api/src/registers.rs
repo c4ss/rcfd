@@ -82,7 +82,11 @@ pub fn initial_patches_schema() -> Schema {
             .field("register", Schema::string("").doc("Name of the register (registers.<name>)"))
             .field(
                 "variable",
-                Schema::enumeration("velocity", &["velocity", "pressure", "temperature"]).doc("The field to overwrite"),
+                Schema::enumeration(
+                    "velocity",
+                    &["velocity", "pressure", "temperature", "k", "epsilon", "omega", "nutilde"],
+                )
+                .doc("The field to overwrite; k, epsilon, omega and nutilde are fields of the turbulence model (which must have them) and take one number"),
             )
             .field(
                 "value",
@@ -91,6 +95,9 @@ pub fn initial_patches_schema() -> Schema {
     )
     .doc("Initial patches: field values set inside registers after the uniform and expression initialisation, in name order")
 }
+
+/// Variables of `initial.patches` that belong to the turbulence model.
+pub const TURBULENCE_VARIABLES: [&str; 4] = ["k", "epsilon", "omega", "nutilde"];
 
 /// Names of the configured registers.
 pub fn names(case: &Case) -> Vec<String> {
@@ -490,6 +497,10 @@ pub fn apply_initial_patches(
             .map(|a| a.iter().filter_map(|x| x.as_f64()).collect())
             .unwrap_or_default();
         let var = gs(case, &path("variable"));
+        if TURBULENCE_VARIABLES.contains(&var.as_str()) {
+            // applied to the turbulence model's own fields once it is built (crate::init)
+            continue;
+        }
         let res = match var.as_str() {
             "velocity" if vals.len() == 3 => reg
                 .patch_vector_field(u, [vals[0], vals[1], vals[2]])

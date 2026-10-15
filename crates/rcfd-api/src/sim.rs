@@ -1263,7 +1263,7 @@ impl Simulation {
             (Some(en), false) => Radiation::from_case(case, &geom, &en.solver.t.values),
             _ => None,
         };
-        Ok(Simulation {
+        let mut sim = Simulation {
             case: case.clone(),
             geom,
             engine,
@@ -1316,7 +1316,132 @@ impl Simulation {
             limit_t,
             limit_s,
             clipped: 0,
-        })
+        };
+        sim.apply_initial_method(case)?;
+        Ok(sim)
+    }
+
+    /// Localised turbulence initialisation (`initial.patches` with a turbulence variable) and `initial.method`
+    /// (potential flow, coarse pre-solve); ADR 0019 D1.
+    fn apply_initial_method(&mut self, case: &Case) -> std::result::Result<(), Vec<Diagnostic>> {
+        let mut errs = Vec::new();
+        for n in case.tree.names("initial.patches").unwrap_or_default() {
+            let path = |f: &str| format!("initial.patches.{n}.{f}");
+            let var = get_s(case, &path("variable"));
+            if !crate::registers::TURBULENCE_VARIABLES.contains(&var.as_str()) {
+                continue;
+            }
+            let vals: Vec<f64> = case
+                .tree
+                .get(&path("value"))
+                .ok()
+                .and_then(|v| v.as_array().cloned())
+                .map(|a| a.iter().filter_map(|x| x.as_f64()).collect())
+                .unwrap_or_default();
+            if vals.len() != 1 {
+                errs.push(
+                    diag(
+                        &path("value"),
+                        format!("expected 1 number for {var}, found {}", vals.len()),
+                    )[0]
+                    .clone(),
+                );
+                continue;
+            }
+            let Some(t) = self.turb.as_mut() else {
+                errs.push(
+                    diag(
+                        &path("variable"),
+                        format!("{var} needs a turbulence model (turbulence.model)"),
+                    )[0]
+                    .clone(),
+                );
+                continue;
+            };
+            let mask = match crate::registers::zone_from_setting(case, &path("register"), &self.geom.mesh) {
+                Ok(m) => m,
+                Err(e) => {
+                    errs.push(e);
+                    continue;
+                }
+            };
+            let field = if var == "nutilde" { "nuTilda" } else { var.as_str() };
+            match t.model.scalar_mut(field) {
+                Some(f) => {
+                    for (v, m) in f.values.iter_mut().zip(&mask) {
+                        if *m {
+                            *v = vals[0];
+                        }
+                    }
+                }
+                None => {
+                    let have: Vec<&str> = t.model.scalars().iter().map(|(n, _)| *n).collect();
+                    errs.push(
+                        diag(
+                            &path("variable"),
+                            format!(
+                                "the turbulence model '{}' has no field '{var}' (fields: {})",
+                                t.model.key(),
+                                have.join(", ")
+                            ),
+                        )[0]
+                        .clone(),
+                    );
+                }
+            }
+        }
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+        let method = crate::init::method(case);
+        if method == "uniform" {
+            return Ok(());
+        }
+        if !matches!(self.engine, Engine::Steady(_)) {
+            return Err(diag(
+                "initial.method",
+                format!("initial.method = \"{method}\" is available with the steady algorithms simple and simplec"),
+            ));
+        }
+        if method == "potential" {
+            let Engine::Steady(s) = &mut self.engine else {
+                unreachable!()
+            };
+            let (u, p) = crate::init::potential_fields(case, &self.geom, &s.u)?;
+            s.set_fields(u, p).map_err(|e| diag("initial.method", e.to_string()))?;
+            return Ok(());
+        }
+        // coarse pre-solve
+        let coarse_case = crate::init::coarse_case(case)?;
+        let mut coarse = Simulation::new(&coarse_case)?;
+        let its = get_i(case, "initial.coarse_iterations").max(1) as usize;
+        coarse.run(its);
+        let me = |e: Error| diag("initial.method", e.to_string());
+        let ip = Interpolator::new(&coarse.geom.mesh, &self.geom.mesh).map_err(me)?;
+        let u = ip
+            .vector(&coarse.velocity().values, InterpMode::NonConservative)
+            .map_err(me)?;
+        let p = ip
+            .scalar(&coarse.pressure().values, InterpMode::NonConservative)
+            .map_err(me)?;
+        let t = match (&coarse.energy, &self.energy) {
+            (Some(c), Some(_)) => Some(ip.scalar(&c.solver.t.values, InterpMode::NonConservative).map_err(me)?),
+            _ => None,
+        };
+        if u.iter().any(|v| v.iter().any(|x| !x.is_finite())) || p.iter().any(|x| !x.is_finite()) {
+            return Err(diag(
+                "initial.coarse_iterations",
+                "the coarse pre-solve produced non-finite values; lower the relaxation factors or the iteration count",
+            ));
+        }
+        let Engine::Steady(s) = &mut self.engine else {
+            unreachable!()
+        };
+        s.set_fields(u, p).map_err(me)?;
+        if let (Some(en), Some(t)) = (self.energy.as_mut(), t) {
+            en.solver.t.values = t;
+        }
+        Ok(())
     }
 
     /// True for SIMPLE/SIMPLEC runs.
