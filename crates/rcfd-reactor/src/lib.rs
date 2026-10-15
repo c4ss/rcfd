@@ -6,10 +6,12 @@
 #![allow(clippy::neg_cmp_op_on_partial_ord, clippy::type_complexity)]
 
 pub mod case;
+pub mod cell;
 pub mod equil;
 pub mod mech;
 pub mod ode;
 pub mod reactors;
+pub mod toy;
 
 pub use mech::{MechError, Mechanism, R_GAS};
 

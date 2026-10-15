@@ -2,6 +2,7 @@
 
 pub mod bc_cat;
 pub mod case;
+pub mod chemistry;
 pub mod cht;
 pub mod comp;
 pub mod decomp;

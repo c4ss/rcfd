@@ -380,6 +380,8 @@ struct Entry {
     base_source: f64,
     /// Algebraic expression with the symbols it reads (slots from 4).
     alg: Option<(Compiled, Vec<Sym>)>,
+    /// Chemistry source and implicit sink per cell (steady runs with `chemistry`, ADR 0027); `None` without chemistry.
+    chem: Option<(Vec<f64>, Vec<f64>)>,
 }
 
 /// Configured scalars and species.
@@ -550,6 +552,7 @@ fn make(
         src_expr,
         base_source: src,
         alg,
+        chem: None,
     }
 }
 
@@ -570,19 +573,33 @@ fn refresh(e: &mut Entry, ctx: &StepCtx) {
     let n = geom.n_cells();
     let cc = geom.mesh.cell_centres();
     let zone: Option<ZoneTerms> = ctx.zone.and_then(|z| z.terms(Some(&e.name), ctx.time));
-    if e.src_expr.is_some() || zone.is_some() {
+    if e.src_expr.is_some() || zone.is_some() || e.chem.is_some() {
         let mut s = vec![e.base_source; n];
         if let Some(c) = &e.src_expr {
             for i in 0..n {
                 s[i] += c.eval(&[cc[i][0], cc[i][1], cc[i][2], ctx.time]);
             }
         }
+        let had_zone = zone.is_some();
+        let mut sink_total: Option<Vec<f64>> = None;
         if let Some(z) = zone {
             for i in 0..n {
                 s[i] += z.source[i];
             }
-            e.transport.sink = z.sink;
+            sink_total = z.sink;
             e.transport.fixed = z.fixed;
+        }
+        if let Some((cs, ck)) = &e.chem {
+            for i in 0..n {
+                s[i] += cs[i];
+            }
+            let tot = sink_total.get_or_insert_with(|| vec![0.0; n]);
+            for i in 0..n {
+                tot[i] += ck[i];
+            }
+        }
+        if had_zone || sink_total.is_some() {
+            e.transport.sink = sink_total;
         }
         e.transport.source = Some(s);
     }
@@ -718,6 +735,41 @@ impl ScalarState {
                 })
                 .collect();
             self.passive[idx].transport.field.values = vals;
+        }
+    }
+
+    /// Is `name` (case-insensitive) a transported species (not the balance species, not a passive scalar)?
+    pub fn is_transported_ci(&self, name: &str) -> bool {
+        self.species.iter().any(|e| e.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Cell values of a species or the balance species by case-insensitive name.
+    pub fn field_ci(&self, name: &str) -> Option<Vec<f64>> {
+        let real = self
+            .species
+            .iter()
+            .map(|e| e.name.as_str())
+            .chain(std::iter::once(self.balance.as_str()))
+            .find(|n| !n.is_empty() && n.eq_ignore_ascii_case(name))?
+            .to_string();
+        self.field(&real)
+    }
+
+    /// Overwrite the values of a transported species after a chemistry step (balance species: ignored, it follows by
+    /// difference) and the old time level, so that the next time derivative sees the reacted level.
+    pub fn set_species_ci(&mut self, name: &str, values: Vec<f64>) {
+        if let Some(e) = self.species.iter_mut().find(|e| e.name.eq_ignore_ascii_case(name)) {
+            if e.transport.field.values.len() == values.len() {
+                e.transport.history.old.clone_from(&values);
+                e.transport.field.values = values;
+            }
+        }
+    }
+
+    /// Steady chemistry terms of a transported species: source and implicit sink per cell (replaced every iteration).
+    pub fn set_chemistry_terms(&mut self, name: &str, source: Vec<f64>, sink: Vec<f64>) {
+        if let Some(e) = self.species.iter_mut().find(|e| e.name.eq_ignore_ascii_case(name)) {
+            e.chem = Some((source, sink));
         }
     }
 

@@ -2351,6 +2351,7 @@ dependencies = [
  "rcfd-mesh",
  "rcfd-particles",
  "rcfd-post",
+ "rcfd-reactor",
  "rcfd-turb",
  "serde",
  "serde_json",

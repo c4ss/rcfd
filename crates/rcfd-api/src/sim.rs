@@ -3,6 +3,7 @@
 //! CLI, the solver service and the MCP tools.
 
 use crate::case::{Case, Diagnostic};
+use crate::chemistry::ChemState;
 use crate::cht::ChtModel;
 use crate::comp::{self, CompState};
 use crate::exprs;
@@ -614,6 +615,8 @@ pub struct Simulation {
     /// Rosseland / P1 radiation (F-130).
     radiation: Option<Radiation>,
     scalars: Option<ScalarState>,
+    /// Chemical reactions of the species (F-054, ADR 0027).
+    chem: Option<ChemState>,
     /// Zone sources and fixed values of the temperature and the scalars (F-201).
     zone_sources: Option<ZoneSources>,
     /// Conjugate heat transfer: solid zones, contact resistances, prescribed flow (ADR 0024).
@@ -1332,6 +1335,11 @@ impl Simulation {
         } else {
             ScalarState::from_case(case, &geom, conv, nu)?
         };
+        let chem = if compressible || vdens {
+            None
+        } else {
+            ChemState::from_case(case)?
+        };
         let zone_sources = if compressible || vdens {
             None
         } else {
@@ -1372,6 +1380,7 @@ impl Simulation {
             components,
             radiation,
             scalars,
+            chem,
             zone_sources,
             cht,
             frozen_iter: 0,
@@ -1885,6 +1894,18 @@ impl Simulation {
                     cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
                 }
                 let i = s.iterate();
+                let mut chem_heat: Option<Vec<f64>> = None;
+                if let Some(ch) = &self.chem {
+                    match crate::chemistry::apply_steady(
+                        ch,
+                        self.scalars.as_mut(),
+                        self.energy.as_ref().map(|e| e.solver.t.values.as_slice()),
+                        self.turb.as_ref(),
+                    ) {
+                        Ok(h) => chem_heat = h,
+                        Err(e) => udf_error = Some(e),
+                    }
+                }
                 if let Some(en) = &mut self.energy {
                     let mut base_alpha = None;
                     if let Some(pr) = &self.props {
@@ -1903,6 +1924,17 @@ impl Simulation {
                             None
                         };
                         zs.apply_temperature(&mut en.solver, base, 0.0);
+                    }
+                    if let Some(mut h) = chem_heat.take() {
+                        // the other sources of this iteration were assigned above; add the heat release
+                        if self.components.is_some() || self.zone_sources.is_some() {
+                            if let Some(b) = &en.solver.source {
+                                for (x, y) in h.iter_mut().zip(b) {
+                                    *x += y;
+                                }
+                            }
+                        }
+                        en.solver.source = Some(h);
                     }
                     en.res_t = match &mut self.radiation {
                         Some(r) => r.iterate_energy(&mut en.solver, &s.phi, base_alpha),
@@ -1940,6 +1972,12 @@ impl Simulation {
             }
             Engine::Coupled(s) => {
                 let i = s.iterate();
+                if let Some(ch) = &self.chem {
+                    if let Err(e) = crate::chemistry::apply_steady(ch, self.scalars.as_mut(), None, self.turb.as_ref())
+                    {
+                        udf_error = Some(e);
+                    }
+                }
                 let res_sc = self
                     .scalars
                     .as_mut()
@@ -2118,6 +2156,17 @@ impl Simulation {
                         time: s.time,
                     };
                     sc.advance(&s.phi, dt, s.settings.time_scheme, s.nu_face.as_deref(), &sctx);
+                }
+                if let Some(ch) = &self.chem {
+                    if let Err(e) = crate::chemistry::apply_split(
+                        ch,
+                        self.scalars.as_mut(),
+                        self.energy.as_mut().map(|e| &mut e.solver),
+                        self.turb.as_ref(),
+                        dt,
+                    ) {
+                        udf_error = Some(e);
+                    }
                 }
                 self.monitors.push("courant", "", i.time, i.courant);
                 self.monitors.push("dt", "s", i.time, i.dt);
