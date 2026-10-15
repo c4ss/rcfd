@@ -8,6 +8,7 @@
 //! * faces `n_internal_faces..n_faces` are boundary faces, grouped by patch,
 //!   with the normal pointing out of the domain.
 
+pub mod edit;
 pub mod gen;
 pub mod layers;
 pub mod measures;
