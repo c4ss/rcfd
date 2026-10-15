@@ -428,7 +428,8 @@ impl Case {
             }
         }
         if alg == "coupled" {
-            let why = "is not supported by solver.algorithm = \"coupled\" (laminar flow of a constant-property fluid only)";
+            let why =
+                "is not supported by solver.algorithm = \"coupled\" (laminar flow of a constant-property fluid only)";
             if self
                 .tree
                 .get("solver.bulk_velocity")

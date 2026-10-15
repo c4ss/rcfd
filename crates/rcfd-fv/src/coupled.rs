@@ -502,7 +502,7 @@ impl CoupledSolver {
         let mut wall_nu: Vec<(usize, usize, f64)> = Vec::new(); // (face, cell, nu_f |S| / dn) of the solid-wall faces
         let mut pconst: Option<Vec<Vec<f64>>> = None;
         {
-            let has_open = class.iter().any(|c| *c == FaceClass::Open);
+            let has_open = class.contains(&FaceClass::Open);
             if has_open || self.body_force.is_some() {
                 let mut pc = vec![vec![0.0; n]; nk];
                 for f in 0..mesh.n_faces() {
