@@ -1302,7 +1302,7 @@ fn d2_check(s: &Simulation) {
         e_mag = e_mag.max(((ux[i] * ux[i] + uy[i] * uy[i]).sqrt() - 1.0).abs());
         e_ang = e_ang.max((uy[i].atan2(ux[i]) - 30.0_f64.to_radians()).abs());
     }
-    let im = imbalance(&s, 1.0);
+    let im = imbalance(s, 1.0);
     println!(
         "D2: max ||u|-1| = {e_mag:.2e} (limit 1e-5), max angle error {e_ang:.2e} rad (limit 1e-6), imbalance {im:.2e}"
     );
