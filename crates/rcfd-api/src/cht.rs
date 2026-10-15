@@ -150,7 +150,41 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ));
         }
     }
+    // a convection condition takes the constant physics.conductivity (or the conductivity of its solid) for the half-cell
+    // resistance, so it is not combined with a temperature-dependent conductivity law or with solvers that bypass it
+    if !convection_patches(case).is_empty() {
+        for b in convection_patches(case) {
+            for (present, path, what) in [
+                (
+                    crate::properties::enabled(case),
+                    "properties",
+                    "temperature-dependent property laws",
+                ),
+                (
+                    crate::comp::enabled(case) || crate::vd::enabled(case),
+                    "compressible",
+                    "the compressible / variable-density solvers",
+                ),
+            ] {
+                if present {
+                    out.push(d(
+                        format!("boundaries.{b}.temperature"),
+                        format!("temperature = \"convection\" cannot be combined with {what} (see {path}); use fixed or heat_flux"),
+                    ));
+                }
+            }
+        }
+    }
     if !solids.is_empty() || frozen_flow {
+        let scalar_present = ["scalars", "species"]
+            .iter()
+            .any(|c| !case.tree.names(c).unwrap_or_default().is_empty());
+        if scalar_present {
+            out.push(d(
+                "scalars",
+                "user scalars and species are not advanced with solid zones or a prescribed flow (ADR 0024 D5); remove them",
+            ));
+        }
         let conflicts: [(bool, &str, &str); 9] = [
             (
                 crate::properties::enabled(case),
