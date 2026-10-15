@@ -104,6 +104,11 @@ fn event(kind: &str, seq: &mut u64, elapsed: f64, body: Value) -> Value {
     v
 }
 
+/// A status event (shared with the chain driver).
+pub fn make_event(kind: &str, seq: &mut u64, elapsed: f64, body: Value) -> Value {
+    event(kind, seq, elapsed, body)
+}
+
 fn lock_sim(m: &Mutex<Simulation>) -> std::sync::MutexGuard<'_, Simulation> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -142,19 +147,27 @@ pub fn check_only(case: &Case) -> (u8, Value) {
             "check",
             &mut seq,
             0.0,
-            json!({"ok": false, "exit_code": exit::INVALID, "diagnostics": diags}),
+            json!({"ok": false, "exit_code": exit::INVALID, "diagnostics": diags, "rules": [], "mesh": null}),
         );
         return (exit::INVALID, v);
     };
     let q = check_mesh(&mesh);
-    let code = if q.is_ok() { exit::OK } else { exit::BAD_MESH };
+    let rules = crate::rules::check_case(case, Some(&crate::rules::mesh_context(&q)));
+    let code = if !q.is_ok() {
+        exit::BAD_MESH
+    } else if crate::rules::has_errors(&rules) {
+        exit::INVALID
+    } else {
+        exit::OK
+    };
     let v = event(
         "check",
         &mut seq,
         0.0,
         json!({
-            "ok": q.is_ok(), "exit_code": code, "cells": q.n_cells,
-            "diagnostics": [], "mesh": serde_json::to_value(&q).unwrap_or(Value::Null),
+            "ok": code == exit::OK, "exit_code": code, "cells": q.n_cells,
+            "diagnostics": [], "rules": crate::rules::to_json(&rules),
+            "mesh": serde_json::to_value(&q).unwrap_or(Value::Null),
         }),
     );
     (code, v)
@@ -186,6 +199,13 @@ pub fn drive(
                 "case_hash": format!("{:016x}", g.case.tree.content_hash()),
             }),
         ));
+    }
+    // setup warnings found before solving (rule engine), passed in `info.warnings` as objects with
+    // `message`, `rule` and `path`
+    if let Some(ws) = opts.info.get("warnings").and_then(Value::as_array) {
+        for w in ws {
+            sink(&event("warning", &mut seq, 0.0, w.clone()));
+        }
     }
     let finish = |state: &'static str, code: u8, reason: String| {
         let g = lock_sim(sim);

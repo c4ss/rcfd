@@ -7,6 +7,7 @@
 //! reached (see docs/run-control.md).
 
 mod cmd_gapc;
+mod cmd_w19c;
 mod cmd_wiring;
 mod convert_formats;
 use rcfd_api::case::Case;
@@ -58,6 +59,20 @@ COMMANDS:
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
         --journal <file>         run the case recorded in a service journal (journal.get) instead of a file
+        --set <path=json>        override a setting (repeatable), e.g. --set solver.dt=0.05; exit 2 if malformed,
+                                 3 if the path or value is invalid
+        --print-settings         print the resolved settings as JSON and exit (no run)
+        --restart-from <file>    start from the solution in a restart file (see `restart`); --source-case <case>
+                                 names the case of a file that does not embed its mesh, --method the transfer method
+        --no-chain               run the base case only, ignoring chain.sequence
+    restart <case> --from <restart file> [--mesh <mesh>] [--source-case <case>] [--method m] [run options]
+                               run a case starting from the solution in a restart file; on another mesh
+                               (--mesh replaces the case mesh) the fields are transferred with --method
+                               gradient (default) | nearest | inverse_distance | least_squares | conservative |
+                               conservative_overlap
+    check <case> [--json] [--set path=value]
+                               validate, build, check the mesh and evaluate the setup rules; exit 0, 3 (invalid or
+                               an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh
     data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]
                                public validation-data pack (F-125): datasets with licence, checksum
                                verification of local copies (offline), provenance report (markdown)
@@ -168,6 +183,8 @@ fn dispatch(args: &[String]) -> u8 {
         "validate" => cmd_validate(rest),
         "schema" => cmd_schema(rest),
         "run" => cmd_run(rest),
+        "restart" => cmd_w19c::cmd_restart(rest),
+        "check" => cmd_w19c::cmd_check(rest),
         "check-mesh" => cmd_check_mesh(rest),
         "partition" => cmd_wiring::cmd_partition(rest),
         "sample" => cmd_wiring::cmd_sample(rest),
@@ -213,8 +230,11 @@ fn cmd_validate(args: &[String]) -> u8 {
         }
     }
     if diags.is_empty() {
-        println!("{path}: ok");
-        OK
+        let code = cmd_w19c::validate_rules(&case, path);
+        if code == OK {
+            println!("{path}: ok");
+        }
+        code
     } else {
         // diagnostics raised while building the simulation carry no line yet: locate them in the TOML text
         let text = path
@@ -270,6 +290,11 @@ const RUN_VALUE_OPTS: &[&str] = &[
     "--precision",
     "--hostfile",
     "--journal",
+    "--set",
+    "--restart-from",
+    "--source-case",
+    "--method",
+    "--mesh",
 ];
 
 fn parse_opt<T: std::str::FromStr>(args: &[String], name: &str) -> Result<Option<T>, String> {
@@ -364,6 +389,12 @@ fn cmd_run(args: &[String]) -> u8 {
             return INVALID;
         }
     }
+    if let Err(code) = cmd_w19c::apply_overrides(&mut case, args, &label) {
+        return code;
+    }
+    if flag(args, "--print-settings") {
+        return cmd_w19c::print_settings(&case);
+    }
     if flag(args, "--check-only") {
         let (code, ev) = runctl::check_only(&case);
         if status_json || flag(args, "--json") {
@@ -385,6 +416,9 @@ fn cmd_run(args: &[String]) -> u8 {
         });
         return code;
     }
+    if cmd_w19c::chain_requested(&case, args) {
+        return cmd_w19c::run_chain_cli(&case, args, &label);
+    }
     let sim = match Simulation::new(&case) {
         Ok(s) => s,
         Err(diags) => {
@@ -401,6 +435,10 @@ fn cmd_run(args: &[String]) -> u8 {
         }
         return BAD_MESH;
     }
+    let rule_warnings = match cmd_w19c::rules_gate(&case, &q, &label) {
+        Ok(w) => w,
+        Err(code) => return code,
+    };
     let mut sim = sim;
     let quiet = flag(args, "--quiet");
     let out_dir = opt(args, "--out")
@@ -437,6 +475,16 @@ fn cmd_run(args: &[String]) -> u8 {
         }
     }
     let cont = opt(args, "--continue-from");
+    if cont.is_none() && interp_case.is_none() {
+        match rcfd_api::restart::apply_case(&mut sim, &case) {
+            Ok(Some(r)) => eprintln!("restarted: {r}"),
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("error: {e}");
+                return FAIL;
+            }
+        }
+    }
     if let Some(c) = cont {
         if let Err(e) = sim.load_restart(Path::new(c)) {
             eprintln!("error: --continue-from {c}: {e}");
@@ -468,7 +516,7 @@ fn cmd_run(args: &[String]) -> u8 {
         info: serde_json::json!({
             "driver": "cli", "case": label, "continue_from": cont,
             "threads": threads.or_else(|| std::thread::available_parallelism().ok().map(|n| n.get())),
-            "precision": "double",
+            "precision": "double", "warnings": rule_warnings,
         }),
     };
     say(&format!(
