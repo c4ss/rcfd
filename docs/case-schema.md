@@ -445,11 +445,29 @@ momentum rows, continuity rows with an implicit Rhie-Chow face flux, right-preco
 the momentum blocks and one AMG V-cycle (aggregation AMG) on the approximate pressure Schur complement.
 `solver.alpha_u` is the implicit momentum relaxation (0.95 to 0.98 work on the cavity, where SIMPLEC is
 limited to about 0.95); there is no pressure relaxation. `solver.pressure_rel_tol` and
-`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400) and `solver.pressure_abs_tol` the absolute residual floor. Scope of the first version, each
-diagnosed with a located error: laminar flow in a closed domain with the velocity prescribed on every boundary
-(walls, moving walls, fixed inlets; no pressure outlets, no periodic patches), no turbulence model, rheology, user
-functions, momentum sources, energy equation, uniform body force, bulk-velocity driver or non-orthogonal
-correctors. The pressure level is fixed by `solver.p_ref_cell` / `solver.p_ref_value`.
+`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400) and `solver.pressure_abs_tol` the absolute residual floor.
+
+Wave 19A (ADR 0029) added open boundaries, body forces, the energy equation and solid zones. Open boundary: `velocity = "zero_gradient"` with
+`pressure = "fixed"` and `pressure_value` (outlets, and inlets with a prescribed pressure); the face flux there follows from the
+cell velocity, the pressure difference and the Rhie-Chow term inside the system. An open face with `pressure = "zero_gradient"` is a
+located error at `boundaries.<patch>.pressure`; with at least one open face the pressure level is set by the pressure condition and
+`solver.p_ref_cell` is not used. `physics.body_force`, `physics.gravity` with `energy.buoyancy` (Boussinesq) and `energy.enabled`
+are accepted (the energy equation is advanced after the flow in every iteration, as in the steady segregated algorithms; no
+chemistry heat, components or zone sources). The balanced-force treatment keeps a hydrostatic or stably stratified fluid at rest.
+
+Solid zones (`solids.<name>`, see the conjugate heat transfer section) may be combined with `coupled` without
+`solver.frozen_flow`: the flow is solved in the fluid cells only. Solid cells are removed from the pressure-velocity system
+(`u = 0`, `p = 0`), the faces between fluid and solid are no-slip walls with exactly zero flux (no Rhie-Chow bypass leak), and only the
+energy equation sees the solids. Located errors: `solver.frozen_flow` (solids with a segregated algorithm and no `frozen_flow`, or
+`coupled` together with `frozen_flow`), `solver.p_ref_cell` (reference cell inside a solid, closed domain; set a fluid cell
+explicitly because the default is cell 0), `solids.<name>.zone` (a closed fluid region split by solids, or a fluid region without an
+open boundary), `boundaries.<patch>.velocity` (non-zero prescribed flux through the boundary face of a solid cell).
+
+Still diagnosed with a located error: turbulence models, rheology, user functions, momentum sources, lumped components, radiation,
+property laws, `bc_kind` conditions, zone sources, `solver.bulk_velocity`, `solver.non_orthogonal_correctors`, periodic patches and
+scalars or species together with solids. Known limits: steady only (no transient coupled solver); with gradient-based convection
+schemes the least-squares gradient of a fluid cell next to a solid sees the solid cell value (use `central`/`upwind` for
+verification); next to a prescribed-flux inlet the pressure shows a decaying odd-even mode (ADR 0029 addendum, A3).
 
 ## `scalars`, `species` and `properties` (F-053)
 
@@ -840,7 +858,7 @@ are ordinary internal faces) are treated alike. Volumetric heat generation in a 
 | `specific_heat` | `-1` (an error) | J/kg/K |
 | `initial_temperature` | `-1` = use `initial.temperature` | K |
 
-Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and `solver.frozen_flow = true`.
+Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and either `solver.frozen_flow = true` (prescribed flow) or `solver.algorithm = "coupled"` (solved flow with the solid cells excluded from the pressure-velocity system, ADR 0029).
 
 ### `thermal_interfaces.<name>`
 
@@ -854,10 +872,10 @@ Default `false`. When `true`, momentum and pressure are not solved: the face flu
 (`moving_wall`, `shear`, `partial_slip`, `marangoni`) or a `fixed` zero velocity carry no flux. Located errors when the flux does not
 vanish on a face touching a solid (`initial.velocity_expression_x`), when the largest cell imbalance exceeds 1e-6 of the largest
 face flux (`initial.velocity`), and for solids or a prescribed flow combined with `properties` laws, radiation, a turbulence model,
-the compressible / variable-density solvers, `components`, `coupled`, buoyancy (thermal expansion with gravity), rheology, user
+the compressible / variable-density solvers, `components`, `coupled` (with `frozen_flow`), buoyancy (thermal expansion with gravity), rheology, user
 functions or `fixed_value` zone sources. Available with `simple`, `simplec`, `piso`, `pimple`; steady runs iterate the energy
 equation (`solver.tolerance_u` is its residual target), transient runs advance it with `solver.dt`, `solver.time_scheme`. A solved
-(pressure or buoyancy driven) flow coupled to solids is NOT available (named gap of F-051).
+(pressure or buoyancy driven) flow coupled to solids is available only with `solver.algorithm = "coupled"` and without `frozen_flow` (steady, laminar, constant properties; ADR 0029); the segregated and transient algorithms still need `frozen_flow` (named gap of F-051). `coupled` together with `frozen_flow` is a located error.
 
 ### `boundaries.<patch>.temperature = "convection"`
 

@@ -46,6 +46,13 @@ Used in `cases/heated_cavity/reference/devahldavis1983.csv`, `crates/rcfd-fv/tes
 
 Locations of the maxima (not used by tests) were not copied.
 
+Wave 19A re-check (`crates/rcfd-fv/tests/coupled_open.rs` B3, Ra = 1e3 and 1e4 values 1.118 / 3.649 / 3.697 and 2.243 / 16.178 / 19.617): the
+two arXiv papers were downloaded and read as text; arXiv:1412.2866 Table 2 prints Nu 1.118 and 2.243, u_max 3.649 and 16.178, v_max 3.697
+and 19.617 for the benchmark row, and arXiv:physics/0305049 attributes Nu 2.243, 4.519 and 8.800 to de Vahl Davis. The Cardinal V&V page
+answered with HTTP 403 in this wave and was not re-read. The 1983 printed tables remain unreachable, so the values stay *verified through
+secondary sources* only. The coupled-solver tests claim agreement with these numbers within 2 percent (measured 0.02 to 0.74 percent),
+nothing more.
+
 ## Exact Riemann solver, Sod problem and oblique shock
 
 Used in `crates/rcfd-fv/src/riemann.rs` tests, `compressible.rs` wedge tests.

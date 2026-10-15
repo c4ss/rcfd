@@ -277,3 +277,95 @@ rheology, user functions, momentum sources, lumped components, radiation, proper
 algorithm; non-orthogonal correction and periodic patches in the coupled solver; the gradient treatment at fluid-solid faces for
 higher-order convection (D3); a verified finite-conductivity conjugate natural-convection benchmark; F-027's V-cycle evidence and
 default gate; F-217; temperature-dependent solid conductivity (F-220).
+
+## Results (addendum written after the runs; registered limits above are unchanged)
+
+Commits: ADR `2dd8c96`; library (open boundaries, body force, solid exclusion, tests A, B, C1, C2) `438be81`; settings-tree glue and
+tree tests (C3, D, E) `4d2eb38`. Measured values are printed by the tests (`cargo test --release -p rcfd-fv --test coupled_open
+--test coupled_solid -- --nocapture`, `-p rcfd-api --test coupled_cht -- --nocapture`).
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| A1 Couette, coupled upwind / central | max error u 1.2e-11 / 1.5e-11, v 6.5e-12 / 8.4e-12, p 9e-12 (47 / 49 outer) | 1e-7 U, 1e-8 | pass |
+| A1 Couette, SIMPLEC upwind / central | u 6.4e-11, v 4.5e-11 / 6.7e-11, p 1.1e-9 / 1.7e-9 (120 / 117 outer) | same | pass |
+| A2 coupled ny = 32: vs discrete closed form / v | 2.3e-10 / 2.0e-14 U_max | 1e-7 | pass |
+| A2 coupled: vs analytic (predicted 9.766e-4) / Q error (predicted 1.953e-3) | 9.766e-4 / 1.953e-3 | 1e-2 | pass |
+| A2 coupled observed orders (ny 16, 32, 64) | 2.000, 2.000 | >= 1.5 | pass |
+| A2 SIMPLEC ny = 32: vs discrete / v / vs analytic / Q | 1.3e-2 / 7.4e-4 / 1.2e-2 / 3.8e-3 | 1e-7 / 1e-7 / 1e-2 / 1e-2 | MISS (known-miss test) |
+| A2 SIMPLEC orders | 1.37, 1.74 | >= 1.5 | MISS |
+| A2 coupled vs SIMPLEC | 1.3e-2 U_max | 1e-6 | MISS (follows from the SIMPLEC miss) |
+| A3 coupled vs parabola at x = L/2 | 5.0e-3 U_max | 1e-2 | pass |
+| A3 coupled vs SIMPLEC at x = L/2 | 4.6e-3 U_max | 1e-4 | MISS (known-miss test) |
+| A3 pressure drop between columns 1 and 6 (coupled) | 1.842 against 2.000 (7.9 percent) | 2 percent | MISS (known-miss test) |
+| A4 continuity (A1, A2, A3) | 1.7e-14, 3.8e-15, 3.7e-15 | 1e-10 | pass |
+| A5 3-D Couette | u 3.4e-12, v/w 1.2e-12 (26 outer) | 1e-7 | pass |
+| A6 existing tests, baseline hashes | pass (hashes unmodified, 3 passed, 1 ignored as before) | | pass |
+| B1 hydrostatic | max u 3.9e-12, phi 2.7e-14, p 2.0e-13 | 1e-9, 1e-9, 1e-8 | pass |
+| B2 stratified rest | max phi 9.4e-5 | 2e-3 | pass |
+| B3 Ra = 1e3 (32 x 32): Nu / u_max / v_max against 1.118 / 3.649 / 3.697 | 1.1167 (-0.11 %) / 3.622 (-0.74 %) / 3.678 (-0.52 %) | 2 % | pass |
+| B3 Ra = 1e4 (40 x 40): against 2.243 / 16.178 / 19.617 | 2.2434 (+0.02 %) / 16.162 (-0.10 %) / 19.516 (-0.51 %) | 2 % | pass |
+| B3 flux imbalance (1e3, 1e4); coupled vs SIMPLEC Nu | 8.0e-9, 5.9e-9; 7e-8, 5.6e-6 | 1e-6; 5e-3 | pass |
+| C1 slab: solid u == 0, flux on solid faces | exactly 0.0, exactly 0.0 | exactly 0 | pass |
+| C1 vs discrete / v / analytic (3.906e-3 predicted) / Q (7.812e-3 predicted) / continuity | 5.4e-11 / 7e-15 / 3.906e-3 / 7.812e-3 / 4e-15 | 1e-7 / 1e-7 / 1e-2 / 1e-2 / 1e-10 | pass |
+| C2 obstacle: leak, in+out flux, continuity, change with rel-tol 1e-12 | 0.0, 2.3e-15, 8.3e-14, 4.7e-15 | 0, 1e-10, 1e-10, 1e-6 | pass |
+| C3 tree cavity with solid walls (k_s = 1e4): Nu against 1.118 | 1.1183 (+0.03 %), 777 outer iterations | 2 % | pass |
+| C3 against the same cavity without solids | 2.5e-5 relative (Nu 1.1183 both) | 1e-2 | pass |
+| C3 heat balance \|Q_xmin + Q_xmax\| / \|Q_xmin\|; interface flux against Q_xmin | 4.2e-11; 7.8e-10 | 1e-9; 1e-9 | pass (second with little margin) |
+| C3 solid u == 0 and flux on solid faces | exactly 0 | exactly 0 | pass |
+| D1 Delta T_tot error, n_f = 16 / 32 | 2.4e-4 / 1.5e-4 (92 / 129 outer) | 1e-2 | pass |
+| D2 Nu against 140/17, n_f = 32 | 8.2367 (1.7e-4) | 2e-2 | pass |
+| D3 u against parabola / v / solid zero / inlet-outlet mass flow | 4.6e-4 U_max / 4.8e-5 U_max / exactly 0 / 4.0e-14 U H | 1e-2 / 1e-3 / 0 / 1e-10 | pass |
+| D4 (a) whole domain / (c) fluid zone | 3.2e-11 / 1.6e-12 q L_x | 1e-9 | pass |
+| D4 (b) solid zone as registered (no end conduction) | 2.55e-5 q L_x | 1e-9 | MISS (known-miss test) |
+| E1 to E7 located errors | all asserted by path (E7: periodic at `solver.algorithm`, zone_sources at `zone_sources.q`; the bc_kind row is covered by the unchanged V1 test of `bc_catalogue.rs`) | | pass |
+
+### Diagnoses of the misses (diagnosed, not tuned)
+
+* A2 SIMPLEC. Fully converged (max du of the order of 1e-15 within 250 iterations) but the solution carries an odd-even modulation
+  along x in u and p (u at mid-height 0.966, 1.018, 0.999, 1.005, 1.008, 0.997, 1.020, 0.974 along x for `ny = 16`), and v is not zero.
+  As a diagnostic only (not a fix, not used for any assertion), the same run with `alpha_u = 0.5` gives 0.994, 1.004, 0.999, 1.001,
+  1.002, 0.999, 1.004, 0.995: the converged segregated solution depends on the velocity relaxation factor, which is the known
+  property of Rhie-Chow interpolation without a relaxation-consistent correction (this attribution is a hypothesis consistent with
+  the diagnostic, not proven). The coupled solver, which forms the same Rhie-Chow flux inside one system, gives the discrete closed
+  form to round-off for every `ny`. The failing limits are a property of the existing segregated solver at open boundaries; they are
+  kept as the ignored test `a2_simplec_known_miss`.
+* A3. The pressure drop between interior columns is 7.9 percent short: the pressure carries a decaying odd-even mode launched at the
+  fixed-velocity inlet (column-to-column drops 0.71, 0.18, 0.55, 0.29, 0.48, 0.34, 0.45 against 0.40 for the coupled solver, similar
+  with a different phase for SIMPLEC), the first column seeing the one-sided zero-gradient inlet pressure that the registered text
+  anticipated. The mode was not removed (no inlet pressure treatment was changed). The coupled-vs-SIMPLEC difference of 4.6e-3 U_max
+  is the difference of the two modulations. Known-miss tests: `a3_pressure_drop_known_miss`, `a3_coupled_vs_simplec_known_miss`. The
+  velocity profile against the parabola (5.0e-3 U_max) passes.
+* D4 (b). The registered statement omitted the conduction through the solid rows of the fixed-temperature inlet and outlet patches.
+  In the discrete solution it is not zero: the two ends carry -2.55e-5 q L_x net. With that term the solid-zone balance closes to
+  3.3e-11 q L_x. The corrected statement was written after the registered form missed; the registered form is kept as the ignored
+  test `d4_solid_registered_form_known_miss` and the corrected one is `d4_energy_balances`. The interface heat flow used by (b) and
+  (c) is recomputed in the test from the temperature field with the harmonic face conductivity (valid for the uniform duct mesh and
+  no contact resistance), it is not read from the solver.
+* A set-up slip in the first C3 run: the test compared the interface heat flow with `Q_xmin` with the wrong sign (ratio 2.0). The sign
+  was corrected in the same test before it was committed (the criterion, 1e-9 relative, was not touched); the corrected value is
+  7.8e-10.
+
+### Deviations from the registered plan (disclosed)
+
+* `crates/rcfd-api/tests/coupled.rs::unsupported_combinations_are_diagnosed`: the `energy.enabled` row became a `turbulence.model`
+  row because the energy equation is now supported (D5); the new test `coupled_energy_is_supported` covers the supported case.
+* A7 (reported only): outer iterations to 1e-11 on the Couette cases 47-49 (coupled) against 117-120 (SIMPLEC); on A2 `ny = 32` both
+  need 529 outer iterations, the coupled solver with 10851 GMRES iterations in total; on the cavities of B3 (residual 1e-9, TVD)
+  coupled needs 384 and 376, SIMPLEC 378 and 418 outer iterations. The coupled solver is therefore not shown faster in outer
+  iterations on these cases and each of its iterations costs more. The cavity of A6 was not re-measured.
+
+### Reference data
+
+The de Vahl Davis values used in B3 (Nu 1.118 and 2.243, u_max 3.649 and 16.178, v_max 3.697 and 19.617) were re-checked against two
+independent published papers that quote them; the original 1983 tables were not reachable, so they are recorded as checked through
+secondary sources in `docs/reference-data.md`.
+
+### Not delivered (final)
+
+Transient coupled solve; solved flow with solids in the segregated algorithms; turbulence, rheology, user functions, momentum
+sources, lumped components, radiation, property laws, scalars and species with the coupled algorithm; non-orthogonal correction and
+periodic patches in the coupled solver; the gradient treatment at fluid-solid faces for gradient-based convection schemes (the
+least-squares gradient of a fluid cell next to a solid still sees the solid cell value; the registered comparisons use central
+convection for that reason); a verified finite-conductivity conjugate natural-convection benchmark (C3 is a consistency check
+against the same cavity without solids, not a benchmark of a finite wall); F-027's V-cycle evidence and default gate; F-217; F-220.
+The fixed-velocity-inlet pressure mode (A3) remains an open defect next to prescribed-flux boundaries.
