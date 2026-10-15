@@ -2077,6 +2077,12 @@ impl Simulation {
                 if let Some(e) = &udf_error {
                     reason_override = Some(e.clone());
                 }
+                if let Some(t) = &mut self.turb {
+                    // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
+                    // velocity and flux of the old time level, no relaxation
+                    t.change = t.model.update(&s.u, &s.phi);
+                    s.nu_face = Some(t.model.nu_face());
+                }
                 if let Some(r) = &mut self.rheology {
                     match r.nu_faces(&self.geom, &s.u, None, self.t_init) {
                         Ok(v) => s.nu_face = Some(v),
@@ -2114,12 +2120,6 @@ impl Simulation {
                     sc.advance(&s.phi, dt, s.settings.time_scheme, s.nu_face.as_deref(), &sctx);
                 }
                 self.monitors.push("courant", "", i.time, i.courant);
-                if let Some(t) = &mut self.turb {
-                    // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
-                    // velocity and flux of the old time level, no relaxation
-                    t.change = t.model.update(&s.u, &s.phi);
-                    s.nu_face = Some(t.model.nu_face());
-                }
                 self.monitors.push("dt", "s", i.time, i.dt);
                 StepSummary {
                     index: i.step,
@@ -2662,6 +2662,7 @@ impl Simulation {
                     "variant": match get_s(&self.case, "turbulence.model").as_str() {
                         "k_omega_sst" => "menter_2003".to_string(),
                         "spalart_allmaras" => "sa_noft2".to_string(),
+                        m @ ("smagorinsky" | "wale" | "mixing_length") => m.to_string(),
                         "plugin" => get_s(&self.case, "turbulence.plugin"),
                         _ => get_s(&self.case, "turbulence.variant"),
                     },
@@ -2710,7 +2711,6 @@ impl Simulation {
         c.put_f64s("u", &st.u.iter().flatten().copied().collect::<Vec<_>>());
         c.put_f64s("p", &st.p);
         c.put_f64s("phi", &st.phi);
-                        m @ ("smagorinsky" | "wale" | "mixing_length") => m.to_string(),
         if let Some(en) = &self.energy {
             c.put_f64s("T", &en.solver.t.values);
         }
