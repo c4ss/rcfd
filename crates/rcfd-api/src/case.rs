@@ -531,6 +531,7 @@ impl Case {
         out.extend(crate::udf::load_case_udfs(self).1);
         out.extend(crate::rheology::check(self));
         out.extend(crate::registers::check(self));
+        out.extend(crate::init::check(self));
         out.extend(crate::sources::check(self));
         out.extend(crate::lumped::check(self));
         out.extend(crate::radiation::check(self));

@@ -16,6 +16,7 @@ pub mod geometry;
 pub mod gradient;
 pub mod lumped;
 pub mod pimple;
+pub mod potential;
 pub mod pressure;
 pub mod radiation;
 pub mod realgas;

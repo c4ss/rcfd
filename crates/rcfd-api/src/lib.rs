@@ -3,6 +3,7 @@
 pub mod case;
 pub mod comp;
 pub mod exprs;
+pub mod init;
 pub mod lumped;
 pub mod properties;
 pub mod radiation;
