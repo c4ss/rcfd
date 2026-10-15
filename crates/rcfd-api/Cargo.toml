@@ -17,6 +17,7 @@ rcfd-linalg.workspace = true
 rcfd-mesh.workspace = true
 rcfd-particles.workspace = true
 rcfd-post.workspace = true
+rcfd-reactor.workspace = true
 rcfd-turb.workspace = true
 serde.workspace = true
 serde_json.workspace = true

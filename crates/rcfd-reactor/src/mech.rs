@@ -274,15 +274,28 @@ impl Mechanism {
 
     /// Net molar production rates (mol/m3/s) for temperature `t` and concentrations `c` (mol/m3).
     pub fn production_rates(&self, t: f64, c: &[f64], wdot: &mut [f64]) {
-        let ns = self.species.len();
-        let g_rt: Vec<f64> = self.species.iter().map(|s| s.h_rt(t) - s.s_r(t)).collect();
         for w in wdot.iter_mut() {
             *w = 0.0;
         }
+        let mut q = vec![0.0; self.reactions.len()];
+        self.rates_of_progress(t, c, &mut q);
+        for (r, q) in self.reactions.iter().zip(&q) {
+            for &(k, nu) in &r.reactants {
+                wdot[k] -= nu * q;
+            }
+            for &(k, nu) in &r.products {
+                wdot[k] += nu * q;
+            }
+        }
+    }
+
+    /// Net rate of progress `q_r` (mol/m3/s) of every reaction for temperature `t` and concentrations `c` (mol/m3):
+    /// forward minus reverse. `q` has one entry per reaction.
+    pub fn rates_of_progress(&self, t: f64, c: &[f64], q_out: &mut [f64]) {
+        let g_rt: Vec<f64> = self.species.iter().map(|s| s.h_rt(t) - s.s_r(t)).collect();
         let ln_t = t.ln();
         let c_ref = P_STD / (R_GAS * t);
-        let _ = ns;
-        for r in &self.reactions {
+        for (ir, r) in self.reactions.iter().enumerate() {
             let arrh = |p: &[f64; 3]| p[0] * (p[1] * ln_t - p[2] / t).exp();
             let m = || -> f64 {
                 match r.collider {
@@ -343,13 +356,7 @@ impl Mechanism {
                 }
                 p
             };
-            let q = kf * conc(&r.reactants) - if r.reversible { kr * conc(&r.products) } else { 0.0 };
-            for &(k, nu) in &r.reactants {
-                wdot[k] -= nu * q;
-            }
-            for &(k, nu) in &r.products {
-                wdot[k] += nu * q;
-            }
+            q_out[ir] = kf * conc(&r.reactants) - if r.reversible { kr * conc(&r.products) } else { 0.0 };
         }
     }
 }
