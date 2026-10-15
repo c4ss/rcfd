@@ -55,6 +55,59 @@ pub struct Species {
     pub low: [f64; 7],
     /// Coefficients for T >= t_mid.
     pub high: [f64; 7],
+    /// Optional nine-coefficient form (ADR 0027 D6a); when present it replaces the NASA-7 polynomials.
+    pub nasa9: Option<Vec<Nasa9Range>>,
+}
+
+/// One temperature range of a nine-coefficient polynomial: `cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4`,
+/// with the integration constants `b1` (enthalpy) and `b2` (entropy).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Nasa9Range {
+    /// Lower temperature limit of the range, K.
+    pub t_low: f64,
+    /// Upper temperature limit of the range, K.
+    pub t_high: f64,
+    /// `a1 .. a7`.
+    pub a: [f64; 7],
+    /// `b1, b2`.
+    pub b: [f64; 2],
+}
+
+impl Nasa9Range {
+    /// cp / R.
+    pub fn cp_r(&self, t: f64) -> f64 {
+        let a = &self.a;
+        a[0] / (t * t) + a[1] / t + a[2] + t * (a[3] + t * (a[4] + t * (a[5] + t * a[6])))
+    }
+
+    /// h / (R T).
+    pub fn h_rt(&self, t: f64) -> f64 {
+        let a = &self.a;
+        -a[0] / (t * t)
+            + a[1] * t.ln() / t
+            + a[2]
+            + t * (a[3] / 2.0 + t * (a[4] / 3.0 + t * (a[5] / 4.0 + t * a[6] / 5.0)))
+            + self.b[0] / t
+    }
+
+    /// s / R at the standard pressure.
+    pub fn s_r(&self, t: f64) -> f64 {
+        let a = &self.a;
+        -a[0] / (2.0 * t * t) - a[1] / t
+            + a[2] * t.ln()
+            + t * (a[3] + t * (a[4] / 2.0 + t * (a[5] / 3.0 + t * a[6] / 4.0)))
+            + self.b[1]
+    }
+
+    /// The nine-coefficient form of a NASA-7 range (`a1 = a2 = 0`, `a3..a7 = c1..c5`, `b1 = c6`, `b2 = c7`).
+    pub fn from_nasa7(c: &[f64; 7], t_low: f64, t_high: f64) -> Nasa9Range {
+        Nasa9Range {
+            t_low,
+            t_high,
+            a: [0.0, 0.0, c[0], c[1], c[2], c[3], c[4]],
+            b: [c[5], c[6]],
+        }
+    }
 }
 
 impl Species {
@@ -66,20 +119,46 @@ impl Species {
         }
     }
 
+    fn range9(&self, t: f64) -> Option<&Nasa9Range> {
+        let r = self.nasa9.as_ref()?;
+        // the first range whose upper limit lies above t; the last range above the table, the first below it
+        r.iter().find(|x| t < x.t_high).or_else(|| r.last())
+    }
+
+    /// The nine-coefficient form of this species (both NASA-7 ranges mapped), or the stored one.
+    pub fn to_nasa9(&self) -> Vec<Nasa9Range> {
+        match &self.nasa9 {
+            Some(r) => r.clone(),
+            None => vec![
+                Nasa9Range::from_nasa7(&self.low, self.t_low, self.t_mid),
+                Nasa9Range::from_nasa7(&self.high, self.t_mid, self.t_high),
+            ],
+        }
+    }
+
     /// cp / R.
     pub fn cp_r(&self, t: f64) -> f64 {
+        if let Some(r) = self.range9(t) {
+            return r.cp_r(t);
+        }
         let a = self.coef(t);
         a[0] + t * (a[1] + t * (a[2] + t * (a[3] + t * a[4])))
     }
 
     /// h / (R T).
     pub fn h_rt(&self, t: f64) -> f64 {
+        if let Some(r) = self.range9(t) {
+            return r.h_rt(t);
+        }
         let a = self.coef(t);
         a[0] + t * (a[1] / 2.0 + t * (a[2] / 3.0 + t * (a[3] / 4.0 + t * a[4] / 5.0))) + a[5] / t
     }
 
     /// s / R at the standard pressure.
     pub fn s_r(&self, t: f64) -> f64 {
+        if let Some(r) = self.range9(t) {
+            return r.s_r(t);
+        }
         let a = self.coef(t);
         a[0] * t.ln() + t * (a[1] + t * (a[2] / 2.0 + t * (a[3] / 3.0 + t * a[4] / 4.0))) + a[6]
     }
@@ -569,6 +648,7 @@ fn parse_thermo_record(
         t_high,
         low,
         high,
+        nasa9: None,
     };
     Ok((name, sp, atoms))
 }

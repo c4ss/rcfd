@@ -8,8 +8,11 @@
 pub mod case;
 pub mod cell;
 pub mod equil;
+pub mod json;
 pub mod mech;
+pub mod network;
 pub mod ode;
+pub mod pollutants;
 pub mod reactors;
 pub mod toy;
 
