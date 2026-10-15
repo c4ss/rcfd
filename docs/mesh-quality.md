@@ -58,3 +58,10 @@ warning, error or exit code changed (all exit 0, identical warning and error lis
 re-recording. The invariance test is now `e1_non_orthogonality_invariance` (renamed from `..._known_miss`, un-ignored; the
 assertion and the 1e-9 limit are untouched); the worst change under the E1 maps fell from 1.479e-6 to 3.5e-13 degrees. ADR 0018 itself
 is not edited: its results text records the miss as it was at the time.
+
+## Inflation report from the command line (F-108, ADR 0021)
+
+`rcfd inflate <case|mesh> --patch p --layers n <sizing> --json` prints the `InflateReport` of `rcfd_mesh::inflate::inflate_patch`
+(first and last layer heights, thickness, growth, and the quality report of the resulting mesh) together with the cell counts; the service
+method `mesh.inflate` returns the same document. Details and options are in [case-schema.md](case-schema.md), section "Wave 16W". The exit
+code is 4 when the inflated mesh has quality errors. Mesh partitioning reports (`rcfd partition`) are described there as well.

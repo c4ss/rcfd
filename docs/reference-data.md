@@ -561,3 +561,11 @@ them: every expected value is a closed form or invariant derived in the ADR.
 | Reverse Cuthill-McKee ordering with a pseudo-peripheral start | Cuthill and McKee (1969); George and Liu (1981) | unverified (memory); the bandwidth bound `2 n2 n3 - 1` for grids is derived in ADR 0020 A2 from the level-set structure |
 | Isentropic total-pressure relation `p0/p = (1 + (gamma-1)/2 M^2)^(gamma/(gamma-1))` | standard gas dynamics | derived series expansion to `M^4` in ADR 0020 C2 (binomial); the closed form itself is textbook, unverified (memory) |
 | Edge-isoperimetric minimum bisection width of a grid (cross-section of the longest axis) | Bollobas and Leader (1991) | unverified (memory); NOT used: only the upper bound given by the slab is registered |
+
+## Wave 16W wiring (F-236, F-072, F-108, ADR 0021)
+
+No new literature value is introduced. The expected values of the registered checks are closed forms or equalities with the library
+call the wiring surfaces: the linear velocity field `u = x + 2y`, `v = 3x - y` (vorticity 1, Q = -7), the Couette wall shear `mu U/h`
+with `U = 3`, `h = 0.5`, and the y+ definition `y+ = y u_tau / nu` with `u_tau = sqrt(tau/rho)`. The references already marked
+unverified under the wave 15B heading (partitioning, reverse Cuthill-McKee, isentropic total pressure) are unchanged and still
+unverified (memory).

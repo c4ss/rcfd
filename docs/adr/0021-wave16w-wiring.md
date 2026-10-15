@@ -280,3 +280,28 @@ unchanged unless every sentence of the roadmap acceptance is met by tests; F-072
 Multilevel graph partitioning; solver use of partitions or of RCM ordering; MCP tools; case-tree key for inflation; volume
 fill (F-234); lambda2 or other vortex criteria; wall-function wall shear; a solution-file reader (so `rcfd sample` runs the
 case); iso-clip, offset surfaces, point clouds and user variables (F-238); GUI surfaces.
+
+## Addendum after implementation (no registered limit changed)
+
+Files: `crates/rcfd-api/src/{decomp,postproc,inflate}.rs`, `crates/rcfd-cli/src/cmd_wiring.rs`; tests
+`crates/rcfd-api/tests/{decomposition,postprocessing,inflate_report,report_conductivity_vd}.rs`, `crates/rcfd-cli/tests/wiring.rs`.
+
+Measured (release): D1 to D4 worst unit-weight imbalance 0.0278 over 90 cases (limit 0.05); D5 worst weighted imbalance 0.0240
+(0.05); D7 natural bandwidth 40, reverse Cuthill-McKee 5 on Q3 (bound 7); P1 worst analytic error 1.4e-14 on 80 interior cells
+(1e-12, minimum 40); P2 and P3 0 (1e-12); P4 |tau| 1.4e-15, y+ 2.6e-15 (1e-12); P6 1.8e-15, P7 8.9e-16 (1e-12). All other
+registered checks pass as stated; none was a known miss.
+
+Deviations, disclosed:
+
+* Extra check beyond the registered list: `decomposition.write_field = true` with `method = "none"` is a located error at
+  `decomposition.write_field` (otherwise the request would silently do nothing).
+* P9 compared `rcfd sample` with `rcfd run` using `--max-iterations 1` instead of 0: `rcfd run` rejects 0 iterations
+  (`solver.max_iterations` range), so both commands ran the same single iteration; the 0-iteration `rcfd sample` form is
+  exercised separately only in the library-level P6/P7 checks, not through the binary.
+* Q2 (cylinder o-grid) parameters used: nx = 48, ny = 12, r_in = 1, r_out = 5, grading = 4 (576 cells).
+* The D2 derivation of the graph-partitioner imbalance bound is an observation, not a proof; the 0.05 limit was registered
+  before running and held.
+* `rcfd inflate` exits 4 when the inflated mesh has quality errors (not registered; unexercised by tests).
+
+Not delivered (as registered): MCP tools, case-tree inflation key, volume fill, lambda2, wall-function shear, solution-file
+reader, multilevel partitioning, solver use of partitions or RCM.
