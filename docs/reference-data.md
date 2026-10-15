@@ -479,7 +479,7 @@ Known misses added by ADR 0015 (limits as registered, never widened; ignored `*_
 | F-203 SST automatic y+ ~ 1 vs Prandtl-Schlichting | 5 % | -8.44 / -7.76 % | `near_wall_catalogue.rs::c1_sst_smooth_y1_known_miss` |
 | F-203 k-epsilon Standard y+ ~ 30 | 5 % | -6.15 / -4.42 % | `c2_kepsilon_standard_y30_known_miss` |
 | F-203 Enhanced y+ ~ 1 and ~ 30 | converged, 5 % | not converged | `c2_kepsilon_enhanced_y{1,30}_known_miss` |
-| F-203 SST + roughness | 10 % | -22 to -17 %, not converged | `c3_rough_plate_sst_known_miss` |
+| F-203 SST + roughness | 10 % | -22 to -17 %, field stationary (max update 4.4e-9 vs registered 1e-9) | `c3_rough_plate_sst_known_miss` |
 | F-203 C5 tree equals library run | 1e-12 | not run: build path hook missing | `rcfd-api/tests/wall_options.rs` (see ADR 0015 results) |
 
 Reference values and sources:

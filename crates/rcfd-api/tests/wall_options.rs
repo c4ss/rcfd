@@ -88,10 +88,11 @@ fn located_errors_for_misplaced_and_invalid_options() {
     ));
 }
 
+// Compile-time record: replace this test and flip the constant together when the hook exists.
+const _: () = assert!(!BUILD_HOOK_INSTALLED);
+
 #[test]
 fn non_default_values_are_rejected_until_the_build_path_applies_them() {
-    let hook = BUILD_HOOK_INSTALLED;
-    assert!(!std::hint::black_box(hook));
     for (t, path) in [
         (with_ke("wall_function = \"scalable\""), "turbulence.wall_function"),
         (with_ke("roughness_height = 1.0e-3"), "turbulence.roughness_height"),
