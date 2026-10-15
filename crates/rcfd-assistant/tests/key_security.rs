@@ -153,7 +153,7 @@ fn k2_planted_canary_never_appears_in_any_output() {
     for body in [
         format!("{{\"error\":{{\"message\":\"Incorrect API key provided: {CANARY}\"}}}}"),
         format!("rate limited for {CANARY} please retry"),
-        format!("{CANARY}"),
+        CANARY.to_string(),
         format!("{{\"echo\":\"Bearer {CANARY}\",\"detail\":\"{CANARY}{CANARY}\"}}"),
     ] {
         for _ in 0..4 {
