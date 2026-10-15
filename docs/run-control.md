@@ -13,6 +13,9 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--continue-from checkpoint] [--checkpoint file] [--checkpoint-every n]
          [--stop-file file] [--max-elapsed seconds]
          [--threads n] [--precision double] [--journal file]
+         [--set path=json]... [--print-settings] [--restart-from file] [--source-case case] [--method m] [--no-chain]
+rcfd restart <case> --from file [--mesh mesh] [--source-case case] [--method m]   (plus every run flag)
+rcfd check <case> [--json] [--set path=json]...
 ```
 
 | flag | meaning |
@@ -30,6 +33,10 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
 | `--threads n` | number of worker threads (`RAYON_NUM_THREADS`); results are bit-identical for any thread count (measured, see below) |
 | `--precision double` | the only supported value; `single` is rejected with exit 2 |
 | `--journal f` | run the case recorded in a service journal (`journal.get`) instead of a case file |
+| `--set path=json` | override one setting before anything else (repeatable): `--set solver.dt=0.05`, `--set solver.algorithm=piso` (a bare word is a string). Malformed argument: exit 2; unknown path or invalid value: exit 3 |
+| `--print-settings` | print the resolved settings (defaults filled in, overrides applied) as JSON and exit 0 without running or writing anything |
+| `--restart-from f` | start from the solution in restart file `f`; on another mesh the fields are transferred (`--method`, default `gradient`; `--source-case` for files that do not embed their mesh). `rcfd restart <case> --from f` is the same; its `--mesh m` replaces the case mesh by a mesh file. Not combinable with `--continue-from` (which restores the exact state) |
+| `--no-chain` | ignore `chain.sequence` and run the base case alone |
 
 `--hostfile` is rejected with exit 2: there is no distributed-memory run yet (F-100).
 
@@ -59,8 +66,8 @@ within one launch) and `wall_s`. Events:
 - `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
-- `warning`: `message` (for example a run that cannot be checkpointed)
-- `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `mesh` (quality report)
+- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`
+- `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `rules` (setup-rule diagnostics, `id severity category path message [fix]`), `mesh` (quality report)
 - `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`
 
 The MCP tool `read_status_stream` (service method `status.read`) summarises such a file; the
@@ -68,12 +75,36 @@ tool `run_headless` (service method `run.headless`) produces the same stream thr
 
 ## Checkpoints
 
-A checkpoint is a checksummed `rcfd-io` container holding velocity, pressure, face fluxes, the
-iteration counter and (with the energy equation) temperature, tied to the mesh by its content hash.
-It is available for **steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation**.
-Transient, compressible and turbulence-model runs report a `warning` event instead of writing one,
-and `--continue-from` fails with exit 1. A checkpoint of a different mesh, or a damaged file, is
-refused.
+A checkpoint (restart file) is a checksummed `rcfd-io` container holding velocity, pressure, face fluxes, the
+iteration counter and (with the energy equation) temperature, tied to the mesh by its content hash. Since ADR 0031 it also
+holds the mesh itself (section `mesh`) and, for transient runs, the time, the step counter and the BDF2 history
+(`meta.engine` is `steady` or `transient`; old files stay readable).
+It is available for **steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation**, and for **transient
+laminar constant-density PISO/PIMPLE runs without energy equation, scalars, statistics, frozen flow, solids, rheology
+or user functions**. Other runs (compressible, turbulence models, energy or scalars in transient runs) report a `warning`
+event instead of writing one, and `--continue-from` fails with exit 1. A checkpoint of a different mesh, or a damaged file, is
+refused by `--continue-from`; `--restart-from` transfers the solution onto the new mesh instead. A transient restart on the
+same mesh continues bit for bit like the uninterrupted run (measured: PISO Euler, PISO BDF2, PIMPLE BDF2); after a mesh change
+the time is kept but the BDF2 history starts fresh.
+
+Field transfer methods (`rcfd-post::remap`): `nearest`, `inverse_distance`, `least_squares`, `gradient`, `conservative` and
+`conservative_overlap`; measured orders and conservation are in the addendum of `docs/adr/0031-wave19c-restart-chain.md`.
+
+### Chains
+
+`rcfd run` on a case with `chain.sequence` runs the stages in order (case-schema.md, `chain`). Every status event carries a
+`stage` field; additional events: `stage_start` (`stage`, `index`, `of`), `restart` (`stage`, `report`), `stage_finish`
+(`stage`, `exit_code`, `state`, `accepted`) and a closing `chain_finish` (`ok`, `exit_code`, `state`, `stages_run`, `stages`). The
+exit code is that of the first stage that did not end with 0 (a steady stage at its iteration cap, exit 5, is accepted with
+`allow_unconverged`). `summarize_stream` is unchanged and reports the last `finish` event, which is that of the last stage run.
+
+### Setup check
+
+`rcfd check <case> [--json]` validates the settings, builds the simulation, checks the mesh and evaluates the setup rules; exit 0
+(also with warnings and infos), 3 (invalid case or an error-level rule) or 4 (mesh failed). `--json` prints one object with the keys
+`ok`, `exit_code`, `diagnostics`, `rules`, `mesh`. `rcfd validate` prints the rule diagnostics too; `rcfd run` stops with exit 3 before
+solving on an error-level rule and reports warnings as `warning` events. For a chain, `rcfd check` checks the base case; each stage is
+checked when it starts.
 
 Measured on a 12x12 lid-driven cavity (tolerances 1e-7): a run stopped after 30/40 iterations and
 continued from its checkpoint stops after the same 111 iterations as the uninterrupted run, and the
@@ -100,7 +131,7 @@ Settings of the case, honoured by `rcfd run` and by `run.headless` with an `out_
 - The wall-clock limit (`--max-elapsed`) and the stop file (`--stop-file`) are the F-121 controls described above and
   work for transient runs too.
 
-Not covered: statistics and snapshots are not part of a checkpoint (transient runs cannot be checkpointed), no
+Not covered: statistics are not part of a restart file (a transient run with statistics.enabled cannot be restarted), no
 statistics for the compressible solver or steady runs, no cumulative time-averaging restarts, no time-based
 (rather than step-based) write interval.
 
@@ -137,4 +168,7 @@ exits with the code of the failing task: 4 (mesh check), 3 (validation), the run
 - No signal handler: interrupt a CLI run with `--stop-file` (a clean stop with checkpoint and results);
   killing the process loses the unwritten results.
 - No `--hostfile` / distributed runs, no single precision.
-- Checkpoints cover steady laminar SIMPLE/SIMPLEC only (see above).
+- Restart files cover steady laminar SIMPLE/SIMPLEC and transient laminar constant-density PISO/PIMPLE only (see above).
+- Not delivered (F-121 stays partial): MPI (`--hostfile`), per-core affinity, commands run at start or on a schedule (`--set` is
+  the safe subset), automatic case-modification strategies, single precision, a control socket; chains and `restart.from` are
+  not driven through the service method `run.headless`.

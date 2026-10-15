@@ -918,3 +918,56 @@ numeric key has the sentinel `-1` = unset with a located error when needed. The 
 | `injection.<n>.parcel_count` | `1` | real particles per parcel |
 | `injection.<n>.distribution` | `constant` | `constant` (`diameter`) or `rosin_rammler` (`rr_d_bar`, `rr_n`, optional `d_min`, `d_max`) |
 | `output_file`, `output_every` | `""`, `0` | VTK PolyData file, extra files every n tracking steps |
+
+## Wave 19C: `restart`, `chain`, setup rules (F-115, F-241, F-240, ADR 0031)
+
+### `restart` (F-115)
+
+Start the run from the solution in a restart file (the file `rcfd run` writes to `<out>/restart.rcfd`). All keys have an
+explicit unset sentinel, so a case without them behaves exactly as before.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `from` | `""` | restart file (relative to the case file); `""` = fresh start |
+| `source_case` | `""` | case that built the mesh of a restart file that does not embed its mesh (files written before ADR 0031); `""` = unset |
+| `method` | `gradient` | transfer method when the file is on another mesh: `gradient`, `nearest`, `inverse_distance`, `least_squares`, `conservative` (gradient plus a uniform shift matching the volume average), `conservative_overlap` (axis-aligned box cells only) |
+
+The same mesh restores the state of the writing engine exactly. A steady file starts a transient run on the same mesh (velocity,
+pressure and flux are taken over, time 0, fresh history). Another mesh transfers velocity and pressure with `method` and rebuilds
+the flux from the transferred velocity; the report gives `max_flux_imbalance`, which is not zero (a divergence-free projection is
+not implemented). Command line: `rcfd run --restart-from f [--source-case c] [--method m]`, `rcfd restart <case> --from f [--mesh m]`.
+`rcfd run` and the chain honour `restart.from`; the service method `run.headless` does not (use `continue_from` or `interpolate_*`).
+
+### `chain` (F-241)
+
+Stages run one after the other; each starts from the restart file of the previous one.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `sequence` | `[]` | stage names in run order; empty = no chain |
+| `stages.<name>.set` | `[]` | settings changed for this stage and the following ones, entries `"dotted.path=<JSON value>"`; applied in order on top of the previous stage |
+| `stages.<name>.restart` | `auto` | `auto`/`previous`: start from the previous stage's restart file (the first stage uses `restart.from` when set); `none`: fresh start |
+| `stages.<name>.method` | `gradient` | transfer method when `set` changes the mesh |
+| `stages.<name>.allow_unconverged` | `false` | continue when this steady stage ends at its iteration cap (exit 5); otherwise the chain stops with that exit code |
+
+Every name in `sequence` needs a `[chain.stages.<name>]` table (it may be empty). Example, steady then transient:
+
+```toml
+[chain]
+sequence = ["steady", "transient"]
+[chain.stages.steady]
+[chain.stages.transient]
+set = ["solver.algorithm=\"piso\"", "solver.dt=0.05", "solver.end_time=1.0"]
+```
+
+Static errors are located: an unknown or repeated stage in `chain.sequence.<i>`, a malformed entry, an unknown setting path or a
+value of the wrong type in `chain.stages.<name>.set.<i>`. Results of a stage go to `<out>/<stage>/`. `rcfd run --no-chain` runs the
+base case alone. See `docs/run-control.md` for the events.
+
+### Setup rules (F-240)
+
+`rcfd check <case>`, `rcfd validate`, `rcfd run` and `--check-only` evaluate the data-driven rules of
+`crates/rcfd-api/rules/setup_rules.json` (format `rcfd-setup-rules` version 1) on the resolved settings and the mesh quality
+before anything is solved. Each diagnostic has `id`, `severity` (`error`, `warning`, `info`), `category`, a located `path`, `message`
+and sometimes a suggested `fix` (never applied). Errors stop the run with exit 3; warnings go to stderr and to `warning` status events
+with the rule id. The 21 rules (SV001-SV013 errors, SV101-SV105 warnings, SV201-SV203 infos) and the grammar are in ADR 0031.
