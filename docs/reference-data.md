@@ -547,3 +547,16 @@ them: every expected value is a closed form derived in the ADR from the project 
 | Orthogonal quality as the minimum cosine between the face normal and the centre-to-face and centre-to-neighbour vectors | common finite-volume practice | unverified (memory); ortho-skew (intra-cell part only) and size change (neighbour-to-cell volume ratio) are project definitions |
 | Default poor-mesh limits (warp 15 deg, face angle 20 and 160 deg, inverse orthogonal quality 0.9, ortho-skew 0.85, face edge-length ratio 100) | rules of thumb | unverified (memory); not guarantees, adjustable through `Thresholds` |
 | Closed forms for the right-corner tetrahedron, sheared and warped hexahedra | derived in ADR 0018 A3 | derived; the decimal expansion printed for the tetrahedron in A3 has a typo, the formula `1 - 3/sqrt(11)` is correct |
+
+## Wave 15B partitioning, reordering, inflation and derived fields (F-236, F-108, F-072, ADR 0020)
+
+Every literature statement below was written from memory; none was checked against a source. None of the registered checks depends on
+them: every expected value is a closed form or invariant derived in the ADR.
+
+| Item | Source | Status |
+| --- | --- | --- |
+| Boundary refinement by single-cell moves with positive gain under a balance cap (Kernighan-Lin / Fiduccia-Mattheyses family) | Kernighan and Lin (1970); Fiduccia and Mattheyses (1982) | unverified (memory); only the idea of gain-driven moves is used, the implementation is a plain greedy variant, not a published algorithm |
+| Recursive coordinate bisection and inertial bisection | Berger and Bokhari (1987); Taylor and Nour-Omid (1994) | unverified (memory); cuts checked against closed forms in the ADR |
+| Reverse Cuthill-McKee ordering with a pseudo-peripheral start | Cuthill and McKee (1969); George and Liu (1981) | unverified (memory); the bandwidth bound `2 n2 n3 - 1` for grids is derived in ADR 0020 A2 from the level-set structure |
+| Isentropic total-pressure relation `p0/p = (1 + (gamma-1)/2 M^2)^(gamma/(gamma-1))` | standard gas dynamics | derived series expansion to `M^4` in ADR 0020 C2 (binomial); the closed form itself is textbook, unverified (memory) |
+| Edge-isoperimetric minimum bisection width of a grid (cross-section of the longest axis) | Bollobas and Leader (1991) | unverified (memory); NOT used: only the upper bound given by the slab is registered |
