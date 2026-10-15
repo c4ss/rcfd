@@ -626,10 +626,7 @@ coefficients = [-2.0, 0.01]
 density = \"ideal_gas\"
 ",
     ));
-    assert!(
-        has(&errs, "boundaries.xmax.temperature") || !errs.is_empty(),
-        "{errs:?}"
-    );
+    assert!(has(&errs, "boundaries.xmax.temperature"), "{errs:?}");
     println!(
         "F4b variable-density errors: {:?}",
         errs.iter().map(|d| d.path.clone()).collect::<Vec<_>>()
