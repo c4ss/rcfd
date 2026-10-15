@@ -569,3 +569,18 @@ call the wiring surfaces: the linear velocity field `u = x + 2y`, `v = 3x - y` (
 with `U = 3`, `h = 0.5`, and the y+ definition `y+ = y u_tau / nu` with `u_tau = sqrt(tau/rho)`. The references already marked
 unverified under the wave 15B heading (partitioning, reverse Cuthill-McKee, isentropic total pressure) are unchanged and still
 unverified (memory).
+
+## Wave 16B boundary-condition catalogue (F-200, ADR 0022)
+
+Every closed form below is a textbook relation written from memory and not checked against a source in this session; each was
+re-derived in the ADR or checked numerically as stated. No vendor data is used.
+
+| Item | Source | Status |
+| --- | --- | --- |
+| Plane Poiseuille flow: `-dp/dx = 12 mu U / H^2`, profile `6 U (y/H)(1 - y/H)` | standard fluid mechanics | derived from the momentum balance (parabolic profile, mean `U`); unverified (memory) as a citation. The measured 0.498 % deficit is the cell-centred wall-gradient error `1.5 (h/gap)^2` predicted in the ADR |
+| Annular Poiseuille flow: `Q = pi G / (8 mu) [R2^4 - R1^4 - (R2^2 - R1^2)^2 / ln(R2/R1)]` | Lamb, Hydrodynamics; Bird, Stewart and Lightfoot | unverified (memory); the closed form is evaluated with the equal-area radii of the 48-gon (0.499286, 0.998572), and the 0.398 % agreement with the solver is a consistency check, not a verification of the formula |
+| Radial equilibrium `dp/dr = rho w^2 / r` of swirling flow, rigid rotation `p = p_a + rho Omega^2 (r^2 - <r^2>)/2` | standard (the F-200 roadmap text states the relation) | derived from the radial momentum balance; unverified (memory) as a citation |
+| Total-pressure inlet `p = p0 - |u|^2/2`, Bernoulli for the frictionless duct | standard | textbook; unverified (memory) |
+| Vent loss law `dp = K rho u |u| / 2` | common engineering practice | unverified (memory); the quadratic law with the dynamic head `rho u^2/2` as the unit is a project definition |
+| Inlet turbulence `k = 1.5 (I U)^2`, `eps = Cmu^(3/4) k^(3/2) / l`, `eps = Cmu k^2 / (nu ratio)`, `omega = eps / (beta* k)` | standard | pre-existing helpers (F-044); the registered values 3.75e-3, 5.390521e-4, 1.597191, 1.265625e-6 are arithmetic of these formulas; unverified (memory) |
+| Secant and dynamic-head sensitivity updates of the target-mass-flow pressure | generic root finding | project design; the secant option is a documented known miss (ADR 0022 addendum) |
