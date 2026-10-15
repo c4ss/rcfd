@@ -2,6 +2,7 @@
 
 pub mod bc_cat;
 pub mod case;
+pub mod cht;
 pub mod comp;
 pub mod decomp;
 pub mod exprs;

@@ -531,8 +531,8 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "temperature",
-            Schema::enumeration("zero_gradient", &["zero_gradient", "fixed", "heat_flux"])
-                .doc("Temperature condition (energy equation): adiabatic, fixed value or prescribed heat flux"),
+            Schema::enumeration("zero_gradient", &["zero_gradient", "fixed", "heat_flux", "convection"])
+                .doc("Temperature condition (energy equation): adiabatic, fixed value, prescribed heat flux or convection (heat-transfer coefficient to a free-stream temperature, optional thin wall layers and radiation to an ambient, ADR 0024)"),
         )
         .field(
             "temperature_value",
@@ -550,6 +550,30 @@ pub fn case_schema() -> Schema {
         .field(
             "heat_flux_expression",
             Schema::string("").doc("Expression [W/m^2] for a prescribed wall heat flux into the domain (energy equation)"),
+        )
+        .field(
+            "heat_transfer_coefficient",
+            Schema::float(-1.0).doc("temperature = convection: heat-transfer coefficient h [W/m^2/K] to free_stream_temperature (0 = none); -1 = unset, an error (ADR 0024)"),
+        )
+        .field(
+            "free_stream_temperature",
+            Schema::float(-1.0).doc("temperature = convection: free-stream (fluid) temperature [K], required when heat_transfer_coefficient > 0; -1 = unset"),
+        )
+        .field(
+            "wall_thickness",
+            Schema::list(Schema::float(0.0)).doc("temperature = convection: thickness [m] of each thin wall layer between the surface and the external convection, steady resistance only (no thermal capacity); empty = no thin wall"),
+        )
+        .field(
+            "wall_conductivity",
+            Schema::list(Schema::float(0.0)).doc("temperature = convection: conductivity [W/m/K] of each thin wall layer (same length as wall_thickness)"),
+        )
+        .field(
+            "wall_emissivity",
+            Schema::float(0.0).doc("temperature = convection: emissivity in [0, 1] of the external surface for radiation to radiation_temperature (0 = none). Distinct from `emissivity`, the P1 radiation wall emissivity"),
+        )
+        .field(
+            "radiation_temperature",
+            Schema::float(-1.0).doc("temperature = convection: ambient temperature [K] the external surface radiates to, required when wall_emissivity > 0; -1 = unset"),
         )
         .field(
             "emissivity",
@@ -989,6 +1013,10 @@ pub fn case_schema() -> Schema {
         .field(
             "ddt_correction",
             Schema::boolean(true).doc("Transient Rhie-Chow correction (piso / pimple)"),
+        )
+        .field(
+            "frozen_flow",
+            Schema::boolean(false).doc("Prescribe the flow: the face flux comes from initial.velocity and initial.velocity_expression_x/y/z at the face centres and only the energy equation is solved (required by solids; conjugate heat transfer, ADR 0024)"),
         );
 
     let report = Schema::object()
@@ -1567,6 +1595,8 @@ pub fn case_schema() -> Schema {
         .field("initial", initial)
         .field("registers", crate::registers::schema())
         .field("zone_sources", crate::zone_sources::schema())
+        .field("solids", crate::cht::solids_schema())
+        .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field(
             "boundaries",
             Schema::named(boundary).doc("Boundary conditions by patch name"),
