@@ -259,4 +259,103 @@ Poisson manufactured-solution order 2) is met only if U1 and U2 hold.
 
 ## Results
 
-(to be filled after the runs)
+All numbers below are printed by the tests (`cargo test --release -p rcfd-api --test <file> -- --nocapture`,
+`-p rcfd-fv --test init_potential`). No limit, reference value, case or algorithm was changed after the first run of the
+checks; there is no tuning anywhere in this wave. The independent Python models quoted in the registered checks were written
+before the implementation to derive the expectations (as stated above); they were not used to fit anything.
+
+### F-205 initialisation (verdict `partial`: I2 missed)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| I1a first-ring `u_theta` error / 2A, M2 | 1.2597e-4 | <= 0.03 | met |
+| I1b extrapolated surface error / 2A, M2 | 9.7428e-4 | <= 0.03 | met |
+| I1c RMS velocity error order M1 -> M2 (1.5711e-4 -> 3.8734e-5, relative to 2A) | 2.020 | >= 1.4 | met |
+| I1d first-ring error order M1 -> M2 (4.9418e-4 -> 1.2597e-4) | 1.972 | >= 0.9 | met |
+| I2 BFS iterations, potential < uniform (1,0,0) and < zero | uniform 253, zero 258, potential 258 (potential velocity with zero pressure: 256) | potential smaller than both | MISS |
+| I3 cavity 40x40 iterations, coarse start < uniform | uniform 165, coarse-initialised 112 (equivalent work with a coarse iteration at 1/4 cost: 187 against 165, reported only) | coarse < uniform | met |
+| I4 localised k, epsilon | 16 of 56 cells in the register, difference 0 inside and outside | 0 | met |
+| I5 `uniform` == default | bitwise equal after 20 iterations; `baseline_hashes` pass unchanged | equal | met |
+| I6 located diagnostics | all registered cases located | - | met |
+
+**I2 miss and diagnosis.** The registered assertion is kept unchanged in the ignored test
+`i2_known_miss_potential_start_needs_fewer_iterations_on_the_backward_facing_step` (`rcfd-fv/tests/init_potential.rs`;
+`I2_TRACE=1` prints the residual histories). After about 25 iterations all four starts have the same residual decay (for
+example `res_u` at iteration 100: 7.3e-4 uniform, 9.1e-4 zero, 9.2e-4 potential; a factor of about 0.31 per 25 iterations): the
+iteration count to 1e-6 is set by the slow asymptotic recirculation / pressure-velocity mode of the SIMPLE iteration, and the
+potential start only lowers the initial residual (`res_u` 0.29 against 1.0 at iteration 1), saving no iterations. This is a
+property of the flow and of the iteration, not a defect of the potential solve (I1 shows the potential velocity is accurate for
+the flow it models; the step flow at Re_h = 100 is viscous and recirculating, which potential flow does not represent). No
+retuning was done. A start that targets the slow mode (for example a coarse-level start for this geometry) was not tried.
+
+**Set-up defect (I4).** The first version of the localised-turbulence test used the model name `none`, which is not a valid
+laminar setting (the name is `laminar`); it is kept as the ignored record `i4_localised_turbulence_initialisation` and the
+corrected `i4b_...` passes with the registered limits.
+
+### F-201 zone sources and fixed values (verdict `partial`: gaps named in D2)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| E1a `max abs(T_h - T_exact - q h^2/(8k))`, n = 64 | 6.724e-10 K | <= 1e-6 * 6.25 K = 6.25e-6 K | met |
+| E1b relative error n = 8, 16, 32, 64 | 1.5625e-2, 3.90625e-3, 9.766e-4, 2.4414e-4; orders 2.000, 2.000 | n = 64 <= 3e-4; orders in [1.9, 2.1] | met |
+| E1c heat out through both walls against `q V` | relative 1.170e-11 | <= 1e-6 | met |
+| E2 relative error n = 8..64 (relative to the maximum exact rise) | 2.8543e-2, 7.3737e-3, 1.8732e-3, 4.7201e-4; orders 1.977, 1.989 | n = 64 <= 6e-4; orders [1.9, 2.1] | met |
+| E3a fixed cells | difference 0 (8 cells = 4 columns) | 0 | met |
+| E3b outside cells against the piecewise-linear profile | 4.767e-10 K | <= 2e-4 K | met |
+| E3c register zone against box zone | difference 0 | 0 | met |
+| E4a Euler `a_N` against `(1 + dt)^-N`, dt = 0.1, 0.05, 0.025 | 1.7e-16, 4.4e-16, 3.1e-15; orders 0.971, 0.985 | <= 1e-10; orders [0.9, 1.15] | met |
+| E4b BDF2 orders, error at dt = 0.025 | errors 1.669e-3, 3.973e-4, 9.739e-5; orders 2.071, 2.028 | orders [1.8, 2.3]; <= 2e-4 | met |
+| E4c `a + b = 1`, `a` uniform | closure 0 and spread <= 3.8e-14 in all six runs | <= 1e-12 | met |
+| E5 heat out against `q V_mid`; symmetry | relative 3.471e-11; asymmetry 3.892e-10 K | <= 1e-6; <= 4e-9 K | met |
+| E6 located diagnostics | all registered cases located | - | met |
+
+The acceptance statement is met; the item stays `partial` because mass sources, momentum sources / fixed values by expression,
+sources and fixed values for turbulence quantities and the variable-density / compressible engines were not attempted (D2).
+
+**Set-up defect (E1c, E5).** The first versions of E1 and E5 left the `heat_flow` reports at their own default conductivity
+(`reports.<n>.conductivity` = 1.0, a separate setting from `physics.conductivity` = 2.0), so the reported heat flow was half the
+true value (E1c and E5 conservation read relative 0.5). The temperature results (E1a, E1b) were unaffected and met their limits
+in the same run. Those two tests are kept as ignored records (`e1_uniform_source_matches_...`, `e5_source_in_a_register_...`) and
+the corrected tests `e1_corrected_report_conductivity` and `e5_corrected_report_conductivity` repeat all registered limits
+with `reports.<n>.conductivity = 2.0`.
+
+### F-202 user transport equations (verdict `partial`: vector variant and coupling not attempted)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| U1 RMS error n = 16, 32, 64, 128 | 4.1724e-4, 1.0441e-4, 2.6110e-5, 6.5278e-6; orders 2.000, 2.000 | n = 128 <= 8e-6; orders [1.9, 2.1] | met |
+| U1 constant diffusivity linear profile | 2.8e-15 | <= 1e-9 | met |
+| U2 Poisson RMS error n = 8..64 | 8.669e-3, 2.165e-3, 5.411e-4, 1.3528e-4; orders 2.000, 2.000 | n = 64 <= 2e-3; orders [1.8, 2.3] | met |
+| U3 Euler (dt 0.1, 0.05, 0.025), nx = 128 | max errors 1.7452e-2, 8.910e-3, 4.510e-3; orders 0.970, 0.982 | [0.9, 1.15] | met |
+| U3 BDF2 (dt 0.2, 0.1, 0.05) | 7.490e-3, 1.6806e-3, 4.144e-4; orders 2.156, 2.020 | [1.8, 2.3] | met |
+| U3 nx = 256 (reported, no limit) | Euler dt 0.025: 4.4962e-3; BDF2 dt 0.05: 4.0056e-4 | - | - |
+| U4 central RMS errors n = 40..320 | 6.953e-5, 1.737e-5, 4.342e-6, 1.0853e-6; orders 2.000, 2.000 | [1.9, 2.1] | met |
+| U4 upwind RMS errors n = 80, 160, 320 | 9.372e-4, 4.925e-4, 2.527e-4; orders 0.928, 0.962 | [0.9, 1.15] | met |
+| U5 algebraic `b = 2a + x + T` | difference 0 | <= 1e-12 | met |
+| U6 located diagnostics | all registered cases located | - | met |
+
+The two acceptance quantities (diffusive second order, Poisson order 2) are met. The item stays `partial` because the vector
+variant and the coupling of user variables into properties, turbulence or other equations were not attempted (D3).
+
+### Deviations from the text of this ADR (disclosed)
+
+1. D2 describes a fixed cell as an identity row with the neighbours "keeping their couplings to the fixed cell". The
+   implementation also moves the fixed cell's column into the neighbours' right-hand sides (the coupling coefficient times the
+   fixed value) and zeroes it in the matrix. This is the same linear system with the unknown eliminated; it keeps a symmetric
+   system symmetric (the conjugate-gradient solver stays applicable). The fixed value is still overwritten after the solve.
+2. E3 text says "exactly four fixed cells"; the slab has `ny = 2`, so the box holds four columns of two cells (8 cells). The test
+   asserts 8 cells in exactly 4 columns; the registered limits are unchanged.
+3. E2 "relative to `max T_exact`" is read as the maximum exact temperature rise over the wall temperature (the normalisation of
+   the independent model, 0.0641 in unit form), not the absolute temperature near 300 K.
+4. The F-202 algebraic expression context has the variables `x, y, z, t`, `T` and the other scalar / species names; scalar
+   names equal to `x`, `y`, `z` or `t` are not rejected (such a name would clash with the coordinate in algebraic
+   expressions; not tested). The `scalars.<name>.equation` key exists for `scalars` only; species are always `transport`.
+5. U5 additionally asserts that `b` carries `T` (all cell values above 300).
+6. Zone sources on the temperature are rejected together with the radiation model (the radiation iteration builds its own
+   energy sweep); this restriction was not in D2.
+
+### References
+
+Only closed-form solutions derived in this ADR were used; no external reference value enters any limit, so nothing was added to
+`docs/reference-data.md` as unverified for this wave. The literature statements marked "(from memory, unverified)" in the ADR
+text (algorithm names, not numbers) carry no numeric limit.
