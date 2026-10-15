@@ -303,6 +303,12 @@ Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/
 7. **Additional unregistered checks** (supplementary evidence, same limits as the library counterparts): `convection_wall_through_the_tree`
    (A1 and A3b through the settings tree) and the ignored upwind records.
 
+8. **Silent-drop guards added after review** (test `f4b_combinations_that_would_drop_a_setting_are_rejected`): user `scalars`/`species`
+   with solids or a prescribed flow (they would never be advanced), and `temperature = "convection"` with a temperature-dependent
+   conductivity law or with the variable-density / compressible solvers (the condition would silently use the constant
+   `physics.conductivity` or become adiabatic) are located errors. `initial.patches` velocity values are not read by the prescribed
+   flux (only `initial.velocity` and its expressions).
+
 ### Not delivered (final)
 
 * A SOLVED flow coupled to solid zones (pressure-driven or buoyancy-driven). `solids` require `solver.frozen_flow = true`. The cell flux
