@@ -298,3 +298,123 @@ All on the lid-driven cavity of the existing run-control tests (12x12, `nu = 0.0
 * F-240: SV001-SV003, SV005-SV008, SV010-SV013 duplicate checks already enforced elsewhere; the only new diagnostics are SV009,
   SV101-SV105, SV201-SV203. Registry `case.json` descriptors are not evaluated.
 * F-209 and F-210 are not touched.
+
+## Addendum (written after the runs): measured results, misses, deviations
+
+Nothing above this heading was changed. Registered limits are intact; every miss is reported as measured and its assertion lives
+in an ignored `*_known_miss` test.
+
+### Measured, per registered check
+
+Field transfer (`crates/rcfd-post/tests/remap_w19c.rs`: 10 pass, 4 ignored):
+
+* **I1 PASS.** Linear field, max abs error over all target cells: least_squares, conservative_overlap and gradient (inside the
+  centre box) all `<= 1.6e-15` (limit 1e-12), 2D coarse-to-fine, fine-to-coarse and 3D.
+* **I2 PARTIAL.** least_squares orders 2.01 and 2.14 (band [1.7, 2.5]) PASS; nearest 0.997 and 1.001 (band [0.7, 1.5]) PASS.
+  MISSES, limits unchanged: gradient 2.09 and 2.75 (second step above the band), conservative_overlap 2.63 and 3.77 (errors
+  3.54e-3, 5.73e-4, 4.21e-5; the quadratic test field is reproduced better than second order by the overlap average, i.e. the
+  scheme is more accurate than the registered upper bound assumed, not less), inverse_distance 1.58 and 1.64 (band [0.7, 1.5];
+  weights `1/d^2` over 10 neighbours give a better than first-order interpolation on this smooth field). Ignored tests:
+  `i2_*_known_miss`. An unregistered diagnostic on `sin x cos y` gave nearest ~1.0, inverse_distance 1.56/1.66, least_squares
+  2.11/2.18, gradient 1.51/2.66.
+* **I3 PASS.** conservative_overlap relative integral mismatch 8.9e-16 (refine) and 1.4e-15 (coarsen) (limit 1e-12); the
+  uniform-shift `conservative` mode 2.5e-15 and 3.8e-15 (limit 1e-10). Deviation: the 2D pairs are `gen::channel` meshes with an
+  equal explicit depth of 0.05, because `cavity_2d_rect` derives its depth from `lx/nx` (different depth per mesh breaks the
+  volume integral comparison); the ADR notation "same depth" was the intent.
+* **I4 PASS.** Identical meshes: bit-exact for all methods, scalar and vector (through the disclosed hash short-cut).
+* **I5 PARTIAL.** Finite, bounded and constant-field parts PASS (constant reproduced to 2.7e-16, minimum coverage reported
+  `< 1`). The clause "least_squares at target centres outside the source cell-centre bounding box equals the nearest value
+  exactly" is a MISS and is mutually inconsistent with I1 as registered (I1 requires the linear field to be exact at ALL target
+  cells, including those between the outermost source centre and the boundary, which are outside the centre box): the
+  implementation extrapolates the fit inside the source MESH bounding box (satisfying I1) and falls back to nearest only outside
+  it. Ignored test `i5_least_squares_nearest_outside_centre_box_known_miss`; new corrected test
+  `i5b_least_squares_nearest_outside_mesh_box` passes. ADR defect.
+* **I6 PASS.**
+
+Restart (`crates/rcfd-api/tests/restart_w19c.rs`: 6 pass, 1 ignored):
+
+* **S1 PASS** (bit-identical after restore and 25 steps later, max abs difference 0).
+* **S2 PASS** for PISO Euler, PISO BDF2 and PIMPLE (`n_outer = 2`) BDF2: 12 steps after `load_restart` bit-identical to the
+  continued run (ux, uy, p, flux, time); the driver run stopped by a step limit writes the transient restart file and a second driver
+  run continues bit-identically.
+* **S3 PASS** (steady file into PISO on the same mesh: u, p, flux bit-identical, time 0; a transient file into a steady run is an
+  error).
+* **S4 PASS** (embedded mesh 12x12 to 24x24 without a source case; a file with the `mesh` section removed needs the source case
+  and then gives bit-identical fields; the wrong source case, no source case and `load_restart` of another mesh are refused).
+* **S5.** Cold start 24x24: 89 iterations to 1e-6 and 23 iterations to a speed distance of 1e-2 from the converged solution.
+  **S5a MISS for all three methods** (iterations to tolerance): gradient 103, least_squares 96, conservative_overlap 103, versus 89.
+  Cause (diagnosed in the first slice and unchanged): the residual normalisation is relative to the run's own variation, so the
+  better start does not shorten the tail of the convergence to 1e-6, and the transferred flux is not divergence-free (max flux
+  imbalance of the rebuilt flux 0.18 in the chained 12 to 24 transfer). Ignored test `s5a_iterations_to_tolerance_known_miss`.
+  **S5b PASS for all three** (iterations until the speed is within 1e-2 of the converged solution: 10 versus 23 cold).
+
+Chain (`crates/rcfd-api/tests/chain_w19c.rs`, `crates/rcfd-cli/tests/chain_w19c.rs`; all PASS):
+
+* **C1** the chain's final state equals the manual procedure bit for bit; at the command line `<out>/transient/solution.vtu` is
+  byte-identical to `rcfd run steady` followed by `rcfd restart transient --from`, and so is the steady stage output.
+* **C2** (16x16 cavity, steady tolerance 1e-8, then PISO dt 0.05 to t = 1): speed relative L2 distance to the single steady run
+  2.08e-3 (limit 2e-2), pressure with the volume mean removed 8.35e-3 (limit 2e-2).
+* **C3** 12x12 to 24x24: the fine stage runs on 576 cells, report `transferred`, converges in 147 iterations (exit 0).
+* **C4** exit 5, stage `b` never started, no `b` directory; with `allow_unconverged` both stages run.
+* **C5** event order as registered, every non-`chain_finish` event carries `stage`, 38 events.
+* **C6** unknown stage, repeated stage, entry without `=`, unknown setting path, value of the wrong type, value that is not JSON and
+  a `set` on the chain section itself are each rejected at the located path.
+
+Run control (`crates/rcfd-cli/tests/w19c_run_control.rs`, `chain_w19c.rs`):
+
+* **R1 NOT REPRODUCED through the binary** for both exit codes, as the registered rule says, not retried with other values. Exit 4
+  candidate `wedge_2d` `ramp_angle = 89`: exit 3, the schema bounds the angle to [0, 60], so the case is refused before any mesh is
+  built (run, `run --check-only` and `check` all give 3). Exit 6 candidates: (i) simple, `alpha_u = alpha_p = 1`, lid 1000, `nu = 1e-4`,
+  central: exit 5 (not converged, no non-finite residual); (ii) PISO `dt = 100`, `end_time = 1000`, central: exit 0 (finished).
+  Exit 4 and 6 stay covered by library tests only.
+* **R2 PASS** (`--print-settings` stdout equals `tree.to_json()`; no results directory; invalid case exit 3).
+* **R3 PASS** (`--set` equals the hand-edited case `case_hash`; `--set foo` and a non-JSON value exit 2; unknown path and invalid
+  value exit 3).
+* **R4 PARTIAL.** Exit 0 (valid and warning-only), 3 (invalid) and the JSON shape (`ok exit_code diagnostics rules mesh`; rule entries
+  have exactly `id severity category path message`, plus `fix`) PASS. Exit 4 for a bad mesh was not reproduced (same candidate as
+  R1). A measured consequence of mirroring: all error-level rules except SV011 are mirrors of checks the case loader already
+  enforces, so through the binary an error-level case exits 3 from the loader before the rules run; the engine itself is covered by
+  E1.
+* **R5 PASS** (threads 1 versus 3 byte-identical `solution.vtu` for a 12 to 24 `least_squares` restart and for the chain).
+
+Rule engine (`crates/rcfd-api/tests/rules_w19c.rs`):
+
+* **E1 PASS** (all 21 rules fire with the registered id, severity, category and path; the error-level id set is exactly the rule
+  under test; fixtures cover exactly the 21 ids of the data file; SV105 locates `solver.tolerance_p` when only that one is loose).
+* **E2 MISS (warning level), PASS (error level).** 62 distinct case texts evaluated (8 `cases/**/*.toml`, 0 doc blocks, 54 test
+  sources; skipped: 16 templates, 39 not valid cases, 8 whose mesh did not build; the docs contain one fenced `toml` block and it is
+  not a complete case). No error-level diagnostic anywhere; the only info is SV202 on a mesh-only text. One warning: SV103 (aspect
+  ratio above 1000) on a case text of `turb_models.rs`, a wall-resolved boundary-layer mesh that the test suite runs on purpose. The
+  threshold is the library's own warning threshold and is not changed. Ignored `e2_zero_false_positives_known_miss` keeps the
+  registered assertion; the active test asserts what holds (no error-level finding, every warning is SV103).
+* **E3 PASS** (identical bytes in two evaluations and after rebuilding the tree with keys inserted in reverse order; output sorted by
+  severity, id, path).
+* **E4 PASS** at library level (strict loader: unknown condition key, operator, severity, category, wrong version, wrong format,
+  unknown rule key, duplicate id, missing or unexpected `value` are all load errors; a rule written only as data fires; `check_only`
+  returns the `rules` array) and at the command line (a warning-only case runs and emits a `warning` event with `rule = SV105` and
+  `path`; `validate` prints the rule line and keeps exit 0). Not reachable through the binary: a rule-only error (see R4).
+
+**B1 baseline hashes:** see the final report line below.
+
+### Deviations from the ADR text
+
+* Grammar: `count` takes an optional `where` condition (items bound to `@`); needed for the registered SV004 ("every boundary ...").
+  A path in `each` over a list binds `{name}` to the index (SV009 locates `chain.sequence.<i>`). `path` may be
+  `{"first_of": [{"when", "path"}, ...]}` (SV105 "the first that applies").
+* The `warning` status events of rules are passed to the driver through `RunOptions.info.warnings` (no new struct field, so the
+  existing literals of that struct keep compiling); the `check` event gained `rules`, and `rules`/`mesh` keys on the invalid path.
+* A stage with no `set` still needs an (empty) `[chain.stages.<name>]` table because a sequence name must name a defined stage.
+* SV009 duplicates the located static check of `chain` (the loader refuses such a case first); the rule itself is exercised on the
+  tree directly.
+* `restart.from` and chains are not driven by the service method `run.headless` (a case read from a sandboxed service must not
+  open arbitrary files through a setting; use `continue_from` or `interpolate_*`).
+* The `check` of a chain checks the base case; each stage is checked (mesh quality and rules) when it starts.
+* `cavity_2d_rect` depth issue and the I1/I5 conflict are listed above.
+
+### Not delivered
+
+F-209 and F-210 (not attempted); MPI, hostfile, affinity, commands at start or on a schedule, automatic case-modification
+strategies, single precision, a control socket (F-121); unstructured conservative remapping and a flux-conservative or
+divergence-free projection of the transferred flux (F-115); transient restart for energy, scalars, statistics, turbulence models,
+frozen flow, solids, rheology and compressible runs; BDF2 history across a mesh change; reading a solution back from result
+files (VTU); registry `cases/*/case.json` descriptors are not evaluated by the rules; the rule `fix` suggestions are never applied.
