@@ -6,12 +6,12 @@ the source is a reputable paper, vendor guide or repository that reproduces the 
 original printed table (the original journal papers were not accessible online). Nothing was loosened:
 no tolerance was changed, and no benchmark number in a data file or assertion turned out to be wrong.
 
-Summary (counted by table row): about 34 verified, 3 mismatched, about 8 unverifiable or not re-checked.
+Summary (counted by table row): about 34 verified, 3 mismatched, about 8 unverifiable or not re-checked (wave 6a counts; see the wave 13 note below and `docs/verification-report.md` for the later re-check).
 The mismatches are one sign error in a test helper (Taylor-Green initial pressure) and two citation or
 label errors (Darwish-Moukalled journal; flat-plate "Prandtl-Schlichting" label); all were corrected in
 comments, notes or the test helper, and every affected test still passes.
 
-Wave 13 follow-up: items that were marked unverified or from memory (turbulence-model and wall constants,
+Wave 13 follow-up (the unverified/from-memory markers below are updated in place where re-checked): items that were marked unverified or from memory (turbulence-model and wall constants,
 EOS critical data, Peng-Robinson/Redlich-Kwong constants, NIST isotherm values, Sutherland, atomic weights,
 backward-facing-step and laminar-step values, Milne, Robertson, flame temperature, Formulation 1A, rheology
 constants) were re-checked against web sources; per-item values, URLs and verdicts are in
@@ -58,7 +58,7 @@ Used in `crates/rcfd-fv/src/riemann.rs` tests, `compressible.rs` wedge tests.
 | M = 2, theta = 10 deg, gamma 1.4: weak beta = 39.31 deg | independent bisection solve (39.314 deg; strong 83.70, theta_max 22.97 deg, p2/p1 = 1.7066); an online oblique-shock calculator quotes 39.3 deg and p2/p1 about 1.71 by normal-shock relations | verified (computed + corroborated) |
 | theta = 30 deg at M = 2 detaches | theta_max = 22.97 deg from the solve | verified |
 | NACA 1135 chart attribution | not accessed | unverifiable, removed from the comment |
-| Reference list entries Roe 1981 JCP 43, Harten 1983 JCP 49, Liou 1996 JCP 129, Shu-Osher 1988 JCP 77, Toro et al. 1994 | bibliographic recollection, not re-fetched | not re-checked |
+| Reference list entries Roe 1981 JCP 43, Harten 1983 JCP 49, Liou 1996 JCP 129, Shu-Osher 1988 JCP 77, Toro et al. 1994 | bibliographic recollection | wave 13: Roe, Harten, Liou, Shu-Osher confirmed via Crossref; Toro 1994 not re-checked |
 
 Corrected: `compressible.rs` cited "Darwish and Moukalled, Numer. Heat Transfer B 44 (2003)"; the TVD paper
 is Int. J. Heat Mass Transfer 46(4) (2003) 599-611 (confirmed by multiple citing sources). Fixed the doc comment.
@@ -170,17 +170,17 @@ Re = U_mean D_h / nu with D_h = 2h, so Re_literature = 2 Re_h.
 |---|---|
 | Patankar, Liu and Sparrow, J. Heat Transfer 99(2) (1977) 180-186 (`simple.rs`) | verified |
 | Darwish and Moukalled, IJHMT 46(4) (2003) 599-611 | verified, comment corrected (see above) |
-| Issa 1986 JCP 62; Choi 1999 Numer. Heat Transfer A 36; Ericson RTCD 5.1.5 | not re-checked |
+| Issa 1986 JCP 62; Choi 1999 Numer. Heat Transfer A 36; Ericson RTCD 5.1.5 | Issa confirmed via Crossref (wave 13); Choi and Ericson not confirmed |
 
 ## Not verifiable online
 
 - Original printed tables of Ghia 1982 and de Vahl Davis 1983 (only secondary reproductions were reachable); the
   Ghia Re 100/400 values at y = 0.9766 rest on a single source.
-- Backward-step geometry (expansion ratio 1.125) and the "5.5 to 7" scatter statement.
+- The "5.5 to 7" scatter statement (the expansion ratio 1.125 was confirmed in wave 13).
 - Williamson 1989 / Henderson 1995 St values and the Williamson fit coefficients.
 - Toro Table 4.3 / NACA 1135 attributions.
-- Original value of A0 in Shih et al. (4.04 vs 4.0).
-- Roe/Harten/Liou/Shu-Osher/Issa/Choi bibliographic details (not re-fetched).
+- (Resolved in wave 13: Shih et al. print A0 = 4.0; rcfd uses 4.04.)
+- Choi 1999 bibliographic details (Roe, Harten, Liou, Shu-Osher, Issa were confirmed via Crossref in wave 13).
 
 ## Public validation-data pack (F-125, fetched 2026-10-13)
 
@@ -211,7 +211,7 @@ where a real file confirmed them. Treat as unverified.
 The law forms in `crates/rcfd-api/src/rheology.rs` are textbook expressions written from memory of the literature
 (Bird, Armstrong and Hassager 1987; Carreau 1972; Yasuda 1981; Cross 1965; Herschel and Bulkley 1926; Papanastasiou
 1987; Williams, Landel and Ferry 1955) and were not checked against the papers in this session. Unverified:
-the Carreau-Yasuda exponent convention `(n-1)/a`, the Cross form `1/(1+(lambda g)^m)`, the regularised yield term
+(wave 13: the Carreau-Yasuda `(n-1)/a` convention and the WLF constants 17.44 and 51.6 K are now confirmed, secondary: arXiv:1810.02292, IUPAC Gold Book goldbook.iupac.org/terms/view/12821; Cross and Papanastasiou remain unverified) the Carreau-Yasuda exponent convention `(n-1)/a`, the Cross form `1/(1+(lambda g)^m)`, the regularised yield term
 `tau0 (1 - exp(-m g))/g`, and the WLF constants 17.44 and 51.6 K (the "universal" values, relative to the glass
 transition temperature, offered only as defaults). The checks that do not depend on those forms are analytic:
 the power-law plane channel profile and pressure gradient (`u = U (2n+1)/(n+1) [1 - |1-2y/H|^((n+1)/n)]`, derived by
@@ -337,7 +337,7 @@ Sutherland viscosity was renamed `air_cp_conductivity_fit_laws_within_1pct_and_s
 
 | Value | Source | Result |
 |---|---|---|
-| Characteristic (LODI) boundary treatment, pressure-relaxation outlet `K (p - p_ref)` | Thompson, J. Comput. Phys. 68 (1987) 1-24; Poinsot and Lele, J. Comput. Phys. 101 (1992) 104-129 | bibliographic details from memory, formulas re-derived in ADR 0006; not re-fetched, unverified |
+| Characteristic (LODI) boundary treatment, pressure-relaxation outlet `K (p - p_ref)` | Thompson, J. Comput. Phys. 68 (1987) 1-24; Poinsot and Lele, J. Comput. Phys. 101 (1992) 104-129 | bibliographic details confirmed via Crossref (wave 13); formulas re-derived in ADR 0006, not checked against the papers, unverified |
 | Riemann-invariant far field, total-pressure inlet | Blazek, *Computational Fluid Dynamics: Principles and Applications*, ch. 8 | textbook formulas re-derived; book not accessed here, unverified |
 | Isentropic and area-Mach relations (nozzle check) | Anderson, *Modern Compressible Flow* | standard textbook formulae, same as F-061 |
 | Vassberg and Jameson, J. Aircraft 47(4) (2010) 1152-1166 (Euler NACA 0012 grid convergence) | listed in the reference list of arXiv:2407.03746 (fetched) | citation verified; its Cl, Cd and Cp values were NOT accessed |
@@ -479,7 +479,7 @@ non-compact velocity field is not tested. Registered misses: R3 NASA continuity 
 | SA-noft2 equations, sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1, S~ limiter (c2 0.7, c3 0.9), SA-neg (cn1 16, fn, far-field 3-5 nu) | NASA TMR https://tmbwg.github.io/turbmodels/spalart.html | verified by web fetch 2026-10-15; the original Spalart and Allmaras 1994 paper and Allmaras et al. 2012 were not re-fetched |
 | Cf(x = 0.97) = 2.70565e-3 (CFL3D SA) | TMR `FlatPlate/SA/cf_cfl3d.dat` (pinned commit 20a39f54..., SHA-256 2298419a...5c6c), interpolated between rows 0.96005368 (2.70961295e-3) and 0.97008407 (2.70562153e-3) | value verified; the grid is not stated in the file ("finest 545x385" is an inference from the page, UNVERIFIED) |
 | Theory curves at x = 0.97: 2.72379e-3, 2.88302e-3, 2.87459e-3 | TMR `cf_as_function_of_x.dat` read off the pinned file | read from file; their exact definition is not documented there |
-| White 0.455/ln^2(0.06 Re_x), power law 0.0576 Re_x^-0.2 | White, Viscous Fluid Flow, flat-plate correlations | from memory, as for the SST entry |
+| White 0.455/ln^2(0.06 Re_x), power law 0.0576 Re_x^-0.2 | White, Viscous Fluid Flow, flat-plate correlations | from memory, as for the SST entry; wave 13: White's form confirmed (Jaffer arXiv:1810.05743v12 eq. 8), the 0.0576 power law by CFD-Online |
 | S5 tolerance 10 % and the y+ band [20, 60] | rcfd choice (ADR 0014) | not a literature value |
 
 
