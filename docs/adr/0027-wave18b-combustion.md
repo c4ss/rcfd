@@ -317,7 +317,7 @@ Appended after the runs (see addenda).
 
 ### Results (measured, against the limits registered above)
 
-All numbers are from `cargo test --release` on the commits of this wave; limits are unchanged.
+All numbers are from `cargo test --release --nocapture` on the final tree of this wave (re-measured after the last code change); limits are unchanged.
 
 | Check | Measured | Limit | Status |
 | --- | --- | --- | --- |
@@ -325,7 +325,7 @@ All numbers are from `cargo test --release` on the commits of this wave; limits 
 | K2a cell vs toolkit | Hermite dT/DeltaT 3.1e-9, dY 3.1e-9, restart 1.8e-15, half-rise step 12 in both | 1e-5, 1e-6, 1e-7, equal | met |
 | K2b closed box (piso, 4x4) | max T difference 7.2e-14 DeltaT_ad, cell spread 2.1e-10 K (1e-13 DeltaT_ad) | 1e-5, 1e-9 DeltaT_ad | met |
 | K2c | library T_end 1149.43387854 K = hand; case max error 6.4e-12 K; Y_A <= 0 | 1e-4 K, 1e-12 | met |
-| K3 | library drift 2.2e-16 / 4.2e-16 (M3), 2.2e-16 / 1.4e-16 (M2i); case element drift 3.0e-14 | 1e-10 | met |
+| K3 | library drift 2.2e-16 / 4.2e-16 (M3), 2.2e-16 / 1.4e-16 (M2i); case element drift 3.0e-14, case sum of fractions asserted to 1e-10 (balance species closes it by construction) | 1e-10 | met |
 | K4a upwind nx 40 discrete exactness | 5.2e-6 relative | 1e-5 | met (not machine precision: the channel flow is not exactly uniform) |
 | K4b upwind orders | 0.942, 0.971 | [0.9, 1.2] | met |
 | K4c linear_upwind | orders 1.946, 1.952; finest L2 error 2.97e-5 | >= 1.5, 1e-4 | met |
@@ -335,7 +335,8 @@ All numbers are from `cargo test --release` on the commits of this wave; limits 
 | K6b | 6.2e-14 | 1e-9 | met |
 | K6c | laminar run refused at `chemistry.model`; k-epsilon run: rates equal the hand formula on the run fields (relative 0) | 1e-12 | met |
 | K7 | xi* 0.2365753940, tau* 4.9994e-4 s, m 113.4512 1/s; Y* relative 1.9e-16, source 4.4e-14 | 1e-12 / 1e-3 / 1e-6 | met |
-| K8 | all listed diagnostics located by path (see below for the line) | present | met with deviation D-L |
+| K8 (registered form) | `line` is the TOML line of the key (50), not the line inside the mechanism text (5; likewise for the reaction line of the eddy-dissipation check) | line inside the mechanism | MISS (ignored test `k8_known_miss_diagnostic_line_inside_mechanism`) |
+| K8 (corrected form) | every listed diagnostic has the registered `path`; the mechanism line is in the message ("mechanism line 5:", "mechanism line 4:") | path + message | met. For inline `mechanism_text` the path of the missing-species diagnostic is `chemistry.mechanism_text` (registered `chemistry.mechanism` for a file) |
 | K9 | split-vs-steady differences 9.10e-2, 4.66e-2, 2.36e-2; orders 0.965, 0.983; precondition met | [0.8, 1.3] | met |
 | K10 (i), (iii) | closed form 1e-12 met; balance rate 1.5e-16 of the forward term | 1e-12 | met |
 | K10 (ii) registered set-up | 3.8e-3 and 2.9e-3 | 1e-3 | MISS (ignored test `k10_known_miss_quasi_steady_registered_setup`) |
@@ -353,11 +354,11 @@ All numbers are from `cargo test --release` on the commits of this wave; limits 
   corrected set-up (k1f = 1e-1, [NO]_0 = 1e-1, relaxation 1e-5 s against NO times of seconds) is a new test and meets the limit.
   The rate constants in the test are invented, not literature values; no literature set is bundled (the only confirmation found was
   a vendor document, which the clean-room rule excludes; the primary evaluation was not accessed): UNVERIFIED, named gap.
-* K4 stop rule: iterations stop at `res_A < 1e-11` (the convention of `tests/scalars.rs`), not the registered 1e-12; at 1e-12 the
-  residual stalled at 5e-12 on one mesh. The checks compare discrete/analytic solutions, so a residual floor of 1e-11 is far below
+* K4 stop rule: the ADR does not register a stop rule for K4; my first test used `res_A < 1e-12`, at which the residual stalled at
+  5e-12 on one mesh, and the test stops at `res_A < 1e-11` (the convention of `tests/scalars.rs`). Not a registered criterion. The checks compare discrete/analytic solutions, so a residual floor of 1e-11 is far below
   the tolerances used.
-* K8: the case parser replaces a diagnostic's `line` by the line of the key in the TOML text, so the line inside a mechanism text is
-  reported in the message ("mechanism line N: ...") and `line` points to the `mechanism_text` key.
+* K8 (registered form missed): the case parser replaces a diagnostic's `line` by the line of the key in the TOML text, so the registered `line` check fails; the line inside a mechanism text is
+  reported in the message (corrected test, original kept ignored) ("mechanism line N: ...") and `line` points to the `mechanism_text` key.
 * D3 steady source form, added stabilisation: besides the finite-difference sink `max(0, -dS/dY)`, a negative source is given the
   Patankar coefficient `-S/Y` (when `Y > 1e-30`). Without it the explicit consumption of a species with a product-limited
   eddy-dissipation rate drained the species to large negative values (observed, FU of order -1e13 in the first iteration). The
@@ -366,3 +367,4 @@ All numbers are from `cargo test --release` on the commits of this wave; limits 
   refusal are checked, not a flame.
 * F-054 acceptance (a published-flame comparison) is NOT met: constant-density flow only, no compressible or variable-density
   species, no published reference verified. F-054 stays `partial`.
+* json.rs reads without silent defaults (a malformed `reversible`, `line` or Troe entry is an error; only a null fourth Troe entry means infinity).

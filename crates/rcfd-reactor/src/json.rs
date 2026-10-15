@@ -210,8 +210,15 @@ pub fn from_json(v: &Value) -> Result<Mechanism, MechError> {
         let troe = match get(r, "troe")? {
             Value::Null => None,
             Value::Array(t) if t.len() == 4 => {
-                let g = |i: usize| t[i].as_f64().unwrap_or(f64::INFINITY);
-                Some([g(0), g(1), g(2), g(3)])
+                let mut v = [0.0; 4];
+                for (i, x) in t.iter().enumerate() {
+                    v[i] = match x {
+                        // only the fourth parameter T2 may be absent (infinity)
+                        Value::Null if i == 3 => f64::INFINITY,
+                        _ => f64_of(x, "troe")?,
+                    };
+                }
+                Some(v)
             }
             _ => return err("'troe' must be null or four entries"),
         };
@@ -230,10 +237,14 @@ pub fn from_json(v: &Value) -> Result<Mechanism, MechError> {
             equation: get(r, "equation")?
                 .as_str()
                 .map_or_else(|| err("equation must be a string"), |n| Ok(n.to_string()))?,
-            line: get(r, "line")?.as_u64().unwrap_or(0) as usize,
+            line: get(r, "line")?
+                .as_u64()
+                .map_or_else(|| err("'line' must be a non-negative integer"), Ok)? as usize,
             reactants: read_pairs(get(r, "reactants")?, ns, "reactants")?,
             products: read_pairs(get(r, "products")?, ns, "products")?,
-            reversible: get(r, "reversible")?.as_bool().unwrap_or(true),
+            reversible: get(r, "reversible")?
+                .as_bool()
+                .map_or_else(|| err("'reversible' must be a boolean"), Ok)?,
             kind,
             arr: arr_n::<3>(get(r, "arrhenius")?, "arrhenius")?,
             low: opt_arr3(get(r, "low")?, "low")?,
