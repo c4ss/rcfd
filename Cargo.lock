@@ -2411,6 +2411,7 @@ dependencies = [
  "egui",
  "egui_dock",
  "egui_plot",
+ "png 0.18.1",
  "rcfd-api",
  "rcfd-assistant",
  "rcfd-mcp",

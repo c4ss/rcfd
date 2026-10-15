@@ -12,6 +12,7 @@ pub mod controller;
 pub mod files;
 pub mod layout;
 pub mod monitors;
+pub mod raster;
 pub mod schema_model;
 pub mod state;
 pub mod theme;
