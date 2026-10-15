@@ -315,7 +315,7 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 Energy (`energy.*`) and pseudo-transient (`solver.pseudo_*`) settings were already in the schema
 and are unchanged.
 
-`heat_flow` reports (constant-density energy equation): `reports.<n>.conductivity` is optional and has no effective default (0 = unset). Unset, the report uses `physics.conductivity`; a positive value overrides it for that report; a temperature-dependent `properties.conductivity` law takes precedence over both and is evaluated at the wall temperature. Before this fix the key defaulted to 1.0 and silently replaced `physics.conductivity` (wave 15A set-up defect E1/E5, ADR 0019); cases that relied on that now need an explicit report value to get the old number.
+`heat_flow` reports (constant-density energy equation): `reports.<n>.conductivity` is optional and has no effective default (0 = unset). Unset, the report uses `physics.conductivity`; a positive value overrides it for that report; a temperature-dependent `properties.conductivity` law takes precedence over both and is evaluated at the wall temperature. Before this fix the key defaulted to 1.0 and silently replaced `physics.conductivity` (wave 15A set-up defect E1/E5, ADR 0019); cases that relied on that now need an explicit report value to get the old number. The variable-density solver (`fluid.density = "ideal_gas"` or `"real_gas"`) does not use this key (its heat flux is built from `fluid.conductivity` or the Prandtl number); a positive `reports.<n>.conductivity` on a `heat_flow` report there is a located error at `reports.<n>.conductivity` instead of being ignored silently (ADR 0021 item W). `0` or absent is accepted.
 
 `energy.enabled` also works with the transient `piso` and `pimple` algorithms (F-050): the temperature equation is advanced
 with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, `energy.relax` unused) on the flux of the previous step,
@@ -627,6 +627,66 @@ The Poisson equation uses the sign `-div(D grad s) = S`, like the transport equa
 (three-component diffusive / Poisson / algebraic variables), feeding user variables into properties, turbulence or other
 equations, and species with user equations. Errors are located at the key (`scalars.s.diffusivity_expression`,
 `scalars.s.expression`, ...).
+
+## Wave 16W: `decomposition` and `postprocessing`, `rcfd partition`, `rcfd sample`, `rcfd inflate` (F-236, F-072, F-108, ADR 0021)
+
+These sections and commands surface library features that already existed. The solver does not use the partitions or the
+reordering: they are reports and a VTK cell field.
+
+### `decomposition` (F-236)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `method` | `none` | `none`, `bisection`, `inertial`, `sectors`, `graph` |
+| `parts` | 1 | number of parts (at most the cell count; checked when the mesh is built) |
+| `rule` | `longest` | bisection split direction: `longest`, `cycle`, `x`, `y`, `z` (bisection only) |
+| `sector_kind` | `circumferential` | `sectors` only: `circumferential` or `radial` |
+| `origin`, `axis`, `reference` | | `sectors` geometry (centre, rotation axis, zero-angle direction) |
+| `weights.mode` | `none` | `box`: cells whose centre is inside `weights.box_min`..`box_max` weigh `weights.inside`, the others `weights.outside` |
+| `tolerance`, `max_passes` | 0.03, 20 | boundary smoothing target imbalance and pass limit |
+| `smooth` | false | run the boundary smoothing after the partition |
+| `reorder` | false | also report the matrix bandwidth natural and with reverse Cuthill-McKee |
+| `write_field` | false | add the cell array `partition` (part id) to `solution.vtu`; needs a `method` |
+
+`rcfd partition <case|mesh> [--method m] [--parts n] [--rule r] [--sector-kind k] [--origin x,y,z] [--axis x,y,z]
+[--reference x,y,z] [--weights-box x0,y0,z0:x1,y1,z1:inside:outside] [--tolerance t] [--max-passes n] [--smooth]
+[--reorder] [--out parts.vtu] [--json] [--parts-vector]` takes the settings of the case section and lets the flags override
+them. `--json` prints `method`, `n_parts`, `n_cells`, `part_cells`, `part_weights`, `imbalance` (weighted, as the library
+function), `edge_cut` (internal faces between different parts), `ghost_cells` per part and, with `--reorder`, `bandwidth`
+(`natural`, `rcm`). Invalid settings are reported at their path (`decomposition.parts`, `decomposition.method`, ...) with exit
+code 3. The service method `mesh.partition` returns the same report (`with_parts` adds the part vector).
+
+### `postprocessing` (F-072)
+
+| Key | Meaning |
+|---|---|
+| `derived` | list of `vorticity`, `q_criterion`, `total_pressure` (array `p_total`), `mach`, `wall_shear`, `wall_y_plus` |
+| `wall_patches` | wall patches for `wall_shear` and `wall_y_plus` (default: every wall patch) |
+| `samples.<name>` | `type = "line"` (`p0`, `p1`, `points`) or `"plane"` (`origin`, `e1`, `e2`, `extent1`, `extent2`, `n1`, `n2`); `fields` (default `speed`, `p`; also `ux`, `uy`, `uz`, and for variable density `T`, `rho`, `mach`, ...); `gradient` (default true: linear reconstruction from the cell gradient) |
+
+`vorticity`, `q_criterion`, `p_total` and `mach` are cell arrays in `solution.vtu`; wall quantities are written to
+`wall_<patch>.vtp` (arrays `wall_shear`, `wall_y_plus`); each sample to `sample_<name>.csv` (columns `s,x,y,z,<fields>,inside`
+for lines, `x,y,z,<fields>,inside` for planes; `inside` is 0 and the values are empty for points outside the mesh). Incompressible
+total pressure uses `rho` times the kinematic pressure; the variable-density case uses the isentropic relation with `fluid.gamma`.
+Located errors at `postprocessing.derived`: unknown names; `mach` without the compressible solver or `fluid.density =
+"ideal_gas"`; `total_pressure` with the compressible solver or `real_gas`; `wall_shear` and `wall_y_plus` with a turbulence
+model, the compressible or variable-density engines, a `rheology` law or a temperature-dependent viscosity (they use the constant
+laminar `physics.nu`); an unknown or non-wall patch at `postprocessing.wall_patches`; bad sample geometry at
+`postprocessing.samples.<name>.points`, `.p1`, `.e2`, `.n1`, `.fields`.
+
+`rcfd sample <case> [--line x0,y0,z0:x1,y1,z1 [--points n]] [--plane o:e1:e2:ext1:ext2:n1:n2] [--fields a,b] [--no-gradient]
+[--max-iterations n] [--out file-or-dir]` runs the case (or `n` iterations) and writes the sample; without `--line`/`--plane`
+it writes the case's `postprocessing.samples`. The service method `field.sample` samples a live session and returns the CSV.
+There is no solution-file reader yet, so `rcfd sample` always runs the case first.
+
+### `rcfd inflate` (F-108)
+
+`rcfd inflate <case|mesh> --patch p --layers n (--first h | --y-plus y --u-tau u --nu nu | --uniform total | --aspect a |
+--last-ratio r --first h) [--growth g] [--out inflated.vtu] [--json]` adds prismatic layers to a boundary patch of any mesh
+(not only the `mesh.wall_layers` generator layers) and reports `patch`, `sizing`, `cells_before`, `cells_after` and the library
+report (first and last heights, thickness, growth, quality). Exit codes: 1 for a failure (unknown patch, invalid sizing value),
+2 for usage errors, 4 if the inflated mesh has quality errors. The service method is `mesh.inflate`. There is no case-tree key
+that inflates a mesh yet.
 
 ## Reactor cases and FW-H surface files (F-112, F-136)
 
