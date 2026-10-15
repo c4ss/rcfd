@@ -246,3 +246,9 @@ probe without NaN on the y+ 0.5 mesh (probe judged on finiteness and residual on
 meshes and both models; turbulence relaxation 0.6 unchanged. Limits identical to B5: each run converges (max update < 1e-7,
 nu_t change < 1e-6 in 8000 iterations); x_r/h of the y+ ~ 1 mesh in [6.16, 6.36]; spread over the three meshes <= 0.15.
 If a run does not converge, the check is reported as not converged and decides nothing about x_r.
+
+Addendum A, note 2 (registered before the B5b runs, after the first B5b launch failed in mesh generation at y+ 2, where 20
+layers of growth 1.25 from 3.7e-3 are thicker than the 1.0 step segment): the number of inflation layers is the largest
+integer <= 20 for which the layer stack is at most 0.5 of the step segment (15 layers at y+ 2); first-cell heights and growth
+are unchanged. The alpha_u probe (300 iterations, y+ 0.5 mesh, SST) was finite for 0.8, 0.5 and 0.3, so by the rule above
+alpha_u = 0.8 is used.
