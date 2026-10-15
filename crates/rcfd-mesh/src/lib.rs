@@ -19,6 +19,7 @@ pub mod partition;
 pub mod predicates;
 pub mod quality;
 pub mod surface;
+pub mod surface_remesh;
 pub mod tetmesh;
 
 pub use mesh::{BoundarySpec, Mesh, Patch, PatchKind, PeriodicRotation, Zone};
