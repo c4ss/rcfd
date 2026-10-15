@@ -16,6 +16,7 @@ use crate::convection::{convection, ConvScheme};
 use crate::ddt::{add_ddt, History, TimeScheme};
 use crate::diffusion::{laplacian, uniform_gamma};
 use crate::field::ScalarField;
+use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::least_squares;
 use crate::simple::normalised_residual;
@@ -41,9 +42,31 @@ pub struct SweepInputs<'a> {
     pub ddt: Option<(TimeScheme, f64, &'a History)>,
 }
 
+/// Optional additions of [`sweep_ext`] (zone sources, ADR 0019 D2): an implicit linear sink and fixed-value cells.
+#[derive(Default, Clone, Copy)]
+pub struct SweepExtras<'a> {
+    /// Linear sink coefficient `k` per cell (1/s): `k * V` is added to the diagonal (`S = -k phi + ...`).
+    pub sink: Option<&'a [f64]>,
+    /// Cells held at a value; their equation is replaced by `phi_c = value` and their column is moved to the
+    /// right-hand sides of the neighbours, so a symmetric system stays symmetric.
+    pub fixed: Option<&'a [Option<f64>]>,
+}
+
 /// One implicit sweep of the transport equation for `field`; returns the normalised residual
 /// before the solve.
 pub fn sweep(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs) -> f64 {
+    sweep_ext(geom, field, inp, &SweepExtras::default())
+}
+
+/// [`sweep`] with an implicit linear sink and fixed-value cells.
+pub fn sweep_ext(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs, ext: &SweepExtras) -> f64 {
+    if let Some(fx) = ext.fixed {
+        for (v, f) in field.values.iter_mut().zip(fx) {
+            if let Some(x) = f {
+                *v = *x;
+            }
+        }
+    }
     let cells = field.values.clone();
     let bc = field.boundary_coeffs(geom);
     let bvals = field.boundary_values(geom);
@@ -56,15 +79,63 @@ pub fn sweep(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs) -> f
             m.b[c] += s[c] * vol[c];
         }
     }
+    if let Some(k) = ext.sink {
+        let vol = geom.mesh.cell_volumes();
+        for c in 0..cells.len() {
+            m.a.diag[c] += k[c] * vol[c];
+        }
+    }
     if let Some((scheme, dt, hist)) = inp.ddt {
         m = add_ddt(scheme, m, geom.mesh.cell_volumes(), dt, hist);
+    }
+    if let Some(fx) = ext.fixed {
+        impose_fixed(&mut m, fx);
     }
     let res = normalised_residual(&m, &cells);
     m.relax(inp.relax, &cells);
     let mut x = cells;
     m.solve(&mut x, inp.solver);
+    if let Some(fx) = ext.fixed {
+        for (v, f) in x.iter_mut().zip(fx) {
+            if let Some(val) = f {
+                *v = *val;
+            }
+        }
+    }
     field.values = x;
     res
+}
+
+/// Replace the equations of the fixed cells by `phi_c = value`, moving their columns to the right-hand sides.
+fn impose_fixed(m: &mut FvMatrix, fixed: &[Option<f64>]) {
+    let addr = m.a.addr.clone();
+    for f in 0..addr.lower.len() {
+        let (a, b) = (addr.lower[f], addr.upper[f]);
+        match (fixed[a], fixed[b]) {
+            (None, None) => {}
+            (Some(va), None) => {
+                // column a of row b moves to the right-hand side
+                m.b[b] -= m.a.lower[f] * va;
+                m.a.lower[f] = 0.0;
+                m.a.upper[f] = 0.0;
+            }
+            (None, Some(vb)) => {
+                m.b[a] -= m.a.upper[f] * vb;
+                m.a.upper[f] = 0.0;
+                m.a.lower[f] = 0.0;
+            }
+            (Some(_), Some(_)) => {
+                m.a.upper[f] = 0.0;
+                m.a.lower[f] = 0.0;
+            }
+        }
+    }
+    for (c, fx) in fixed.iter().enumerate() {
+        if let Some(v) = fx {
+            m.a.diag[c] = 1.0;
+            m.b[c] = *v;
+        }
+    }
 }
 
 /// Discrete flux of a scalar out of the domain through one boundary patch.
@@ -137,11 +208,18 @@ pub struct ScalarTransport {
     pub source: Option<Vec<f64>>,
     /// Linear solver controls.
     pub solver: SolveControl,
+    /// Implicit linear sink coefficient per cell (1/s), see [`SweepExtras`].
+    pub sink: Option<Vec<f64>>,
+    /// Cells held at a value, see [`SweepExtras`].
+    pub fixed: Option<Vec<Option<f64>>>,
+    /// Old time levels for transient runs ([`ScalarTransport::advance`]).
+    pub history: History,
 }
 
 impl ScalarTransport {
     /// New transport with the tight default solver tolerance used for conservation checks.
     pub fn new(geom: Arc<FvGeometry>, field: ScalarField, diffusivity: f64) -> Self {
+        let history = History::new(field.values.clone());
         ScalarTransport {
             geom,
             field,
@@ -155,6 +233,9 @@ impl ScalarTransport {
                 tol_rel: 1e-13,
                 max_iter: 2000,
             },
+            sink: None,
+            fixed: None,
+            history,
         }
     }
 
@@ -169,7 +250,7 @@ impl ScalarTransport {
     pub fn iterate(&mut self, phi: &[f64]) -> f64 {
         let gamma = self.gamma();
         let geom = self.geom.clone();
-        sweep(
+        sweep_ext(
             &geom,
             &mut self.field,
             &SweepInputs {
@@ -181,7 +262,37 @@ impl ScalarTransport {
                 solver: &self.solver,
                 ddt: None,
             },
+            &SweepExtras {
+                sink: self.sink.as_deref(),
+                fixed: self.fixed.as_deref(),
+            },
         )
+    }
+
+    /// One transient step of size `dt` on the flux `phi`: no relaxation, one linear solve; the new level is pushed
+    /// into [`ScalarTransport::history`]. Returns the normalised residual before the solve.
+    pub fn advance(&mut self, phi: &[f64], dt: f64, scheme: TimeScheme) -> f64 {
+        let gamma = self.gamma();
+        let geom = self.geom.clone();
+        let res = sweep_ext(
+            &geom,
+            &mut self.field,
+            &SweepInputs {
+                phi,
+                gamma: &gamma,
+                scheme: self.convection,
+                relax: 1.0,
+                source: self.source.as_deref(),
+                solver: &self.solver,
+                ddt: Some((scheme, dt, &self.history)),
+            },
+            &SweepExtras {
+                sink: self.sink.as_deref(),
+                fixed: self.fixed.as_deref(),
+            },
+        );
+        self.history.push(self.field.values.clone(), dt);
+        res
     }
 
     /// Boundary fluxes per patch for the current field.

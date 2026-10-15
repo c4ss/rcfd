@@ -15,7 +15,7 @@ use crate::diffusion::uniform_gamma;
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
 use crate::pimple::{PimpleSolver, StepInfo};
-use crate::scalar::{self, SweepInputs};
+use crate::scalar::{self, SweepExtras, SweepInputs};
 use crate::simple::{BodyForce, IterationInfo, SimpleSolver};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
@@ -41,6 +41,10 @@ pub struct EnergySolver {
     pub solver: SolveControl,
     /// Old time levels of `T` for transient runs ([`EnergySolver::advance`]).
     pub history: History,
+    /// Implicit linear sink coefficient per cell (1/s), see [`SweepExtras`].
+    pub sink: Option<Vec<f64>>,
+    /// Cells held at a temperature, see [`SweepExtras`].
+    pub fixed: Option<Vec<Option<f64>>>,
 }
 
 impl EnergySolver {
@@ -61,6 +65,8 @@ impl EnergySolver {
                 max_iter: 500,
             },
             history,
+            sink: None,
+            fixed: None,
         }
     }
 
@@ -73,7 +79,7 @@ impl EnergySolver {
             Some(a) => a.clone(),
             None => uniform_gamma(&g, self.alpha),
         };
-        scalar::sweep(
+        scalar::sweep_ext(
             &g,
             &mut self.t,
             &SweepInputs {
@@ -84,6 +90,10 @@ impl EnergySolver {
                 source: self.source.as_deref(),
                 solver: &self.solver,
                 ddt: None,
+            },
+            &SweepExtras {
+                sink: self.sink.as_deref(),
+                fixed: self.fixed.as_deref(),
             },
         )
     }
@@ -97,7 +107,7 @@ impl EnergySolver {
             Some(a) => a.clone(),
             None => uniform_gamma(&g, self.alpha),
         };
-        let res = scalar::sweep(
+        let res = scalar::sweep_ext(
             &g,
             &mut self.t,
             &SweepInputs {
@@ -108,6 +118,10 @@ impl EnergySolver {
                 source: self.source.as_deref(),
                 solver: &self.solver,
                 ddt: Some((scheme, dt, &self.history)),
+            },
+            &SweepExtras {
+                sink: self.sink.as_deref(),
+                fixed: self.fixed.as_deref(),
             },
         );
         self.history.push(self.t.values.clone(), dt);
