@@ -283,9 +283,12 @@ fn register_library_twin(key: &'static str, kappa: f64, l_max: f64, profile: Mix
     );
 }
 
+/// Name, tree edits, kappa, l_max_ratio, profile, damping of one ML6 variant.
+type Variant<'a> = (&'a str, Vec<(&'a str, Value)>, f64, f64, MixingProfile, bool);
+
 #[test]
 fn ml6_tree_equals_library_and_options_have_teeth() {
-    let variants: [(&str, Vec<(&str, Value)>, f64, f64, MixingProfile, bool); 5] = [
+    let variants: [Variant; 5] = [
         ("default", vec![], 0.41, 0.09, MixingProfile::Linear, true),
         (
             "nikuradse",
