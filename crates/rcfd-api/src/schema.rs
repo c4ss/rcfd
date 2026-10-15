@@ -1705,12 +1705,12 @@ pub fn case_schema() -> Schema {
         .field(
             "scalars",
             Schema::named(scalar_schema(false))
-                .doc("Passive scalars transported by the flow (steady runs): div(phi s) - div(D grad s) = S, constant density"),
+                .doc("Passive scalars and user variables (steady iterations or transient steps): div(phi s) - div(D grad s) = S, constant density; equation selects convection-diffusion, pure diffusion, Poisson or an algebraic expression"),
         )
         .field(
             "species",
             Schema::named(scalar_schema(true)).doc(
-                "Multicomponent mass fractions (steady runs): all but the balance species are transported, the balance species is 1 - sum of the others; every transported species is conserved separately",
+                "Multicomponent mass fractions (steady or transient incompressible runs): all but the balance species are transported, the balance species is 1 - sum of the others; every transported species is conserved separately",
             ),
         )
         .field("reports", Schema::named(report).doc("Scalar reports by name"))

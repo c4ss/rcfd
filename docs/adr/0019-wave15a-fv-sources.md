@@ -279,7 +279,7 @@ before the implementation to derive the expectations (as stated above); they wer
 | I6 located diagnostics | all registered cases located | - | met |
 
 **I2 miss and diagnosis.** The registered assertion is kept unchanged in the ignored test
-`i2_known_miss_potential_start_needs_fewer_iterations_on_the_backward_facing_step` (`rcfd-fv/tests/init_potential.rs`;
+`i2_potential_start_needs_fewer_iterations_on_the_backward_facing_step_known_miss` (`rcfd-fv/tests/init_potential.rs`;
 `I2_TRACE=1` prints the residual histories). After about 25 iterations all four starts have the same residual decay (for
 example `res_u` at iteration 100: 7.3e-4 uniform, 9.1e-4 zero, 9.2e-4 potential; a factor of about 0.31 per 25 iterations): the
 iteration count to 1e-6 is set by the slow asymptotic recirculation / pressure-velocity mode of the SIMPLE iteration, and the
