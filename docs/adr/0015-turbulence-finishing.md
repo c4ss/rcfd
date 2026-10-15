@@ -222,3 +222,27 @@ retuned.
 ## Results
 
 (filled in after the runs, without changing anything above)
+
+## Addendum A: B5b, registered 2026-10-15 before any B5b run
+
+The first B5 runs (`step_sst.rs`, limits above unchanged and kept as the record) showed two defects of the test set-up,
+found from the printed diagnostics only (no reattachment length was used to choose anything):
+
+1. The first-cell height was `y+ nu / 0.04`, i.e. a friction velocity of 0.04 and a y+ referring to the cell height. The
+   flat-plate tests of B4 report y+ at the wall-cell centre (`u_tau d / nu`, d = half the cell height). The BFS floor
+   runs reported a realised centre-based y+ of at most 0.77 (target 2), because the floor friction velocity downstream of
+   reattachment is about 0.03, not 0.04. The three meshes therefore had realised y+ maxima of about 0.8, 0.4, 0.2 instead of
+   2, 1, 0.5, and "the y+ ~ 1 mesh" of the check was not the y+ ~ 1 mesh.
+2. Both SST and BSL diverged to NaN within 50 iterations on the finest two meshes (aspect ratio of the wall cells about
+   1000, momentum under-relaxation 0.8 from an impulsive start); the SST y+ 2 run had not converged in 8000 iterations
+   (du 9.0e-9, nu_t change 1.7e-6 against the registered 1e-7 and 1e-6).
+
+B5b (new test `step_c_{sst,bsl}_wall_resolved_b` in `crates/rcfd-turb/tests/step_sst.rs`; the B5 tests stay as the record):
+first-cell height `h1 = 2 y+ nu / 0.03` (so the centre-based y+ reaches its target at the maximum of the floor
+downstream of the step), targets y+ = 2, 1, 0.5, meshes otherwise identical; the realised floor y+ range is printed and
+the mesh is "applicable" only if the realised maximum lies within 25 percent of its target (else reported, not retuned).
+Numerics: momentum under-relaxation `alpha_u` chosen as the largest of {0.8, 0.5, 0.3} that survives a 300-iteration
+probe without NaN on the y+ 0.5 mesh (probe judged on finiteness and residual only), the same value then used on all three
+meshes and both models; turbulence relaxation 0.6 unchanged. Limits identical to B5: each run converges (max update < 1e-7,
+nu_t change < 1e-6 in 8000 iterations); x_r/h of the y+ ~ 1 mesh in [6.16, 6.36]; spread over the three meshes <= 0.15.
+If a run does not converge, the check is reported as not converged and decides nothing about x_r.
