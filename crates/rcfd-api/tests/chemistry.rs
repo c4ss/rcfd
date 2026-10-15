@@ -183,6 +183,10 @@ fn k3_case_element_conservation() {
             worst = worst.max((x - y).abs() / x);
         }
     }
+    let sum_drift = (0..z1.len())
+        .map(|c| (names.iter().map(|n| sim.field(n).unwrap()[c]).sum::<f64>() - 1.0).abs())
+        .fold(0.0, f64::max);
+    assert!(sum_drift <= 1e-10, "sum of the mass fractions {sum_drift:e}");
     let xy = sim.field("XY").unwrap();
     println!("K3 case: element drift {worst:.3e} (limit 1e-10), XY end {:.4}", xy[0]);
     assert!(xy[0] > 0.3, "the reaction did not run");
@@ -424,6 +428,45 @@ initial = 0.65
 }
 
 // ---------- K8: located validation errors ----------
+
+/// Registered form of the CHEMKIN syntax-error check: the diagnostic `line` is the line inside the mechanism text. The case
+/// parser replaces `line` by the line of the key in the TOML text, so this form misses (ADR 0027 addendum A1); the corrected
+/// check (line in the message) is in `k8_located_errors`.
+#[test]
+#[ignore = "known miss: Case::parse_toml overwrites Diagnostic.line with the TOML key line, see ADR 0027 addendum A1"]
+fn k8_known_miss_diagnostic_line_inside_mechanism() {
+    let (_, t) = toy::isomer_texts(K_RATE, 0.0, 0.0, false);
+    let bad_mech = "ELEMENTS X/20.0/ END
+SPECIES A B END
+REACTIONS
+A => B  5.0 0.0 0.0
+ PLOG / 1.0 1.0 0.0 0.0 /
+END
+";
+    let d = diags(&channel(
+        "upwind",
+        10,
+        &format!(
+            "[chemistry]
+model = \"finite_rate\"
+mechanism_text = '''
+{bad_mech}'''
+thermo_text = '''
+{t}'''
+density = 1.0
+temperature = 1000.0
+"
+        ),
+        "",
+        &decay_species(),
+        STEADY_SOLVER,
+    ));
+    let e = d
+        .iter()
+        .find(|x| x.path == "chemistry.mechanism_text")
+        .expect("diagnostic");
+    assert_eq!(e.line, Some(5));
+}
 
 fn diags(text: &str) -> Vec<rcfd_api::case::Diagnostic> {
     match Case::parse_toml(text) {

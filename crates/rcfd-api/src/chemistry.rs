@@ -10,7 +10,8 @@
 //!   with the stiff integrator of the 0D toolkit ([`rcfd_reactor::cell::CellModel`]); the result is written back to the
 //!   species fields (and the temperature with heat release) and to their time-history level.
 //! * Steady runs: source-term form. Per iteration and cell the rates are evaluated from the current state, with the
-//!   diagonal implicit linearisation `c_i = max(0, -dS_i/dY_i)` as an implicit sink.
+//!   diagonal implicit linearisation `c_i = max(0, -dS_i/dY_i)` as an implicit sink; a negative source additionally gets
+//!   Patankar's coefficient `-S_i/Y_i` (the fixed point is unchanged, a species cannot be drained below zero).
 //!
 //! Closures: `finite_rate` (laminar), `eddy_dissipation` (Magnussen-Hjertager), `finite_rate_eddy_dissipation`
 //! (minimum of the two), `edc` (Eddy Dissipation Concept). Constants and their verification status: ADR 0027 D2.
