@@ -381,9 +381,9 @@ Rule engine (`crates/rcfd-api/tests/rules_w19c.rs`):
 
 * **E1 PASS** (all 21 rules fire with the registered id, severity, category and path; the error-level id set is exactly the rule
   under test; fixtures cover exactly the 21 ids of the data file; SV105 locates `solver.tolerance_p` when only that one is loose).
-* **E2 MISS (warning level), PASS (error level).** 62 distinct case texts evaluated (8 `cases/**/*.toml`, 0 doc blocks, 54 test
-  sources; skipped: 16 templates, 39 not valid cases, 8 whose mesh did not build; the docs contain one fenced `toml` block and it is
-  not a complete case). No error-level diagnostic anywhere; the only info is SV202 on a mesh-only text. One warning: SV103 (aspect
+* **E2 MISS (warning level), PASS (error level).** 66 distinct case texts evaluated in the final run (8 `cases/**/*.toml`, 1 doc block, 57 test
+  sources; skipped: 17 templates, 40 not valid cases, 8 whose mesh did not build; an earlier run before the chain example was added to
+  the docs and before other waves added tests gave 62 = 8 + 0 + 54). No error-level diagnostic anywhere; the only info is SV202 on a mesh-only text. One warning: SV103 (aspect
   ratio above 1000) on a case text of `turb_models.rs`, a wall-resolved boundary-layer mesh that the test suite runs on purpose. The
   threshold is the library's own warning threshold and is not changed. Ignored `e2_zero_false_positives_known_miss` keeps the
   registered assertion; the active test asserts what holds (no error-level finding, every warning is SV103).
@@ -394,7 +394,10 @@ Rule engine (`crates/rcfd-api/tests/rules_w19c.rs`):
   returns the `rules` array) and at the command line (a warning-only case runs and emits a `warning` event with `rule = SV105` and
   `path`; `validate` prints the rule line and keeps exit 0). Not reachable through the binary: a rule-only error (see R4).
 
-**B1 baseline hashes:** see the final report line below.
+**B1 PASS.** `cargo test -p rcfd-api --test baseline_hashes` passes unchanged (52 tests, nothing re-recorded) as part of the full
+`cargo test --workspace --release --no-fail-fast` run on a `git archive` of the commit: 187 test binaries, all `ok`, 0 failed.
+The later commit that makes `--restart-from` with `--continue-from`/`--interpolate-*` a usage error (exit 2, one new test) was
+checked by running `w19c_run_control` (7 pass) and `rules_w19c` only.
 
 ### Deviations from the ADR text
 
