@@ -253,21 +253,22 @@ Verified against primary sources in this session (fetched 2026-10-13):
 Unverified (from memory, not checked against a primary source in this session; the wave 13 outcome is appended to each item):
 
 - Standard atomic weights used for the molar masses (N 14.007, O 15.999, Ar 39.948, H 1.008, C 12.011). Wave 13: all inside the CIAAW intervals (ciaaw.org), confirmed.
-- Dry-air mole fractions 0.78084 / 0.20946 / 0.00934 (N2/O2/Ar). Wave 13: NIST CIPM-2007 gives 0.780848 / 0.209390 / 0.009332; code differs by up to 0.09 % (immaterial).
+- Dry-air mole fractions 0.78084 / 0.20946 / 0.00934 (N2/O2/Ar). Wave 13: NIST CIPM-2007 gives 0.780848 / 0.209390 / 0.009332; code differed by up to 0.09 % (immaterial).
+  Post-verification fix: `GasMixture::dry_air` now uses the CIPM-2007 values 0.780848 / 0.209390 / 0.009332 (renormalised over the three species); its only user is the air cp/transport unit test, whose cp values moved by about 0.01 J/kg/K, all assertions unchanged and passing.
 - Peng-Robinson constants 0.45724, 0.07780, kappa = 0.37464 + 1.54226 omega - 0.26992 omega^2 and Redlich-Kwong constants
   0.42748, 0.08664, and the Wilke pair weight, as published by Peng and Robinson (Ind. Eng. Chem. Fundam. 15, 1976), Redlich and Kwong
   (Chem. Rev. 44, 1949) and Wilke (J. Chem. Phys. 18, 1950); the tests use only properties that follow from the forms
   themselves (critical-point conditions, ideal limit, root consistency, thermodynamic consistency of fugacity and residual enthalpy,
   the acentric-factor definition of the vapour pressure at reduced temperature 0.7 within 5 %: measured +0.38, -0.35, -0.23 %). The
-  critical constants of N2 used in the tests (126.2 K, 3.39 MPa, omega 0.0372) are illustrative, from memory.
+  critical constants of N2 used in the tests were illustrative (126.2 K, 3.39 MPa); they are now the NIST values 126.192 K, 3.3958 MPa (omega 0.0372), tests unchanged and passing.
   Wave 13: PR 0.45724/0.07780/kappa polynomial confirmed (Wikipedia citing Peng and Robinson 1976; exact 0.457236, 0.077796
   computed), RK 0.42748/0.08664 confirmed (Wikipedia and closed form); the Wilke weight remains unverified. The N2 test constants
-  differ from NIST (126.192 K, 3.3958 MPa) as stated.
+  differed from NIST (126.192 K, 3.3958 MPa) as stated; fixed afterwards, see above.
 - NIST WebBook data was deliberately not used (its terms were not reviewed); no REFPROP or other licensed file is read or shipped.
   (See the F-061 section below: later waves did embed WebBook values; wave 13 notes that NIST SRD 69 is copyrighted, see
   `docs/verification-report.md` section 1.6.)
-- Critical constants and acentric factors in `rcfd-core/src/eos_data.rs` (header comment still says "from memory"): wave 13
-  confirmed all seven fluids against the NIST WebBook fluid pages; only the Ar acentric factor differs (code -0.002, NIST -0.00219).
+- Critical constants and acentric factors in `rcfd-core/src/eos_data.rs` (the header comment now points at `docs/verification-report.md`): wave 13
+  confirmed all seven fluids against the NIST WebBook fluid pages; only the Ar acentric factor differed (code -0.002, NIST -0.00219); fixed to -0.00219 afterwards (no test uses Ar PR against NIST; workspace tests unchanged).
 
 
 ## Variable-density validation (wave 10, ADR 0005)

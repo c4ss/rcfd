@@ -366,11 +366,11 @@ impl GasMixture {
         })
     }
 
-    /// Dry air from the mole fractions of N2, O2 and argon (0.78084, 0.20946, 0.00934, renormalised; carbon
-    /// dioxide and trace gases neglected).
+    /// Dry air from the mole fractions of N2, O2 and argon (0.780848, 0.209390, 0.009332, the CIPM-2007 values,
+    /// renormalised; carbon dioxide and trace gases neglected).
     pub fn dry_air() -> GasMixture {
         let m = [28.014e-3, 31.998e-3, 39.948e-3];
-        let y = mass_fractions(&[0.78084, 0.20946, 0.00934], &m);
+        let y = mass_fractions(&[0.780848, 0.209390, 0.009332], &m);
         GasMixture::new(&["N2", "O2", "AR"], &y).expect("valid air composition")
     }
 
@@ -826,7 +826,7 @@ mod tests {
 
     // ---- cubic equations of state ----
 
-    const N2_PR: (f64, f64, f64, f64) = (126.2, 3.39e6, 0.0372, 28.014e-3);
+    const N2_PR: (f64, f64, f64, f64) = (126.192, 3.3958e6, 0.0372, 28.014e-3);
 
     fn eos(kind: CubicKind) -> CubicEos {
         let (tc, pc, w, m) = N2_PR;
