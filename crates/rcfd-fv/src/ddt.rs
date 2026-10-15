@@ -186,6 +186,71 @@ impl CflController {
     }
 }
 
+/// Error-estimator time-step controller (ADR 0023 D2, F-209 partial): the local error of the step just taken is estimated from
+/// the difference between the new state and the linear extrapolation of the two previous states, and the next step follows
+/// `dt (tol / e)^(1/2)` (first-order scheme).
+#[derive(Debug, Clone, Copy)]
+pub struct ErrorController {
+    /// Target (relative) local error per step.
+    pub tol: f64,
+    /// Safety factor on the step update.
+    pub safety: f64,
+    /// Maximum growth factor per step.
+    pub growth: f64,
+    /// Smallest shrink factor per step.
+    pub shrink_min: f64,
+    /// Smallest allowed step.
+    pub min_dt: f64,
+    /// Largest allowed step.
+    pub max_dt: f64,
+    /// Fixed reference magnitude for the error scale (absolute error target); `None` divides by the current maximum.
+    pub abs_ref: Option<f64>,
+}
+
+impl ErrorController {
+    /// Controller with the registered constants (safety 0.9, growth 1.5, shrink minimum 0.3).
+    pub fn new(tol: f64, min_dt: f64, max_dt: f64) -> Self {
+        ErrorController {
+            tol,
+            safety: 0.9,
+            growth: 1.5,
+            shrink_min: 0.3,
+            min_dt,
+            max_dt,
+            abs_ref: None,
+        }
+    }
+
+    /// Local error estimate `0.5 max|u_n - u_pred| / max(max|u_n|, 1e-30)` with `u_pred` the linear extrapolation of
+    /// `u_{n-1}` and `u_{n-2}` to the new time (`dt` the step just taken, `dt_prev` the one before).
+    pub fn estimate(&self, u_new: &[f64], u_prev: &[f64], u_prev2: &[f64], dt: f64, dt_prev: f64) -> f64 {
+        let r = dt / dt_prev;
+        let mut diff: f64 = 0.0;
+        let mut scale: f64 = 1e-30;
+        for i in 0..u_new.len() {
+            let pred = u_prev[i] + (u_prev[i] - u_prev2[i]) * r;
+            diff = diff.max((u_new[i] - pred).abs());
+            scale = scale.max(u_new[i].abs());
+        }
+        0.5 * diff / self.abs_ref.unwrap_or(scale)
+    }
+
+    /// Whether a step with estimate `err` is accepted (rejected above twice the tolerance).
+    pub fn accepts(&self, err: f64) -> bool {
+        err <= 2.0 * self.tol
+    }
+
+    /// Next step size from the estimate of the step of size `dt` just taken.
+    pub fn next_dt(&self, err: f64, dt: f64) -> f64 {
+        let f = if err > 0.0 {
+            (self.safety * (self.tol / err).sqrt()).clamp(self.shrink_min, self.growth)
+        } else {
+            self.growth
+        };
+        (dt * f).clamp(self.min_dt, self.max_dt)
+    }
+}
+
 /// Mean value weighted by cell volume (utility for conservation checks).
 pub fn volume_mean(geom: &FvGeometry, x: &[f64]) -> f64 {
     let v = geom.mesh.cell_volumes();
@@ -223,6 +288,97 @@ mod tests {
             hist.push(phi.clone(), dt);
         }
         (phi[0] - (-lambda * t_end).exp()).abs()
+    }
+
+    /// ADR 0023 E1: linear decay du/dt = -3u, implicit Euler, tolerance 1e-3. Returns (controlled steps, error,
+    /// uniform steps for the same error).
+    fn e1_run(abs_ref: Option<f64>) -> (usize, f64, usize) {
+        let g = FvGeometry::new(Arc::new(box_mesh([2, 2, 2], [1.0; 3], [Grading::Uniform; 3]).unwrap())).unwrap();
+        let vol = g.mesh.cell_volumes().to_vec();
+        let lambda = 3.0;
+        let ctl = SolveControl {
+            tol_abs: 1e-15,
+            tol_rel: 1e-14,
+            max_iter: 100,
+        };
+        let one_step = |u: &[f64], dt: f64, hist: &History| -> Vec<f64> {
+            let mut spatial = FvMatrix::zeros(&g);
+            for i in 0..vol.len() {
+                spatial.a.diag[i] = lambda * vol[i];
+            }
+            let sys = add_ddt(TimeScheme::ImplicitEuler, spatial, &vol, dt, hist);
+            let mut x = u.to_vec();
+            sys.solve(&mut x, &ctl);
+            x
+        };
+        let exact = (-lambda * 1.0_f64).exp();
+        // error-controlled run
+        let mut ec = ErrorController::new(1e-3, 1e-4, 0.2);
+        ec.abs_ref = abs_ref;
+        let mut u = vec![1.0; g.n_cells()];
+        let mut hist = History::new(u.clone());
+        let (mut t, mut dt, mut steps) = (0.0_f64, 1e-3_f64, 0usize);
+        let mut prev: Option<(Vec<f64>, f64)> = None; // (u_{n-2}, dt of the step that produced u_{n-1})
+        let mut u_prev = u.clone();
+        while t < 1.0 - 1e-12 {
+            let d = dt.min(1.0 - t);
+            let x = one_step(&u, d, &hist);
+            steps += 1;
+            let mut next = d;
+            if let Some((u2, d_prev)) = &prev {
+                let err = ec.estimate(&x, &u_prev, u2, d, *d_prev);
+                // the scalar utility rejects a step above twice the tolerance (not for the very last, shortened step)
+                if !ec.accepts(err) && d == dt {
+                    dt = ec.next_dt(err, d);
+                    continue;
+                }
+                next = ec.next_dt(err, d);
+            }
+            prev = Some((u_prev.clone(), d));
+            u_prev = x.clone();
+            hist.push(x.clone(), d);
+            u = x;
+            t += d;
+            dt = next;
+        }
+        let e_c = (u[0] - exact).abs();
+        // smallest uniform step count with error <= e_c
+        let mut n_f = 0;
+        for n in 1..2000 {
+            let d = 1.0 / n as f64;
+            let mut u = vec![1.0; g.n_cells()];
+            let mut h = History::new(u.clone());
+            for _ in 0..n {
+                u = one_step(&u, d, &h);
+                h.push(u.clone(), d);
+            }
+            if (u[0] - exact).abs() <= e_c {
+                n_f = n;
+                break;
+            }
+        }
+        println!("E1 (abs_ref {abs_ref:?}): controlled {steps} steps, error {e_c:.3e} (tol 1e-3, limit 10 tol); uniform stepping needs {n_f} steps");
+        (steps, e_c, n_f)
+    }
+
+    /// Registered E1 (relative error scale): MISSED, see ADR 0023 addendum A7; the registered limits are kept here.
+    #[test]
+    #[ignore = "KNOWN MISS (ADR 0023 addendum A7): relative error scale gives a constant step for exponential decay (81 vs 76 steps)"]
+    fn e1_error_controlled_decay_needs_fewer_steps_than_uniform_stepping_known_miss() {
+        let (steps, e_c, n_f) = e1_run(None);
+        assert!(e_c <= 1e-2, "{e_c}");
+        assert!(n_f > 0);
+        assert!(steps as f64 <= 0.8 * n_f as f64, "{steps} vs {n_f}");
+    }
+
+    /// Registered E1b (absolute reference scale, addendum A7).
+    #[test]
+    #[ignore = "KNOWN MISS (ADR 0023 addendum A8): absolute reference scale 46 steps vs 36 uniform"]
+    fn e1b_absolute_reference_error_control_needs_fewer_steps_than_uniform_stepping_known_miss() {
+        let (steps, e_c, n_f) = e1_run(Some(1.0));
+        assert!(e_c <= 1e-2, "{e_c}");
+        assert!(n_f > 0);
+        assert!(steps as f64 <= 0.8 * n_f as f64, "{steps} vs {n_f}");
     }
 
     #[test]

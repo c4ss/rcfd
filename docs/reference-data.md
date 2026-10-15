@@ -594,3 +594,16 @@ decimation for plot data. The OpenAI-compatible wire format (`POST /v1/chat/comp
 recalled from memory and unverified against current documentation; they were checked only against the loopback mock server written
 for the tests, which shares the author's understanding of the format, so agreement is not independent evidence about any real server.
 The lid-driven cavity logic check (top-row mean ux, return flow) is a sanity bound, not a benchmark comparison.
+
+Wave 17A (ADR 0023): convergence floor diagnosis and pseudo-transient control. Known misses added (limits as registered, never widened; ignored tests):
+
+| Item | Limit | Measured | Test |
+| --- | --- | --- | --- |
+| F-106 `ser` controller, cavity Re 1000 / step Re_h 400 | residual 1e-6 | not converged (cavity 0.18 after 6000 its, scale at cap) | `rcfd-fv/tests/pseudo_control.rs::*_known_miss` |
+| F-106 `ser2` controller (symmetric), same cases | residual 1e-6 | cavity 1.6e-2, step 7.7e-5 | `pseudo_control.rs::*_ser2_known_miss` |
+| F-106 controller on C2/D1/D2 (local cfl 1, physical 0.2) | converge, registered accuracy | residual 0.21 or NaN | `rcfd-api/tests/convergence_wave17a.rs::f?_*_known_miss`, `f?b_*_known_miss` |
+| F-209 error-controlled stepping, linear decay (relative and absolute scale) | steps <= 0.8 x uniform | 81 vs 76; 46 vs 36 | `rcfd-fv/src/ddt.rs::e1*_known_miss` |
+
+Findings: the F-200 C2/D1/D2/E2 residual targets are met with `solver.residual_norm = scaled` (new passing tests F1c, F2c, F3c, F4), the reference
+normalisation stalled by construction; the F-061 nozzle 1e-8 residual floor (2.619e-5) stays undiagnosed; wave-13 D5b n_r = 128 is slow convergence. No external reference data
+were used in wave 17A; the Taylor-Green and flat-plate acceptance items of F-209 were not run.
