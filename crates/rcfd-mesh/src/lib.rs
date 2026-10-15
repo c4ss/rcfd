@@ -17,5 +17,6 @@ pub mod mesh;
 pub mod non_conformal;
 pub mod partition;
 pub mod quality;
+pub mod surface;
 
 pub use mesh::{BoundarySpec, Mesh, Patch, PatchKind, PeriodicRotation, Zone};
