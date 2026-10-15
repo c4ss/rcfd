@@ -919,7 +919,6 @@ pub fn case_schema() -> Schema {
             ),
         )
         .field(
-        .field(
             "pseudo_control",
             Schema::enumeration("off", &["off", "ser", "ser2"]).doc(
                 "Automatic pseudo-time-step controller (needs pseudo_mode other than off): ser2 = switched evolution relaxation, the step scale follows the inverse residual ratio in both directions (at most x2 up, x0.5 down per iteration), scale within [1/64, pseudo_scale_max]; ser = (kept for the record, ratchets to the cap for oscillating residuals) the step grows with the inverse residual ratio (at most x2 per iteration), is halved when the residual rises by more than x2 or is not finite, scale kept within [1/64, pseudo_scale_max] (ADR 0023)",
@@ -937,6 +936,7 @@ pub fn case_schema() -> Schema {
                 "Normalisation of the momentum residual of SIMPLE/SIMPLEC: reference = sum|b-Ax| over the variation of the iterate (default), backward = sum|b-Ax| over sum(|A||x|+|b|), which can reach round-off level for uniform exact solutions; scaled = common iterate-independent scales for the velocity components and for the pressure equation (needed where an exact component or the pressure is zero) (ADR 0023)",
             ),
         )
+        .field(
             "p_ref_cell",
             Schema::int(0)
                 .range(0.0, 1e9)

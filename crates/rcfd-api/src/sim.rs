@@ -1161,6 +1161,26 @@ impl Simulation {
                 mode,
                 factor: get_f(case, "solver.pseudo_factor"),
             });
+            let ctl = get_s(case, "solver.pseudo_control");
+            if ctl == "ser" || ctl == "ser2" {
+                if solver.pseudo.is_none() {
+                    return Err(diag(
+                        "solver.pseudo_control",
+                        "the pseudo-time-step controller needs solver.pseudo_mode = \"auto\", \"local\" or \"physical\"",
+                    ));
+                }
+                let cap = get_f(case, "solver.pseudo_scale_max");
+                solver.pseudo_control = Some(if ctl == "ser2" {
+                    rcfd_fv::simple::PseudoController::new_symmetric(cap)
+                } else {
+                    rcfd_fv::simple::PseudoController::new(cap)
+                });
+            }
+            match get_s(case, "solver.residual_norm").as_str() {
+                "backward" => solver.residual_norm = rcfd_fv::simple::ResidualNorm::Backward,
+                "scaled" => solver.residual_norm = rcfd_fv::simple::ResidualNorm::Scaled,
+                _ => {}
+            }
             Engine::Steady(Box::new(solver))
         } else {
             let mut s = if alg == "pimple" {
@@ -1189,26 +1209,6 @@ impl Simulation {
             solver.convection = conv;
             solver.relax = get_f(case, "energy.relax");
             if transient_alg {
-            let ctl = get_s(case, "solver.pseudo_control");
-            if ctl == "ser" || ctl == "ser2" {
-                if solver.pseudo.is_none() {
-                    return Err(diag(
-                        "solver.pseudo_control",
-                        "the pseudo-time-step controller needs solver.pseudo_mode = \"auto\", \"local\" or \"physical\"",
-                    ));
-                }
-                let cap = get_f(case, "solver.pseudo_scale_max");
-                solver.pseudo_control = Some(if ctl == "ser2" {
-                    rcfd_fv::simple::PseudoController::new_symmetric(cap)
-                } else {
-                    rcfd_fv::simple::PseudoController::new(cap)
-                });
-            }
-            match get_s(case, "solver.residual_norm").as_str() {
-                "backward" => solver.residual_norm = rcfd_fv::simple::ResidualNorm::Backward,
-                "scaled" => solver.residual_norm = rcfd_fv::simple::ResidualNorm::Scaled,
-                _ => {}
-            }
                 // linear for the frozen flux, solved tightly every step
                 solver.solver.tol_rel = 1e-10;
                 solver.solver.tol_abs = 1e-300;
@@ -1528,6 +1528,22 @@ impl Simulation {
         self.converged
     }
 
+    /// The SIMPLE/SIMPLEC solver of a steady run (diagnostics and tests), if that is the engine.
+    pub fn simple_solver(&self) -> Option<&SimpleSolver> {
+        match &self.engine {
+            Engine::Steady(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Mutable access to the SIMPLE/SIMPLEC solver of a steady run (diagnostics and tests).
+    pub fn simple_solver_mut(&mut self) -> Option<&mut SimpleSolver> {
+        match &mut self.engine {
+            Engine::Steady(s) => Some(s),
+            _ => None,
+        }
+    }
+
     /// Iterations or steps performed.
     pub fn iteration(&self) -> usize {
         self.last.map_or(0, |l| l.index)
@@ -1569,22 +1585,6 @@ impl Simulation {
     /// Coefficients (name, value) of the active turbulence model.
     pub fn turbulence_coefficients(&self) -> Vec<(String, f64)> {
         self.turb.as_ref().map_or_else(Vec::new, |t| {
-    /// The SIMPLE/SIMPLEC solver of a steady run (diagnostics and tests), if that is the engine.
-    pub fn simple_solver(&self) -> Option<&SimpleSolver> {
-        match &self.engine {
-            Engine::Steady(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    /// Mutable access to the SIMPLE/SIMPLEC solver of a steady run (diagnostics and tests).
-    pub fn simple_solver_mut(&mut self) -> Option<&mut SimpleSolver> {
-        match &mut self.engine {
-            Engine::Steady(s) => Some(s),
-            _ => None,
-        }
-    }
-
             t.model
                 .coefficients()
                 .into_iter()
