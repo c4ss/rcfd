@@ -2,6 +2,7 @@
 
 pub mod bc_cat;
 pub mod case;
+pub mod chain;
 pub mod chemistry;
 pub mod cht;
 pub mod comp;
@@ -15,7 +16,9 @@ pub mod postproc;
 pub mod properties;
 pub mod radiation;
 pub mod registers;
+pub mod restart;
 pub mod rheology;
+pub mod rules;
 pub mod runctl;
 pub mod scalars;
 pub mod schema;

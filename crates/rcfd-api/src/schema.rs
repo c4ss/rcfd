@@ -1901,6 +1901,8 @@ pub fn case_schema() -> Schema {
         .field("output", output)
         .field("decomposition", crate::decomp::schema())
         .field("postprocessing", crate::postproc::schema())
+        .field("restart", crate::restart::schema())
+        .field("chain", crate::chain::schema())
 }
 
 /// Settings of one passive scalar or species.
