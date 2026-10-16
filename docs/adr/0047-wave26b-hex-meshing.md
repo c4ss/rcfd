@@ -215,3 +215,53 @@ Poiseuille `u_c = G R^2/(4 nu)` and `U_b = G R^2/(8 nu)`: derived. Pappus' centr
 Ghia et al. 1982 data: existing CSV files, "verified, two secondary copies" in `docs/reference-data.md`. Octree 2:1 balancing and
 hanging-node face splitting, ray-casting parity: standard computational-geometry / mesh-generation practice, cited from memory and
 unverified. No source was read for this ADR beyond the repository.
+
+## Addendum (written after the runs): measured results, misses, deviations
+
+The registered limits above are unchanged. Misses are ignored `*_known_miss` tests with the limit intact; corrected tests are new.
+
+### F-235 measured (limit in brackets)
+
+* Sweep checks S1-S7, S9 and S11 pass (`crates/rcfd-mesh/tests/sweep.rs`, `crates/rcfd-api/tests/pipe_sweep.rs`): Pappus
+  volume order 1.996 / 1.999 (revolve), annulus volume order 1.992 / 1.998; all-hex, valid, positive volumes; case-tree mesh content
+  hash equals the library mesh (8840 cells); located errors for `periodic_z`, `core_fraction` and `nx` below 1.
+* Pipe quality: non-orthogonality 35.4 degrees, skewness 0.454, aspect 5.12, face angles 50.0-135.0 degrees. Annulus: non-orthogonality
+  1.2e-12, skewness 2.1e-2, aspect 11.19.
+* S8 MISS (`s8_annulus_skewness_known_miss`, ignored): annulus skewness 2.1e-2 against the registered 1e-6. Root cause: a
+  derivation error in the ADR. On a polar block the cell-centre line and the face centre differ by the chord-to-arc offset of a
+  curved cell, which is not zero for 64 azimuthal cells; the limit assumed a straight-sided cell. A diagnosis test records the value.
+* S10 MISS (`s10_..._known_miss`, ignored): registered settings give a centreline error of 3.33 percent (limit 1). Root cause:
+  the O-grid/core junction faces are 35 degrees non-orthogonal independently of refinement and the default
+  `non_orthogonal_correctors = 0` leaves that error uncorrected; the error does not shrink with refinement (3.93, 3.46, 3.33, 3.30
+  percent for nx = 5, 9, 17, 33; `pipe_sweep_diag.rs`).
+* S10b (`non_orthogonal_correctors = 2`, registered 8-layer mesh) did NOT pass: the iteration is stable for about 400
+  iterations, then an axial mode grows without bound (nz = 4 and nz = 8 diverge, nz = 2 is stable). The first two runs failed
+  because the helper's convergence test read NaN as zero change; the helper now asserts finiteness. The cause of the growth is not
+  isolated (a z-mode of the solver with the explicit non-orthogonal correction on the cyclic pair is suspected, not shown). The test
+  is kept as the ignored `s10b_..._known_miss`.
+* S10c (new corrected test, passes): same cross-section, nz = 2, `non_orthogonal_correctors = 2`, no-slip walls (no Symmetry):
+  centreline error 0.134 percent (limit 1), bulk error 0.075 percent (limit 1.5), axial spread 0, transverse velocity 4.5e-21.
+  Acceptance reading: the Poiseuille point is reached on the nz = 2 mesh, NOT on the registered nz = 8 mesh; the all-hex
+  pipe/annulus point is reached.
+
+### F-234 measured (status partial)
+
+* O1-O4, O6-O9 pass: balanced tree, tiling exact; 12656 cells at Lmax 3 (hex fraction 0.889, layer shell 100 percent hex, 1400
+  polyhedral transition cells); void-volume error 4.24e-3 (Lmax 3, limit 3 percent) and 1.18e-3 (Lmax 4, limit 1 percent), order
+  1.843 (limit 1.5); offset rules exact to 1e-12, mesh columns thickness error 0 and last-layer error 7e-15; vessel 1.95e-3
+  (limit 3 percent); cavity on the generated mesh max |u - Ghia| 0.00456, |v - Ghia| 0.00797 (limit 0.03).
+* O5 MISS (`o5_non_orthogonality_known_miss`, ignored): non-orthogonality 77.4 degrees against 70 (skewness 0.61, aspect 11.4 and
+  volume ratio 10.2 meet their limits). Root cause (diagnosis test): all 240 faces above 70 degrees are layer-to-layer faces of
+  the snapped shell, where the extrusion direction (towards the closest surface point) varies between neighbouring columns;
+  layer thickness ranges 0.049-0.150. Not tuned.
+* Not delivered: sphere drag at Re 100 (not run), flat-plate y+/Cf (not attempted), anisotropic refinement, snapping of the core
+  to the surface (the layer shell absorbs the gap). Conformity at the interface: the shell shares the core's interface nodes, so
+  no non-conformal join is needed.
+
+### Deviations from the plan
+
+1. Poiseuille acceptance uses `non_orthogonal_correctors = 2` and nz = 2 (above), not the registered settings/mesh.
+2. The layer lateral size `s` is the square root of the mean interface-polygon area (not the mean edge length).
+3. The cavity O9 uses an unrefined 40 x 40 x 1 fill (a refined single-layer slab is impossible with cubic cells), so it exercises
+   classification and face emission but not hanging nodes in a flow solve.
+4. The 8-layer Poiseuille solve costs about 20 minutes, so the registered-mesh runs were limited.

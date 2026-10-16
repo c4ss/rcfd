@@ -1744,9 +1744,9 @@
       "F-108",
       "F-011"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A sphere in a box meets stated quality limits with no negative volumes; drag of the sphere at Re 100 lies within published scatter; a lid-driven cavity on the generated mesh matches Ghia centreline velocities within 3 percent; last-ratio prism offsets on a flat plate reach the target y+ within 10 percent and Cf within 3 percent of Blasius",
-    "note": "Priority P3. Size XL. Area: mesh. Priority reconciled between P2 and P4 proposals; the GPU octree study is not scheduled."
+    "note": "Priority P3. Size XL. Area: mesh. Priority reconciled between P2 and P4 proposals; the GPU octree study is not scheduled. WAVE 26B (ADR 0047), vertical slice, PARTIAL: rcfd_mesh::octree (2:1 balanced octree fill with hanging-node polyhedra, snapped conforming prism-layer shell with uniform/aspect-ratio/last-ratio rules exact to round-off). Sphere in box: valid, positive volumes, volume order 1.84, but non-orthogonality 77.4 degrees vs limit 70 (known miss). Cavity on a generated mesh within 0.008 of Ghia (limit 0.03). Not run: sphere drag at Re 100. Not attempted: flat-plate y+/Cf."
   },
   {
     "id": "F-235",
@@ -1756,9 +1756,9 @@
       "F-012",
       "F-011"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Swept mesh of an annulus or pipe has all-hex cells with prescribed layer counts; fully developed Poiseuille pipe flow on the swept mesh recovers the analytic centreline velocity within 1 percent",
-    "note": "Priority P3. Size M. Area: mesh. Dependency on the tetrahedral mesher dropped; builds on the structured generator."
+    "note": "Priority P3. Size M. Area: mesh. Dependency on the tetrahedral mesher dropped; builds on the structured generator. WAVE 26B (ADR 0047): rcfd_mesh::sweep (Line/Revolve/NormalOffset sweeps, thin_volume, disc/annulus/cylinder-shell bases, O-grid + core pipe_mesh) and case-tree generator pipe_sweep (periodic_z, core_fraction). All-hex, valid, volume order ~2. Poiseuille centreline error 0.134 percent with no-slip walls, reached with non_orthogonal_correctors = 2 on a 2-layer mesh (s10c); the registered settings gave 3.33 percent (known miss) and the 8-layer mesh with correctors diverges (cause not isolated, known miss). Annulus skewness 1e-6 limit was a derivation error (known miss)."
   },
   {
     "id": "F-236",
