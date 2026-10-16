@@ -80,7 +80,8 @@ impl Simulation {
 
     /// Transient laminar constant-density PISO/PIMPLE without any additional transported state.
     fn transient_restartable(&self) -> bool {
-        matches!(self.engine, Engine::Transient(_))
+        // the fractional-step advance keeps the lagged pressure increment, which a checkpoint does not hold
+        matches!(&self.engine, Engine::Transient(s) if s.settings.fractional.is_none())
             && self.turb.is_none()
             && self.energy.is_none()
             && self.scalars.is_none()

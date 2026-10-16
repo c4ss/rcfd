@@ -155,3 +155,23 @@ fn f13_default_is_bit_identical() {
     b.run(1000);
     assert!(bits_equal(&fields(&a), &fields(&b)));
 }
+
+/// F11 (output part): the run path writes the usual outputs for a fractional-step case, the run is not restartable (the lagged
+/// pressure increment is not in the checkpoint), and the explicit default run is.
+#[test]
+fn f11_run_path_writes_outputs_and_is_not_restartable() {
+    use rcfd_api::runctl::{self, RunOptions};
+    let dir = std::env::temp_dir().join(format!("rcfd_frac_run_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let s = sim(&tg_text("time_advance = \"fractional_step\"", ""));
+    assert!(!s.supports_restart());
+    let m = std::sync::Mutex::new(s);
+    let out = runctl::drive(&m, &RunOptions::default(), &|| false, &mut |_| {});
+    assert_eq!(out.exit_code, 0, "{out:?}");
+    let s = m.into_inner().unwrap();
+    runctl::write_results(&s, &dir).unwrap();
+    let vtu = std::fs::read_to_string(dir.join("solution.vtu")).unwrap();
+    assert!(vtu.contains("Name=\"U\"") && vtu.contains("Name=\"p\""));
+    assert!(dir.join("monitors.csv").exists());
+    assert!(sim(&tg_text("time_advance = \"iterative\"", "")).supports_restart());
+}
