@@ -542,6 +542,17 @@ specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `
 temperature. The density stays constant; no property data is shipped, the constants are inputs (the material library
 F-111 provides sourced data).
 
+Wave 21B (F-220, ADR 0036) adds three more laws to the same three keys: `law = "piecewise_linear"` (`temperatures` strictly
+increasing, K, and `values` of the same length; linear interpolation, exact at the nodes), `law = "piecewise_polynomial"`
+(`breakpoints`: n + 1 strictly increasing range limits [K] of n pieces, `piece_order` m >= 1 and `piece_coefficients`, n x m
+coefficients piece by piece, lowest power first, in the absolute temperature T in kelvin; the pieces need not join), and
+`law = "vogel"` (meant for the viscosity, accepted on every key; `vogel_a` > 0, `vogel_b`, `vogel_c` in K: `mu = a exp(b / (T - c))`, T > c). `extrapolation` =
+`clamp` (default; holds the end value) | `linear` (continues the end segment) | `error` (NaN outside the range, which the finiteness checks of the solvers may report; it does not stop the run) outside the table.
+Malformed tables are located errors (`properties.<key>.temperatures[i]`, `.values`, `.piece_coefficients`, `.vogel_a`, ...).
+The default laws and all recorded baseline hashes are unchanged. The library in `rcfd_core::tabular` also has the Tait
+compressible-liquid density and a pressure-temperature table with saturation line and phase selection; these are NOT
+reachable from the case tree because the incompressible solvers keep a constant density.
+
 ### Material library (F-111)
 
 `rcfd_core::fluids` and `rcfd_core::iapws` are Rust APIs (no case keys of their own; the `properties` laws above and the F-105 tables
@@ -574,6 +585,7 @@ its cells do. `type` selects:
 | `rotating_frame` | `rotation_axis` (default +z), `rotation_origin`, `angular_velocity` [rad/s], `centrifugal` (default true) | relative-velocity form: `-2 Omega x u - Omega x (Omega x r)`. The centrifugal part is analytic at cell and face centres, the Coriolis part uses the previous iterate (boundary faces: the boundary velocity). Wall velocities are given in the rotating frame. `centrifugal = false` keeps Coriolis only (needed for periodic domains) |
 | `mrf` | `rotation_axis` (default +z), `rotation_origin`, `angular_velocity` [rad/s] | multiple-reference-frame (frozen rotor) zone, **absolute-velocity** formulation (ADR 0008): the solved velocity stays absolute, momentum in the zone is convected with the relative flux `phi - (Omega x r).S` and gets the lagged acceleration `-Omega x u`; boundary conditions are absolute (a wall rotating with the zone is given `Omega x r` by `velocity_expression_x/y/z`). The interface to the rest of the mesh (an ordinary internal face set, also a non-conformal one from `annulus_3d_interface`) carries absolute momentum, which is the frozen-rotor treatment. |
 | `acceleration` | `acceleration` [m/s^2] | constant acceleration in the zone |
+| `actuator_disk` | `thrust` [N] (signed), `direction` (required, non-zero), `profile` = `uniform` (default) \| `linear_r` (force density proportional to the distance from the disk axis; needs `disk_centre`), `disk_centre` [m], `disk_axis` (default `direction`), `torque` [N m] about `disk_axis` (0 = no swirl; needs `disk_centre`), `density` [kg/m^3] (0 = `physics.rho`), `distribution` = `smooth` (default) \| `cell` | actuator disk (ADR 0036): the total force `thrust` is spread over the cells of the zone as a body force; the integral is exactly `thrust` (and `torque`) to round-off. `smooth` spreads the loading over one cell layer around the zone so that edge cells carry no unbalanced half force; `cell` is the raw top-hat (a jet of order sqrt(a dx) forms at the disk edge, see ADR 0036 A4c). Momentum-theory helpers are in `rcfd_fv::actuator`. |
 
 MRF validation errors (path `sources.<name>...`): zero `rotation_axis`, non-finite `angular_velocity`,
 a zone without cells, a zone boundary (walls, symmetry planes, the interface) that is not a surface of revolution about
@@ -1081,3 +1093,14 @@ Static errors are located at the key (unknown patch names, expression syntax and
 `six_dof` without positive mass and inertia, wrong list lengths); combinations that are not implemented (`solver.algorithm` other than `piso` / `pimple`, a
 `time_scheme` other than `euler`, turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart) are reported at `dynamic_mesh.enabled`.
 A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
+
+## Wave 21B: `regions` (F-216, ADR 0036)
+
+`regions.<name>` assigns a model to a cell zone. Keys: `zone` = `all` (default) | `box` | `cell_zone` | `register` with
+`box_min`, `box_max`, `cell_zone`, `register` as for `zone_sources`; `turbulence` = `model` (default, the global
+`turbulence.model` acts) | `laminar`. A laminar region sets the momentum-equation face viscosity to the molecular value
+`physics.nu` on every face that touches a cell of the region (boundary faces by their owner cell); the turbulence transport
+equations are still solved there, and the energy, radiation and species models are not region-scoped. Located errors:
+`regions.<n>.turbulence` (unknown value, no turbulence model configured, Reynolds stress or plugin model, rheology or a
+temperature-dependent viscosity), `regions.<n>.zone` (no cells), `regions.<n>.cell_zone`, `regions.<n>.register`.
+Without any `regions` entry nothing changes (recorded baseline hashes are bit-identical).
