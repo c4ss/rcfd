@@ -642,6 +642,8 @@ pub struct Simulation {
     zone_sources: Option<ZoneSources>,
     /// Conjugate heat transfer: solid zones, contact resistances, prescribed flow (ADR 0024).
     cht: Option<ChtModel>,
+    /// Particle tracking driven by the transient step (F-056, ADR 0037 D1).
+    particles: Option<crate::particle_run::ParticleRun>,
     /// Electric potential and Joule heating (F-213, ADR 0035).
     electric: Option<ElectricState>,
     /// Iterations performed with a prescribed flow (the flow solver is not advanced).
@@ -1471,6 +1473,7 @@ impl Simulation {
             zone_sources,
             cht,
             electric,
+            particles: None,
             frozen_iter: 0,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
@@ -1515,6 +1518,18 @@ impl Simulation {
             sc.update_algebraic(&ctx);
         }
         sim.apply_initial_method(case)?;
+        if crate::particles::enabled(case) {
+            if sim.dynmesh.is_some() {
+                return Err(diag(
+                    "particles.enabled",
+                    "particle tracking is not available with dynamic_mesh.enabled (the mesh moves under the tracker)",
+                ));
+            }
+            let tracker = crate::particles::build_tracker(case, &sim)?;
+            if matches!(sim.engine, Engine::Transient(_)) {
+                sim.particles = Some(crate::particle_run::ParticleRun::new(case, tracker, sim.time()));
+            }
+        }
         let mut post_diags = crate::postproc::check_sim(&sim);
         post_diags.extend(crate::decomp::check_mesh(case, &sim.geom.mesh));
         if !post_diags.is_empty() {
@@ -1653,6 +1668,23 @@ impl Simulation {
             Engine::Transient(_) => false,
             Engine::Compressible(c) => c.steady,
             Engine::VarDensity(v) => v.solver.settings.transient.is_none(),
+        }
+    }
+
+    /// The particle run driven by the transient step, if `particles.enabled` with a transient algorithm.
+    pub fn particle_run(&self) -> Option<&crate::particle_run::ParticleRun> {
+        self.particles.as_ref()
+    }
+
+    /// Stop the built-in particle hook (the library hook `particles::track_transient` tracks by itself).
+    pub fn detach_particles(&mut self) {
+        self.particles = None;
+    }
+
+    /// Output directory of the run (numbered particle files during the run).
+    pub fn set_output_dir(&mut self, dir: Option<std::path::PathBuf>) {
+        if let Some(p) = &mut self.particles {
+            p.set_output_dir(dir);
         }
     }
 
@@ -2399,6 +2431,17 @@ impl Simulation {
                 summary.done = true;
                 summary.converged = !reason.starts_with("interrupt");
                 self.stop_reason = Some(reason);
+            }
+        }
+        if let Some(mut pr) = self.particles.take() {
+            let r = pr.after_step(self);
+            self.particles = Some(pr);
+            if let Err(e) = r {
+                let e = format!("particle tracking: {e}");
+                summary.done = true;
+                summary.converged = false;
+                self.stop_reason = Some(e.clone());
+                self.failure = Some(e);
             }
         }
         self.done = summary.done;
