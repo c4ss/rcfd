@@ -5,9 +5,11 @@
 use crate::case::{Case, Diagnostic};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::actuator::{ActuatorDisk, DiskProfile};
+use rcfd_fv::lorentz::{Lorentz, LorentzResult, PatchElectric, PotentialMode};
 use rcfd_fv::simple::BodyForce;
 use rcfd_fv::sources::{self as fvs, MrfZone, RotatingFrame};
-use rcfd_fv::{FvGeometry, VectorField};
+use rcfd_fv::{FvGeometry, ScalarField, VectorField};
+use std::sync::Mutex;
 
 pub(crate) fn gf(c: &Case, p: &str) -> f64 {
     c.tree.get(p).ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
@@ -188,6 +190,45 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     bad(p("density"), "set a positive density or physics.rho".into());
                 }
             }
+            "lorentz" => {
+                match vec3_of("magnetic_field") {
+                    Ok(Some(b)) if vec3::norm(b) > 0.0 && b.iter().all(|x| x.is_finite()) => {}
+                    Ok(_) => bad(
+                        p("magnetic_field"),
+                        "a Lorentz source needs a finite non-zero magnetic_field [Bx, By, Bz] (T)".into(),
+                    ),
+                    Err(m) => bad(p("magnetic_field"), m),
+                }
+                match vec3_of("applied_electric_field") {
+                    Ok(Some(e)) if !e.iter().all(|x| x.is_finite()) => {
+                        bad(p("applied_electric_field"), "must be finite".into())
+                    }
+                    Ok(_) => {}
+                    Err(m) => bad(p("applied_electric_field"), m),
+                }
+                let sigma = gf(case, &p("conductivity"));
+                if !(sigma > 0.0 && sigma.is_finite()) {
+                    bad(
+                        p("conductivity"),
+                        format!("set the electrical conductivity [S/m] (> 0); found {sigma} (-1 means unset)"),
+                    );
+                }
+                if gf(case, "physics.rho") <= 0.0 {
+                    bad(p("type"), "a Lorentz source needs a positive physics.rho".into());
+                }
+                if case
+                    .tree
+                    .get("electric.enabled")
+                    .ok()
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
+                    bad(
+                        p("type"),
+                        "a Lorentz source cannot be combined with electric.enabled (the Joule heat sigma |grad phi|^2 of the electric model is not J^2/sigma when u x B is present; ADR 0039)".into(),
+                    );
+                }
+            }
             _ => {
                 if let Err(m) = vec3_of("acceleration") {
                     bad(p("acceleration"), m);
@@ -196,6 +237,13 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Does a Lorentz source with `potential = "solve"` exist (it reads the `boundaries.<p>.electric` keys)?
+pub fn lorentz_potential(case: &Case) -> bool {
+    names(case).iter().any(|n| {
+        gs(case, &format!("sources.{n}.type")) == "lorentz" && gs(case, &format!("sources.{n}.potential")) == "solve"
+    })
 }
 
 /// Checks of the `zone` / `box_min` / `box_max` / `cell_zone` settings under `prefix` (shared with the lumped components).
@@ -306,6 +354,14 @@ enum Kind {
     Mrf(MrfZone),
     Acceleration(Vec3),
     Disk(ActuatorDisk),
+    Lorentz(Box<LorentzItem>),
+}
+
+/// A Lorentz source with its persistent potential field and the last evaluation (for the output fields).
+struct LorentzItem {
+    law: Lorentz,
+    phi: Mutex<ScalarField>,
+    last: Mutex<Option<LorentzResult>>,
 }
 
 struct Item {
@@ -414,6 +470,56 @@ impl Sources {
                     }
                     Kind::Disk(d)
                 }
+                "lorentz" => {
+                    let mut patches = Vec::new();
+                    for patch in geom.mesh.patches() {
+                        let bp = |f: &str| format!("boundaries.{}.{f}", patch.name);
+                        match gs(case, &bp("electric")).as_str() {
+                            "potential" => patches.push((
+                                patch.name.clone(),
+                                PatchElectric::Potential(gf(case, &bp("electric_potential"))),
+                            )),
+                            "current" => {
+                                let sf = geom.mesh.face_area_vectors();
+                                let area: f64 = patch
+                                    .faces()
+                                    .filter(|&f| !geom.empty[f])
+                                    .map(|f| vec3::norm(sf[f]))
+                                    .sum();
+                                if area <= 0.0 {
+                                    errs.push(Diagnostic {
+                                        path: bp("electric_current"),
+                                        line: None,
+                                        message: "the patch has no area".into(),
+                                    });
+                                    continue;
+                                }
+                                patches.push((
+                                    patch.name.clone(),
+                                    PatchElectric::Current(gf(case, &bp("electric_current")) / area),
+                                ))
+                            }
+                            _ => {}
+                        }
+                    }
+                    Kind::Lorentz(Box::new(LorentzItem {
+                        law: Lorentz {
+                            b: gv(case, &p("magnetic_field")).flatten().unwrap_or([0.0; 3]),
+                            sigma: gf(case, &p("conductivity")),
+                            e_ext: gv(case, &p("applied_electric_field")).flatten().unwrap_or([0.0; 3]),
+                            rho: gf(case, "physics.rho"),
+                            mode: if gs(case, &p("potential")) == "solve" {
+                                PotentialMode::Solve
+                            } else {
+                                PotentialMode::None
+                            },
+                            patches,
+                            zone: zone.clone(),
+                        },
+                        phi: Mutex::new(ScalarField::uniform("phi_mhd", geom, 0.0)),
+                        last: Mutex::new(None),
+                    }))
+                }
                 _ => Kind::Acceleration(gv(case, &p("acceleration")).flatten().unwrap_or([0.0; 3])),
             };
             items.push(Item {
@@ -450,9 +556,12 @@ impl Sources {
                 m.add_frame_flux(geom, &it.zone, off);
             }
         }
-        let wall_pressure_trapezoid = items
-            .iter()
-            .any(|i| matches!(i.kind, Kind::Rotating(_) | Kind::Acceleration(_) | Kind::Disk(_)));
+        let wall_pressure_trapezoid = items.iter().any(|i| {
+            matches!(
+                i.kind,
+                Kind::Rotating(_) | Kind::Acceleration(_) | Kind::Disk(_) | Kind::Lorentz(_)
+            )
+        });
         Ok(Some(Sources {
             wall_pressure_trapezoid,
             items,
@@ -489,8 +598,46 @@ impl Sources {
                     // the zone was checked for force-carrying cells when the source was built
                     let _ = d.add_force(geom, &it.zone, f);
                 }
+                Kind::Lorentz(l) => {
+                    let mut phi = l.phi.lock().expect("lorentz potential lock");
+                    let r = l.law.evaluate(geom, &mut phi, u);
+                    let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));
+                    f.add(&r.body_force(geom));
+                    let s = sink.get_or_insert_with(|| vec![0.0; geom.n_cells()]);
+                    for (a, b) in s.iter_mut().zip(&r.sink) {
+                        *a += b;
+                    }
+                    *l.last.lock().expect("lorentz result lock") = Some(r);
+                }
             }
         }
         (force, sink)
+    }
+
+    /// Output field of the Lorentz sources (`lorentz_force_x/y/z` in N/m^3, `current_density_x/y/z` in A/m^2) from the last
+    /// evaluation, summed over the sources; `None` when the name is not one of them or no Lorentz source has been evaluated.
+    pub fn lorentz_field(&self, name: &str) -> Option<Vec<f64>> {
+        let (force, comp) = match name {
+            "lorentz_force_x" => (true, 0),
+            "lorentz_force_y" => (true, 1),
+            "lorentz_force_z" => (true, 2),
+            "current_density_x" => (false, 0),
+            "current_density_y" => (false, 1),
+            "current_density_z" => (false, 2),
+            _ => return None,
+        };
+        let mut out: Option<Vec<f64>> = None;
+        for it in &self.items {
+            if let Kind::Lorentz(l) = &it.kind {
+                let guard = l.last.lock().expect("lorentz result lock");
+                let Some(r) = guard.as_ref() else { continue };
+                let v = if force { &r.force } else { &r.current };
+                let o = out.get_or_insert_with(|| vec![0.0; v.len()]);
+                for (a, b) in o.iter_mut().zip(v) {
+                    *a += b[comp];
+                }
+            }
+        }
+        out
     }
 }

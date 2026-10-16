@@ -18,6 +18,8 @@ pub mod field;
 pub mod fvmatrix;
 pub mod geometry;
 pub mod gradient;
+pub mod hx;
+pub mod lorentz;
 pub mod lumped;
 pub mod masstransfer;
 pub mod outlets;

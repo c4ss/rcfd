@@ -51,8 +51,28 @@ pub fn solve(
     ctl: &SolveControl,
     max_sweeps: usize,
 ) -> (Vec<f64>, usize) {
+    solve_with_source(geom, phi, sigma, None, false, ctl, max_sweeps)
+}
+
+/// [`solve`] with a volumetric source: `-div(sigma_f grad phi) = source` per cell (A/m^3; ADR 0039 D1: the divergence of the
+/// motional current `sigma u x B`). With `pin_reference` the first conducting cell is held at `phi = 0`, for a problem
+/// without any fixed-potential boundary (the potential is then defined up to a constant).
+pub fn solve_with_source(
+    geom: &FvGeometry,
+    phi: &mut ScalarField,
+    sigma: &[f64],
+    source: Option<&[f64]>,
+    pin_reference: bool,
+    ctl: &SolveControl,
+    max_sweeps: usize,
+) -> (Vec<f64>, usize) {
     let sf = face_conductivity(geom, sigma);
-    let fixed: Vec<Option<f64>> = sigma.iter().map(|&s| (s <= 0.0).then_some(0.0)).collect();
+    let mut fixed: Vec<Option<f64>> = sigma.iter().map(|&s| (s <= 0.0).then_some(0.0)).collect();
+    if pin_reference {
+        if let Some(c) = sigma.iter().position(|&s| s > 0.0) {
+            fixed[c] = Some(0.0);
+        }
+    }
     let any_fixed = fixed.iter().any(|f| f.is_some());
     let zero = vec![0.0; geom.mesh.n_faces()];
     let mut sweeps = 0;
@@ -67,7 +87,7 @@ pub fn solve(
                 gamma: &sf,
                 scheme: ConvScheme::LinearUpwind,
                 relax: 1.0,
-                source: None,
+                source,
                 solver: ctl,
                 ddt: None,
             },
