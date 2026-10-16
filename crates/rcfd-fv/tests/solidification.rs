@@ -68,10 +68,20 @@ struct Run {
 
 /// `melting = true`: hot wall `t_w > 0`, solid initial `t_i <= 0`; `false`: the mirror image (`t_w < 0`, liquid initial `t_i >= 0`).
 fn stefan_run(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phase: bool) -> Run {
-    stefan_run_x(n, t_w, t_i, lambda, melting, one_phase, false)
+    stefan_run_x(n, t_w, t_i, lambda, melting, one_phase, false, false)
 }
 
-fn stefan_run_x(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phase: bool, force: bool) -> Run {
+#[allow(clippy::too_many_arguments)]
+fn stefan_run_x(
+    n: usize,
+    t_w: f64,
+    t_i: f64,
+    lambda: f64,
+    melting: bool,
+    one_phase: bool,
+    force: bool,
+    avg_init: bool,
+) -> Run {
     let geom = geometry(box_2d(n, 1, LX, 1.0, false, false).unwrap());
     let sign = if melting { 1.0 } else { -1.0 };
     // analytic profile of the melting orientation, mirrored for freezing
@@ -81,6 +91,36 @@ fn stefan_run_x(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_ph
         // one-phase: the solid stays at its initial value (no solid-side profile)
         let solid = x[0] >= 2.0 * lambda * T0.sqrt();
         t.values[c] = if one_phase && solid { t_i } else { analytic };
+    }
+    if avg_init {
+        // ADR 0043 S7: cell average of the sharp-front analytic enthalpy, inverted through the piecewise-linear law
+        let s0 = 2.0 * lambda * T0.sqrt();
+        let (hs, hl) = (-EPS, EPS + LATENT_K);
+        let xs = geom.mesh.cell_centres();
+        let hcell = LX / n as f64;
+        for c in 0..t.values.len() {
+            let sub = 200;
+            let mut acc = 0.0;
+            for k in 0..sub {
+                let x = xs[c][0] - 0.5 * hcell + (k as f64 + 0.5) / sub as f64 * hcell;
+                let liquid = x < s0;
+                let tm = if one_phase && !liquid {
+                    sign * t_i
+                } else {
+                    neumann_t(x, T0, lambda, sign * t_w, sign * t_i)
+                };
+                acc += tm + if liquid { LATENT_K } else { 0.0 };
+            }
+            let hm = acc / sub as f64;
+            let h = if melting { hm } else { LATENT_K - hm };
+            t.values[c] = if h <= hs {
+                h
+            } else if h >= hl {
+                h - LATENT_K
+            } else {
+                -EPS + (h - hs) / (hl - hs) * 2.0 * EPS
+            };
+        }
     }
     t.set_bc(&geom, "xmin", Box::new(FixedValue::scalar(t_w))).unwrap();
     t.set_bc(&geom, "xmax", Box::new(FixedValue::scalar(t_i))).unwrap();
@@ -204,7 +244,7 @@ fn p1_one_phase_melting_setup_defect_record() {
 /// Registered P2. MISSED at N=480 (invariants P4/P5/P6): the Newton iteration cycles on the piecewise-linear enthalpy when the
 /// mush half-width (0.002) is much thinner than a cell (0.0125); see ADR 0035 addendum.
 #[test]
-#[ignore = "known miss P2: Newton limit cycle at N=480 (cap hit, balance not closed)"]
+#[ignore = "known miss P2: Newton limit cycle at N=480 (cap hit, balance not closed); since ADR 0043 D2 the invariants hold at N=480 (s1_s2_s4_...) and only the successive-order criterion fails (errors 1.86e-2, 3.5e-3, 6.3e-5, 1.6e-3)"]
 fn p2_two_phase_melting_known_miss() {
     stefan_case("P2", 1.0, -0.5, true, false, &[60, 120, 240, 480], true);
 }
@@ -216,7 +256,7 @@ fn p2_two_phase_melting_n60_to_240() {
 }
 
 #[test]
-#[ignore = "known miss P8: Newton limit cycle at N=480 (cap hit, balance not closed)"]
+#[ignore = "known miss P8: Newton limit cycle at N=480 (cap hit, balance not closed); since ADR 0043 D2 the invariants hold at N=480 and only the successive-order criterion fails (mirror image of P2)"]
 fn p8_two_phase_solidification_known_miss() {
     stefan_case("P8", -1.0, 0.5, false, false, &[60, 120, 240, 480], true);
 }
@@ -401,7 +441,7 @@ fn s3_forced_safeguarded_branch_matches_the_plain_loop() {
     let lambda = neumann_lambda(0.5, 0.25);
     for n in [60usize, 120, 240] {
         let a = stefan_run(n, 1.0, -0.5, lambda, true, false);
-        let b = stefan_run_x(n, 1.0, -0.5, lambda, true, false, true);
+        let b = stefan_run_x(n, 1.0, -0.5, lambda, true, false, true, false);
         let d = (a.s_num - b.s_num).abs() / a.s_num;
         println!(
             "S3 N={n}: plain {:.10} forced {:.10} rel diff {d:.2e}, forced newton max {}",
@@ -435,4 +475,85 @@ fn s5_p1_successive_position_differences_report() {
         "S5 P1 positions {s:?} (exact {s_exact:.9}); signed errors {:?}; successive differences {d:?}; orders of the differences {o:?}",
         s.iter().map(|x| (x - s_exact) / s_exact).collect::<Vec<_>>()
     );
+}
+
+/// ADR 0043 S7: corrected initial state (cell-averaged sharp-front enthalpy). The registered limits of P1, P2 and P8 unchanged.
+fn stefan_case_v2(tag: &str, t_w: f64, t_i: f64, melting: bool, one_phase: bool, orders_too: bool) {
+    let (st_l, st_s) = (t_w.abs() / LATENT_K, if one_phase { 0.0 } else { t_i.abs() / LATENT_K });
+    let lambda = neumann_lambda(st_l, st_s);
+    let s_exact = 2.0 * lambda * T_END.sqrt();
+    let s0_exact = 2.0 * lambda * T0.sqrt();
+    let mut errs = Vec::new();
+    for n in [60usize, 120, 240, 480] {
+        let r = stefan_run_x(n, t_w, t_i, lambda, melting, one_phase, false, true);
+        let e = (r.s_num - s_exact).abs() / s_exact;
+        println!(
+            "{tag} v2 N={n}: initial position error {:.3e}; final rel {e:.4e}; balance {:.2e}, monotone {:.2e}, newton max {}, safeguarded {}",
+            r.s_init - s0_exact,
+            r.worst_balance,
+            r.worst_monotone,
+            r.max_newton,
+            r.safeguarded
+        );
+        check_invariants(&format!("{tag} v2 N={n}"), &r);
+        errs.push(e);
+    }
+    let orders: Vec<f64> = errs.windows(2).map(|w| (w[0] / w[1]).log2()).collect();
+    println!("{tag} v2 errors {errs:?}, orders {orders:?} (limits: N=240 <= 3e-2, orders >= 0.9)");
+    assert!(errs[2] <= 0.03, "{tag} v2 acceptance: error at N=240 is {}", errs[2]);
+    if orders_too {
+        assert!(orders.iter().all(|&o| o >= 0.9), "{tag} v2 orders {orders:?}");
+    }
+}
+
+/// Corrected P1 set-up, invariants and the 3 percent position limit (the order criterion is the separate test below).
+#[test]
+fn p1_v2_corrected_initial_state_position_and_invariants() {
+    stefan_case_v2("P1", 1.0, -EPS, true, true, false);
+}
+
+#[test]
+#[ignore = "known miss (ADR 0043 S7): corrected initial state, successive orders [-1.03, -0.06, 0.45] against >= 0.9; the error sits on an O(mush half-width) floor of the registered reference, see the ADR addendum"]
+fn p1_v2_known_miss_corrected_initial_state_orders() {
+    stefan_case_v2("P1", 1.0, -EPS, true, true, true);
+}
+
+#[test]
+fn p2_v2_corrected_initial_state_position_and_invariants() {
+    stefan_case_v2("P2", 1.0, -0.5, true, false, false);
+}
+
+#[test]
+#[ignore = "known miss (ADR 0043 S7): corrected initial state, successive orders [0.49, 1.85, 0.97] against >= 0.9 (first pair)"]
+fn p2_v2_known_miss_corrected_initial_state_orders() {
+    stefan_case_v2("P2", 1.0, -0.5, true, false, true);
+}
+
+#[test]
+fn p8_v2_corrected_initial_state_position_and_invariants() {
+    stefan_case_v2("P8", -1.0, 0.5, false, false, false);
+}
+
+#[test]
+#[ignore = "known miss (ADR 0043 S7): mirror image of P2, successive orders [0.49, 1.85, 0.97] against >= 0.9 (first pair)"]
+fn p8_v2_known_miss_corrected_initial_state_orders() {
+    stefan_case_v2("P8", -1.0, 0.5, false, false, true);
+}
+
+/// Report only (ADR 0043 S5/S7 diagnosis): P1 with the corrected initial state against two references, the registered one-phase
+/// Neumann position (solid at the melting temperature) and the two-phase Neumann position with the solid at the solidus
+/// `T_i = -EPS` (`St_s = EPS/(L/c)`), which is the temperature the numerical solid actually has.
+#[test]
+fn s7_p1_reference_offset_report() {
+    let lam1 = neumann_lambda(0.5, 0.0);
+    let lam2 = neumann_lambda(0.5, EPS / LATENT_K);
+    let (s1, s2) = (2.0 * lam1 * T_END.sqrt(), 2.0 * lam2 * T_END.sqrt());
+    let mut e1 = Vec::new();
+    let mut e2 = Vec::new();
+    for n in [60usize, 120, 240, 480] {
+        let r = stefan_run_x(n, 1.0, -EPS, lam2, true, false, false, true);
+        e1.push((r.s_num - s1) / s1);
+        e2.push((r.s_num - s2) / s2);
+    }
+    println!("S7 report: s_exact one-phase {s1:.9}, solid-at-solidus {s2:.9}; signed errors vs one-phase {e1:?}; vs solid-at-solidus {e2:?}");
 }
