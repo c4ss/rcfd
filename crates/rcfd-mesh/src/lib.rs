@@ -14,6 +14,7 @@ pub mod inflate;
 pub mod layers;
 pub mod measures;
 pub mod mesh;
+pub mod motion;
 pub mod non_conformal;
 pub mod partition;
 pub mod predicates;
