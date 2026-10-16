@@ -669,6 +669,8 @@ pub(crate) struct TurbState {
     /// Per-face speed of each inlet patch (kept to rebuild the model in a live session).
     pub inlet_speeds: Vec<(String, Vec<f64>)>,
     geom: Arc<FvGeometry>,
+    /// Cells of the laminar regions (`regions.<n>.turbulence = "laminar"`, ADR 0036) and the molecular viscosity; `None` without any.
+    laminar: Option<(Vec<bool>, f64)>,
 }
 
 impl TurbState {
@@ -898,6 +900,9 @@ impl TurbState {
             }
         }
         let wall_faces = model.wall_faces();
+        let laminar = crate::regions::laminar_cells(case, geom)
+            .map_err(|d| vec![d])?
+            .map(|m| (m, nu));
         Ok(TurbState {
             model,
             change: f64::INFINITY,
@@ -905,7 +910,17 @@ impl TurbState {
             wall_faces,
             inlet_speeds: inlet_speeds.to_vec(),
             geom: geom.clone(),
+            laminar,
         })
+    }
+
+    /// Face viscosity for the momentum equation: the model's, with the molecular value on faces of laminar regions (ADR 0036).
+    pub fn nu_face(&self) -> Vec<f64> {
+        let mut nu = self.model.nu_face();
+        if let Some((cells, nu_lam)) = &self.laminar {
+            crate::regions::mask_faces(&self.geom, cells, *nu_lam, &mut nu);
+        }
+        nu
     }
 
     /// Wall-face `y+` of each wall face (aligned with `wall_faces`), from the model.

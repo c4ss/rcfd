@@ -32,6 +32,7 @@ pub mod turb;
 pub mod udf;
 pub mod vd;
 pub mod wall_motion;
+pub mod regions;
 pub mod wall_opts;
 pub mod workflow;
 pub mod zone_sources;

@@ -533,6 +533,7 @@ impl Case {
         out.extend(crate::scalars::check(self));
         out.extend(crate::chemistry::check(self));
         out.extend(crate::zone_sources::check(self));
+        out.extend(crate::regions::check(self));
         out.extend(crate::cht::check(self));
         out.extend(crate::particles::check(self));
         out.extend(crate::properties::check(self));
