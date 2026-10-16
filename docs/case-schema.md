@@ -584,8 +584,11 @@ coefficients = [-9.4e-4, 1.1165476190476213e-4, -8.071428571428652e-8, 4.1666666
 
 ## `sources` momentum sources (F-031)
 
-`sources.<name>` adds a momentum source in a cell zone of a steady (`simple`, `simplec`) run; other algorithms are
-rejected with a located diagnostic. `zone` is `all` (default), `box` (cells whose centres lie in
+`sources.<name>` adds a momentum source in a cell zone of a `simple`, `simplec`, `piso` or `pimple` run (ADR 0045: the
+transient algorithms use the same mechanism, evaluated at the start of every outer iteration, so the solution-dependent
+Lorentz force and porous sink follow the PIMPLE outer loop; with `piso` it is evaluated once per step from the old-time
+velocity). `rotating_frame` and `mrf` sources, `solver.time_advance = fractional_step`, the `coupled` and compressible /
+variable-density algorithms are rejected with a located diagnostic at `sources.<name>.type`. `zone` is `all` (default), `box` (cells whose centres lie in
 `[box_min, box_max]`, metres) or `cell_zone` (a named zone of an imported mesh). A face belongs to the zone when both
 its cells do. `type` selects:
 
@@ -602,11 +605,14 @@ MRF validation errors (path `sources.<name>...`): zero `rotation_axis`, non-fini
 a zone without cells, a zone boundary (walls, symmetry planes, the interface) that is not a surface of revolution about
 the rotation axis (the frame flux `(Omega x r).S` must vanish there; planar interfaces perpendicular to the axis and
 cylindrical ones qualify), an MRF zone sharing cells with another MRF zone or a `rotating_frame` source, and
-transient algorithms. Pseudo-transient time steps use the absolute flux. Not validated: any pump or turbine
+transient algorithms (`piso`, `pimple`, `coupled`; the transient `rotating_frame` / `mrf` combinations are not built, ADR 0045 D4). Pseudo-transient time steps use the absolute flux. Not validated: any pump or turbine
 benchmark, turbulence models or the energy equation with an MRF zone; the checks are in ADR 0008 and
 `crates/rcfd-api/tests/mrf.rs`.
 
-Limits: steady runs only, the viscous porous term uses `physics.nu`; the non-conformal join of F-114 handles planar
+Limits: `rotating_frame` and `mrf` are steady-only; the viscous porous term uses `physics.nu`; in transient runs the sources use the
+velocity of the previous outer iteration (one evaluation per step with `piso`: first-order lag of the solution-dependent
+parts, e.g. the explicit part of the Lorentz force; raise `solver.n_outer` to converge it), the stability of the transient
+algorithm at viscous numbers `nu dt/dy^2` above about 3 is a separate limit (ADR 0045 addendum); the non-conformal join of F-114 handles planar
 interfaces only, so an MRF zone with a non-conformal interface is limited to interfaces perpendicular to the axis.
 Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
 
@@ -652,8 +658,10 @@ and optional NASA nine-coefficient thermodynamics in `Species::nasa9`.
 
 ## `components` lumped zone components (F-113, ADR 0012)
 
-`components.<name>` adds a lumped component to a steady constant-density run (`solver.algorithm` `simple` or `simplec`;
-other algorithms, the coupled solver and ideal-gas runs are a located diagnostic). `type`:
+`components.<name>` adds a lumped component to a constant-density run (`solver.algorithm` `simple`, `simplec`, `piso` or
+`pimple`; ADR 0045 evaluates the face jumps and network pressures every outer iteration of the transient algorithms and the
+heat-exchanger heat sources once per step from the flux and temperature of the previous step; the coupled solver, ideal-gas runs, `solver.time_advance = fractional_step` and `dynamic_mesh` are a located
+diagnostic at `components.<name>.type`). `type`:
 
 | `type` | Keys | Meaning |
 | --- | --- | --- |

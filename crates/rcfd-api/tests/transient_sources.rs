@@ -147,7 +147,7 @@ fn t1b_implicit_sink_follows_the_recursion_and_the_analytic_decay_known_miss() {
     assert!(ok.iter().all(|&b| b), "{ok:?}");
 }
 
-/// T1a / T1b corrected set-up (new test, the registered ones are kept above): outer iterations that converge the lagged
+/// T1a / T1b DIAGNOSTIC (not a registered configuration, not a criterion pass; the registered ones are kept above): outer iterations that converge the lagged
 /// periodic coupling (PIMPLE, n_outer = 40). Same limits as registered.
 #[test]
 fn t1c_uniform_acceleration_and_sink_with_converged_periodic_coupling() {
@@ -485,7 +485,7 @@ alpha_p = 0.5",
     }
 }
 
-/// T3d on the stable step with the T3 settings (n_outer = 3, alpha_u 0.9, alpha_p 0.5). KNOWN MISS (measured 8e-3 against 1e-6 at
+/// T3d DIAGNOSTIC / second known miss: the T3 settings (n_outer = 3, alpha_u 0.9, alpha_p 0.5) on the stable step dt = 2.5e-4. KNOWN MISS (measured 8e-3 against 1e-6 at
 /// t = 0.1): the current vanishes with the solved potential, but the isotropic implicit Lorentz sink s = sigma B^2 / rho is balanced
 /// by an explicit term evaluated with the previous outer iterate, so while u changes the flow carries a splitting error that decays
 /// geometrically with the outer iterations (`t3d_..._converged_outer_iterations`).
@@ -495,7 +495,16 @@ fn t3d_solved_potential_cancels_the_motional_current_known_miss() {
     t3d_run(3, 2.5e-4);
 }
 
-/// T3d corrected (new test): 24 outer iterations converge the splitting error (measured 2.4e-7 at t = 0.1) with the limits unchanged.
+/// T3d exactly as registered (T3 settings: n_outer = 3, alpha_u 0.9, alpha_p 0.5, dt = 0.02, Ha 10, ny 80). KNOWN MISS: the step is
+/// above the diffusion-number stability bound of the transient PISO/PIMPLE (see T3), so the run fails or misses the limit.
+#[test]
+#[ignore = "KNOWN MISS: registered dt = 0.02 is beyond the transient PIMPLE stability bound (pre-existing); see t3d diagnostics"]
+fn t3d_solved_potential_cancels_the_motional_current_registered_step_known_miss() {
+    t3d_run(3, 0.02);
+}
+
+/// T3d DIAGNOSTIC (not a registered configuration, not a criterion pass): 24 outer iterations localise the cause as the outer-iteration
+/// splitting error (measured 2.4e-7 at t = 0.1, limits unchanged).
 #[test]
 fn t3d_solved_potential_cancels_the_motional_current_converged_outer_iterations() {
     t3d_run(24, 2.5e-4);
@@ -643,6 +652,11 @@ fn impulse_residual(mut sim: Simulation, steps: usize, dt: f64, g: f64, s: f64, 
 /// (T5a Poiseuille start-up 100 steps of 1e-3, T5b Hartmann Ha 10 on the stable step 800 steps of 2.5e-4, T5c periodic box with
 /// sink 100 steps of 0.01).
 fn t5_residuals(alg: &str, n_outer: usize) -> [f64; 3] {
+    t5_residuals_dt(alg, n_outer, 2.5e-4, 800)
+}
+
+/// As `t5_residuals`, with the Hartmann case (T5b) run for `steps_b` steps of `dt_b`.
+fn t5_residuals_dt(alg: &str, n_outer: usize, dt_b: f64, steps_b: usize) -> [f64; 3] {
     let a = impulse_residual(
         build(&plates_text(40, alg, "euler", n_outer, 1e-3, 2.0, "", &drive(8.0))),
         100,
@@ -653,9 +667,9 @@ fn t5_residuals(alg: &str, n_outer: usize) -> [f64; 3] {
         true,
     );
     let b = impulse_residual(
-        build(&hartmann_text(80, 10.0, alg, n_outer, 2.5e-4, 2.0)),
-        800,
-        2.5e-4,
+        build(&hartmann_text(80, 10.0, alg, n_outer, dt_b, 2.0)),
+        steps_b,
+        dt_b,
         G_HARTMANN,
         400.0,
         80,
@@ -674,7 +688,16 @@ fn t5_residuals(alg: &str, n_outer: usize) -> [f64; 3] {
     [a, b, c]
 }
 
-/// T5 as registered (PISO). KNOWN MISS if the residuals exceed the limits: the PISO corrector leaves the cell velocity only
+/// T5 as registered (PISO, Euler): T5a 100 steps of 1e-3; T5b the T3 set-up (Ha 10, ny 80) over 0.2 s at dt = 0.02 (10 steps); T5c 100
+/// steps of 0.01 (1 s). KNOWN MISS (T5a, T5c miss the limit; T5b is beyond the stability bound at dt = 0.02).
+#[test]
+#[ignore = "KNOWN MISS: registered T5 set-ups (piso); splitting error / lagged periodic coupling / dt = 0.02 beyond the stability bound"]
+fn t5_momentum_balance_registered_setups_known_miss() {
+    let [a, b, c] = t5_residuals_dt("piso", 1, 0.02, 10);
+    assert!(a <= 1e-8 && b <= 1e-8 && c <= 1e-9, "{a} {b} {c}");
+}
+
+/// T5 with T5b on the stable step (800 steps of 2.5e-4; a different step from the registered one, hence a diagnostic miss). KNOWN MISS if the residuals exceed the limits: the PISO corrector leaves the cell velocity only
 /// approximately on the momentum equation (splitting error of the order of the pressure-velocity coupling at the walls and of the
 /// lagged periodic coupling), so the discrete impulse balance closes to the splitting error and not to round-off.
 #[test]
@@ -684,8 +707,8 @@ fn t5_momentum_balance_impulse_equals_integral_of_force_known_miss() {
     assert!(a <= 1e-8 && b <= 1e-8 && c <= 1e-9, "{a} {b} {c}");
 }
 
-/// T5 corrected (new test): the same balance with 40 outer iterations (PIMPLE), which converge the momentum-pressure coupling and
-/// the lagged periodic coupling. Limits unchanged.
+/// T5 DIAGNOSTIC (not a registered configuration, not a criterion pass): the same balance with 40 outer iterations (PIMPLE) localises
+/// the cause as the unconverged momentum-pressure and lagged periodic coupling. Limits unchanged.
 #[test]
 fn t5b_momentum_balance_impulse_equals_integral_of_force_converged_outer_iterations() {
     let [a, b, c] = t5_residuals("pimple", 40);
