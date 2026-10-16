@@ -32,6 +32,7 @@ use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
 use std::sync::Arc;
 
+pub mod fractional;
 pub mod moving;
 
 /// Settings of the transient solver.
@@ -66,6 +67,8 @@ pub struct PimpleSettings {
     /// Add the transposed part `div(nu_eff (grad u)^T)` of the viscous stress divergence as an explicit
     /// (deferred-correction) source (ADR 0032). Default `false`: Laplacian form only.
     pub full_viscous_stress: bool,
+    /// Non-iterative fractional-step (projection) advance instead of the PISO/PIMPLE loop (ADR 0037); `None` = PISO.
+    pub fractional: Option<fractional::FractionalSettings>,
 }
 
 impl PimpleSettings {
@@ -94,6 +97,7 @@ impl PimpleSettings {
                 max_iter: 3000,
             },
             full_viscous_stress: false,
+            fractional: None,
         }
     }
 
@@ -220,6 +224,8 @@ pub struct PimpleSolver {
     pub body_force: Option<BodyForce>,
     /// Moving-mesh data of the current step (set only by `step_ale`, ADR 0033).
     pub(crate) ale: Option<moving::AleStep>,
+    /// Pressure increment of the previous fractional step (lagged boundary treatment, ADR 0037).
+    pub(crate) fs_q: Vec<f64>,
 }
 
 impl PimpleSolver {
@@ -243,11 +249,15 @@ impl PimpleSolver {
             nu_face: None,
             body_force: None,
             ale: None,
+            fs_q: Vec::new(),
         }
     }
 
     /// Advance one time step of size `dt`.
     pub fn step(&mut self, dt: f64) -> StepInfo {
+        if self.settings.fractional.is_some() && self.ale.is_none() {
+            return self.step_fractional(dt);
+        }
         let g = self.geom.clone();
         let mesh = &g.mesh;
         let n = g.n_cells();
