@@ -350,6 +350,8 @@ fn t9_if97_built_tables() {
     assert!(worst <= 1e-4);
 }
 
+/// WAVE 25B NOTE (ADR 0044 D2): plain bilinear interpolation of rho still gives 2.642e-4 (record kept ignored); the opt-in
+/// `eval_density_ideal_scaled` basis meets the same 1e-4 limit in `t9b_b3_if97_vapour_table_scaled_basis` (1.24e-5).
 /// KNOWN MISS (T9, vapour half). The registered limit (1e-4 relative at cell centres, estimated from the 1/T curvature alone) is
 /// kept. Measured 2.64e-4 at the cell T 380-385 K, p 10-20 kPa. Root cause: the estimate ignored the pressure direction. Steam
 /// at 380 K is not ideal: rho T / p rises by 0.07 percent per 5 kPa (Z falls by about 1.3 percent per 100 kPa), so rho(p) has a curvature
@@ -388,4 +390,125 @@ fn t9_vapour_table_midcell_error_known_miss() {
     }
     eprintln!("T9 vapour worst mid-cell relative error {worst:.3e} (limit 1e-4)");
     assert!(worst <= 1e-4);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Wave 25B (ADR 0044 D2): the density-specific ideal-gas-scaled basis, checks B1 to B4 as registered before the run.
+// The registered limits of T9 (1e-4) are unchanged; the plain bilinear miss above stays ignored.
+// ---------------------------------------------------------------------------------------------------------------------
+
+fn vapour_table(f: &dyn Fn(f64, f64) -> f64) -> (PtTable, Vec<f64>, Vec<f64>) {
+    let vt: Vec<f64> = (0..=24).map(|i| 380.0 + 5.0 * i as f64).collect();
+    let vp: Vec<f64> = (1..=10).map(|j| 1e4 * j as f64).collect();
+    let vap: Vec<f64> = vt.iter().flat_map(|&t| vp.iter().map(move |&p| f(t, p))).collect();
+    let tab = PtTable::new(
+        vt.clone(),
+        vp.clone(),
+        vec![f64::NAN; vap.len()],
+        vap,
+        vec![280.0, 520.0],
+        vec![2e5, 1e6],
+    )
+    .unwrap();
+    (tab, vt, vp)
+}
+
+/// B1: an ideal-gas density table is reproduced anywhere by the scaled basis; plain bilinear is not.
+#[test]
+fn t9b_b1_ideal_gas_exact() {
+    let rs = 461.5;
+    let ideal = |t: f64, p: f64| p / (rs * t);
+    let (tab, vt, vp) = vapour_table(&ideal);
+    let (mut scaled, mut plain) = (0.0_f64, 0.0_f64);
+    for i in 0..vt.len() - 1 {
+        for j in 0..vp.len() - 1 {
+            for &(a, b) in &[(0.1, 0.2), (0.3, 0.8), (0.5, 0.5), (0.7, 0.1), (0.9, 0.6)] {
+                let (t, p) = (vt[i] + a * 5.0, vp[j] + b * 1e4);
+                let want = ideal(t, p);
+                scaled = scaled.max((tab.eval_density_ideal_scaled(t, p).unwrap() - want).abs() / want);
+                plain = plain.max((tab.eval(t, p).unwrap() - want).abs() / want);
+            }
+        }
+    }
+    eprintln!("B1 ideal-gas table: scaled max relative error {scaled:.2e} (limit 1e-12), plain bilinear {plain:.2e} (must exceed 1e-5)");
+    assert!(scaled <= 1e-12);
+    assert!(plain > 1e-5);
+}
+
+fn b3_check() -> (f64, f64, f64) {
+    let dens = |t: f64, p: f64| iapws::water_state(t, p).unwrap().density;
+    let (tab, vt, vp) = vapour_table(&dens);
+    // B2 nodes
+    for (i, &t) in vt.iter().enumerate() {
+        for (j, &p) in vp.iter().enumerate() {
+            let v = tab.eval_density_ideal_scaled(t, p).unwrap();
+            let want = dens(t, p);
+            assert!((v - want).abs() <= 1e-12 * want, "node {i} {j}: {v} vs {want}");
+        }
+    }
+    let (mut centre, mut quarter, mut plain) = (0.0_f64, 0.0_f64, 0.0_f64);
+    for i in 0..vt.len() - 1 {
+        for j in 0..vp.len() - 1 {
+            for &(a, b) in &[(0.25, 0.25), (0.25, 0.75), (0.5, 0.5), (0.75, 0.25), (0.75, 0.75)] {
+                let (t, p) = (vt[i] + a * 5.0, vp[j] + b * 1e4);
+                let want = dens(t, p);
+                let e = (tab.eval_density_ideal_scaled(t, p).unwrap() - want).abs() / want;
+                if a == 0.5 {
+                    centre = centre.max(e);
+                } else {
+                    quarter = quarter.max(e);
+                }
+                if a == 0.5 {
+                    plain = plain.max((tab.eval(t, p).unwrap() - want).abs() / want);
+                }
+            }
+        }
+    }
+    (centre, quarter, plain)
+}
+
+/// B2 and B3: the registered T9 vapour table, the registered 1e-4 limit at the cell centres (and at the quarter points).
+#[test]
+fn t9b_b3_if97_vapour_table_scaled_basis() {
+    let (centre, quarter, plain) = b3_check();
+    eprintln!(
+        "T9b vapour scaled basis: centre worst {centre:.3e}, quarter points worst {quarter:.3e} (limit 1e-4 for both); plain bilinear centre {plain:.3e}"
+    );
+    assert!(centre <= 1e-4, "centre {centre}");
+    assert!(quarter <= 1e-4, "quarter {quarter}");
+}
+
+/// B4: error behaviour.
+#[test]
+fn t9b_b4_errors() {
+    let (tab, _, _) = vapour_table(&|t, p| p / (461.5 * t));
+    assert!(tab.eval_density_ideal_scaled(0.0, 5e4).is_err());
+    assert!(tab.eval_density_ideal_scaled(400.0, -1.0).is_err());
+    assert!(tab.eval_density_ideal_scaled(f64::NAN, 5e4).is_err());
+    assert!(tab.eval_density_ideal_scaled(300.0, 5e4).is_err()); // below the T axis
+    assert!(tab.eval_density_ideal_scaled(400.0, 5e5).is_err()); // above the p axis
+    let neg = PtTable::new(
+        vec![-10.0, 10.0],
+        vec![1.0, 2.0],
+        vec![f64::NAN; 4],
+        vec![1.0; 4],
+        vec![-10.0, 10.0],
+        vec![1.0, 100.0],
+    )
+    .unwrap();
+    assert!(neg.eval_density_ideal_scaled(0.0, 1.5).is_err());
+    // NaN corner: same located error as eval
+    let nan = PtTable::new(
+        vec![300.0, 350.0, 400.0],
+        vec![1e4, 1e5, 1e6],
+        vec![f64::NAN; 9],
+        vec![0.1, f64::NAN, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+        vec![280.0, 400.0],
+        vec![1e3, 2e3],
+    )
+    .unwrap();
+    let a = nan.eval(310.0, 5e4).unwrap_err().to_string();
+    let b = nan.eval_density_ideal_scaled(310.0, 5e4).unwrap_err().to_string();
+    assert_eq!(a, b);
+    assert!(b.contains("cell"), "{b}");
 }

@@ -620,4 +620,44 @@ impl PtTable {
         }
         Ok((1.0 - u) * ((1.0 - w) * v00 + w * v01) + u * ((1.0 - w) * v10 + w * v11))
     }
+
+    /// Density-specific variant of [`eval`](Self::eval) (ADR 0044 D2): bilinear interpolation of `q = v T / p` (equal to
+    /// `1/(R_s Z)` for a density grid `v = rho`, a constant for an ideal gas), returned as `q p / T`. Exact for an ideal gas at any
+    /// point; for a real vapour the error is set by the curvature of `1/Z` instead of that of `rho`, which is much smaller far from
+    /// saturation. Only meaningful for a density grid (it is not applicable to other properties, nor to a liquid grid), needs
+    /// positive temperature and pressure axes, and is opt-in: [`eval`](Self::eval) is unchanged.
+    pub fn eval_density_ideal_scaled(&self, t: f64, p: f64) -> Result<f64> {
+        if !(t > 0.0 && p > 0.0) {
+            return bad(
+                "(t, p)",
+                format!("the ideal-gas scaling needs T > 0 and p > 0, got T = {t}, p = {p}"),
+            );
+        }
+        if !(self.t[0] > 0.0 && self.p[0] > 0.0) {
+            return bad(
+                "(t, p)",
+                "the ideal-gas scaling needs positive temperature and pressure axes".into(),
+            );
+        }
+        let grid = match self.phase(t, p) {
+            Phase::Liquid => &self.liquid,
+            Phase::Vapour => &self.vapour,
+        };
+        // the bilinear weights and corner selection are those of `eval`; the corner values are scaled by T/p of their node
+        let np = self.p.len();
+        let (Some(i), Some(j)) = (Self::cell(&self.t, t), Self::cell(&self.p, p)) else {
+            return self.eval(t, p); // the located out-of-axes error of `eval`
+        };
+        let q = |a: usize, b: usize| grid[a * np + b] * self.t[a] / self.p[b];
+        let (v00, v01, v10, v11) = (q(i, j), q(i, j + 1), q(i + 1, j), q(i + 1, j + 1));
+        if [v00, v01, v10, v11].iter().any(|v| v.is_nan()) {
+            return self.eval(t, p); // the located NaN-corner error of `eval`
+        }
+        let (u, w) = (
+            (t - self.t[i]) / (self.t[i + 1] - self.t[i]),
+            (p - self.p[j]) / (self.p[j + 1] - self.p[j]),
+        );
+        let qv = (1.0 - u) * ((1.0 - w) * v00 + w * v01) + u * ((1.0 - w) * v10 + w * v11);
+        Ok(qv * p / t)
+    }
 }
