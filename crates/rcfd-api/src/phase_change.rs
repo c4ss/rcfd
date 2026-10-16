@@ -139,6 +139,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         out.push(d(here, "cannot be combined with electric.enabled"));
     }
     for z in case.tree.names("zone_sources").unwrap_or_default() {
+        if gf(case, &format!("zone_sources.{z}.linear_coefficient")) != 0.0 {
+            out.push(d(
+                format!("zone_sources.{z}.linear_coefficient"),
+                "an implicit linear part is not combined with phase_change.enabled (use a constant source)",
+            ));
+        }
         if gs(case, &format!("zone_sources.{z}.kind")) == "fixed_value" {
             out.push(d(
                 format!("zone_sources.{z}.kind"),
