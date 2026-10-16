@@ -232,7 +232,8 @@ fn z3_network_outlet_follows_the_lumped_resistance() {
     assert!((q / q_op - 1.0).abs() < 5e-3, "operating flow {q} vs {q_op}");
 }
 
-/// Diagnosis (wave 24, ADR 0042): the two-cycle sits in the inlet cell and vanishes with `component_diagonal = "corrected"`
+/// Diagnosis (wave 24, ADR 0042): the two-cycle sits in the inlet cell and vanishes with `component_diagonal = "corrected"` and
+/// with the inflow lag of ADR 0042 (this test also passes with `--ignored` since then; its assertion is unchanged)
 /// (`duct_diagnosis.rs::z3_with_corrected_component_diagonal_meets_the_registered_limits`).
 /// Registered Z3 limit on the network patch pressure against R(Q) (1e-4). Measured 8.5e-4: a small persistent
 /// two-cycle of the flow remains, so the lagged patch pressure and the final flow differ. Not met; limit unchanged.
