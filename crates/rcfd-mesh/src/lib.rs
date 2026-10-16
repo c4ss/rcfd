@@ -16,11 +16,13 @@ pub mod measures;
 pub mod mesh;
 pub mod motion;
 pub mod non_conformal;
+pub mod octree;
 pub mod partition;
 pub mod predicates;
 pub mod quality;
 pub mod surface;
 pub mod surface_remesh;
+pub mod sweep;
 pub mod tetmesh;
 
 pub use mesh::{BoundarySpec, Mesh, Patch, PatchKind, PeriodicRotation, Zone};

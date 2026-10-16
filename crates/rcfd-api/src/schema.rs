@@ -74,9 +74,9 @@ pub fn case_schema() -> Schema {
             "generator",
             Schema::enumeration(
                 "cavity_2d",
-                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d", "annulus_3d", "annulus_3d_interface"],
+                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d", "annulus_3d", "annulus_3d_interface", "pipe_sweep"],
             )
-            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides); annulus_3d is a full cylindrical annulus r_in <= r <= r_out about the z axis, height lz, nx cells around, ny radial, nz axial (patches inner, outer, zmin, zmax; F-031); annulus_3d_interface is two such blocks (heights lz/2) joined at z = lz/2 through a non-conformal interface, the upper block having ny_right x nz_right cells (0 = same as ny / nz)"),
+            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides); annulus_3d is a full cylindrical annulus r_in <= r <= r_out about the z axis, height lz, nx cells around, ny radial, nz axial (patches inner, outer, zmin, zmax; F-031); annulus_3d_interface is two such blocks (heights lz/2) joined at z = lz/2 through a non-conformal interface, the upper block having ny_right x nz_right cells (0 = same as ny / nz); pipe_sweep is an all-hexahedral circular pipe along z of radius r_out and length lz made by sweeping a multizone O-grid + core disc (nx x nx Cartesian core of half-width core_fraction * r_out, four ring sectors of nx x ny cells, 4 nx cells around, nz axial layers, grading = last/first ring cell size ratio; patches wall, zmin, zmax; periodic_z makes zmin/zmax a cyclic pair; F-235, ADR 0047)"),
         )
         .field(
             "nx",
@@ -104,7 +104,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "nz",
-            Schema::int(1).range(1.0, 100000.0).doc("Axial cells of annulus_3d (and the lower block of annulus_3d_interface)"),
+            Schema::int(1).range(1.0, 100000.0).doc("Axial cells of annulus_3d (and the lower block of annulus_3d_interface); axial layers of pipe_sweep"),
         )
         .field(
             "nz_right",
@@ -164,6 +164,16 @@ pub fn case_schema() -> Schema {
         .field(
             "periodic_y",
             Schema::boolean(false).doc("Make ymin/ymax cyclic (box_2d)"),
+        )
+        .field(
+            "periodic_z",
+            Schema::boolean(false).doc("Make zmin/zmax cyclic (pipe_sweep)"),
+        )
+        .field(
+            "core_fraction",
+            Schema::float(0.5)
+                .range(0.2, 0.8)
+                .doc("Half-width of the Cartesian core of the pipe_sweep cross section as a fraction of the pipe radius"),
         )
         .field(
             "ramp_start",
