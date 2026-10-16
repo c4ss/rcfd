@@ -593,8 +593,9 @@
     "deps": [
       "F-082"
     ],
-    "status": "todo",
-    "acceptance": "pip-installable wheel; Python test reproduces cavity and reads fields as numpy arrays"
+    "status": "partial",
+    "acceptance": "pip-installable wheel; Python test reproduces cavity and reads fields as numpy arrays",
+    "note": " WAVE 20C (ADR 0034, partial, NOT the PyO3 route): pure-Python package python/rcfd (standard library, numpy optional) driving the rcfd command line: Case.load/from_text/from_dict, set/get/update with immediate validation by the Rust schema (SettingsError with the same located paths as the CLI), settings, check, run -> RunResult (exit code, state, reports, monitors, fields read from solution.vtu), study helper (List/Linspace/Logspace), schema(). Measured (checks registered first): 10-setting round trip and resolved settings equal to `rcfd run --set --print-settings`; Python run and CLI run byte-identical (monitors.csv, monitors.json, solution.vtu) with reports equal to the last CSV row; study tables byte-identical to the CLI; no environment marker in any output; clean import under `python -I`; harness test runs the 9 Python tests from cargo test (prints SKIPPED without Python). Not done, and the acceptance text is NOT met: an in-process PyO3 extension crate, a pip-installable wheel, numpy arrays without a VTU round trip, a cavity reproduction through the extension. PyO3 was not built: the workspace forbids unsafe code (PyO3 macros expand to it), pyo3 is not in the offline cargo cache and the only Python is a Microsoft Store 3.9 (docs/python.md). Also not done: access through the JSON-RPC service, typed classes per settings section."
   },
   {
     "id": "F-084",
@@ -690,9 +691,9 @@
       "F-109",
       "F-104"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Sweep of 5 inlet velocities runs in parallel and returns a table; resumable",
-    "note": "Result-table columns come from report definitions (F-109); sweep parameters can be named expressions (F-104). SCOPE (merged review): add operating-point maps with the laminar Poiseuille pressure-drop curve as the verification case (within 1 percent)."
+    "note": "Result-table columns come from report definitions (F-109); sweep parameters can be named expressions (F-104). SCOPE (merged review): add operating-point maps with the laminar Poiseuille pressure-drop curve as the verification case (within 1 percent). WAVE 20C (ADR 0034, partial): `study` settings section and `rcfd study` command (docs/studies.md): list, linspace, logspace sweeps, grid or zip, strings and JSON-valued (vector) parameters, each design point = base case + --set style overrides, sequential or `--parallel n` scoped threads, result table of chosen reports as table.csv and table.json (no wall-clock or thread data, byte-identical for 1 and 3 threads), failure isolation (failed row, other points run, study exit code = lowest-index failed point per docs/run-control.md, 3 for static sweep errors with located study.* paths), `--resume` (skips ok rows with equal fingerprint, result byte-identical to a fresh run), `--max-new-points`, `--list`. Measured (checks registered first): 18-point slab-conduction grid reproduces the closed form to 3.3e-10 relative (limit 1e-6) after a corrected-depth set-up (the registered unit-depth formula is an ignored known miss: box_2d depth is lx/nx); byte-identical tables for 1 vs 3 threads; resume runs 11 and skips 7 as registered. MISS, reported not tuned: S7 laminar plane-Poiseuille operating-point map (5 inlet velocities) is 1.86 to 1.91 percent below 12 rho nu U L/h^2 at 10 cells across the gap against the registered 1 percent (ignored known-miss test); 0.29 percent at 20 cells, so the cause looks like the first-order wall treatment, not the study runner. Not done: assistant/MCP/service exposure of studies (the acceptance text asks for it), named-expression sweep parameters (F-104), studies of chained runs, adaptive or optimising exploration, resuming a half-finished point, distributed runner. Python helper `rcfd.study` in python/rcfd (F-083)."
   },
   {
     "id": "F-096",

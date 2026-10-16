@@ -161,6 +161,12 @@ Task kinds: `check_mesh`, `validate`, `set {path, value}`, `initialize`, `solve 
 exits with the code of the failing task: 4 (mesh check), 3 (validation), the run code of a failing solve
 (5 when it stopped at the step cap), 1 otherwise.
 
+## Parametric studies
+
+`rcfd study <case>` runs the design points of the `study` section, each as an `rcfd run` of the base case with settings overrides, and
+exits with the code of the lowest-index failed point (the per-run codes above) or 3 for an invalid sweep. See `docs/studies.md`.
+The Python package (`docs/python.md`) drives `run`, `check` and `study`.
+
 ## Not implemented / deviations
 
 - No control-port socket as such: remote control of a running job is the service (`rcfd serve`,
