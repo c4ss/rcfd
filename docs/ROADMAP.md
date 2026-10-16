@@ -329,10 +329,10 @@ Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F
 - [ ] **F-100** Distributed-memory parallelism via MPI (halo exchange, parallel linear solvers)
   - depends on: F-016, F-027
   - acceptance: Strong scaling at least 70 percent efficiency to 16 ranks on 4M cells
-- [ ] **F-101** GPU acceleration (wgpu/CUDA) for linear solves and flux assembly
+- [~] **F-101** GPU acceleration (wgpu/CUDA) for linear solves and flux assembly
   - depends on: F-027
   - acceptance: At least 3x speedup on 5M-cell Poisson solve vs single-thread CPU
-  - note: SCOPE (merged review): define the initial GPU scope as flow, energy, free-surface, species, one- and two-equation turbulence and radiation.
+  - note: SCOPE (merged review): define the initial GPU scope as flow, energy, free-surface, species, one- and two-equation turbulence and radiation. WAVE 22 (ADR 0038, docs/gpu.md): PARTIAL. Delivered: CUDA backend (rcfd-gpu, cargo feature cuda, off by default) with f64 NVRTC kernels, CG and BiCGStab on the device, Jacobi and Chebyshev preconditioning, linear_solver.device = cpu|cuda|auto for the segregated pressure solve, runtime discovery with CPU fallback. Measured on one machine (RTX 5080, 16 CPU threads), 3-D Poisson CG-Jacobi tol 1e-6, median of 5 after warm-up: the registered acceptance holds at 5.0M unknowns, GPU one-shot including matrix upload and download 0.201 s vs 1.945 s single-thread CPU (9.7x; 15x in a second run), resident-matrix 31x; vs 16 CPU threads 6.1x. The GPU is SLOWER than one CPU thread at 4096 unknowns (0.22x), about equal at 32768 (1.15x), 5.0x at 262144, 5.5x at 1M. Not delivered, so the item stays partial: flux assembly on the device (the matrix is assembled on the CPU and uploaded per solve), multi-GPU, AMG/ILU/GMRES on the device, other vendors (wgpu/ROCm/oneAPI), coupled/compressible/variable-density cases, and the scope list above (energy, free surface, species, turbulence, radiation) was not ported to the device; only the pressure Poisson solve of the segregated algorithms is.
 - [ ] **F-102** Adaptive mesh refinement/adaption criteria and polyhedral conversion
   - depends on: F-010, F-028
   - acceptance: Adapted cavity matches fine uniform solution with fewer cells

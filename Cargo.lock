@@ -2431,6 +2431,7 @@ name = "rcfd-gpu"
 version = "0.1.0"
 dependencies = [
  "cudarc",
+ "rayon",
  "rcfd-linalg",
 ]
 

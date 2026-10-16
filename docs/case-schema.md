@@ -1188,3 +1188,17 @@ equations are still solved there, and the energy, radiation and species models a
 `regions.<n>.turbulence` (unknown value, no turbulence model configured, Reynolds stress or plugin model, rheology or a
 temperature-dependent viscosity), `regions.<n>.zone` (no cells), `regions.<n>.cell_zone`, `regions.<n>.register`.
 Without any `regions` entry nothing changes (recorded baseline hashes are bit-identical).
+
+## Wave 22: `linear_solver` (F-101, ADR 0038)
+
+`linear_solver` selects where the segregated pressure solve (`simple`, `piso`, `pimple`) runs. See `docs/gpu.md`.
+
+| Key | Value | Meaning |
+| --- | --- | --- |
+| `linear_solver.device` | `cpu` (default), `cuda`, `auto` | `cpu`: unchanged CPU path (bit-identical to a case without the section). `cuda`: preconditioned CG on an NVIDIA device; a missing device or toolkit is a located error. `auto`: the device for 100000 unknowns or more when one is usable, otherwise the CPU path (the reason is recorded) |
+| `linear_solver.preconditioner` | `jacobi` (default), `chebyshev` | preconditioner of the device CG (the CPU path keeps its own preconditioners) |
+| `linear_solver.chebyshev_degree` | int, 4 (0..32) | number of Chebyshev terms; only with `preconditioner = "chebyshev"` |
+
+Unset keys keep their default. Errors are located at the key (`linear_solver.device`, `linear_solver.chebyshev_degree`). `device = cuda` or
+`auto` with `solver.algorithm = coupled`, a compressible/energy setting or a non-constant density is a semantic error at
+`linear_solver.device`. A build without the cargo feature `cuda` reports `device = cuda` at `linear_solver.device`; `auto` falls back to the CPU.
