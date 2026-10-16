@@ -282,9 +282,10 @@ fn b_pressure_pressure_duct_with_darcy_bed_matches_closed_form() {
     assert!(em <= 1e-12, "{em}");
 }
 
-/// D (registered): jump only, `p_in = p_out = 0`, initial flow 1 m/s: the flow decays. KNOWN MISS: diverges at molecular viscosity.
+/// D (registered): jump only, `p_in = p_out = 0`, initial flow 1 m/s: the flow decays. KNOWN MISS: diverged at molecular viscosity
+/// before the inflow lag; with it the flow decays but too slowly for the registered 1500 iterations.
 #[test]
-#[ignore = "KNOWN MISS: pressure-pressure duct with a localised jump diverges in SIMPLEC (inlet-cell diagonal, ADR 0042)"]
+#[ignore = "KNOWN MISS (registered limit D): jump-only pressure-pressure duct; diverged before the F2 inflow lag, after it decays but max|ux| is 4.96e-6 after 1500 iterations against 1e-6 (ADR 0042)"]
 fn d_jump_only_decay_known_miss() {
     let mut sim = sim_of(&pp_text(&p_in("0.0"), JUMP, 1.0, "1.5e-5"));
     let h = max_ux_history(&mut sim, 1500);
@@ -292,9 +293,11 @@ fn d_jump_only_decay_known_miss() {
     assert!(h[1499].is_finite() && h[1499] <= 1e-6, "{}", h[1499]);
 }
 
-/// Diagnostic of the mechanism: the first-iteration velocity of a lossless pressure-pressure duct scales as 1/nu (the inlet cell
-/// has only the viscous diagonal), and it sits in the inlet cell.
+/// Diagnostic of the mechanism (pre-fix behaviour, measured at commit 8989cdd): the first-iteration velocity of a lossless
+/// pressure-pressure duct scales as 1/nu (the inlet cell has only the viscous diagonal), and it sits in the inlet cell. With the
+/// inflow lag of ADR 0042 (F2) this no longer holds; see `b1f_`.
 #[test]
+#[ignore = "pre-fix mechanism record (ADR 0042, 8989cdd): fails once the inlet-cell inflow term is lagged (F2); see b1f_"]
 fn b1_first_iteration_velocity_is_inversely_proportional_to_viscosity() {
     let first = |nu: &str| {
         let mut sim = sim_of(&pp_text(&p_in("100.0"), "", 1.0, nu));
@@ -320,9 +323,10 @@ fn b1_first_iteration_velocity_is_inversely_proportional_to_viscosity() {
     );
 }
 
-/// Diagnostic of the mechanism (cause test): the jump-only pressure-pressure duct diverges, and a Darcy sink restricted to the
+/// Diagnostic of the mechanism (cause test, pre-fix behaviour, measured at commit 8989cdd): the jump-only pressure-pressure duct diverges, and a Darcy sink restricted to the
 /// inlet cell column (nothing else changed) makes it converge, so the missing diagonal of the inlet cell is what is wrong.
 #[test]
+#[ignore = "pre-fix mechanism record (ADR 0042, 8989cdd): the jump-only duct no longer diverges once the inflow term is lagged (F2); see b2f_"]
 fn b2_sink_in_the_inlet_cell_column_removes_the_divergence() {
     let mut bad = sim_of(&pp_text(&p_in("100.0"), JUMP, 1.0, "1.5e-5"));
     let hb = max_ux_history(&mut bad, 60);
@@ -342,6 +346,35 @@ fn b2_sink_in_the_inlet_cell_column_removes_the_divergence() {
         hg[399].is_finite() && (hg[399] - hg[199]).abs() <= 1e-6 * hg[399],
         "{hg:?}"
     );
+}
+
+/// Post-fix counterpart of b1: with the lagged inflow term the first-iteration velocity of the lossless pressure-pressure duct
+/// no longer grows as 1/nu (measured 30.0 and 25.5 m/s for nu 1.5e-5 and 1.5e-3, ratio 1.2; before: 1.3e6 and 1.2e4).
+#[test]
+fn b1f_first_iteration_velocity_is_bounded_independently_of_viscosity() {
+    let first = |nu: &str| {
+        let mut sim = sim_of(&pp_text(&p_in("100.0"), "", 1.0, nu));
+        sim.step();
+        sim.field("ux").unwrap().iter().map(|v| v.abs()).fold(0.0, f64::max)
+    };
+    let (u1, u3) = (first("1.5e-5"), first("1.5e-3"));
+    eprintln!("B1f: first-iteration max|ux| {u1:.3e} and {u3:.3e}");
+    assert!(u1 < 100.0 && u3 < 100.0 && (0.5..2.0).contains(&(u1 / u3)), "{u1} {u3}");
+}
+
+/// Post-fix counterpart of b2: the jump-only pressure-pressure duct (`p_in = 100` kinematic = 120 Pa, no sink anywhere) is
+/// finite and reaches the closed-form velocity: `dp = mu/alpha v t + rho c2 v^2 t / 2` gives `12 v^2 + 36 v - 120 = 0`,
+/// `v = 2` m/s exactly. Limit 1e-3 relative (set after a first run gave 7.8e-5 at 1200 iterations; the tail is still decaying).
+#[test]
+fn b2f_jump_only_pressure_pressure_duct_reaches_the_closed_form_velocity() {
+    let mut sim = sim_of(&pp_text(&p_in("100.0"), JUMP, 1.0, "1.5e-5"));
+    let h = max_ux_history(&mut sim, 1200);
+    let e = (h[1199] / 2.0 - 1.0).abs();
+    eprintln!(
+        "B2f: jump only, max|ux| at 600/1200 iterations {:.6} {:.6} (closed form 2, rel {e:.2e})",
+        h[599], h[1199]
+    );
+    assert!(h[1199].is_finite() && e <= 1e-3, "{} {}", h[599], h[1199]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -402,12 +435,8 @@ relax = 0.02
     )
 }
 
-/// Z3 of ADR 0012 with `component_diagonal = "corrected"` (the set-up is otherwise the registered one): the patch pressure
-/// agrees with `R(Q)` to the registered 1e-4 and the flow with the operating point to 5e-3; the registered default keeps its
-/// ignored miss (`lumped.rs::z3_network_pressure_known_miss`).
-#[test]
-fn z3_with_corrected_component_diagonal_meets_the_registered_limits() {
-    let mut sim = sim_of(&z3_text(CORRECTED));
+fn z3_check(tag: &str, extra_solver: &str) {
+    let mut sim = sim_of(&z3_text(extra_solver));
     for _ in 0..6000 {
         sim.step();
     }
@@ -418,7 +447,92 @@ fn z3_with_corrected_component_diagonal_meets_the_registered_limits() {
     let fan = rcfd_fv::lumped::FanCurve::new(vec![0.0, 0.03, 0.06], vec![200.0, 140.0, 0.0]).unwrap();
     let q_op = rcfd_fv::lumped::bisect(|q| fan.eval(q) - network_pressure(0.0, 1000.0, 40000.0, q), 0.0, 0.06);
     let (eq, ep) = ((q / q_op - 1.0).abs(), (p_patch / r - 1.0).abs());
-    eprintln!("Z3 corrected: Q {q:.6e} vs {q_op:.6e} (rel {eq:.2e}, limit 5e-3); patch pressure {p_patch:.5} vs R(Q) {r:.5} (rel {ep:.2e}, limit 1e-4)");
+    eprintln!("{tag}: Q {q:.6e} vs {q_op:.6e} (rel {eq:.2e}, limit 5e-3); patch pressure {p_patch:.5} vs R(Q) {r:.5} (rel {ep:.2e}, limit 1e-4)");
     assert!(eq < 5e-3, "{eq}");
     assert!(ep < 1e-4, "{ep}");
+}
+
+/// Z3 of ADR 0012 with `component_diagonal = "corrected"` (the set-up is otherwise the registered one): the patch pressure
+/// agrees with `R(Q)` to the registered 1e-4 and the flow with the operating point to 5e-3.
+#[test]
+fn z3_with_corrected_component_diagonal_meets_the_registered_limits() {
+    z3_check("Z3 corrected", CORRECTED);
+}
+
+/// Z3 of ADR 0012 exactly as registered (default settings). Met since the inflow lag of ADR 0042 (before it: patch pressure
+/// +0.085 % against R(Q), a persistent two-cycle in the inlet cell; the old ignored test `lumped.rs::z3_network_pressure_known_miss`
+/// keeps its assertion and is not edited).
+#[test]
+fn z3_default_settings_meet_the_registered_limits_with_the_inflow_lag() {
+    z3_check("Z3 default", "");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// X4 of ADR 0039 as registered (fan boundary and porous jump in a lossless pressure-pressure duct, no bed)
+
+/// The registered limits of `heat_exchanger.rs::x4_run` (5e-3 on Q, 2e-3 on the patch pressure) on the registered set-up, without
+/// the stationarity helper of that test (which compares ux 300 iterations apart at 1e-8 and gives 4.06e-8 at 8000 iterations: the
+/// old test `x4_registered_lossless_setup_known_miss` stays ignored and unedited).
+#[test]
+fn x4_registered_setup_reaches_the_operating_point_with_the_inflow_lag() {
+    use rcfd_fv::lumped::{bisect, porous_jump_dp, FanCurve};
+    let (rho, mu, ly, depth) = (1.2, 1.8e-5, 1.0, 0.02);
+    let area = ly * depth;
+    let (fq, fp) = ([0.0, 0.03, 0.06], [200.0, 140.0, 0.0]);
+    let fan = FanCurve::new(fq.to_vec(), fp.to_vec()).unwrap();
+    let (alpha, c2, thick) = (1e-8, 1000.0, 0.02);
+    let q_op = bisect(
+        |q| fan.eval(q) - porous_jump_dp(mu, rho, alpha, c2, thick, q / area),
+        0.0,
+        0.06,
+    );
+    let comps = format!(
+        "[components.fan]
+type = \"fan_boundary\"
+patch = \"xmin\"
+curve_flow = {fq:?}
+curve_pressure = {fp:?}
+reference_pressure = 0.0
+relax = 0.02
+[components.jump]
+type = \"porous_jump\"
+zone = \"box\"
+box_min = [1.2, -1.0, -1.0]
+box_max = [1.3, 2.0, 1.0]
+direction = [1.0, 0.0, 0.0]
+thickness = {thick}
+permeability = {alpha}
+inertial_resistance = {c2}
+"
+    );
+    let inlet = "[boundaries.xmin]
+velocity = \"zero_gradient\"
+pressure = \"fixed\"
+";
+    let text = pp_text(inlet, &comps, 2.0, &format!("{}", mu / rho)).replace(
+        "[initial]
+velocity = [2.0, 0.0, 0.0]",
+        "[initial]
+velocity = [2.0, 0.0, 0.0]
+temperature = 300.0",
+    );
+    let text = text.replace(
+        "rho = 1.2
+[initial]",
+        "rho = 1.2
+cp = 1005.0
+conductivity = 1e-6
+[initial]",
+    );
+    let mut sim = sim_of(&text);
+    for _ in 0..8000 {
+        sim.step();
+    }
+    assert!(sim.failure().is_none(), "{:?}", sim.failure());
+    let q = -outlet_flux(&sim, "xmin");
+    let dp = sim.monitors.last("fan_dp").unwrap();
+    let (eq, ec) = ((q / q_op - 1.0).abs(), (dp / fan.eval(q) - 1.0).abs());
+    eprintln!("X4 (registered, lag): Q {q:.6e} vs {q_op:.6e} (rel {eq:.2e}, limit 5e-3); patch pressure {dp:.4} vs curve {:.4} (rel {ec:.2e}, limit 2e-3)", fan.eval(q));
+    assert!(q > 0.0 && eq <= 5e-3, "Q {q} vs {q_op}");
+    assert!(ec <= 2e-3, "patch pressure {dp} vs curve {}", fan.eval(q));
 }

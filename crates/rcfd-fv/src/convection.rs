@@ -242,6 +242,31 @@ pub fn convection(
     m
 }
 
+/// Lag the inflow through boundary faces that are linked implicitly to their owner cell (ADR 0042).
+///
+/// [`convection`] puts the boundary term `phi_b a_b` of such a face on the owner diagonal. For inflow (`phi_b < 0`) through a
+/// zero-gradient face (`a_b = 1`; a fixed-pressure inlet whose velocity is extrapolated, or backflow at an outlet) it cancels
+/// the outflow terms exactly (`div phi = 0`), so the diagonal of that cell is only viscous (1/1300 of its neighbours' in the
+/// measured duct) and the segregated momentum predictor of the cell is driven by the pressure force alone. This moves the
+/// inflow term to the right-hand side with the owner value of the previous iterate. The converged solution is unchanged;
+/// faces with `a_b = 0` (prescribed value), outflow and periodic faces are not touched.
+pub fn lag_boundary_inflow(geom: &FvGeometry, flux: &[f64], cells: &[f64], bc: &[FaceCoeffs], m: &mut FvMatrix) {
+    let mesh = &geom.mesh;
+    let own = mesh.owner();
+    for f in geom.n_internal..mesh.n_faces() {
+        if geom.empty[f] || geom.coupled_face[f - geom.n_internal] || flux[f] >= 0.0 {
+            continue;
+        }
+        let co = &bc[f - geom.n_internal];
+        if co.a == 0.0 {
+            continue;
+        }
+        let c = own[f];
+        m.a.diag[c] -= flux[f] * co.a;
+        m.b[c] -= flux[f] * co.a * cells[c];
+    }
+}
+
 /// Volumetric flux `u_f . S_f` with linear interpolation of the cell
 /// velocities and prescribed boundary velocities (empty faces carry no flux).
 pub fn face_flux(geom: &FvGeometry, u: &[Vec3], boundary_u: &[Vec3]) -> Vec<f64> {
