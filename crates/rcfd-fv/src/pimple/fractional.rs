@@ -195,6 +195,7 @@ impl PimpleSolver {
             non_orth_correctors: s.non_orth_correctors,
             solver: s.pressure_solver,
             amg: s.amg_pressure,
+            linear: s.linear,
         };
         let mut q = if fs.incremental {
             vec![0.0; n]

@@ -2365,6 +2365,7 @@ version = "0.1.0"
 dependencies = [
  "rcfd-core",
  "rcfd-fv",
+ "rcfd-gpu",
  "rcfd-io",
  "rcfd-linalg",
  "rcfd-mesh",
@@ -2420,6 +2421,7 @@ version = "0.1.0"
 dependencies = [
  "rayon",
  "rcfd-core",
+ "rcfd-gpu",
  "rcfd-linalg",
  "rcfd-mesh",
 ]

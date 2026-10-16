@@ -9,8 +9,14 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Device linear solvers (CUDA); off by default (ADR 0038).
+cuda = ["rcfd-gpu/cuda"]
+
 [dependencies]
 rcfd-core.workspace = true
 rcfd-mesh.workspace = true
 rcfd-linalg.workspace = true
+rcfd-gpu.workspace = true
 rayon.workspace = true

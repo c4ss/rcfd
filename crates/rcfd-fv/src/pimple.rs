@@ -29,7 +29,7 @@ use crate::pressure::{
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_linalg::SolveControl;
+use rcfd_linalg::{LinearOptions, SolveControl};
 use std::sync::Arc;
 
 pub mod fractional;
@@ -64,6 +64,8 @@ pub struct PimpleSettings {
     pub momentum_solver: SolveControl,
     /// Linear solver controls for pressure.
     pub pressure_solver: SolveControl,
+    /// Linear-solver device of the pressure equation (ADR 0038); default CPU.
+    pub linear: LinearOptions,
     /// Add the transposed part `div(nu_eff (grad u)^T)` of the viscous stress divergence as an explicit
     /// (deferred-correction) source (ADR 0032). Default `false`: Laplacian form only.
     pub full_viscous_stress: bool,
@@ -96,6 +98,7 @@ impl PimpleSettings {
                 tol_rel: 1e-7,
                 max_iter: 3000,
             },
+            linear: LinearOptions::default(),
             full_viscous_stress: false,
             fractional: None,
         }
@@ -439,6 +442,7 @@ impl PimpleSolver {
                     non_orth_correctors: s.non_orth_correctors,
                     solver: s.pressure_solver,
                     amg: s.amg_pressure,
+                    linear: s.linear,
                 };
                 let p_old = self.p.values.clone();
                 let mut p_new = p_old.clone();

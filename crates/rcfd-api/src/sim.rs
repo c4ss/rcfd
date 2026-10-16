@@ -1140,6 +1140,7 @@ impl Simulation {
                 if pi > 0 {
                     $s.pressure_solver.max_iter = pi as usize;
                 }
+                $s.linear = crate::linsolver::options(case);
             }};
         }
         let mut base_body: Option<BodyForce> = None;

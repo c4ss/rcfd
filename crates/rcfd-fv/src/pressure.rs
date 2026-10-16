@@ -11,7 +11,9 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::least_squares;
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_linalg::{cg, Amg, AmgSettings, CsrMatrix, LduMatrix, SolveControl};
+use rcfd_linalg::{
+    cg, Amg, AmgSettings, CsrMatrix, LduMatrix, LinearBackend, LinearDevice, LinearOptions, SolveControl, SolveStats,
+};
 
 /// Pressure boundary coefficients with the velocity-boundary logic applied.
 #[derive(Debug, Clone)]
@@ -158,6 +160,43 @@ pub struct PressureControls {
     pub solver: SolveControl,
     /// Precondition the pressure CG with algebraic multigrid instead of incomplete Cholesky.
     pub amg: bool,
+    /// Linear-solver device (ADR 0038). `device = cpu` (the default) leaves the CPU path untouched.
+    pub linear: LinearOptions,
+}
+
+/// Solve the pressure system on the device chosen by `linear` when that is not the CPU. `None` means the caller must
+/// use the unchanged CPU path (device `cpu`, or `auto` that resolved to the CPU). An explicitly requested device that
+/// fails is fatal (a `cuda` request is never silently downgraded); under `auto` a failing device solve falls back.
+fn device_solve(
+    a: &CsrMatrix,
+    b: &[f64],
+    x: &mut [f64],
+    ctl: &SolveControl,
+    linear: &LinearOptions,
+    symmetric: bool,
+) -> Option<SolveStats> {
+    if linear.device == LinearDevice::Cpu {
+        return None;
+    }
+    let backend: &dyn LinearBackend = match rcfd_gpu::resolve(linear.device, a.n) {
+        Ok(r) => r.backend?,
+        Err(e) => panic!("{e}"),
+    };
+    let x0 = x.to_vec();
+    let res = if symmetric {
+        backend.cg(a, b, x, ctl, linear)
+    } else {
+        backend.bicgstab(a, b, x, ctl, linear)
+    };
+    match res {
+        Ok(s) => Some(s),
+        Err(e) if linear.device == LinearDevice::Auto => {
+            rcfd_gpu::note_fallback(&e.message);
+            x.copy_from_slice(&x0);
+            None
+        }
+        Err(e) => panic!("linear_solver.device = \"cuda\": the device solve failed: {e}"),
+    }
 }
 
 /// Net outward flux of each cell for a face flux field.
@@ -270,18 +309,34 @@ pub fn solve_pressure_parts(
             }
         }
         if extras.is_empty() {
-            iters += if ctl.amg {
-                pm.solve_amg(p, &ctl.solver)
+            let dev = if ctl.linear.device == LinearDevice::Cpu {
+                None
             } else {
-                pm.solve(p, &ctl.solver)
+                device_solve(&pm.a.to_csr(), &pm.b, p, &ctl.solver, &ctl.linear, pm.a.is_symmetric())
+            };
+            iters += match dev {
+                Some(s) => s,
+                None if ctl.amg => pm.solve_amg(p, &ctl.solver),
+                None => pm.solve(p, &ctl.solver),
             }
             .iterations;
         } else {
             let mut t = ldu_triplets(&pm.a);
             t.extend(extras);
             let csr = CsrMatrix::from_triplets(p.len(), t);
-            let amg = Amg::new(&csr, AmgSettings::default());
-            iters += cg(&csr, &pm.b, p, &amg, &ctl.solver).iterations;
+            let dev = if ctl.linear.device == LinearDevice::Cpu {
+                None
+            } else {
+                device_solve(&csr, &pm.b, p, &ctl.solver, &ctl.linear, true)
+            };
+            iters += match dev {
+                Some(s) => s,
+                None => {
+                    let amg = Amg::new(&csr, AmgSettings::default());
+                    cg(&csr, &pm.b, p, &amg, &ctl.solver)
+                }
+            }
+            .iterations;
         }
     }
     (res0, iters, parts)
