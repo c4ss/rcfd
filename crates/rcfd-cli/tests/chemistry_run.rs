@@ -380,3 +380,133 @@ fn c5_service_headless_writes_the_same_report() {
     );
     assert_eq!(svc_report, cli_report);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Wave 25B (ADR 0044 D4): independent evidence for the chemistry output arrays. C4 above compares the output with `cell_rates`
+// (the same code); the tests below use no reactor, mechanism or `cell_rates` routine: closed forms and a hand-written integrator.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// Closed isothermal box, `A => B`, `k = 5 1/s` (Ea = 0), fixed temperature, uniform fields; `write_rates = true`.
+fn iso_text(dt: f64, end: f64) -> String {
+    let (m, t) = toy::isomer_texts(K_RATE, 0.0, 0.0, false);
+    let chem = chem_block(
+        &m,
+        &t,
+        "model = \"finite_rate\"\ndensity = 1.5\ntemperature = 1000.0\nwrite_rates = true",
+    );
+    format!(
+        r#"
+[mesh]
+generator = "box_2d"
+nx = 4
+ny = 4
+lx = 1.0
+ly = 1.0
+[physics]
+nu = 0.01
+rho = 1.5
+cp = 1000.0
+conductivity = 1.0
+[initial]
+temperature = 1000.0
+[boundaries.xmin]
+velocity = "fixed"
+[boundaries.xmax]
+velocity = "fixed"
+[boundaries.ymin]
+velocity = "fixed"
+[boundaries.ymax]
+velocity = "fixed"
+[solver]
+algorithm = "piso"
+dt = {dt}
+end_time = {end}
+[species.A]
+diffusivity = 1e-5
+initial = 1.0
+[species.B]
+diffusivity = 1e-5
+initial = 0.0
+remainder = true
+{chem}
+"#
+    )
+}
+
+#[test]
+fn c4b_isothermal_first_order_closed_form_and_rate_arrays() {
+    let (dt, end) = (1.0e-3, 0.4);
+    let d = tmp("c4b");
+    cli(&iso_text(dt, end), &d);
+    let out = d.join("out");
+    let ya = vtu_array(&out, "A").unwrap();
+    let yb = vtu_array(&out, "B").unwrap();
+    let wa = vtu_array(&out, "wdot_A").unwrap();
+    let wb = vtu_array(&out, "wdot_B").unwrap();
+    let expect = (-K_RATE * end).exp();
+    let (rho, w_mol) = (1.5, 0.020);
+    let (mut e_y, mut e_wa, mut e_wb, mut e_sum) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+    for c in 0..ya.len() {
+        e_y = e_y.max((ya[c] - expect).abs());
+        let want = -K_RATE * rho * ya[c] / w_mol;
+        e_wa = e_wa.max((wa[c] - want).abs() / want.abs());
+        e_wb = e_wb.max((wb[c] + wa[c]).abs() / wa[c].abs());
+        e_sum = e_sum.max((ya[c] + yb[c] - 1.0).abs());
+    }
+    println!(
+        "C4b isothermal: Y_A {:.8} vs exp(-k t) {expect:.8} (max abs {e_y:.2e}, limit 1e-5); wdot_A vs -k rho Y_A/W {e_wa:.2e} (limit 1e-9); wdot_B + wdot_A {e_wb:.2e} (limit 1e-12); |sum Y - 1| {e_sum:.2e} (limit 1e-12)",
+        ya[0]
+    );
+    assert!(e_y <= 1e-5 && e_wa <= 1e-9 && e_wb <= 1e-12 && e_sum <= 1e-12);
+}
+
+/// RK4 of the adiabatic isomerisation box in the test's own code: `Y' = -k(T) Y`, `T' = dT_ad k(T) Y`, `k = A exp(-Ea 4.184/(R T))`.
+fn hand_box(a_pre: f64, ea_cal: f64, dt_ad: f64, t0: f64, end: f64, steps: usize) -> (f64, f64) {
+    let k = |t: f64| a_pre * (-ea_cal * 4.184 / (8.314462618 * t)).exp();
+    let f = |t: f64, y: f64| (dt_ad * k(t) * y, -k(t) * y);
+    let (mut t, mut y) = (t0, 1.0);
+    let h = end / steps as f64;
+    for _ in 0..steps {
+        let (a1, b1) = f(t, y);
+        let (a2, b2) = f(t + 0.5 * h * a1, y + 0.5 * h * b1);
+        let (a3, b3) = f(t + 0.5 * h * a2, y + 0.5 * h * b2);
+        let (a4, b4) = f(t + h * a3, y + h * b3);
+        t += h / 6.0 * (a1 + 2.0 * a2 + 2.0 * a3 + a4);
+        y += h / 6.0 * (b1 + 2.0 * b2 + 2.0 * b3 + b4);
+    }
+    (t, y)
+}
+
+#[test]
+fn c4c_adiabatic_arrhenius_box_against_hand_integration() {
+    // The K2b end time (2e-3 s) is far past the thermal runaway at about 1.2e-4 s (Y_A underflows, every rate is zero), which makes the
+    // final-state rates a degenerate comparison; the run stops at 1.1e-4 s, where Y_A is about 0.54 and T about 1729 K.
+    let end = 1.1e-4;
+    let d = tmp("c4c");
+    cli(&k2b_text(true).replace("end_time = 2e-3", "end_time = 1.1e-4"), &d);
+    let out = d.join("out");
+    let (a_pre, ea_cal, dt_ad) = (1.0e8, 19872.0, 2000.0);
+    let (t_hand, y_hand) = hand_box(a_pre, ea_cal, dt_ad, 800.0, end, 20000);
+    let tv = vtu_array(&out, "T").unwrap();
+    let ya = vtu_array(&out, "A").unwrap();
+    let wa = vtu_array(&out, "wdot_A").unwrap();
+    let wb = vtu_array(&out, "wdot_B").unwrap();
+    let hr = vtu_array(&out, "heat_release_rate").unwrap();
+    let (mut e_t, mut e_y, mut e_wa, mut e_wb, mut e_hr) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+    for c in 0..tv.len() {
+        e_t = e_t.max((tv[c] - t_hand).abs() / dt_ad);
+        e_y = e_y.max((ya[c] - y_hand).abs());
+        let k = a_pre * (-ea_cal * 4.184 / (8.314462618 * tv[c])).exp();
+        let want = -k * 1.5 * ya[c] / 0.020;
+        e_wa = e_wa.max((wa[c] - want).abs() / want.abs());
+        e_wb = e_wb.max((wb[c] + want).abs() / want.abs());
+        let heat = k * ya[c] * dt_ad;
+        e_hr = e_hr.max((hr[c] - heat).abs() / heat);
+    }
+    println!(
+        "C4c hand RK4: T_end {t_hand:.6}, Y_A {y_hand:.8}; VTU T[0] {:.6}; |T - T_hand|/dT_ad {e_t:.2e} (limit 1e-5), |Y_A - Y_hand| {e_y:.2e} (limit 1e-5), wdot_A {e_wa:.2e}, wdot_B {e_wb:.2e}, heat_release_rate {e_hr:.2e} (limits 1e-9)",
+        tv[0]
+    );
+    assert!(e_t <= 1e-5 && e_y <= 1e-5);
+    assert!(e_wa <= 1e-9 && e_wb <= 1e-9 && e_hr <= 1e-9);
+}
