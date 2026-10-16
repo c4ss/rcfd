@@ -58,16 +58,14 @@ fn column_pressure(sim: &Simulation, x_target: f64) -> f64 {
 }
 
 fn a4_run(walls: &str) -> (f64, f64, f64) {
-    let src = &format!(
-        "[sources.disk]
+    let src = "[sources.disk]
 type = \"actuator_disk\"
 zone = \"box\"
 box_min = [0.9, -1.0, -1.0]
 box_max = [1.1, 1.0, 1.0]
 thrust = 0.6
 direction = [1.0, 0.0, 0.0]
-"
-    );
+";
     let case = Case::parse_toml(&duct_with(src, walls)).unwrap_or_else(|e| panic!("{e:?}"));
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
     for _ in 0..1700 {

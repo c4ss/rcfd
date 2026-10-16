@@ -104,7 +104,7 @@ fn r2_mask_faces_semantics_are_exact() {
         let touches = cells[o] || (f < geom.n_internal && cells[geom.mesh.neighbour()[f]]);
         assert_eq!(nu[f], if touches { 0.25 } else { 5.0 }, "face {f}");
     }
-    assert!(nu.iter().any(|&v| v == 0.25));
+    assert!(nu.contains(&0.25));
     // an empty mask leaves the field untouched
     let mut nu2 = vec![5.0; nf];
     rcfd_api::regions::mask_faces(geom, &vec![false; n], 0.25, &mut nu2);
