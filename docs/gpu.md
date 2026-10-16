@@ -77,13 +77,13 @@ location, context, NVRTC compile, module load): 0.29 s in the benchmark process 
 
 Transfer and per-iteration costs:
 
-| unknowns | nnz | matrix upload [ms] (bytes) | b, x upload [ms] | x download [ms] | device iterations [ms] | GPU CG-Chebyshev(4) resident [s] (its) | per iteration GPU [us] | per iteration CPU 1 thr [us] |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 4096 | 27136 | 7.33 (374788) | 0.04 | 0.05 | 2.98 | 0.0021 (11) | 87.7 | 22.3 |
-| 32768 | 223232 | 1.05 (3072004) | 0.20 | 0.06 | 2.23 | 0.0024 (10) | 89.1 | 174.4 |
-| 262144 | 1810432 | 4.81 (24870916) | 0.67 | 0.20 | 3.17 | 0.0033 (10) | 109.5 | 1899.8 |
-| 1000000 | 6940000 | 71.52 (95280004) | 2.24 | 0.65 | 5.41 | 0.0108 (10) | 257.7 | 8339.2 |
-| 5000211 | 34826031 | 263.64 (477914908) | 9.21 | 2.78 | 48.67 | 0.0680 (11) | 1315.3 | 52558.0 |
+| unknowns | nnz | first matrix upload incl. allocation [ms] (bytes), single cold sample, NOT a median | one-shot minus resident [ms], from the medians (estimate of the matrix upload cost) | b, x upload [ms] | x download [ms] | device iterations [ms] | GPU CG-Chebyshev(4) resident [s] (its) | per iteration GPU [us] | per iteration CPU 1 thr [us] |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 4096 | 27136 | 7.33 (374788) | 0.4 | 0.04 | 0.05 | 2.98 | 0.0021 (11) | 87.7 | 22.3 |
+| 32768 | 223232 | 1.05 (3072004) | 1.3 | 0.20 | 0.06 | 2.23 | 0.0024 (10) | 89.1 | 174.4 |
+| 262144 | 1810432 | 4.81 (24870916) | 7.0 | 0.67 | 0.20 | 3.17 | 0.0033 (10) | 109.5 | 1899.8 |
+| 1000000 | 6940000 | 71.52 (95280004) | 23.6 | 2.24 | 0.65 | 5.41 | 0.0108 (10) | 257.7 | 8339.2 |
+| 5000211 | 34826031 | 263.64 (477914908) | 138.4 | 9.21 | 2.78 | 48.67 | 0.0680 (11) | 1315.3 | 52558.0 |
 
 Reading the table honestly:
 
@@ -92,7 +92,9 @@ Reading the table honestly:
   systems do not pay. This is why `auto` has a 100000-unknown threshold.
 * Against 16 CPU threads the one-shot GPU gain is smaller: 5000211 unknowns 1.2342 s vs 0.2009 s (6.1x), 1000000 unknowns 0.0867 vs 0.0320 (2.7x),
   262144 unknowns 0.0131 vs 0.0111 (1.2x); at 32768 and 4096 unknowns the 16-thread CPU is faster (0.0026 vs 0.0038 s; 0.0007 vs 0.0035 s).
-* The one-shot figure is dominated by the matrix upload for the sizes up to 1M; in the pressure solve of a case the matrix changes
+* The first-upload column is one cold sample taken before the warm-up (it includes first-touch allocation), so it can exceed the one-shot median
+  (4096 and 1M unknowns); use the derived column. One-shot minus resident, from medians, is about 63% of the one-shot time at 262144 unknowns,
+  74% at 1M and 69% at 5M: the matrix upload is the largest part of the one-shot cost. In the pressure solve of a case the matrix changes
   every outer iteration, so the one-shot figure is the relevant one there. The resident figure applies to repeated solves with one matrix.
 * The CPU AMG-CG (1 thread) needs far fewer iterations (6 to 7) but its setup cost is large; the device Jacobi-CG is faster in wall time
   at every size measured (1.18x at 4096 unknowns, 90x at 5000211) including set-up. This compares different algorithms; it is not a statement that Jacobi-CG is the better method.
