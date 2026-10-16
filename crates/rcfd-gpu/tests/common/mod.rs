@@ -121,3 +121,6 @@ pub fn matvec_ref(a: &CsrMatrix, x: &[f64]) -> Vec<f64> {
     a.matvec(x, &mut y);
     y
 }
+
+#[cfg(feature = "cuda")]
+pub mod bench;
