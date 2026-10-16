@@ -315,6 +315,12 @@ fn k1_carman_kozeny_values() {
 }
 
 fn brinkman_error(ny: usize) -> f64 {
+    brinkman_run(ny).0
+}
+
+/// (centre-normalised max error against the analytic profile, centre-normalised max difference to the exact solution of the 1-D
+/// discrete problem, centre-normalised max error of that discrete solution).
+fn brinkman_run(ny: usize) -> (f64, f64, f64) {
     let (nu, g, h) = (0.1, 1.0, 0.5);
     let kappa = 3.6;
     let b = 1e-3;
@@ -356,7 +362,48 @@ fn brinkman_error(ny: usize) -> f64 {
         .fold(0.0, f64::max)
         / uc;
     println!("K2 ny={ny}: centre-normalised max error {err:.4e}");
-    err
+    // exact solution of the 1-D finite-volume problem: -nu (u[j+1] - 2 u[j] + u[j-1])/h^2 + kappa u[j] = g with the wall
+    // value 0 at half a cell from the first and last centres (wall cell: -nu (u[1] - 3 u[0])/h^2), Thomas algorithm
+    let hh = 1.0 / ny as f64;
+    let (mut lo, mut di, mut up, mut rhs) = (vec![0.0; ny], vec![0.0; ny], vec![0.0; ny], vec![g; ny]);
+    for j in 0..ny {
+        let wall = j == 0 || j == ny - 1;
+        di[j] = nu * (if wall { 3.0 } else { 2.0 }) / (hh * hh) + kappa;
+        if j > 0 {
+            lo[j] = -nu / (hh * hh);
+        }
+        if j + 1 < ny {
+            up[j] = -nu / (hh * hh);
+        }
+    }
+    for j in 1..ny {
+        let w = lo[j] / di[j - 1];
+        di[j] -= w * up[j - 1];
+        rhs[j] -= w * rhs[j - 1];
+    }
+    let mut ud = vec![0.0; ny];
+    ud[ny - 1] = rhs[ny - 1] / di[ny - 1];
+    for j in (0..ny - 1).rev() {
+        ud[j] = (rhs[j] - up[j] * ud[j + 1]) / di[j];
+    }
+    let (mut diff, mut derr) = (0.0_f64, 0.0_f64);
+    for (i, v) in solver.u.values.iter().enumerate() {
+        let j = ((cc[i][1] / hh).floor() as usize).min(ny - 1);
+        diff = diff.max((v[0] - ud[j]).abs() / uc);
+        derr = derr.max((ud[j] - exact(cc[i][1])).abs() / uc);
+    }
+    (err, diff, derr)
+}
+
+/// ADR 0043 S6: the converged SIMPLEC Brinkman solution equals the exact solution of the 1-D discrete problem to 1e-9
+/// (centre-normalised), so the K2 error at ny = 20 is the discretisation error of the scheme, not a solver defect.
+#[test]
+fn s6_k2_error_is_the_discretisation_error_of_the_exact_discrete_solution() {
+    for ny in [20usize, 40, 80] {
+        let (err, diff, derr) = brinkman_run(ny);
+        println!("S6 ny={ny}: SIMPLEC error {err:.6e}, difference to the exact discrete solution {diff:.3e}, discrete solution error {derr:.6e}");
+        assert!(diff <= 1e-9, "S6 ny={ny}: difference {diff}");
+    }
 }
 
 /// Registered K2. MISSED narrowly: the ny=20 centre-normalised error is 1.0040e-2 against the limit 1e-2; both orders (1.84,
