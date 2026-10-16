@@ -1876,7 +1876,7 @@ impl Simulation {
                 if let Some(t) = &mut self.turb {
                     // eddy viscosity from the current flux, then the momentum step with it
                     t.change = t.model.update(&s.u, &s.phi);
-                    s.nu_face = Some(t.model.nu_face());
+                    s.nu_face = Some(t.nu_face());
                 }
                 let temp_cells: Option<&[f64]> = self.energy.as_ref().map(|en| en.solver.t.values.as_slice());
                 if let Some(r) = &mut self.rheology {
@@ -2208,7 +2208,7 @@ impl Simulation {
                     // velocity and flux of the old time level, no relaxation
                     t.model.begin_step(dt);
                     t.change = t.model.update(&s.u, &s.phi);
-                    s.nu_face = Some(t.model.nu_face());
+                    s.nu_face = Some(t.nu_face());
                     if let Some(src) = t.model.momentum_source(&s.u) {
                         // stress-transport closure (ADR 0032): the Reynolds stress divergence enters as a body acceleration
                         let b = rcfd_turb::rsm::body_force_from_cells(&self.geom, &src);
