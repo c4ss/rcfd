@@ -989,7 +989,7 @@ Available with `solver.frozen_flow = true` and a ZERO prescribed flux (the melt 
 | `newton_max` | `100` | Newton iteration cap per step; not converging stops the run with a message naming this key |
 
 Field `liquid_fraction` (cells, in [0, 1]). Located errors: `phase_change.solidus`, `.liquidus`, `.latent_heat`, `.momentum_constant`,
-`solver.time_scheme`, `solver.algorithm`, `zone_sources.<n>.kind` (`fixed_value`), and at `phase_change.enabled`: no `frozen_flow`,
+`solver.time_scheme`, `solver.algorithm`, `zone_sources.<n>.kind` (`fixed_value`), `zone_sources.<n>.linear_coefficient` (non-zero), and at `phase_change.enabled`: no `frozen_flow`,
 energy off, non-zero prescribed flux, combined with `solids` or `electric`. Not delivered (F-212 stays partial): melt flow and natural
 convection, the damping in the tree, phase-dependent properties, convected latent term, steady solidification, BDF2.
 

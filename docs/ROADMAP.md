@@ -573,7 +573,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-213** Electric potential and Joule heating, with electric and thermal coupling
   - depends on: F-050, F-051
   - acceptance: Joule heating of a conducting bar reproduces the analytic parabolic temperature profile within 1 percent; potential drop matches Ohm's law
-  - note: Priority P3. Size M. Area: fv. Conducting solids and fluids; voltage and current boundaries. Wave 21A (ADR 0035): electric potential with sigma(T) and Joule heating in the case tree (prescribed flow only); Ohm bar, Joule parabola and sigma(T) bar reproduced at second order (parabola within 1e-3 of peak at N=20 against the 1 percent target). Not delivered: solved-flow coupling, exact power identity on non-orthogonal meshes, magnetic induction, time-accurate coupling.
+  - note: Priority P3. Size M. Area: fv. Conducting solids and fluids; voltage and current boundaries. Wave 21A (ADR 0035): electric potential with sigma(T) and Joule heating in the case tree (prescribed flow only); Ohm bar, Joule parabola and sigma(T) bar reproduced at second order (Joule parabola error 2.5e-3 of the 25 K peak rise at N=20, i.e. 0.25 percent, against the 1 percent target). Not delivered: solved-flow coupling, exact power identity on non-orthogonal meshes, magnetic induction, time-accurate coupling.
 - [ ] **F-214** Magnetohydrodynamic Lorentz-force coupling for liquid conductors
   - depends on: F-213
   - acceptance: Hartmann channel flow matches the analytic Hartmann velocity profile within 2 percent

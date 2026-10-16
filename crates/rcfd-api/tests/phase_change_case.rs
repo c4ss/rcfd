@@ -246,6 +246,21 @@ velocity = \"zero_gradient\""),
             "phase_change.enabled",
         ),
     ];
+    let mut cases = cases;
+    cases.push((
+        text(
+            20,
+            PHASE,
+            "",
+            "[zone_sources.z]
+zone = \"all\"
+target = \"temperature\"
+kind = \"source\"
+value = 1.0
+linear_coefficient = 2.0",
+        ),
+        "zone_sources.z.linear_coefficient",
+    ));
     for (i, (t, path)) in cases.iter().enumerate() {
         let e = errors(t);
         assert!(has(&e, path), "case {i}: expected {path}, got {e:?}");
