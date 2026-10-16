@@ -155,6 +155,98 @@ impl Preconditioner for Ilu0 {
     }
 }
 
+/// Coefficients of the Chebyshev polynomial preconditioner of `D^-1 A` (Saad, "Iterative Methods for Sparse Linear
+/// Systems", Algorithm 12.1, started from a zero iterate). Shared by the host preconditioner and the device
+/// implementation so that both use the very same scalars.
+#[derive(Debug, Clone)]
+pub struct ChebyshevCoeffs {
+    /// Inverse diagonal (a zero diagonal counts as 1).
+    pub dinv: Vec<f64>,
+    /// Centre of the eigenvalue interval of `D^-1 A`.
+    pub theta: f64,
+    /// Number of terms (`degree - 1` matrix products per application).
+    pub degree: usize,
+    /// For step `i + 1`: `(c1, c2)` with `d_{i+1} = c1 d_i + c2 r_{i+1}`.
+    pub steps: Vec<(f64, f64)>,
+}
+
+impl ChebyshevCoeffs {
+    /// Build for a CSR matrix. The interval is `[lmax/30, lmax]` with `lmax` the Gershgorin bound
+    /// `max_i sum_j |a_ij| / |a_ii|`. Returns `None` for an empty matrix or a non-finite bound.
+    pub fn new(a: &CsrMatrix, degree: usize) -> Option<Self> {
+        let degree = degree.max(1);
+        let diag = a.diag();
+        let dinv: Vec<f64> = diag.iter().map(|&d| if d != 0.0 { 1.0 / d } else { 1.0 }).collect();
+        let mut lmax = 0.0f64;
+        for i in 0..a.n {
+            let s: f64 = (a.row_ptr[i]..a.row_ptr[i + 1]).map(|k| a.val[k].abs()).sum();
+            lmax = lmax.max(s * dinv[i].abs());
+        }
+        if !(lmax.is_finite() && lmax > 0.0) {
+            return None;
+        }
+        let lmin = lmax / 30.0;
+        let theta = 0.5 * (lmax + lmin);
+        let delta = 0.5 * (lmax - lmin);
+        let sigma1 = theta / delta;
+        let mut rho = 1.0 / sigma1;
+        let mut steps = Vec::with_capacity(degree.saturating_sub(1));
+        for _ in 1..degree {
+            let rho_new = 1.0 / (2.0 * sigma1 - rho);
+            steps.push((rho_new * rho, 2.0 * rho_new / delta));
+            rho = rho_new;
+        }
+        Some(ChebyshevCoeffs {
+            dinv,
+            theta,
+            degree,
+            steps,
+        })
+    }
+}
+
+/// Chebyshev polynomial preconditioner of the Jacobi-scaled operator (fixed polynomial, so it is a legal
+/// preconditioner for CG on symmetric positive definite matrices). Host twin of the device preconditioner.
+pub struct Chebyshev {
+    a: CsrMatrix,
+    c: ChebyshevCoeffs,
+}
+
+impl Chebyshev {
+    /// Build with `degree` terms (`degree - 1` matrix products per application); `None` if the matrix has no
+    /// usable spectral bound (see [`ChebyshevCoeffs::new`]).
+    pub fn new(a: &CsrMatrix, degree: usize) -> Option<Self> {
+        Some(Chebyshev {
+            c: ChebyshevCoeffs::new(a, degree)?,
+            a: a.clone(),
+        })
+    }
+}
+
+impl Preconditioner for Chebyshev {
+    fn apply(&self, r: &[f64], z: &mut [f64]) {
+        let n = self.a.n;
+        let c = &self.c;
+        let mut rc: Vec<f64> = (0..n).map(|i| c.dinv[i] * r[i]).collect();
+        let mut d: Vec<f64> = rc.iter().map(|v| v / c.theta).collect();
+        let mut t = vec![0.0; n];
+        z.iter_mut().for_each(|v| *v = 0.0);
+        for i in 0..c.degree {
+            for k in 0..n {
+                z[k] += d[k];
+            }
+            if i + 1 < c.degree {
+                self.a.matvec(&d, &mut t);
+                let (c1, c2) = c.steps[i];
+                for k in 0..n {
+                    rc[k] -= c.dinv[k] * t[k];
+                    d[k] = c1 * d[k] + c2 * rc[k];
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,6 +4,7 @@ members = [
     "crates/rcfd-core",
     "crates/rcfd-mesh",
     "crates/rcfd-linalg",
+    "crates/rcfd-gpu",
     "crates/rcfd-fv",
     "crates/rcfd-turb",
     "crates/rcfd-io",
@@ -35,6 +36,7 @@ wasmi = "0.31"
 rcfd-core = { path = "crates/rcfd-core" }
 rcfd-mesh = { path = "crates/rcfd-mesh" }
 rcfd-linalg = { path = "crates/rcfd-linalg" }
+rcfd-gpu = { path = "crates/rcfd-gpu" }
 rcfd-fv = { path = "crates/rcfd-fv" }
 rcfd-turb = { path = "crates/rcfd-turb" }
 rcfd-io = { path = "crates/rcfd-io" }
