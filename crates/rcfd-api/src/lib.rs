@@ -26,6 +26,7 @@ pub mod service;
 pub mod sim;
 pub mod sources;
 pub mod stats;
+pub mod study;
 pub mod turb;
 pub mod udf;
 pub mod vd;
