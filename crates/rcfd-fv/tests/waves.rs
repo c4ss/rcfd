@@ -617,6 +617,8 @@ fn abrupt_and_beach_r(s: &Setup) -> (f64, f64) {
     (r0, r2)
 }
 
+/// WAVE 25B NOTE (ADR 0044 D3): the premise is shown ill-posed by `w8_*` below (the independent discrete frequency-domain solution gives the
+/// same 0.2144; the thin zone's reflection is set by its integrated per-second damping); this record stays ignored with its limit.
 /// Registered W7 (d): the abrupt zone reflects at least half. KNOWN MISS (the premise was wrong, see ADR 0040 addendum).
 #[test]
 #[ignore = "known miss: abrupt relaxation zone R = 0.21 < 0.5 (premise of the registered check)"]
@@ -634,4 +636,326 @@ fn w7e_abrupt_zone_vs_beach() {
     let (r0, r2) = abrupt_and_beach_r(&s);
     println!("w7e abrupt R = {r0:.5}, beach R = {r2:.6}");
     assert!(r0 >= 0.1 && r0 >= 50.0 * r2, "abrupt {r0} beach {r2}");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Wave 25B (ADR 0044 D3): the cause of the W7 (d) miss tested separately. Checks W8-1 to W8-5 as registered before the runs.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// Per-step factors of the tank (the same position rule as `WaveTank::new`): eta at cell centres, u at faces.
+fn tank_weights(cfg: &TankConfig) -> (Vec<f64>, Vec<f64>) {
+    let factor = |x: f64| -> f64 {
+        match cfg.zone {
+            TankZone::None => 1.0,
+            TankZone::Relaxation { x_start, x_end, blend } => blend.weight(zone_chi(x, x_start, x_end)),
+            TankZone::Sponge {
+                x_start,
+                x_end,
+                sigma_max,
+                n,
+            } => (-sponge_rate(zone_chi(x, x_start, x_end), sigma_max, n) * cfg.dt).exp(),
+        }
+    };
+    let n = cfg.n_cells;
+    (
+        (0..n).map(|i| factor((i as f64 + 0.5) * cfg.dx)).collect(),
+        (0..=n).map(|j| factor(j as f64 * cfg.dx)).collect(),
+    )
+}
+
+/// Minimal complex number (the test must not depend on the library).
+#[derive(Clone, Copy)]
+struct Cx(f64, f64);
+impl Cx {
+    fn add(self, o: Cx) -> Cx {
+        Cx(self.0 + o.0, self.1 + o.1)
+    }
+    fn sub(self, o: Cx) -> Cx {
+        Cx(self.0 - o.0, self.1 - o.1)
+    }
+    fn mul(self, o: Cx) -> Cx {
+        Cx(self.0 * o.0 - self.1 * o.1, self.0 * o.1 + self.1 * o.0)
+    }
+    fn scale(self, k: f64) -> Cx {
+        Cx(self.0 * k, self.1 * k)
+    }
+    fn div(self, o: Cx) -> Cx {
+        let d = o.0 * o.0 + o.1 * o.1;
+        Cx((self.0 * o.0 + self.1 * o.1) / d, (self.1 * o.0 - self.0 * o.1) / d)
+    }
+    fn abs(self) -> f64 {
+        self.0.hypot(self.1)
+    }
+}
+
+/// Independent steady-harmonic solution of the SAME discrete scheme (not a time-domain run). One step is
+/// `u* = u - G d(eta)` (interior faces), `eta* = eta - H d(u*)`, `u' = wu u*`, `eta' = we eta*` with `G = g dt/dx`, `H = h dt/dx`.
+/// With the time factor `z^n`, `z = exp(-i omega dt)`: `u*_j (z - wu_j) = -z G (E_j - E_{j-1})` and
+/// `E_i (z - we_i) = -we_i H (u*_{i+1} - u*_i)`. Marching from the wall (`u*_N = 0`, `E_{N-1} = 1`) towards the source gives the standing
+/// field; in the lossless region it is `I q^i + R q^-i` with the discrete dispersion `q + 1/q = 2 - 4 sin^2(omega dt/2)/(c dt/dx)^2`.
+/// Returns `|R/I|`, read from the two cells `i_probe`, `i_probe + 1` (both with lossless stencils).
+fn discrete_reflection(cfg: &TankConfig, i_probe: usize) -> f64 {
+    let (we, wu) = tank_weights(cfg);
+    let n = cfg.n_cells;
+    let omega = 2.0 * PI / cfg.period;
+    let z = Cx((omega * cfg.dt).cos(), -(omega * cfg.dt).sin());
+    let (g_, h_) = (cfg.g * cfg.dt / cfg.dx, cfg.h * cfg.dt / cfg.dx);
+    let cfl2 = g_ * h_;
+    let cos_k = 1.0 - 2.0 * (0.5 * omega * cfg.dt).sin().powi(2) / cfl2;
+    assert!(cos_k.abs() < 1.0);
+    let k_dx = cos_k.acos();
+    let q = Cx(k_dx.cos(), k_dx.sin());
+    let q_inv = Cx(k_dx.cos(), -k_dx.sin());
+    let mut e = vec![Cx(0.0, 0.0); n];
+    let mut ustar = vec![Cx(0.0, 0.0); n + 1];
+    e[n - 1] = Cx(1.0, 0.0);
+    for i in (i_probe + 1..n).rev() {
+        // u*_i from the eta equation of cell i
+        ustar[i] = ustar[i + 1].add(e[i].mul(z.sub(Cx(we[i], 0.0))).scale(1.0 / (we[i] * h_)));
+        // eta_{i-1} from the u equation of face i
+        e[i - 1] = e[i].add(ustar[i].mul(z.sub(Cx(wu[i], 0.0))).div(z).scale(1.0 / g_));
+    }
+    let (e0, e1) = (e[i_probe], e[i_probe + 1]);
+    // e0 = a + b, e1 = a q + b / q
+    let a = e1.sub(e0.mul(q_inv)).div(q.sub(q_inv));
+    let b = e0.sub(a);
+    b.abs() / a.abs()
+}
+
+/// Continuum estimate (ODE integration of the layer with rates `-ln(w)/dt`, piecewise constant on the cells and the face volumes).
+fn continuum_reflection(cfg: &TankConfig, x_probe: f64, linear_rate: bool) -> f64 {
+    let (we, wu) = tank_weights(cfg);
+    let n = cfg.n_cells;
+    let omega = 2.0 * PI / cfg.period;
+    let c = (cfg.g * cfg.h).sqrt();
+    let rate = |w: f64| {
+        if w >= 1.0 {
+            0.0
+        } else if linear_rate {
+            (1.0 - w) / cfg.dt
+        } else {
+            -w.ln() / cfg.dt
+        }
+    };
+    // e^{-i w t} convention: d eta/dx = -(-i w + a_u) u / g, d u/dx = -(-i w + a_e) eta / h
+    let rhs = |x: f64, eta: Cx, u: Cx| -> (Cx, Cx) {
+        let ie = ((x / cfg.dx).floor() as usize).min(n - 1);
+        let iu = ((x / cfg.dx).round() as usize).min(n);
+        let a_e = rate(we[ie]);
+        let a_u = if iu == n { 0.0 } else { rate(wu[iu]) };
+        let deta = Cx(a_u, -omega).mul(u).scale(-1.0 / cfg.g);
+        let du = Cx(a_e, -omega).mul(eta).scale(-1.0 / cfg.h);
+        (deta, du)
+    };
+    let (mut eta, mut u) = (Cx(1.0, 0.0), Cx(0.0, 0.0));
+    let mut x = n as f64 * cfg.dx;
+    let half = 0.5 * cfg.dx;
+    let sub = 8;
+    while x > x_probe + 1e-9 {
+        // one half-cell piece with constant coefficients (evaluated at the piece midpoint)
+        let xm = x - 0.5 * half;
+        let hh = -half / sub as f64;
+        for _ in 0..sub {
+            let (k1e, k1u) = rhs(xm, eta, u);
+            let (k2e, k2u) = rhs(xm, eta.add(k1e.scale(0.5 * hh)), u.add(k1u.scale(0.5 * hh)));
+            let (k3e, k3u) = rhs(xm, eta.add(k2e.scale(0.5 * hh)), u.add(k2u.scale(0.5 * hh)));
+            let (k4e, k4u) = rhs(xm, eta.add(k3e.scale(hh)), u.add(k3u.scale(hh)));
+            eta = eta.add(k1e.add(k2e.scale(2.0)).add(k3e.scale(2.0)).add(k4e).scale(hh / 6.0));
+            u = u.add(k1u.add(k2u.scale(2.0)).add(k3u.scale(2.0)).add(k4u).scale(hh / 6.0));
+        }
+        x -= half;
+    }
+    let hu = u.scale(cfg.h / c);
+    eta.sub(hu).abs() / eta.add(hu).abs()
+}
+
+fn zone_exp(s: &Setup, m_cells: usize) -> (TankZone, f64) {
+    let ext = m_cells as f64 / 40.0;
+    (
+        TankZone::Relaxation {
+            x_start: 12.0 * s.lambda,
+            x_end: (12.0 + ext) * s.lambda,
+            blend: Blend::exponential(),
+        },
+        12.0 + ext,
+    )
+}
+
+fn zone_uniform(s: &Setup, m_cells: usize, w: f64, dt: f64) -> (TankZone, f64) {
+    let ext = m_cells as f64 / 40.0;
+    (
+        TankZone::Sponge {
+            x_start: 12.0 * s.lambda,
+            x_end: (12.0 + ext) * s.lambda,
+            sigma_max: -w.ln() / dt,
+            n: 1e-9,
+        },
+        12.0 + ext,
+    )
+}
+
+/// Time-domain R and the discrete frequency-domain R of the same zone.
+fn both_r(s: &Setup, zone: TankZone, domain_lambda: f64, x_s_lambda: f64) -> (f64, f64) {
+    let (r_time, _) = reflection(s, zone, domain_lambda, domain_lambda, x_s_lambda);
+    let cfg = TankConfig {
+        n_cells: (domain_lambda * 40.0).round() as usize,
+        zone,
+        ..s.cfg
+    };
+    (r_time, discrete_reflection(&cfg, 470))
+}
+
+/// Sanity of the solver itself: a lossless wall gives |R| = 1.
+#[test]
+fn w8_0_discrete_solver_lossless() {
+    let s = setup();
+    let cfg = TankConfig {
+        n_cells: 560,
+        zone: TankZone::None,
+        ..s.cfg
+    };
+    let r = discrete_reflection(&cfg, 470);
+    eprintln!("W8-0 lossless wall |R| = {r:.12}");
+    assert!((r - 1.0).abs() <= 1e-9);
+}
+
+/// W8-1 and W8-4: the time-domain R equals the independent discrete frequency-domain R within 5e-3 absolute; the continuum
+/// estimate is within 25 percent of it for the registered abrupt zone.
+#[test]
+fn w8_1_time_domain_equals_discrete_solution() {
+    let s = setup();
+    let mut worst = 0.0_f64;
+    for m in [1usize, 2, 4, 8] {
+        let (zone, dom) = zone_exp(&s, m);
+        let (rt, rd) = both_r(&s, zone, dom, 12.0);
+        let cfg = TankConfig {
+            n_cells: (dom * 40.0).round() as usize,
+            zone,
+            ..s.cfg
+        };
+        let rc = continuum_reflection(&cfg, 12.0 * s.lambda, false);
+        let rl = continuum_reflection(&cfg, 12.0 * s.lambda, true);
+        eprintln!(
+            "W8-1 exponential zone of {m} cells (L = {:.4} lambda): time-domain R {rt:.5}, discrete {rd:.5}, continuum (-ln w/dt) {rc:.5}, continuum ((1-w)/dt) {rl:.5}",
+            m as f64 / 40.0
+        );
+        worst = worst.max((rt - rd).abs());
+        assert!((rt - rd).abs() <= 5e-3, "m {m}: {rt} vs {rd}");
+    }
+    // registered sponge, L = 2 lambda
+    let sig = 3.0 * s.c / (2.0 * s.lambda);
+    let zs = TankZone::Sponge {
+        x_start: 12.0 * s.lambda,
+        x_end: 14.0 * s.lambda,
+        sigma_max: sig,
+        n: 2.0,
+    };
+    let (rt, rd) = both_r(&s, zs, 14.0, 12.0);
+    eprintln!("W8-1 registered sponge: time-domain R {rt:.5}, discrete {rd:.5}");
+    worst = worst.max((rt - rd).abs());
+    assert!((rt - rd).abs() <= 5e-3);
+    eprintln!("W8-1 worst |time - discrete| {worst:.2e} (limit 5e-3)");
+}
+
+/// W8-2: the per-step weight is a rate `-ln(w)/dt`; the same weights at half the time step change R by more than 0.1.
+#[test]
+fn w8_2_dt_dependence_of_the_same_weights() {
+    let s = setup();
+    let (zone, dom) = zone_exp(&s, 2);
+    let (r1_t, r1_d) = both_r(&s, zone, dom, 12.0);
+    let mut s2 = setup();
+    s2.cfg.dt = s2.cfg.period / 160.0;
+    let (r2_t, r2_d) = both_r(&s2, zone, dom, 12.0);
+    eprintln!(
+        "W8-2 abrupt zone, dt = T/80: time {r1_t:.5} discrete {r1_d:.5}; dt = T/160: time {r2_t:.5} discrete {r2_d:.5}"
+    );
+    assert!((r1_t - r1_d).abs() <= 5e-3 && (r2_t - r2_d).abs() <= 5e-3);
+    assert!((r2_t - r1_t).abs() > 0.1, "R(dt/2) {r2_t} vs R(dt) {r1_t}");
+}
+
+/// W8-3: the sponge reflection is round-trip attenuation, R = exp(-2 int sigma dx / c).
+#[test]
+fn w8_3_sponge_is_round_trip_attenuation() {
+    let s = setup();
+    let sig = 3.0 * s.c / (2.0 * s.lambda);
+    let len = 2.0 * s.lambda;
+    let m = 2000;
+    let hh = len / m as f64;
+    let f = |x: f64| sponge_rate(x / len, sig, 2.0);
+    let mut integral = f(0.0) + f(len);
+    for i in 1..m {
+        integral += f(i as f64 * hh) * if i % 2 == 1 { 4.0 } else { 2.0 };
+    }
+    integral *= hh / 3.0;
+    let pred = (-2.0 * integral / s.c).exp();
+    let zs = TankZone::Sponge {
+        x_start: 12.0 * s.lambda,
+        x_end: 14.0 * s.lambda,
+        sigma_max: sig,
+        n: 2.0,
+    };
+    let (r, _) = reflection(&s, zs, 14.0, 14.0, 12.0);
+    eprintln!(
+        "W8-3 sponge R {r:.5}, exp(-2 int sigma dx/c) = {pred:.5} (int sigma dx / c = {:.5}; limit 5e-3)",
+        integral / s.c
+    );
+    assert!((r - pred).abs() <= 5e-3, "{r} vs {pred}");
+}
+
+/// W8-5: corrected, well-posed thin-zone expectation. A thin zone (L = 0.05 lambda) is a near-rigid reflector only when its integrated
+/// damping is small: uniform w = 0.99 gives R >= 0.8, uniform w = 0.8 gives R <= 0.4 (time domain and discrete solution).
+#[test]
+fn w8_5_thin_zone_reflects_iff_weakly_damped() {
+    let s = setup();
+    let (weak, dom) = zone_uniform(&s, 2, 0.99, s.cfg.dt);
+    let (strong, _) = zone_uniform(&s, 2, 0.8, s.cfg.dt);
+    let (rw_t, rw_d) = both_r(&s, weak, dom, 12.0);
+    let (rs_t, rs_d) = both_r(&s, strong, dom, 12.0);
+    eprintln!(
+        "W8-5 thin zone w = 0.99: time {rw_t:.5} discrete {rw_d:.5} (limit >= 0.8); w = 0.8: time {rs_t:.5} discrete {rs_d:.5} (limit <= 0.4)"
+    );
+    assert!(rw_t >= 0.8 && rw_d >= 0.8);
+    assert!(rs_t <= 0.4 && rs_d <= 0.4);
+}
+
+/// Registered W8-4: the continuum estimate (rates `-ln(w)/dt`) is within 25 percent of the discrete value for the registered abrupt
+/// zone. KNOWN MISS: measured 0.274 against 0.214 (+27.8 percent). The diagnosis is in `w8_4b_*` and ADR 0044 addendum.
+#[test]
+#[ignore = "KNOWN MISS: continuum estimate of the abrupt zone is 27.8 percent above the discrete value (limit 25 percent)"]
+fn w8_4_continuum_estimate_known_miss() {
+    let s = setup();
+    let (zone, dom) = zone_exp(&s, 2);
+    let (_, rd) = both_r(&s, zone, dom, 12.0);
+    let cfg = TankConfig {
+        n_cells: (dom * 40.0).round() as usize,
+        zone,
+        ..s.cfg
+    };
+    let rc = continuum_reflection(&cfg, 12.0 * s.lambda, false);
+    eprintln!(
+        "W8-4 continuum {rc:.5} vs discrete {rd:.5} (relative {:.3}, limit 0.25)",
+        (rc - rd).abs() / rd
+    );
+    assert!((rc - rd).abs() <= 0.25 * rd, "continuum {rc} vs discrete {rd}");
+}
+
+/// Diagnosis of the W8-4 miss (limits written AFTER seeing the W8-4 numbers, labelled post-hoc): the continuum estimate is a statement
+/// about small per-step damping (sigma dt << 1). For uniform thin layers with w = 0.99 and 0.97 (sigma dt = 0.010, 0.030) it must agree
+/// with the discrete value within 5 percent; the registered exponential zone has w down to 0.74 (sigma dt = 0.30) in its outer cell, where
+/// it does not.
+#[test]
+fn w8_4b_continuum_estimate_holds_for_small_per_step_damping_post_hoc() {
+    let s = setup();
+    for &w in &[0.99, 0.97] {
+        let (zone, dom) = zone_uniform(&s, 2, w, s.cfg.dt);
+        let cfg = TankConfig {
+            n_cells: (dom * 40.0).round() as usize,
+            zone,
+            ..s.cfg
+        };
+        let rd = discrete_reflection(&cfg, 470);
+        let rc = continuum_reflection(&cfg, 12.0 * s.lambda, false);
+        eprintln!("W8-4b uniform thin layer w = {w}: discrete {rd:.5}, continuum {rc:.5} (relative {:.3}, post-hoc limit 0.05)", (rc - rd).abs() / rd);
+        assert!((rc - rd).abs() <= 0.05 * rd, "w {w}: {rc} vs {rd}");
+    }
 }
