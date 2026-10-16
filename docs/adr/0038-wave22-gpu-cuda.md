@@ -219,6 +219,7 @@ Deviations and set-up defects, disclosed:
 5. **Unsupported combinations.** `device` other than `cpu` with `coupled`, compressible/energy or non-constant density is a located semantic error.
 6. **Timing variation.** CPU 1-thread time at 171^3 was 1.94 s in the benchmark and 2.84 s in the F1 test; both runs pass F1.
 7. **Unsafe policy.** The workspace lint `unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` has its own lint table (`deny`, allowed only in `src/cuda/launch.rs`).
+8. **Layering test.** The existing test `layering_matches_architecture_doc` (rcfd-cli/tests/workspace_graph.rs) failed on the first full-workspace gate run with `unknown crate rcfd-gpu`. `rcfd-gpu` is now a layer of its own between `linalg` and `fv` (the later layers are renumbered, their relative order is unchanged), and `docs/architecture.md` lists it. No rule was loosened.
 
 Not delivered: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the device, other vendors, non-segregated algorithms on the device.
 F-101 is `partial`.
