@@ -192,7 +192,7 @@ No registered limit was changed.
 | --- | --- | --- |
 | P1 | 0 `unsafe` outside `launch.rs`, SAFETY comments | pass |
 | B1 | baseline hashes identical | pass, default and `--features cuda`, never re-recorded |
-| B2 | no `cudarc` in `cargo tree -p rcfd-api -e normal` | see the final gate in the report |
+| B2 | no `cudarc` in `cargo tree -p rcfd-api -e normal` | 0 matching lines |
 | D1 | device found, cc >= 7.0, toolkit dir | RTX 5080, cc 12.0; first-call cost 0.29 s (0.9 s in a cold test process) |
 | D2 | child with `RCFD_GPU_DISABLE=1` | pass (probe reason, `auto` bitwise equal to cpu, located error, default build same error) |
 | K1 | SpMV rel2 <= 1e-13 | 0.0 (bitwise) on all five matrices |
@@ -220,6 +220,7 @@ Deviations and set-up defects, disclosed:
 6. **Timing variation.** CPU 1-thread time at 171^3 was 1.94 s in the benchmark and 2.84 s in the F1 test; both runs pass F1.
 7. **Unsafe policy.** The workspace lint `unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` has its own lint table (`deny`, allowed only in `src/cuda/launch.rs`).
 8. **Layering test.** The existing test `layering_matches_architecture_doc` (rcfd-cli/tests/workspace_graph.rs) failed on the first full-workspace gate run with `unknown crate rcfd-gpu`. `rcfd-gpu` is now a layer of its own between `linalg` and `fv` (the later layers are renumbered, their relative order is unchanged), and `docs/architecture.md` lists it. No rule was loosened.
+9. **Benchmark reporting defect.** The first version of the transfer table in `docs/gpu.md` labelled a single cold upload sample as the matrix upload time next to medians, and it exceeded the one-shot median at two sizes. The column is relabelled as a single cold sample and a derived column (one-shot minus resident, from medians) is added. The benchmark was not rerun.
 
 Not delivered: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the device, other vendors, non-segregated algorithms on the device.
 F-101 is `partial`.

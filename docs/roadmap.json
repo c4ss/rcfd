@@ -715,7 +715,8 @@
       "F-027"
     ],
     "status": "todo",
-    "acceptance": "Strong scaling at least 70 percent efficiency to 16 ranks on 4M cells"
+    "acceptance": "Strong scaling at least 70 percent efficiency to 16 ranks on 4M cells",
+    "note": "WAVE 22 (ADR 0038): device partition and multi-GPU work is not started; the GPU backend of F-101 is single-device."
   },
   {
     "id": "F-101",

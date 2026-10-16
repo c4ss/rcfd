@@ -329,6 +329,7 @@ Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F
 - [ ] **F-100** Distributed-memory parallelism via MPI (halo exchange, parallel linear solvers)
   - depends on: F-016, F-027
   - acceptance: Strong scaling at least 70 percent efficiency to 16 ranks on 4M cells
+  - note: WAVE 22 (ADR 0038): device partition and multi-GPU work is not started; the GPU backend of F-101 is single-device.
 - [~] **F-101** GPU acceleration (wgpu/CUDA) for linear solves and flux assembly
   - depends on: F-027
   - acceptance: At least 3x speedup on 5M-cell Poisson solve vs single-thread CPU
