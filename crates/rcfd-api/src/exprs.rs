@@ -221,8 +221,16 @@ pub fn report_dimension(kind: &str, field: &str) -> Dimension {
         "vector_flux" => Dimension::FORCE,
         "volume_integral" => field_dim * Dimension::LENGTH.powi(3),
         "area_integral" => field_dim * Dimension::LENGTH.powi(2),
-        "volume_average" | "area_average" | "probe" | "minimum" | "maximum" | "volume_std" | "area_std"
-        | "mass_weighted_average" | "area_min" | "area_max" => field_dim,
+        "volume_average"
+        | "area_average"
+        | "probe"
+        | "minimum"
+        | "maximum"
+        | "volume_std"
+        | "area_std"
+        | "mass_weighted_average"
+        | "area_min"
+        | "area_max" => field_dim,
         _ => Dimension::NONE,
     }
 }
