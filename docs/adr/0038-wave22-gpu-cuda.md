@@ -182,3 +182,43 @@ fact that the acceptance wording says "5M-cell Poisson solve", whereas the CPU's
 touched except that F-100 notes that the device partition work is not started. `docs/case-schema.md` gains the
 `linear_solver` section; `docs/gpu.md` holds setup (toolkit and NVRTC location, PATH requirement, `RCFD_*` variables), the benchmark
 command and the results table.
+
+## Addendum: results and deviations (end of wave 22)
+
+Measured on RTX 5080 (sm_120, 16275 MiB), driver 617.42, toolkit 13.4 (found by the Program Files scan; `CUDA_PATH` unset), 16 CPU threads.
+No registered limit was changed.
+
+| Check | Limit | Measured |
+| --- | --- | --- |
+| P1 | 0 `unsafe` outside `launch.rs`, SAFETY comments | pass |
+| B1 | baseline hashes identical | pass, default and `--features cuda`, never re-recorded |
+| B2 | no `cudarc` in `cargo tree -p rcfd-api -e normal` | see the final gate in the report |
+| D1 | device found, cc >= 7.0, toolkit dir | RTX 5080, cc 12.0; first-call cost 0.29 s (0.9 s in a cold test process) |
+| D2 | child with `RCFD_GPU_DISABLE=1` | pass (probe reason, `auto` bitwise equal to cpu, located error, default build same error) |
+| K1 | SpMV rel2 <= 1e-13 | 0.0 (bitwise) on all five matrices |
+| K2 | dot 1e-14, norm2 1e-14, sum 1e-14, axpy 2.5e-16 | worst 1.6e-16, 1.9e-16, 1.9e-16, 0; reproducible bitwise |
+| S1/S2 | rel diff <= 1e-10, iterations within 2, residual <= 1e-10 | iterations identical in all 15 cases (3 preconditioners, 5 systems); difference <= 1.1e-14; residual <= ~1e-12 |
+| C1 | <= 1e-6 | worst 2.07e-12 (steady 32x32 and piso 20x20, Jacobi and Chebyshev4) |
+| C2 | bit-identical | 0 differing bits (simple, piso, also with device-only keys) |
+| M1 | live bytes and buffers equal | equal after 200 + 50 cycles |
+| E1 | located errors | pass |
+| F1 | GPU one-shot faster than 1-thread CPU at 171^3 | pass: 0.2009 s vs 1.9446 s in the benchmark (9.7x); 0.187 s vs 2.839 s (15.2x) in the ignored test |
+
+The full benchmark table (sizes 16^3 to 171^3, 16 threads, AMG-CG, transfer costs) is in `docs/gpu.md`. The GPU is slower than one CPU thread at
+4096 unknowns (0.22x one-shot).
+
+Deviations and set-up defects, disclosed:
+
+1. **C1 set-up defect.** The first C1 test ran the steady `simple` case with the default relaxation factors; the case diverges (fields ~1e60) on the CPU and on
+   the device, so the comparison meant nothing. That test is kept as the ignored `c1_full_case_cuda_matches_cpu_diverged_setup`; the corrected test
+   `c1_full_case_cuda_matches_cpu` sets `alpha_u = 0.7`, `alpha_p = 0.3` for the steady case. The limit (1e-6) is unchanged.
+2. **`GpuPrecond::None`** exists in the library API only, so that the registered S1/S2 "none" preconditioner can be run; the case schema offers `jacobi` and `chebyshev`.
+3. **Run header.** D6 mentioned printing the device decision in the `rcfd run` header; this is NOT implemented. The decision is available through
+   `rcfd_gpu::probe`, `resolve` and `fallbacks()`, and errors are located diagnostics.
+4. **Runtime failure.** A device failure during a run with `device = cuda` (after the up-front diagnostic) panics with a located message; `auto` falls back and records it.
+5. **Unsupported combinations.** `device` other than `cpu` with `coupled`, compressible/energy or non-constant density is a located semantic error.
+6. **Timing variation.** CPU 1-thread time at 171^3 was 1.94 s in the benchmark and 2.84 s in the F1 test; both runs pass F1.
+7. **Unsafe policy.** The workspace lint `unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` has its own lint table (`deny`, allowed only in `src/cuda/launch.rs`).
+
+Not delivered: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the device, other vendors, non-segregated algorithms on the device.
+F-101 is `partial`.
