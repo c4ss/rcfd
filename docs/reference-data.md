@@ -778,3 +778,40 @@ retrievable.
 | Enthalpy-porosity model, Carman-Kozeny damping `A(f) = C (1 - f)^2 / (f^3 + b)` | V. R. Voller and C. Prakash (1987), Int. J. Heat Mass Transfer 30(8), 1709-1719 | verified citation (bibliographic record by search); paper not read. `C` (mushy constant) and `b` are case dependent: no universal value is claimed, the tests choose `C` from the target permeability `kappa` |
 | Brinkman channel `u = (G/kappa)(1 - cosh(m(y - H))/cosh(mH))`, `m = sqrt(kappa/nu)` | momentum balance with a linear sink | derived here (ADR 0035, K2) |
 | Gallium-melting cavity experiment (published front shape) | not obtained | NOT used: not delivered, named gap of F-212 |
+
+## Wave 23C population balance references (F-228, ADR 0041)
+
+No paper was read and no web check was made in this wave: every literature entry below is a citation written from memory and is
+marked UNVERIFIED. None of them supplies a number used by a test. Every acceptance value is a closed form derived in ADR 0041 from
+the moment equations (and checked by the registered tests), or an identity of the code.
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Constant-kernel exponential solution `n(v,t) = N0/(1+tau)^2 exp(-v/(1+tau))`, `tau = K N0 t/2`; moments `m_k = k! N0 (1+tau)^(k-1)` | Smoluchowski (1917); P. J. Scott (1968), J. Atmos. Sci. 25, 54-65 | citation UNVERIFIED (memory); the solution is DERIVED in ADR 0041 (substitution into the moment equation, every `k`) |
+| Discrete (Flory) constant-kernel distribution `N_k = N0 tau^(k-1)/(1+tau)^(k+1)` | discrete Smoluchowski system on the integer grid | DERIVED; reproduced by the integrated bin solution (test B1, 1.2e-11) |
+| Sum-kernel `m_0 = N0 e^(-B m_1 t)`, `m_2 = m_2(0) e^(2 B m_1 t)`; product-kernel `m_0 = m_0(0) - C m_1^2 t/2`, `m_2 = m_2(0)/(1 - C m_2(0) t)`, `m_3 = m_3(0)(1 - C m_2(0) t)^-3`, gel time `1/(C m_2(0))` | moment equations | DERIVED (ADR 0041); not compared to a paper |
+| Breakup moment laws (constant rate: uniform `exp(Gamma t (1-k)/(1+k))`, binary `exp(Gamma t (2^(1-k) - 1))`; linear rate `m_0 = m_0(0) + m_1 t`) | moment equations | DERIVED (ADR 0041) |
+| Fixed-pivot discretisation | S. Kumar and D. Ramkrishna (1996), Chem. Eng. Sci. 51, 1311-1332 | citation UNVERIFIED (memory); scheme restated and its conservation properties derived in ADR 0041 |
+| QMOM | R. McGraw (1997), Aerosol Sci. Technol. 27, 255-265 | citation UNVERIFIED (memory) |
+| Product-difference algorithm; Wheeler's algorithm | R. G. Gordon (1968), J. Math. Phys. 9, 655-663; J. C. Wheeler (1974), Rocky Mountain J. Math. 4, 287-296 | citations UNVERIFIED (memory); the Wheeler recurrence was reconstructed from the modified Chebyshev algorithm and is validated by exact recovery of finite distributions (Q1) and Gauss-Laguerre abscissae `3 +- sqrt(3)` (Q2) |
+| Brownian kernel `(2kT/3mu)(u^(1/3)+v^(1/3))(u^(-1/3)+v^(-1/3))` and laminar shear kernel `(4/3) gdot (r_u+r_v)^3` | Smoluchowski (1917) | citation UNVERIFIED (memory); only equal-size values and symmetry are tested |
+| Turbulent shear kernel `sqrt(8 pi/15) sqrt(eps/nu) (r_u+r_v)^3` | Saffman and Turner (1956), J. Fluid Mech. 1, 16-30 | citation and constant UNVERIFIED (memory); only the identity with the laminar-shear kernel is tested, NOT validated against a turbulent case |
+| Symmetric-beta daughter distribution (integer order) | Hill and Ng (1995), AIChE J. 41, 1204-1216 | citation UNVERIFIED (memory); the form is defined in ADR 0041 and its moments are verified by quadrature (B10) |
+
+## Wave 23B interfacial mass transfer and wave references (F-226, F-227, ADR 0040)
+
+No web page and no paper was consulted in this wave. Every formula below is reproduced from knowledge and is checked in the tests only against closed forms, invariants and internal consistency, NOT against the original publication. Entries are therefore UNVERIFIED as citations unless marked "derived".
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Lee temperature-driven evaporation-condensation `mdot = r alpha rho (T - Tsat)/Tsat` | attributed to W. H. Lee (1980), "A pressure iteration scheme for two-phase modeling" | UNVERIFIED citation; the relaxation frequencies are inputs, no default is claimed; hand values and the 0-D analytic relaxation checked (M1, M8) |
+| Hertz-Knudsen flux and Schrage correction `2 sigma/(2 - sigma)` | kinetic theory of evaporation (Hertz, Knudsen, Schrage) | UNVERIFIED citation; the one-way flux `p sqrt(M/(2 pi R T))` is DERIVED here from `n m vbar/4`, `vbar = sqrt(8RT/(pi M))`, and matched to 1e-13 (M3); the Schrage factor is not independently checked |
+| Pressure-driven mass transfer `3 alpha rho_v/R_B sqrt((2/3)abs(dp)/rho_l)` with `F_vap = 50`, `F_cond = 0.01`, `alpha_nuc = 5e-4`, `R_B = 1e-6 m` | attributed to Zwart, Gerber, Belamri (2004); the structure is DERIVED here from the Rayleigh-Plesset growth rate (ADR 0040 D1) | structure derived and checked (M4); the numerical factor values are UNVERIFIED and only the `Default` |
+| Raoult's law, bubble and dew pressures; Henry's law with van 't Hoff dependence `H(T) = H0 exp(-C(1/T - 1/T0))` | standard thermodynamics | derived/standard; checked by sum-to-one and round-trip identities (M5, M6); no constants shipped |
+| Nusselt laminar film: `delta = [4 mu k dT x/(g rho (rho - rho_v) h_fg)]^(1/4)`, mean `h = 0.943[...]^(1/4)`, `Gamma = rho (rho - rho_v) g delta^3/(3 mu)` | Nusselt (1916) film condensation theory | derived here from the film momentum and energy balance; the coefficient `(4/3)(1/4)^(1/4) = 0.9428` is computed; the Rohsenow correction `h_fg + 0.68 c_p dT` is UNVERIFIED; the water property values in the test are round test inputs, not data claims |
+| Dispersion `omega^2 = g k tanh(kh)`, phase and group velocity, Airy kinematics, energy density `rho g a^2/2`, mean flux `E/c` | linear wave theory | derived/standard; checked against deep and shallow limits, kinetic-energy equipartition, continuity, Laplace (W1, W2) |
+| Second-order Stokes: `eta2 = (k a^2/4) cosh kh (2 + cosh 2kh)/sinh^3 kh`, `u2`, `w2`, `phi2 = (3/8) a^2 omega cosh 2k(z+h)/sinh^4 kh sin 2 theta` | textbook Stokes expansion (Dean and Dalrymple type) | UNVERIFIED citation; the formulas are VALIDATED here by satisfying the kinematic and dynamic free-surface conditions to third order (W3b, ratios 8.00) and by the deep and shallow limits |
+| Pierson-Moskowitz in `Hs`-`wp` form `S = (5/16) Hs^2 wp^4 w^-5 exp(-1.25 (wp/w)^4)`; moments `m_n = (5/64) Hs^2 wp^n 1.25^((n-4)/4) Gamma(1 - n/4)` | form attributed to Bretschneider / Pierson-Moskowitz | `m0 = Hs^2/16` and the moments are DERIVED here (substitution `s = 1.25 (wp/w)^4`) and checked numerically (W5); the attribution is UNVERIFIED |
+| JONSWAP shape `gamma^r`, `r = exp(-(w - wp)^2/(2 s^2 wp^2))`, `s = 0.07/0.09`, `gamma = 3.3` | Hasselmann et al. (1973) | UNVERIFIED citation; the constant `A` is replaced by a numerical normalisation to `Hs` |
+| Relaxation-zone exponential blending `1 - (exp(chi^3.5) - 1)/(e - 1)` | attributed to the waves2Foam authors (Jacobsen, Fuhrman, Fredsoe, 2012) | UNVERIFIED citation; endpoint exactness and monotonicity checked (W6); the reflection result is a toy-model measurement (W7), not a validation |
+| Linear shallow-water leapfrog tank | first principles | derived; the incident amplitude and the rigid-wall reflection `R = 1.00000` are internal consistency checks (W7) |
