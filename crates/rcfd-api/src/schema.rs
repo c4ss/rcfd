@@ -1915,7 +1915,7 @@ pub fn case_schema() -> Schema {
                     .field(
                         "arrangement",
                         Schema::enumeration("counterflow", &["counterflow", "parallel", "crossflow_unmixed", "crossflow_cmax_mixed", "crossflow_cmin_mixed", "shell_and_tube"])
-                            .doc("heat_exchanger, ntu mode: flow arrangement of the effectiveness-NTU relation (crossflow_unmixed is the closed approximation of the series solution; shell_and_tube is one shell pass)"),
+                            .doc("heat_exchanger, ntu mode: flow arrangement of the effectiveness-NTU relation (crossflow_unmixed is the exact series solution (ADR 0044); shell_and_tube is one shell pass)"),
                     )
                     .field(
                         "ua",

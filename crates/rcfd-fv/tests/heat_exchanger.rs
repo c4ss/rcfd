@@ -72,6 +72,8 @@ fn h1_counterflow_and_parallel_against_marching() {
     }
 }
 
+/// WAVE 25B NOTE (ADR 0044): with the exact series in `effectiveness` this test passes when run with `--ignored`; the record is kept
+/// ignored as registered, and `h5_*` below assert the same limits as passing tests.
 /// KNOWN MISS of the registered H2 small-N slope limit (1e-3 at N = 1e-3) for the crossflow both-unmixed closed form: measured
 /// 0.99836 at Cr = 0.5. Root cause: the formula is a curve fit of the series solution, `eps ~ N - (Cr/2) N^1.34` for small N,
 /// whose slope tends to 1 only as N^0.34 -> 0; the exact solution has `eps = N - N^2 (1 + Cr)/2 + ...`.
@@ -147,6 +149,8 @@ fn h2_limits_and_ordering_exact_arrangements() {
     h2_check(false);
 }
 
+/// WAVE 25B NOTE (ADR 0044): with the exact series in `effectiveness` this test passes when run with `--ignored`; the record is kept
+/// ignored as registered, and `h5_*` below assert the same limits as passing tests.
 /// KNOWN MISS: the registered H2 limits with the both-unmixed curve fit included (slope 0.99836 at N = 1e-3, and 177 ordering
 /// violations where the fit lies below the parallel-flow result at small N, e.g. N = 0.05, Cr = 0.05).
 #[test]
@@ -216,6 +220,8 @@ fn h3_crossflow_variants_against_independent_recursions() {
     }
 }
 
+/// WAVE 25B NOTE (ADR 0044): with the exact series in `effectiveness` this test passes when run with `--ignored`; the record is kept
+/// ignored as registered, and `h5_*` below assert the same limits as passing tests.
 /// KNOWN MISS of the registered H3 limit (2 percent) for the crossflow both-unmixed closed approximation against the registered
 /// reference, the 800 x 800 cell-exact recursion (cross-checked against the Richardson extrapolation of 150 and 300 cells, which
 /// agrees to the printed difference): the deviation reaches 3.3 percent at N = 0.5, Cr = 1 (the correlation
@@ -282,4 +288,158 @@ fn h4_energy_balance_round_trip_and_loss_closures() {
         solve_exchanger(Arrangement::Counterflow, -3.0, 20.0, 30.0, 300.0, 350.0).q,
         0.0
     );
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Wave 25B (ADR 0044 D1): exact both-unmixed crossflow series. Checks X1 to X5 as registered before the implementation.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// The retired curve fit `1 - exp[N^0.22/Cr (exp(-Cr N^0.78) - 1)]`, kept here only as a diagnostic.
+fn retired_fit(n: f64, c: f64) -> f64 {
+    1.0 - (n.powf(0.22) / c * ((-c * n.powf(0.78)).exp() - 1.0)).exp()
+}
+
+/// X1: agreement with the independent marched 2-D solution (cell recursion, Richardson 400/800), limit 1e-4.
+#[test]
+fn h5_x1_exact_series_against_marched_2d() {
+    let mut worst = 0.0_f64;
+    let mut worst_ref = 0.0_f64;
+    for &n in &[0.1, 0.5, 1.0, 3.0, 8.0] {
+        for &cr in &[0.1, 0.25, 0.5, 1.0] {
+            let r800 = 2.0 * cross_unmixed(800, n, cr) - cross_unmixed(400, n, cr);
+            let r400 = 2.0 * cross_unmixed(400, n, cr) - cross_unmixed(200, n, cr);
+            let got = effectiveness(Arrangement::CrossBothUnmixed, n, cr);
+            let e = (got / r800 - 1.0).abs();
+            let conv = (r800 / r400 - 1.0).abs();
+            eprintln!("X1 N {n} Cr {cr}: series {got:.9} marched {r800:.9} rel {e:.2e} (reference convergence {conv:.1e}) fit {:.6}", retired_fit(n, cr));
+            worst = worst.max(e);
+            worst_ref = worst_ref.max(conv);
+        }
+    }
+    eprintln!("X1 worst relative deviation {worst:.3e} (limit 1e-4); worst reference convergence {worst_ref:.2e}");
+    assert!(worst <= 1e-4, "worst {worst}");
+}
+
+/// X2: small-N slope and second-order coefficient.
+#[test]
+fn h5_x2_small_n_slope_and_second_order() {
+    for &cr in &[0.25, 0.5, 1.0] {
+        let n = 1e-7;
+        let s = effectiveness(Arrangement::CrossBothUnmixed, n, cr) / n;
+        eprintln!("X2 Cr {cr}: eps/N at 1e-7 = {s:.10} (limit |.-1| <= 1e-6)");
+        assert!((s - 1.0).abs() <= 1e-6, "Cr {cr}: {s}");
+        let n = 1e-4;
+        let e = effectiveness(Arrangement::CrossBothUnmixed, n, cr);
+        let c2 = (e - n) / (n * n);
+        eprintln!(
+            "X2 Cr {cr}: (eps - N)/N^2 at 1e-4 = {c2:.6} vs {:.6}",
+            -(1.0 + cr) / 2.0
+        );
+        assert!(
+            (c2 + (1.0 + cr) / 2.0).abs() <= 1e-3 * (1.0 + cr) / 2.0,
+            "Cr {cr}: {c2}"
+        );
+    }
+    // the old registered H2 limit
+    let small = effectiveness(Arrangement::CrossBothUnmixed, 1e-3, 0.5) / 1e-3;
+    eprintln!("X2 old H2 slope at N = 1e-3, Cr = 0.5: {small:.6} (limit 1e-3)");
+    assert!((small - 1.0).abs() <= 1e-3, "slope {small}");
+}
+
+/// X3: bounds, ordering, monotonicity on the registered H2 grid plus Cr = 1, and the NTU round trip.
+#[test]
+fn h5_x3_bounds_ordering_monotonicity() {
+    let mut violations = 0;
+    let crs: Vec<f64> = (1..=19).map(|j| 0.05 * j as f64).chain(std::iter::once(1.0)).collect();
+    for i in 1..=200 {
+        let n = 0.05 * i as f64;
+        for &c in &crs {
+            let par = effectiveness(Arrangement::Parallel, n, c);
+            let cross = effectiveness(Arrangement::CrossBothUnmixed, n, c);
+            let counter = effectiveness(Arrangement::Counterflow, n, c);
+            if !(par <= cross + 1e-12 && cross <= counter + 1e-12) {
+                violations += 1;
+                eprintln!("X3 order violation N {n} Cr {c}: {par} {cross} {counter}");
+            }
+            if !(0.0..=1.0).contains(&cross) {
+                violations += 1;
+            }
+            if effectiveness(Arrangement::CrossBothUnmixed, n + 0.05, c) < cross - 1e-12 {
+                violations += 1;
+            }
+            if c < 1.0 && effectiveness(Arrangement::CrossBothUnmixed, n, c + 0.05) > cross + 1e-12 {
+                violations += 1;
+            }
+        }
+    }
+    eprintln!("X3 violations {violations} (limit 0)");
+    assert_eq!(violations, 0);
+    let (p, x, c) = (
+        effectiveness(Arrangement::Parallel, 1.0, 0.5),
+        effectiveness(Arrangement::CrossBothUnmixed, 1.0, 0.5),
+        effectiveness(Arrangement::Counterflow, 1.0, 0.5),
+    );
+    assert!(p < x && x < c, "{p} {x} {c}");
+    for &cr in &[0.0, 0.3, 0.9, 1.0] {
+        for &n in &[0.3, 1.5, 4.0] {
+            let eps = effectiveness(Arrangement::CrossBothUnmixed, n, cr);
+            let back = ntu_for_effectiveness(Arrangement::CrossBothUnmixed, eps, cr).unwrap();
+            assert!((back / n - 1.0).abs() <= 1e-9, "Cr {cr} N {n}: {back}");
+        }
+    }
+}
+
+/// X4: limits, including the derived large-N behaviour.
+#[test]
+fn h5_x4_limits() {
+    for &n in &[0.1, 1.0, 5.0] {
+        let e = effectiveness(Arrangement::CrossBothUnmixed, n, 1e-9);
+        let d = (e - (1.0 - (-n).exp())).abs();
+        eprintln!("X4 Cr 1e-9 N {n}: {e:.12} deviation {d:.2e} (limit 1e-8)");
+        assert!(d <= 1e-8, "N {n}: {d}");
+    }
+    let e = effectiveness(Arrangement::CrossBothUnmixed, 400.0, 0.5);
+    eprintln!("X4 Cr 0.5 N 400: 1 - eps = {:.3e} (limit 1e-9)", 1.0 - e);
+    assert!(1.0 - e <= 1e-9);
+    let t = std::time::Instant::now();
+    let e = effectiveness(Arrangement::CrossBothUnmixed, 1e4, 1.0);
+    let asy = 1.0 / (std::f64::consts::PI * 1e4).sqrt();
+    eprintln!(
+        "X4 Cr 1 N 1e4: 1 - eps = {:.5e}, 1/sqrt(pi N) = {asy:.5e}, time {:?}",
+        1.0 - e,
+        t.elapsed()
+    );
+    assert!(((1.0 - e) / asy - 1.0).abs() <= 0.05);
+    for &cr in &[0.01, 0.5, 1.0] {
+        let t = std::time::Instant::now();
+        let e = effectiveness(Arrangement::CrossBothUnmixed, 1e6, cr);
+        eprintln!("X4 N 1e6 Cr {cr}: eps {e:.8} time {:?}", t.elapsed());
+        assert!(e.is_finite() && (0.0..=1.0).contains(&e));
+    }
+}
+
+/// X5: the registered old limits, re-asserted for the exact series; plus the retired fit's documented deviation.
+#[test]
+fn h5_x5_old_registered_limits_and_retired_fit() {
+    h2_check(true);
+    let richardson = |f: &dyn Fn(usize) -> f64, n: usize| 2.0 * f(2 * n) - f(n);
+    let mut worst = 0.0_f64;
+    for &n in &[0.5, 1.0, 3.0] {
+        for &cr in &[0.25, 0.5, 1.0] {
+            let want = cross_unmixed(800, n, cr);
+            let rich = richardson(&|c| cross_unmixed(c, n, cr), 150);
+            let got = effectiveness(Arrangement::CrossBothUnmixed, n, cr);
+            worst = worst.max((got / want - 1.0).abs());
+            assert!((got / rich - 1.0).abs() <= 2e-2);
+        }
+    }
+    eprintln!("X5 H3 worst vs 800x800 {worst:.3e} (registered limit 2e-2)");
+    assert!(worst <= 2e-2);
+    let fit = retired_fit(0.5, 1.0);
+    let exact = effectiveness(Arrangement::CrossBothUnmixed, 0.5, 1.0);
+    eprintln!(
+        "X5 retired fit at N 0.5 Cr 1: {fit:.6} vs exact {exact:.6} (rel {:.2e})",
+        (fit / exact - 1.0).abs()
+    );
+    assert!((fit / exact - 1.0).abs() > 2e-2);
 }
