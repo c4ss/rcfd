@@ -217,16 +217,24 @@ fn pt14_located_validation_errors() {
     assert!(Case::parse_toml(&base.replace("[particles]\n", "[particles]\nrestitution = 1.5\n")).is_err());
 }
 
+/// ADR 0037 D1: `Simulation::new` now reports these mesh-dependent errors itself (checks W5), so the library function is
+/// exercised on a simulation built from the same case with the section switched off.
+fn sim_without_particles(c: &Case) -> Simulation {
+    let mut off = c.clone();
+    off.set("particles.enabled", serde_json::json!(false)).unwrap();
+    Simulation::new(&off).unwrap()
+}
+
 #[test]
 fn pt14_mesh_dependent_errors_are_located() {
     // unknown wall patch
     let c = case(&couette_text("[particles.walls.nowhere]\ninteraction = \"stick\"\n"));
-    let sim = Simulation::new(&c).unwrap();
+    let sim = sim_without_particles(&c);
     let e = particles::build_tracker(&c, &sim).err().expect("error");
     assert!(has(&e, "particles.walls.nowhere"), "{e:?}");
     // injection point outside the mesh
     let c = case(&couette_text("").replace("position = [0.5, 0.37, 0.05]", "position = [9.0, 0.37, 0.05]"));
-    let sim = Simulation::new(&c).unwrap();
+    let sim = sim_without_particles(&c);
     let e = particles::build_tracker(&c, &sim).err().expect("error");
     assert!(has(&e, "particles.injection.p.position"), "{e:?}");
     // surface injection on an unknown patch
@@ -235,7 +243,7 @@ fn pt14_mesh_dependent_errors_are_located() {
             .replace("kind = \"point\"", "kind = \"surface\"\npatch = \"nope\"")
             .replace("position = [0.5, 0.37, 0.05]\n", ""),
     );
-    let sim = Simulation::new(&c).unwrap();
+    let sim = sim_without_particles(&c);
     let e = particles::build_tracker(&c, &sim).err().expect("error");
     assert!(has(&e, "particles.injection.p.patch"), "{e:?}");
 }

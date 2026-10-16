@@ -162,10 +162,18 @@ pub fn schema() -> Schema {
         .field("restitution", Schema::float(1.0).range(0.0, 1.0).doc("Restitution coefficient of reflecting walls"))
         .field("walls", walls)
         .field("injection", injection)
-        .field("output_file", Schema::string("").doc("VTK PolyData (.vtp) file of the particles written at the end; empty = none"))
+        .field("output_file", Schema::string("").doc("VTK PolyData (.vtp) file of the particles written at the end by the library hooks track_frozen / track_transient (relative to the working directory); the run path (rcfd run, service) writes particles.vtp into the output directory instead; empty = none"))
         .field(
             "output_every",
-            Schema::int(0).at_least(0.0).doc("Also write <output_file stem>_<n>.vtp every n tracking steps (0 = only the final file)"),
+            Schema::int(0).at_least(0.0).doc("Also write <output_file stem>_<n>.vtp (run path: particles_<n>.vtp in the output directory) every n tracking steps (0 = only the final file)"),
+        )
+        .field(
+            "tracks",
+            Schema::boolean(false).doc("Run path: also write particle_tracks.csv (id,time,x,y,z,state of every parcel at injection, every track_every-th tracking step while active, and when it leaves)"),
+        )
+        .field(
+            "track_every",
+            Schema::int(1).at_least(1.0).doc("tracks = true: log a position every this many tracking steps"),
         )
 }
 
@@ -414,14 +422,14 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
 }
 
 /// Fluid data of a simulation for the tracker (cell velocity, least-squares gradient, constant properties).
-struct FlowData {
+pub(crate) struct FlowData {
     u: Vec<Vec3>,
     grad: Vec<[Vec3; 3]>,
     rho: f64,
     mu: f64,
 }
 
-fn flow_data(case: &Case, sim: &Simulation) -> FlowData {
+pub(crate) fn flow_data(case: &Case, sim: &Simulation) -> FlowData {
     let u = sim.velocity();
     let geom = &sim.geom;
     let bv = u.boundary_values(geom);
@@ -445,7 +453,7 @@ fn flow_data(case: &Case, sim: &Simulation) -> FlowData {
 }
 
 impl FlowData {
-    fn flow(&self) -> Flow<'_> {
+    pub(crate) fn flow(&self) -> Flow<'_> {
         Flow {
             u: &self.u,
             grad: Some(&self.grad),
@@ -508,6 +516,7 @@ pub fn track_frozen(case: &Case, sim: &Simulation) -> std::result::Result<Tracke
 /// Advance `sim` step by step (a transient algorithm) and track the particles over each flow step on the current field,
 /// until `particles.end_time` or the end of the simulation.
 pub fn track_transient(case: &Case, sim: &mut Simulation) -> std::result::Result<Tracker, Vec<Diagnostic>> {
+    sim.detach_particles();
     let mut tr = build_tracker(case, sim)?;
     if sim.is_steady() {
         return Err(vec![d(

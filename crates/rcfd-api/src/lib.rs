@@ -13,6 +13,7 @@ pub mod exprs;
 pub mod inflate;
 pub mod init;
 pub mod lumped;
+pub mod particle_run;
 pub mod particles;
 pub mod postproc;
 pub mod properties;

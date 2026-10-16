@@ -188,7 +188,8 @@ pub fn drive(
     let mut seq = 0u64;
     let every = if opts.status_every == 0 { 10 } else { opts.status_every };
     {
-        let g = lock_sim(sim);
+        let mut g = lock_sim(sim);
+        g.set_output_dir(opts.out_dir.clone());
         sink(&event(
             "start",
             &mut seq,
@@ -436,6 +437,7 @@ fn prune_numbered(path: &Path, keep: usize) {
 pub fn write_results(sim: &Simulation, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(dir)?;
     sim.export_vtu(dir, "solution")?;
+    crate::particle_run::write_run_outputs(sim, dir)?;
     std::fs::write(dir.join("monitors.json"), sim.monitors.to_json().to_string())?;
     std::fs::write(dir.join("report.html"), sim.html_report())?;
     std::fs::write(dir.join("monitors.csv"), sim.monitors.to_csv())?;

@@ -594,6 +594,21 @@ impl Service {
                 self.wait_state(&s, |st| !matches!(st, RunState::Running), Duration::from_millis(ms));
                 Ok(self.status(&s))
             }
+            "particles.report" => {
+                let s = self.session(p)?;
+                let sim = self.sim(&s)?;
+                let sim = lock(&sim);
+                if !crate::particles::enabled(&sim.case) {
+                    return Err(RpcError::new(code::BAD_STATE, "particles.enabled is false in this session"));
+                }
+                let with_tracks = p.get("with_tracks").and_then(Value::as_bool).unwrap_or(false);
+                match sim.particle_run() {
+                    Some(pr) => Ok(pr.report(with_tracks)),
+                    None => crate::particle_run::steady_run(&sim, None)
+                        .map(|r| r.report(with_tracks))
+                        .map_err(RpcError::validation),
+                }
+            }
             "monitors.get" => {
                 let s = self.session(p)?;
                 let sim = self.sim(&s)?;
@@ -1770,6 +1785,7 @@ pub const METHODS: &[&str] = &[
     "run.status",
     "run.wait",
     "monitors.get",
+    "particles.report",
     "reports.get",
     "report.export",
     "field.stats",

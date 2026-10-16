@@ -90,6 +90,7 @@ impl Simulation {
             && self.rheology.is_none()
             && self.catalogue.is_none()
             && self.udfs.is_empty()
+            && self.particles.is_none()
     }
 
     /// Whether [`save_restart`](Self::save_restart) works for this run: steady SIMPLE/SIMPLEC without
