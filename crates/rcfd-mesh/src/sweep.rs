@@ -399,7 +399,7 @@ pub fn sweep(base: &BaseMesh, spec: &SweepSpec) -> Result<Mesh> {
     };
     let axis_unit = match spec.path {
         Path::Line { dir, length } => {
-            if !(length > 0.0) || vec3::norm(dir) == 0.0 {
+            if (length.is_nan() || length <= 0.0) || vec3::norm(dir) == 0.0 {
                 return bad("sweep line needs a positive length and a non-zero direction");
             }
             Some(vec3::unit(dir))
@@ -423,7 +423,7 @@ pub fn sweep(base: &BaseMesh, spec: &SweepSpec) -> Result<Mesh> {
             Some(k)
         }
         Path::NormalOffset { thickness } => {
-            if !(thickness > 0.0) {
+            if (thickness.is_nan() || thickness <= 0.0) {
                 return bad("normal offset needs a positive thickness");
             }
             None
