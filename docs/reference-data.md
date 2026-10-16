@@ -746,3 +746,19 @@ Web pages were consulted for the entries marked "verified"; no vendor documentat
 | Kirchhoff transform for temperature-dependent conductivity, `K(T) = int k dT` linear in x | heat-conduction theory | derived here (ADR 0036 P2); no external source |
 | Per-region laminar assignment as a face-viscosity mask | design decision of ADR 0036 | no external source; the equality with a laminar run (R1) is an implementation check |
 
+
+## Wave 21C run-loop wiring and fractional-step references (F-056, F-054, F-210, ADR 0037)
+
+Web searches were run for the entries marked "verified" (publisher or society records, abstracts). No paper was read in full,
+so the numerical content of every entry below is either derived in the ADR or checked by the registered tests, not taken from
+the papers.
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Projection method, one Poisson solve per step, non-incremental pressure | A. J. Chorin (1968), "Numerical solution of the Navier-Stokes equations", Math. Comp. 22, 745-762 | verified citation (AMS record); paper not read |
+| Fractional step with boundary conditions for the intermediate velocity that remove the splitting error at the wall (`u* = u_b + dt grad(q)_tangential` for the lagged pressure term) | J. Kim and P. Moin (1985), "Application of a fractional-step method to incompressible Navier-Stokes equations", J. Comput. Phys. 59, 308-323 | abstract and the NASA TM-85898 precursor found; volume and page numbers not confirmed against a publisher record (UNVERIFIED); the lagged-increment form implemented here is the author's reading, not copied |
+| Incremental pressure-correction schemes, order of the splitting error of the non-incremental scheme | J.-L. Guermond, P. Minev and J. Shen (2006), "An overview of projection methods for incompressible flows", Comput. Methods Appl. Mech. Engrg. 195, 6011-6045; J.-L. Guermond and L. Quartapelle (1997) | verified citation and abstract; theorems not re-derived (the measured F8 result is consistent with a first-order non-incremental steady state, see the ADR addendum) |
+| Collocated-grid fractional step (pressure-smoothing face flux) | Zang, Street and Koseff (1994), J. Comput. Phys. 114, 18-33 | UNVERIFIED, from memory, not used quantitatively |
+| Taylor-Green vortex decay `exp(-2 nu t)` | wave 7 entry above | verified earlier |
+| Lid-driven cavity centreline data, Re = 100 | Ghia, Ghia and Shin (1982); two secondary copies | verified earlier (the CSV files in `cases/cavity/reference`) |
+| Particle tracking and chemistry closed forms used by the wiring checks | ADR 0027, ADR 0028 entries above | unchanged; the wiring checks compare the run path with the library, so they introduce no new reference values |

@@ -58,7 +58,13 @@ See "particles" in `docs/case-schema.md`. Library entry points in `rcfd_api::par
 * `track_frozen(case, &sim)`: tracks on the current velocity field (a `solver.frozen_flow` field or a converged steady solution).
 * `track_transient(case, &mut sim)`: steps a `piso` / `pimple` simulation and tracks over each flow step on the current field.
 
-These are library functions; the `rcfd run` command and the service do not call them yet (named gap).
+These are the library functions. Since ADR 0037 (wave 21C) the run loop drives the tracker itself, with the arithmetic of these hooks
+(bit-identical, checks W1/W2): `Simulation::new` builds the tracker (`rcfd_api::particle_run::ParticleRun`), the end of a transient
+`Simulation::step` advances it over the flow step, and steady algorithms are tracked once on the final field when the results are
+written. `rcfd run`, the service (`run.headless`, `workflow`, `run.start`, and `particles.report`) therefore need no hook call.
+`track_transient` detaches the built-in hook of the simulation it is given. Outputs of the run path (`particles.vtp`,
+`particles_<n>.vtp`, `particle_report.json`, optional `particle_tracks.csv`) are in `docs/case-schema.md` ("particles", Run path).
+A transient run with particles is not restartable.
 
 ## Output
 
@@ -70,5 +76,5 @@ ASCII VTK PolyData (`.vtp`): points and point data `id`, `diameter`, `velocity`,
 Cyclone separation case (the roadmap acceptance names settling and cyclone sanity cases; only closed-form settling-type checks exist),
 droplet / combusting / multicomponent particle types, cone / group / file injections, parcel-count control, two-way coupling, turbulent
 dispersion, heat and mass transfer, breakup, wall film, erosion, periodic patches, tracking through unjoined non-conformal pairs,
-gradient limiting in the interpolation, CLI/service invocation, compressible and variable-density flows, a time-dependent sequence of
+gradient limiting in the interpolation, checkpointing of the tracker state, compressible and variable-density flows, a time-dependent sequence of
 VTK files tied to the flow time (only every n tracking steps), a pure-walk guarantee on non-convex domains (see ADR 0028 results).

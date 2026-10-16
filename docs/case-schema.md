@@ -377,6 +377,16 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 * `solver.momentum_rel_tol`, `momentum_max_iter`, `pressure_rel_tol`, `pressure_max_iter` (0 keeps
   the algorithm default).
 * `solver.ddt_correction` (transient Rhie-Chow time-step correction, default on).
+* `solver.time_advance` = `iterative` (default, the PISO corrector loop) | `fractional_step` (F-210, ADR 0037): the non-iterative
+  projection advance of the transient `piso` algorithm, one momentum predictor and ONE pressure Poisson solve per step.
+  `solver.fractional_form` = `incremental` (default; predictor with the old pressure gradient, increment Poisson problem) |
+  `chorin` (no pressure in the predictor, full pressure from the projection; a first-order steady state);
+  `solver.fractional_boundary` = `kim_moin` (default; boundary velocity of the intermediate field `u_b + dt grad(q)_t` with the
+  lagged pressure (increment) q, after Kim and Moin 1985) | `plain`. Euler and `bdf2` time schemes, central and upwind-type
+  convection. Located errors at `solver.time_advance` for `pimple`, steady algorithms, `energy`, turbulence, `rheology`,
+  `base_body`, `dynamic_mesh`, `solver.viscous_stress = "full"` and `time_scheme = "bdf2_bounded"`; `physics.body_force` is refused
+  for `piso` as before. A fractional-step run is not restartable (`supports_restart()` is false; the lagged pressure increment is
+  not in the checkpoint). The default `iterative` leaves every existing run bit-identical (ADR 0037 F13).
 * `convergence.<name>.monitor = "res_T"` (energy residual), `res_nut`, `res_rho` are valid monitors.
 * New fields in `report.field` and the GUI field list: `y_plus`, `rho`, `mach`.
 
@@ -619,6 +629,14 @@ there is one. No mechanism is shipped.
 | `eddy_dissipation_a`, `eddy_dissipation_b` | 4.0, 0.5 | Magnussen-Hjertager constants (UNVERIFIED, see `docs/reference-data.md`) |
 | `eddy_dissipation_product_limit` | true | include the product-limited term; false is the reactant-only form |
 | `edc_c_xi`, `edc_c_tau` | 2.1377, 0.4082 | EDC constants (secondary source, see `docs/reference-data.md`) |
+| `write_rates` | false | also write the cell arrays `wdot_<species>` [mol/m3/s] (net production rate of the closure on the final fields; for `edc` the kinetic rate of the cell state) and, with `heat_release`, `heat_release_rate` [K/s] (the temperature source of the energy balance) to `solution.vtu` (ADR 0037 D2) |
+
+Outputs of the run path (`rcfd run`, service `run.headless`, `write_results`; ADR 0037): `chemistry.json` whenever `model` is not `off`:
+`model`, `mechanism {species, reactions, elements}`, per species `{min, max, volume_mean}`, `mass_fraction_sum {min, max}`,
+`temperature {min, max, source}`, `element_moles` (moles of element atoms in the domain, `sum V rho sum_k Y_k a_ke / W_k`),
+`density`, `cells`. The species themselves are user scalars and are in `solution.vtu`. The chemistry was already advanced by
+`Simulation::step` (transient Lie splitting after the scalar sweeps, steady source form before the scalar solve); the binary and the
+service therefore give bit-identical fields to the in-process run (ADR 0037 C1, C2).
 
 Transient runs (`piso`, `pimple`) use Lie operator splitting: after the flow step and the transport sweeps every cell is advanced
 by the stiff integrator over `dt` and the species and temperature are written back (first order in `dt`). Steady runs use a source
@@ -957,7 +975,7 @@ to its exact solution. These keys on a patch whose `temperature` is not `convect
 
 One-way coupled Lagrangian particle tracking (F-056, ADR 0028, `docs/particles.md`). `particles.enabled = false` by default; every
 numeric key has the sentinel `-1` = unset with a located error when needed. The section is read by `rcfd_api::particles`
-(`track_frozen`, `track_transient`); `rcfd run` does not call it yet.
+(`track_frozen`, `track_transient`) and, since ADR 0037, by the run loop itself (see "Run path" below).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -977,7 +995,23 @@ numeric key has the sentinel `-1` = unset with a located error when needed. The 
 | `injection.<n>.velocity_mode`, `velocity` | `given`, `[]` | initial velocity (empty list = at rest) or the local fluid velocity |
 | `injection.<n>.parcel_count` | `1` | real particles per parcel |
 | `injection.<n>.distribution` | `constant` | `constant` (`diameter`) or `rosin_rammler` (`rr_d_bar`, `rr_n`, optional `d_min`, `d_max`) |
-| `output_file`, `output_every` | `""`, `0` | VTK PolyData file, extra files every n tracking steps |
+| `output_file`, `output_every` | `""`, `0` | VTK PolyData file written by the LIBRARY hooks (relative to the working directory), extra files every n tracking steps; the run path writes `particles.vtp` / `particles_<n>.vtp` into the output directory instead |
+| `tracks` | `false` | run path: also write `particle_tracks.csv` (`id,time,x,y,z,state`) |
+| `track_every` | `1` (>= 1) | `tracks = true`: log a position every n tracking steps while the parcel is active (always at injection, when it leaves, and at the end) |
+
+Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
+patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
+--check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`
+by the dynamic-mesh check). Transient algorithms (`piso`, `pimple`): the tracker is advanced at the end of every `Simulation::step`
+over the flow step (`h = min(dt, end_time - tracker time)`), bit for bit as `track_transient` does, by every driver (`rcfd run`,
+service `run.headless`/`workflow`, `run.start`). Steady algorithms and `solver.frozen_flow`: the final field is tracked once from 0
+to `end_time` in steps of `particles.dt` (`solver.dt` when -1) when the results are written, as `track_frozen` does. Outputs next to
+`solution.vtu`: `particles.vtp` (final state), `particles_<n>.vtp` (every `output_every`-th tracking step, written during the run
+when the driver has an output directory), `particle_report.json` (`time`, `injected`, `counts {active, deposited, escaped, stuck}`,
+`mean_diameter`, `mass_by_state`, `steps`) and, with `tracks`, `particle_tracks.csv`. A transient run with particles is not
+restartable (the tracker state is not in the checkpoint; the run-control warning is emitted). Service method `particles.report`
+(`session`, optional `with_tracks`) returns the report of the live session (a steady session is tracked on demand). The flow is
+never modified: its fields are bit-identical with `particles.enabled` true or false (ADR 0037 W3).
 
 ## Wave 19C: `restart`, `chain`, setup rules (F-115, F-241, F-240, ADR 0031)
 

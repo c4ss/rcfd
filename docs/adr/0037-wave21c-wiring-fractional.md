@@ -259,3 +259,106 @@ Aitken acceleration, flat-plate acceleration, Taylor-Green step-count comparison
 | Collocated-grid fractional step | Zang, Street and Koseff (1994), J. Comput. Phys. 114, 18-33 | UNVERIFIED, from memory |
 | Taylor-Green closed form | docs/reference-data.md | verified (earlier wave) |
 | Ghia et al. cavity data | docs/reference-data.md | verified, two secondary copies |
+
+## Results addendum (written after the runs; no registered limit was changed)
+
+Measured values are from release builds on the final code; tests are in `crates/rcfd-fv/tests/fractional_step.rs` (F1-F10),
+`crates/rcfd-api/tests/fractional_tree.rs` (F11-F13), `crates/rcfd-api/tests/particle_run.rs`, `crates/rcfd-cli/tests/particle_run.rs`
+(W1-W8, F11 binary part) and `crates/rcfd-cli/tests/chemistry_run.rs` (C1-C5).
+
+### Particles (W)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| W1 transient run path vs `track_transient` (cavity 20 x 20, 40 steps, 10 parcels, `output_every` 7) | fingerprint (132 words), `particles.vtp` and all 5 numbered files equal; flow bits equal | 0 bits | met |
+| W2 steady run path vs `track_frozen` (60 SIMPLE iterations) | fingerprint and `particles.vtp` equal | 0 bits | met |
+| W3 flow untouched, piso and simple | `U`, `p`, face flux bits equal with particles on and off; `baseline_hashes.rs` passes unchanged | 0 bits | met |
+| W4 defaults inert | default file list exactly `monitors.csv, monitors.json, report.html, solution.vtu`; `chemistry.write_rates = true` without chemistry changes nothing | exact | met |
+| W5 located errors | all paths found, non-empty messages, `rcfd run --check-only` exit 3 for four of them (the fifth, dynamic mesh, see deviation 1) | path + exit 3 | met (with deviation 1) |
+| W6 outputs exact | `active + deposited + escaped + stuck = injected = 10 = floor(50 x 0.2)`; every parcel has a first row at its injection step end (within 1e-9), the last row equals the final position bit for bit, the row count equals 1 + every 3rd later step + closing row for each parcel | exact | met |
+| W7 binary and service | `rcfd run` bytes of `particles.vtp`, `particle_report.json`, `particle_tracks.csv` equal the in-process run path; `run.headless` writes the same `particles.vtp`; `run.start` then `particles.report` equals the run path report | exact | met |
+| W8 checkpoint honesty | `supports_restart()` false with particles (transient), true without; `drive` with a checkpoint path emits the "cannot be restarted" warning and writes no file; the binary writes no `restart.rcfd` | exact | met |
+
+### Chemistry (C)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| C1 K2b through `rcfd run` | binary vs in-process: T 0, Y 0 (bits equal); binary vs single-cell integration 1.8e-15 DeltaT_ad; T_end 2800 K | 1e-9 DeltaT_ad, 1e-9, 1e-5 DeltaT_ad | met |
+| C2 K4 plug flow through `rcfd run` | binary vs in-process 0 (bits equal); discrete-solution deviation 5.248e-6 | 1e-9; 5e-6 as printed in this ADR | binary vs in-process met; the printed 5e-6 MISSED (known miss, deviation 2) |
+| C3 report | `abs(1 - sum Y)` 1.1e-16; element moles change 0 | 1e-12; 1e-12 | met |
+| C4 rate arrays | `wdot_A`, `wdot_B`, `heat_release_rate` relative difference to `cell_rates` / the enthalpy formula 0; absent without the key | 1e-12 | met (caveat: same code path as the reference function, so this checks the output plumbing and the units, not the rates) |
+| C5 service | `chemistry.json` bytes equal the CLI file (490 bytes) | identical | met |
+
+### Fractional step (F)
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| F1 Taylor-Green KE error / L2 error (n 32, nu 0.05, dt 0.02, t 2) | 2.303e-3 / 1.485e-3 | 0.02 / 0.02 | met |
+| F2 temporal order, Euler | 1.034 | [0.8, 1.3] | met |
+| F2 temporal order, BDF2 | 1.040 | [1.7, 2.3] | MISSED, `f2_known_miss_temporal_order_bdf2` (ignored) |
+| F3 spatial ratio e16/e32 (dt 0.005) | 2.479 | >= 3.0 | MISSED, `f3_known_miss_spatial_order` (ignored) |
+| F4 continuity, Taylor-Green default / tight; cavity default / tight | 1.831e-11 / 2.753e-15; 5.776e-9 / 4.490e-14 | 1e-6 / 1e-9 | met |
+| F5 difference to PISO (incremental / Chorin) | 3.016e-3 / 3.970e-3 | 5e-3 | met |
+| F6 cavity Re 100, 40 x 40, dt 0.05 | stop rule reached (540 steps); Ghia error u 3.0027e-3, v 8.9796e-3; difference to SIMPLEC 4.7294e-4 | 0.02; 0.01 | met |
+| F7 step sensitivity (0.05 vs 0.025) | 2.4513e-4 | 5e-3 | met |
+| F8 Kim-Moin effect (Chorin form) | ratio km/plain 1.130 (1.1671e-2 vs 1.0331e-2) | <= 0.5 | MISSED, `f8_known_miss_kim_moin_effect` (ignored) |
+| F9 Chorin Taylor-Green KE error | 1.388e-2 | 0.02 | met |
+| F10 mean velocity | 4.1e-11 | 1e-8 | met |
+| F11 tree vs library | bits equal (worst relative difference 0); `rcfd run` writes `solution.vtu`, no checkpoint | 1e-12 | met |
+| F12 located errors | all paths found (`physics.body_force` is refused at parse by the existing `physics.body_force` error for `piso`) | path | met |
+| F13 defaults | explicit `iterative` bit-identical to the default; `baseline_hashes.rs` unchanged | 0 bits | met |
+
+Diagnoses of the three F misses (none tuned):
+
+* F2 BDF2 (1.040 against [1.7, 2.3]). Not a defect of the projection. The baseline PISO solver with periodic faces and one
+  corrector shows the same first-order behaviour (orders 1.03 and 1.09 for BDF2 with `n_outer = 1`; 2.17 and 1.75 only with three
+  outer iterations), a pure periodic shear-diffusion problem gives about 1.08 for both solvers, and a wall-bounded decaying mode
+  gives BDF2 orders 2.074 / 2.045 with the fractional step identical to PISO. This points at the lagged coupling of periodic faces
+  in the shared momentum assembly (a hypothesis consistent with these runs, not proven by an isolating change). The collocated
+  pressure-smoothing term `dt (interp grad p - snGrad p)` adds an O(dt) steady/inviscid error (with the term removed at
+  `nu = 1e-6` the order is 1.98). A first implementation used `dt` instead of the effective step `dt/c0` for the pressure
+  (c0 = 3/2 for BDF2); that bug was found and fixed during the diagnosis (first run: F2 BDF2 1.052, F3 ratio 2.502, Euler results
+  unchanged); the numbers in the table are after the fix.
+* F3 (2.479 against 3.0). At `dt = 0.005` the temporal error from the periodic-face lag is comparable to the spatial error.
+* F8 (ratio 1.130 against 0.5). The Chorin form has an O(dt) steady-state error from the bulk (the momentum operator is applied to
+  `u* = u + dt grad p`), which the Kim-Moin boundary treatment does not remove; error to SIMPLEC at dt 0.1 / 0.05 / 0.025:
+  Kim-Moin 4.351e-2 / 2.741e-2 / 1.574e-2, plain 3.863e-2 / 2.452e-2 / 1.438e-2. The incremental form has 8.07e-4 / 4.73e-4 /
+  2.49e-4 and is identical with and without Kim-Moin, because the lagged increment tends to zero at steady state. So in this
+  implementation the Kim-Moin condition is a no-op where it is harmless and does not beat the plain condition where it matters;
+  the claimed benefit (reduced boundary splitting error in transients) is NOT shown by any registered check.
+
+Post-hoc tests (NOT registered; limits chosen after seeing the diagnostics above; they do not replace the misses): `f2c`
+wall-bounded decaying mode BDF2 order 2.074 in [1.7, 2.3] (errors 4.451e-3 and 1.057e-3); `f3c` the F3 ratio at `dt = 0.00125`
+equals 3.539 against the registered 3.0; `f8b` the Chorin finer-pair step-halving order lies in [0.7, 1.3] (measured 0.800 Kim-Moin /
+0.770 plain) and the incremental form is at least 10 times closer to the steady state. The diagnostic code is not in the
+repository.
+
+### Deviations from the registered text
+
+1. W5, dynamic mesh: the conflict of particles with `dynamic_mesh.enabled` was already a located error at `dynamic_mesh.enabled`
+   (ADR 0033 check, raised by `semantic_errors`), so the test asserts that path; the guard added at `particles.enabled` in
+   `Simulation::new` is unreachable through the tree and untested.
+2. C2: the "K4 registered 5e-6" in the C2 text is a misquote of the K4a limit of ADR 0027, which is 1e-5 (5.2e-6 was the measured
+   value there). The measured 5.248e-6 reproduces the in-process K4 result exactly. The 5e-6 criterion is kept as the ignored test
+   `c2_known_miss_discrete_solution_5e_6`; the corrected test `c2_binary_k4_plug_flow_matches_in_process_and_the_k4a_limit`
+   asserts the K4a limit 1e-5. The K4 case also needed a convergence condition (`convergence.a`: `res_A` below 1e-11, 40 minimum
+   iterations): the normalised momentum residual of the uniform plug flow does not fall below `tolerance_u` (0.79 after 800
+   iterations, continuity 1e-16), a property of the case unrelated to the chemistry.
+3. D1 said `supports_restart()` is false "while particles are enabled"; implemented for transient algorithms only. Steady runs are
+   tracked once from the final field, so a steady restart stays valid.
+4. D5 named `chem_output.rs`; the chemistry report and rate arrays live in `chemistry.rs` (`ChemState::report`, `rate_fields`)
+   with thin accessors in `sim.rs`. `particles.output_file` keeps its library meaning (as registered).
+5. The old test `pt14_mesh_dependent_errors_are_located` (ADR 0028) built its simulation with particles enabled and expected
+   `Simulation::new` to succeed; since D1 reports those errors in `Simulation::new`, its set-up now builds the simulation from the
+   same case with the section switched off. Its assertions are unchanged; the new behaviour is checked by W5.
+6. A particle-tracking failure during a run (tracker error) stops the simulation with `failure` set (like a user-function error).
+7. The first commit of the fractional-step schema keys (56d4fd4) contained the three keys twice (a mistake of my commit tooling);
+   it was corrected in the next commit.
+8. F-210 stops at `partial`: the registered BDF2 temporal-order, spatial-order and Kim-Moin checks are misses (above). The roadmap
+   acceptance (Taylor-Green decay within 2 percent, cavity against published data) is met by F1 and F6.
+9. Fractional-step runs are not restartable (`supports_restart()` false); a restart would drop the lagged pressure increment.
+
+### Decision D6 (F-209)
+
+Not attempted. The remainder needs error-estimator stepping wired to the tree, residual smoothing and Aitken acceleration with a
+Taylor-Green step-count comparison, which is not cheap; the status stays `todo`.
