@@ -239,7 +239,7 @@ impl ElectricState {
                 "current" => {
                     let i = gf(case, &format!("{b}.electric_current"));
                     let area: f64 = patch.faces().map(|f| rcfd_core::vec3::norm(sf[f])).sum();
-                    if !(area > 0.0) {
+                    if area.is_nan() || area <= 0.0 {
                         errs.push(d(format!("{b}.electric_current"), "the patch has no area"));
                         continue;
                     }
