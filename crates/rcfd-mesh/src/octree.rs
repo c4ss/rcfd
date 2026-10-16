@@ -302,7 +302,7 @@ pub fn layer_heights(rule: LayerRule, t: f64, s: f64) -> Result<Vec<f64>> {
     let mut h: Vec<f64> = match rule {
         LayerRule::Uniform { layers } => vec![t / layers as f64; layers],
         LayerRule::AspectRatio { aspect, layers } => {
-            if layers < 2 || !(aspect > 0.0) {
+            if layers < 2 || (aspect.is_nan() || aspect <= 0.0) {
                 return bad("aspect-ratio rule needs a positive aspect ratio and at least two layers");
             }
             let h1 = s / aspect;
@@ -316,7 +316,7 @@ pub fn layer_heights(rule: LayerRule, t: f64, s: f64) -> Result<Vec<f64>> {
             (0..layers).map(|i| h1 * g.powi(i as i32)).collect()
         }
         LayerRule::LastRatio { last_ratio, layers } => {
-            if layers < 2 || !(last_ratio > 0.0) {
+            if layers < 2 || (last_ratio.is_nan() || last_ratio <= 0.0) {
                 return bad("last-ratio rule needs a positive last ratio and at least two layers");
             }
             let hn = last_ratio * s;
@@ -539,7 +539,7 @@ fn with_hanging(poly: &[L3], reg: &HashMap<L3, usize>) -> Vec<L3> {
 pub fn fill(spec: &FillSpec<'_>) -> Result<(Mesh, FillReport)> {
     let h0 = (spec.hi[0] - spec.lo[0]) / spec.roots[0] as f64;
     for k in 0..3 {
-        if spec.roots[k] == 0 || !(spec.hi[k] > spec.lo[k]) {
+        if spec.roots[k] == 0 || spec.hi[k].is_nan() || spec.lo[k].is_nan() || spec.hi[k] <= spec.lo[k] {
             return bad("octree fill needs a non-empty box and at least one root cell per axis");
         }
         let hk = (spec.hi[k] - spec.lo[k]) / spec.roots[k] as f64;
