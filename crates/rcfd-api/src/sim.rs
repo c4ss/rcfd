@@ -1250,6 +1250,12 @@ impl Simulation {
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             s.ddt_correction = get_b(case, "solver.ddt_correction");
             s.full_viscous_stress = get_s(case, "solver.viscous_stress") == "full";
+            if get_s(case, "solver.time_advance") == "fractional_step" {
+                s.fractional = Some(rcfd_fv::pimple::fractional::FractionalSettings {
+                    incremental: get_s(case, "solver.fractional_form") != "chorin",
+                    kim_moin: get_s(case, "solver.fractional_boundary") != "plain",
+                });
+            }
             linear_controls!(s);
             s.time_scheme = solver_time_scheme(case);
             s.amg_pressure = geom.n_cells() > 2000;
@@ -1389,6 +1395,30 @@ impl Simulation {
                 "dynamic_mesh.enabled",
                 "needs a transient incompressible run (solver.algorithm = piso or pimple)",
             ));
+        }
+        if get_s(case, "solver.time_advance") == "fractional_step" {
+            let why = if !matches!(&engine, Engine::Transient(_)) || alg != "piso" {
+                Some("needs solver.algorithm = \"piso\" (a non-iterative step has no outer iterations)")
+            } else if energy.is_some() {
+                Some("is not available with energy.enabled (no body-force term in the projection)")
+            } else if turb.is_some() {
+                Some("is not available with a turbulence model")
+            } else if rheology.is_some() {
+                Some("is not available with rheology")
+            } else if base_body.is_some() {
+                Some("is not available with physics.body_force")
+            } else if dynmesh.is_some() {
+                Some("is not available with dynamic_mesh")
+            } else if get_s(case, "solver.viscous_stress") == "full" {
+                Some("is not available with solver.viscous_stress = \"full\"")
+            } else if get_s(case, "solver.time_scheme") == "bdf2_bounded" {
+                Some("is not available with solver.time_scheme = \"bdf2_bounded\" (use euler or bdf2)")
+            } else {
+                None
+            };
+            if let Some(w) = why {
+                return Err(diag("solver.time_advance", format!("fractional_step {w}")));
+            }
         }
         let mut sim = Simulation {
             case: case.clone(),

@@ -1032,6 +1032,18 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("kim_moin", &["kim_moin", "plain"]).doc("time_advance = fractional_step: kim_moin = intermediate velocity condition u_b + dt grad(q)_tangential with q the lagged pressure (increment) (Kim and Moin 1985); plain = the physical velocity"),
         )
         .field(
+            "time_advance",
+            Schema::enumeration("iterative", &["iterative", "fractional_step"]).doc("Transient incompressible time advance (solver.algorithm = piso only): iterative = the PISO corrector loop (default); fractional_step = non-iterative projection, one momentum predictor and one pressure Poisson solve per step (ADR 0037). Not combined with pimple, steady algorithms, energy, turbulence, rheology, body force, dynamic_mesh, solver.viscous_stress = full or time_scheme = bdf2_bounded (located errors)"),
+        )
+        .field(
+            "fractional_form",
+            Schema::enumeration("incremental", &["incremental", "chorin"]).doc("time_advance = fractional_step: incremental = predictor with the old pressure gradient and a pressure-increment Poisson problem (default); chorin = no pressure in the predictor and the full pressure from the projection (first-order steady state)"),
+        )
+        .field(
+            "fractional_boundary",
+            Schema::enumeration("kim_moin", &["kim_moin", "plain"]).doc("time_advance = fractional_step: kim_moin = intermediate velocity condition u_b + dt grad(q)_tangential with q the lagged pressure (increment) (Kim and Moin 1985); plain = the physical velocity"),
+        )
+        .field(
             "frozen_flow",
             Schema::boolean(false).doc("Prescribe the flow: the face flux comes from initial.velocity and initial.velocity_expression_x/y/z at the face centres and only the energy equation is solved (required by solids; conjugate heat transfer, ADR 0024)"),
         );
