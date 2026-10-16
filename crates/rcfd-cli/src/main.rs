@@ -7,6 +7,7 @@
 //! reached (see docs/run-control.md).
 
 mod cmd_gapc;
+mod cmd_study;
 mod cmd_w19c;
 mod cmd_wiring;
 mod convert_formats;
@@ -73,6 +74,8 @@ COMMANDS:
     check <case> [--json] [--set path=value]
                                validate, build, check the mesh and evaluate the setup rules; exit 0, 3 (invalid or
                                an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh
+    study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=value]
+                               parametric study from the `study` section: one run per design point, table.csv/table.json
     data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]
                                public validation-data pack (F-125): datasets with licence, checksum
                                verification of local copies (offline), provenance report (markdown)
@@ -185,6 +188,7 @@ fn dispatch(args: &[String]) -> u8 {
         "run" => cmd_run(rest),
         "restart" => cmd_w19c::cmd_restart(rest),
         "check" => cmd_w19c::cmd_check(rest),
+        "study" => cmd_study::cmd_study(rest),
         "check-mesh" => cmd_check_mesh(rest),
         "partition" => cmd_wiring::cmd_partition(rest),
         "sample" => cmd_wiring::cmd_sample(rest),
