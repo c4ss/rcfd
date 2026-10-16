@@ -81,8 +81,9 @@ def study(case, parameters, outputs=None, combine="grid", parallel=1, out="study
     """Run a parametric study of ``case`` (a ``rcfd.Case``).
 
     ``parameters`` maps a parameter name to ``List``/``Linspace``/``Logspace``. Invalid sweeps raise
-    ``StudyError`` (exit code 3 of the binary; ``.diagnostics`` hold the located ``study.*`` paths).
-    Points that fail are rows of the table; ``result.exit_code`` is the contract exit code (0 all ok).
+    ``StudyError`` (exit code 3 of the binary, nothing is run; ``.diagnostics`` hold the located ``study.*`` paths).
+    Points that fail are rows of the table and do not raise; ``result.exit_code`` is the contract exit code
+    (0 all ok, otherwise that of the lowest-index failed point).
     """
     sets = []
     for name in sorted(parameters):
@@ -102,6 +103,6 @@ def study(case, parameters, outputs=None, combine="grid", parallel=1, out="study
         args += ["--set", f"{p}={dumps(v)}"]
     code, stdout, err = _binary.call(case._binary, args)
     lines = [ln for ln in stdout.splitlines() if ln.startswith("{")]
-    if not lines or code in (2, 3):
+    if not lines:  # static sweep errors and usage errors print no summary; a failed point still does
         raise StudyError(err.strip() or f"rcfd study exited with {code}", code, err, parse_diagnostics(err, case.path))
     return StudyResult(code, json.loads(lines[-1]), os.path.abspath(out))

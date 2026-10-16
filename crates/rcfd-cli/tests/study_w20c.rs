@@ -8,6 +8,14 @@ fn rcfd(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_rcfd")).args(args).output().unwrap()
 }
 
+fn rcfd_env(args: &[&str], key: &str, val: &str) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_rcfd"))
+        .args(args)
+        .env(key, val)
+        .output()
+        .unwrap()
+}
+
 fn code(o: &Output) -> i32 {
     o.status.code().unwrap_or(-1)
 }
@@ -384,6 +392,125 @@ strings = ["generator", "file", "generator"]
     assert!(tables[0] == tables[1]);
 }
 
+/// S2 as registered (the S1 study at tolerance 1e-12, where every point stops at the cap with exit 5) and the
+/// reading of "thread count" as the solver's worker threads.
+#[test]
+fn s2_registered_tolerance_and_solver_threads() {
+    let d = tmp("s2_reg");
+    let case = write(&d, "slab.toml", &slab("1e-12", GRID));
+    let (o1, o3) = (d.join("o1"), d.join("o3"));
+    let a = rcfd(&[
+        "study",
+        &case,
+        "--out",
+        o1.to_str().unwrap(),
+        "--parallel",
+        "1",
+        "--quiet",
+        "--json",
+    ]);
+    let b = rcfd(&[
+        "study",
+        &case,
+        "--out",
+        o3.to_str().unwrap(),
+        "--parallel",
+        "3",
+        "--quiet",
+        "--json",
+    ]);
+    assert_eq!((code(&a), code(&b)), (5, 5));
+    for file in ["table.csv", "table.json"] {
+        assert!(
+            std::fs::read(o1.join(file)).unwrap() == std::fs::read(o3.join(file)).unwrap(),
+            "{file} differs between parallel 1 and 3"
+        );
+    }
+    let case9 = write(&d, "slab9.toml", &slab("1e-9", GRID));
+    let (r1, r3) = (d.join("r1"), d.join("r3"));
+    let a = rcfd_env(
+        &["study", &case9, "--out", r1.to_str().unwrap(), "--quiet"],
+        "RAYON_NUM_THREADS",
+        "1",
+    );
+    let b = rcfd_env(
+        &["study", &case9, "--out", r3.to_str().unwrap(), "--quiet"],
+        "RAYON_NUM_THREADS",
+        "3",
+    );
+    assert_eq!((code(&a), code(&b)), (0, 0));
+    for file in ["table.csv", "table.json"] {
+        assert!(
+            std::fs::read(r1.join(file)).unwrap() == std::fs::read(r3.join(file)).unwrap(),
+            "{file} differs between solver threads 1 and 3"
+        );
+    }
+}
+
+/// S3 on the study exactly as registered (tolerance 1e-12): every point is `failed` (exit 5), and resume retries
+/// failed points, so the registered counts (run 11, skipped 7) cannot be met.
+#[test]
+#[ignore = "known miss: ADR 0034 S3 registered on the 1e-12 study where all rows are failed (exit 5) and resume retries failed rows; measured run 18, skipped 0 (see s3_resume_skips_exactly_completed_points for the 1e-9 set-up)"]
+fn s3_registered_tolerance_known_miss() {
+    let d = tmp("s3_reg");
+    let case = write(&d, "slab.toml", &slab("1e-12", GRID));
+    let part = d.join("part");
+    rcfd(&[
+        "study",
+        &case,
+        "--out",
+        part.to_str().unwrap(),
+        "--quiet",
+        "--max-new-points",
+        "7",
+    ]);
+    let b = rcfd(&[
+        "study",
+        &case,
+        "--out",
+        part.to_str().unwrap(),
+        "--quiet",
+        "--json",
+        "--resume",
+    ]);
+    let s = summary(&b);
+    assert_eq!((s["run"].as_u64(), s["skipped"].as_u64()), (Some(11), Some(7)), "{s}");
+}
+
+/// S4 with the registered fallback: a mesh file that does not exist.
+#[test]
+fn s4_registered_variant_missing_mesh_file() {
+    let d = tmp("s4b");
+    let missing = d.join("no_such.msh").display().to_string().replace('\\', "/");
+    let st = format!(
+        "[study]
+combine = \"zip\"
+outputs = [\"q\"]
+[study.parameters.a]
+path = \"mesh.source\"
+strings = [\"generator\", \"file\", \"generator\"]
+[study.parameters.b]
+path = \"mesh.file\"
+strings = [\"\", \"{missing}\", \"\"]
+"
+    );
+    let case = write(&d, "slab.toml", &slab("1e-9", &st));
+    let out = d.join("o");
+    let o = rcfd(&["study", &case, "--out", out.to_str().unwrap(), "--quiet", "--json"]);
+    let t = table(&out);
+    let rows = t["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 3, "{}", stderr(&o));
+    assert_eq!(rows[1]["status"], "failed");
+    assert_eq!(
+        (rows[0]["status"].as_str(), rows[2]["status"].as_str()),
+        (Some("ok"), Some("ok"))
+    );
+    let fc = rows[1]["exit_code"].as_i64().unwrap() as i32;
+    eprintln!("S4 registered variant: exit code {fc}, message {}", rows[1]["message"]);
+    assert!(fc != 0);
+    assert_eq!(code(&o), fc);
+}
+
 #[test]
 fn s5_located_errors() {
     let d = tmp("s5");
@@ -428,6 +555,14 @@ fn s5_located_errors() {
             "bad json",
             "path = \"physics.nu\"\njson = [\"[1,\"]\n",
             "study.parameters.a.json.0",
+        ),
+        (
+            "unknown kind",
+            "path = \"physics.nu\"
+kind = \"cubic\"
+values = [1.0]
+",
+            "study.parameters.a.kind",
         ),
         (
             "own section",

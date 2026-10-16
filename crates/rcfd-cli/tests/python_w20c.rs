@@ -45,5 +45,5 @@ fn python_package_tests() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(out.status.success(), "python tests failed:\n{text}");
-    assert!(text.contains("Ran 9 tests"), "unexpected test count:\n{text}");
+    assert!(text.contains("Ran 11 tests"), "unexpected test count:\n{text}");
 }
