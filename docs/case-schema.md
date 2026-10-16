@@ -904,6 +904,15 @@ Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `en
 `solid_a`, `solid_b` (a `solids` name or `"fluid"`; empty is an error; the two must differ) and `resistance` (m^2 K/W, `-1` = unset
 is an error, `0` = perfect contact). The resistance is added in series on the internal faces between exactly these two materials.
 
+Added in wave 21A (ADR 0035 D1, all optional):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `layer_thickness` [m], `layer_conductivity` [W/m/K] | empty = no layers | lists of equal length, every entry positive; the steady resistance `sum t_i/k_i` (no thermal capacity) is added to `resistance`. With layers, `resistance` may stay `-1` (counts as 0) |
+| `connection` | `closed` | `open` makes the faces adiabatic (a gap); `resistance` and the layer keys must then be absent. In a steady (simple/simplec) problem an open interface that leaves a group of cells with no fixed-temperature or convecting boundary is a located error at `connection` |
+
+Not delivered (F-215 stays partial): layer thermal capacity, in-plane shell conduction, solution-dependent open/closed switching, interfaces between separate meshes beyond the F-114 join.
+
 ### `solver.frozen_flow`
 
 Default `false`. When `true`, momentum and pressure are not solved: the face flux is `u(x_f) . S_f` from `initial.velocity` and

@@ -122,7 +122,19 @@ pub fn interfaces_schema() -> Schema {
             )
             .field(
                 "resistance",
-                Schema::float(UNSET).doc("Contact (or fouling-layer) resistance per unit area [m^2 K/W] added in series on the faces between the two materials; 0 is a perfect contact, -1 = unset (an error)"),
+                Schema::float(UNSET).doc("Contact (or fouling-layer) resistance per unit area [m^2 K/W] added in series on the faces between the two materials; 0 is a perfect contact, -1 = unset (an error unless layer_thickness is given, then it counts as 0)"),
+            )
+            .field(
+                "layer_thickness",
+                Schema::list(Schema::float(0.0)).doc("Thickness [m] of each thin layer of the interface (ADR 0035 D1); empty = none. The steady resistance sum(t/k) is added to resistance; the layers have no thermal capacity"),
+            )
+            .field(
+                "layer_conductivity",
+                Schema::list(Schema::float(0.0)).doc("Conductivity [W/m/K] of each layer, one per layer_thickness entry"),
+            )
+            .field(
+                "connection",
+                Schema::enumeration("closed", &["closed", "open"]).doc("closed: the faces conduct (default); open: the faces are adiabatic (an air gap), so resistance and layers must not be given"),
             ),
     )
     .doc("Thermal contact resistances between materials (ADR 0024)")
@@ -319,12 +331,37 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             out.push(d(p("solid_b"), "the two materials of an interface must differ"));
         }
         let r = gf(case, &p("resistance"));
-        if r == UNSET {
+        let lt = list_f(case, &p("layer_thickness"));
+        let lk = list_f(case, &p("layer_conductivity"));
+        let open = gs(case, &p("connection")) == "open";
+        if lt.len() != lk.len() {
+            out.push(d(
+                p("layer_conductivity"),
+                format!(
+                    "layer_thickness has {} entries but layer_conductivity has {}; give one conductivity per layer",
+                    lt.len(),
+                    lk.len()
+                ),
+            ));
+        }
+        for (key, v) in [("layer_thickness", &lt), ("layer_conductivity", &lk)] {
+            if v.iter().any(|x| !(*x > 0.0 && x.is_finite())) {
+                out.push(d(p(key), "every layer entry must be positive"));
+            }
+        }
+        if open {
+            if !lt.is_empty() || r != UNSET {
+                out.push(d(
+                    p("connection"),
+                    "an open connection is adiabatic: remove resistance and the layer keys (they have no effect)",
+                ));
+            }
+        } else if r == UNSET && lt.is_empty() {
             out.push(d(
                 p("resistance"),
-                "set the contact resistance [m^2 K/W] (0 = perfect contact); -1 means unset",
+                "set the contact resistance [m^2 K/W] (0 = perfect contact) or give layers; -1 means unset",
             ));
-        } else if !(r >= 0.0 && r.is_finite()) {
+        } else if r != UNSET && !(r >= 0.0 && r.is_finite()) {
             out.push(d(p("resistance"), format!("must not be negative (found {r})")));
         }
     }
@@ -502,7 +539,17 @@ impl ChtModel {
             let (Some(a), Some(b)) = (find(gs(case, &p("solid_a"))), find(gs(case, &p("solid_b")))) else {
                 continue; // reported by the settings check
             };
-            let found = cht::contact_faces(geom, &label, a, b, gf(case, &p("resistance")));
+            let r = if gs(case, &p("connection")) == "open" {
+                f64::INFINITY
+            } else {
+                let layers: f64 = list_f(case, &p("layer_thickness"))
+                    .iter()
+                    .zip(&list_f(case, &p("layer_conductivity")))
+                    .map(|(t, k)| t / k)
+                    .sum();
+                gf(case, &p("resistance")).max(0.0) + layers
+            };
+            let found = cht::contact_faces(geom, &label, a, b, r);
             if found.is_empty() {
                 errs.push(d(
                     p("solid_a"),
@@ -511,6 +558,10 @@ impl ChtModel {
             }
             contacts.extend(found);
         }
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+        errs.extend(open_group_errors(case, geom, &contacts));
         if !errs.is_empty() {
             return Err(errs);
         }
@@ -579,6 +630,75 @@ impl ChtModel {
             .map(|p| p.faces().map(|f| self.face_k[f]).collect())
             .unwrap_or_default()
     }
+}
+
+/// A steady problem whose open interfaces cut off a group of cells without any boundary that fixes the temperature has a
+/// singular matrix (ADR 0035 D1): one located error per such interface.
+fn open_group_errors(case: &Case, geom: &FvGeometry, contacts: &[cht::Contact]) -> Vec<Diagnostic> {
+    let open: Vec<usize> = contacts
+        .iter()
+        .filter(|c| c.resistance.is_infinite())
+        .map(|c| c.face)
+        .collect();
+    let alg = gs(case, "solver.algorithm");
+    if open.is_empty() || !matches!(alg.as_str(), "simple" | "simplec") {
+        return Vec::new();
+    }
+    let n = geom.n_cells();
+    let (own, nei) = (geom.mesh.owner(), geom.mesh.neighbour());
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(p: &mut [usize], mut x: usize) -> usize {
+        while p[x] != x {
+            p[x] = p[p[x]];
+            x = p[x];
+        }
+        x
+    }
+    for f in 0..geom.n_internal {
+        if open.contains(&f) {
+            continue;
+        }
+        let (a, b) = (find(&mut parent, own[f]), find(&mut parent, nei[f]));
+        if a != b {
+            parent[a] = b;
+        }
+    }
+    let mut anchored = vec![false; n];
+    for patch in geom.mesh.patches() {
+        let b = format!("boundaries.{}", patch.name);
+        let kind = gs(case, &format!("{b}.temperature"));
+        let active = match kind.as_str() {
+            "fixed" => true,
+            "convection" => {
+                gf(case, &format!("{b}.heat_transfer_coefficient")) > 0.0
+                    || gf(case, &format!("{b}.wall_emissivity")) > 0.0
+            }
+            _ => false,
+        };
+        if active {
+            for f in patch.faces() {
+                let r = find(&mut parent, own[f]);
+                anchored[r] = true;
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for name in interface_names(case) {
+        if gs(case, &format!("thermal_interfaces.{name}.connection")) != "open" {
+            continue;
+        }
+        let bad = open.iter().any(|&f| {
+            let (a, b) = (find(&mut parent, own[f]), find(&mut parent, nei[f]));
+            !anchored[a] || !anchored[b]
+        });
+        if bad {
+            out.push(d(
+                format!("thermal_interfaces.{name}.connection"),
+                "the open interface leaves a group of cells without a fixed-temperature or convecting boundary, so the steady problem is singular; give that side a fixed temperature or a convection coefficient, or run it transient",
+            ));
+        }
+    }
+    out
 }
 
 /// Heat-flux boundary condition `FixedGradient(q/k)` with the per-face conductivity (`q` INTO the domain, per face).
