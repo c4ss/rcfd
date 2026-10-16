@@ -1672,9 +1672,9 @@
     "deps": [
       "F-127"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Constant-kernel coalescence matches the analytic Smoluchowski moment solution",
-    "note": "Priority P4. Size L. Area: fv. Single item replaces the separate population-balance and polydispersed scope."
+    "note": "Priority P4. Size L. Area: fv. Single item replaces the separate population-balance and polydispersed scope. Wave 23C (ADR 0041), partial: LIBRARY only, one-way, no multiphase base (F-127 todo). Delivered in rcfd-fv popbal.rs: 0-D fixed-pivot bins (coalescence: constant, sum, product, Brownian, shear, Saffman-Turner; breakup: constant/power rate with binary, uniform, symmetric-beta daughters) and QMOM (Wheeler, located realizability errors), plus a one-way transport helper carrying the bins as passive scalars (no interphase coupling). Constant-kernel Smoluchowski moments matched to 1e-8 or better (bins and QMOM); sum, product and breakup closed forms and conservation to round-off checked. Gaps: case-tree wiring, interphase momentum/mass/volume-fraction coupling, turbulence-driven kernels from a k-epsilon run, DQMOM, method of classes, spatial moment transport."
   },
   {
     "id": "F-229",
