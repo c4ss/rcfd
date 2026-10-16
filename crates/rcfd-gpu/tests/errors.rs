@@ -14,16 +14,14 @@ fn e1_shape_errors_are_located() {
     let a = grid_matrix(5, 5, 1, 0.0);
     let (c, o) = (SolveControl::default(), LinearOptions::default());
     let mut x = vec![0.0; 25];
-    let e = CudaBackend.cg(&a, &vec![1.0; 24], &mut x, &c, &o).unwrap_err();
+    let e = CudaBackend.cg(&a, &[1.0; 24], &mut x, &c, &o).unwrap_err();
     println!("E1 b mismatch: {e}");
     assert!(
         e.message.contains("right-hand side") && e.message.contains("24") && e.message.contains("25"),
         "{e}"
     );
     let mut short = vec![0.0; 3];
-    let e = CudaBackend
-        .bicgstab(&a, &vec![1.0; 25], &mut short, &c, &o)
-        .unwrap_err();
+    let e = CudaBackend.bicgstab(&a, &[1.0; 25], &mut short, &c, &o).unwrap_err();
     println!("E1 x mismatch: {e}");
     assert!(e.message.contains("solution vector x"), "{e}");
     let rect = CsrMatrix::rect(2, 3, vec![0, 1, 2], vec![0, 2], vec![1.0, 1.0]);

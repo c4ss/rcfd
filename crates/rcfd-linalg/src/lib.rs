@@ -16,8 +16,8 @@ pub mod vecops;
 
 pub use amg::{Amg, AmgSettings};
 pub use backend::{
-    check_index_range, check_system, cpu_preconditioner, BackendError, CpuBackend, GpuPrecond, LinearBackend, LinearDevice,
-    LinearOptions, DEFAULT_CHEBYSHEV_DEGREE,
+    check_index_range, check_system, cpu_preconditioner, BackendError, CpuBackend, GpuPrecond, LinearBackend,
+    LinearDevice, LinearOptions, DEFAULT_CHEBYSHEV_DEGREE,
 };
 pub use matrix::{CsrMatrix, LduAddressing, LduMatrix};
 pub use precond::{Chebyshev, ChebyshevCoeffs, Ic0, Identity, Ilu0, Jacobi, Preconditioner};
