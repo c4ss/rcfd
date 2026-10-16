@@ -201,3 +201,64 @@ realizable fluxes in space, validation against a published experiment.
 | Turbulent shear kernel | P. G. Saffman and J. S. Turner (1956), J. Fluid Mech. 1, 16-30 | citation from memory, UNVERIFIED; constant `sqrt(8 pi/15)` from memory, only an identity is tested |
 | Breakup daughter distributions | C. A. Hill and K. M. Ng (1995), AIChE J. 41, 1204-1216 | citation from memory, UNVERIFIED; the symmetric-beta form is defined here |
 | Implicit QL tridiagonal eigenproblem | Golub and Welsch (1969), Math. Comp. 23, 221-230; standard QL | citation from memory, UNVERIFIED; implementation own |
+
+## Results addendum (written after the runs; no registered limit was changed)
+
+Release builds, tests in `crates/rcfd-fv/tests/popbal_bins.rs` (B), `popbal_qmom.rs` (Q), `popbal_transport.rs` (T); code in
+`crates/rcfd-fv/src/popbal.rs`. All registered limits were met; there are no `*_known_miss` tests.
+
+Measured against the registered limit:
+
+| Check | Measured | Limit |
+| --- | --- | --- |
+| B1 max abs bin error vs Flory, tau 1 / 4 | 1.2e-11 / 1.4e-12 | 1e-7 |
+| B1 volume drift; min N / max N over steps (B9) | <= 4.4e-16; 0 | 1e-12; >= -1e-10 |
+| B2 m0 relative error tau 1 / 4 | 3.8e-12 / 1.7e-12 | 1e-8 |
+| B3 m0 (all s) | 1.7e-7 | 1e-5 |
+| B3 m1 (all s) | <= 4.4e-16 | 1e-8 |
+| B3 m2 relative error s = 2 / 4 / 8 | 4.8e-2 / 1.1e-2 / 2.9e-3 | s=4 0.08, s=8 0.03 |
+| B3 m3 relative error s = 2 / 4 / 8 | 1.6e-1 / 3.7e-2 / 9.1e-3 | s=8 0.10 |
+| B3 observed order in bin width (reported) | m2 2.05, 2.01; m3 2.12, 2.03 | expectation recorded 1 to 2: the measured order is 2 (slightly above the recorded band; not asserted) |
+| B4 sum kernel m0 / m2 | 1.3e-13 / 4.3e-12 | 1e-6 |
+| B5 product kernel m0 / m2 | 5.9e-16 / 3.1e-12 | 1e-6 |
+| B6 generation numbers abs / m0 / volume | 6.8e-10 / 8.3e-11 / 2.2e-16 | 1e-9 / 1e-9 / 1e-12 |
+| B7 s = 4: m0, m1 | 7.5e-9, 3.3e-16 | 1e-8, 1e-12 |
+| B7 s = 8: m2, m3 (s = 4: 3.3e-3, 7.4e-3) | 8.3e-4, 1.9e-3 | 0.05, 0.10 |
+| B8 RHS volume / number conservation | 4.8e-16 / 1.2e-15 | 1e-13 |
+| B10 Brownian initial number rate | equal to 12 digits (1e-12 limit met) | 1e-12 |
+| Q1, Q2 recovery / reproduction | all within limits (see test output) | 1e-12 / 1e-9 |
+| Q3 error cases | 5 of 5 located with the registered indices (0, 0, 2, 2, 4) | index in text |
+| Q4 N = 2 and 3, worst moment error | 1.4e-12 | 1e-8 |
+| Q5 m0 / m2 | 1.3e-13 / 4.3e-12 | 1e-7 |
+| Q6 t = 0.25 m0, m2, m3 | 1.6e-14, 3.1e-12, 1.1e-10 | 1e-7 |
+| Q6 t = 0.4 m0, m2, m3 | 2.7e-14, 1.4e-10, 4.7e-9 | 1e-7 |
+| Q7 uniform / binary, k = 0..3, worst | 1.6e-13 / 1.2e-12 | 1e-8 |
+| Q7 linear breakup m0 / m1 | 1.4e-14 / 0 | 1e-8 / 1e-12 |
+| Q8 bins (s = 8) vs QMOM m0; m2 difference (reported) | 1.7e-7; 2.9e-3 | m0 1e-5 |
+| T1 relative L2 error of the advected pulse; linearity | 3.8e-2; 1.2e-15 | 0.06; 1e-12 |
+| T2 outlet m0 relative error; volume ratio | 1.5e-3; 1.0e-15 | 0.01; 1e-6 |
+| T3 cell volume change by the source step | 1.9e-16 | 1e-12 |
+
+Deviations and disclosures (none changes a registered limit):
+
+* **B10 set-up defect.** The first version of the daughter-row assertion required a total daughter number strictly greater than 1. For
+  bin 1 all uniform daughters fall below the first pivot and the volume-conserving pile-up gives number exactly 1. The first test is kept
+  as `b10_kernel_and_daughter_identities_v1_setup_defect` (ignored) and the corrected `..._v2` passes.
+* **B10 registered wording.** The registered statement "`sum_i n_ik = nu` for every `k` whose daughters stay above `x_1`" is vacuous for the
+  continuous densities (their daughters always reach below `x_1`). What is checked instead: volume `sum x_i n_ik = x_k` to 1e-13 for every
+  `k` and every density; the number sum is `2 - x_1/x_k` for the uniform density (closed form, 1e-13) and between 1 and 2 for the betas; the
+  binary-equal row has number exactly 2 for `k >= 2`; the moment factors `mb_k/x^k` agree with composite-Simpson integrals of the densities
+  to 1e-9. The Saffman-Turner identity is tested with the exact constant `sqrt(8 pi/15)` (1.2944 is its rounded value).
+* **Q3 "second Hankel".** Realized as a three-point law with `m_4` multiplied by 0.3 (N = 3); the error carries index 4.
+* **B3 order.** Observed order 2, above the recorded expectation "between 1 and 2" (the expectation was a report, not a limit). It is the
+  expected value for piecewise-linear splitting of the interpolation error per event (second order in the bin width in `v^2`), a
+  reading consistent with the derivation in D2.
+* **T2 cost.** The registered T2 set-up (161 bins, 200 cells, 2000 steps) takes about 225 s in a release build (dominated by 322 000
+  implicit transport solves), which is long for the suite. The parameters stay as registered.
+* **Not done:** no case-tree wiring, no schema change (so `docs/case-schema.md` is unchanged), no turbulence-coupled run.
+* The pair loop of the bin right-hand side skips pairs where either number density is exactly zero (an optimisation with identical results).
+
+Status of F-228: `partial`. Delivered: 0-D fixed-pivot bins with coalescence (constant, sum, product, Brownian, laminar shear,
+Saffman-Turner) and breakup (constant and power rates; binary-equal, uniform and symmetric-beta daughters); QMOM with Wheeler's algorithm
+and located realizability errors; one-way transport of the bins in the scalar machinery (library). Named gaps: case-tree wiring,
+interphase coupling (F-127), turbulence-driven kernels from a k-epsilon run, DQMOM, method of classes, spatial moment transport.
