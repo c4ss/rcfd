@@ -88,6 +88,8 @@ direction = [1.0, 0.0, 0.0]
     (-dp, eu, ev)
 }
 
+/// Diagnosis (wave 24, ADR 0042): the 0.159 comes from the default averaged component diagonal; `component_diagonal = "corrected"`
+/// holds the plug flow to round-off (`duct_diagnosis.rs`).
 /// A4 as registered (slip walls). KNOWN MISS of the velocity limits: the registered set-up assumed the uniform duct flow is preserved
 /// with `symmetry` side walls; it is not, even without a disk (the empty duct deviates from the plug flow by 0.159, measured, with
 /// the inlet fixed and a uniform initial field), so the 1e-3 limits cannot be met by any disk. The pressure jump (49.71, within the

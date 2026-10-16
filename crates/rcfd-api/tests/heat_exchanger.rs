@@ -280,6 +280,8 @@ fn x4_fan_boundary_reproduces_its_pressure_flow_curve() {
     x4_run(true);
 }
 
+/// Diagnosis (wave 24, ADR 0042): the set-up is well-posed (fan curve against the jump has an operating point); the divergence
+/// is the missing momentum diagonal of the fixed-pressure inlet cell (`duct_diagnosis.rs`), not ill-posed physics.
 /// KNOWN MISS: the registered X4 set-up (lossless duct, fan boundary at the inlet, porous jump, outlet pressure 0, initial speed 2 m/s)
 /// diverges (flow NaN within about 8 iterations, patch pressure stays near 200 Pa); see ADR 0039 addendum, deviation 2. The corrected set-up
 /// with a distributed Darcy bed is `x4_fan_boundary_reproduces_its_pressure_flow_curve`.
