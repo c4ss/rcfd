@@ -218,9 +218,11 @@ pub fn report_dimension(kind: &str, field: &str) -> Dimension {
         "moment" => Dimension::FORCE * Dimension::LENGTH,
         "mass_flow" => Dimension::MASS / Dimension::TIME,
         "heat_flow" => Dimension::POWER,
+        "vector_flux" => Dimension::FORCE,
         "volume_integral" => field_dim * Dimension::LENGTH.powi(3),
         "area_integral" => field_dim * Dimension::LENGTH.powi(2),
-        "volume_average" | "area_average" | "probe" | "minimum" | "maximum" => field_dim,
+        "volume_average" | "area_average" | "probe" | "minimum" | "maximum" | "volume_std" | "area_std"
+        | "mass_weighted_average" | "area_min" | "area_max" => field_dim,
         _ => Dimension::NONE,
     }
 }
@@ -341,6 +343,11 @@ pub fn report_symbols(case: &Case) -> Vec<(String, Dimension)> {
                         | "maximum"
                         | "volume_integral"
                         | "area_integral"
+                        | "volume_std"
+                        | "area_std"
+                        | "mass_weighted_average"
+                        | "area_min"
+                        | "area_max"
                 )
             {
                 // static pressure [Pa] instead of the kinematic pressure of the incompressible solvers

@@ -1059,6 +1059,12 @@ pub fn case_schema() -> Schema {
                     "y_plus",
                     "scalar_flux",
                     "scalar_average",
+                    "volume_std",
+                    "area_std",
+                    "mass_weighted_average",
+                    "area_min",
+                    "area_max",
+                    "vector_flux",
                 ],
             )
             .doc("What to compute (y_plus: wall y+ minimum / maximum / average over a wall patch, k-epsilon runs)"),
