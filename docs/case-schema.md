@@ -74,11 +74,21 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 | `sa.wall_mode` | `auto` | `auto`: Spalding law of the wall for the wall shear, plus a wall-cell `nuTilda` matching the law for wall-cell y+ > 5 (works from y+ about 1 into the log layer); `resolved`: `nuTilda = 0` on the wall and no wall function (y+ of order 1) |
 | `sa.limiter` | `allmaras` | `S~` limiter: `allmaras` (Allmaras, Johnson and Spalart 2012, c2 0.7, c3 0.9), `min_0p3` (`S~ >= 0.3 Omega`), `positive` |
 | `sa.negative_nutilde` | true | SA-neg treatment of negative `nuTilda` (production `cb1 Omega nuTilda`, destruction `+cw1 (nuTilda/d)^2`, diffusion `nu + fn nuTilda`, `nut = 0`); off: clip at zero |
+| `sa.des` | `off` | `off`: RANS length scale `d` (wall distance). `des`: detached-eddy simulation, `d~ = min(d, C_DES Delta)`. `ddes`: delayed DES, `d~ = d - f_d max(0, d - C_DES Delta)`, `f_d = 1 - tanh((8 r_d)^3)`, `r_d = (nu + nut)/(max(sqrt(U_ij U_ij), 1e-10) kappa^2 d^2)`. `des` and `ddes` run with the transient algorithms (`piso`, `pimple`) only and add an implicit-Euler time derivative on `nuTilda` (ADR 0032) |
+| `sa.des_delta` | `max_extent` | Grid scale `Delta`: `max_extent` (largest distance between two face centres of the cell, empty directions excluded: `max(dx, dy, dz)` on boxes) or `cbrt_volume` (`V^(1/3)`) |
+| `sa.c_des` | 0.65 | `C_DES`, range 0.1 to 2 (value from secondary literature, see `docs/reference-data.md`) |
 
 `convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
 `wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are
 rejected for this model with a located diagnostic. Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the
 TMR CFL3D SA value (y+ 0.5 and y+ 30 meshes: +3.0 and +5.8 percent).
+
+The `sa.des*` keys are errors (located at the key) with any other model, and `sa.des != "off"` with a steady algorithm is a
+located error at `turbulence.sa.des`. Plain SA (`sa.des = "off"`) stays steady-only. With the DES length scale the
+model is a hybrid RANS-LES closure on the Spalart-Allmaras equation only: the SA-based DES and DDES of ADR 0032 are not
+validated on a separated flow (no case in this version), IDDES, SAS, the Strelets variants and the DES-SST models are not
+available. In a live session `turbulence.model` cannot be switched while `turbulence.sa.*` differ from their defaults;
+`turbulence.sa.des` itself can be switched (`des` to `ddes`) and keeps the flow field.
 
 ### `smagorinsky`, `wale` and `mixing_length` (F-045, F-206, ADR 0026)
 
@@ -102,11 +112,40 @@ function). Subgrid models need no wall patch unless `wall_damping = van_driest`.
 (`settings.set turbulence.model`; the flow is kept). Restrictions: no energy equation, no compressible or variable-density
 engine; `k_initial`, `epsilon_initial` and the other transported-model keys are rejected. **Known limitations:** the
 subgrid-stress divergence is discretised in Laplacian form `div(nu_eff grad u)` as for the RANS models (the transposed part
-`div(nu_t (grad u)^T)` is missing, which changes the dissipation of a variable `nu_t`, ADR 0026 addendum A1); no SGS heat or
-scalar flux; DES-class hybrid models, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, Pr_t/Sc_t are not available.
+`div(nu_t (grad u)^T)` is missing by default, which changes the dissipation of a variable `nu_t`, ADR 0026 addendum A1; the
+option `solver.viscous_stress = "full"` adds it, see below); no SGS heat or
+scalar flux; DES-class hybrid models other than the SA-based DES / DDES below, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, Pr_t/Sc_t are not available.
 Validation: closed-form checks and a Taylor-Green vortex (ADR 0026); mixing length on the periodic Re_tau 395 channel
 within 4 percent of the DNS mean velocity (linear, van Driest) and 3 percent (Nikuradse analogy). Decaying isotropic
 turbulence and pipe data were not run.
+
+### `solver.viscous_stress`, SA-based DES, `rsm` (F-045, F-207, F-046, ADR 0032)
+
+`solver.viscous_stress` (`laplacian` default | `full`): `laplacian` is the momentum diffusion `div(nu_eff grad u)` of every
+earlier version (results bit-identical). `full` adds the transposed part of the viscous stress, `div(nu_eff (grad u)^T)`, as an
+explicit source from the previous iterate (the part that is zero for a constant viscosity and divergence-free velocity, so the
+laminar results change by the discretisation error only: 6e-6 in the tree test). It exists for the variable-viscosity closures
+(`smagorinsky`, `wale`, `mixing_length`, `rsm`'s eddy viscosity, rheology laws). `full` is available with `piso` and `pimple`,
+constant density; a steady algorithm or variable density is a located error at `solver.viscous_stress`. Translationally periodic
+patches are included; non-periodic boundary faces and rotationally periodic faces contribute nothing to the explicit term (the
+boundary value of `grad u` is not reconstructed), so near a wall the term is incomplete.
+
+`turbulence.model = "rsm"` is a Reynolds stress transport model: six stress equations and the dissipation rate. Keys:
+`turbulence.rsm.pressure_strain` (`ssg` default, Speziale-Sarkar-Gatski quadratic with `Ce2` 1.83 | `lrr_ip`, Launder-Reece-Rodi
+isotropisation of production with `Ce2` 1.92); coefficients in `turbulence.coefficients.rsm` (`c1`, `c1s`, `c2`, `c3`, `c3s`, `c4`,
+`c5`, `c1_lrr`, `c2_lrr`, `ce1`, `ce2_ssg`, `ce2_lrr`, `c_s`, `c_eps`, `c_mu`, with ranges); `turbulence.k_initial` and
+`turbulence.epsilon_initial` (or `initial_intensity` and `initial_viscosity_ratio`) set the isotropic start `R_ij = 2/3 k delta_ij`.
+Fields `Rxx`, `Ryy`, `Rzz`, `Rxy`, `Rxz`, `Ryz`, `epsilon`, `k` (= trace R / 2) and `nut` (= `c_mu k^2/eps`, added to the molecular
+viscosity in the momentum equation). The divergence of the Reynolds stress enters the momentum equation as an explicit body
+acceleration `-div R` minus the implicit eddy-viscosity Laplacian already in `nu_eff`, so the net effect is the stress itself.
+Stress diffusion is generalised-gradient with the normal-stress part only (`nu + c_s (k/eps) n.R.n` through each face; the
+off-diagonal `R_kl` terms are not implemented). Restrictions (located errors): transient algorithms (`piso`, `pimple`) only;
+**no wall patch** (no wall treatment, no low-Reynolds terms, no wall reflection: error at `boundaries.<patch>.turbulence`) and no
+`inlet` turbulence role (no stress inlet condition); no energy equation; `turbulence.rsm.*` with another model is an error. Valid
+configurations are therefore fully periodic boxes (the only configuration tested); other wall-free boundaries are not validated. Validation (ADR 0032): term invariants, the
+homogeneous-shear and isotropic-decay ODEs, the semi-implicit update and the momentum source to 1e-8 or better; the wall-bounded
+channel check (C7) was **not delivered**. The decay exponent `1/(Ce2 - 1)` is a model statement, no comparison with
+experiment was made. `plugin` with `turbulence.plugin = "rsm"` selects the same model.
 
 ### Model coefficients, plugin models and live switching (F-044)
 
@@ -114,7 +153,7 @@ turbulence and pipe data were not run.
 exported JSON schema: `k_epsilon` (`c_mu`, `c1`, `c2`, `sigma_k`, `sigma_e`; 0 keeps the value of the selected `variant`),
 `k_omega_sst` (the eleven Menter 2003 values; **shown, not editable**: a non-default value is rejected because the
 constants are compiled into the model), `sa` (`sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`),
-`smagorinsky`, `wale` and `mixing_length` (above). A
+`smagorinsky`, `wale`, `mixing_length` and `rsm` (above). A
 value outside its range is rejected when it is set; a non-default value in the group of a model that is not selected, or
 `k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available: overriding
 a coefficient by an expression or a user function.
