@@ -30,6 +30,7 @@ pub mod scalar;
 pub mod simple;
 pub mod sixdof;
 pub mod smoothing;
+pub mod solidification;
 pub mod sources;
 pub mod thermal_bc;
 pub mod varden;

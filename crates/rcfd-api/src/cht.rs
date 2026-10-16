@@ -102,6 +102,10 @@ pub fn solids_schema() -> Schema {
             .field(
                 "initial_temperature",
                 Schema::float(UNSET).doc("Initial temperature [K] of the solid cells; -1 = unset, the cells start at initial.temperature"),
+            )
+            .field(
+                "electrical_conductivity",
+                Schema::float(UNSET).doc("Electrical conductivity [S/m] of the solid (electric.enabled, ADR 0035); 0 = insulator, -1 = use electric.conductivity"),
             ),
     )
     .doc("Solid cell zones of a conjugate heat-transfer case (ADR 0024). Zones must not overlap; the fluid is every cell in no solid")
