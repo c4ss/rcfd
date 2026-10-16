@@ -130,3 +130,32 @@ F-220: orthotropic conductivity; NASA nine-coefficient heat-capacity polynomials
 F-218: blade-element lookup, tip loss, trim, unsteady/rotating disks; the model-rotor data comparison (acceptance 10 percent); a validated CFD hover induced-velocity result (A5 is report only).
 F-216: per-region energy/radiation/species models, region-scoped turbulence equations, coupling of regions through interfaces, the conjugate heat transfer benchmark.
 F-217: not attempted.
+
+## Addendum (end of wave 21B): measured results and deviations
+
+Registered limits above are unchanged. Everything below is what happened.
+
+### Measured against the registered checks
+
+- T1-T8 pass. T8 saturation interpolation worst 5.167e-4 (limit 1e-3, derived bound 6e-4); psat(tsat(p)) round trip and phase selection pass.
+- **T9 vapour half MISSES** (known miss, test `t9_vapour_table_midcell_error_known_miss`, `#[ignore]`): measured 2.642e-4 relative at cell centres (limit 1e-4), cell T 380-385 K, p 10-20 kPa. Root cause: the pre-registration estimate omitted the non-ideal behaviour of steam in the pressure direction (rho T/p rises about 0.07 percent per 5 kPa, error about 2 a h^2/(8 p) with a = 1.3e-7 1/Pa, 2.2e-4; the temperature direction contributes 4.4e-5). Not tuned. The liquid half passes (3.311e-5).
+- P1 max |dT| 4.377e-12 K, heat flow relative difference 1.334e-13; P2 max |T - exact| 7.405e-2 K (limit 0.5), heat flow -0.032 percent (limit 1); P3 4.377e-12 K; P4 max |u - exact| 4.357e-5 U (limit 1e-2); P5, P6 pass.
+- A1 closed forms to <= 1e-13, Betz scan within 1e-5; A2 (raw top-hat, `distribution = "cell"`) force 3.7 to about 4e-16 relative, torque 0.700000000000001; selected volume 4.93496e-2 vs pi R^2 t 5.65487e-2 (-12.73 percent, reported only); A3 pass.
+- **A4 as registered (symmetry side walls) cannot pass, set-up defect.** The velocity limits fail even for the EMPTY duct: with `velocity = "symmetry"` side walls the existing solver does not preserve plug flow (max |ux - 1| = 0.159 at iteration 400 and later). The pressure jump is inside the limit (49.71 sharp, 49.95 smooth). Kept as ignored test `a4_pressure_jump_across_a_disk_in_a_duct_symmetry_walls_known_miss` (smooth: max |ux - 1| 1.598e-1, |uy| 2.011e-2). The cause of the symmetry-wall deviation was not investigated further (pre-existing solver behaviour; recommended for a follow-up).
+- **A4b corrected set-up** (walls `velocity = "fixed"` with the stream velocity (1, 0, 0); the empty duct is exact to 2e-12): kinematic dp 50.0000 (limit 0.5), max |ux - 1| 2.92e-12, max |uy| 4.6e-13 (limit 1e-3), with the default smoothed distribution. Passes.
+- **A4c sharp top-hat on the corrected set-up misses** (ignored test `a4c_sharp_top_hat_known_miss`): max |ux - 1| 2.897, max |uy| 0.47, dp 49.985. Root cause: a sharp cell zone leaves an unbalanced half force in the edge cells (the discrete pressure gradient gives edge cells half the force density, and the outside neighbours half), producing a jet of about sqrt(a dx) = 3 m/s.
+- A5 (hover in a finite box) NOT attempted (report-only check).
+- R1 max |du| 0.0 (limit 1e-6), max |dp| 0.0 (limit 3.6e-6); the laminar and k_epsilon runs differ by 9.3e-4 in ux (so the check is not vacuous, but the flow is only weakly turbulent at nu = 0.02); R1b a partial region changes ux by 1.9e-4; R2 exact; R3 six located-error cases pass; R4 baseline hashes unchanged.
+
+### Deviations from the registered text
+
+1. D3 formula: the acceleration is `a_c = F_c / (rho V_c)`; the ADR formula omitted the division by the cell volume (registered check A2 is consistent with the corrected form).
+2. New case key `sources.<n>.distribution = "smooth" | "cell"` (default "smooth"), not in the ADR. Smooth: face values are the mean of the two adjacent cell accelerations (outside cells zero), cell values are reconstructed from the face fluxes by the least-squares form (sum S(x)S/|S|)^-1 sum S phi/|S|, and thrust and torque parts are renormalised separately so the totals stay exact (A2b: force 3.7 to 3e-14, torque 0.7 to machine precision, 504 cells outside the zone carry force). Reason: the A4c finding above.
+3. D2 sentence "an `error` extrapolation law stops the run" is NOT delivered: the error mode returns NaN (as the schema documentation says); the run is not stopped.
+4. A4 was split into the registered (ignored known miss) and corrected tests as described.
+5. F-216 was implemented through a face-viscosity mask in the turbulence state (`TurbState::nu_face`); turbulence transport equations are still solved inside laminar regions.
+6. **Commit hygiene incident.** Commit 679b24b accidentally contained other waves' uncommitted hunks of `crates/rcfd-api/src/schema.rs` (time_advance, electric fields) and `crates/rcfd-fv/src/lib.rs` (`pub mod electric;`) because the shared working tree was staged with `git add` of a shared file. History was not rewritten. The wave 21A electric files were uncommitted at the time, so 679b24b alone did not build; a clean build of a given commit therefore depends on wave 21A having committed its electric files (at the time of writing they were staged but not committed).
+
+### Not delivered (in addition to the list above)
+
+Per-region energy, radiation and species models, regions coupled through interfaces, the conjugate benchmark; blade-element, tip loss and trim; the model-rotor comparison; A5.

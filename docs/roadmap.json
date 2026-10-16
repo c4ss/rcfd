@@ -1530,9 +1530,9 @@
       "F-051",
       "F-114"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A published conjugate heat transfer benchmark with a conducting wall is reproduced within published scatter using different model sets in fluid and solid regions",
-    "note": "Priority P3. Size M. Area: fv,api. Architectural item: region-scoped settings in the state tree."
+    "note": "PARTIAL (wave 21B, ADR 0036). Delivered: regions.<name> section (zone all/box/cell_zone/register) with turbulence = model | laminar: the momentum equation uses the molecular viscosity on every face touching a laminar region (steady and transient incompressible runs). Measured: laminar region over the whole domain equals a laminar run exactly (0 difference, limit 1e-6) while a partial region changes the solution (1.9e-4); mask semantics exact; located diagnostics for unknown values, empty zones, no turbulence model, RSM/plugin, rheology and temperature-dependent viscosity. Missing (why partial): the turbulence transport equations are still solved inside laminar regions; per-region energy, radiation and species models; coupling of regions through interfaces; the published conjugate heat transfer benchmark with different model sets (the conjugate code was being changed by another wave). Previous scope text: Priority P3. Size M. Area: fv,api. Architectural item: region-scoped settings in the state tree."
   },
   {
     "id": "F-217",
@@ -1554,9 +1554,9 @@
       "F-031",
       "F-113"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Axial hover thrust and induced velocity match momentum theory; a public model-rotor hover data set gives thrust within 10 percent",
-    "note": "Priority P3. Size M. Area: fv. Momentum source distributed over a disk zone."
+    "note": "PARTIAL (wave 21B, ADR 0036). Delivered: rcfd-fv actuator.rs and sources type actuator_disk (steady SIMPLE/SIMPLEC): thrust along a direction over a zone (box, cell_zone, register, all), uniform or linear-in-radius loading, optional swirl torque about the disk axis, force and torque exact to machine precision (3.7 N to 4e-16 relative, 0.7 N m to 1e-15), smoothed distribution (default) that removes the edge-cell imbalance of a sharp top-hat; momentum-theory closed forms (induced velocity, wake velocity, power, figure of merit, Betz coefficients) verified to 1e-13; located diagnostics. Duct pressure jump: corrected set-up (A4b) kinematic dp 50.0000 (limit 0.5), velocity perturbation 2.9e-12; the registered symmetry-wall set-up misses on velocity because the existing solver does not keep plug flow with symmetry side walls (0.159 even without a disk) and the sharp top-hat (distribution = cell) misses with a 3 m/s jet; both are ignored known-miss tests. Missing (why partial): blade-element lookup, tip loss and trim; unsteady and rotating disks; the model-rotor hover data comparison (acceptance 10 percent) and any validated CFD hover induced-velocity result (A5 not attempted); hover momentum-theory formulas are derived, not checked against a rotorcraft text. Previous scope text: Priority P3. Size M. Area: fv. Momentum source distributed over a disk zone."
   },
   {
     "id": "F-219",
@@ -1578,9 +1578,9 @@
       "F-111",
       "F-061"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Public water and steam verification values reproduced to the standard's table tolerance; saturation-line round trip closes; a compressible-liquid density law reproduces its defining relation",
-    "note": "Priority P2. Size M. Area: core,api. Public formulations only; no reference-fluid database import."
+    "note": "PARTIAL (wave 21B, ADR 0036). Delivered: rcfd-core tabular.rs with piecewise-linear and piecewise-polynomial tables (located validation, monotonic checks, constant/linear/error extrapolation), Vogel-Fulcher-Tammann viscosity, the Tait compressible-liquid density law, and a pressure-temperature table with saturation line, phase selection and bilinear interpolation; case-schema laws piecewise_linear, piecewise_polynomial and vogel in properties.viscosity / conductivity / specific_heat (defaults and baseline hashes unchanged). Measured: interpolation exact at nodes; P1 table-vs-polynomial dT 4.4e-12 K; kinked-conductivity Kirchhoff case 7.4e-2 K (limit 0.5); Vogel Couette 4.4e-5 U; saturation interpolation 5.2e-4 (limit 1e-3), psat(tsat) round trip and phase selection pass. KNOWN MISS: the registered 1e-4 mid-cell interpolation error of the steam table is 2.64e-4 (liquid half 3.3e-5 passes) because steam is non-ideal in the pressure direction; kept as an ignored test, limit not widened. Missing (why partial): orthotropic conductivity; NASA nine-coefficient heat capacity as a case law (exists in the reactor crate); pressure-dependent properties (Tait density, P-T tables) are library-only and not connected to the incompressible solvers; CSV table-file property laws; the water/steam acceptance rests on the existing IF97 module, not on new table data. Tait and Vogel formulas verified against public pages (docs/reference-data.md). Previous scope text: Priority P2. Size M. Area: core,api. Public formulations only; no reference-fluid database import."
   },
   {
     "id": "F-221",
