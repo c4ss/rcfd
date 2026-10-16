@@ -4,6 +4,7 @@
 
 use crate::case::{Case, Diagnostic};
 use rcfd_core::vec3::{self, Vec3};
+use rcfd_fv::actuator::{ActuatorDisk, DiskProfile};
 use rcfd_fv::simple::BodyForce;
 use rcfd_fv::sources::{self as fvs, MrfZone, RotatingFrame};
 use rcfd_fv::{FvGeometry, VectorField};
@@ -129,6 +130,64 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     bad(p("angular_velocity"), "must be finite".into());
                 }
             }
+            "actuator_disk" => {
+                if !gf(case, &p("thrust")).is_finite() {
+                    bad(p("thrust"), "must be finite".into());
+                }
+                let dir = vec3_of("direction");
+                match &dir {
+                    Ok(Some(d)) if vec3::norm(*d) > 0.0 && d.iter().all(|x| x.is_finite()) => {}
+                    Ok(_) => bad(
+                        p("direction"),
+                        "an actuator disk needs a non-zero direction [x, y, z]".into(),
+                    ),
+                    Err(m) => bad(p("direction"), m.clone()),
+                }
+                let (centre, axis) = (vec3_of("disk_centre"), vec3_of("disk_axis"));
+                for (f, r) in [("disk_centre", &centre), ("disk_axis", &axis)] {
+                    if let Err(m) = r {
+                        bad(p(f), m.clone());
+                    }
+                }
+                let centre_given = matches!(centre, Ok(Some(_)));
+                let axis_ok = match &axis {
+                    Ok(Some(a)) => vec3::norm(*a) > 0.0,
+                    _ => matches!(&dir, Ok(Some(d)) if vec3::norm(*d) > 0.0),
+                };
+                if matches!(&axis, Ok(Some(a)) if vec3::norm(*a) == 0.0) {
+                    bad(p("disk_axis"), "must be non-zero (or empty to use direction)".into());
+                }
+                if gs(case, &p("profile")) == "linear_r" && !centre_given {
+                    bad(
+                        p("disk_centre"),
+                        "profile = \"linear_r\" needs disk_centre (a point on the disk axis)".into(),
+                    );
+                }
+                let torque = gf(case, &p("torque"));
+                if !torque.is_finite() {
+                    bad(p("torque"), "must be finite".into());
+                } else if torque != 0.0 {
+                    if !axis_ok {
+                        bad(
+                            p("disk_axis"),
+                            "a swirl torque needs a non-zero disk_axis (or direction)".into(),
+                        );
+                    }
+                    if !centre_given {
+                        bad(
+                            p("disk_centre"),
+                            "a swirl torque needs disk_centre (a point on the disk axis)".into(),
+                        );
+                    }
+                }
+                let rho = gf(case, &p("density"));
+                if rho < 0.0 {
+                    bad(p("density"), "must not be negative (0 = physics.rho)".into());
+                }
+                if rho == 0.0 && gf(case, "physics.rho") <= 0.0 {
+                    bad(p("density"), "set a positive density or physics.rho".into());
+                }
+            }
             _ => {
                 if let Err(m) = vec3_of("acceleration") {
                     bad(p("acceleration"), m);
@@ -246,6 +305,7 @@ enum Kind {
     Rotating(RotatingFrame),
     Mrf(MrfZone),
     Acceleration(Vec3),
+    Disk(ActuatorDisk),
 }
 
 struct Item {
@@ -324,6 +384,36 @@ impl Sources {
                     }
                     Kind::Mrf(m)
                 }
+                "actuator_disk" => {
+                    let direction = vec3::unit(gv(case, &p("direction")).flatten().unwrap_or([1.0, 0.0, 0.0]));
+                    let d = ActuatorDisk {
+                        thrust: gf(case, &p("thrust")),
+                        direction,
+                        profile: if gs(case, &p("profile")) == "linear_r" {
+                            DiskProfile::LinearR
+                        } else {
+                            DiskProfile::Uniform
+                        },
+                        centre: gv(case, &p("disk_centre")).flatten().unwrap_or([0.0; 3]),
+                        axis: gv(case, &p("disk_axis")).flatten().map_or(direction, vec3::unit),
+                        torque: gf(case, &p("torque")),
+                        smooth: gs(case, &p("distribution")) != "cell",
+                        density: if gf(case, &p("density")) > 0.0 {
+                            gf(case, &p("density"))
+                        } else {
+                            gf(case, "physics.rho")
+                        },
+                    };
+                    if let Err(m) = d.cell_forces(geom, &zone) {
+                        errs.push(Diagnostic {
+                            path: p("zone"),
+                            line: None,
+                            message: m,
+                        });
+                        continue;
+                    }
+                    Kind::Disk(d)
+                }
                 _ => Kind::Acceleration(gv(case, &p("acceleration")).flatten().unwrap_or([0.0; 3])),
             };
             items.push(Item {
@@ -362,7 +452,7 @@ impl Sources {
         }
         let wall_pressure_trapezoid = items
             .iter()
-            .any(|i| matches!(i.kind, Kind::Rotating(_) | Kind::Acceleration(_)));
+            .any(|i| matches!(i.kind, Kind::Rotating(_) | Kind::Acceleration(_) | Kind::Disk(_)));
         Ok(Some(Sources {
             wall_pressure_trapezoid,
             items,
@@ -393,6 +483,11 @@ impl Sources {
                 Kind::Acceleration(a) => {
                     let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));
                     fvs::add_constant_acceleration(geom, *a, &it.zone, f);
+                }
+                Kind::Disk(d) => {
+                    let f = force.get_or_insert_with(|| BodyForce::uniform(geom, [0.0; 3]));
+                    // the zone was checked for force-carrying cells when the source was built
+                    let _ = d.add_force(geom, &it.zone, f);
                 }
             }
         }
