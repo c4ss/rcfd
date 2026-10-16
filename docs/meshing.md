@@ -52,5 +52,36 @@ TriSurface (soup or generator)  ->  diagnose / repair   (surface.rs, F-232)
   tetrahedra, known miss); after surface remeshing it does. Cylinder in a box: 0.927, min dihedral 3.3 degrees (slivers remain).
 * Solver smoke (T10): a Laplace problem with Dirichlet data on a 1277-cell unit-sphere tetrahedral mesh gives relative L2 error
   1.1e-2; a linear field on a cube mesh is reproduced to 5e-14.
-* Not done: boundary layers, polyhedral dual conversion (F-102), Cartesian core (F-234), sweep / multizone hex (F-235), sliver
+* Not done: polyhedral dual conversion (F-102), sliver
   optimisation beyond flips, size fields inside the volume beyond a uniform `size`.
+
+## Sweep, thin-volume and multizone hex meshing (F-235, ADR 0047)
+
+`rcfd_mesh::sweep`: a quad base mesh with named boundary edge groups is swept along `Path::Line`, `Path::Revolve` (closed when
+the angle is 2 pi) or `Path::NormalOffset` with prescribed layer counts and grading; `thin_volume` offsets a shell along its
+vertex normals. Results are all hex, oriented and positive volume (`Mesh::validate`). Bases: `rect_base`, `annulus_base`,
+`disc_base` (n x n core + four ring sectors that are exact 90 degree rotations, shared nodes identified structurally),
+`cylinder_shell_base`; `pipe_mesh` is the case-tree entry (`pipe_sweep`). A base touching the revolve axis and an unassigned
+boundary edge are rejected with located errors.
+
+* Inscribed-polygon deficit: an N-gon section has volume `(N/2) sin(2 pi/N) R^2 L`, wall area `N 2 R sin(pi/N) L`; the relative
+  deficit is about `(2 pi)^2 / (6 N^2)`, so volume converges at order 2 (measured 1.99-2.00 for Pappus and annulus).
+* Pipe (R = 1, n = 17, 12 rings, 8 layers, 8840 cells): non-orthogonality 35.4 degrees, skewness 0.45, aspect 5.1, face angles
+  50-135 degrees. Annulus (2560 cells): non-orthogonality ~0, skewness 2.1e-2 (the registered 1e-6 limit was a derivation
+  error; kept as ignored `s8_annulus_skewness_known_miss`).
+* Poiseuille: derived `u_c = G R^2 / (4 nu)`, `U_b = G R^2 / (8 nu)`. See the ADR 0047 addendum for the measured errors.
+
+## Cartesian-core fill with snapped prism layers (F-234, ADR 0047, status partial)
+
+`rcfd_mesh::octree::fill`: a 2:1 balanced octree (integer lattice, refinement within `band * h_f` of the surface, balance over
+the 26-neighbourhood) keeps leaves whose eight corners are fluid at distance >= `margin * h_f`. A face next to finer leaves is
+split into four and hanging nodes are inserted into every face loop, so transition cells are polyhedra and the mesh is
+conforming. Inside/outside by ray-cast parity along three irrational directions (majority vote).
+
+* Boundary layers: each core-interface polygon is extruded to its closest surface point (`T = |S(P) - P|`), sharing the core's
+  inner nodes, so the interface is conforming (no non-conformal join). Layer heights (wall first, rescaled to sum to `T`):
+  uniform `T/N`; aspect ratio `h1 = s/a`, growth from `sum h1 g^i = T` by bisection; last ratio `h_N = r s`,
+  `T/h_N = (1 - q^N)/(1 - q)`, `q = 1/g`. Layer cells form cell zone `layers`.
+* Sphere (r = 0.5) in [-2,2]^3, Lmax 3: 12656 cells (hex fraction 0.889), non-orthogonality 77.4 degrees (limit 70, known miss),
+  skewness 0.61, aspect 11.4; volume error 4.2e-3 (Lmax 3), 1.2e-3 (Lmax 4), order 1.84.
+* Cavity on a generated mesh matches Ghia within 0.008 (limit 0.03). Not attempted: flat-plate y+/Cf. Not run: sphere drag.

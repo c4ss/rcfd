@@ -910,3 +910,13 @@ sections, geometry and variable file layouts, `nfaced`, 80-character binary reco
 state the `hexa8` node numbering (figure), the `nfaced` face orientation or the binary integer / float widths. The hexahedron
 convention (bottom face counter-clockwise seen from the top), outward `nfaced` faces and 4-byte little-endian integers and floats are
 from memory. HDF5 and CGNS layouts were not read or used.
+
+## Wave 26B sweep and Cartesian-core meshing (F-235, F-234, ADR 0047)
+
+| Item | Status | Note |
+|------|--------|------|
+| Poiseuille pipe `u_c = G R^2/(4 nu)`, `U_b = G R^2/(8 nu)` | derived | from the axisymmetric momentum balance; no source read |
+| Pappus volume of revolution, inscribed N-gon area `(N/2) sin(2 pi/N) R^2` | derived | first principles |
+| Ghia et al. 1982 cavity centreline Re 100 | verified | two secondary copies (see wave 25B) |
+| Ray-cast parity point-in-solid, 2:1 octree balance, hanging-node polyhedra | unverified | from memory of the general literature; not checked against a source |
+| Layer-height rules (uniform, aspect ratio, last ratio) | derived | ADR 0047 |

@@ -203,6 +203,30 @@ radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the c
 upper block has `ny_right` x `nz_right` cells (0 = same as the lower block). Both blocks have `nx` cells around, so the
 rim polygons coincide and the radial rings differ.
 
+### Swept pipe (`mesh.generator = "pipe_sweep"`, F-235)
+
+An all-hex circular pipe of radius `r_out` and length `lz` along z: an `nx` x `nx` Cartesian core (half-width
+`core_fraction * r_out`, default 0.5, range 0.2-0.8) inside an O-grid of `ny` rings, swept in `nz` axial layers
+(`nx` odd is typical; `nx` = core cells per side). `mesh.grading != 1` grades the rings toward the wall. Patches: `inlet`
+(z = 0), `outlet` (z = lz), `wall`; with `mesh.periodic_z = true` the end patches become a cyclic pair for fully developed flow
+(use `physics.body_force`). The cross-section is an inscribed polygon of polygon, see `docs/meshing.md`
+for the discrete volume and area deficit. Use `solver.non_orthogonal_correctors = 2`: the core-to-ring corners reach
+about 35 degrees of non-orthogonality.
+
+```toml
+[mesh]
+generator = "pipe_sweep"
+nx = 17
+ny = 12
+nz = 8
+r_out = 1.0
+lz = 1.0
+core_fraction = 0.5
+periodic_z = true
+```
+
+`mesh.periodic_z` and `mesh.core_fraction` on any other generator are rejected with a located error.
+
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
 For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:
