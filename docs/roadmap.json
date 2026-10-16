@@ -748,9 +748,9 @@
     "deps": [
       "F-015"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Exports open in third-party viewers",
-    "note": "SCOPE (merged review): conformance cases per format are tracked in F-237. WAVE 15B: not attempted. The acceptance (exports open in third-party viewers) cannot be tested here, and CGNS/HDF5 layouts could not be verified without a library or a viewer (ADR 0020, Not attempted)."
+    "note": "SCOPE (merged review): conformance cases per format are tracked in F-237. WAVE 15B: not attempted. WAVE 26C (ADR 0048): EnSight Gold export delivered in rcfd_io::ensight (case, geometry, per-node and per-element scalar and vector variables, ASCII and C Binary, hexa8 and nfaced elements, transient time set); verified by a hand-written reader in the tests and by an independent stdlib-Python reader of the files on disk (counts, hexahedron and polyhedron volumes, case file), NOT by a third-party viewer or library. The acceptance (exports open in third-party viewers) cannot be tested here; hexa8 node order, nfaced face orientation and the 4-byte binary widths are from memory and unverified. CGNS and any HDF5 reader or writer are NOT delivered (no HDF5 library or Python package is available locally to verify a layout; ADR 0048 D7)."
   },
   {
     "id": "F-104",
@@ -1793,9 +1793,9 @@
       "F-072",
       "F-109"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Integrals over an analytic field on a sphere and box (area, flux, mean, standard deviation) match closed form to mesh-convergence order; the difference of two identical solutions is exactly zero and of two uniform-offset analytic fields equals the offset to machine precision, including across meshes",
-    "note": "Priority P2. Size L. Area: post. Case comparison reuses the interpolation module."
+    "note": "Priority P2. Size L. Area: post. Case comparison reuses the interpolation module. WAVE 26C (ADR 0048): all registered acceptance checks met in the library (rcfd_post::{stats, surfaces, compare}): weighted mean / standard deviation / min / max / count (two-pass, offset-safe), flux-weighted average, normal and vector flux, force and moment projection, plane / sphere / cylinder / cone / general quadric cuts (planes exact), iso-clip, offset surfaces, rotational and translated instances, rake and point clouds, case difference fields; sphere and box integrals converge at second order, identical solutions give exactly 0, uniform offsets across meshes equal the offset to 21 eps. Case tree: six new scalar report types (volume_std, area_std, area_min, area_max, mass_weighted_average, vector_flux). Remaining for done: case-tree keys and file output (VTU/CSV) for surfaces, rakes, point clouds, transforms and comparison; cut surfaces are second order only (linear interpolation of the implicit function), mixed-mesh difference uses the existing remap methods."
   },
   {
     "id": "F-239",

@@ -145,3 +145,53 @@ F-103
 * Third-party viewer acceptance of F-103 cannot be tested here; EnSight is "verified by hand-written reader of the same author".
 * CGNS and any HDF5 writer/reader: not delivered (D7).
 * Surfaces and comparison have no case-tree keys (D5).
+
+## Addendum A: measured results, misses, deviations (after the runs)
+
+Commands: `cargo test -p rcfd-post --release --test w26c_catalogue`, `-p rcfd-api --test w26c_reports`, `-p rcfd-io --test
+w26c_ensight`. Measured against the registered limits (all limits unchanged):
+
+| Check | Measured | Limit |
+| --- | --- | --- |
+| S1 sphere area rel err n = 8 / 16 / 32 | 2.56e-2 / 6.23e-3 / 1.58e-3, orders 2.04, 1.97 | n = 32 <= 5e-3, order >= 1.5 |
+| S2 sphere flux rel err | 4.83e-2 / 1.20e-2 / 3.06e-3, orders 2.00, 1.98; reversed g: 3.3e-16 | <= 5e-3, order >= 1.5, 1e-12 |
+| S3 std rel err n = 16 / 32; mean error | 4.40e-3 / 1.13e-3, order 1.96; mean 4e-16; with +1e9: 1.1275e-3 (same) | <= 5e-3, order >= 1.5, mean 2e-3 |
+| B1 / B2 box area, flux | exact to 1e-15 | 1e-12 |
+| B3 std rel err n = 8 / 16 | 3.13e-3 / 7.82e-4, order 2.002 | n = 16 <= 5e-3, order >= 1.9 |
+| B4 / B5 / B6 | pass (1e-12 / 1e-14 limits) | |
+| W1 variance of 1e9 + {0..6} | error 0 (the naive formula gives -8320) | 1e-9 |
+| Q1 plane areas, n = 4, 8 | <= 1.1e-14; min normal dot 1 - 2.2e-16 | 1e-12, 1 - 1e-12 |
+| Q2 cylinder n = 16 / 32 | 1.71e-3 / 3.75e-4, order 2.19; cone 2.02e-3; ellipsoid flux 3.24e-3; quadric sphere = cut_sphere | 5e-3, >= 1.5; 1e-2; 5e-3; 1e-14 |
+| O1 offset | plane 0; sphere area 1.42e-3 | 1e-14; 1e-2 |
+| R1 rake, T1 transforms, C1 clip | pass; T1 area 3.95e-15, axis distance 1.1e-16; clip areas 0.7 and 0.3 within 2.2e-16 | 1e-14 .. 1e-12 |
+| D1 identical solutions (all six remap methods, same and separately built mesh) | every value bitwise `+0.0` | exactly 0 |
+| D1 uniform offsets, six mesh pairs (5, 8, 12) | worst 20.6 eps | 64 eps |
+| D1 linear + offset 8 <-> 12 | least_squares 1.78e-14, conservative_overlap 3.6e-15 | 1e-11 |
+| Reports on the 2D channel | volume_std 0, area_min = area_max = 1.5, mass-weighted 1.5, vector_flux outlet 0.45 (= 2 * 0.15 * 1.5, flux non-zero) | 1e-14 / 1e-12 |
+| X1 / X2 EnSight | ASCII and binary round trips, mixed mesh, sizes exact | rel 1e-5 / 1e-7, exact |
+
+Misses: none ended as an ignored known-miss test. Items 2 to 4 of the pre-implementation review (welded vertices, `g >= 0` rule,
+early D1 measurement) were followed; the early D1 measurement shows the remap stencils sum to 1 within 21 eps.
+
+Deviations (disclosed):
+
+1. Q1 first run: the registered "min facet-normal dot >= 1 - 1e-12" failed for the hexagon plane (32 of 226 facets at n = 4, 206 of
+   1014 at n = 8, worst dot 0.8165). Diagnosis: collapsed triangles, area about 1e-33 (all three vertices coincide within rounding
+   when `g` is a few ulp from zero at a tet vertex), so their cross-product direction is noise; their area is negligible, which is why the
+   area check passed. A first cull relative to the triangle's own longest edge did not remove them (the edge is also noise); the fix
+   that stayed is `CULL_RATIO = 1e-12` of the squared longest edge of the generating tet (`surfaces.rs`). This is an algorithm change
+   after seeing the miss (a root-cause fix, the limit and the assertion are unchanged); re-run: 0 bad facets, minimum facet area 2.3e-3
+   (n = 8). Facets with doubled area below 1e-12 h^2 are never reported, so cut areas can differ from the exact value by at most
+   that per facet.
+2. `b1_b3_box_area_flux_mean_std`: an auxiliary assertion not in the registry (`patch_stats` mean of the face-centre `y` on an
+   8 x 8 patch) expected 0.4375; the correct value is 0.5 (set-up defect). The old test is kept, ignored, with the reason; the corrected
+   test `b1_b3_box_area_flux_mean_std_corrected` carries the registered B1 to B3 checks.
+3. Case tree: only the scalar statistic reports were wired (D5, as registered). Surfaces, rakes, point clouds, transforms and comparison
+   have no keys and no VTU / CSV writer: F-238 stays `partial`.
+4. Independent reader for F-103: none of h5py, vtk, meshio, numpy is importable (`ModuleNotFoundError` for each); the previous
+   interchange wave used VTK elsewhere. As extra evidence a stdlib-only Python reader (`python -I`, written from the layout text, kept
+   in the scratch directory, not committed) parsed the ASCII and binary files that the test `export_for_external_check` wrote to disk
+   for the mixed mesh: 14 points, 2 hexa8 of volume 1.0, 1 nfaced of volume 0.49999999999999983 with the standard face table and
+   outward faces, case file with 2 steps and `mix.pc.****`. Same author, other language: this checks that the files are parseable
+   from the written layout and consistent, not that third-party software accepts them.
+5. CGNS / HDF5: not delivered (D7 unchanged). F-103 `partial`.
