@@ -6,6 +6,7 @@
 use crate::case::{Case, Diagnostic};
 use crate::sources::{check_zone, gf, gs, gv, zone_cells};
 use rcfd_core::vec3::{self, Vec3};
+use rcfd_fv::hx::{self, Arrangement};
 use rcfd_fv::lumped::{self as lz, FaceJump, FanCurve, ZoneFlow};
 use rcfd_fv::{FvGeometry, ScalarField};
 
@@ -60,7 +61,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 format!("lumped components are available with the steady algorithms (simple, simplec) only, not with \"{alg}\""),
             );
         }
-        if kind != "network_outlet" {
+        if !matches!(kind.as_str(), "network_outlet" | "fan_boundary") {
             for d in check_zone(case, &format!("components.{n}")) {
                 bad(d.path, d.message);
             }
@@ -107,7 +108,56 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                         "a heat_exchanger needs the energy equation (energy.enabled = true)".into(),
                     );
                 }
-                if gs(case, &p("mode")) == "effectiveness" {
+                for f in ["loss_coefficient", "loss_linear"] {
+                    let v = gf(case, &p(f));
+                    if v.is_nan() || v < 0.0 {
+                        bad(p(f), "must not be negative (0 = none)".into());
+                    }
+                }
+                let dual = getb(case, &p("dual_cell"));
+                if dual && gs(case, &p("mode")) != "ntu" {
+                    bad(p("dual_cell"), "a dual cell needs mode = \"ntu\"".into());
+                }
+                if gs(case, &p("mode")) == "ntu" {
+                    if Arrangement::parse(&gs(case, &p("arrangement"))).is_none() {
+                        bad(
+                            p("arrangement"),
+                            format!("unknown arrangement; use one of {}", Arrangement::NAMES.join(", ")),
+                        );
+                    }
+                    let ua = gf(case, &p("ua"));
+                    if !(ua > 0.0 && ua.is_finite()) {
+                        bad(
+                            p("ua"),
+                            format!("set the conductance UA [W/K] (> 0); found {ua} (-1 means unset)"),
+                        );
+                    }
+                    if dual {
+                        let sp = |f: &str| format!("components.{n}.secondary.{f}");
+                        for d in check_zone(case, &format!("components.{n}.secondary")) {
+                            bad(d.path, d.message);
+                        }
+                        if let Err(m) = direction(case, &sp("direction")) {
+                            bad(sp("direction"), m);
+                        }
+                        for f in ["loss_coefficient", "loss_linear"] {
+                            let v = gf(case, &sp(f));
+                            if v.is_nan() || v < 0.0 {
+                                bad(sp(f), "must not be negative (0 = none)".into());
+                            }
+                        }
+                    } else {
+                        if gf(case, &p("secondary_capacity_rate")) < 0.0 {
+                            bad(
+                                p("secondary_capacity_rate"),
+                                "must not be negative (0 = infinite)".into(),
+                            );
+                        }
+                        if gf(case, &p("secondary_temperature")) <= 0.0 {
+                            bad(p("secondary_temperature"), "must be a positive temperature [K]".into());
+                        }
+                    }
+                } else if gs(case, &p("mode")) == "effectiveness" {
                     let e = gf(case, &p("effectiveness"));
                     if !(e > 0.0 && e <= 1.0) {
                         bad(p("effectiveness"), "must be in (0, 1]".into());
@@ -123,6 +173,22 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     }
                 } else if !gf(case, &p("duty")).is_finite() {
                     bad(p("duty"), "must be finite".into());
+                }
+            }
+            "fan_boundary" => {
+                if let Err(m) = FanCurve::new(list(case, &p("curve_flow")), list(case, &p("curve_pressure"))) {
+                    bad(p("curve_flow"), m);
+                }
+                let patch = gs(case, &p("patch"));
+                if patch.is_empty() {
+                    bad(p("patch"), "a fan_boundary needs the name of a boundary patch".into());
+                } else if case.tree.get(&format!("boundaries.{patch}.pressure")).is_err() {
+                    bad(p("patch"), format!("no boundary '{patch}' is defined"));
+                } else if gs(case, &format!("boundaries.{patch}.pressure")) != "fixed" {
+                    bad(
+                        p("patch"),
+                        format!("boundaries.{patch}.pressure must be \"fixed\" (the fan curve sets its value)"),
+                    );
                 }
             }
             "network_outlet" => {
@@ -167,6 +233,18 @@ enum Kind {
         duty: f64,
         last_duty: f64,
         last_t_in: f64,
+        /// NTU model (`mode = "ntu"`).
+        ntu: Option<NtuModel>,
+        /// Pressure-loss closure of the primary zone: linear coefficient [Pa s/m] and loss coefficient.
+        loss: (f64, f64),
+        last_eps: f64,
+        last_ntu: f64,
+    },
+    FanBoundary {
+        patch: String,
+        p_ref: f64,
+        curve: FanCurve,
+        p_used: Option<f64>,
     },
     Network {
         patch: String,
@@ -175,6 +253,26 @@ enum Kind {
         r2: f64,
         p_used: f64,
     },
+}
+
+/// Effectiveness-NTU exchanger of a heat-exchanger component (ADR 0039 D3).
+struct NtuModel {
+    arrangement: Arrangement,
+    ua: f64,
+    t_secondary: f64,
+    c_secondary: f64,
+    /// Second flow-through zone (dual cell).
+    secondary: Option<Secondary>,
+}
+
+/// Secondary zone of a dual-cell exchanger.
+struct Secondary {
+    zone: Vec<bool>,
+    flow: ZoneFlow,
+    loss: (f64, f64),
+    last_q: f64,
+    last_t_in: f64,
+    last_duty: f64,
 }
 
 struct Item {
@@ -207,6 +305,43 @@ impl Components {
             let p = |f: &str| format!("components.{n}.{f}");
             let kind_s = gs(case, &p("type"));
             let relax = gf(case, &p("relax")).clamp(0.01, 1.0);
+            if kind_s == "fan_boundary" {
+                let patch = gs(case, &p("patch"));
+                if geom.mesh.patch(&patch).is_none() {
+                    errs.push(Diagnostic {
+                        path: p("patch"),
+                        line: None,
+                        message: format!("the mesh has no patch '{patch}'"),
+                    });
+                    continue;
+                }
+                let curve = match FanCurve::new(list(case, &p("curve_flow")), list(case, &p("curve_pressure"))) {
+                    Ok(c) => c,
+                    Err(m) => {
+                        errs.push(Diagnostic {
+                            path: p("curve_flow"),
+                            line: None,
+                            message: m,
+                        });
+                        continue;
+                    }
+                };
+                items.push(Item {
+                    name: n.clone(),
+                    kind: Kind::FanBoundary {
+                        patch,
+                        p_ref: gf(case, &p("reference_pressure")),
+                        curve,
+                        p_used: None,
+                    },
+                    zone: Vec::new(),
+                    flow: None,
+                    relax,
+                    last_q: 0.0,
+                    last_dp: 0.0,
+                });
+                continue;
+            }
             if kind_s == "network_outlet" {
                 let patch = gs(case, &p("patch"));
                 if geom.mesh.patch(&patch).is_none() {
@@ -263,7 +398,10 @@ impl Components {
                     continue;
                 }
             };
-            if matches!(kind_s.as_str(), "fan" | "porous_jump") && flow.exit.iter().all(|&(f, _)| f >= geom.n_internal)
+            let has_loss = kind_s == "heat_exchanger"
+                && (gf(case, &p("loss_coefficient")) > 0.0 || gf(case, &p("loss_linear")) > 0.0);
+            if (matches!(kind_s.as_str(), "fan" | "porous_jump") || has_loss)
+                && flow.exit.iter().all(|&(f, _)| f >= geom.n_internal)
             {
                 errs.push(Diagnostic {
                     path: p("zone"),
@@ -291,18 +429,100 @@ impl Components {
                     c2: gf(case, &p("inertial_resistance")),
                     t: gf(case, &p("thickness")),
                 },
-                _ => Kind::Hx {
-                    effectiveness: (gs(case, &p("mode")) == "effectiveness").then(|| {
-                        (
-                            gf(case, &p("effectiveness")),
-                            gf(case, &p("secondary_temperature")),
-                            gf(case, &p("secondary_capacity_rate")),
-                        )
-                    }),
-                    duty: gf(case, &p("duty")),
-                    last_duty: 0.0,
-                    last_t_in: 0.0,
-                },
+                _ => {
+                    let mut ntu = None;
+                    if gs(case, &p("mode")) == "ntu" {
+                        let mut secondary = None;
+                        if getb(case, &p("dual_cell")) {
+                            let sp = format!("components.{n}.secondary");
+                            let sz = match zone_cells(case, &sp, geom) {
+                                Ok(z) => z,
+                                Err(d) => {
+                                    errs.push(d);
+                                    continue;
+                                }
+                            };
+                            let sdir = match direction(case, &format!("{sp}.direction")) {
+                                Ok(d) => vec3::unit(d),
+                                Err(m) => {
+                                    errs.push(Diagnostic {
+                                        path: format!("{sp}.direction"),
+                                        line: None,
+                                        message: m,
+                                    });
+                                    continue;
+                                }
+                            };
+                            if sz.iter().zip(&zone).any(|(a, b)| *a && *b) {
+                                errs.push(Diagnostic {
+                                    path: format!("{sp}.zone"),
+                                    line: None,
+                                    message:
+                                        "the secondary zone of a dual cell must not share cells with the primary zone"
+                                            .into(),
+                                });
+                                continue;
+                            }
+                            let sflow = match ZoneFlow::new(geom, &sz, sdir) {
+                                Ok(f) => f,
+                                Err(m) => {
+                                    errs.push(Diagnostic {
+                                        path: format!("{sp}.zone"),
+                                        line: None,
+                                        message: m,
+                                    });
+                                    continue;
+                                }
+                            };
+                            let sloss = (
+                                gf(case, &format!("{sp}.loss_linear")),
+                                gf(case, &format!("{sp}.loss_coefficient")),
+                            );
+                            if (sloss.0 > 0.0 || sloss.1 > 0.0) && sflow.exit.iter().all(|&(f, _)| f >= geom.n_internal)
+                            {
+                                errs.push(Diagnostic {
+                                    path: format!("{sp}.zone"),
+                                    line: None,
+                                    message: "a pressure-loss closure needs an interior plane on the downstream side of the zone"
+                                        .into(),
+                                });
+                                continue;
+                            }
+                            secondary = Some(Secondary {
+                                zone: sz,
+                                flow: sflow,
+                                loss: sloss,
+                                last_q: 0.0,
+                                last_t_in: 0.0,
+                                last_duty: 0.0,
+                            });
+                        }
+                        ntu = Some(NtuModel {
+                            arrangement: Arrangement::parse(&gs(case, &p("arrangement")))
+                                .unwrap_or(Arrangement::Counterflow),
+                            ua: gf(case, &p("ua")),
+                            t_secondary: gf(case, &p("secondary_temperature")),
+                            c_secondary: gf(case, &p("secondary_capacity_rate")),
+                            secondary,
+                        });
+                    }
+                    Kind::Hx {
+                        effectiveness: (gs(case, &p("mode")) == "effectiveness").then(|| {
+                            (
+                                gf(case, &p("effectiveness")),
+                                gf(case, &p("secondary_temperature")),
+                                gf(case, &p("secondary_capacity_rate")),
+                            )
+                        }),
+                        duty: gf(case, &p("duty")),
+                        last_duty: 0.0,
+                        last_t_in: 0.0,
+                        ntu,
+                        loss: (gf(case, &p("loss_linear")), gf(case, &p("loss_coefficient"))),
+                        last_eps: 0.0,
+                        last_ntu: 0.0,
+                    }
+                }
             };
             items.push(Item {
                 name: n.clone(),
@@ -357,6 +577,24 @@ impl Components {
                     }
                     it.last_dp = lz::porous_jump_dp(*mu, self.rho, *alpha, *c2, *t, q / flow.area);
                 }
+                Kind::Hx { loss, ntu, .. } => {
+                    let mut planes: Vec<(&ZoneFlow, (f64, f64))> = vec![(flow, *loss)];
+                    if let Some(sec) = ntu.as_mut().and_then(|m| m.secondary.as_mut()) {
+                        sec.last_q = sec.flow.flow(phi);
+                        planes.push((&sec.flow, sec.loss));
+                    }
+                    for (pl, (r1, k)) in planes {
+                        if r1 <= 0.0 && k <= 0.0 {
+                            continue;
+                        }
+                        let j = jump.get_or_insert_with(|| FaceJump::zeros(geom.mesh.n_faces()));
+                        for &(f, _) in pl.exit.iter().filter(|&&(f, _)| f < geom.n_internal) {
+                            let a = vec3::norm(sf[f]);
+                            j.resist[f] += r1 / (self.rho * a) + k * phi[f].abs() / (2.0 * a * a);
+                        }
+                    }
+                    it.last_dp = hx::core_dp(loss.0, loss.1, self.rho, q / flow.area);
+                }
                 _ => {}
             }
         }
@@ -376,6 +614,10 @@ impl Components {
                     duty,
                     last_duty,
                     last_t_in,
+                    ntu,
+                    last_eps,
+                    last_ntu,
+                    ..
                 },
             ) = (&it.flow, &mut it.kind)
             else {
@@ -383,20 +625,56 @@ impl Components {
             };
             let q = flow.flow(phi);
             it.last_q = q;
-            let t_in = flow.inlet_temperature(geom, phi, &t.values, &tb).unwrap_or_else(|| {
+            let mean_t = |zone: &[bool]| {
                 let (mut s, mut n) = (0.0, 0.0);
-                for (c, &z) in it.zone.iter().enumerate() {
+                for (c, &z) in zone.iter().enumerate() {
                     if z {
                         s += t.values[c];
                         n += 1.0;
                     }
                 }
                 s / n
-            });
+            };
+            let t_in = flow
+                .inlet_temperature(geom, phi, &t.values, &tb)
+                .unwrap_or_else(|| mean_t(&it.zone));
             *last_t_in = t_in;
-            let heat = match effectiveness {
-                Some((eps, t_sec, c_sec)) => lz::effectiveness_duty(*eps, rho_cp * q.max(0.0), *c_sec, *t_sec, t_in),
-                None => *duty,
+            let mut sec_heat: Option<(f64, usize)> = None;
+            let heat = if let Some(m) = ntu {
+                let c_p = rho_cp * q.max(0.0);
+                let (c_s, t_s) = match &mut m.secondary {
+                    Some(sec) => {
+                        let qs = sec.flow.flow(phi);
+                        sec.last_q = qs;
+                        let ts = sec
+                            .flow
+                            .inlet_temperature(geom, phi, &t.values, &tb)
+                            .unwrap_or_else(|| mean_t(&sec.zone));
+                        sec.last_t_in = ts;
+                        (rho_cp * qs.max(0.0), ts)
+                    }
+                    None => (m.c_secondary, m.t_secondary),
+                };
+                // a dual cell without secondary flow transfers no heat (zero capacity rate is not "infinite" there)
+                let r = if m.secondary.is_some() && c_s <= 0.0 {
+                    hx::solve_exchanger(m.arrangement, 0.0, 0.0, m.ua, t_in, t_s)
+                } else {
+                    hx::solve_exchanger(m.arrangement, c_p, c_s, m.ua, t_in, t_s)
+                };
+                *last_eps = r.eps;
+                *last_ntu = r.ntu;
+                if let Some(sec) = &mut m.secondary {
+                    sec.last_duty = -r.q;
+                    sec_heat = Some((-r.q, 0));
+                }
+                r.q
+            } else {
+                match effectiveness {
+                    Some((eps, t_sec, c_sec)) => {
+                        lz::effectiveness_duty(*eps, rho_cp * q.max(0.0), *c_sec, *t_sec, t_in)
+                    }
+                    None => *duty,
+                }
             };
             *last_duty = heat;
             let s = src.get_or_insert_with(|| vec![0.0; geom.n_cells()]);
@@ -404,6 +682,16 @@ impl Components {
             for (c, &z) in it.zone.iter().enumerate() {
                 if z {
                     s[c] += per_vol;
+                }
+            }
+            if let (Some((h, _)), Some(m)) = (sec_heat, ntu.as_ref()) {
+                if let Some(sec) = &m.secondary {
+                    let per_vol = h / (rho_cp * sec.flow.volume);
+                    for (c, &z) in sec.zone.iter().enumerate() {
+                        if z {
+                            s[c] += per_vol;
+                        }
+                    }
                 }
             }
         }
@@ -432,6 +720,28 @@ impl Components {
                 it.last_dp = *p_used;
                 out.push((patch.clone(), *p_used / self.rho));
             }
+            if let Kind::FanBoundary {
+                patch,
+                p_ref,
+                curve,
+                p_used,
+            } = &mut it.kind
+            {
+                // volume flow INTO the domain through the patch
+                let q_in: f64 = geom
+                    .mesh
+                    .patch(patch)
+                    .map(|p| -p.faces().filter(|&f| !geom.empty[f]).map(|f| phi[f]).sum::<f64>())
+                    .unwrap_or(0.0);
+                it.last_q = q_in;
+                // the first evaluation takes the curve value at the initial flow (no relaxation from the reference pressure)
+                let target = *p_ref + curve.eval(q_in);
+                let cur = p_used.unwrap_or(target);
+                let new = cur + it.relax * (target - cur);
+                *p_used = Some(new);
+                it.last_dp = new - *p_ref;
+                out.push((patch.clone(), new / self.rho));
+            }
         }
         out
     }
@@ -449,10 +759,25 @@ impl Components {
             v.push((format!("{}_flow", it.name), it.last_q));
             match &it.kind {
                 Kind::Hx {
-                    last_duty, last_t_in, ..
+                    last_duty,
+                    last_t_in,
+                    ntu,
+                    last_eps,
+                    last_ntu,
+                    ..
                 } => {
                     v.push((format!("{}_duty", it.name), *last_duty));
                     v.push((format!("{}_t_in", it.name), *last_t_in));
+                    v.push((format!("{}_dp", it.name), it.last_dp));
+                    if let Some(m) = ntu {
+                        v.push((format!("{}_eps", it.name), *last_eps));
+                        v.push((format!("{}_ntu", it.name), *last_ntu));
+                        if let Some(sec) = &m.secondary {
+                            v.push((format!("{}_sec_flow", it.name), sec.last_q));
+                            v.push((format!("{}_sec_t_in", it.name), sec.last_t_in));
+                            v.push((format!("{}_sec_duty", it.name), sec.last_duty));
+                        }
+                    }
                 }
                 _ => v.push((format!("{}_dp", it.name), it.last_dp)),
             }

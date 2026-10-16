@@ -2601,6 +2601,9 @@ impl Simulation {
         if let Some(v) = self.scalars.as_ref().and_then(|s| s.field(name)) {
             return Ok(v);
         }
+        if let Some(v) = self.sources.as_ref().and_then(|s| s.lorentz_field(name)) {
+            return Ok(v);
+        }
         Ok(match name {
             "ux" => u.iter().map(|v| v[0]).collect(),
             "uy" => u.iter().map(|v| v[1]).collect(),

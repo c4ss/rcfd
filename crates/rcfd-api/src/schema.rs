@@ -1772,8 +1772,8 @@ pub fn case_schema() -> Schema {
                     .doc("A momentum source restricted to a cell zone (steady SIMPLE/SIMPLEC runs)")
                     .field(
                         "type",
-                        Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration", "actuator_disk"])
-                            .doc("actuator_disk: thrust (and optional torque) distributed over the zone as a body force, uniform or proportional to the distance from the disk axis (ADR 0036); porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
+                        Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration", "actuator_disk", "lorentz"])
+                            .doc("lorentz: Lorentz body force J x B / rho of a liquid conductor in an imposed magnetic field, J = sigma (E_ext - grad phi + u x B), low magnetic Reynolds number (ADR 0039; steady SIMPLE/SIMPLEC); actuator_disk: thrust (and optional torque) distributed over the zone as a body force, uniform or proportional to the distance from the disk axis (ADR 0036); porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
                     )
                     .field(
                         "zone",
@@ -1838,6 +1838,16 @@ pub fn case_schema() -> Schema {
                     .field(
                         "density",
                         Schema::float(0.0).doc("actuator_disk: density [kg/m^3] converting force to the solver's kinematic acceleration; 0 = physics.rho"),
+                    )
+                    .field("magnetic_field", vec3([0.0; 3], "lorentz: applied uniform magnetic flux density [T] (required, non-zero); empty list = unset"))
+                    .field(
+                        "conductivity",
+                        Schema::float(-1.0).doc("lorentz: electrical conductivity sigma [S/m] of the zone (required > 0; -1 = unset)"),
+                    )
+                    .field("applied_electric_field", vec3([0.0; 3], "lorentz: imposed uniform electric field E_ext [V/m] added to -grad phi (default 0)"))
+                    .field(
+                        "potential",
+                        Schema::enumeration("none", &["none", "solve"]).doc("lorentz: none = grad phi = 0 (J = sigma (E_ext + u x B), the fully developed / short-circuited approximation); solve = solve div(sigma grad phi) = div(sigma (E_ext + u x B)) with the boundaries.<patch>.electric conditions (insulated by default; a cell is pinned when no patch fixes the potential)"),
                     ),
             )
             .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
@@ -1849,8 +1859,8 @@ pub fn case_schema() -> Schema {
                     .doc("A lumped zone component (ADR 0012; steady SIMPLE/SIMPLEC runs, constant density)")
                     .field(
                         "type",
-                        Schema::enumeration("fan", &["fan", "porous_jump", "heat_exchanger", "network_outlet"])
-                            .doc("fan: pressure rise from a fan curve applied as a pressure jump on the downstream boundary faces of the zone; porous_jump: thin Darcy-Forchheimer pressure jump on the downstream boundary faces of the zone; heat_exchanger: radiator / heat-exchanger heat source in a zone (fixed duty or effectiveness; needs energy.enabled); network_outlet: fixed-pressure patch whose pressure follows a lumped downstream network"),
+                        Schema::enumeration("fan", &["fan", "porous_jump", "heat_exchanger", "network_outlet", "fan_boundary"])
+                            .doc("fan_boundary: fixed-pressure patch whose static pressure follows reference_pressure + the fan curve at the volume flow into the domain (ADR 0039); fan: pressure rise from a fan curve applied as a pressure jump on the downstream boundary faces of the zone; porous_jump: thin Darcy-Forchheimer pressure jump on the downstream boundary faces of the zone; heat_exchanger: radiator / heat-exchanger heat source in a zone (fixed duty or effectiveness; needs energy.enabled); network_outlet: fixed-pressure patch whose pressure follows a lumped downstream network"),
                     )
                     .field(
                         "zone",
@@ -1883,8 +1893,8 @@ pub fn case_schema() -> Schema {
                     )
                     .field(
                         "mode",
-                        Schema::enumeration("fixed_duty", &["fixed_duty", "effectiveness"])
-                            .doc("heat_exchanger: fixed_duty uses duty, effectiveness uses Q = eps C_min (T_secondary - T_in)"),
+                        Schema::enumeration("fixed_duty", &["fixed_duty", "effectiveness", "ntu"])
+                            .doc("heat_exchanger: fixed_duty uses duty, effectiveness uses Q = eps C_min (T_secondary - T_in), ntu uses the effectiveness-NTU relation of the arrangement with NTU = ua / C_min evaluated at the actual flow (ADR 0039); secondary_temperature and secondary_capacity_rate describe a prescribed secondary stream, or dual_cell takes a second zone of the mesh"),
                     )
                     .field(
                         "duty",
@@ -1902,10 +1912,52 @@ pub fn case_schema() -> Schema {
                         "secondary_capacity_rate",
                         Schema::float(0.0).doc("heat_exchanger, effectiveness mode: capacity rate m cp [W/K] of the secondary stream (0 = infinite)"),
                     )
-                    .field("patch", Schema::string("").doc("network_outlet: name of the boundary patch (its pressure must be fixed)"))
+                    .field(
+                        "arrangement",
+                        Schema::enumeration("counterflow", &["counterflow", "parallel", "crossflow_unmixed", "crossflow_cmax_mixed", "crossflow_cmin_mixed", "shell_and_tube"])
+                            .doc("heat_exchanger, ntu mode: flow arrangement of the effectiveness-NTU relation (crossflow_unmixed is the closed approximation of the series solution; shell_and_tube is one shell pass)"),
+                    )
+                    .field(
+                        "ua",
+                        Schema::float(-1.0).doc("heat_exchanger, ntu mode: overall conductance UA [W/K] (required > 0; -1 = unset)"),
+                    )
+                    .field(
+                        "dual_cell",
+                        Schema::boolean(false).doc("heat_exchanger, ntu mode: the secondary stream is the flow through a second zone of the mesh (the secondary object) instead of a prescribed stream; the heat leaving one zone enters the other exactly"),
+                    )
+                    .field(
+                        "loss_coefficient",
+                        Schema::float(0.0).doc("heat_exchanger: pressure-loss coefficient K of the core, dp = K rho v|v|/2 as a pressure jump on the downstream interior plane of the zone (0 = none)"),
+                    )
+                    .field(
+                        "loss_linear",
+                        Schema::float(0.0).doc("heat_exchanger: linear pressure-loss coefficient r1 [Pa s/m] of the core, dp = r1 v on the downstream interior plane (0 = none)"),
+                    )
+                    .field(
+                        "secondary",
+                        Schema::object()
+                            .doc("heat_exchanger, dual_cell: the secondary zone (same keys as the primary zone)")
+                            .field(
+                                "zone",
+                                Schema::enumeration("all", &["all", "box", "cell_zone"]).doc("Cells of the secondary zone: whole mesh, box or named cell zone"),
+                            )
+                            .field("box_min", vec3([0.0; 3], "Lower corner [m] of the box zone"))
+                            .field("box_max", vec3([0.0; 3], "Upper corner [m] of the box zone"))
+                            .field("cell_zone", Schema::string("").doc("Name of the mesh cell zone"))
+                            .field("direction", vec3([1.0, 0.0, 0.0], "Flow direction of the secondary stream through its zone"))
+                            .field(
+                                "loss_coefficient",
+                                Schema::float(0.0).doc("Pressure-loss coefficient K of the secondary core (0 = none)"),
+                            )
+                            .field(
+                                "loss_linear",
+                                Schema::float(0.0).doc("Linear pressure-loss coefficient r1 [Pa s/m] of the secondary core (0 = none)"),
+                            ),
+                    )
+                    .field("patch", Schema::string("").doc("network_outlet, fan_boundary: name of the boundary patch (its pressure must be fixed)"))
                     .field(
                         "reference_pressure",
-                        Schema::float(0.0).doc("network_outlet: pressure [Pa] at the far end of the network"),
+                        Schema::float(0.0).doc("network_outlet: pressure [Pa] at the far end of the network; fan_boundary: ambient static pressure [Pa] the fan pressure rise is added to"),
                     )
                     .field(
                         "resistance_linear",
@@ -1917,7 +1969,7 @@ pub fn case_schema() -> Schema {
                     )
                     .field(
                         "relax",
-                        Schema::float(0.5).range(0.01, 1.0).doc("fan, network_outlet: under-relaxation of the lagged pressure update"),
+                        Schema::float(0.5).range(0.01, 1.0).doc("fan, network_outlet, fan_boundary: under-relaxation of the lagged pressure update"),
                     ),
             )
             .doc("Lumped zone components: fans, porous jumps, radiator / heat-exchanger heat sources and lumped network outlets (ADR 0012)"),

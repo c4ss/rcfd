@@ -98,7 +98,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         let p = |f: &str| format!("boundaries.{b}.{f}");
         let kind = gs(case, &p("electric"));
         let (v, i) = (gf(case, &p("electric_potential")), gf(case, &p("electric_current")));
-        if !on && kind != "insulated" {
+        if !on && !crate::sources::lorentz_potential(case) && kind != "insulated" {
             out.push(d(p("electric"), "only used with electric.enabled = true"));
         }
         match kind.as_str() {
