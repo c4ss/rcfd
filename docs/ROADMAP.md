@@ -566,22 +566,22 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - depends on: F-022, F-024
   - acceptance: Order-of-accuracy test on a smooth advected profile gives the nominal order; square-wave advection stays within physical bounds; blend factor 0 and 1 reproduce the upwind and central results
   - note: ADR 0016 wave 13. Added: blended(beta) (0 = upwind and 1 = central to 0), gamma(beta_m), compressive(k) (Roe-Sweby family, k project-extended below 1), bounded_central (bitwise minmod in NVD form) convection schemes and the bdf2_bounded time scheme. MET: B1 blend 0/1 equal upwind/central (0, 0); order on a smooth profile (central, blended(1), gamma, bounded_central 2.0000; first-order members 0.98 to 1.003); square wave within 1e-3 of the bounds for gamma, compressive and bounded_central (dt = 0.1 h; the registered 0.5 h gave a toothless control); temporal orders. MISS: O1c convergence for compressive(1.5) and compressive(2) (limit cycle at 1e-8 per sweep from limiter switching; orders in band), kept in an ignored known-miss test. Set-up deviations disclosed in the ADR results. Literature references unverified (docs/reference-data.md).
-- [ ] **F-212** Enthalpy-porosity solidification and melting: liquid fraction, mushy-zone damping, pull velocity
+- [~] **F-212** Enthalpy-porosity solidification and melting: liquid fraction, mushy-zone damping, pull velocity
   - depends on: F-050, F-031
   - acceptance: 1D Stefan problem interface position within 3 percent of the analytic solution; gallium-melting cavity front shape trend agrees with the published experiment
-  - note: Priority P3. Size M. Area: fv. Momentum damping reuses the porous-media source machinery.
-- [ ] **F-213** Electric potential and Joule heating, with electric and thermal coupling
+  - note: Priority P3. Size M. Area: fv. Momentum damping reuses the porous-media source machinery. Wave 21A (ADR 0035): enthalpy-method library and case-tree wiring (zero flux, piso/pimple), Carman-Kozeny damping and a Brinkman check in the library only. 1D Stefan front within 3 percent at N=240 (one- and two-phase). Misses recorded as ignored tests: P1 order criterion, Newton limit cycle at N=480, K2 ny=20 error 1.0040e-2 vs 1e-2. Not delivered: melt flow coupling, gallium cavity comparison, pull velocity, damping in the tree.
+- [~] **F-213** Electric potential and Joule heating, with electric and thermal coupling
   - depends on: F-050, F-051
   - acceptance: Joule heating of a conducting bar reproduces the analytic parabolic temperature profile within 1 percent; potential drop matches Ohm's law
-  - note: Priority P3. Size M. Area: fv. Conducting solids and fluids; voltage and current boundaries.
+  - note: Priority P3. Size M. Area: fv. Conducting solids and fluids; voltage and current boundaries. Wave 21A (ADR 0035): electric potential with sigma(T) and Joule heating in the case tree (prescribed flow only); Ohm bar, Joule parabola and sigma(T) bar reproduced at second order (parabola within 1e-3 of peak at N=20 against the 1 percent target). Not delivered: solved-flow coupling, exact power identity on non-orthogonal meshes, magnetic induction, time-accurate coupling.
 - [ ] **F-214** Magnetohydrodynamic Lorentz-force coupling for liquid conductors
   - depends on: F-213
   - acceptance: Hartmann channel flow matches the analytic Hartmann velocity profile within 2 percent
   - note: Priority P4. Size S. Area: fv. Optional; kept separate so the niche part can be deferred without blocking electric heating.
-- [ ] **F-215** Interface physics: thermal contact resistance, thin and shell conduction with layers, conditional (open/closed) connections, mapped coupled interfaces
+- [~] **F-215** Interface physics: thermal contact resistance, thin and shell conduction with layers, conditional (open/closed) connections, mapped coupled interfaces
   - depends on: F-114, F-051
   - acceptance: Two-solid contact with prescribed resistance reproduces the analytic series-resistance temperature jump within 1 percent; a layered thin wall matches the composite-wall solution
-  - note: Priority P2. Size M. Area: fv. Builds on the conservative non-conformal interface.
+  - note: Priority P2. Size M. Area: fv. Builds on the conservative non-conformal interface. Wave 21A (ADR 0035): layered resistances (steady, no layer capacity) and open/closed connection in the case tree; series-resistance and layered-wall checks to round-off. Miss: the registered stiff transient enthalpy-drift limit (G5, dt 0.01) is not met (round-off 1e-11), corrected dt 1e-3 passes. Not delivered: layer thermal capacity, in-plane shell conduction, solution-dependent switching, mapped interfaces.
 - [~] **F-216** Per-region model sets: assign energy, turbulence, species and radiation models per region and couple regions through interfaces
   - depends on: F-051, F-114
   - acceptance: A published conjugate heat transfer benchmark with a conducting wall is reproduced within published scatter using different model sets in fluid and solid regions

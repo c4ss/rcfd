@@ -1680,6 +1680,7 @@ pub fn case_schema() -> Schema {
         .field("zone_sources", crate::zone_sources::schema())
         .field("regions", crate::regions::schema())
         .field("electric", crate::electric::schema())
+        .field("phase_change", crate::phase_change::schema())
         .field("solids", crate::cht::solids_schema())
         .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field("particles", crate::particles::schema())

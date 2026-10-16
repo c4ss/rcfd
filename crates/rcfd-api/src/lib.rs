@@ -15,6 +15,7 @@ pub mod init;
 pub mod lumped;
 pub mod particle_run;
 pub mod particles;
+pub mod phase_change;
 pub mod postproc;
 pub mod properties;
 pub mod radiation;
