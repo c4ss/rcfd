@@ -218,3 +218,5 @@ Registered limits above are unchanged. Everything below is what happened. Measur
 ### Not delivered (in addition to the list above)
 
 Everything on the "Not delivered" list stands. Additionally: a Lee-versus-HKS coefficient relation (linearisation of the kinetic flux to a Lee frequency); the Rohsenow coefficient 0.68 is unverified; no 2-D/3-D free-surface verification of any wave closure.
+
+8. Post-gate wording fix (docs only): the roadmap note and reference-data row had said the Stokes formulas satisfy the free-surface conditions "to third order"; the correct statement is through second order (the residual is third order). Registered Decisions mention a toolbox name in D2; the reference-data entry cites authors and year only.
