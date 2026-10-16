@@ -1650,9 +1650,9 @@
       "F-055",
       "F-127"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "1D Stefan evaporation matches the analytic solution; film condensation agrees with the Nusselt solution within 10 percent",
-    "note": "Priority P3. Size M. Area: fv. Source-term closures on top of the multiphase base."
+    "note": "PARTIAL, LIBRARY ONLY (wave 23B, ADR 0040). The multiphase base (F-055 VOF, F-127 Euler-Euler) does not exist, so nothing is wired into the case tree or a solver. Delivered: rcfd-fv masstransfer.rs, per-cell source evaluators taking phase fractions, temperatures and pressures: Lee temperature-driven and Hertz-Knudsen-Schrage kinetic evaporation-condensation, a pressure-driven bubble-dynamics form derived from Rayleigh-Plesset (Zwart-Gerber-Belamri structure), Raoult bubble/dew pressures and Henry's law with van 't Hoff temperature dependence, species transfer rate, Nusselt laminar-film wall condensation (film thickness, wall mass flux, mean coefficient 0.943 form) and a 0-D Lee relaxation cell. Checked against hand values and closed forms (to 1e-13 and better), exact phase-source conservation (liquid + vapour == 0, energy == -mdot h_fg), zero at saturation, sign logic, kinetic-theory maximum flux, Nusselt mass-flow identity, and the frozen-mass relaxation analytic solution (6e-11 relative); located errors for bad inputs. All M1-M9 checks pass, no misses. Missing (why partial): case-tree wiring and any VOF/Euler-Euler host; the 1D Stefan evaporation acceptance (needs a moving-interface solver); the CFD-level film condensation within 10 percent of Nusselt; activity-coefficient equilibrium models; interfacial-area transport (F-228). Lee, ZGB factor values, Schrage factor and Rohsenow 0.68 are from knowledge and UNVERIFIED (docs/reference-data.md). Previous scope text: Priority P3. Size M. Area: fv. Source-term closures on top of the multiphase base."
   },
   {
     "id": "F-227",
@@ -1661,9 +1661,9 @@
     "deps": [
       "F-055"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Linear dispersion relation and Stokes wave elevation reproduced; reflected-wave fraction below 5 percent with the beach",
-    "note": "Priority P3. Size M. Area: fv. Wave boundary conditions for the free-surface solver."
+    "note": "PARTIAL, LIBRARY ONLY (wave 23B, ADR 0040). The free-surface base (F-055 VOF) does not exist, so no wave boundary condition is wired into a solver or the case tree. Delivered: rcfd-fv waves.rs: finite-depth dispersion solved to 2e-15 residual, Airy and second-order Stokes kinematics (elevation, velocity, potential, pressure) usable as wave-inlet values with a start-up ramp and an exact liquid-volume-fraction helper; irregular waves from Pierson-Moskowitz and JONSWAP spectra with a seeded reproducible phase set (recovered Hs within 4.8e-4 and 3.3e-4 of target, moments m1 and m2 within 2e-5 and 8e-4 of closed forms); relaxation-zone blending weights (exponential and polynomial, exact endpoints, monotone) and sponge profiles; and a 1-D linear shallow-water tank for reflection estimates. Linear dispersion limits, energy equipartition and mean flux, continuity and Laplace pass; the Stokes formulas satisfy both free-surface conditions to third order (residual ratio 8.00 for halved amplitude). 1-D toy tank: rigid wall R = 1.00000, exponential relaxation beach of 2 wavelengths R = 2.6e-4 (limit 0.05, acceptance statement met only in this toy, not in a free-surface solver). KNOWN MISSES (ignored tests, limits not changed): the registered W3 residual-scaling statement divided by the amplitude and so cannot pass (corrected test w3b passes); the registered 'abrupt zone reflects at least 0.5' check measured 0.214 (wrong premise; a post-hoc corrected comparison is labelled as such in the ADR addendum). Missing (why partial): wiring into a free-surface solver (F-055); third and higher order Stokes, cnoidal and stream-function waves; directional spectra; piston/flap wave makers; any 2-D/3-D reflection measurement. Second-order Stokes, JONSWAP and the blending formula citations are UNVERIFIED (docs/reference-data.md); the formulas are validated by the tests. Previous scope text: Priority P3. Size M. Area: fv. Wave boundary conditions for the free-surface solver."
   },
   {
     "id": "F-228",
