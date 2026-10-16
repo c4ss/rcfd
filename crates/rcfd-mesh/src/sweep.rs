@@ -423,7 +423,7 @@ pub fn sweep(base: &BaseMesh, spec: &SweepSpec) -> Result<Mesh> {
             Some(k)
         }
         Path::NormalOffset { thickness } => {
-            if (thickness.is_nan() || thickness <= 0.0) {
+            if thickness.is_nan() || thickness <= 0.0 {
                 return bad("normal offset needs a positive thickness");
             }
             None
