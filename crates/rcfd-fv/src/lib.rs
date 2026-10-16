@@ -22,6 +22,7 @@ pub mod lumped;
 pub mod masstransfer;
 pub mod outlets;
 pub mod pimple;
+pub mod popbal;
 pub mod potential;
 pub mod pressure;
 pub mod radiation;
