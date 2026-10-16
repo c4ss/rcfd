@@ -81,6 +81,10 @@ pub struct PhaseChange {
     pub solver: SolveControl,
     /// Largest Newton iteration count seen so far.
     pub max_iterations: usize,
+    /// Steps that needed the safeguarded branch (the plain Newton loop did not converge), ADR 0043 D2.
+    pub safeguarded_steps: usize,
+    /// Use the safeguarded branch for every step (default false: only when the plain Newton loop fails).
+    pub force_safeguard: bool,
 }
 
 impl PhaseChange {
@@ -97,6 +101,8 @@ impl PhaseChange {
                 max_iter: 5000,
             },
             max_iterations: 0,
+            safeguarded_steps: 0,
+            force_safeguard: false,
         }
     }
 
@@ -158,48 +164,119 @@ impl PhaseChange {
             converged: false,
             residual: 0.0,
         };
-        for it in 0..=self.newton_max {
-            let rmax = r.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
-            stats.residual = rmax / scale.max(1e-300);
-            if stats.residual <= 1e-12 {
-                stats.converged = true;
-                stats.iterations = it;
-                break;
-            }
-            if it == self.newton_max {
-                stats.iterations = it;
-                break;
-            }
-            // Newton step through the linearised matrix
-            let mut m = self.operator(geom, field, &cells);
-            for c in 0..n {
-                let cap = self.law.apparent_capacity(cells[c]) * vol[c] / dt;
-                m.a.diag[c] += cap;
-                let s = source.map_or(0.0, |s| vol[c] * s[c]);
-                m.b[c] += s + cap * cells[c] - vol[c] * (self.law.enthalpy(cells[c]) - self.h_old[c]) / dt;
-            }
-            let mut tn = cells.clone();
-            m.solve(&mut tn, &self.solver);
-            // backtracking on the 2-norm of the true residual
-            let r0 = norm2(&r);
-            let mut s = 1.0;
-            let mut accepted = None;
-            for _ in 0..=8 {
-                let cand: Vec<f64> = cells.iter().zip(&tn).map(|(a, b)| a + s * (b - a)).collect();
-                let (rc, sc) = self.residual(geom, field, &cand, dt, source);
-                if norm2(&rc) < (1.0 - 1e-4 * s) * r0 || s < 1.0 / 256.0 {
-                    accepted = Some((cand, rc, sc));
+        if !self.force_safeguard {
+            for it in 0..=self.newton_max {
+                let rmax = r.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
+                stats.residual = rmax / scale.max(1e-300);
+                if stats.residual <= 1e-12 {
+                    stats.converged = true;
+                    stats.iterations = it;
                     break;
                 }
-                s *= 0.5;
+                if it == self.newton_max {
+                    stats.iterations = it;
+                    break;
+                }
+                // Newton step through the linearised matrix
+                let mut m = self.operator(geom, field, &cells);
+                for c in 0..n {
+                    let cap = self.law.apparent_capacity(cells[c]) * vol[c] / dt;
+                    m.a.diag[c] += cap;
+                    let s = source.map_or(0.0, |s| vol[c] * s[c]);
+                    m.b[c] += s + cap * cells[c] - vol[c] * (self.law.enthalpy(cells[c]) - self.h_old[c]) / dt;
+                }
+                let mut tn = cells.clone();
+                m.solve(&mut tn, &self.solver);
+                // backtracking on the 2-norm of the true residual
+                let r0 = norm2(&r);
+                let mut s = 1.0;
+                let mut accepted = None;
+                for _ in 0..=8 {
+                    let cand: Vec<f64> = cells.iter().zip(&tn).map(|(a, b)| a + s * (b - a)).collect();
+                    let (rc, sc) = self.residual(geom, field, &cand, dt, source);
+                    if norm2(&rc) < (1.0 - 1e-4 * s) * r0 || s < 1.0 / 256.0 {
+                        accepted = Some((cand, rc, sc));
+                        break;
+                    }
+                    s *= 0.5;
+                }
+                let (cand, rc, sc) = accepted.unwrap_or_else(|| {
+                    let (rc, sc) = self.residual(geom, field, &tn, dt, source);
+                    (tn.clone(), rc, sc)
+                });
+                cells = cand;
+                r = rc;
+                scale = sc;
             }
-            let (cand, rc, sc) = accepted.unwrap_or_else(|| {
-                let (rc, sc) = self.residual(geom, field, &tn, dt, source);
-                (tn.clone(), rc, sc)
-            });
-            cells = cand;
-            r = rc;
-            scale = sc;
+        }
+        if !stats.converged {
+            // The plain Newton loop on the piecewise-linear h(T) can fall into a limit cycle when a cell crosses the whole
+            // mushy interval in one step (ADR 0043 D2). Restart from the initial guess with a line search on the convex
+            // potential whose gradient is the residual: the directional derivative is monotone along the Newton direction,
+            // so the root is bracketed and bisected, and the potential decreases strictly (no cycle is possible).
+            self.safeguarded_steps += 1;
+            cells = field.values.clone();
+            let (r0v, sc0) = self.residual(geom, field, &cells, dt, source);
+            r = r0v;
+            scale = sc0;
+            stats = StepStats {
+                iterations: 0,
+                converged: false,
+                residual: 0.0,
+            };
+            for it in 0..=self.newton_max {
+                let rmax = r.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
+                stats.residual = rmax / scale.max(1e-300);
+                if stats.residual <= 1e-12 {
+                    stats.converged = true;
+                    stats.iterations = it;
+                    break;
+                }
+                if it == self.newton_max {
+                    stats.iterations = it;
+                    break;
+                }
+                let mut m = self.operator(geom, field, &cells);
+                for c in 0..n {
+                    let cap = self.law.apparent_capacity(cells[c]) * vol[c] / dt;
+                    m.a.diag[c] += cap;
+                    let s = source.map_or(0.0, |s| vol[c] * s[c]);
+                    m.b[c] += s + cap * cells[c] - vol[c] * (self.law.enthalpy(cells[c]) - self.h_old[c]) / dt;
+                }
+                let mut tn = cells.clone();
+                m.solve(&mut tn, &self.solver);
+                let d: Vec<f64> = tn.iter().zip(&cells).map(|(a, b)| a - b).collect();
+                // phi'(s) = d . r(T + s d)
+                let slope = |s: f64| -> f64 {
+                    let cand: Vec<f64> = cells.iter().zip(&d).map(|(a, b)| a + s * b).collect();
+                    let (rc, _) = self.residual(geom, field, &cand, dt, source);
+                    rc.iter().zip(&d).map(|(a, b)| a * b).sum::<f64>()
+                };
+                let step = if slope(1.0) <= 0.0 {
+                    1.0
+                } else {
+                    let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
+                    for _ in 0..60 {
+                        let mid = 0.5 * (lo + hi);
+                        if slope(mid) > 0.0 {
+                            hi = mid;
+                        } else {
+                            lo = mid;
+                        }
+                    }
+                    if lo > 0.0 {
+                        lo
+                    } else {
+                        hi
+                    }
+                };
+                for c in 0..n {
+                    cells[c] += step * d[c];
+                }
+                let (rc, sc) = self.residual(geom, field, &cells, dt, source);
+                r = rc;
+                scale = sc;
+            }
         }
         self.max_iterations = self.max_iterations.max(stats.iterations);
         field.values = cells;

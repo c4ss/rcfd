@@ -61,10 +61,17 @@ struct Run {
     worst_balance: f64,
     worst_monotone: f64,
     f_in_range: bool,
+    safeguarded: usize,
+    /// Interface position (liquid content) of the initial state.
+    s_init: f64,
 }
 
 /// `melting = true`: hot wall `t_w > 0`, solid initial `t_i <= 0`; `false`: the mirror image (`t_w < 0`, liquid initial `t_i >= 0`).
 fn stefan_run(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phase: bool) -> Run {
+    stefan_run_x(n, t_w, t_i, lambda, melting, one_phase, false)
+}
+
+fn stefan_run_x(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phase: bool, force: bool) -> Run {
     let geom = geometry(box_2d(n, 1, LX, 1.0, false, false).unwrap());
     let sign = if melting { 1.0 } else { -1.0 };
     // analytic profile of the melting orientation, mirrored for freezing
@@ -83,6 +90,7 @@ fn stefan_run(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phas
         latent_k: LATENT_K,
     };
     let mut pc = PhaseChange::new(law, vec![1.0; geom.mesh.n_faces()], &t.values);
+    pc.force_safeguard = force;
     let h = LX / n as f64;
     let steps = ((T_END - T0) / (0.5 * h)).ceil() as usize;
     let dt = (T_END - T0) / steps as f64;
@@ -94,7 +102,17 @@ fn stefan_run(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phas
         worst_balance: 0.0,
         worst_monotone: 0.0,
         f_in_range: true,
+        safeguarded: 0,
+        s_init: 0.0,
     };
+    {
+        let f0 = pc.liquid_fraction(&t.values);
+        let a0 = patch_area(&geom, "xmin");
+        run.s_init = (0..f0.len())
+            .map(|c| vol[c] * if melting { f0[c] } else { 1.0 - f0[c] })
+            .sum::<f64>()
+            / a0;
+    }
     for _ in 0..steps {
         let f_old = pc.liquid_fraction(&t.values);
         let h_old = pc.h_old.clone();
@@ -118,6 +136,7 @@ fn stefan_run(n: usize, t_w: f64, t_i: f64, lambda: f64, melting: bool, one_phas
             run.worst_monotone = run.worst_monotone.max(bad);
         }
     }
+    run.safeguarded = pc.safeguarded_steps;
     let f = pc.liquid_fraction(&t.values);
     let area = patch_area(&geom, "xmin");
     run.s_num = (0..f.len())
@@ -318,4 +337,102 @@ fn k2_brinkman_channel_orders() {
     let e: Vec<f64> = [20usize, 40, 80].iter().map(|&n| brinkman_error(n)).collect();
     let (o1, o2) = ((e[0] / e[1]).log2(), (e[1] / e[2]).log2());
     assert!(o1 >= 1.8 && o2 >= 1.8, "{e:?} {o1} {o2}");
+}
+
+// ---- ADR 0043 D2 checks S1 to S5 ------------------------------------------------------------------------------------
+
+fn check_invariants(tag: &str, r: &Run) {
+    assert!(r.worst_balance <= 1e-10, "{tag} P4 balance {}", r.worst_balance);
+    assert!(r.f_in_range, "{tag} P5 range");
+    assert!(r.worst_monotone <= 1e-10, "{tag} P5 monotone {}", r.worst_monotone);
+    assert!(
+        r.all_converged && r.max_newton < 100,
+        "{tag} P6 newton {}",
+        r.max_newton
+    );
+}
+
+/// S1 (and S4): P2 and P8 at all four levels including N = 480: P4, P5, P6 and the position error <= 3 percent. S2: the
+/// safeguarded branch is not entered at N <= 240. S4: it is entered at N = 480 (the limit cycle of the plain Newton loop existed).
+#[test]
+fn s1_s2_s4_two_phase_stefan_four_levels_with_safeguard() {
+    for (tag, t_w, t_i, melting) in [("P2", 1.0_f64, -0.5_f64, true), ("P8", -1.0_f64, 0.5_f64, false)] {
+        let lambda = neumann_lambda(t_w.abs() / LATENT_K, t_i.abs() / LATENT_K);
+        let s_exact = 2.0 * lambda * T_END.sqrt();
+        for n in [60usize, 120, 240, 480] {
+            let r = stefan_run(n, t_w, t_i, lambda, melting, false);
+            let e = (r.s_num - s_exact).abs() / s_exact;
+            println!(
+                "{tag} N={n}: rel {e:.4e}; balance {:.2e}, monotone {:.2e}, newton max {}, safeguarded steps {}",
+                r.worst_balance, r.worst_monotone, r.max_newton, r.safeguarded
+            );
+            check_invariants(&format!("{tag} N={n}"), &r);
+            assert!(e <= 0.03, "{tag} N={n} position error {e}");
+            if n <= 240 {
+                assert_eq!(
+                    r.safeguarded, 0,
+                    "{tag} N={n}: the plain loop converged before, it must not change"
+                );
+            } else {
+                assert!(
+                    r.safeguarded > 0,
+                    "{tag} N={n}: the plain loop should have failed here (S4)"
+                );
+            }
+        }
+    }
+}
+
+/// S2: one-phase P1 never enters the safeguarded branch (all four levels) and keeps the invariants.
+#[test]
+fn s2_p1_never_enters_the_safeguarded_branch() {
+    let lambda = neumann_lambda(0.5, 0.0);
+    for n in [60usize, 120, 240, 480] {
+        let r = stefan_run(n, 1.0, -EPS, lambda, true, true);
+        check_invariants(&format!("P1 N={n}"), &r);
+        assert_eq!(r.safeguarded, 0, "P1 N={n}");
+    }
+}
+
+/// S3: the safeguarded branch forced on every step converges to the same discrete solution (interface position within 1e-8
+/// relative) and keeps P4, P5, P6.
+#[test]
+fn s3_forced_safeguarded_branch_matches_the_plain_loop() {
+    let lambda = neumann_lambda(0.5, 0.25);
+    for n in [60usize, 120, 240] {
+        let a = stefan_run(n, 1.0, -0.5, lambda, true, false);
+        let b = stefan_run_x(n, 1.0, -0.5, lambda, true, false, true);
+        let d = (a.s_num - b.s_num).abs() / a.s_num;
+        println!(
+            "S3 N={n}: plain {:.10} forced {:.10} rel diff {d:.2e}, forced newton max {}",
+            a.s_num, b.s_num, b.max_newton
+        );
+        check_invariants(&format!("S3 N={n}"), &b);
+        assert!(d <= 1e-8, "S3 N={n} {d}");
+        assert!(b.safeguarded > 0);
+    }
+}
+
+/// S5 (reported, not asserted): successive differences of the numerical interface position of P1 and their orders.
+#[test]
+fn s5_p1_successive_position_differences_report() {
+    let lambda = neumann_lambda(0.5, 0.0);
+    let s_exact = 2.0 * lambda * T_END.sqrt();
+    let runs: Vec<Run> = [60usize, 120, 240, 480]
+        .iter()
+        .map(|&n| stefan_run(n, 1.0, -EPS, lambda, true, true))
+        .collect();
+    let s: Vec<f64> = runs.iter().map(|r| r.s_num).collect();
+    let s0_exact = 2.0 * lambda * T0.sqrt();
+    println!(
+        "S5 initial-state position errors (absolute, against 2 lambda sqrt(t0) = {s0_exact:.9}): {:?}; final absolute errors {:?}",
+        runs.iter().map(|r| r.s_init - s0_exact).collect::<Vec<_>>(),
+        runs.iter().map(|r| r.s_num - s_exact).collect::<Vec<_>>()
+    );
+    let d: Vec<f64> = s.windows(2).map(|w| (w[0] - w[1]).abs()).collect();
+    let o: Vec<f64> = d.windows(2).map(|w| (w[0] / w[1]).log2()).collect();
+    println!(
+        "S5 P1 positions {s:?} (exact {s_exact:.9}); signed errors {:?}; successive differences {d:?}; orders of the differences {o:?}",
+        s.iter().map(|x| (x - s_exact) / s_exact).collect::<Vec<_>>()
+    );
 }
