@@ -192,9 +192,9 @@ fn a3_diagnostics_are_located() {
         .replace("box_max = [1.1", "box_max = [6.1"),
         "sources.disk.zone",
     );
-    // transient algorithm
+    // an algorithm without a momentum-source hook (ADR 0045: piso and pimple now have one, see tests/transient_sources.rs)
     let text = duct(&format!("{head}direction = [1.0, 0.0, 0.0]\n"))
-        .replace("algorithm = \"simplec\"", "algorithm = \"piso\"");
+        .replace("algorithm = \"simplec\"", "algorithm = \"coupled\"");
     let err = match Case::parse_toml(&text) {
         Err(d) => d,
         Ok(c) => Simulation::new(&c).err().unwrap_or_default(),

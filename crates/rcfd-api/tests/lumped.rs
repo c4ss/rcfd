@@ -232,8 +232,7 @@ fn z3_network_outlet_follows_the_lumped_resistance() {
     assert!((q / q_op - 1.0).abs() < 5e-3, "operating flow {q} vs {q_op}");
 }
 
-/// Diagnosis (wave 24, ADR 0042): the two-cycle sits in the inlet cell and vanishes with `component_diagonal = "corrected"` and
-/// with the inflow lag of ADR 0042 (this test also passes with `--ignored` since then; its assertion is unchanged)
+/// Diagnosis (wave 24, ADR 0042): the two-cycle sits in the inlet cell and vanishes with `component_diagonal = "corrected"`
 /// (`duct_diagnosis.rs::z3_with_corrected_component_diagonal_meets_the_registered_limits`).
 /// Registered Z3 limit on the network patch pressure against R(Q) (1e-4). Measured 8.5e-4: a small persistent
 /// two-cycle of the flow remains, so the lagged patch pressure and the final flow differ. Not met; limit unchanged.
@@ -418,7 +417,7 @@ fn z5_invalid_settings_get_located_errors() {
     let case = Case::parse_toml(&base(&inl, empty)).unwrap();
     let err = Simulation::new(&case).err().expect("empty zone must fail");
     assert!(format!("{err:?}").contains("components.j.zone"), "{err:?}");
-    // transient algorithm
-    let tr = base(&inl, &fan("[0.0, 1.0]", "[1.0, 0.0]")).replace("simplec", "piso");
+    // an algorithm without a pressure-jump hook (ADR 0045: piso and pimple now have one, see tests/transient_sources.rs)
+    let tr = base(&inl, &fan("[0.0, 1.0]", "[1.0, 0.0]")).replace("simplec", "coupled");
     assert!(diags(&tr).contains(&"components.f.type".to_string()));
 }

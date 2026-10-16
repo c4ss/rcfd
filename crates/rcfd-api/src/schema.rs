@@ -1769,11 +1769,11 @@ pub fn case_schema() -> Schema {
             "sources",
             Schema::named(
                 Schema::object()
-                    .doc("A momentum source restricted to a cell zone (steady SIMPLE/SIMPLEC runs)")
+                    .doc("A momentum source restricted to a cell zone (SIMPLE/SIMPLEC, PISO and PIMPLE runs; rotating_frame and mrf steady only)")
                     .field(
                         "type",
                         Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration", "actuator_disk", "lorentz"])
-                            .doc("lorentz: Lorentz body force J x B / rho of a liquid conductor in an imposed magnetic field, J = sigma (E_ext - grad phi + u x B), low magnetic Reynolds number (ADR 0039; steady SIMPLE/SIMPLEC); actuator_disk: thrust (and optional torque) distributed over the zone as a body force, uniform or proportional to the distance from the disk axis (ADR 0036); porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
+                            .doc("lorentz: Lorentz body force J x B / rho of a liquid conductor in an imposed magnetic field, J = sigma (E_ext - grad phi + u x B), low magnetic Reynolds number (ADR 0039; SIMPLE/SIMPLEC, PISO, PIMPLE per ADR 0045); actuator_disk: thrust (and optional torque) distributed over the zone as a body force, uniform or proportional to the distance from the disk axis (ADR 0036); porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
                     )
                     .field(
                         "zone",
@@ -1850,13 +1850,13 @@ pub fn case_schema() -> Schema {
                         Schema::enumeration("none", &["none", "solve"]).doc("lorentz: none = grad phi = 0 (J = sigma (E_ext + u x B), the fully developed / short-circuited approximation); solve = solve div(sigma grad phi) = div(sigma (E_ext + u x B)) with the boundaries.<patch>.electric conditions (insulated by default; a cell is pinned when no patch fixes the potential)"),
                     ),
             )
-            .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
+            .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; SIMPLE/SIMPLEC, PISO and PIMPLE runs (ADR 0045; rotating_frame and mrf steady only)"),
         )
         .field(
             "components",
             Schema::named(
                 Schema::object()
-                    .doc("A lumped zone component (ADR 0012; steady SIMPLE/SIMPLEC runs, constant density)")
+                    .doc("A lumped zone component (ADR 0012; SIMPLE/SIMPLEC, PISO and PIMPLE runs per ADR 0045, constant density)")
                     .field(
                         "type",
                         Schema::enumeration("fan", &["fan", "porous_jump", "heat_exchanger", "network_outlet", "fan_boundary"])

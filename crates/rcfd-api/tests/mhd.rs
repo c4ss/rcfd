@@ -243,14 +243,13 @@ fn a4_invalid_settings_get_located_errors() {
     let bad_e = lorentz([0.0, 1.0, 0.0], "applied_electric_field = [1.0]\n");
     assert!(diags(&channel(10, 1.0, &bad_e)).contains(&"sources.mhd.applied_electric_field".to_string()));
     // unsupported algorithms
-    for alg in ["piso", "pimple"] {
-        let t = channel(10, 1.0, &ok).replace("simplec", alg);
-        assert!(
-            diags(&t).contains(&"sources.mhd.type".to_string()),
-            "{alg}: {:?}",
-            diags(&t)
-        );
-    }
+    // (ADR 0045: piso and pimple now support the Lorentz source, see tests/transient_sources.rs)
+    let compressible = channel(10, 1.0, &ok).replace("simplec", "compressible");
+    assert!(
+        diags(&compressible).contains(&"sources.mhd.type".to_string()),
+        "compressible: {:?}",
+        diags(&compressible)
+    );
     let coupled = channel(10, 1.0, &ok).replace("simplec", "coupled");
     assert!(
         diags(&coupled).contains(&"sources.mhd.type".to_string()),

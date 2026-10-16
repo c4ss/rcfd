@@ -2336,8 +2336,17 @@ impl Simulation {
                 }
                 if let Some(en) = &mut self.energy {
                     // temperature first, on the flux of the previous step; the flow then sees the new buoyancy
+                    if let Some(cm) = &mut self.components {
+                        // lumped heat exchangers: duty from the flux and temperature of the previous step (ADR 0045)
+                        en.solver.source = cm.heat_sources(&self.geom, &s.phi, &en.solver.t);
+                    }
                     if let Some(zs) = &self.zone_sources {
-                        zs.apply_temperature(&mut en.solver, None, s.time + dt);
+                        let base = if self.components.is_some() {
+                            en.solver.source.clone()
+                        } else {
+                            None
+                        };
+                        zs.apply_temperature(&mut en.solver, base, s.time + dt);
                     }
                     en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
                     let bous = en
@@ -2375,8 +2384,31 @@ impl Simulation {
                             }
                         }
                     },
+                    None if self.sources.is_some() || self.components.is_some() => {
+                        // momentum sources and lumped pressure components (ADR 0045): one evaluation per outer iteration
+                        let (geom, sources, components) = (&self.geom, &self.sources, &mut self.components);
+                        let mut hook = |u: &VectorField, phi: &[f64]| {
+                            let mut up = rcfd_fv::pimple::OuterUpdate::default();
+                            if let Some(src) = sources {
+                                let (f, sk) = src.evaluate(geom, u);
+                                up.source_force = f;
+                                up.sink = sk;
+                            }
+                            if let Some(cm) = components.as_mut() {
+                                up.face_jump = cm.face_jump(geom, phi);
+                                up.patch_pressures = cm.network_pressures(geom, phi);
+                            }
+                            up
+                        };
+                        s.step_with(dt, Some(&mut hook))
+                    }
                     None => s.step(dt),
                 };
+                if let Some(cm) = &self.components {
+                    for (name, v) in cm.values() {
+                        self.monitors.push(&name, "", i.time, v);
+                    }
+                }
                 if let Some(sc) = &mut self.scalars {
                     let sctx = StepCtx {
                         zone: self.zone_sources.as_ref(),

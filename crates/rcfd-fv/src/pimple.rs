@@ -16,6 +16,7 @@
 //!   outer iteration, which allows Courant numbers above one. With
 //!   `n_outer = 1` the algorithm is plain PISO.
 
+use crate::bc::FixedValue;
 use crate::convection::{convection, face_flux, ConvScheme};
 use crate::ddt::{add_ddt, max_courant, CflController, History, TimeScheme};
 use crate::diffusion::{laplacian, uniform_gamma};
@@ -23,6 +24,7 @@ use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
+use crate::lumped::FaceJump;
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc, solve_pressure,
     PressureControls,
@@ -202,6 +204,25 @@ pub struct StepInfo {
     pub p_iters: usize,
 }
 
+/// Momentum-side sources of one outer iteration, returned by the hook of [`PimpleSolver::step_with`] (ADR 0045). The same
+/// quantities the steady kernel receives: an explicit body acceleration (balanced-force face values), an implicit
+/// isotropic sink, pressure jumps at internal faces (fans, porous jumps, loss closures) and fixed pressures on named
+/// patches (network outlets, fan boundaries).
+#[derive(Debug, Clone, Default)]
+pub struct OuterUpdate {
+    /// Explicit source acceleration (replaces `PimpleSolver::source_force`).
+    pub source_force: Option<BodyForce>,
+    /// Implicit sink per cell, `-sink * u`, in 1/s (replaces `PimpleSolver::sink`).
+    pub sink: Option<Vec<f64>>,
+    /// Face pressure jumps (replaces `PimpleSolver::face_jump`).
+    pub face_jump: Option<FaceJump>,
+    /// New fixed kinematic pressure of named pressure patches.
+    pub patch_pressures: Vec<(String, f64)>,
+}
+
+/// Hook of [`PimpleSolver::step_with`]: called at the start of every outer iteration with the current velocity and flux.
+pub type OuterHook<'a> = dyn FnMut(&VectorField, &[f64]) -> OuterUpdate + 'a;
+
 /// Transient PISO/PIMPLE solver state.
 pub struct PimpleSolver {
     /// Geometry.
@@ -225,6 +246,13 @@ pub struct PimpleSolver {
     pub nu_face: Option<Vec<f64>>,
     /// Body acceleration (balanced-force face values, as in the steady solver), e.g. Boussinesq buoyancy.
     pub body_force: Option<BodyForce>,
+    /// Explicit source acceleration of the outer iteration in progress, set by the `step_with` hook (ADR 0045); summed with
+    /// `body_force` and applied through the same four balanced-force places. `None` leaves the solver unchanged.
+    pub source_force: Option<BodyForce>,
+    /// Implicit linear momentum sink per cell, `-sink * u`, in 1/s (porous media, Lorentz damping), set by the hook.
+    pub sink: Option<Vec<f64>>,
+    /// Pressure jumps at internal faces (lumped fans and porous jumps), set by the hook; same algebra as the SIMPLE kernel.
+    pub face_jump: Option<FaceJump>,
     /// Moving-mesh data of the current step (set only by `step_ale`, ADR 0033).
     pub(crate) ale: Option<moving::AleStep>,
     /// Pressure increment of the previous fractional step (lagged boundary treatment, ADR 0037).
@@ -251,6 +279,9 @@ impl PimpleSolver {
             step_no: 0,
             nu_face: None,
             body_force: None,
+            source_force: None,
+            sink: None,
+            face_jump: None,
             ale: None,
             fs_q: Vec::new(),
         }
@@ -258,6 +289,13 @@ impl PimpleSolver {
 
     /// Advance one time step of size `dt`.
     pub fn step(&mut self, dt: f64) -> StepInfo {
+        self.step_with(dt, None)
+    }
+
+    /// Advance one time step of size `dt`; `hook` (if any) is called at the start of every outer iteration with the current
+    /// velocity and flux and supplies the solution-dependent momentum sources of that iteration (ADR 0045). The hook is not
+    /// used by the non-iterative fractional-step advance.
+    pub fn step_with(&mut self, dt: f64, mut hook: Option<&mut OuterHook>) -> StepInfo {
         if self.settings.fractional.is_some() && self.ale.is_none() {
             return self.step_fractional(dt);
         }
@@ -307,8 +345,29 @@ impl PimpleSolver {
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
+            if let Some(h) = hook.as_mut() {
+                let up = h(&self.u, &self.phi);
+                self.source_force = up.source_force;
+                self.sink = up.sink;
+                self.face_jump = up.face_jump;
+                for (patch, pk) in up.patch_pressures {
+                    let _ = self.p.set_bc(&g, &patch, Box::new(FixedValue::scalar(pk)));
+                }
+            }
+            // effective body acceleration of this outer iteration: the static part plus the hook's source
+            let body_cow: Option<std::borrow::Cow<BodyForce>> = match (&self.body_force, &self.source_force) {
+                (None, None) => None,
+                (Some(b), None) => Some(std::borrow::Cow::Borrowed(b)),
+                (None, Some(x)) => Some(std::borrow::Cow::Borrowed(x)),
+                (Some(b), Some(x)) => {
+                    let mut t = b.clone();
+                    t.add(x);
+                    Some(std::borrow::Cow::Owned(t))
+                }
+            };
+            let body: Option<&BodyForce> = body_cow.as_deref();
             let mut pbc = pressure_bc(&g, &self.u, &self.p);
-            if let Some(bf) = &self.body_force {
+            if let Some(bf) = body {
                 // fixed-flux pressure condition: where the normal velocity is prescribed the pressure gradient balances
                 // the body force (as in the steady solver)
                 for i in 0..pbc.coeffs.len() {
@@ -329,7 +388,14 @@ impl PimpleSolver {
             }
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
-            let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
+            let mut grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
+            if let Some(j) = &self.face_jump {
+                // the jump is removed from the face interpolation of the cell gradient (as in the SIMPLE kernel)
+                let fix = j.gradient_fix(&g, &j.totals(&self.phi));
+                for (a, b) in grad_p.iter_mut().zip(&fix) {
+                    *a = vec3::add(*a, *b);
+                }
+            }
 
             // ---- momentum predictor -----------------------------------------
             let transposed = s
@@ -371,6 +437,11 @@ impl PimpleSolver {
                 };
                 let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
+                if let Some(sink) = &self.sink {
+                    for c in 0..n {
+                        m.a.diag[c] += sink[c] * vol[c];
+                    }
+                }
                 let mut m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);
                 if let Some(a) = &self.ale {
                     a.fix_ddt(&mut m, &vol, &self.hist_u[k].old, dt);
@@ -386,7 +457,7 @@ impl PimpleSolver {
                 let mut sys = m.clone();
                 for c in 0..n {
                     sys.b[c] -= vol[c] * grad_p[c][k];
-                    if let Some(bf) = &self.body_force {
+                    if let Some(bf) = body {
                         sys.b[c] += vol[c] * bf.cell[c][k];
                     }
                 }
@@ -426,7 +497,7 @@ impl PimpleSolver {
                         phi_hby_a[f] += gamma_p[f] / dt * ddt_defect[f];
                     }
                 }
-                if let Some(bf) = &self.body_force {
+                if let Some(bf) = body {
                     // balanced-force face value of the body acceleration, like the pressure gradient
                     for f in 0..mesh.n_faces() {
                         if !g.empty[f] {
@@ -437,6 +508,19 @@ impl PimpleSolver {
                 if let Some(a) = &self.ale {
                     a.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
                 }
+                // pressure jumps: phi (1 + G R) = phiHbyA + G rise - G snGrad p with G = gamma lap, as in the SIMPLE kernel
+                let mut gamma_j = gamma_p.clone();
+                if let Some(j) = &self.face_jump {
+                    for f in 0..n_int {
+                        if g.empty[f] || (j.rise[f] == 0.0 && j.resist[f] == 0.0) {
+                            continue;
+                        }
+                        let gu = gamma_p[f] * g.lap_coeff[f];
+                        let den = 1.0 + gu * j.resist[f];
+                        phi_hby_a[f] = (phi_hby_a[f] + gu * j.rise[f]) / den;
+                        gamma_j[f] = gamma_p[f] / den;
+                    }
+                }
                 let controls = PressureControls {
                     p_ref: s.p_ref,
                     non_orth_correctors: s.non_orth_correctors,
@@ -446,19 +530,25 @@ impl PimpleSolver {
                 };
                 let p_old = self.p.values.clone();
                 let mut p_new = p_old.clone();
-                let (r0, it) = solve_pressure(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls);
+                let (r0, it) = solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls);
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
                 }
-                self.phi = corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
+                self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
-                let grad_new = green_gauss(&g, &p_new, &bv_new, 0);
+                let mut grad_new = green_gauss(&g, &p_new, &bv_new, 0);
+                if let Some(j) = &self.face_jump {
+                    let fix = j.gradient_fix(&g, &j.totals(&self.phi));
+                    for (a, b) in grad_new.iter_mut().zip(&fix) {
+                        *a = vec3::add(*a, *b);
+                    }
+                }
                 for c in 0..n {
                     for k in 0..3 {
                         if g.active[k] {
-                            let body = self.body_force.as_ref().map_or(0.0, |bf| r_au[c] * bf.cell[c][k]);
-                            self.u.values[c][k] = hby_a[c][k] + body - r_au[c] * grad_new[c][k];
+                            let bforce = body.map_or(0.0, |bf| r_au[c] * bf.cell[c][k]);
+                            self.u.values[c][k] = hby_a[c][k] + bforce - r_au[c] * grad_new[c][k];
                         }
                     }
                 }

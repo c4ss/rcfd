@@ -350,11 +350,14 @@ fn invalid_sources_are_diagnosed() {
     ))
     .unwrap();
     assert!(Simulation::new(&case).is_err());
-    // transient algorithms are rejected
+    // an algorithm without a momentum-source hook is rejected (ADR 0045: piso and pimple have one since wave 25C; coupled does not)
     let text = bed("[sources.a]\ntype = \"porous\"\nporosity = 0.4\nparticle_diameter = 0.01\n").replace(
         "algorithm = \"simplec\"",
-        "algorithm = \"piso\"\ndt = 0.01\nend_time = 0.1",
+        "algorithm = \"coupled\"\ndt = 0.01\nend_time = 0.1",
     );
-    let errs = Case::parse_toml(&text).expect_err("rejected");
+    let errs = match Case::parse_toml(&text) {
+        Err(d) => d,
+        Ok(c) => Simulation::new(&c).err().unwrap_or_default(),
+    };
     assert!(errs.iter().any(|d| d.path == "sources.a.type"), "{errs:?}");
 }
