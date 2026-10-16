@@ -9,6 +9,7 @@
 //! conductivity with its own constant. The constants are inputs: nothing here ships measured data.
 
 use crate::error::{Error, Result};
+use crate::tabular::{PiecewiseLinear, PiecewisePoly, Vogel};
 
 /// A scalar property as a function of temperature.
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +27,12 @@ pub enum PropertyLaw {
         /// Sutherland constant S (K).
         constant: f64,
     },
+    /// Piecewise-linear table in T (F-220).
+    PiecewiseLinear(PiecewiseLinear),
+    /// Piecewise polynomial in T (F-220).
+    PiecewisePolynomial(PiecewisePoly),
+    /// `a exp(b / (T - c))` (F-220).
+    Vogel(Vogel),
 }
 
 impl PropertyLaw {
@@ -42,6 +49,9 @@ impl PropertyLaw {
                 let r = t / reference_temperature;
                 reference_value * r * r.sqrt() * (reference_temperature + constant) / (t + constant)
             }
+            PropertyLaw::PiecewiseLinear(l) => l.eval(t),
+            PropertyLaw::PiecewisePolynomial(l) => l.eval(t),
+            PropertyLaw::Vogel(l) => l.eval(t),
         }
     }
 
@@ -70,6 +80,7 @@ impl PropertyLaw {
             } if !(*reference_value > 0.0 && *reference_temperature > 0.0 && *constant > -*reference_temperature) => {
                 bad("Sutherland's law needs a positive reference value and temperature and S > -T_ref")
             }
+            PropertyLaw::Vogel(v) => v.validate(),
             _ => Ok(()),
         }
     }
