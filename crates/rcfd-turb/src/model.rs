@@ -10,7 +10,7 @@
 use crate::eddy::patch_faces;
 use crate::kepsilon::{KEpsilon, KEpsilonVariant, WallFunction, WallTreatment};
 use crate::les::{sgs_infos, AlgebraicSgs, SgsKind, A_PLUS_SGS, CS_DEFAULT, CW_DEFAULT};
-use crate::sa::{SLimiter, SaWallMode, SpalartAllmaras};
+use crate::sa::{DesDelta, DesMode, SLimiter, SaWallMode, SpalartAllmaras};
 use crate::sst::{KOmegaSst, SstVariant, SstWallMode};
 use crate::wall::Roughness;
 use crate::zeroeq::{mixing_length_infos, MixingLengthModel, MixingProfile, A_PLUS_ML};
@@ -161,6 +161,19 @@ pub trait TurbulenceModel: Send {
     /// reported, not ignored.
     fn apply_wall_options(&mut self, _o: &WallOptions) -> std::result::Result<(), String> {
         Ok(())
+    }
+    /// A transient step of size `dt` is about to start (called once per step before [`TurbulenceModel::update`] by the
+    /// transient algorithms). Models with a time derivative store their old level here; the default does nothing.
+    fn begin_step(&mut self, _dt: f64) {}
+    /// Set a string-valued model option (`des`, `des_delta`, `pressure_strain`, ...); `Err` carries the reason. The
+    /// default accepts none.
+    fn set_option(&mut self, name: &str, _value: &str) -> std::result::Result<(), String> {
+        Err(format!("the model '{}' has no option '{name}'", self.key()))
+    }
+    /// Explicit momentum source (acceleration per cell, ADR 0032) that a closure adds beyond the eddy viscosity, for
+    /// example the divergence of the Reynolds stress of a stress-transport model; `None` for eddy-viscosity models.
+    fn momentum_source(&self, _u: &VectorField) -> Option<Vec<[f64; 3]>> {
+        None
     }
 }
 
@@ -637,6 +650,29 @@ impl TurbulenceModel for SpalartAllmaras {
     fn initialize_from_nut(&mut self, nut: &[f64]) {
         SpalartAllmaras::initialize_from_nut(self, nut)
     }
+    fn begin_step(&mut self, dt: f64) {
+        SpalartAllmaras::begin_step(self, dt)
+    }
+    fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        match (name, value) {
+            ("des", "off") => self.des = DesMode::Off,
+            ("des", "des") => self.des = DesMode::Des,
+            ("des", "ddes") => self.des = DesMode::Ddes,
+            ("des_delta", "max_extent") => self.des_delta = DesDelta::MaxExtent,
+            ("des_delta", "cbrt_volume") => self.des_delta = DesDelta::CbrtVolume,
+            ("c_des", v) => {
+                let x: f64 = v.parse().map_err(|_| format!("c_des = '{v}' is not a number"))?;
+                if !(0.1..=2.0).contains(&x) {
+                    return Err(format!("c_des = {x} is outside [0.1, 2]"));
+                }
+                self.c_des = x;
+            }
+            ("des" | "des_delta", v) => return Err(format!("'{v}' is not a valid value of the option '{name}'")),
+            _ => return Err(format!("the model 'spalart_allmaras' has no option '{name}'")),
+        }
+        self.delta_cache = None;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------- algebraic models (ADR 0026)
@@ -659,7 +695,7 @@ pub fn mixing_length_coefficient_table() -> Vec<CoefficientInfo> {
 /// Is the built-in model `key` usable with the transient algorithms? The subgrid models are transient only
 /// ([`is_sgs_key`]); the mixing length works in both; the RANS transport models and plug-ins are steady only.
 pub fn supports_transient(key: &str) -> bool {
-    matches!(key, "smagorinsky" | "wale" | "mixing_length")
+    matches!(key, "smagorinsky" | "wale" | "mixing_length" | "rsm")
 }
 
 /// Is `key` a subgrid-scale (large-eddy) model, which is not defined for the steady algorithms?
@@ -711,6 +747,11 @@ fn registry() -> &'static Mutex<Vec<Entry>> {
                 "wale",
                 "WALE subgrid-scale model for large-eddy simulation (transient algorithms)",
                 Arc::new(|c| Ok(Box::new(AlgebraicSgs::new(SgsKind::Wale, c)?) as Box<dyn TurbulenceModel>)),
+            ),
+            b(
+                "rsm",
+                "Reynolds stress transport model (SSG or LRR-IP pressure-strain, epsilon equation; transient algorithms, no walls)",
+                Arc::new(|c| Ok(Box::new(crate::rsm::new_rsm(c)?) as Box<dyn TurbulenceModel>)),
             ),
             b(
                 "mixing_length",

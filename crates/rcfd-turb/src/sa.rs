@@ -176,6 +176,84 @@ pub fn r_function(nutilde: f64, s_t: f64, kappa: f64, d: f64) -> f64 {
     }
 }
 
+/// Hybrid RANS-LES mode of the SA model (ADR 0032).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesMode {
+    /// Plain RANS: the length scale is the wall distance.
+    Off,
+    /// Detached-eddy simulation (Spalart et al. 1997): `d~ = min(d, C_DES Delta)`.
+    Des,
+    /// Delayed DES (Spalart et al. 2006): `d~ = d - f_d max(0, d - C_DES Delta)`.
+    Ddes,
+}
+
+/// Definition of the grid scale `Delta` of the hybrid length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesDelta {
+    /// Largest distance between two face centres of the cell (empty-direction faces excluded): `max(dx, dy, dz)` on boxes.
+    MaxExtent,
+    /// Cube root of the cell volume.
+    CbrtVolume,
+}
+
+/// DES length scale `min(d, c_des Delta)`.
+pub fn des_length(d: f64, delta: f64, c_des: f64) -> f64 {
+    d.min(c_des * delta)
+}
+
+/// DDES shielding function `f_d = 1 - tanh[(8 r_d)^3]`.
+pub fn ddes_fd(rd: f64) -> f64 {
+    1.0 - (8.0 * rd).powi(3).tanh()
+}
+
+/// DDES argument `r_d = (nu + nu_t)/(max(sqrt(U_ij U_ij), 1e-10) kappa^2 d^2)`.
+pub fn ddes_rd(nu: f64, nut: f64, grad_mag: f64, kappa: f64, d: f64) -> f64 {
+    (nu + nut) / (grad_mag.max(1e-10) * kappa * kappa * d * d)
+}
+
+/// DDES length scale `d - f_d max(0, d - c_des Delta)`.
+pub fn ddes_length(d: f64, delta: f64, c_des: f64, fd: f64) -> f64 {
+    d - fd * (d - c_des * delta).max(0.0)
+}
+
+/// Production factor `S~` and destruction function `fw` of a cell with `nuT = x >= 0`, vorticity `omega` and length `d`.
+pub fn sa_s_fw(x: f64, omega: f64, d: f64, nu: f64, cf: &SaCoefficients, limiter: SLimiter) -> (f64, f64) {
+    let chi = x / nu;
+    let sb = x * fv2(chi, cf.cv1) / (cf.kappa * cf.kappa * d * d);
+    let st = s_tilde(omega, sb, limiter, cf.c2, cf.c3);
+    let r = r_function(x, st, cf.kappa, d);
+    (st, fw(r, cf.cw2, cf.cw3))
+}
+
+/// Local source `cb1 S~ nuT - cw1 fw (nuT/d)^2` of the SA equation (`nuT >= 0`).
+pub fn sa_local_source(x: f64, omega: f64, d: f64, nu: f64, cf: &SaCoefficients, limiter: SLimiter) -> f64 {
+    let (st, fwv) = sa_s_fw(x, omega, d, nu, cf, limiter);
+    cf.cb1 * st.max(0.0) * x - cf.cw1() * fwv * x * x / (d * d)
+}
+
+/// Grid scale of every cell.
+pub fn cell_delta(geom: &FvGeometry, kind: DesDelta) -> Vec<f64> {
+    let mesh = &geom.mesh;
+    match kind {
+        DesDelta::CbrtVolume => mesh.cell_volumes().iter().map(|v| v.cbrt()).collect(),
+        DesDelta::MaxExtent => {
+            let fc = mesh.face_centres();
+            (0..geom.n_cells())
+                .map(|c| {
+                    let faces: Vec<usize> = mesh.cell_faces(c).iter().copied().filter(|&f| !geom.empty[f]).collect();
+                    let mut m: f64 = 0.0;
+                    for (i, &a) in faces.iter().enumerate() {
+                        for &b in &faces[i + 1..] {
+                            m = m.max(vec3::norm(vec3::sub(fc[a], fc[b])));
+                        }
+                    }
+                    m
+                })
+                .collect()
+        }
+    }
+}
+
 /// Steady Spalart-Allmaras model state.
 pub struct SpalartAllmaras {
     /// Geometry.
@@ -208,11 +286,21 @@ pub struct SpalartAllmaras {
     pub relax_nut: f64,
     /// Linear solver controls.
     pub solver: SolveControl,
+    /// Hybrid RANS-LES mode (default off).
+    pub des: DesMode,
+    /// `C_DES` (0.65).
+    pub c_des: f64,
+    /// Definition of the grid scale.
+    pub des_delta: DesDelta,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
     cell_wall_face: Vec<usize>,
     y_plus: Vec<f64>,
     started: bool,
+    /// Time step of the current transient step (`None`: steady pseudo-time sweep).
+    step_dt: Option<f64>,
+    nutilde_old: Vec<f64>,
+    pub(crate) delta_cache: Option<Vec<f64>>,
 }
 
 impl SpalartAllmaras {
@@ -259,11 +347,17 @@ impl SpalartAllmaras {
                 max_iter: 500,
             },
             wall_dist,
+            des: DesMode::Off,
+            c_des: 0.65,
+            des_delta: DesDelta::MaxExtent,
             y_plus: vec![0.0; wall_faces.len()],
             wall_faces,
             cell_wall_face,
             geom,
             started: false,
+            step_dt: None,
+            nutilde_old: Vec::new(),
+            delta_cache: None,
         })
     }
 
@@ -303,6 +397,38 @@ impl SpalartAllmaras {
         vec3::norm(vec3::sub(v, vec3::scale(n, vec3::dot(v, n))))
     }
 
+    /// Start a transient step of size `dt`: the next [`SpalartAllmaras::update`] adds the implicit-Euler time derivative
+    /// (no under-relaxation) with the present `nuT` as the old level.
+    pub fn begin_step(&mut self, dt: f64) {
+        self.step_dt = Some(dt);
+        self.nutilde_old = self.nutilde.values.clone();
+    }
+
+    /// Length scale of every cell: the wall distance, or the DES / DDES length.
+    fn length_scale(&mut self, grad_mag: &[f64]) -> Vec<f64> {
+        let n = self.geom.n_cells();
+        if self.des == DesMode::Off {
+            return (0..n).map(|c| self.wall_dist[c].max(1e-30)).collect();
+        }
+        if self.delta_cache.is_none() {
+            self.delta_cache = Some(cell_delta(&self.geom, self.des_delta));
+        }
+        let delta = self.delta_cache.as_ref().unwrap();
+        (0..n)
+            .map(|c| {
+                let d = self.wall_dist[c].max(1e-30);
+                let l = match self.des {
+                    DesMode::Des => des_length(d, delta[c], self.c_des),
+                    _ => {
+                        let rd = ddes_rd(self.nu, self.nut[c], grad_mag[c], self.coef.kappa, d);
+                        ddes_length(d, delta[c], self.c_des, ddes_fd(rd))
+                    }
+                };
+                l.max(1e-30)
+            })
+            .collect()
+    }
+
     /// One sweep: solve the `nuT` equation on the flux `phi` for the current velocity, then update `nut` and `wall_nut`.
     /// Returns the largest relative change of `nut`.
     pub fn update(&mut self, u: &VectorField, phi: &[f64]) -> f64 {
@@ -325,6 +451,20 @@ impl SpalartAllmaras {
             })
             .collect();
         let nt = self.nutilde.values.clone();
+        let grad_mag: Vec<f64> = if self.des == DesMode::Ddes {
+            (0..n)
+                .map(|c| {
+                    let mut s2 = 0.0;
+                    for gi in gr.iter() {
+                        s2 += vec3::dot(gi[c], gi[c]);
+                    }
+                    s2.sqrt()
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let len = self.length_scale(&grad_mag);
 
         // ---- wall cells (wall mode Auto): Spalding law, strain and fixed nuT
         let mut fixed: Vec<Option<f64>> = vec![None; n];
@@ -379,7 +519,7 @@ impl SpalartAllmaras {
         let mut m = convection(&g, phi, &cells, &bc, self.convection, grad.as_deref());
         m.add(&laplacian(&g, &gam, &bc, grad.as_deref()));
         for c in 0..n {
-            let d = self.wall_dist[c].max(1e-30);
+            let d = len[c];
             let x = nt[c];
             let g2 = vec3::dot(gnt[c], gnt[c]);
             m.b[c] += cf.cb2 / cf.sigma * g2 * vol[c];
@@ -396,7 +536,15 @@ impl SpalartAllmaras {
                 m.b[c] += (cf.cb1 * vort[c] * x + cw1 * x * x / (d * d)) * vol[c];
             }
         }
-        m.relax(self.relax_turb, &nt);
+        if let Some(dt) = self.step_dt {
+            // implicit-Euler time derivative, no under-relaxation
+            for c in 0..n {
+                m.a.diag[c] += vol[c] / dt;
+                m.b[c] += vol[c] * self.nutilde_old[c] / dt;
+            }
+        } else {
+            m.relax(self.relax_turb, &nt);
+        }
         for &c in &wall_cells {
             if let Some(v) = fixed[c] {
                 let big = 1e8 * m.a.diag[c].abs().max(1e-30);
@@ -414,7 +562,11 @@ impl SpalartAllmaras {
         // ---- eddy viscosity and wall values
         let cap = 1e5 * nu;
         let mut change: f64 = 0.0;
-        let alpha = if self.started { self.relax_nut } else { 1.0 };
+        let alpha = if self.started && self.step_dt.is_none() {
+            self.relax_nut
+        } else {
+            1.0
+        };
         for c in 0..n {
             let target = nut_from_nutilde(self.nutilde.values[c], nu, cf.cv1).min(cap);
             let upd = alpha * target + (1.0 - alpha) * self.nut[c];
@@ -448,6 +600,7 @@ impl SpalartAllmaras {
             })
             .collect();
         self.y_plus = yp;
+        self.step_dt = None;
         change
     }
 }

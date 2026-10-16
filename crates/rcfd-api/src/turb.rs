@@ -69,8 +69,13 @@ pub fn variant_of(case: &Case) -> KEpsilonVariant {
 pub fn enabled(case: &Case) -> bool {
     matches!(
         get_s(case, "turbulence.model").as_str(),
-        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "smagorinsky" | "wale" | "mixing_length" | "plugin"
+        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "smagorinsky" | "wale" | "mixing_length" | "rsm" | "plugin"
     )
+}
+
+/// Is the Reynolds stress transport model selected (ADR 0032), by `model = "rsm"` or as the plugin key `rsm`?
+pub fn is_rsm(case: &Case) -> bool {
+    model_key(case) == "rsm"
 }
 
 /// Is a subgrid-scale (large-eddy) model selected (ADR 0026)?
@@ -120,6 +125,14 @@ pub fn model_label(case: &Case) -> String {
         "smagorinsky" => "Smagorinsky (LES)".to_string(),
         "wale" => "WALE (LES)".to_string(),
         "mixing_length" => "mixing length".to_string(),
+        "rsm" => format!(
+            "Reynolds stress ({})",
+            if get_s(case, "turbulence.rsm.pressure_strain") == "lrr_ip" {
+                "LRR-IP"
+            } else {
+                "SSG"
+            }
+        ),
         "plugin" => format!("plugin ({})", get_s(case, "turbulence.plugin")),
         _ => "laminar".to_string(),
     }
@@ -213,6 +226,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     let sa = is_sa(case);
     let sgs = is_sgs(case);
     let alg = is_algebraic(case);
+    let rsm = is_rsm(case);
     let plugin = get_s(case, "turbulence.model") == "plugin";
     let mname = match get_s(case, "turbulence.model").as_str() {
         "k_omega_sst" => "k-omega SST".to_string(),
@@ -220,11 +234,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         "smagorinsky" => "Smagorinsky".to_string(),
         "wale" => "WALE".to_string(),
         "mixing_length" => "mixing_length".to_string(),
+        "rsm" => "the Reynolds stress model".to_string(),
         "plugin" => format!("plugin model '{}'", get_s(case, "turbulence.plugin")),
         _ => "k-epsilon".to_string(),
     };
     let mname = mname.as_str();
-    let ke = !sst && !sa && !plugin && !alg;
+    let ke = !sst && !sa && !plugin && !alg && !rsm;
     if plugin && !rcfd_turb::is_registered(&get_s(case, "turbulence.plugin")) {
         out.push(diag(
             "turbulence.plugin",
@@ -272,7 +287,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ));
         }
     }
-    if (sst || sa || plugin || alg) && get_f(case, "turbulence.epsilon_initial") > 0.0 {
+    if (sst || sa || plugin || alg) && !rsm && get_f(case, "turbulence.epsilon_initial") > 0.0 {
         out.push(diag(
             "turbulence.epsilon_initial",
             format!("turbulence.epsilon_initial applies to k_epsilon only, not to {mname}"),
@@ -306,9 +321,51 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             }
         }
     }
+    let des = sa && get_s(case, "turbulence.sa.des") != "off";
+    if !sa {
+        for (k, v) in [("sa.des", "off"), ("sa.des_delta", "max_extent")] {
+            if get_s(case, &format!("turbulence.{k}")) != v {
+                out.push(diag(
+                    &format!("turbulence.{k}"),
+                    "turbulence.sa options need turbulence.model = \"spalart_allmaras\"",
+                ));
+            }
+        }
+        if get_f(case, "turbulence.sa.c_des") != 0.65 {
+            out.push(diag(
+                "turbulence.sa.c_des",
+                "turbulence.sa options need turbulence.model = \"spalart_allmaras\"",
+            ));
+        }
+    }
+    if !rsm && get_s(case, "turbulence.rsm.pressure_strain") != "ssg" {
+        out.push(diag(
+            "turbulence.rsm.pressure_strain",
+            "turbulence.rsm options need turbulence.model = \"rsm\"",
+        ));
+    }
     check_coefficients(case, &mut out);
     let algorithm = get_s(case, "solver.algorithm");
-    if sgs {
+    if rsm {
+        if !is_transient(case) {
+            out.push(diag(
+                "turbulence.model",
+                format!(
+                    "the Reynolds stress model is available with the transient algorithms (piso, pimple) only, not with solver.algorithm = \"{algorithm}\" (no steady stress sweep is validated)"
+                ),
+            ));
+        }
+    } else if des {
+        if !is_transient(case) {
+            out.push(diag(
+                "turbulence.sa.des",
+                format!(
+                    "turbulence.sa.des = \"{}\" runs with the transient algorithms (piso, pimple) only, not with solver.algorithm = \"{algorithm}\"",
+                    get_s(case, "turbulence.sa.des")
+                ),
+            ));
+        }
+    } else if sgs {
         if !is_transient(case) {
             out.push(diag(
                 "turbulence.model",
@@ -351,7 +408,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         get_f(case, "turbulence.k_initial"),
         get_f(case, &format!("turbulence.{second}")),
     );
-    if !(ke || sst) {
+    if !(ke || sst || rsm) {
         // SA and plugins: nothing to pair
     } else if (k0 > 0.0) != (e0 > 0.0) {
         out.push(diag(
@@ -374,6 +431,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         match role(case, n) {
             Role::Wall => {
                 walls += 1;
+                if rsm {
+                    out.push(diag(
+                        &format!("{b}.turbulence"),
+                        "the Reynolds stress model has no wall treatment (no wall functions, no low-Reynolds terms, no wall reflection): it is available for flows without wall patches (periodic boxes, free-slip or symmetry boundaries)",
+                    ));
+                }
                 if crate::wall_motion::is_wall_motion(case, n) {
                     out.push(diag(
                         &format!("{b}.velocity"),
@@ -386,6 +449,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                         "moving walls are not supported by the wall functions (the wall velocity must be zero)",
                     ));
                 }
+            }
+            Role::Inlet if rsm => {
+                out.push(diag(
+                    &format!("{b}.turbulence"),
+                    "the Reynolds stress model has no inlet condition for the stresses in this version: use periodic boundaries or zero-gradient boundaries",
+                ));
             }
             Role::Inlet if sa || plugin || alg => {}
             Role::Inlet => {
@@ -428,7 +497,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         }
     }
     let van_driest = get_s(case, "turbulence.wall_damping") == "van_driest";
-    if walls == 0 && !(sgs && !van_driest) {
+    if walls == 0 && !(sgs && !van_driest) && !rsm {
         // a subgrid model without wall damping is valid in a periodic box (ADR 0026)
         let (path, why) = if van_driest && alg {
             ("turbulence.wall_damping", "with wall_damping = van_driest needs")
@@ -521,7 +590,7 @@ fn check_algebraic_options(case: &Case, out: &mut Vec<Diagnostic>) {
 /// from the defaults (k-epsilon: 0 = variant default).
 fn check_coefficients(case: &Case, out: &mut Vec<Diagnostic>) {
     let active = get_s(case, "turbulence.model");
-    let groups: [(&str, &str, Vec<rcfd_turb::CoefficientInfo>, bool); 6] = [
+    let groups: [(&str, &str, Vec<rcfd_turb::CoefficientInfo>, bool); 7] = [
         ("k_epsilon", "k_epsilon", rcfd_turb::ke_coefficient_table(), true),
         ("k_omega_sst", "k_omega_sst", rcfd_turb::sst_coefficient_table(), false),
         (
@@ -543,6 +612,7 @@ fn check_coefficients(case: &Case, out: &mut Vec<Diagnostic>) {
             rcfd_turb::mixing_length_coefficient_table(),
             false,
         ),
+        ("rsm", "rsm", rcfd_turb::rsm_coefficient_table(), false),
     ];
     for (group, model, table, zero_default) in groups {
         for c in table {
@@ -625,7 +695,7 @@ impl TurbState {
             .cloned()
             .collect();
         let needs_wall = is_mixing_length(case) || get_s(case, "turbulence.wall_damping") == "van_driest";
-        if walls.is_empty() && (!is_sgs(case) || needs_wall) {
+        if walls.is_empty() && ((!is_sgs(case) && !is_rsm(case)) || needs_wall) {
             return Err(vec![diag(
                 "turbulence.model",
                 "the turbulence model found no wall patch among the mesh patches",
@@ -719,6 +789,7 @@ impl TurbState {
             "smagorinsky" => ("smagorinsky", false),
             "wale" => ("wale", false),
             "mixing_length" => ("mixing_length", false),
+            "rsm" => ("rsm", false),
             _ => ("", false),
         };
         if !group.is_empty() {
@@ -763,6 +834,29 @@ impl TurbState {
         }
         if !errs.is_empty() {
             return Err(errs);
+        }
+
+        // hybrid RANS-LES options of Spalart-Allmaras (ADR 0032)
+        if sa {
+            for (key, value) in [
+                ("des", get_s(case, "turbulence.sa.des")),
+                ("des_delta", get_s(case, "turbulence.sa.des_delta")),
+                ("c_des", format!("{}", get_f(case, "turbulence.sa.c_des"))),
+            ] {
+                if let Err(e) = model.set_option(key, &value) {
+                    errs.push(diag(&format!("turbulence.sa.{key}"), e));
+                }
+            }
+            if !errs.is_empty() {
+                return Err(errs);
+            }
+        }
+
+        // pressure-strain model of the Reynolds stress model (ADR 0032)
+        if is_rsm(case) {
+            if let Err(e) = model.set_option("pressure_strain", &get_s(case, "turbulence.rsm.pressure_strain")) {
+                return Err(vec![diag("turbulence.rsm.pressure_strain", e)]);
+            }
         }
 
         // inlet values
