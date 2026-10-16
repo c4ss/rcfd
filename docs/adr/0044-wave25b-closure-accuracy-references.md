@@ -148,3 +148,42 @@ Known item to examine: the two-phase Neumann/Stefan equation recorded in 21A rea
 ## Not in scope
 
 Wave 24 SIMPLE/SIMPLEC duct code, wave 25A fractional step / solidification / interface code, wave 25C PIMPLE momentum-source plumbing.
+
+## Addendum (after the runs): measured values and deviations
+
+All limits below are the ones registered above, before the runs. None was widened, replaced or deleted. No file under crates/rcfd-api/tests/baseline_hashes.rs input paths was touched; the exact crossflow series, the opt-in density basis, the new tests and the doc string are not on any hashed path (survey in the decisions section), so the baseline hashes are unchanged.
+
+### D1 F-217 exact series (hx.rs, tests h5_x1..x5)
+
+- X1 worst relative deviation from the Richardson-extrapolated marched 2-D reference (400 and 800 cells): 7.717e-6 (limit 1e-4; worst reference convergence 2.31e-5).
+- X2 `eps/N` at N = 1e-7 is 0.99999990 to 0.9999999250 (limit 1e-6). Deviation: the literal 1e-6 limit at N = 1e-3 is impossible (the first-order loss is `(1+Cr)N/2`), so the check was registered at N = 1e-7 and as the second-order coefficient `-(1+Cr)/2` at N = 1e-4 (measured -0.624970, -0.749954, -0.999917). The old H2 slope at N = 1e-3, Cr = 0.5 is 0.999250 (limit 1e-3).
+- X3 zero monotonicity or bound violations on the grid; NTU round trip passes.
+- X4 Cr = 1e-9 deviation from `1 - e^-N` at most 1.84e-10 (limit 1e-8); Cr = 0.5, N = 400: 1 - eps = 1.11e-16 (limit 1e-9); Cr = 1, N = 1e4: 1 - eps = 5.64186e-3 versus the derived `1/sqrt(pi N)` = 5.64190e-3; N = 1e6 takes about 1 ms.
+- X5 the three older ignored tests (H2 slope, H2 ordering, H3 against 800x800) pass under `--ignored` (H3 worst deviation 9.22e-7). They stay `#[ignore]` with a note, limits intact. The retired fit deviated 3.33e-2 at N = 0.5, Cr = 1. Independent check: the published series quoted at the NTU-method Wikipedia page agrees with the implementation to 9 digits at five points.
+
+### D2 F-220 vapour table (tabular.rs, tests t9b_b1..b4)
+
+- B1 ideal-gas table reproduced to 3.89e-16 by the scaled basis (plain bilinear 4.27e-5).
+- T9 vapour table: scaled basis centre worst 1.239e-5 and quarter points worst 9.751e-6, limit 1e-4 (both met). Plain bilinear centre 2.642e-4, so the original known miss stays ignored with the limit intact.
+- Deviation: the pre-run estimate in this ADR ("a few 1e-6") underestimated the error by about 3x; the result is still 8x inside the limit. The basis `q = rho T/p` is physically motivated (ideal gas gives constant q), not fitted to the T9 table. `eval` is unchanged; the new method is opt-in `eval_density_ideal_scaled`.
+
+### D3 F-227 wave damping (tests w8_0..w8_5, w8_4b)
+
+- Independent discrete frequency-domain solver agrees with the time-domain run to 1.16e-7 worst (limit 5e-3); lossless |R| = 1.000000000000.
+- Exponential zones of 1, 2, 4, 8 cells: R = 0.79671, 0.21440, 0.07259, 0.05051. The registered sponge: R = 0.13476, matching `exp(-2 int sigma dx/c)` = 0.13534 with int sigma dx / c = 1.00000 (W8-3, limit 5e-3). So the sponge R = 0.135 is the round-trip attenuation e^-2, not a bug.
+- W8-2: halving dt (T/160) gives R = 0.04647 against 0.21440 at T/80 (|change| > 0.1 met). Deviation: my pre-run guess of the direction (R rising) was wrong, the registered check was the size of the change only.
+- Cause test (per-step multiplication by w < 1): confirmed as the mechanism, but the premise of W7(d) is ill-posed. The registered exponential blend gives outer-cell w(0.75) = 0.7436, a damping rate of about 3.0 per second against omega 0.785, a strong absorber. A thin zone is a near-rigid reflector only when its integrated per-second damping is small (W8-5: uniform w = 0.99 gives R = 0.92359, limit >= 0.8; w = 0.8 gives R = 0.10550, limit <= 0.4). |R| is not monotone in the rate.
+- MISS: W8-4 continuum estimate (relative limit 25 percent): continuum 0.27398 against discrete 0.21440, +27.8 percent; the test is kept as `w8_4_continuum_estimate_known_miss` (ignored). With the (1-w)/dt rate the continuum gives 0.33445; for 4 and 8 cells it gives 0.00910 and 0.00175 against 0.0726 and 0.0505, because the per-step damping sigma dt reaches 0.3 to 1.3 in the outer cells, outside the continuum's validity.
+- Post-hoc diagnostic `w8_4b` (labelled post-hoc, limit 5 percent chosen after seeing the miss): uniform thin layers w = 0.99 and 0.97 agree with the discrete solution within 0.1 and 0.4 percent, which supports the diagnosis that the continuum estimate fails only where per-step damping is large.
+- The old `w7d` test stays ignored (R = 0.214 against >= 0.5, note added). `w7e` is unchanged. No change to waves.rs source.
+
+### D4 chemistry independent checks (chemistry_run.rs, c4b and c4c)
+
+C4 is kept unchanged.
+- c4b isothermal first-order (k = 5/s, dt = 1e-3, end 0.4): Y_A against `exp(-kt)` max abs 2.0e-15 (limit 1e-5); wdot_A against `-k rho Y_A/W` 2.8e-16 (limit 1e-9); `wdot_B + wdot_A` = 0; `sum Y - 1` = 0.
+- c4c adiabatic Arrhenius box against my own RK4 hand integration (A exp(-Ea 4.184/(8.314462618 T)), dT_ad = 2000 K), stopped at 1.1e-4 s: T = 1729.196822 K, Y_A = 0.53540159; |T - T_hand|/dT_ad = 2.92e-10 and |Y - Y_hand| = 2.92e-10 (limits 1e-5); wdot_A, wdot_B and heat release rate relative deviations about 1.07e-10 (limits 1e-9). This confirms the cal to J factor 4.184, R and dT_ad independently of the production code path.
+- Set-up defect, disclosed: the first run used the K2b end time of 2e-3 s, far past thermal runaway (about 1.2e-4 s) where Y_A underflows, so relative errors of the final-state rates were degenerate (1.0). The end time was corrected to 1.1e-4 s with the same limits; the degenerate form was never committed.
+
+### D5 Reference verification
+
+The verification table is in docs/reference-data.md, section "Wave 25B reference verification". Summary: record verified for Kim and Moin, Zang et al., Timmermans et al., Kumar and Ramkrishna, McGraw, Saffman and Turner, Hill and Ng, Gordon, Wheeler, Smoluchowski, Jacobsen et al., Hartmann; corrected: Scott is William T. Scott; Lee report is probably 1979 (primary unconfirmed); formulas verified (secondary or derived): effectiveness-NTU forms, exact both-unmixed series, JONSWAP shape factors, Pierson-Moskowitz Hs-wp form, Neumann one-phase limit; the ADR 0035 two-phase Neumann equation is the equal-diffusivity special case of the general condition (no code change). Still unverified: Saffman-Turner constant, Lee and Zwart primaries (Zwart R_B 1e-6 vs 2e-6 m reported by different sources), Jacobsen blend attribution and exponent, shell-and-tube formula, Nusselt, Schrage, Rohsenow, Stokes second order, Brownian and shear kernels, Kumar-Ramkrishna formulas, Wheeler algorithm text. No code changed because of a reference discrepancy.
