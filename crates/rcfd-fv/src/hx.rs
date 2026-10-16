@@ -11,7 +11,7 @@ pub enum Arrangement {
     Counterflow,
     /// Streams in the same direction.
     Parallel,
-    /// Crossflow, both streams unmixed (closed approximation of the series solution).
+    /// Crossflow, both streams unmixed (the exact Poisson-tail series solution, ADR 0044 D1).
     CrossBothUnmixed,
     /// Crossflow, the stream of larger capacity rate mixed, the other unmixed.
     CrossCmaxMixed,
@@ -68,13 +68,103 @@ pub fn effectiveness(arr: Arrangement, ntu: f64, cr: f64) -> f64 {
         Arrangement::Parallel => (1.0 - (-n * (1.0 + c)).exp()) / (1.0 + c),
         Arrangement::CrossCmaxMixed => (1.0 - (-c * (1.0 - (-n).exp())).exp()) / c,
         Arrangement::CrossCminMixed => 1.0 - (-(1.0 - (-n * c).exp()) / c).exp(),
-        Arrangement::CrossBothUnmixed => 1.0 - (n.powf(0.22) / c * ((-c * n.powf(0.78)).exp() - 1.0)).exp(),
+        Arrangement::CrossBothUnmixed => cross_both_unmixed(n, c),
         Arrangement::ShellAndTube => {
             let w = (1.0 + c * c).sqrt();
             let e = (-n * w).exp();
             2.0 / (1.0 + c + w * (1.0 + e) / (1.0 - e))
         }
     }
+}
+
+/// `ln k!`: exact sum for small `k`, Stirling series (error below 1e-15) from `k = 20`.
+fn ln_factorial(k: u64) -> f64 {
+    if k < 20 {
+        return (2..=k).map(|j| (j as f64).ln()).sum();
+    }
+    let x = k as f64;
+    let (x2, x3) = (x * x, x * x * x);
+    x * x.ln() - x + 0.5 * (2.0 * std::f64::consts::PI * x).ln() + 1.0 / (12.0 * x) - 1.0 / (360.0 * x3)
+        + 1.0 / (1260.0 * x3 * x2)
+        - 1.0 / (1680.0 * x3 * x3 * x)
+}
+
+/// Poisson probability `e^-x x^k / k!` evaluated in log space.
+fn poisson_pmf(x: f64, k: u64) -> f64 {
+    (k as f64 * x.ln() - x - ln_factorial(k)).exp()
+}
+
+/// Index below which `P(n, x) = Pr(Poisson(x) >= n)` equals 1 to better than `e^-70`.
+fn poisson_lower_start(x: f64) -> u64 {
+    let s = (x - 12.0 * x.sqrt() - 20.0).floor();
+    if s < 0.0 {
+        0
+    } else {
+        s as u64
+    }
+}
+
+/// Index above which `P(n, x)` is below `e^-70` (the upper tail is negligible).
+fn poisson_upper_top(x: f64) -> u64 {
+    (x + 12.0 * x.sqrt() + 40.0).ceil() as u64
+}
+
+/// `P(n, x) = Pr(Poisson(x) >= n)` for `n = n_lo..=n_hi` (`n_lo >= 1`). Only sums of positive terms are used: for `n <= x` the
+/// complement `1 - sum_{k<n} pmf` (where `P >= 1/2`), for `n > x` the upper tail summed downwards from where it is negligible, so
+/// no small tail is ever obtained by subtracting from 1.
+fn poisson_tail_series(x: f64, n_lo: u64, n_hi: u64) -> Vec<f64> {
+    let len = (n_hi - n_lo + 1) as usize;
+    let mut out = vec![0.0; len];
+    let s = poisson_lower_start(x);
+    let fx = x.floor() as u64;
+    // n <= s: exactly 1
+    for n in n_lo..=n_hi.min(s) {
+        out[(n - n_lo) as usize] = 1.0;
+    }
+    // s < n <= floor(x): 1 - sum_{k=s}^{n-1} pmf(k)
+    let mut lower = 0.0;
+    for n in (s + 1)..=fx.min(n_hi) {
+        lower += poisson_pmf(x, n - 1);
+        if n >= n_lo {
+            out[(n - n_lo) as usize] = 1.0 - lower;
+        }
+    }
+    // n > floor(x): upper tail summed downwards
+    let top = poisson_upper_top(x);
+    let mut tail = 0.0;
+    let mut n = top;
+    while n > fx {
+        tail += poisson_pmf(x, n);
+        if n >= n_lo && n <= n_hi {
+            out[(n - n_lo) as usize] = tail;
+        }
+        n -= 1;
+    }
+    out
+}
+
+/// Exact effectiveness of the crossflow exchanger with both streams unmixed (ADR 0044 D1):
+/// `eps = (1/M) sum_{n>=1} P(n, N) P(n, M)`, `M = N Cr`, `P(n, y) = Pr(Poisson(y) >= n)`. Derived from the double Laplace transform
+/// of the two first-order balances; `0 < cr <= 1`, `n > 0`.
+fn cross_both_unmixed(n: f64, cr: f64) -> f64 {
+    let m = n * cr;
+    if m < 1e-300 {
+        return -(-n).exp_m1();
+    }
+    if n > 1e9 {
+        // asymptotics: exponentially close to 1 for Cr < 1; 1 - 1/sqrt(pi N) at Cr = 1
+        return if cr < 1.0 {
+            1.0
+        } else {
+            1.0 - 1.0 / (std::f64::consts::PI * n).sqrt()
+        };
+    }
+    let n0 = poisson_lower_start(n).min(poisson_lower_start(m)).max(1);
+    let n_end = poisson_upper_top(n).min(poisson_upper_top(m));
+    let pn = poisson_tail_series(n, n0, n_end);
+    let pm = poisson_tail_series(m, n0, n_end);
+    let sum: f64 = pn.iter().zip(&pm).map(|(a, b)| a * b).sum();
+    (((n0 - 1) as f64 + sum) / m).min(1.0)
 }
 
 /// Outcome of the two-stream exchanger solution.
