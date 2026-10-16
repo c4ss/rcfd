@@ -64,8 +64,14 @@ fn hx_block(extra: &str) -> String {
     )
 }
 
-/// Run `n` iterations then 300 more; require stationarity (relative change of ux, p, T below 1e-8).
+/// Run `n` iterations then 300 more; require stationarity (relative change of ux, p, T below 1e-8). The pressure change is scaled by
+/// `max(max|p|, 1)` (see the ADR 0039 addendum, deviation 4).
 fn run(text: &str, n: usize) -> Simulation {
+    run_floor(text, n, 1.0)
+}
+
+/// As `run` with the pressure-scale floor `p_floor` (1e-12 is the originally registered helper).
+fn run_floor(text: &str, n: usize, p_floor: f64) -> Simulation {
     let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
     for _ in 0..n {
@@ -80,7 +86,7 @@ fn run(text: &str, n: usize) -> Simulation {
     for (f, old) in fields.iter().zip(&before) {
         let new = sim.field(f).unwrap();
         let scale = new.iter().map(|v| v.abs()).fold(1e-12, f64::max);
-        let scale = if *f == "p" { scale.max(1.0) } else { scale };
+        let scale = if *f == "p" { scale.max(p_floor) } else { scale };
         let change = new.iter().zip(old).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max) / scale;
         assert!(
             change < 1e-8,
@@ -271,6 +277,30 @@ fn x3_dual_cell_exchanges_equal_and_opposite_heat() {
 
 #[test]
 fn x4_fan_boundary_reproduces_its_pressure_flow_curve() {
+    x4_run(true);
+}
+
+/// KNOWN MISS: the registered X4 set-up (lossless duct, fan boundary at the inlet, porous jump, outlet pressure 0, initial speed 2 m/s)
+/// diverges (flow NaN within about 8 iterations, patch pressure stays near 200 Pa); see ADR 0039 addendum, deviation 2. The corrected set-up
+/// with a distributed Darcy bed is `x4_fan_boundary_reproduces_its_pressure_flow_curve`.
+#[test]
+#[ignore = "KNOWN MISS: the registered lossless pressure-pressure duct of X4 diverges in the segregated iteration (flow NaN)"]
+fn x4_registered_lossless_setup_known_miss() {
+    x4_run(false);
+}
+
+/// Originally registered stationarity helper (pressure scale floor 1e-12): the pressure of a lossless periodic duct is zero to round-off,
+/// so its relative change is noise (measured 0.42 for X1, 0.30 for X2, 0.13 for X3). Corrected helper: `run`.
+#[test]
+#[ignore = "KNOWN MISS: the registered stationarity test on the round-off pressure of a lossless duct fails (relative change 0.42)"]
+fn x1_registered_stationarity_known_miss() {
+    let block = hx_block(
+        "mode = \"ntu\"\narrangement = \"counterflow\"\nua = 40.0\nsecondary_temperature = 350.0\nsecondary_capacity_rate = 20.0\n",
+    );
+    run_floor(&case_text(0.2, HOT_INLET, &block, true), 3000, 1e-12);
+}
+
+fn x4_run(with_bed: bool) {
     let (ly, depth) = (1.0, 0.02);
     let area = ly * depth;
     let (fq, fp) = ([0.0, 0.03, 0.06], [200.0, 140.0, 0.0]);
@@ -280,25 +310,34 @@ fn x4_fan_boundary_reproduces_its_pressure_flow_curve() {
     // within 2 iterations with the jump alone), so the whole duct carries a linear Darcy bed `dp = mu/K v L` (L = 2 m); it enters the
     // analytic operating point.
     let (k_bed, length) = (1e-6, 2.0);
+    let bed_on = if with_bed { 1.0 } else { 0.0 };
     let q_op = bisect(
         |q| {
             let v = q / area;
-            fan.eval(q) - porous_jump_dp(MU, RHO, alpha, c2, thick, v) - MU / k_bed * v * length
+            fan.eval(q) - porous_jump_dp(MU, RHO, alpha, c2, thick, v) - bed_on * MU / k_bed * v * length
         },
         0.0,
         0.06,
     );
+    let bed = if with_bed {
+        format!("[sources.bed]\ntype = \"porous\"\nmodel = \"darcy_forchheimer\"\npermeability = {k_bed}\ninertial_resistance = 0.0\nzone = \"all\"\n")
+    } else {
+        String::new()
+    };
     let comps = format!(
-        "[components.fan]\ntype = \"fan_boundary\"\npatch = \"xmin\"\ncurve_flow = {fq:?}\ncurve_pressure = {fp:?}\nreference_pressure = 0.0\nrelax = 0.02\n[components.jump]\ntype = \"porous_jump\"\nzone = \"box\"\nbox_min = [1.2, -1.0, -1.0]\nbox_max = [1.3, 2.0, 1.0]\ndirection = [1.0, 0.0, 0.0]\nthickness = {thick}\npermeability = {alpha}\ninertial_resistance = {c2}\n[sources.bed]\ntype = \"porous\"\nmodel = \"darcy_forchheimer\"\npermeability = {k_bed}\ninertial_resistance = 0.0\nzone = \"all\"\n"
+        "[components.fan]\ntype = \"fan_boundary\"\npatch = \"xmin\"\ncurve_flow = {fq:?}\ncurve_pressure = {fp:?}\nreference_pressure = 0.0\nrelax = 0.02\n[components.jump]\ntype = \"porous_jump\"\nzone = \"box\"\nbox_min = [1.2, -1.0, -1.0]\nbox_max = [1.3, 2.0, 1.0]\ndirection = [1.0, 0.0, 0.0]\nthickness = {thick}\npermeability = {alpha}\ninertial_resistance = {c2}\n{bed}"
     );
     let inlet = "[boundaries.xmin]\nvelocity = \"zero_gradient\"\npressure = \"fixed\"\n";
-    let text = case_text(ly, inlet, &comps, false).replace(
-        "velocity = [2.0, 0.0, 0.0]
+    let mut text = case_text(ly, inlet, &comps, false);
+    if with_bed {
+        text = text.replace(
+            "velocity = [2.0, 0.0, 0.0]
 temperature",
-        "velocity = [1.0, 0.0, 0.0]
+            "velocity = [1.0, 0.0, 0.0]
 temperature",
-    );
-    let sim = run(&text, 2000);
+        );
+    }
+    let sim = run(&text, if with_bed { 2000 } else { 8000 });
     let p = sim.geom.mesh.patch("xmin").unwrap();
     let phi = sim.flux();
     let q: f64 = -p.faces().filter(|&f| !sim.geom.empty[f]).map(|f| phi[f]).sum::<f64>();

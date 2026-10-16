@@ -263,10 +263,12 @@ Written after the runs. Limits are those registered above; none was widened, rep
 
 * H1 (`rcfd-fv/tests/heat_exchanger.rs`) counterflow and parallel against the independent marched integration: worst relative error 4.99e-13 [1e-5]. Pass.
 * H4 energy balance 1.4e-15 [1e-12], NTU round trip, `core_dp`/`vent_dp` hand values: pass.
-* H3 crossflow `C_max` mixed and `C_min` mixed against the cell-exact recursions: worst 4.4e-9 [1e-3]. Pass.
-* **H3 both-unmixed approximation: MISS.** Against the Richardson-extrapolated cell-exact recursion the relative error is 8.1e-3, 1.64e-2, 3.33e-2
-  at N = 0.5, Cr = 0.25, 0.5, 1; 1.4e-3, 5.0e-3, 1.61e-2 at N = 1; 8.9e-3, 1.06e-2, 4.3e-3 at N = 3 [limit 2e-2]. The Cr = 1, N = 0.5 case is outside the limit.
-  Recorded as `h3_cross_unmixed_known_miss` (ignored, limit unchanged).
+* H3 crossflow `C_max` mixed and `C_min` mixed against the cell-exact recursions: worst 4.4e-9 [1e-3]. Pass. (Reference: the Richardson extrapolation of the 4000-row and 8000-row
+  recursions, `2 f(8000) - f(4000)`, not the single 4000-row value registered; the extrapolation is at least as accurate as the registered reference, see deviation 9.)
+* **H3 both-unmixed approximation: MISS.** Against the registered 800 x 800 cell-exact recursion the relative error is 8.10e-3, 1.64e-2, 3.33e-2
+  at N = 0.5, Cr = 0.25, 0.5, 1; 1.38e-3, 4.98e-3, 1.61e-2 at N = 1; 8.94e-3, 1.06e-2, 4.28e-3 at N = 3 [limit 2e-2]. The Cr = 1, N = 0.5 case is outside the limit.
+  The 800 x 800 value agrees with the Richardson extrapolation of the 150 and 300 cell recursions to at most 1.4e-5 relative, so the reference is not the cause of the miss.
+  Recorded as `h3_cross_unmixed_known_miss` (ignored, limit unchanged, 800 x 800 reference).
 * **H2 both-unmixed: MISS** (small-N slope `eps/N` = 0.99836 at N = 1e-3 [within 1e-3]; 177 violations of `parallel <= cross` at small N and small Cr
   on the 200 x 19 grid, e.g. N = 0.05, Cr = 0.05, where the fit 0.04866 lies below the parallel-flow 0.04871). Recorded as `h2_cross_unmixed_slope_known_miss` and
   `h2_limits_and_ordering_known_miss` (ignored, limits unchanged).
@@ -307,6 +309,12 @@ Written after the runs. Limits are those registered above; none was widened, rep
 7. Process slip: files written by a Windows Python script briefly carried CRLF line ends (`lib.rs`, `electric.rs`, `lorentz.rs`); they were normalised to LF before any commit.
    `docs/case-schema.md` is stored with CRLF in the working tree and was edited preserving that.
 8. Z3 (ADR 0012) remains an open miss from before; not touched.
+9. H3 references: the mixed variants use the Richardson extrapolation of 4000 and 8000 rows (registered: 4000 rows); the both-unmixed known-miss test uses the registered
+   800 x 800 recursion (the first version of the test used a Richardson extrapolation of 150 and 300 cells; replaced after the review, results above and agreeing to 1.4e-5).
+10. Rewritten registered tests are kept as ignored known-miss tests, as the process requires: `x4_registered_lossless_setup_known_miss` (registered X4 set-up without the bed, ly = 1.0,
+    initial speed 2 m/s, 8000 iterations; measured: flow becomes NaN, within about 8 iterations in the diagnostic runs, patch pressure stays at 200 Pa, limits 5e-3 and 2e-3 unchanged and not met) and
+    `x1_registered_stationarity_known_miss` (the originally registered stationarity helper with pressure-scale floor 1e-12, counterflow `C_sec = 20`: pressure change 0.423 against 1e-8; the same
+    helper gave 0.299 for X2 and 0.132 for X3 in the first runs). The corrected set-up and helper (`run`, floor 1) pass in the non-ignored tests.
 
 ### Status
 

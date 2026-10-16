@@ -216,8 +216,9 @@ fn h3_crossflow_variants_against_independent_recursions() {
     }
 }
 
-/// KNOWN MISS of the registered H3 limit (2 percent) for the crossflow both-unmixed closed approximation against the cell-exact
-/// recursion (Richardson-extrapolated 150 and 300 cells): the deviation reaches 3.3 percent at N = 0.5, Cr = 1 (the correlation
+/// KNOWN MISS of the registered H3 limit (2 percent) for the crossflow both-unmixed closed approximation against the registered
+/// reference, the 800 x 800 cell-exact recursion (cross-checked against the Richardson extrapolation of 150 and 300 cells, which
+/// agrees to the printed difference): the deviation reaches 3.3 percent at N = 0.5, Cr = 1 (the correlation
 /// 1 - exp[N^0.22/Cr (exp(-Cr N^0.78) - 1)] is a curve fit; its error is largest at small NTU and Cr = 1). The mixed variants pass
 /// (h3_crossflow_variants_against_independent_recursions).
 #[test]
@@ -227,10 +228,14 @@ fn h3_cross_unmixed_known_miss() {
     let mut worst = 0.0_f64;
     for &n in &[0.5, 1.0, 3.0] {
         for &cr in &[0.25, 0.5, 1.0] {
-            let want = richardson(&|c| cross_unmixed(c, n, cr), 150);
+            let want = cross_unmixed(800, n, cr);
+            let rich = richardson(&|c| cross_unmixed(c, n, cr), 150);
             let got = effectiveness(Arrangement::CrossBothUnmixed, n, cr);
             let e = (got / want - 1.0).abs();
-            eprintln!("H3 both unmixed N {n} Cr {cr}: {got:.6} vs {want:.6} (rel {e:.2e}, limit 2e-2)");
+            eprintln!(
+                "H3 both unmixed N {n} Cr {cr}: {got:.6} vs 800x800 {want:.6} (rel {e:.2e}, limit 2e-2); Richardson 150/300 {rich:.6} (reference difference {:.1e})",
+                (rich / want - 1.0).abs()
+            );
             worst = worst.max(e);
         }
     }
