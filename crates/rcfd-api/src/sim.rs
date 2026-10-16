@@ -201,6 +201,14 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
     if graded && matches!(generator, "cavity_2d" | "wedge_2d" | "nozzle_2d") {
         bad("mesh.grading", "grading");
     }
+    if generator != "pipe_sweep" {
+        if get_b(case, "mesh.periodic_z") {
+            bad("mesh.periodic_z", "a periodic z pair (pipe_sweep only)");
+        }
+        if (get_f(case, "mesh.core_fraction") - 0.5).abs() > 1e-12 {
+            bad("mesh.core_fraction", "a cross-section core (pipe_sweep only)");
+        }
+    }
     if generator != "box_2d" {
         for p in ["mesh.periodic_x", "mesh.periodic_y"] {
             if get_b(case, p) {
@@ -364,6 +372,34 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
                     .map(|(m, _)| m)
                     .map_err(me)
             }
+        }
+        "pipe_sweep" => {
+            // all-hex circular pipe along z: multizone O-grid + core disc swept in nz layers (F-235, ADR 0047)
+            for (path, v) in [
+                ("mesh.nx", nx as i64),
+                ("mesh.ny", ny as i64),
+                ("mesh.nz", get_i(case, "mesh.nz")),
+            ] {
+                if v < 1 {
+                    return Err(diag(path, "pipe_sweep needs at least one cell in this direction"));
+                }
+            }
+            let g = if (grading - 1.0).abs() < 1e-12 {
+                Grading::Uniform
+            } else {
+                Grading::Expansion(grading)
+            };
+            rcfd_mesh::sweep::pipe_mesh(
+                nx,
+                ny,
+                get_i(case, "mesh.nz") as usize,
+                get_f(case, "mesh.r_out"),
+                get_f(case, "mesh.lz"),
+                get_f(case, "mesh.core_fraction"),
+                g,
+                get_b(case, "mesh.periodic_z"),
+            )
+            .map_err(me)
         }
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {

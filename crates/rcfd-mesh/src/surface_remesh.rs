@@ -93,7 +93,7 @@ pub struct SurfaceQuery<'a> {
     s: &'a TriSurface,
 }
 
-fn closest_on_triangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> (Vec3, [f64; 3]) {
+pub(crate) fn closest_on_triangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> (Vec3, [f64; 3]) {
     let (ab, ac, ap) = (sub(b, a), sub(c, a), sub(p, a));
     let d1 = dot(ab, ap);
     let d2 = dot(ac, ap);
