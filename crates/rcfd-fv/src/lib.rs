@@ -2,6 +2,7 @@
 //! boundary conditions, gradients, convection and diffusion operators,
 //! time integration and the pressure-velocity coupled solvers.
 
+pub mod actuator;
 pub mod ale;
 pub mod bc;
 pub mod cht;
@@ -11,6 +12,7 @@ pub mod convection;
 pub mod coupled;
 pub mod ddt;
 pub mod diffusion;
+pub mod electric;
 pub mod energy;
 pub mod field;
 pub mod fvmatrix;

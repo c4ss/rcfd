@@ -796,6 +796,7 @@ pub fn case_schema() -> Schema {
             "pressure_relax",
             Schema::float(0.5).range(0.01, 1.0).doc("target_mass_flow_outlet: relaxation of the pressure update"),
         );
+    let boundary = crate::electric::boundary_fields(boundary);
 
     let solver = Schema::object()
         .doc("Numerical method and run control")
@@ -1017,6 +1018,18 @@ pub fn case_schema() -> Schema {
         .field(
             "viscous_stress",
             Schema::enumeration("laplacian", &["laplacian", "full"]).doc("Viscous term of the transient incompressible momentum equation (piso / pimple): laplacian = div(nu_eff grad u) only (default); full = adds the explicit transposed part div(nu_eff (grad u)^T), the full stress divergence needed for a variable (subgrid or eddy) viscosity (ADR 0032). Boundary faces other than periodic ones do not contribute to the transposed part"),
+        )
+        .field(
+            "time_advance",
+            Schema::enumeration("iterative", &["iterative", "fractional_step"]).doc("Transient incompressible time advance (solver.algorithm = piso only): iterative = the PISO corrector loop (default); fractional_step = non-iterative projection, one momentum predictor and one pressure Poisson solve per step (ADR 0037). Not combined with pimple, steady algorithms, energy, turbulence, rheology, body force, dynamic_mesh, solver.viscous_stress = full or time_scheme = bdf2_bounded (located errors)"),
+        )
+        .field(
+            "fractional_form",
+            Schema::enumeration("incremental", &["incremental", "chorin"]).doc("time_advance = fractional_step: incremental = predictor with the old pressure gradient and a pressure-increment Poisson problem (default); chorin = no pressure in the predictor and the full pressure from the projection (first-order steady state)"),
+        )
+        .field(
+            "fractional_boundary",
+            Schema::enumeration("kim_moin", &["kim_moin", "plain"]).doc("time_advance = fractional_step: kim_moin = intermediate velocity condition u_b + dt grad(q)_tangential with q the lagged pressure (increment) (Kim and Moin 1985); plain = the physical velocity"),
         )
         .field(
             "frozen_flow",
@@ -1665,6 +1678,7 @@ pub fn case_schema() -> Schema {
         .field("registers", crate::registers::schema())
         .field("chemistry", crate::chemistry::schema())
         .field("zone_sources", crate::zone_sources::schema())
+        .field("electric", crate::electric::schema())
         .field("solids", crate::cht::solids_schema())
         .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field("particles", crate::particles::schema())
@@ -1756,8 +1770,8 @@ pub fn case_schema() -> Schema {
                     .doc("A momentum source restricted to a cell zone (steady SIMPLE/SIMPLEC runs)")
                     .field(
                         "type",
-                        Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration"])
-                            .doc("porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
+                        Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration", "actuator_disk"])
+                            .doc("actuator_disk: thrust (and optional torque) distributed over the zone as a body force, uniform or proportional to the distance from the disk axis (ADR 0036); porous: Darcy-Forchheimer resistance (superficial velocity); rotating_frame: relative-velocity Coriolis and centrifugal accelerations; mrf: multiple-reference-frame (frozen rotor) zone in the absolute-velocity formulation, boundary conditions stay in the absolute frame (ADR 0008); acceleration: constant acceleration"),
                     )
                     .field(
                         "zone",
@@ -1799,7 +1813,30 @@ pub fn case_schema() -> Schema {
                         "centrifugal",
                         Schema::boolean(true).doc("Include the centrifugal acceleration Omega^2 r_perp of the rotating frame (false keeps only the Coriolis force, which is needed for periodic domains)"),
                     )
-                    .field("acceleration", vec3([0.0; 3], "Constant acceleration [m/s^2] for type = acceleration")),
+                    .field("acceleration", vec3([0.0; 3], "Constant acceleration [m/s^2] for type = acceleration"))
+                    .field(
+                        "thrust",
+                        Schema::float(0.0).doc("actuator_disk: total force [N] exerted on the fluid along direction (signed); the force is spread over the zone cells so that the integral is exactly this value"),
+                    )
+                    .field("direction", vec3([0.0; 3], "actuator_disk: direction of the thrust on the fluid (required, non-zero)"))
+                    .field(
+                        "profile",
+                        Schema::enumeration("uniform", &["uniform", "linear_r"]).doc("actuator_disk: force density uniform, or proportional to the distance from the disk axis (needs disk_centre)"),
+                    )
+                    .field("disk_centre", vec3([0.0; 3], "actuator_disk: a point on the disk axis [m] (radial coordinate of linear_r and the swirl)"))
+                    .field("disk_axis", vec3([0.0; 3], "actuator_disk: disk axis direction; empty = direction"))
+                    .field(
+                        "torque",
+                        Schema::float(0.0).doc("actuator_disk: torque [N m] exerted on the fluid about disk_axis (right-handed); 0 = no swirl"),
+                    )
+                    .field(
+                        "distribution",
+                        Schema::enumeration("smooth", &["smooth", "cell"]).doc("actuator_disk: smooth (default) spreads the force over one extra cell layer so that the discrete pressure gradient balances it in the zone edge cells; cell keeps the sharp top-hat of cell forces (exact zone, but the edge cells see an unbalanced half force)"),
+                    )
+                    .field(
+                        "density",
+                        Schema::float(0.0).doc("actuator_disk: density [kg/m^3] converting force to the solver's kinematic acceleration; 0 = physics.rho"),
+                    ),
             )
             .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; steady SIMPLE/SIMPLEC runs"),
         )
