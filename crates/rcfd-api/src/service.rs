@@ -599,7 +599,10 @@ impl Service {
                 let sim = self.sim(&s)?;
                 let sim = lock(&sim);
                 if !crate::particles::enabled(&sim.case) {
-                    return Err(RpcError::new(code::BAD_STATE, "particles.enabled is false in this session"));
+                    return Err(RpcError::new(
+                        code::BAD_STATE,
+                        "particles.enabled is false in this session",
+                    ));
                 }
                 let with_tracks = p.get("with_tracks").and_then(Value::as_bool).unwrap_or(false);
                 match sim.particle_run() {
