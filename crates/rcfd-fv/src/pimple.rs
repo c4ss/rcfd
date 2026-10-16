@@ -402,6 +402,11 @@ impl PimpleSolver {
                 .full_viscous_stress
                 .then(|| transposed_stress_source(&g, &self.u, &gamma_nu));
             let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
+            let mut links: Vec<PeriodicLinks> = vec![
+                PeriodicLinks::default(),
+                PeriodicLinks::default(),
+                PeriodicLinks::default(),
+            ];
             let mut a_p = vec![0.0; n];
             let u_iter: Vec<Vec3> = self.u.values.clone();
             // second-order linearisation: on the first outer iteration of a BDF2 step the
@@ -437,6 +442,10 @@ impl PimpleSolver {
                 };
                 let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
+                // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
+                let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
+                let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
+                lk.fix_rhs(&mut m, &q_lag);
                 if let Some(sink) = &self.sink {
                     for c in 0..n {
                         m.a.diag[c] += sink[c] * vol[c];
@@ -452,7 +461,7 @@ impl PimpleSolver {
                     }
                 }
                 if alpha_u < 1.0 {
-                    m.relax(alpha_u, &cells);
+                    lk.relax(&mut m, alpha_u, &cells);
                 }
                 let mut sys = m.clone();
                 for c in 0..n {
@@ -462,15 +471,16 @@ impl PimpleSolver {
                     }
                 }
                 if outer == 0 {
-                    res_u = res_u.max(normalised_residual(&sys, &cells));
+                    res_u = res_u.max(lk.residual(&sys, &cells));
                 }
                 let mut x = cells;
-                sys.solve(&mut x, &s.momentum_solver);
+                lk.solve(&sys, &mut x, &s.momentum_solver);
                 for c in 0..n {
                     self.u.values[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
                 mats[k] = Some(m);
+                links[k] = lk;
             }
             for a in a_p.iter_mut() {
                 *a /= n_active;
@@ -484,7 +494,7 @@ impl PimpleSolver {
                 for k in 0..3 {
                     if let Some(m) = &mats[k] {
                         let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
-                        let h = m.a.h_operator(&cells, &m.b);
+                        let h = links[k].h_operator(m, &cells);
                         for c in 0..n {
                             hby_a[c][k] = h[c] / a_p[c];
                         }
@@ -618,6 +628,119 @@ impl PimpleSolver {
     }
 }
 
+/// Implicit partner links of the translationally periodic faces in the momentum matrix (ADR 0046, D1). `convection` and
+/// `laplacian` put the partner part of a coupled face on the right-hand side with the value of the previous iterate; here its
+/// coefficient `c_f` (`-gamma |S| / span` for the Laplacian, plus `phi_f` for upwind convection when `phi_f < 0`) is moved back
+/// to the matrix as an off-diagonal entry (row = owner cell, column = owner cell of the partner face).
+#[derive(Debug, Clone, Default)]
+struct PeriodicLinks {
+    /// (row, column, coefficient)
+    t: Vec<(usize, usize, f64)>,
+}
+
+impl PeriodicLinks {
+    /// Links of the velocity component whose boundary coefficients are `bc`. Rotationally periodic patches and
+    /// self-partnered cells keep the lagged treatment.
+    fn build(geom: &FvGeometry, u: &VectorField, flux: &[f64], gamma: &[f64], bc: &[crate::bc::FaceCoeffs]) -> Self {
+        let mesh = &geom.mesh;
+        let n_int = geom.n_internal;
+        let (own, sf) = (mesh.owner(), mesh.face_area_vectors());
+        let mut t = Vec::new();
+        for (pi, p) in mesh.patches().iter().enumerate() {
+            let Some(map) = &geom.periodic_partner[pi] else {
+                continue;
+            };
+            if geom.periodic_rot[pi].is_some() || !u.bc(pi).is_coupled() {
+                continue;
+            }
+            for (local, f) in p.faces().enumerate() {
+                if geom.empty[f] {
+                    continue;
+                }
+                let (row, col) = (own[f], own[map[local]]);
+                let co = &bc[f - n_int];
+                if row == col || !(co.a > 0.0 && co.a < 1.0) {
+                    continue;
+                }
+                let mut coef = gamma[f] * vec3::norm(sf[f]) * co.c;
+                if flux[f] < 0.0 {
+                    coef += flux[f];
+                }
+                if coef != 0.0 {
+                    t.push((row, col, coef));
+                }
+            }
+        }
+        PeriodicLinks { t }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.t.is_empty()
+    }
+
+    /// Remove the lagged partner term from the right-hand side (`q` = the cell values the assembly used).
+    fn fix_rhs(&self, m: &mut FvMatrix, q: &[f64]) {
+        for &(r, c, a) in &self.t {
+            m.b[r] += a * q[c];
+        }
+    }
+
+    /// Implicit under-relaxation including the link magnitudes in the diagonal-dominance sum.
+    fn relax(&self, m: &mut FvMatrix, alpha: f64, x_old: &[f64]) {
+        if self.is_empty() {
+            return m.relax(alpha, x_old);
+        }
+        assert!(alpha > 0.0 && alpha <= 1.0, "relaxation factor must be in (0,1]");
+        let mut sums = m.a.off_diag_abs_sum();
+        for &(r, _, a) in &self.t {
+            sums[r] += a.abs();
+        }
+        for i in 0..m.a.diag.len() {
+            let d = m.a.diag[i].max(sums[i]);
+            let dr = d / alpha;
+            m.b[i] += (dr - m.a.diag[i]) * x_old[i];
+            m.a.diag[i] = dr;
+        }
+    }
+
+    /// The matrix with the links as a CSR system.
+    fn csr(&self, sys: &FvMatrix) -> rcfd_linalg::CsrMatrix {
+        let csr = sys.a.to_csr();
+        let mut tr = Vec::with_capacity(csr.val.len() + self.t.len());
+        for r in 0..csr.n {
+            for k in csr.row_ptr[r]..csr.row_ptr[r + 1] {
+                tr.push((r, csr.col[k], csr.val[k]));
+            }
+        }
+        tr.extend(self.t.iter().copied());
+        rcfd_linalg::CsrMatrix::from_triplets(csr.n, tr)
+    }
+
+    fn residual(&self, sys: &FvMatrix, x: &[f64]) -> f64 {
+        if self.is_empty() {
+            return normalised_residual(sys, x);
+        }
+        crate::simple::normalised_residual_csr(&self.csr(sys), &sys.b, x)
+    }
+
+    fn solve(&self, sys: &FvMatrix, x: &mut [f64], ctl: &SolveControl) {
+        if self.is_empty() {
+            sys.solve(x, ctl);
+            return;
+        }
+        let a = self.csr(sys);
+        rcfd_linalg::bicgstab(&a, &sys.b, x, &rcfd_linalg::Ilu0::new(&a), ctl);
+    }
+
+    /// `H` numerator `b - sum_offdiag A_ij x_j` including the links.
+    fn h_operator(&self, m: &FvMatrix, x: &[f64]) -> Vec<f64> {
+        let mut h = m.a.h_operator(x, &m.b);
+        for &(r, c, a) in &self.t {
+            h[r] -= a * x[c];
+        }
+        h
+    }
+}
 /// Weights `(c1, c2)` of the old levels in the time derivative
 /// `(c0 u - c1 u^n + c2 u^{n-1}) / dt` for the active scheme and history.
 fn ddt_history_weights(scheme: &TimeScheme, hist: &History, dt: f64) -> (f64, f64) {

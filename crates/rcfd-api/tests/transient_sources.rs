@@ -127,6 +127,7 @@ fn t1b_run(alg: &str, scheme: &str, n_outer: usize, analytic_limit: f64) -> bool
 /// so while u changes in time the H operator of the cells at the periodic wrap differs from the interior; the pressure equation
 /// then sees a divergence of the order dt and the periodic box does not accelerate uniformly (error 0.5 at t = 1 for PISO).
 /// With n_outer = 40 the same set-up closes to 1e-13 (`t1c_...`), which confirms the cause.
+/// (Wave 26A: passes after ADR 0046 D1 when run with `--ignored`; kept as the record, see the `_implicit_periodic_coupling` tests.)
 #[test]
 #[ignore = "KNOWN MISS: lagged periodic momentum coupling in the transient solver (pre-existing); see t1c"]
 fn t1a_uniform_acceleration_is_exact_in_time_known_miss() {
@@ -135,9 +136,31 @@ fn t1a_uniform_acceleration_is_exact_in_time_known_miss() {
 }
 
 /// T1b as registered; KNOWN MISS for the same reason as T1a.
+/// (Wave 26A: passes after ADR 0046 D1 when run with `--ignored`; kept as the record, see the `_implicit_periodic_coupling` tests.)
 #[test]
 #[ignore = "KNOWN MISS: lagged periodic momentum coupling in the transient solver (pre-existing); see t1c"]
 fn t1b_implicit_sink_follows_the_recursion_and_the_analytic_decay_known_miss() {
+    let ok = [
+        ("piso", "euler", 1, 1e-2),
+        ("pimple", "euler", 3, 1e-2),
+        ("piso", "bdf2", 1, 2e-3),
+    ]
+    .map(|(a, s, n, l)| t1b_run(a, s, n, l));
+    assert!(ok.iter().all(|&b| b), "{ok:?}");
+}
+
+/// Wave 26A (ADR 0046): the periodic partner of the transient momentum matrix is now an implicit link, so the ignored registered
+/// T1 tests above pass (`--ignored`); these two tests repeat the registered configurations and the unchanged limits as passing
+/// tests. The ignored records are kept as they were.
+#[test]
+fn t1a_uniform_acceleration_is_exact_in_time_implicit_periodic_coupling() {
+    let ok = [("piso", "euler", 1), ("pimple", "euler", 3), ("piso", "bdf2", 1)].map(|(a, s, n)| t1a_run(a, s, n));
+    assert!(ok.iter().all(|&b| b), "{ok:?}");
+}
+
+/// See the previous test.
+#[test]
+fn t1b_implicit_sink_follows_the_recursion_and_the_analytic_decay_implicit_periodic_coupling() {
     let ok = [
         ("piso", "euler", 1, 1e-2),
         ("pimple", "euler", 3, 1e-2),
@@ -690,6 +713,7 @@ fn t5_residuals_dt(alg: &str, n_outer: usize, dt_b: f64, steps_b: usize) -> [f64
 
 /// T5 as registered (PISO, Euler): T5a 100 steps of 1e-3; T5b the T3 set-up (Ha 10, ny 80) over 0.2 s at dt = 0.02 (10 steps); T5c 100
 /// steps of 0.01 (1 s). KNOWN MISS (T5a, T5c miss the limit; T5b is beyond the stability bound at dt = 0.02).
+/// (Wave 26A: passes after ADR 0046 D1 when run with `--ignored`; see the `_implicit_periodic_coupling` tests.)
 #[test]
 #[ignore = "KNOWN MISS: registered T5 set-ups (piso); splitting error / lagged periodic coupling / dt = 0.02 beyond the stability bound"]
 fn t5_momentum_balance_registered_setups_known_miss() {
@@ -700,9 +724,26 @@ fn t5_momentum_balance_registered_setups_known_miss() {
 /// T5 with T5b on the stable step (800 steps of 2.5e-4; a different step from the registered one, hence a diagnostic miss). KNOWN MISS if the residuals exceed the limits: the PISO corrector leaves the cell velocity only
 /// approximately on the momentum equation (splitting error of the order of the pressure-velocity coupling at the walls and of the
 /// lagged periodic coupling), so the discrete impulse balance closes to the splitting error and not to round-off.
+/// (Wave 26A: passes after ADR 0046 D1 when run with `--ignored`; see the `_implicit_periodic_coupling` tests.)
 #[test]
 #[ignore = "KNOWN MISS: PISO splitting error and lagged periodic coupling leave the impulse balance open (see t5b)"]
 fn t5_momentum_balance_impulse_equals_integral_of_force_known_miss() {
+    let [a, b, c] = t5_residuals("piso", 1);
+    assert!(a <= 1e-8 && b <= 1e-8 && c <= 1e-9, "{a} {b} {c}");
+}
+
+/// Wave 26A (ADR 0046): with the periodic partner as an implicit link the two ignored T5 records above pass (`--ignored`). These
+/// passing tests repeat them with the limits unchanged. T5b of the registered set-up (dt = 0.02, 10 steps) only covers 0.2 s; the
+/// registered T3 runs at that step are still beyond the stability bound of the wall-bounded splitting (ADR 0046, D2).
+#[test]
+fn t5_momentum_balance_registered_setups_implicit_periodic_coupling() {
+    let [a, b, c] = t5_residuals_dt("piso", 1, 0.02, 10);
+    assert!(a <= 1e-8 && b <= 1e-8 && c <= 1e-9, "{a} {b} {c}");
+}
+
+/// See the previous test; T5b on the stable step (800 steps of 2.5e-4).
+#[test]
+fn t5_momentum_balance_impulse_equals_integral_of_force_implicit_periodic_coupling() {
     let [a, b, c] = t5_residuals("piso", 1);
     assert!(a <= 1e-8 && b <= 1e-8 && c <= 1e-9, "{a} {b} {c}");
 }
