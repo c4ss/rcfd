@@ -1507,9 +1507,9 @@
     "deps": [
       "F-213"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Hartmann channel flow matches the analytic Hartmann velocity profile within 2 percent",
-    "note": "Priority P4. Size S. Area: fv. Optional; kept separate so the niche part can be deferred without blocking electric heating."
+    "note": "PARTIAL (wave 23A, ADR 0039). Delivered: sources.<n> type lorentz (steady SIMPLE/SIMPLEC): uniform imposed B, conductivity, optional applied E, J = sigma(E - grad phi + u x B) at low magnetic Reynolds number; potential none (short circuit, explicit force plus implicit sigma B^2/rho sink) or solve (potential equation on the 21A electric solver with its boundary keys); output fields lorentz_force and current_density. Measured Hartmann channel (periodic box_2d, no-slip plates): profile error 1.6e-3, 6.5e-3, 6.5e-3 of u_max at Ha 2, 10, 20 (limit 2e-2), flow-rate reduction error 1.2e-3, 8.6e-4, 4.1e-4 (limit 1e-2), insulated walls Ha 10 the same; Lorentz integral, work identity and momentum balance at round-off; electrode current within 1.5e-3. Not delivered: transient/PISO/PIMPLE/coupled solver (no momentum-source hook), Joule heating, case-given or varying B, induced field, non-uniform sigma, a 3-D duct with side-wall layers or a non-trivial solved potential, published experiments."
   },
   {
     "id": "F-215",
@@ -1543,9 +1543,9 @@
       "F-113",
       "F-050"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Counterflow exchanger reproduces the effectiveness-NTU analytic result within 2 percent; fan and vent boundaries reproduce their prescribed pressure-flow curves",
-    "note": "Priority P3. Size M. Area: fv. Extends the lumped zone components."
+    "note": "PARTIAL (wave 23A, ADR 0039). Delivered: rcfd_fv::hx (eps-NTU counter, parallel, crossflow with one stream mixed, shell and tube, both-unmixed fit; pressure-loss closure) and components heat_exchanger mode ntu (arrangement, UA, constant or dual-cell secondary, loss_coefficient/loss_linear on the downstream plane) and type fan_boundary (curve-driven pressure patch). Measured: counterflow/parallel against eps-NTU and an independent marched solution to 1e-14 (limit 2e-2), dual-cell energy exchange to 1e-8, loss closure exact to 1e-14, fan boundary flow within 6.3e-4 of the analytic operating point and patch pressure on the curve (limit 2e-3). The macro cell is algebraic, so these checks verify wiring, not a resolved exchanger. Misses (ignored known_miss tests, limits unchanged): the both-unmixed crossflow curve fit deviates up to 3.3 percent from the exact solution and breaks the small-N slope and parallel <= cross ordering; shell and tube is UNVERIFIED against a published table. Vent and porous jump reuse ADR 0012/0022 evidence (no new CFD vent test); the fan test needs a distributed bed because a lossless pressure-pressure duct diverges in SIMPLEC. Not delivered: segmented/resolved exchanger, multi-branch network, two-phase, transient, fan total pressure with dynamic head."
   },
   {
     "id": "F-218",
