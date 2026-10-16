@@ -174,6 +174,13 @@ impl Case {
         if segs.len() >= 3 && self.tree.get(&segs[..2].join(".")).is_err() {
             self.tree.add_named(segs[0], segs[1])?;
         }
+        // named entries nested deeper (`study.parameters.<name>.path`); a path that is no collection is left
+        // to the final `set`, which reports it
+        for k in 2..segs.len().saturating_sub(1) {
+            if self.tree.get(&segs[..=k].join(".")).is_err() {
+                let _ = self.tree.add_named(&segs[..k].join("."), segs[k]);
+            }
+        }
         self.tree.set(path, value)
     }
 

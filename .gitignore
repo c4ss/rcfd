@@ -2,3 +2,4 @@
 Cargo.lock.bak
 *.vtu
 *.pvd
+__pycache__/
