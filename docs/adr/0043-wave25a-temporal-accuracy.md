@@ -152,3 +152,24 @@ Edited: `crates/rcfd-fv/src/pimple/fractional.rs`, `crates/rcfd-fv/src/solidific
 momentum-source plumbing, `bc.rs`, `field.rs`, `scalar.rs`, `energy.rs`, `docs/ROADMAP.md`. Clean-room: first principles and
 published literature only. Cited and NOT read in this session (attribution from memory, unverified): Timmermans, Minev and van
 de Vosse 1996 (rotational pressure correction); Kim and Moin 1985; Zang, Street and Koseff 1994; Voller and Swaminathan 1991.
+
+## Amendment 1 (written after the runs of S1 to S5 and before any run of S7; nothing above was changed)
+
+Status of the runs so far, so that the order of events is on record: the safeguarded branch (D2) is committed with the tests S1 to
+S5 above; those tests ran, S1 to S4 pass, and the S5 report FALSIFIED the hypothesis of check S5 ("the successive position
+differences contract at order >= 0.9"): the differences of the P1 positions at N = 60, 120, 240, 480 are 8.8e-4, 1.1e-4, 1.3e-3
+(orders 3.0 and -3.6). The extra report line shows why: the liquid content of the INITIAL state (cell-centre sampling of the
+analytic profile, a sharp front inside one cell) differs from the exact position at t0 by 6.04e-3 (2 percent of s(t0)) for
+N = 60, 120 and 240 and by 1.69e-3 for N = 480, and the final position errors (1.9e-3, 2.8e-3, 2.7e-3, 1.35e-3) follow it. Because the
+enthalpy balance is exact (P4) any initial content error is a persistent offset of the position. This is a SET-UP defect of P1, P2
+and P8 (the ADR text says only "cell-centre values; disclosed"), not a property of the scheme.
+
+* **S7 corrected set-up (new tests; the old tests are kept unchanged).** Initial cell enthalpy = cell average of the sharp-front
+  analytic enthalpy `H(x) = T_exact(x) + (L/c) [x < s(t0)]` (melting orientation; the freezing mirror image has `L/c - H`) taken with
+  200 midpoint sub-samples per cell, inverted to the cell temperature through the piecewise-linear law (below the solidus
+  `T = h`, in the mush linear, above the liquidus `T = h - L/c`). Then the unchanged registered limits of P1, P2, P8 apply to
+  N = 60, 120, 240, 480: P4 <= 1e-10, P5 <= 1e-10, P6 below 100 iterations, position error at N = 240 <= 3 percent, successive
+  orders >= 0.9. The outcome is not known in advance; whichever criterion fails is reported as measured and stays a miss (a new
+  ignored `*_known_miss` record for the corrected set-up), and the P1/P2/P8 order claims are made only for criteria that pass.
+* **S5 replaced as a diagnosis, not as a criterion:** the offset of the initial liquid content is the reported explanation of the
+  non-monotone P1 errors; S7 is its test (if S7 P1 orders still fail, the explanation is incomplete and is reported as such).
