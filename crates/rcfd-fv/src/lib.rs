@@ -19,6 +19,7 @@ pub mod fvmatrix;
 pub mod geometry;
 pub mod gradient;
 pub mod lumped;
+pub mod masstransfer;
 pub mod outlets;
 pub mod pimple;
 pub mod potential;
@@ -34,6 +35,7 @@ pub mod solidification;
 pub mod sources;
 pub mod thermal_bc;
 pub mod varden;
+pub mod waves;
 
 pub use bc::{
     Bc, BcCtx, Directed, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Switched,
