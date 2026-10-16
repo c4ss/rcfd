@@ -890,3 +890,23 @@ The derivation was checked by substitution (each term solves the heat equation a
 Euler recursion is `u_{n+1} = (u_n + a dt) / (1 + s dt)`. Both are exact algebra, no data.
 
 **Hartmann limits (T3).** Reused from wave 23A (docs/reference-data.md, F-214 section): the short-circuit profile and flow rate of `rcfd_fv::lorentz::hartmann`.
+
+## Wave 26C post-object catalogue and EnSight export (F-238, F-103, ADR 0048)
+
+No literature value is used; every expected number is a definition or a closed form derived here.
+
+**Verified by derivation (first principles).** Sphere of radius `r`: area `4 pi r^2`, outward flux of `F = x - c` is `r * 4 pi r^2 = 4 pi r^3`
+(divergence theorem, `3 V`), a linear field `z - c_z` on the sphere has mean 0 and variance `r^2 / 3` (equal-area slices, `z - c_z`
+is uniform on `[-r, r]` by Archimedes' hat-box theorem). Ellipsoid flux of `x - c` is `3 V = 4 pi a b c`. Unit cube: surface area 6,
+outward flux of `(x,y,z)` is `3`, area-weighted mean of `x` over the six faces is `(0 + 1 + 4 * 1/2)/6 = 1/2`, mean of `x^2` is
+`(0 + 1 + 4/3)/6 = 7/18`, so the variance is `7/18 - 1/4 = 5/36` and the standard deviation `sqrt(5)/6`. Plane sections of the unit cube:
+`x = const` area 1, `x + y = 1` area `sqrt 2`, `x + y + z = 3/2` the regular hexagon of side `sqrt 2 / 2`, area `3 sqrt 3 / 4`.
+Cylinder lateral area `2 pi r h`; circular cone lateral area `pi R l` with `R = h tan a`, `l = h / cos a`. Weighted variance of
+`1e9 + {0..6}` is 4 (variance of the integers 0..6 is `(49 - 1)/12`). Momentum flux of a uniform velocity `u` through a patch of
+area vector `S` is `(u . S) u`.
+
+**Unverified / not read.** Layouts of the EnSight Gold files were taken from the vendor's public user-manual page (case file
+sections, geometry and variable file layouts, `nfaced`, 80-character binary records, wildcard expansion); the page text read did not
+state the `hexa8` node numbering (figure), the `nfaced` face orientation or the binary integer / float widths. The hexahedron
+convention (bottom face counter-clockwise seen from the top), outward `nfaced` faces and 4-byte little-endian integers and floats are
+from memory. HDF5 and CGNS layouts were not read or used.

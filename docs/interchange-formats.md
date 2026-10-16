@@ -25,7 +25,16 @@ precision, either byte order, iblank, function files, headerless C-binary single
 
 * No HDF5 heavy data: the XDMF writer uses raw binary data items only. The title of F-119 ("XDMF/HDF5 writer") is
   therefore not met and the item stays `partial`.
-* No EnSight writer.
+* EnSight Gold (wave 26C, ADR 0048): `rcfd_io::ensight` writes the case, geometry and per-node / per-element scalar and
+  vector variable files, ASCII (`%10d`, `%12.5e`) and C Binary, one part, `hexa8` for hexahedra and `nfaced` for every other
+  cell, time series as a time set with `*` wildcard file names. Not reachable from `rcfd convert`. Verified only by a
+  hand-written reader in the tests and a stdlib-Python reader of the files; no third-party viewer or library was available.
+  The `hexa8` node order, the outward `nfaced` face orientation and the 4-byte little-endian binary widths are from memory
+  (the public page read does not state them) and unverified. Structured parts, ids, ghost data and ASCII reals beyond five
+  digits are not written.
+* CGNS and HDF5 (F-103): not delivered. No HDF5 library is installed and none of h5py, vtk, meshio, numpy is importable locally
+  (`python -I -c "import ..."` measured in wave 26C), so no layout could be checked against an independent reader; no file
+  is claimed to be CGNS or HDF5 valid.
 * Tecplot polyhedral zones and binary `.plt` are not supported.
 * Verification against third-party readers was done with VTK 9.6.2 (`vtkSTLReader`, `vtkTecplotReader`,
   `vtkXdmfReader`, `vtkMultiBlockPLOT3DReader`) through `scripts/check_interchange.py` (meshio is installed but not used by the checks); no commercial

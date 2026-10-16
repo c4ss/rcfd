@@ -245,6 +245,17 @@ names, a `Turbulence` row in the HTML report, a `turbulence` object in the servi
 `y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area
 weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent
 cells, the quantity the wall functions use.
+Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
+unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field
+(population form `sqrt(sum w (x - mean)^2 / sum w)`, two-pass with a mean-correction term so a large offset does not cancel);
+`area_std`, `area_min` and `area_max` are the area-weighted standard deviation and the smallest / largest face value of a boundary
+field over `patch`; `mass_weighted_average` is `sum phi q / sum phi` over `patch` (the signed face flux is the weight, so the
+value is the same on an inflow and an outflow patch; a patch whose net flux cancels is an error); `vector_flux` is the net
+momentum flux `sum phi (u . d)` through `patch` along the unit vector of `direction` (unit N; incompressible fluxes are scaled by
+`physics.rho`, the compressible flux is already a mass flux; not available with the variable-density solver). Surfaces (plane,
+sphere, cylinder, cone and general quadric cuts, iso-clip, offset, rotational / translated instances), rakes, point clouds and
+case difference fields are library objects (`rcfd_post::surfaces`, `rcfd_post::compare`) without case-tree keys.
+
 For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
 
 ## `compressible` and `solver.algorithm = "compressible"`
