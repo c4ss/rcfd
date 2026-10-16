@@ -1,10 +1,7 @@
-//! F-235 through the case tree (ADR 0047 checks S10, S11): the `pipe_sweep` generator and fully developed Poiseuille pipe flow.
-//! The limits are the registered ones.
+//! Ignored diagnostics for the S10 root causes (ADR 0047 addendum); not checks.
 
 use rcfd_api::case::Case;
-use rcfd_api::sim::{build_mesh, Simulation};
-use rcfd_mesh::gen::Grading;
-use rcfd_mesh::sweep::pipe_mesh;
+use rcfd_api::sim::Simulation;
 
 fn pipe_case(extra_mesh: &str, extra: &str) -> String {
     format!(
@@ -129,7 +126,7 @@ alpha_u = 0.5",
                 .iter()
                 .fold(0.0_f64, |m, v| if v.is_nan() { f64::NAN } else { m.max(v.abs()) });
             println!("nz {nz} [{}] it {}: max|uz| = {m:.6e}", extra.len(), (k + 1) * 100);
-            if !(m < 50.0) {
+            if m.is_nan() || m >= 50.0 {
                 break;
             }
         }
