@@ -102,6 +102,20 @@ impl PimpleSolver {
             _ => self.phi.clone(),
         };
         let ub_phys = self.u.boundary_values(&g);
+        // boundary coefficients with the extrapolated cell velocity (only the coupled faces use them)
+        let bc_extrapolated: Vec<Vec<crate::bc::FaceCoeffs>> = match extrap {
+            Some(r) if g.coupled_face.iter().any(|&c| c) => {
+                let mut ue = self.u.clone();
+                for c in 0..n {
+                    for j in 0..3 {
+                        let older = self.hist_u[j].older.as_ref().map_or(self.hist_u[j].old[c], |v| v[c]);
+                        ue.values[c][j] = (1.0 + r) * self.hist_u[j].old[c] - r * older;
+                    }
+                }
+                (0..3).map(|k| ue.boundary_coeffs(&g, k)).collect()
+            }
+            _ => Vec::new(),
+        };
         let mut res_u: f64 = 0.0;
         for k in 0..3 {
             if !g.active[k] {
@@ -109,6 +123,16 @@ impl PimpleSolver {
             }
             let cells: Vec<f64> = u_old.iter().map(|v| v[k]).collect();
             let mut bc = self.u.boundary_coeffs(&g, k);
+            if extrap.is_some() && !bc_extrapolated.is_empty() {
+                // BDF2: the partner value of the periodic faces is extrapolated like the convected velocity (ADR 0043 D1),
+                // otherwise the explicit coupling across the periodic faces is only first order in time
+                for (i, c) in bc.iter_mut().enumerate() {
+                    if g.coupled_face[i] {
+                        c.b = bc_extrapolated[k][i].b;
+                        c.d = bc_extrapolated[k][i].d;
+                    }
+                }
+            }
             if fs.kim_moin {
                 for (i, c) in bc.iter_mut().enumerate() {
                     let f = n_int + i;

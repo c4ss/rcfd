@@ -97,13 +97,13 @@ fn f2_temporal_order_euler() {
 }
 
 #[test]
-#[ignore = "known miss (ADR 0037 addendum): observed order 1.04 on the periodic Taylor-Green vortex; the lagged periodic-face coupling of the shared momentum assembly limits it to first order, see f2c"]
+#[ignore = "known miss (ADR 0037 addendum): observed order 1.04 on the periodic Taylor-Green vortex before the BDF2 extrapolation of the periodic partner value (ADR 0043 D1); still below 1.7 afterwards, see ADR 0043 addendum"]
 fn f2_known_miss_temporal_order_bdf2() {
     order(TimeScheme::Bdf2, 1.7, 2.3, "bdf2");
 }
 
 #[test]
-#[ignore = "known miss (ADR 0037 addendum): ratio 2.48 because the first-order temporal error of the periodic coupling is comparable to the spatial error at dt = 0.005, see f3c"]
+#[ignore = "known miss (ADR 0037 addendum): ratio 2.48 before the BDF2 extrapolation of the periodic partner value; passes since ADR 0043 D1, see f3_v2_spatial_order_after_periodic_extrapolation"]
 fn f3_known_miss_spatial_order() {
     let nu = 0.1;
     let err = |n| {
@@ -455,4 +455,86 @@ fn f8b_chorin_first_order_steady_state() {
         let inc = centre_diff(&cavity_fs(40, 0.05, FractionalSettings::default(), false), &sc);
         assert!(inc * 10.0 <= e2, "incremental {inc} vs chorin {e2}");
     }
+}
+
+/// ADR 0043 A2: the registered F3 limit (ratio >= 3.0) with the BDF2 extrapolation of the periodic partner value. The old test
+/// `f3_known_miss_spatial_order` stays as the record of the pre-fix miss.
+#[test]
+fn f3_v2_spatial_order_after_periodic_extrapolation() {
+    let nu = 0.1;
+    let err = |n| {
+        let mut s = tg_fs(n, nu, TimeScheme::Bdf2, true);
+        s.run_fixed(0.5, 0.005);
+        exact_error(&s, nu)
+    };
+    let (e1, e2) = (err(16), err(32));
+    println!("F3 v2 e16 {e1:.3e} e32 {e2:.3e} ratio {:.3} (limit 3.0)", e1 / e2);
+    assert!(e1 / e2 >= 3.0);
+}
+
+/// ADR 0043 A4: the periodic-lag defect was acting. Errors of the registered F2 set-up (BDF2, dt 0.1 and 0.05 against the dt/32
+/// reference) at most half of the pre-fix values 9.256e-3 and 4.502e-3.
+#[test]
+fn f2_v2_bdf2_errors_halved_by_periodic_extrapolation() {
+    let nu = 0.1;
+    let run = |dt: f64| {
+        let mut s = tg_fs(32, nu, TimeScheme::Bdf2, true);
+        s.run_fixed(1.0, dt);
+        s
+    };
+    let reference = run(0.1 / 32.0);
+    let e1 = l2_diff(&run(0.1), &reference);
+    let e2 = l2_diff(&run(0.05), &reference);
+    println!(
+        "F2 v2 bdf2: e(0.1) {e1:.3e} (limit 4.6e-3) e(0.05) {e2:.3e} (limit 2.25e-3) order {:.3} (registered band 1.7-2.3, see the ignored record)",
+        (e1 / e2).log2()
+    );
+    assert!(e1 <= 4.6e-3 && e2 <= 2.25e-3, "{e1} {e2}");
+}
+
+fn fingerprint(s: &PimpleSolver) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    let mut mix = |x: f64| {
+        h = (h.rotate_left(5) ^ x.to_bits()).wrapping_mul(0x9E3779B97F4A7C15);
+    };
+    for v in &s.u.values {
+        mix(v[0]);
+        mix(v[1]);
+    }
+    for &p in &s.p.values {
+        mix(p);
+    }
+    for &f in &s.phi {
+        mix(f);
+    }
+    h
+}
+
+/// ADR 0043 A1: the Euler path and the BDF2 path without periodic faces are bit-identical to the code before the fix (the
+/// fingerprints were recorded from that code and written into the ADR before the fix).
+#[test]
+fn a1_euler_and_non_periodic_bdf2_unchanged_bitwise() {
+    let mut s = tg_fs(32, 0.05, TimeScheme::ImplicitEuler, true);
+    s.run_fixed(1.0, 0.02);
+    assert_eq!(
+        format!("{:016x}", fingerprint(&s)),
+        "8c2d50e6a8e9b9ee",
+        "Euler Taylor-Green"
+    );
+
+    let mesh = Arc::new(cavity_2d(16, 1.0).unwrap());
+    let geom = Arc::new(FvGeometry::new(mesh).unwrap());
+    let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
+    u.set_bc(&geom, "lid", Box::new(FixedValue::vector([1.0, 0.0, 0.0])))
+        .unwrap();
+    u.set_bc(&geom, "walls", Box::new(FixedValue::vector([0.0; 3])))
+        .unwrap();
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let mut st = PimpleSettings::piso(0.01);
+    st.convection = ConvScheme::LinearUpwind;
+    st.time_scheme = TimeScheme::Bdf2;
+    st.fractional = fs(true, true);
+    let mut c = PimpleSolver::new(geom, u, p, st);
+    c.run_fixed(1.0, 0.05);
+    assert_eq!(format!("{:016x}", fingerprint(&c)), "e8bd7eaeefd7048b", "BDF2 cavity");
 }
