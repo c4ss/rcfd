@@ -15,7 +15,7 @@
 //! SIMPLEC replaces `rAU` in the pressure equation by `V / (a_P - H1)`
 //! with `H1` the sum of neighbour coefficients.
 
-use crate::convection::{convection, face_flux, ConvScheme};
+use crate::convection::{convection, face_flux, lag_boundary_inflow, ConvScheme};
 use crate::diffusion::{laplacian, uniform_gamma};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
@@ -734,6 +734,7 @@ impl SimpleSolver {
                 None
             };
             let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, grad.as_deref());
+            lag_boundary_inflow(&g, &phi_conv, &cells, &bc, &mut m);
             m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
             if let Some(sink) = &self.sink {
                 for c in 0..n {
