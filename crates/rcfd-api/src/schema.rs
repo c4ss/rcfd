@@ -1238,6 +1238,14 @@ pub fn case_schema() -> Schema {
                 "Prandtl mixing-length model coefficients (turbulence.model = mixing_length, ADR 0026)",
                 false,
             ),
+        )
+        .field(
+            "rsm",
+            coef_obj(
+                rcfd_turb::rsm_coefficient_table(),
+                "Reynolds stress model coefficients (turbulence.model = rsm, ADR 0032): SSG (c1, c1s, c2, c3, c3s, c4, c5, ce2_ssg) and LRR-IP (c1_lrr, c2_lrr, ce2_lrr) pressure-strain constants, epsilon-equation constants ce1, c_eps, stress diffusion c_s, c_mu of the eddy viscosity returned to the momentum solver",
+                false,
+            ),
         );
     let sa_group = Schema::object()
         .doc("Spalart-Allmaras options")
@@ -1252,13 +1260,30 @@ pub fn case_schema() -> Schema {
         .field(
             "negative_nutilde",
             Schema::boolean(true).doc("SA-neg treatment of a negative nuTilda (Allmaras, Johnson and Spalart 2012); off: nuTilda is clipped at zero"),
+        )
+        .field(
+            "des",
+            Schema::enumeration("off", &["off", "des", "ddes"]).doc("Hybrid RANS-LES length scale (ADR 0032): off = plain SA (steady algorithms); des = detached-eddy simulation d~ = min(d, c_des Delta) (Spalart et al. 1997); ddes = delayed DES d~ = d - f_d max(0, d - c_des Delta) with f_d = 1 - tanh((8 r_d)^3) (Spalart et al. 2006). des and ddes run with the transient algorithms (piso, pimple) only, with a time derivative on nuTilda"),
+        )
+        .field(
+            "des_delta",
+            Schema::enumeration("max_extent", &["max_extent", "cbrt_volume"]).doc("Grid scale Delta of des / ddes: max_extent = largest distance between two face centres of the cell (empty directions excluded; max(dx, dy, dz) on boxes), cbrt_volume = cell volume^(1/3)"),
+        )
+        .field(
+            "c_des",
+            Schema::float(0.65).range(0.1, 2.0).doc("C_DES of the des / ddes length scale (0.65; the value is taken from secondary literature, see docs/reference-data.md)"),
         );
+
+    let rsm_group = Schema::object().doc("Reynolds stress model options (turbulence.model = rsm)").field(
+        "pressure_strain",
+        Schema::enumeration("ssg", &["ssg", "lrr_ip"]).doc("Pressure-strain model: ssg (Speziale, Sarkar and Gatski 1991, quadratic) or lrr_ip (Launder, Reece and Rodi 1975, isotropisation of production, linear). Its epsilon-equation constant Ce2 differs (1.83 / 1.92)"),
+    );
 
     let turbulence = Schema::object()
         .doc("Turbulence modelling (RANS models: steady SIMPLE / SIMPLEC runs; smagorinsky and wale: transient runs; mixing_length: both)")
         .field(
             "model",
-            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "smagorinsky", "wale", "mixing_length", "plugin"]).doc("smagorinsky and wale are algebraic subgrid-scale models for large-eddy simulation (transient algorithms piso/pimple only; resolved walls, nu_sgs = 0 on wall faces, filter width = cell volume^(1/3); ADR 0026), mixing_length is the Prandtl algebraic closure (steady or transient, needs a wall and turbulence.length_scale; ADR 0026). Otherwise: laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
+            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "smagorinsky", "wale", "mixing_length", "rsm", "plugin"]).doc("rsm is the Reynolds stress transport model (SSG or LRR-IP pressure-strain, generalised gradient diffusion; ADR 0032): transient algorithms (piso, pimple) only, no wall treatment, so no wall patches. smagorinsky and wale are algebraic subgrid-scale models for large-eddy simulation (transient algorithms piso/pimple only; resolved walls, nu_sgs = 0 on wall faces, filter width = cell volume^(1/3); ADR 0026), mixing_length is the Prandtl algebraic closure (steady or transient, needs a wall and turbulence.length_scale; ADR 0026). Otherwise: laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
         )
         .field(
             "variant",
@@ -1391,6 +1416,7 @@ pub fn case_schema() -> Schema {
                 .doc("Spalart-Allmaras: nuTilda/nu of the initial field and of inlets without nutilde_value (TMR: 3 to 5 for far-field values)"),
         )
         .field("sa", sa_group)
+        .field("rsm", rsm_group)
         .field("coefficients", coefficients)
         .field(
             "plugin_coefficients",

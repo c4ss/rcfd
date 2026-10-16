@@ -2176,8 +2176,19 @@ impl Simulation {
                 if let Some(t) = &mut self.turb {
                     // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
                     // velocity and flux of the old time level, no relaxation
+                    t.model.begin_step(dt);
                     t.change = t.model.update(&s.u, &s.phi);
                     s.nu_face = Some(t.model.nu_face());
+                    if let Some(src) = t.model.momentum_source(&s.u) {
+                        // stress-transport closure (ADR 0032): the Reynolds stress divergence enters as a body acceleration
+                        let b = rcfd_turb::rsm::body_force_from_cells(&self.geom, &src);
+                        let mut total = self.base_body.clone();
+                        match &mut total {
+                            Some(x) => x.add(&b),
+                            None => total = Some(b),
+                        }
+                        s.body_force = total;
+                    }
                 }
                 if let Some(r) = &mut self.rheology {
                     match r.nu_faces(&self.geom, &s.u, None, self.t_init) {
@@ -2414,6 +2425,15 @@ impl Simulation {
                     return Ok(t.scalar(name).map(|f| f.values.clone()).unwrap_or_default())
                 }
                 "nut" => return Ok(t.model.nut().to_vec()),
+                // Reynolds stress model (ADR 0032): the stress components and k = tr(R)/2
+                "Rxx" | "Ryy" | "Rzz" | "Rxy" | "Rxz" | "Ryz" if t.scalar(name).is_some() => {
+                    return Ok(t.scalar(name).map(|f| f.values.clone()).unwrap_or_default())
+                }
+                "k" if t.model.key() == "rsm" => {
+                    let g = |n: &str| t.scalar(n).map(|f| f.values.clone()).unwrap_or_default();
+                    let (a, b, c) = (g("Rxx"), g("Ryy"), g("Rzz"));
+                    return Ok((0..a.len()).map(|i| 0.5 * (a[i] + b[i] + c[i])).collect());
+                }
                 "wall_distance" => return Ok(t.model.wall_distance().to_vec()),
                 "y_plus" => return Ok(t.y_plus_cells()),
                 _ => {}

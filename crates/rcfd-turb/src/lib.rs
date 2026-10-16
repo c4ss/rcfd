@@ -5,6 +5,7 @@ pub mod eddy;
 pub mod kepsilon;
 pub mod les;
 pub mod model;
+pub mod rsm;
 pub mod sa;
 pub mod sst;
 pub mod wall;
@@ -20,7 +21,11 @@ pub use model::{
     register_model, sa_infos, smagorinsky_coefficient_table, sst_coefficient_table, supports_transient,
     wale_coefficient_table, CoefficientInfo, ModelContext, TurbulenceModel,
 };
-pub use sa::{SLimiter, SaCoefficients, SaWallMode, SpalartAllmaras};
+pub use rsm::{rsm_coefficient_table, PressureStrain, ReynoldsStress, RsmCoefficients};
+pub use sa::{
+    cell_delta, ddes_fd, ddes_length, ddes_rd, des_length, sa_local_source, sa_s_fw, DesDelta, DesMode, SLimiter,
+    SaCoefficients, SaWallMode, SpalartAllmaras,
+};
 pub use sst::KOmegaSst;
 pub use wall::{wall_distance, wall_y_plus, SpaldingLaw, WallConstants};
 pub use zeroeq::{MixingLengthModel, MixingProfile};
