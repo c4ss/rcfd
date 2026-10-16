@@ -83,12 +83,13 @@ fn layering_matches_architecture_doc() {
     let layer = |n: &str| match n {
         "rcfd-core" => 0,
         "rcfd-mesh" | "rcfd-linalg" | "rcfd-reactor" => 1,
-        "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 2,
-        "rcfd-turb" | "rcfd-post" => 3,
-        "rcfd-api" => 4,
-        "rcfd-mcp" | "rcfd-cli" => 5,
-        "rcfd-assistant" => 6,
-        "rcfd-gui" => 7,
+        "rcfd-gpu" => 2,
+        "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 3,
+        "rcfd-turb" | "rcfd-post" => 4,
+        "rcfd-api" => 5,
+        "rcfd-mcp" | "rcfd-cli" => 6,
+        "rcfd-assistant" => 7,
+        "rcfd-gui" => 8,
         other => panic!("unknown crate {other}"),
     };
     for (c, deps) in &g {
