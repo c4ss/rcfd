@@ -62,11 +62,26 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     for n in names(case) {
         let p = |f: &str| format!("sources.{n}.{f}");
         let kind = gs(case, &p("type"));
-        if !matches!(alg.as_str(), "simple" | "simplec") {
+        if !matches!(alg.as_str(), "simple" | "simplec" | "piso" | "pimple") {
             bad(
                 p("type"),
-                format!("momentum sources are available with the steady algorithms (simple, simplec) only, not with \"{alg}\""),
+                format!("momentum sources are available with the algorithms simple, simplec, piso and pimple, not with \"{alg}\" (it has no momentum-source hook)"),
             );
+        } else if matches!(alg.as_str(), "piso" | "pimple") {
+            // transient hook (ADR 0045): the frame-flux offset and component-diagonal correction of the rotating-frame
+            // sources exist in the steady kernel only; the fractional-step advance has no outer iteration to hook into
+            if matches!(kind.as_str(), "rotating_frame" | "mrf") {
+                bad(
+                    p("type"),
+                    format!("\"{kind}\" sources are available with the steady algorithms (simple, simplec) only, not with \"{alg}\""),
+                );
+            }
+            if gs(case, "solver.time_advance") == "fractional_step" {
+                bad(
+                    p("type"),
+                    "momentum sources are not available with solver.time_advance = \"fractional_step\" (no outer iteration to re-evaluate them in; use iterative)".into(),
+                );
+            }
         }
         let vec3_of = |f: &str| match gv(case, &p(f)) {
             Some(None) => Err(String::from(

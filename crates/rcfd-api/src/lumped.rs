@@ -55,11 +55,25 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     for n in names(case) {
         let p = |f: &str| format!("components.{n}.{f}");
         let kind = gs(case, &p("type"));
-        if !matches!(alg.as_str(), "simple" | "simplec") {
+        if !matches!(alg.as_str(), "simple" | "simplec" | "piso" | "pimple") {
             bad(
                 p("type"),
-                format!("lumped components are available with the steady algorithms (simple, simplec) only, not with \"{alg}\""),
+                format!("lumped components are available with the algorithms simple, simplec, piso and pimple, not with \"{alg}\" (it has no pressure-jump hook)"),
             );
+        } else if matches!(alg.as_str(), "piso" | "pimple") {
+            // transient hook (ADR 0045): not available with the fractional-step advance or a moving mesh
+            if gs(case, "solver.time_advance") == "fractional_step" {
+                bad(
+                    p("type"),
+                    "lumped components are not available with solver.time_advance = \"fractional_step\" (no outer iteration to re-evaluate them in; use iterative)".into(),
+                );
+            }
+            if getb(case, "dynamic_mesh.enabled") {
+                bad(
+                    p("type"),
+                    "lumped components are not available with dynamic_mesh.enabled (the mesh moves under the component planes)".into(),
+                );
+            }
         }
         if !matches!(kind.as_str(), "network_outlet" | "fan_boundary") {
             for d in check_zone(case, &format!("components.{n}")) {
