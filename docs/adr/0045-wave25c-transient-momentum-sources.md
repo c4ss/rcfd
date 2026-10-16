@@ -208,8 +208,8 @@ corrected or diagnostic variants are separate tests that do not count as criteri
 | T1b (sink; PISO / PIMPLE 3 / PISO BDF2) | registered | vs recursion 7.587e-2 / 1.402e-2 / 7.437e-2; vs analytic 7.841e-2 / 1.657e-2 / 7.691e-2 of a/s | 1e-9 (Euler recursion); 1e-2 / 2e-3 (analytic) | MISS |
 | T2 (Poiseuille start-up, dt 1e-3, ny 40) | registered | worst series error 4.996e-3 (PISO Euler), 2.784e-3 (PIMPLE 2), 3.182e-3 (PISO BDF2) | 1e-2 | PASS |
 | T2b (stationary) | registered | 6.250e-4 at t = 1.5 | 2e-3 | PASS |
-| T3 (Hartmann, dt 0.02, t_end 2) | registered | unstable: PISO Ha 2 ny 40 last-step change 0.995, profile error 20.6, flow error 12.2 | 2e-2 / 1e-2 / 1e-8 | MISS |
-| T3d (solved potential, T3 settings, dt 0.02) | registered | u 8.631e-1, J 1.036e-2 at t = 0.1 | 1e-6 | MISS |
+| T3a / T3b / T3c (Hartmann, dt 0.02, t_end 2) | registered | unstable: PISO Ha 2 ny 40 last-step change 0.995, profile error 20.6, flow error 12.2 | 2e-2 / 1e-2 / 1e-8 | MISS |
+| T3d (solved potential; the registered text names only `pimple`, so n_outer 3, alpha 0.9 / 0.5 and dt 0.02 are taken from T3) | registered (as read) | u 8.631e-1, J 1.036e-2 at t = 0.1 | 1e-6 | MISS |
 | T4 (disk) | registered | kinematic dp 50.0000; max abs(ux-1) 1.0e-12 (PISO) / 9.0e-13 (PIMPLE 3); uy 5.0e-13 / 6.1e-13; last-step p change 0 | as registered | PASS |
 | T5a (Poiseuille start-up impulse, PISO Euler) | registered | 4.319e-3 | 1e-8 | MISS |
 | T5b (Hartmann Ha 10, T3 set-up, 10 steps of 0.02) | registered | 3.434e-1 | 1e-8 | MISS |
@@ -220,11 +220,11 @@ corrected or diagnostic variants are separate tests that do not count as criteri
 | T7c (loss closure) | registered | 6.9e-15, 5.9e-14 | 1e-3 | PASS |
 | T7d (fan_boundary) | registered | Q 1.85e-13, patch pressure 5.3e-15 | 5e-3 / 2e-3 | PASS |
 | T7e (NTU duty, transient = steady) | registered | 451.450431 W, relative difference 1.35e-14; equals the eps-NTU library value to 1e-9 | 1e-4 | PASS |
-| T8 (steady unchanged) | registered | see below | bit identical | PASS |
+| T8 (steady unchanged) | (i) registered; (ii) reference changed; (iii) four edited assertions | (i) identical; (ii) all 8 bit hashes identical to b1c5c9a, `fan_jump` differs from 78fcadd; (iii) four assertions edited | (i) identical; (ii) identical to 78fcadd; (iii) three assertions | PASS for (i); (ii) and (iii) PASS WITH DEVIATION, see T8 evidence and Deviations |
 
 A corrected set-up (new test, limits unchanged, registered configuration kept as an ignored known miss):
 
-* T3b, step set by the viscous number nu dt / dy^2 = 1.6 (the number of the stable T2 set-up), t_end 2.0 / 0.5 / 0.25 for Ha
+* T3a / T3b / T3c on a stable step (test `t3b_...`; not the ADR check T3b), step set by the viscous number nu dt / dy^2 = 1.6 (the number of the stable T2 set-up), t_end 2.0 / 0.5 / 0.25 for Ha
   2 / 10 / 20, PISO and PIMPLE (n_outer 3, alpha_u 0.9, alpha_p 0.5): profile error 1.590e-3 / 6.532e-3 / 6.532e-3 (limit 2e-2),
   flow error 1.218e-3 / 8.580e-4 / 4.064e-4 (1e-2), last-step change at most 4.9e-14 (1e-8). T3c against the steady SIMPLEC Ha 10
   profile: 4.7e-15 (PISO), 5.7e-14 (PIMPLE) (limit 1e-6). This is a set-up defect (the instability below) and the limits are
@@ -260,13 +260,18 @@ Diagnostics (new tests, NOT registered configurations, NOT criterion passes; the
 * `baseline_hashes`: 3 passed, 1 ignored, identical; hashes not re-recorded.
 * Scratch bit-hash test (not committed; 8 steady SIMPLEC cases, 150 iterations): all 8 hashes identical between a `git archive` of
   b1c5c9a (parent of the wave 25C code commit) and the wave 25C tree. Against the registered reference 78fcadd only `fan_jump`
-  differs; by inference (not bisected) this is wave 24 commit b1c5c9a ("lag the inflow through zero-gradient boundary faces"),
-  which lies between 78fcadd and this wave, not this wave.
+  differs; this is attributed to wave 24 commit b1c5c9a ("lag the inflow through zero-gradient boundary faces in the steady SIMPLE/SIMPLEC
+  convection"), by inference and not bisected: 78fcadd..b1c5c9a also contains documentation, F-210/F-212/F-215/F-220/F-227/F-054
+  and F-217 hx-function commits of waves 25A/25B and the wave 24 diagnosis tests, and b1c5c9a is the only commit of the range that
+  changes the steady SIMPLE/SIMPLEC convection. The registered criterion (ii) names 78fcadd as the reference, so it is NOT met
+  verbatim; it holds against b1c5c9a.
 * Existing tests: `sources`, `actuator_disk` (2 passed, 2 ignored), `lumped` (6, 2 ignored), `heat_exchanger` (5, 2 ignored),
   `component_diagonal` (3), `mrf` (10, 11 ignored), `mhd` (5), `rcfd-fv` lib (63), `rcfd-api` lib (54) pass.
 
 ### Deviations
 
+* T8(ii) is met against b1c5c9a, not against the registered 78fcadd (`fan_jump` differs, attributed to b1c5c9a); T8(iii) says three
+  edited assertions, four were edited.
 * D3 listed three superseded assertions; four were edited (also `invalid_sources` in `tests/sources.rs`: PISO became coupled,
   because PISO is now supported). The code commit message says "four ... per D3", which is inexact.
 * In `tests/mhd.rs` the loop over the two transient algorithms became a single inline `compressible` assertion (a single-element
