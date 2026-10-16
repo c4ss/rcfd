@@ -438,6 +438,9 @@ pub fn write_results(sim: &Simulation, dir: &Path) -> Result<(), Box<dyn std::er
     std::fs::create_dir_all(dir)?;
     sim.export_vtu(dir, "solution")?;
     crate::particle_run::write_run_outputs(sim, dir)?;
+    if let Some(rep) = sim.chemistry_report() {
+        std::fs::write(dir.join("chemistry.json"), rep.to_string())?;
+    }
     std::fs::write(dir.join("monitors.json"), sim.monitors.to_json().to_string())?;
     std::fs::write(dir.join("report.html"), sim.html_report())?;
     std::fs::write(dir.join("monitors.csv"), sim.monitors.to_csv())?;

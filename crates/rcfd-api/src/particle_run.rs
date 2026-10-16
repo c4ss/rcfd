@@ -1,3 +1,4 @@
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
 //! Particle tracking driven by the run loop (F-056, ADR 0037 D1).
 //!
 //! `Simulation::new` builds a [`ParticleRun`] for transient algorithms when `particles.enabled`; the end of
