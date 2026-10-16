@@ -188,6 +188,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let names = case.tree.names("boundaries").unwrap_or_default();
     check_algebraic_options(case, &mut out);
+    check_viscous_stress(case, &mut out);
     if !enabled(case) {
         for n in &names {
             let p = format!("boundaries.{n}.turbulence");
@@ -454,6 +455,27 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// `solver.viscous_stress = "full"` (ADR 0032) is available for the incompressible constant-density transient algorithms only.
+fn check_viscous_stress(case: &Case, out: &mut Vec<Diagnostic>) {
+    if get_s(case, "solver.viscous_stress") != "full" {
+        return;
+    }
+    let algorithm = get_s(case, "solver.algorithm");
+    if !is_transient(case) {
+        out.push(diag(
+            "solver.viscous_stress",
+            format!(
+                "solver.viscous_stress = \"full\" is available with the transient algorithms (piso, pimple) only, not with solver.algorithm = \"{algorithm}\""
+            ),
+        ));
+    } else if crate::vd::enabled(case) {
+        out.push(diag(
+            "solver.viscous_stress",
+            "solver.viscous_stress = \"full\" is not available with variable density (the transposed stress is implemented for the constant-density momentum equation)",
+        ));
+    }
 }
 
 /// Keys that belong to the algebraic models (`wall_damping`, `length_scale`, `mixing_profile`, ADR 0026).

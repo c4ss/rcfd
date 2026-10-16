@@ -1015,6 +1015,10 @@ pub fn case_schema() -> Schema {
             Schema::boolean(true).doc("Transient Rhie-Chow correction (piso / pimple)"),
         )
         .field(
+            "viscous_stress",
+            Schema::enumeration("laplacian", &["laplacian", "full"]).doc("Viscous term of the transient incompressible momentum equation (piso / pimple): laplacian = div(nu_eff grad u) only (default); full = adds the explicit transposed part div(nu_eff (grad u)^T), the full stress divergence needed for a variable (subgrid or eddy) viscosity (ADR 0032). Boundary faces other than periodic ones do not contribute to the transposed part"),
+        )
+        .field(
             "frozen_flow",
             Schema::boolean(false).doc("Prescribe the flow: the face flux comes from initial.velocity and initial.velocity_expression_x/y/z at the face centres and only the energy equation is solved (required by solids; conjugate heat transfer, ADR 0024)"),
         );

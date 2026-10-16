@@ -61,6 +61,9 @@ pub struct PimpleSettings {
     pub momentum_solver: SolveControl,
     /// Linear solver controls for pressure.
     pub pressure_solver: SolveControl,
+    /// Add the transposed part `div(nu_eff (grad u)^T)` of the viscous stress divergence as an explicit
+    /// (deferred-correction) source (ADR 0032). Default `false`: Laplacian form only.
+    pub full_viscous_stress: bool,
 }
 
 impl PimpleSettings {
@@ -88,6 +91,7 @@ impl PimpleSettings {
                 tol_rel: 1e-7,
                 max_iter: 3000,
             },
+            full_viscous_stress: false,
         }
     }
 
@@ -101,6 +105,71 @@ impl PimpleSettings {
             ..Self::piso(nu)
         }
     }
+}
+
+/// Explicit transposed part of the viscous stress divergence, `S_i = d_j (nu d_i u_j)` per unit volume at every cell
+/// (ADR 0032). The face value of `grad u` is the linear interpolation of the cell Green-Gauss gradients, `nu_face` the
+/// face viscosity of every face (internal faces only enter; boundary faces contribute nothing).
+pub fn transposed_stress_source(geom: &FvGeometry, u: &VectorField, nu_face: &[f64]) -> Vec<Vec3> {
+    let mesh = &geom.mesh;
+    let n = geom.n_cells();
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let sf = mesh.face_area_vectors();
+    let vol = mesh.cell_volumes();
+    let ub = u.boundary_values(geom);
+    // grads[j][c][i] = d_i u_j
+    let grads: Vec<Vec<Vec3>> = (0..3)
+        .map(|j| {
+            if geom.active[j] {
+                let cells: Vec<f64> = u.values.iter().map(|v| v[j]).collect();
+                let bv: Vec<f64> = ub.iter().map(|v| v[j]).collect();
+                green_gauss(geom, &cells, &bv, 0)
+            } else {
+                vec![[0.0; 3]; n]
+            }
+        })
+        .collect();
+    let mut out = vec![[0.0; 3]; n];
+    for f in 0..geom.n_internal {
+        let (o, nb) = (own[f], nei[f]);
+        let w = geom.weights[f];
+        let mut flux = [0.0; 3];
+        for (i, fl) in flux.iter_mut().enumerate() {
+            for j in 0..3 {
+                let gf = w * grads[j][o][i] + (1.0 - w) * grads[j][nb][i];
+                *fl += nu_face[f] * gf * sf[f][j];
+            }
+        }
+        for i in 0..3 {
+            out[o][i] += flux[i] / vol[o];
+            out[nb][i] -= flux[i] / vol[nb];
+        }
+    }
+    // translationally periodic (coupled) faces: both sides of the pair visit their own face, the partner cell supplies the
+    // other half of the face gradient (rotationally periodic patches are skipped, a named limitation)
+    for (pi, patch) in mesh.patches().iter().enumerate() {
+        let Some(map) = &geom.periodic_partner[pi] else {
+            continue;
+        };
+        if geom.periodic_rot[pi].is_some() || !u.bc(pi).is_coupled() {
+            continue;
+        }
+        for (local, f) in patch.faces().enumerate() {
+            let g = map[local];
+            let (dn_o, dn_p) = (geom.dn[f - geom.n_internal], geom.dn[g - geom.n_internal]);
+            let w = dn_p / (dn_o + dn_p);
+            let (o, q) = (own[f], own[g]);
+            for i in 0..3 {
+                let mut fl = 0.0;
+                for j in 0..3 {
+                    let gf = w * grads[j][o][i] + (1.0 - w) * grads[j][q][i];
+                    fl += nu_face[f] * gf * sf[f][j];
+                }
+                out[o][i] += fl / vol[o];
+            }
+        }
+    }
+    out
 }
 
 /// Diagnostics of one time step.
@@ -240,6 +309,9 @@ impl PimpleSolver {
             let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
 
             // ---- momentum predictor -----------------------------------------
+            let transposed = s
+                .full_viscous_stress
+                .then(|| transposed_stress_source(&g, &self.u, &gamma_nu));
             let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
             let mut a_p = vec![0.0; n];
             let u_iter: Vec<Vec3> = self.u.values.clone();
@@ -273,6 +345,11 @@ impl PimpleSolver {
                 let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
                 let mut m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);
+                if let Some(ts) = &transposed {
+                    for c in 0..n {
+                        m.b[c] += vol[c] * ts[c][k];
+                    }
+                }
                 if alpha_u < 1.0 {
                     m.relax(alpha_u, &cells);
                 }

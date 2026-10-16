@@ -1248,6 +1248,7 @@ impl Simulation {
             s.alpha_p = get_f(case, "solver.alpha_p");
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             s.ddt_correction = get_b(case, "solver.ddt_correction");
+            s.full_viscous_stress = get_s(case, "solver.viscous_stress") == "full";
             linear_controls!(s);
             s.time_scheme = solver_time_scheme(case);
             s.amg_pressure = geom.n_cells() > 2000;
