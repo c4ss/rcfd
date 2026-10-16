@@ -202,8 +202,9 @@ Everything below was measured with the release build (`cargo test --release -p r
 2. The registered solver setting `tolerance_u = 1e-12` never meets the residual target on this case (the energy residual stalls at
    about 1e-11; the run stops at the 400-iteration cap, exit 5, `not_converged`), so every point of the S1 study has status `failed`
    with exit 5 at that tolerance, which is also a demonstration of the exit-code contract. `s1_corrected_depth` is run at both
-   tolerances (identical q to the digit shown below); S2-S6 and the Python tests use `tolerance_u = 1e-9` (converges in 4
-   iterations, exit 0), a new set-up chosen before those runs, not tuned on a result.
+   tolerances (identical q to the digit shown below); S2 and S3 were first run only at 1e-9, which I switched to after the 1e-12 grid ended at the iteration cap
+   (a set-up change made after seeing that outcome, not before); S4-S6 and the Python tests also use `tolerance_u = 1e-9` (converges in 4
+   iterations, exit 0). The registered 1e-12 versions were added afterwards (second addendum below).
 3. S7: the generator is `channel_2d` (patches `inlet`, `outlet`, `walls`), not `box_2d` with `ymin/ymax`, and `depth = 0.1`; the
    inlet velocity is a vector setting, which the scalar `values` list cannot express, so the parameter kind `list` got an additive key
    `json` (list of JSON texts) beside `values` and `strings`. This extends D2.
@@ -238,7 +239,7 @@ Everything below was measured with the release build (`cargo test --release -p r
 | P4 | same rows, same CSV bytes as the CLI | identical `table.csv` and `table.json` | met |
 | P5 | marker nowhere | not found in any file, repr or str; only `RCFD_BIN` read from the environment | met |
 | P6 | clean import under `python -I` | imports only standard-library modules and the package, no output | met |
-| P7 | visible skip without Python | the harness test ran the 9 Python tests; the skip branch prints `SKIPPED: ...` (not exercised on this machine) | met (skip path untested) |
+| P7 | visible skip without Python | the harness test ran the Python tests (11 after review); the skip branch prints `SKIPPED: ...` (not exercised on this machine) | met (skip path untested) |
 
 S7 diagnosis (not tuned): at 10 cells across the gap the pressure deficit is 1.9 percent and it falls to 0.29 percent at 20 cells
 (`poiseuille_error_decreases_with_refinement`, a diagnostic added after the miss, not a replacement). The probable cause (consistent with the
@@ -247,3 +248,22 @@ treatment of the wall in the cell-centred finite-volume scheme (wall shear from 
 `dy / (2 h)`, so the discrete channel is slightly more conductive), plus half a cell of pressure extrapolation at the inlet face
 (about 0.5 percent of `dp`). The estimate in S7 ("a few tenths of a percent") ignored the wall-treatment term. The sweep is also
 nearly linear in `U` (dp/U constant to 1e-3 over three values; the convective terms break exactness), also unregistered.
+
+## Second addendum: gaps closed after review
+
+* S2 as registered (1e-12 study): `s2_registered_tolerance_and_solver_threads`, `table.csv` and `table.json` byte-identical for
+  `--parallel 1` and `3` (both exit 5). Also, reading "thread count" as the solver's worker threads: the 1e-9 study with
+  `RAYON_NUM_THREADS=1` against `3` gives byte-identical tables.
+* S3 as registered (1e-12 study): MISS. All rows are `failed` (exit 5) and resume retries failed rows, so the second launch
+  measured run 18, skipped 0 against the registered 11 and 7. Kept as the ignored test `s3_registered_tolerance_known_miss`; the
+  1e-9 test passes with the registered counts.
+* S4 registered fallback (a mesh file that does not exist, `mesh.source` and `mesh.file` zipped): the failed point has exit code 3
+  (`mesh.file: <path>: io error ... cannot find the file specified`), two other rows ok, study exit 3, as for the first variant
+  (`s4_registered_variant_missing_mesh_file`).
+* P2 on a cavity-class case (12x12 `cavity_2d`, simplec, 40 iterations, exit 5 at the cap, `physics.nu` and the lid velocity set on
+  both sides): `monitors.csv`, `monitors.json` and `solution.vtu` byte-identical between `Case.run` and `rcfd run --set`
+  (`P2bCavityRunEqualsCli`), so momentum and pressure are exercised too; the slab test stays.
+* Bug found by review and fixed: `rcfd.study` raised `StudyError` for any exit code 2 or 3, including a study that ran and had a failed
+  point (exit 3). It now raises only when the binary printed no summary (static sweep errors, usage errors); `P4bFailedPointThroughPython`
+  covers the failed-point case (exit code 3, rows `ok failed ok`).
+* S5 gained `kind = "cubic"` (located at `study.parameters.a.kind`), 16 invalid sweeps in total. The Python harness now counts 11 tests.

@@ -156,6 +156,73 @@ class P2RunEqualsCli(Base):
         self.assertAlmostEqual(f[0], 333.0 - 33.0 / 32.0, places=6)
 
 
+CAVITY = """title = "cavity class"
+[mesh]
+generator = "cavity_2d"
+nx = 12
+ny = 12
+[physics]
+nu = 0.01
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+[boundaries.walls]
+velocity = "fixed"
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+max_iterations = 2000
+tolerance_u = 1e-8
+tolerance_p = 1e-8
+[reports.umax]
+type = "maximum"
+field = "ux"
+"""
+
+
+class P2bCavityRunEqualsCli(Base):
+    """P2 on a momentum-and-pressure case (the slab has no flow)."""
+
+    def test_cavity_bitwise_equal(self):
+        cav = os.path.join(self.dir, "cavity.toml")
+        with open(cav, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(CAVITY)
+        case = rcfd.Case.load(cav)
+        case.set("physics.nu", 0.02)
+        case.set("boundaries.lid.velocity_value", [0.75, 0.0, 0.0])
+        res = case.run(os.path.join(self.dir, "py"), max_iterations=40)
+        self.assertEqual(res.exit_code, 5)  # stopped at the cap
+        self.assertEqual(res.iterations, 40)
+        code, _, err = cli(
+            "run", cav, "--out", os.path.join(self.dir, "cli"), "--quiet", "--max-iterations", "40",
+            "--set", "physics.nu=0.02", "--set", "boundaries.lid.velocity_value=[0.75, 0.0, 0.0]",
+        )
+        self.assertEqual(code, 5, err)
+        for name in ("monitors.csv", "solution.vtu", "monitors.json"):
+            self.assertEqual(self.read(self.dir, "py", name), self.read(self.dir, "cli", name), name)
+        self.assertEqual(len(res.field("U", as_numpy=False)), 144)
+        self.assertIn("umax", res.reports)
+
+
+class P4bFailedPointThroughPython(Base):
+    """A failed design point is a row, not an exception (exit code 3 here)."""
+
+    def test_failed_point_returns_a_result(self):
+        case = rcfd.Case.load(self.case_file)
+        res = rcfd.study(
+            case,
+            {"n": rcfd.List("mesh.source", ["generator", "file", "generator"])},
+            outputs=["q"],
+            parallel=2,
+            out=os.path.join(self.dir, "st"),
+        )
+        self.assertEqual(res.exit_code, 3)
+        rows = res.rows
+        self.assertEqual([r["status"] for r in rows], ["ok", "failed", "ok"])
+        self.assertTrue(rows[1]["message"])
+        self.assertEqual(res.summary["failed"], 1)
+
+
 class P3Errors(Base):
     def cli_path(self, setting):
         code, _, err = cli("run", self.case_file, "--set", setting, "--print-settings")
