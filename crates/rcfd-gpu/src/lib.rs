@@ -159,6 +159,25 @@ pub fn resolve(device: LinearDevice, n: usize) -> Result<Resolution, BackendErro
     }
 }
 
+static FALLBACKS: AtomicUsize = AtomicUsize::new(0);
+static LAST_FALLBACK: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+/// Record that a device solve under `device = auto` failed and the CPU path was used instead.
+pub fn note_fallback(reason: &str) {
+    FALLBACKS.fetch_add(1, Ordering::SeqCst);
+    if let Ok(mut g) = LAST_FALLBACK.lock() {
+        *g = reason.to_string();
+    }
+}
+
+/// Number of device solves that fell back to the CPU, and the last reason.
+pub fn fallbacks() -> (usize, String) {
+    (
+        FALLBACKS.load(Ordering::SeqCst),
+        LAST_FALLBACK.lock().map(|g| g.clone()).unwrap_or_default(),
+    )
+}
+
 static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
 static LIVE_BUFS: AtomicUsize = AtomicUsize::new(0);
 static PEAK_BYTES: AtomicUsize = AtomicUsize::new(0);

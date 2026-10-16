@@ -1970,6 +1970,7 @@ pub fn case_schema() -> Schema {
         .field("statistics", statistics)
         .field("output", output)
         .field("decomposition", crate::decomp::schema())
+        .field("linear_solver", crate::linsolver::schema())
         .field("postprocessing", crate::postproc::schema())
         .field("restart", crate::restart::schema())
         .field("chain", crate::chain::schema())

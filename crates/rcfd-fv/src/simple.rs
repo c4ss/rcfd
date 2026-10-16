@@ -26,7 +26,7 @@ use crate::pressure::{
     PressureBc, PressureControls,
 };
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_linalg::SolveControl;
+use rcfd_linalg::{LinearOptions, SolveControl};
 use std::sync::Arc;
 
 /// Pressure-velocity coupling algorithm.
@@ -181,6 +181,8 @@ pub struct SimpleSettings {
     pub momentum_solver: SolveControl,
     /// Linear solver controls for pressure.
     pub pressure_solver: SolveControl,
+    /// Linear-solver device of the pressure equation (ADR 0038); default CPU.
+    pub linear: LinearOptions,
 }
 
 impl SimpleSettings {
@@ -209,6 +211,7 @@ impl SimpleSettings {
                 tol_rel: 1e-3,
                 max_iter: 2000,
             },
+            linear: LinearOptions::default(),
         }
     }
 }
@@ -906,6 +909,7 @@ impl SimpleSolver {
             non_orth_correctors: s.non_orth_correctors,
             solver: s.pressure_solver,
             amg: false,
+            linear: s.linear,
         };
         let (res_p, p_iters, p_parts) = solve_pressure_parts(
             &g,
