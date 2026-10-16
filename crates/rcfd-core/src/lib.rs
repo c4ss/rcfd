@@ -15,6 +15,7 @@ pub mod materials;
 pub mod scalar;
 pub mod settings;
 pub mod table;
+pub mod tabular;
 pub mod units;
 pub mod vec3;
 

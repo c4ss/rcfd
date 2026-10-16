@@ -2019,9 +2019,45 @@ fn property_law(doc: &str) -> Schema {
         .doc(doc)
         .field(
             "law",
-            Schema::enumeration("constant", &["constant", "polynomial", "sutherland"]).doc(
-                "constant: the physics value; polynomial: c0 + c1 T + c2 T^2 + ... (T in kelvin); sutherland: v_ref (T/T_ref)^1.5 (T_ref + S) / (T + S)",
+            Schema::enumeration("constant", &["constant", "polynomial", "sutherland", "piecewise_linear", "piecewise_polynomial", "vogel"]).doc(
+                "constant: the physics value; polynomial: c0 + c1 T + c2 T^2 + ... (T in kelvin); sutherland: v_ref (T/T_ref)^1.5 (T_ref + S) / (T + S); piecewise_linear: table (temperatures, values); piecewise_polynomial: one polynomial per temperature range (breakpoints, piece_coefficients, piece_order); vogel: vogel_a exp(vogel_b / (T - vogel_c)) (ADR 0036)",
             ),
+        )
+        .field(
+            "temperatures",
+            Schema::list(Schema::float(0.0)).doc("piecewise_linear: table temperatures [K], strictly increasing; empty = unset"),
+        )
+        .field(
+            "values",
+            Schema::list(Schema::float(0.0)).doc("piecewise_linear: property value at each temperature; empty = unset"),
+        )
+        .field(
+            "breakpoints",
+            Schema::list(Schema::float(0.0)).doc("piecewise_polynomial: n+1 strictly increasing range limits [K] of n pieces; empty = unset"),
+        )
+        .field(
+            "piece_coefficients",
+            Schema::list(Schema::float(0.0)).doc("piecewise_polynomial: n x piece_order coefficients, piece by piece, ascending powers of T (absolute T in kelvin)"),
+        )
+        .field(
+            "piece_order",
+            Schema::int(0).doc("piecewise_polynomial: coefficients per piece (degree + 1); 0 = unset (an error for this law)"),
+        )
+        .field(
+            "extrapolation",
+            Schema::enumeration("clamp", &["clamp", "linear", "error"]).doc("piecewise laws outside the table range: clamp holds the end value, linear continues the end segment, error returns NaN outside the range (no run-time stop; ADR 0036 addendum)"),
+        )
+        .field(
+            "vogel_a",
+            Schema::float(0.0).doc("vogel: prefactor (> 0)"),
+        )
+        .field(
+            "vogel_b",
+            Schema::float(0.0).dim(Dimension::TEMPERATURE).doc("vogel: exponent constant [K]"),
+        )
+        .field(
+            "vogel_c",
+            Schema::float(0.0).dim(Dimension::TEMPERATURE).doc("vogel: Vogel temperature [K] (the law needs T > vogel_c)"),
         )
         .field(
             "coefficients",

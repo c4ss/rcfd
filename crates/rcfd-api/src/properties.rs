@@ -13,6 +13,7 @@
 
 use crate::case::{Case, Diagnostic};
 use rcfd_core::materials::PropertyLaw;
+use rcfd_core::tabular::{Extrapolation, PiecewiseLinear, PiecewisePoly, Vogel};
 use rcfd_fv::{FvGeometry, ScalarField};
 
 const NAMES: [&str; 3] = ["viscosity", "conductivity", "specific_heat"];
@@ -49,6 +50,95 @@ fn law(case: &Case, name: &str) -> Option<PropertyLaw> {
             reference_temperature: gf(case, &p("reference_temperature")),
             constant: gf(case, &p("sutherland_constant")),
         }),
+        "piecewise_linear" => {
+            let ex = Extrapolation::parse(&gs(case, &p("extrapolation"))).unwrap_or_default();
+            // an invalid table still selects the law; `check` reports the located error
+            Some(
+                PiecewiseLinear::new(
+                    coefficients(case, &p("temperatures")),
+                    coefficients(case, &p("values")),
+                    ex,
+                )
+                .map(PropertyLaw::PiecewiseLinear)
+                .unwrap_or(PropertyLaw::Constant(f64::NAN)),
+            )
+        }
+        "piecewise_polynomial" => {
+            let ex = Extrapolation::parse(&gs(case, &p("extrapolation"))).unwrap_or_default();
+            Some(
+                piece_lists(case, name)
+                    .and_then(|(b, c)| PiecewisePoly::new(b, c, ex).map_err(|e| e.to_string()))
+                    .map(PropertyLaw::PiecewisePolynomial)
+                    .unwrap_or(PropertyLaw::Constant(f64::NAN)),
+            )
+        }
+        "vogel" => Some(PropertyLaw::Vogel(Vogel {
+            a: gf(case, &p("vogel_a")),
+            b: gf(case, &p("vogel_b")),
+            c: gf(case, &p("vogel_c")),
+        })),
+        _ => None,
+    }
+}
+
+/// Breakpoints and the per-piece coefficient lists of a `piecewise_polynomial` law.
+fn piece_lists(case: &Case, name: &str) -> Result<(Vec<f64>, Vec<Vec<f64>>), String> {
+    let p = |f: &str| format!("properties.{name}.{f}");
+    let order = case
+        .tree
+        .get(&p("piece_order"))
+        .ok()
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    if order < 1 {
+        return Err("piece_order must be at least 1 (coefficients per piece)".into());
+    }
+    let order = order as usize;
+    let flat = coefficients(case, &p("piece_coefficients"));
+    if flat.is_empty() || flat.len() % order != 0 {
+        return Err(format!(
+            "piece_coefficients has {} entries, which is not a positive multiple of piece_order = {order}",
+            flat.len()
+        ));
+    }
+    Ok((
+        coefficients(case, &p("breakpoints")),
+        flat.chunks(order).map(|c| c.to_vec()).collect(),
+    ))
+}
+
+/// Located message of an invalid table law (`None` when the law is valid or not tabular).
+fn table_error(case: &Case, name: &str) -> Option<(String, String)> {
+    let p = |f: &str| format!("properties.{name}.{f}");
+    let ex = Extrapolation::parse(&gs(case, &p("extrapolation"))).unwrap_or_default();
+    match gs(case, &p("law")).as_str() {
+        "piecewise_linear" => {
+            let (x, y) = (coefficients(case, &p("temperatures")), coefficients(case, &p("values")));
+            PiecewiseLinear::new(x.clone(), y, ex).err().map(|e| {
+                let (k, msg) = match &e {
+                    rcfd_core::Error::InvalidValue { path, reason } => (path.clone(), reason.clone()),
+                    e => (String::new(), e.to_string()),
+                };
+                let key = if k.starts_with('y') || k == "values" {
+                    "values"
+                } else {
+                    "temperatures"
+                };
+                (p(key), msg)
+            })
+        }
+        "piecewise_polynomial" => match piece_lists(case, name) {
+            Err(m) => Some((p("piece_coefficients"), m)),
+            Ok((b, c)) => PiecewisePoly::new(b, c, ex).err().map(|e| {
+                let msg = e.to_string();
+                let key = if msg.contains("breakpoints") || msg.contains("breaks") {
+                    "breakpoints"
+                } else {
+                    "piece_coefficients"
+                };
+                (p(key), msg)
+            }),
+        },
         _ => None,
     }
 }
@@ -93,9 +183,12 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 "a temperature-dependent property needs the temperature field: set energy.enabled = true".into(),
             );
         }
-        if let Err(e) = l.validate() {
+        if let Some((path, message)) = table_error(case, n) {
+            bad(path, message);
+        } else if let Err(e) = l.validate() {
             let field = match &l {
                 PropertyLaw::Polynomial(_) => "coefficients",
+                PropertyLaw::Vogel(_) => "vogel_a",
                 _ => "reference_value",
             };
             bad(p(field), e.to_string());
