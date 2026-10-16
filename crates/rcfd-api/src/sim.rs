@@ -412,6 +412,18 @@ pub enum ReportKind {
     ScalarFlux,
     /// Volume average of a passive scalar or species.
     ScalarAverage,
+    /// Volume-weighted standard deviation of a field (ADR 0048).
+    VolumeStd,
+    /// Area-weighted standard deviation of a field over a patch (ADR 0048).
+    AreaStd,
+    /// Flux-weighted average of a field over a patch (ADR 0048).
+    MassWeightedAverage,
+    /// Smallest face value of a field on a patch (ADR 0048).
+    AreaMin,
+    /// Largest face value of a field on a patch (ADR 0048).
+    AreaMax,
+    /// Net momentum flux through a patch along `direction` (ADR 0048).
+    VectorFlux,
 }
 
 /// A report definition read from the settings tree.
@@ -475,6 +487,12 @@ impl ReportDef {
                     "y_plus" => ReportKind::YPlus,
                     "scalar_flux" => ReportKind::ScalarFlux,
                     "scalar_average" => ReportKind::ScalarAverage,
+                    "volume_std" => ReportKind::VolumeStd,
+                    "area_std" => ReportKind::AreaStd,
+                    "mass_weighted_average" => ReportKind::MassWeightedAverage,
+                    "area_min" => ReportKind::AreaMin,
+                    "area_max" => ReportKind::AreaMax,
+                    "vector_flux" => ReportKind::VectorFlux,
                     _ => ReportKind::VolumeAverage,
                 };
                 ReportDef {
@@ -505,6 +523,7 @@ impl ReportDef {
             ReportKind::Moment => "N m".into(),
             ReportKind::MassFlow => "kg/s".into(),
             ReportKind::HeatFlow => "W".into(),
+            ReportKind::VectorFlux => "N".into(),
             ReportKind::Expression => self.expr_unit.clone(),
             _ => String::new(),
         }
@@ -1058,6 +1077,11 @@ impl Simulation {
                     | ReportKind::MassFlow
                     | ReportKind::HeatFlow
                     | ReportKind::YPlus
+                    | ReportKind::AreaStd
+                    | ReportKind::MassWeightedAverage
+                    | ReportKind::AreaMin
+                    | ReportKind::AreaMax
+                    | ReportKind::VectorFlux
             );
             if needs_patch && geom.mesh.patch(&r.patch).is_none() {
                 errs.push(Diagnostic {
@@ -2815,6 +2839,11 @@ impl Simulation {
                 }
                 ReportKind::MassFlow => return v.solver.mass_flow(&r.patch),
                 ReportKind::HeatFlow => return v.solver.heat_flow_out(&r.patch),
+                ReportKind::VectorFlux => {
+                    return Err(Error::Other(
+                        "vector_flux is not available with the variable-density solver".into(),
+                    ))
+                }
                 _ => {}
             }
         }
@@ -2879,6 +2908,22 @@ impl Simulation {
                 sc.flux(&r.scalar, &r.patch, self.flux())?
             }
             ReportKind::ScalarAverage => ig::volume_average(g, &self.field(&r.scalar)?),
+            ReportKind::VolumeStd => rcfd_post::stats::volume_stats(&g.mesh, &self.field(&r.field)?)?.std,
+            ReportKind::AreaStd => rcfd_post::stats::patch_stats(&g.mesh, &r.patch, &self.boundary_field(&r.field)?)?.std,
+            ReportKind::AreaMin => rcfd_post::stats::patch_stats(&g.mesh, &r.patch, &self.boundary_field(&r.field)?)?.min,
+            ReportKind::AreaMax => rcfd_post::stats::patch_stats(&g.mesh, &r.patch, &self.boundary_field(&r.field)?)?.max,
+            ReportKind::MassWeightedAverage => {
+                rcfd_post::stats::mass_weighted_average(&g.mesh, &r.patch, self.flux(), &self.boundary_field(&r.field)?)?
+            }
+            ReportKind::VectorFlux => {
+                let (ux, uy, uz) = (self.boundary_field("ux")?, self.boundary_field("uy")?, self.boundary_field("uz")?);
+                let uf: Vec<Vec3> = (0..ux.len()).map(|i| [ux[i], uy[i], uz[i]]).collect();
+                let m = rcfd_post::stats::vector_flux(&g.mesh, &r.patch, self.flux(), &uf)?;
+                let d = vec3::unit(r.direction);
+                // incompressible fluxes are volumetric, the compressible flux is a mass flux
+                let scale = if matches!(self.engine, Engine::Compressible(_)) { 1.0 } else { self.rho };
+                scale * vec3::dot(m, d)
+            }
             ReportKind::Probe => ig::Probe::new(g, r.point).sample(g, &self.field(&r.field)?, None),
             ReportKind::Minimum => self.field(&r.field)?.into_iter().fold(f64::INFINITY, f64::min),
             ReportKind::Maximum => self.field(&r.field)?.into_iter().fold(f64::NEG_INFINITY, f64::max),

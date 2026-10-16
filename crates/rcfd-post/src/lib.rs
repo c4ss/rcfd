@@ -1,6 +1,7 @@
 //! Post-processing, checkpoint/restart, integrals, monitors, reports and rendering.
 
 pub mod checkpoint;
+pub mod compare;
 pub mod convergence;
 pub mod derived;
 pub mod fwh;
@@ -12,3 +13,5 @@ pub mod monitors;
 pub mod registers;
 pub mod remap;
 pub mod render;
+pub mod stats;
+pub mod surfaces;
