@@ -6,6 +6,7 @@ use crate::case::{Case, Diagnostic};
 use crate::chemistry::ChemState;
 use crate::cht::ChtModel;
 use crate::comp::{self, CompState};
+use crate::electric::ElectricState;
 use crate::exprs;
 use crate::lumped::Components;
 use crate::properties::Properties;
@@ -545,6 +546,23 @@ impl ExprBc {
     }
 }
 
+/// Joule source (K/s) of the electric state for the temperature `t`; a failure message goes to `err`.
+fn joule_source(
+    electric: &mut Option<ElectricState>,
+    geom: &Arc<FvGeometry>,
+    t: &[f64],
+    err: &mut Option<String>,
+) -> Option<Vec<f64>> {
+    let el = electric.as_mut()?;
+    match el.update(geom, t) {
+        Ok(j) => j,
+        Err(e) => {
+            *err = Some(e);
+            None
+        }
+    }
+}
+
 /// Energy equation state of a steady buoyant simulation.
 struct EnergyState {
     solver: EnergySolver,
@@ -624,6 +642,8 @@ pub struct Simulation {
     zone_sources: Option<ZoneSources>,
     /// Conjugate heat transfer: solid zones, contact resistances, prescribed flow (ADR 0024).
     cht: Option<ChtModel>,
+    /// Electric potential and Joule heating (F-213, ADR 0035).
+    electric: Option<ElectricState>,
     /// Iterations performed with a prescribed flow (the flow solver is not advanced).
     frozen_iter: usize,
     props: Option<Properties>,
@@ -1370,6 +1390,11 @@ impl Simulation {
         } else {
             ChemState::from_case(case)?
         };
+        let electric = if compressible || vdens {
+            None
+        } else {
+            ElectricState::from_case(case, &geom, cht.as_ref())?
+        };
         let zone_sources = if compressible || vdens {
             None
         } else {
@@ -1445,6 +1470,7 @@ impl Simulation {
             chem,
             zone_sources,
             cht,
+            electric,
             frozen_iter: 0,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
@@ -1826,8 +1852,11 @@ impl Simulation {
                 self.frozen_iter += 1;
                 let iteration = self.frozen_iter;
                 if let Some(en) = &mut self.energy {
+                    let joule = joule_source(&mut self.electric, &self.geom, &en.solver.t.values, &mut udf_error);
                     if let Some(zs) = &self.zone_sources {
-                        zs.apply_temperature(&mut en.solver, None, 0.0);
+                        zs.apply_temperature(&mut en.solver, joule, 0.0);
+                    } else if self.electric.is_some() {
+                        en.solver.source = joule;
                     }
                     en.res_t = en.solver.iterate(&s.phi);
                 }
@@ -1845,8 +1874,11 @@ impl Simulation {
             Engine::Transient(s) if frozen => {
                 let dt = self.dt.min((self.end_time - s.time).max(1e-12));
                 if let Some(en) = &mut self.energy {
+                    let joule = joule_source(&mut self.electric, &self.geom, &en.solver.t.values, &mut udf_error);
                     if let Some(zs) = &self.zone_sources {
-                        zs.apply_temperature(&mut en.solver, None, s.time + dt);
+                        zs.apply_temperature(&mut en.solver, joule, s.time + dt);
+                    } else if self.electric.is_some() {
+                        en.solver.source = joule;
                     }
                     en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
                 }
@@ -2488,6 +2520,18 @@ impl Simulation {
             "uz" => u.iter().map(|v| v[2]).collect(),
             "speed" => u.iter().map(|v| vec3::norm(*v)).collect(),
             "p" => self.pressure().values.clone(),
+            "electric_potential" | "joule_heat" | "electric_conductivity" if self.electric.is_none() => {
+                return Err(Error::InvalidValue {
+                    path: name.into(),
+                    reason: "needs electric.enabled = true".into(),
+                })
+            }
+            "electric_potential" => self.electric.as_ref().map_or(vec![], |e| e.potential().to_vec()),
+            "joule_heat" => self.electric.as_ref().map_or(vec![], |e| e.heat().to_vec()),
+            "electric_conductivity" => match (&self.electric, &self.energy) {
+                (Some(e), Some(en)) => e.conductivity_cells(&en.solver.t.values),
+                _ => vec![],
+            },
             "T" => match &self.energy {
                 Some(en) => en.solver.t.values.clone(),
                 None => {
@@ -2559,6 +2603,12 @@ impl Simulation {
             "speed" => ub.iter().map(|v| vec3::norm(*v)).collect(),
             "p" => self.pressure_face_values(),
             "T" if self.energy.is_some() => self.energy.as_ref().map_or(vec![], |e| e.solver.t.boundary_values(g)),
+            "electric_potential" if self.electric.is_some() => {
+                self.electric.as_ref().map_or(vec![], |e| e.boundary_potential(g))
+            }
+            "electric_current_density" if self.electric.is_some() => {
+                self.electric.as_ref().map_or(vec![], |e| e.boundary_current_density(g))
+            }
             other => {
                 return Err(Error::InvalidValue {
                     path: other.into(),
