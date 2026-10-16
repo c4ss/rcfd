@@ -220,3 +220,29 @@ Grids N = 60, 120, 240, 480.
 Thermal capacity of interface layers and in-plane shell conduction; solution-dependent open/closed connections; mapped interfaces between meshes; Joule heating
 with solved flow, on non-orthogonal meshes (exact power identity), with electric insulation by thin layers, magnetic induction; coupled melt flow, the gallium cavity
 comparison, pull velocity, phase-dependent properties, damping in the settings tree; F-214 (Lorentz force, Hartmann flow).
+
+## Addendum: results and deviations (written after the runs; registered limits above were not changed)
+
+### F-215 (commit 36c6cdb)
+
+G1 error/dT 2.2e-14, jump 1.0e-14; G2 2.0e-14 / 5.4e-14; G3 within 1e-10; G4 error/dT 2.3e-14, end-wall flows 9.6e-14 and 0 against the 1e-12 limit; G7 all located errors found. **G5 MISSED at the registered dt = 0.01**: per-side enthalpy drift 2.0e-12 and 1.8e-11 against 1e-12; the cell Fourier number is about 8e3 and the drift is solver round-off (independent of the linear tolerance, 2.5e-13 / 3.8e-14 at dt = 1e-3). Kept as the ignored `g5_open_connection_transient_conserves_each_side_known_miss`; the corrected set-up `g5_v2_...` (dt = 1e-3, chosen after seeing the miss, the ADR did not fix dt) passes.
+Deviation: the tree G4 measures the end-wall heat flows as the proxy for "no flow through the open interface"; the zero interface face conductance is asserted exactly in the library check G5.
+
+### F-213 (commit accd924)
+
+H1 phi 1.4e-15, current 1.1e-14, in/out 8.7e-15; H2 4.6e-15 / 2.3e-15; H3 3.6e-16 uniform, 1.8e-14 graded; H4 errors N=20/40/80 2.5e-3, 6.25e-4, 1.56e-4 (orders 2.000, 2.000), balances <= 6.5e-14; H5 errors 2.157e-3, 5.30e-4, 1.314e-4 (orders 2.025, 2.012), voltage 5.8e-4, 1.4e-4, 3.5e-5; H6(i) 1.999999999998 (exact 2), H6(ii) 5.47e-3, 2.72e-3, 1.36e-3 (orders 1.008, 1.004); H7 1.6e-15 with exact zeros; H8 tree equals the library (same numbers, orders 2.000) and current rel <= 2.8e-14; H9 12 located-error cases and the runtime message naming `electric.temperature_coefficient`. All met.
+Deviations: (a) the ADR text names a report kind `electric_current`; the implementation exposes the boundary field `electric_current_density` read by the existing `area_integral` report. (b) The H8 current check compares with the analytic current `sigma V A / L` of the H4 bar, not "the I of H1". (c) The 2D mesh depth scales with the cell size, so the patch area depends on N; the tree tests prescribe the total current `J A` from the built simulation. (d) The first attempt of the tree H5 test passed a current density as the total current and diverged; this set-up defect was corrected before any pass was recorded. (e) The identity is exact on orthogonal meshes only, as registered.
+
+### F-212 (library commit accd924, tree wiring in the following commit)
+
+Set-up: the tree needs absolute temperatures, so the tree runs use Tm = 300 K (shift-invariant; the library run compared with it uses the same shift). The T2 reference clamp is computed from the literal solidus and liquidus (an earlier version through `T - Tm + eps` had 2.4e-12 round-off from the shift: test defect, corrected).
+P1 first set-up started the solid at Tm (mid-mush, f = 0.5 everywhere), i.e. not "solid at Ts": defect; kept as the ignored record `p1_one_phase_melting_setup_defect_record`; corrected test with the solid at Ts. Results (position rel. error N = 60/120/240/480): P1 2.05e-3, 3.00e-3, 2.88e-3, 1.46e-3; P2 and P8 (identical numbers) 1.86e-2, 3.50e-3, 6.3e-5, then 5.1e-3 at N=480 with a failed Newton solve. P3 max error/dT 1.56e-3 (limit 5e-3) met. K1 values match to round-off. P7 root residual met.
+**Misses (ignored `*_known_miss` tests, criteria unchanged):**
+* P1 successive-order criterion >= 0.9: orders -0.55, 0.06, 0.98; the position error is 0.1 to 0.3 percent, at the level of the mush and time-step offsets, so it does not fall monotonically. The 3 percent limit and the invariants P4 to P6 hold at all four levels.
+* P2 and P8 at N = 480: Newton hits the 100-iteration cap on some steps (P6), so the per-step balance (P4, 1.06) and monotonicity (P5, 0.21) fail there. Diagnosed with the residual history: the iteration falls into a period-20 limit cycle of the semismooth Newton on the piecewise-linear `h(T)` (mush half-width 0.002 against a cell of 0.0125, so a cell crosses the whole mush in one step) and the backtracking cannot break it. At N = 60, 120, 240 all of P2/P8 hold (evidence tests `*_n60_to_240`, which do not replace the registered four-level check). The remedy would be a bracketing or chord-slope safeguard of the nonlinear solver: not implemented (named gap).
+* K2 ny = 20 centre-normalised error 1.0040e-2 against 1e-2 (orders 1.84, 1.92 meet >= 1.8). Not tuned. The convergence loop of the test stops on `max_du` and continuity because the normalised momentum residual of the identically-zero v-equation is noise.
+T1 (tree vs Neumann position rel 1.30e-3; tree vs library difference 0.0) , T2 (difference 0.0) and T3 (13 located-error cases) are met. Deviation: the non-zero prescribed flux check is in `PhaseState::from_case`; a prescribed flux needs `initial.velocity` with matching inlet/outlet patches.
+
+### Reconciliation of "Not delivered"
+
+F-214 was not started. The damping is library-only (K1, K2); melt flow is not coupled. No gallium comparison. Documents: `docs/case-schema.md`, `docs/reference-data.md` (Neumann solution UNVERIFIED against a primary text).

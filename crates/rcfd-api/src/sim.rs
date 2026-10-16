@@ -9,6 +9,7 @@ use crate::comp::{self, CompState};
 use crate::electric::ElectricState;
 use crate::exprs;
 use crate::lumped::Components;
+use crate::phase_change::PhaseState;
 use crate::properties::Properties;
 use crate::radiation::Radiation;
 use crate::rheology::Rheology;
@@ -642,10 +643,12 @@ pub struct Simulation {
     zone_sources: Option<ZoneSources>,
     /// Conjugate heat transfer: solid zones, contact resistances, prescribed flow (ADR 0024).
     cht: Option<ChtModel>,
-    /// Particle tracking driven by the transient step (F-056, ADR 0037 D1).
-    particles: Option<crate::particle_run::ParticleRun>,
     /// Electric potential and Joule heating (F-213, ADR 0035).
     electric: Option<ElectricState>,
+    /// Enthalpy-method melting and solidification (F-212, ADR 0035).
+    phase: Option<PhaseState>,
+    /// Particle tracking driven by the transient step (F-056, ADR 0037 D1).
+    particles: Option<crate::particle_run::ParticleRun>,
     /// Iterations performed with a prescribed flow (the flow solver is not advanced).
     frozen_iter: usize,
     props: Option<Properties>,
@@ -1397,6 +1400,11 @@ impl Simulation {
         } else {
             ElectricState::from_case(case, &geom, cht.as_ref())?
         };
+        let phase = if compressible || vdens {
+            None
+        } else {
+            PhaseState::from_case(case, cht.as_ref())?
+        };
         let zone_sources = if compressible || vdens {
             None
         } else {
@@ -1473,6 +1481,7 @@ impl Simulation {
             zone_sources,
             cht,
             electric,
+            phase,
             particles: None,
             frozen_iter: 0,
             props: Properties::from_case(case),
@@ -1931,7 +1940,22 @@ impl Simulation {
                     } else if self.electric.is_some() {
                         en.solver.source = joule;
                     }
-                    en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
+                    if let Some(ph) = &mut self.phase {
+                        let src = en.solver.source.clone();
+                        match ph.advance(
+                            &self.geom,
+                            &mut en.solver.t,
+                            en.solver.alpha_face.as_deref(),
+                            dt,
+                            src.as_deref(),
+                        ) {
+                            Ok(res) => en.res_t = res,
+                            Err(e) => udf_error = Some(e),
+                        }
+                        en.solver.history.push(en.solver.t.values.clone(), dt);
+                    } else {
+                        en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
+                    }
                 }
                 s.time += dt;
                 let step = s.history.len() + 1;
@@ -2588,6 +2612,15 @@ impl Simulation {
                     reason: "needs electric.enabled = true".into(),
                 })
             }
+            "liquid_fraction" => match (&self.phase, &self.energy) {
+                (Some(ph), Some(en)) => ph.liquid_fraction(&en.solver.t.values),
+                _ => {
+                    return Err(Error::InvalidValue {
+                        path: name.into(),
+                        reason: "needs phase_change.enabled = true".into(),
+                    })
+                }
+            },
             "electric_potential" => self.electric.as_ref().map_or(vec![], |e| e.potential().to_vec()),
             "joule_heat" => self.electric.as_ref().map_or(vec![], |e| e.heat().to_vec()),
             "electric_conductivity" => match (&self.electric, &self.energy) {

@@ -762,3 +762,19 @@ the papers.
 | Taylor-Green vortex decay `exp(-2 nu t)` | wave 7 entry above | verified earlier |
 | Lid-driven cavity centreline data, Re = 100 | Ghia, Ghia and Shin (1982); two secondary copies | verified earlier (the CSV files in `cases/cavity/reference`) |
 | Particle tracking and chemistry closed forms used by the wiring checks | ADR 0027, ADR 0028 entries above | unchanged; the wiring checks compare the run path with the library, so they introduce no new reference values |
+
+
+## Wave 21A thermal extras references (F-215, F-213, F-212, ADR 0035)
+
+Closed forms below are derived in ADR 0035 from conservation and Fourier/Ohm laws, and each is checked by a registered test; none
+is a data claim. Web search was attempted for the Stefan solution and the enthalpy-porosity paper; primary texts were not
+retrievable.
+
+| Quantity | Source | Status |
+| --- | --- | --- |
+| Series thermal resistance, composite wall with contact resistance, `q = dT / (sum t_i/k_i + R_c)` | heat-conduction theory | derived here (ADR 0035 D1); no external source needed |
+| Ohm bar, Joule parabola `T = T0 + (J^2 rho/ (2 k)) x (L - x)`, `sigma(T) = sigma_0/(1 + a (T - T_ref))` bar solution and lumped Joule ODE | conduction theory | derived here (ADR 0035 D2); checked by H1 to H6 |
+| Two-phase Neumann/Stefan solution `St_l e^{-l^2}/(sqrt(pi) erf l) - St_s e^{-l^2}/(sqrt(pi) erfc l) = l`, front `s = 2 l sqrt(alpha t)` (one-phase limit `St_s = 0`) | textbook form (H. S. Carslaw and J. C. Jaeger 1959, Conduction of Heat in Solids; V. Alexiades and A. D. Solomon 1993; J. Crank 1984) | UNVERIFIED against a primary text: a search tool returned the same form but not from the textbook; the root is checked in the tests through the residual (P7) and the numerical front converges to it |
+| Enthalpy-porosity model, Carman-Kozeny damping `A(f) = C (1 - f)^2 / (f^3 + b)` | V. R. Voller and C. Prakash (1987), Int. J. Heat Mass Transfer 30(8), 1709-1719 | verified citation (bibliographic record by search); paper not read. `C` (mushy constant) and `b` are case dependent: no universal value is claimed, the tests choose `C` from the target permeability `kappa` |
+| Brinkman channel `u = (G/kappa)(1 - cosh(m(y - H))/cosh(mH))`, `m = sqrt(kappa/nu)` | momentum balance with a linear sink | derived here (ADR 0035, K2) |
+| Gallium-melting cavity experiment (published front shape) | not obtained | NOT used: not delivered, named gap of F-212 |

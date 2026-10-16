@@ -536,6 +536,7 @@ impl Case {
         out.extend(crate::regions::check(self));
         out.extend(crate::cht::check(self));
         out.extend(crate::electric::check(self));
+        out.extend(crate::phase_change::check(self));
         out.extend(crate::particles::check(self));
         out.extend(crate::properties::check(self));
         out.extend(crate::stats::check(self));

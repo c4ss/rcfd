@@ -926,6 +926,7 @@ are ordinary internal faces) are treated alike. Volumetric heat generation in a 
 | `density` | `-1` (an error) | kg/m^3 |
 | `specific_heat` | `-1` (an error) | J/kg/K |
 | `initial_temperature` | `-1` = use `initial.temperature` | K |
+| `electrical_conductivity` | `-1` = use `electric.conductivity` | S/m; `0` = insulator; only with `electric.enabled` (ADR 0035) |
 
 Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and either `solver.frozen_flow = true` (prescribed flow) or `solver.algorithm = "coupled"` (solved flow with the solid cells excluded from the pressure-velocity system, ADR 0029).
 
@@ -942,6 +943,55 @@ Added in wave 21A (ADR 0035 D1, all optional):
 | `connection` | `closed` | `open` makes the faces adiabatic (a gap); `resistance` and the layer keys must then be absent. In a steady (simple/simplec) problem an open interface that leaves a group of cells with no fixed-temperature or convecting boundary is a located error at `connection` |
 
 Not delivered (F-215 stays partial): layer thermal capacity, in-plane shell conduction, solution-dependent open/closed switching, interfaces between separate meshes beyond the F-114 join.
+
+### `electric` (F-213, ADR 0035 D2)
+
+Quasi-static conduction `div(sigma grad phi) = 0` with the Joule heat `sigma |grad phi|^2` added to the energy equation. Available
+with `solver.frozen_flow = true` and `energy.enabled = true` (prescribed flow; transient and steady paths), not with the compressible or
+variable-density solvers. The coupling is lagged: the potential is solved with the conductivity of the temperature of the previous
+step (steady: previous sweep).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | solve the potential |
+| `conductivity` | `-1` (an error when enabled) | sigma_0, S/m, of the fluid cells and of solids without `electrical_conductivity` |
+| `temperature_coefficient` | `0` | a, 1/K, of `sigma = sigma_0 / (1 + a (T - reference_temperature))`; a cell where `1 + a (T - T_ref) <= 0` stops the run with a message naming this key |
+| `reference_temperature` | `-1` (an error when `temperature_coefficient != 0`) | T_ref, K |
+| `joule_heating` | `true` | `false` solves the potential only |
+
+Per patch (`boundaries.<patch>`): `electric = "insulated"` (default, zero current), `"potential"` (needs `electric_potential`, V) or
+`"current"` (needs `electric_current`, the TOTAL current in A flowing INTO the domain, spread as a uniform density over the patch
+area). `electric_potential` and `electric_current` default to the sentinel `-1e30` (unset; any real is a legal value); setting one
+that does not match `electric` is a located error. At least one patch must be `potential`; a case with only `current` patches is a
+located error at `electric`. Located errors also: `electric.conductivity`, `electric.reference_temperature`, `electric.enabled`
+(not `frozen_flow`, energy off), `solids.<n>.electrical_conductivity` (negative other than the `-1` sentinel), `boundaries.<p>.electric`
+(used without `electric.enabled`). Fields (`probe`, `area_integral`, output): `electric_potential`, `joule_heat` (W/m^3),
+`electric_conductivity` (S/m) in the cells; `electric_potential` and `electric_current_density` (A/m^2 INTO the domain, so the current
+through a patch is the existing `area_integral` of that boundary field) on the boundary faces. On orthogonal meshes the Joule power
+equals the electrical power input to round-off; on non-orthogonal meshes it holds only to truncation error (named gap).
+
+Not delivered (F-213 stays partial): Joule heating with a solved flow, magnetic induction, higher-order or iterated coupling in time,
+the exact power identity on non-orthogonal meshes.
+
+### `phase_change` (F-212, ADR 0035 D3)
+
+Enthalpy-method melting and solidification of a single material with equal phase properties: `h(T) = T + (L/cp) f(T)` with the
+linear liquid fraction `f` between `solidus` and `liquidus`, implicit Euler, Newton on the apparent capacity with backtracking.
+Available with `solver.frozen_flow = true` and a ZERO prescribed flux (the melt does not flow), `solver.algorithm = "piso"` or
+`"pimple"`, `solver.time_scheme = "euler"`, `energy.enabled = true`; temperatures are Kelvin (> 0).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | |
+| `solidus`, `liquidus` | `-1` (errors when enabled) | K; `liquidus > solidus` |
+| `latent_heat` | `-1` (an error when enabled) | J/kg, `>= 0` (`0` = sensible only) |
+| `momentum_constant` | `-1` | reserved: the Carman-Kozeny damping exists in the library only; setting it is an error |
+| `newton_max` | `100` | Newton iteration cap per step; not converging stops the run with a message naming this key |
+
+Field `liquid_fraction` (cells, in [0, 1]). Located errors: `phase_change.solidus`, `.liquidus`, `.latent_heat`, `.momentum_constant`,
+`solver.time_scheme`, `solver.algorithm`, `zone_sources.<n>.kind` (`fixed_value`), and at `phase_change.enabled`: no `frozen_flow`,
+energy off, non-zero prescribed flux, combined with `solids` or `electric`. Not delivered (F-212 stays partial): melt flow and natural
+convection, the damping in the tree, phase-dependent properties, convected latent term, steady solidification, BDF2.
 
 ### `solver.frozen_flow`
 
