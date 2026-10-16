@@ -70,10 +70,10 @@ impl ActuatorDisk {
                 sum_wr += w * r;
             }
         }
-        if !(sum_w > 0.0) {
+        if sum_w.is_nan() || sum_w <= 0.0 {
             return Err("the disk zone has no force-carrying cells (zero total weight)".into());
         }
-        if self.torque != 0.0 && !(sum_wr > 0.0) {
+        if self.torque != 0.0 && (sum_wr.is_nan() || sum_wr <= 0.0) {
             return Err("a swirl torque needs cells away from the disk axis".into());
         }
         let mut out = vec![[0.0; 3]; zone.len()];
