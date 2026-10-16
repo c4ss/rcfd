@@ -89,6 +89,10 @@ pub fn schema() -> Schema {
             "edc_c_tau",
             Schema::float(0.4082).doc("EDC time-scale constant C_tau (same source)"),
         )
+        .field(
+            "write_rates",
+            Schema::boolean(false).doc("Write the net molar production rates wdot_<species> [mol/m3/s] of the closure on the final fields and, with heat_release, heat_release_rate [K/s] (the temperature source of the energy balance) to solution.vtu (ADR 0037 D2). chemistry.json is written whenever chemistry.model is not off"),
+        )
 }
 
 fn gf(c: &Case, p: &str) -> f64 {
@@ -450,6 +454,132 @@ impl ChemState {
         &self.mech
     }
 
+    /// Name of the closure (`chemistry.model`).
+    pub fn model_name(&self) -> &'static str {
+        match self.kind {
+            Kind::FiniteRate => "finite_rate",
+            Kind::EddyDissipation => "eddy_dissipation",
+            Kind::Limited => "finite_rate_eddy_dissipation",
+            Kind::Edc => "edc",
+        }
+    }
+
+    /// The run report `chemistry.json` of the final fields (ADR 0037 D2): per species minimum, maximum and volume mean, the
+    /// range of the mass-fraction sum, the temperature range, and the element totals (moles of element atoms in the domain,
+    /// `sum_c V_c rho sum_k Y_k a_ke / W_k`, `rho` = constant density `rho`).
+    pub fn report(&self, sc: &ScalarState, temp: Option<&[f64]>, vol: &[f64], rho: f64) -> serde_json::Value {
+        use serde_json::{json, Map, Value};
+        let ns = self.mech.species.len();
+        let cols: Vec<Option<Vec<f64>>> = self.mech.species.iter().map(|s| sc.field_ci(&s.name)).collect();
+        let n = vol.len();
+        let total_v: f64 = vol.iter().sum();
+        let mut species = Map::new();
+        for (s, col) in self.mech.species.iter().zip(&cols) {
+            let Some(col) = col else { continue };
+            let (mut lo, mut hi, mut mean) = (f64::INFINITY, f64::NEG_INFINITY, 0.0);
+            for (c, v) in col.iter().enumerate() {
+                lo = lo.min(*v);
+                hi = hi.max(*v);
+                mean += v * vol[c];
+            }
+            species.insert(
+                s.name.clone(),
+                json!({"min": lo, "max": hi, "volume_mean": mean / total_v}),
+            );
+        }
+        let (mut slo, mut shi) = (f64::INFINITY, f64::NEG_INFINITY);
+        let mut elem = vec![0.0; self.mech.elements.len()];
+        let mut y = vec![0.0; ns];
+        for c in 0..n {
+            let mut sum = 0.0;
+            for k in 0..ns {
+                y[k] = cols[k].as_ref().map_or(0.0, |col| col[c]);
+                sum += y[k];
+            }
+            slo = slo.min(sum);
+            shi = shi.max(sum);
+            for (e, z) in self.mech.element_mass_fractions(&y).into_iter().enumerate() {
+                elem[e] += vol[c] * rho * z;
+            }
+        }
+        let temperature = match temp {
+            Some(t) => {
+                let lo = t.iter().copied().fold(f64::INFINITY, f64::min);
+                let hi = t.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                json!({"min": lo, "max": hi, "source": "energy"})
+            }
+            None => json!({"min": self.temperature, "max": self.temperature, "source": "chemistry.temperature"}),
+        };
+        let mut totals = Map::new();
+        for (e, name) in self.mech.elements.iter().enumerate() {
+            totals.insert(name.clone(), Value::from(elem[e]));
+        }
+        json!({
+            "model": self.model_name(),
+            "mechanism": {
+                "species": ns,
+                "reactions": self.mech.reactions.len(),
+                "elements": self.mech.elements,
+            },
+            "species": species,
+            "mass_fraction_sum": {"min": slo, "max": shi},
+            "temperature": temperature,
+            "element_moles": totals,
+            "density": rho,
+            "cells": n,
+        })
+    }
+
+    /// Net molar production rates `wdot_<species>` [mol/m3/s] of the closure on the given fields (the coarse state; for the
+    /// EDC closure the kinetic rate of the cell state, not the fine-structure relaxation) and, with heat release, the
+    /// temperature source `heat_release_rate` [K/s] (the term the energy balance receives). Cells colder than
+    /// `chemistry.minimum_temperature` are zero, as in the solver.
+    pub fn rate_fields(
+        &self,
+        sc: &ScalarState,
+        temp: Option<&[f64]>,
+        mix: Option<Mixing>,
+    ) -> Result<Vec<(String, Vec<f64>)>, String> {
+        let (cols, tcol) = self.columns(sc, temp)?;
+        let ns = self.mech.species.len();
+        let n = tcol.len();
+        let mut wd = vec![vec![0.0; n]; ns];
+        let mut heat = self.cp.map(|_| vec![0.0; n]);
+        let mut st = vec![0.0; ns + 1];
+        let mut w = vec![0.0; ns];
+        let mut q = vec![0.0; self.mech.reactions.len()];
+        let mut f = vec![0.0; ns + 1];
+        for c in 0..n {
+            if tcol[c] < self.min_temperature {
+                continue;
+            }
+            st[0] = tcol[c];
+            for k in 0..ns {
+                st[1 + k] = cols[k][c];
+            }
+            let cell = self.cell_model(self.eps_over_k(mix, c));
+            cell.production(&st, &mut w, &mut q);
+            for k in 0..ns {
+                wd[k][c] = w[k];
+            }
+            if let Some(h) = heat.as_mut() {
+                cell.rhs(&st, &mut f);
+                h[c] = f[0];
+            }
+        }
+        let mut out: Vec<(String, Vec<f64>)> = self
+            .mech
+            .species
+            .iter()
+            .zip(wd)
+            .map(|(s, v)| (format!("wdot_{}", s.name), v))
+            .collect();
+        if let Some(h) = heat {
+            out.push(("heat_release_rate".to_string(), h));
+        }
+        Ok(out)
+    }
+
     fn cell_model(&self, eps_over_k: f64) -> CellModel<'_> {
         let ed = EdParams {
             a: self.a,
@@ -655,6 +785,21 @@ fn mixing_vectors(turb: Option<&crate::turb::TurbState>) -> Option<(Vec<f64>, Ve
     let w = t.scalar("omega")?;
     let eps = k.iter().zip(&w.values).map(|(k, w)| 0.09 * k * w).collect();
     Some((k, eps))
+}
+
+/// [`ChemState::rate_fields`] with the mixing fields of the turbulence model, for the output of `chemistry.write_rates`.
+pub(crate) fn rate_fields(
+    chem: &ChemState,
+    scalars: &ScalarState,
+    temperature: Option<&[f64]>,
+    turb: Option<&crate::turb::TurbState>,
+) -> Result<Vec<(String, Vec<f64>)>, String> {
+    let mv = mixing_vectors(turb);
+    if chem.needs_turbulence() && mv.is_none() {
+        return Err("the chemistry closure needs the turbulence fields k and epsilon".into());
+    }
+    let mix = mv.as_ref().map(|(k, e)| Mixing { k, eps: e });
+    chem.rate_fields(scalars, temperature, mix)
 }
 
 /// One steady iteration: set the species chemistry terms and return the heat source (K/s) with heat release.

@@ -1688,6 +1688,25 @@ impl Simulation {
         }
     }
 
+    /// The `chemistry.json` report of the current fields (`None` without chemistry), ADR 0037 D2.
+    pub fn chemistry_report(&self) -> Option<Value> {
+        let ch = self.chem.as_ref()?;
+        let t = self.energy.as_ref().map(|e| e.solver.t.values.as_slice());
+        Some(ch.report(self.scalars.as_ref()?, t, self.geom.mesh.cell_volumes(), self.rho))
+    }
+
+    /// Cell arrays of `chemistry.write_rates` (empty unless chemistry is on and the key is true).
+    fn chemistry_rate_fields(&self) -> std::result::Result<Vec<(String, Vec<f64>)>, String> {
+        let (Some(ch), Some(sc)) = (&self.chem, &self.scalars) else {
+            return Ok(Vec::new());
+        };
+        if !get_b(&self.case, "chemistry.write_rates") {
+            return Ok(Vec::new());
+        }
+        let t = self.energy.as_ref().map(|e| e.solver.t.values.as_slice());
+        crate::chemistry::rate_fields(ch, sc, t, self.turb.as_ref())
+    }
+
     /// Run finished?
     pub fn is_done(&self) -> bool {
         self.done
@@ -3120,7 +3139,7 @@ impl Simulation {
         if let Some(en) = &self.energy {
             extra.push(("T", en.solver.t.values.clone()));
         }
-        let scalar_fields: Vec<(String, Vec<f64>)> = self
+        let mut scalar_fields: Vec<(String, Vec<f64>)> = self
             .scalars
             .as_ref()
             .map(|s| {
@@ -3130,6 +3149,7 @@ impl Simulation {
                     .collect()
             })
             .unwrap_or_default();
+        scalar_fields.extend(self.chemistry_rate_fields().map_err(std::io::Error::other)?);
         if let Some(t) = &self.turb {
             for (name, f) in t.model.scalars() {
                 extra.push((name, f.values.clone()));

@@ -426,3 +426,16 @@ fn error_case_texts_for_the_binary_are_exported() {
         ]
     );
 }
+
+#[test]
+fn w4_write_rates_is_inert_without_chemistry() {
+    let d = tmp("w4");
+    let t = format!("{}\n[chemistry]\nwrite_rates = true\n", text("piso", false, ""));
+    let _ = run_path(&t, &d);
+    assert_eq!(
+        sorted_names(&d),
+        vec!["monitors.csv", "monitors.json", "report.html", "solution.vtu"]
+    );
+    let vtu = std::fs::read_to_string(d.join("solution.vtu")).unwrap();
+    assert!(!vtu.contains("wdot_") && !vtu.contains("heat_release_rate"));
+}
