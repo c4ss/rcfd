@@ -162,3 +162,20 @@ fn w5_check_only_exits_3_for_mesh_dependent_particle_errors() {
         Some(0)
     );
 }
+
+/// F11 (binary part, ADR 0037): `rcfd run` of a fractional-step case writes solution.vtu and no checkpoint.
+#[test]
+fn f11_binary_runs_a_fractional_step_case() {
+    let d = tmp("f11");
+    let l = 2.0 * std::f64::consts::PI;
+    let t = format!(
+        "[mesh]\ngenerator = \"box_2d\"\nnx = 16\nny = 16\nlx = {l:.17e}\nly = {l:.17e}\nperiodic_x = true\nperiodic_y = true\n[physics]\nnu = 0.05\n[initial]\nvelocity_expression_x = \"sin(x/(1 [m]))*cos(y/(1 [m])) * 1 [m/s]\"\nvelocity_expression_y = \"-cos(x/(1 [m]))*sin(y/(1 [m])) * 1 [m/s]\"\n[solver]\nalgorithm = \"piso\"\nconvection = \"central\"\ntime_advance = \"fractional_step\"\ndt = 0.02\nend_time = 0.2\n"
+    );
+    let case = d.join("c.toml");
+    std::fs::write(&case, t).unwrap();
+    let out = d.join("out");
+    let o = rcfd(&["run", case.to_str().unwrap(), "--out", out.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(0), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(out.join("solution.vtu").exists());
+    assert!(!out.join("restart.rcfd").exists());
+}
