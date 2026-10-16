@@ -32,6 +32,8 @@ use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::SolveControl;
 use std::sync::Arc;
 
+pub mod moving;
+
 /// Settings of the transient solver.
 #[derive(Debug, Clone)]
 pub struct PimpleSettings {
@@ -216,6 +218,8 @@ pub struct PimpleSolver {
     pub nu_face: Option<Vec<f64>>,
     /// Body acceleration (balanced-force face values, as in the steady solver), e.g. Boussinesq buoyancy.
     pub body_force: Option<BodyForce>,
+    /// Moving-mesh data of the current step (set only by `step_ale`, ADR 0033).
+    pub(crate) ale: Option<moving::AleStep>,
 }
 
 impl PimpleSolver {
@@ -238,6 +242,7 @@ impl PimpleSolver {
             step_no: 0,
             nu_face: None,
             body_force: None,
+            ale: None,
         }
     }
 
@@ -264,7 +269,9 @@ impl PimpleSolver {
         // transient Rhie-Chow data: (c1, c2) weights of the old levels, sized for the scheme
         let (c1, c2) = ddt_history_weights(&s.time_scheme, &self.hist_u[0], dt);
         // old-level flux defects `phi_old - (U_old)_f . S`
-        let ddt_defect: Vec<f64> = if s.ddt_correction {
+        let ddt_defect: Vec<f64> = if let Some(a) = &self.ale {
+            a.defect.clone()
+        } else if s.ddt_correction {
             let zero_b = vec![[0.0; 3]; mesh.n_boundary_faces()];
             let uold: Vec<Vec3> = (0..n).map(|c| [0, 1, 2].map(|k| self.hist_u[k].old[c])).collect();
             let fo = face_flux(&g, &uold, &zero_b);
@@ -304,6 +311,9 @@ impl PimpleSolver {
                     }
                 }
             }
+            if let Some(a) = &self.ale {
+                a.apply_wall_gradients(&mut pbc, &g.dn);
+            }
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
             let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
@@ -323,6 +333,10 @@ impl PimpleSolver {
                     .map(|f| (1.0 + r) * self.phi_hist.old[f] - r * older[f])
                     .collect(),
                 _ => self.phi.clone(),
+            };
+            let phi_conv = match &self.ale {
+                Some(a) => a.relative_flux(&phi_conv),
+                None => phi_conv,
             };
             for k in 0..3 {
                 if !g.active[k] {
@@ -345,6 +359,9 @@ impl PimpleSolver {
                 let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
                 let mut m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);
+                if let Some(a) = &self.ale {
+                    a.fix_ddt(&mut m, &vol, &self.hist_u[k].old, dt);
+                }
                 if let Some(ts) = &transposed {
                     for c in 0..n {
                         m.b[c] += vol[c] * ts[c][k];
@@ -403,6 +420,9 @@ impl PimpleSolver {
                             phi_hby_a[f] += gamma_p[f] * bf.face[f];
                         }
                     }
+                }
+                if let Some(a) = &self.ale {
+                    a.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
                 }
                 let controls = PressureControls {
                     p_ref: s.p_ref,

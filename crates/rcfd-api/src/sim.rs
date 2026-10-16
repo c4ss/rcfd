@@ -590,6 +590,7 @@ pub struct Simulation {
     pub case: Case,
     /// Finite-volume geometry.
     pub geom: Arc<FvGeometry>,
+    dynmesh: Option<crate::dynmesh::DynMesh>,
     engine: Engine,
     /// Recorded residuals, courant numbers and report histories.
     pub monitors: MonitorStore,
@@ -1382,9 +1383,17 @@ impl Simulation {
             (Some(en), false) => Radiation::from_case(case, &geom, &en.solver.t.values),
             _ => None,
         };
+        let dynmesh = crate::dynmesh::DynMesh::from_case(case, &geom)?;
+        if dynmesh.is_some() && !matches!(engine, Engine::Transient(_)) {
+            return Err(diag(
+                "dynamic_mesh.enabled",
+                "needs a transient incompressible run (solver.algorithm = piso or pimple)",
+            ));
+        }
         let mut sim = Simulation {
             case: case.clone(),
             geom,
+            dynmesh,
             engine,
             monitors: MonitorStore::new(if steady { "iteration" } else { "time" }),
             reports,
@@ -1641,6 +1650,11 @@ impl Simulation {
     /// Why the run stopped (`None` while it is still running).
     pub fn stop_reason(&self) -> Option<&str> {
         self.stop_reason.as_deref()
+    }
+
+    /// The six-degree-of-freedom body of a `dynamic_mesh` run (`motion = six_dof`), if any.
+    pub fn dynamic_body(&self) -> Option<&rcfd_fv::sixdof::Body> {
+        self.dynmesh.as_ref().and_then(|d| d.body())
     }
 
     /// Set when the run stopped because a user function failed (trap, fuel, bad value).
@@ -2192,7 +2206,28 @@ impl Simulation {
                 if let Some(cat) = &mut self.catalogue {
                     cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
                 }
-                let i = s.step(dt);
+                let i = match &mut self.dynmesh {
+                    Some(dm) => match dm.step(s, dt) {
+                        Ok(i) => {
+                            self.geom = s.geom.clone();
+                            i
+                        }
+                        Err(e) => {
+                            udf_error = Some(crate::dynmesh::failure_message(s.history.len() + 1, s.time + dt, &e));
+                            rcfd_fv::pimple::StepInfo {
+                                step: s.history.len() + 1,
+                                time: s.time,
+                                dt,
+                                courant: 0.0,
+                                continuity: 0.0,
+                                res_u: 0.0,
+                                res_p: 0.0,
+                                p_iters: 0,
+                            }
+                        }
+                    },
+                    None => s.step(dt),
+                };
                 if let Some(sc) = &mut self.scalars {
                     let sctx = StepCtx {
                         zone: self.zone_sources.as_ref(),

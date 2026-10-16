@@ -995,3 +995,41 @@ path swept twice), `.values.<i>` / `.strings.<i>` / `.json.<i>` (value rejected 
 and `.start` (sweep definition), `study.combine` (zip lengths), `study.outputs.<i>` (no such report), `study.parallel`,
 `study.parameters` (no parameters for `rcfd study`). `Case::set` now also creates named entries nested deeper than one level
 (`--set study.parameters.k.path=...`).
+
+## Wave 20B: `dynamic_mesh` (F-063, F-229, ADR 0033)
+
+Moving mesh for incompressible laminar `piso` / `pimple` runs with `solver.time_scheme = "euler"`; see `docs/dynamic-mesh.md`. Every key is inert while
+`dynamic_mesh.enabled = false` (the default) and older cases are unchanged. Unset values: empty strings and lists, 0.
+
+| key | type, default | meaning |
+| --- | --- | --- |
+| `dynamic_mesh.enabled` | bool, false | move the mesh |
+| `dynamic_mesh.motion` | `prescribed` (default), `six_dof` | source of the motion of the moving patches |
+| `dynamic_mesh.deformation` | `rigid` (default), `smoothing` | all points follow, or the interior is smoothed |
+| `dynamic_mesh.moving_patches` | list of strings, `[]` | patches that carry the motion (required) |
+| `dynamic_mesh.follow_patches` | list of strings, `[]` | patches whose velocity is the mesh velocity (empty = the moving patches); their `velocity` must stay `"fixed"` and their `velocity_value` only sets the initial flux |
+| `dynamic_mesh.fixed_patches` | list of strings, `[]` | smoothing: patches whose points do not move; all other non-moving patches slide in their plane |
+| `dynamic_mesh.displacement_expression_x`, `_y`, `_z` | string, `""` | displacement in m, expression of `t` (e.g. `"1 [m/s^2] * t^2"`); empty = 0 |
+| `dynamic_mesh.rotation_angle_expression` | string, `""` | dimensionless angle in radian, expression of `t` |
+| `dynamic_mesh.rotation_origin`, `.rotation_axis` | list of 3 floats, `[]` | point on the axis (default origin), axis (default z) |
+| `dynamic_mesh.smoothing.method` | `laplacian` (default), `inverse_distance` | diffusivity 1 or `1/l^exponent` (distance to the nearest moving face) |
+| `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance diffusivity (not negative) |
+| `dynamic_mesh.smoothing.substeps` | int, 1 | reserved; only 1 is accepted |
+| `dynamic_mesh.smoothing.tolerance` | float, 1e-12 | relative tolerance of the displacement solve |
+| `dynamic_mesh.six_dof.mass` | float, 0 | kg, must be > 0 for `motion = six_dof` |
+| `dynamic_mesh.six_dof.inertia` | list, `[]` | 3 principal moments or 6 components `xx yy zz xy xz yz`, kg m^2 |
+| `dynamic_mesh.six_dof.position`, `.velocity`, `.angular_velocity` | list of 3, `[]` | initial centre of mass, velocity, angular velocity |
+| `dynamic_mesh.six_dof.orientation_axis`, `.orientation_angle` | list of 3, `[]`; float, 0 | initial orientation (empty axis = identity) |
+| `dynamic_mesh.six_dof.translation_locked` | list of bool, `[]` | locked world axes (empty = none) |
+| `dynamic_mesh.six_dof.rotation` | `locked` (default), `free`, `about_axis`, `hinge` | rotational freedom |
+| `dynamic_mesh.six_dof.axis`, `.pivot` | list of 3, `[]` | axis for `about_axis` / `hinge`; a point on the hinge axis |
+| `dynamic_mesh.six_dof.stiffness`, `.damping`, `.rest_position` | list of 3, `[]` | translational spring and damper per world axis |
+| `dynamic_mesh.six_dof.torsion_stiffness`, `.torsion_damping`, `.torsion_rest_angle` | float, 0 | torsional spring and damper (single-axis rotation) |
+| `dynamic_mesh.six_dof.gravity` | bool, false | weight from `physics.gravity` |
+| `dynamic_mesh.six_dof.force_patches` | list of strings, `[]` | patches the flow force is integrated on (empty = moving patches) |
+| `dynamic_mesh.six_dof.integrator` | `rk4` (default), `newmark` | body integrator (`newmark` not for free rotation) |
+
+Static errors are located at the key (unknown patch names, expression syntax and dimension, zero rotation axis with a rotation expression, negative exponent,
+`six_dof` without positive mass and inertia, wrong list lengths); combinations that are not implemented (`solver.algorithm` other than `piso` / `pimple`, a
+`time_scheme` other than `euler`, turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart) are reported at `dynamic_mesh.enabled`.
+A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.

@@ -2,6 +2,7 @@
 //! boundary conditions, gradients, convection and diffusion operators,
 //! time integration and the pressure-velocity coupled solvers.
 
+pub mod ale;
 pub mod bc;
 pub mod cht;
 pub mod compressible;
@@ -25,6 +26,8 @@ pub mod realgas;
 pub mod riemann;
 pub mod scalar;
 pub mod simple;
+pub mod sixdof;
+pub mod smoothing;
 pub mod sources;
 pub mod thermal_bc;
 pub mod varden;

@@ -345,3 +345,74 @@ Computational Methods for Fluid Dynamics (moving grids); Jasak and Tukovic (2006
 Newmark (1959, J. Eng. Mech. Div. ASCE 85:67); Causin, Gerbeau and Nobile (2005, Comput. Methods Appl. Mech. Eng. 194:4506), added-mass effect in
 partitioned fluid-structure coupling; Schlichting, Boundary-Layer Theory (Stokes second problem). None of these was accessed; every registered closed form
 above is derived in the text or is a textbook identity checked by substitution in the tests.
+
+## Addendum: measured results, misses and deviations (written after the work)
+
+All limits above are unchanged. Where a registered set-up contradicted its own expectation or hit a defect of the baseline solver, the
+corrected check is a new test, the registered one is kept and `#[ignore]`d (`*_known_miss`). Nothing was tuned.
+
+### Measured against the registered limits
+
+| check | measured | limit |
+| --- | --- | --- |
+| G1 GCL (cell sum of swept volume vs volume change) | ~1e-15 (origin variant 1.8e-14, `W.dS` 3e-16) | registered, passes |
+| G2 uniform flow on 4 motions | `|u-u0|`, `|p|` ~2e-15 | passes |
+| G3 Galilean / steady Couette on moving mesh | 6.9e-16 / 8.9e-16 | passes |
+| G4c Stokes second problem, ny=80 dt=T/800 | `max|ux-exact|` 5.6e-3 (4e-2); ny=40 1.99e-2, ratio 3.56 (>=1.7); `max|uy-V|` 6.8e-14 (1e-9); moving vs fixed 2.3e-14 (1e-9) | passes with corrected set-up |
+| G5b piston (flux level) | continuity 2.8e-15, outlet vs piston flux 1.5e-14, transverse 1.2e-15, volume 2.0e-15, pressure 9.8e-3 (4e-2) | passes |
+| G5b cell velocity (iii) | 2.9e-4 | 1e-6 a0 t_end: MISS (ignored `g5b_piston_cell_velocity_known_miss`) |
+| G6 rotating annulus | velocity 3.3e-3 W r_o (2e-2), pressure 5.0e-3 of range (5e-2), continuity 4.1e-14 | passes |
+| S1 / S2 smoothing exactness | 6.8e-17; 8e-17, 5.7e-17, 6.7e-16, 5e-16 (1e-12) | passes |
+| S3b compression with slip sides / S3c tilted wall with slip sides | min V ratio 0.5 to 1e-9, position error 7.2e-16; all volumes positive (min ratio 0.388 Laplacian, 0.828/0.857 inverse distance) | passes (corrected set-ups) |
+| S4 invalid motion | message "cell 0 has non-positive volume -2.5e-5" | passes |
+| R1 free flight / R2 Newmark and RK4 spring | 1.1e-10, 2.8e-11 (1e-8); Newmark 1.3e-3 (2e-3) ratio 3.99; RK4 2.1e-6 (1e-5) ratio 15.7 | passes |
+| R3 terminal velocity | 2.4e-7 (1e-5) | passes |
+| R4 torque-free (i, iii), axisymmetric (ii, corrected sign) | L drift 8.8e-12, E 3.0e-13 (1e-7); isotropic 0; 3.3e-12 (1e-7) | passes |
+| R5 pendulum | 8.9e-5 (1e-3); theta0=1: RK4 4.3e-10 (1e-5), Newmark 8.2e-5 (2e-3) | passes |
+| R6 constraints | off-axis motion 0, hook vs drag 0 | passes |
+| C1b plate on a fluid layer (open x faces) | `U(tau)/(U0 e^-1)` = 0.99883 | `|.-1|<=1e-2`, passes |
+| C2 piston with a fluid column | `v^2/v_exact^2` = 1.00003 (2e-2), continuity 3.8e-15 | passes |
+| T1 located errors, run-time failure | all registered paths; "dynamic_mesh: step 116, t = ...: mesh error: cell 0 has non-positive volume" | passes |
+| T2 piston through the tree | continuity 3.5e-12 (1e-6), outlet vs swept volume 3.3e-10 (1e-6), pressure 9.8e-3 (4e-2) | passes; velocity 2.9e-4 vs 1e-5 a0 t_end MISS (ignored `t2_piston_cell_velocity_known_miss`) |
+| T3 Stokes through the tree (ny=40, T/400, n_outer 10) | `max|ux-exact|` 1.991e-2 (equal to the library ny=40 value), `max|uy-V|` 2.7e-10 (1e-9) | passes |
+| T4 six-DOF piston through the tree (C2 set-up) | `v^2/v_exact^2` = 0.99994 (2e-2) | passes |
+| B1 baseline hashes | unchanged, not re-recorded | passes |
+
+### Misses and diagnoses
+
+1. **G5 (iii), T2 velocity.** The streamwise cell velocity next to the accelerating piston lags the plug flow by 2.9e-4 while the flux-level plug
+   flow is exact to 1e-14. It depends on the Rhie-Chow time term (1.25e-4 without), grows at low viscosity (1.5e-3 at nu=1e-9) and is independent of the number
+   of pressure correctors; the cause (a cell-versus-face inconsistency at an accelerating wall of the collocated scheme) is not proven. Not tuned.
+2. **G4 as registered** (inconsistent initial wall flux, one outer iteration). Set-up bug (the lower wall had normal velocity 0 while the fluid moves
+   with V) and a baseline limitation: with one outer iteration the lagged coupling of the cyclic faces leaves a spurious pressure and vertical velocity in the
+   seam column when the mesh translates along the periodic direction. Corrected `g4c` uses a consistent start and 10 outer iterations; the registered and the
+   intermediate variants stay as ignored tests.
+3. **G5 as registered** (Symmetry side planes, pressure measured at the lab position). Set-up bug in the exact pressure (it is `a0 (x_out - x)`) and a
+   pre-existing baseline limitation: the scalar `a_p` (mean of the component diagonals) with `Symmetry` boundaries turns wall friction of the normal component into a
+   force on the tangential ones (reproduced on a fixed mesh). The sides are `ZeroGradient` in the corrected checks.
+4. **C1 as registered** (periodic x, dt = 1). The baseline PISO is unstable with cyclic faces and a time-dependent wall velocity (reproduced without a body, on a
+   fixed mesh with a prescribed ramp; growth ~15 per step, independent of dt, scheme and corrector counts). C1b uses open x faces.
+5. **S3 / S3c as registered** (fixed side walls): fixed walls prevent a uniform compression and the tilted corner would move 0.148 down through fixed wall
+   points, folding corner cell 380. Corrected with slip side walls; registered variants kept ignored.
+6. **R4 (ii)** closed form: the registered sign of the exponent is wrong; Euler's equations give `e^{+i Omega t}`. Registered-sign test kept ignored.
+
+### Deviations from the decisions above
+
+- The displacement of the smoothed mesh is always solved from the initial mesh (absolute displacement), not incrementally; `smoothing.substeps` is reserved (only 1).
+- New moving-wall pressure condition (needed for G5/G6): `dp/dn = -n.a_wall` with the wall acceleration from the finite difference of the wall velocity, built into
+  `apply_wall_gradients` / `add_wall_flux`; viscous and convective contributions are neglected. It is active only on the ALE path; the non-ALE path is untouched.
+- The fixed-mesh comparator of G4 uses the step-mean plate velocity; the G6 pressure gauge is a mean shift; R5 measures the period with a cubic Hermite crossing
+  interpolation (R2 uses the registered linear one). Newmark is by fixed-point iteration as registered.
+- `AboutAxis` checks the principal-axis condition, `Hinge` does not.
+- Case tree: added `dynamic_mesh.fixed_patches` (smoothing: patches whose points stay; unlisted non-moving patches slide in their plane); `mesh_motion = none`
+  (D7) is not exposed; the library-equality parts of T2-T4 were replaced by the physical limits of the library checks (the tree reproduces the library ny=40
+  Stokes error to all printed digits). T4 uses the C2 set-up (force by `six_dof.gravity` with `physics.gravity = [5,0,0]`, mass 0.2) because the C1 set-up needs `mesh_motion = none`.
+  A `follow_patches` entry must have `velocity = "fixed"`; its `velocity_value` sets the flux of the initial state (consistent start).
+- Restart, checkpoint, the decomposed run and turbulence/energy/scalar sections are rejected at `dynamic_mesh.enabled`.
+
+### Still not delivered
+
+Everything in the list above, plus: sliding interfaces (D9), `mesh_motion = none` for six_dof, rotationally periodic smoothing, a resolved flow-coupled falling body and the
+flow-coupled spring-mounted-body frequency check named in the F-229 acceptance (2 percent) and free fall with drag in a flow (the drag validation uses the registered drag hook).
+Baseline-solver limitations found (not fixed, defaults untouched): Symmetry with the scalar `a_p`, the cyclic-face PISO instability with time-dependent walls, zero-gradient
+pressure on accelerating walls in the non-ALE path.
