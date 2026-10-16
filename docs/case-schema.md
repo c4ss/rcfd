@@ -971,3 +971,27 @@ base case alone. See `docs/run-control.md` for the events.
 before anything is solved. Each diagnostic has `id`, `severity` (`error`, `warning`, `info`), `category`, a located `path`, `message`
 and sometimes a suggested `fix` (never applied). Errors stop the run with exit 3; warnings go to stderr and to `warning` status events
 with the rule id. The 21 rules (SV001-SV013 errors, SV101-SV105 warnings, SV201-SV203 infos) and the grammar are in ADR 0031.
+
+## Wave 20C: `study` (F-095, ADR 0034)
+
+A parametric study is part of the settings tree; an empty `study.parameters` means no study and every older case is unchanged.
+`rcfd study <case>` runs it (see `docs/studies.md`). All keys have explicit unset values.
+
+| key | type, default | meaning |
+| --- | --- | --- |
+| `study.outputs` | list of strings, `[]` | report names that become table columns; empty = all reports, sorted |
+| `study.combine` | `grid` (default) or `zip` | cartesian product (first parameter name, alphabetically, slowest) or parameters walking together |
+| `study.parallel` | int, 1 | design points run at the same time |
+| `study.write_results` | bool, true | write each point's result files to `<out>/points/pNNNN/` |
+| `study.parameters.<name>.path` | string, `""` | settings path the parameter overrides (any path `--set` accepts) |
+| `study.parameters.<name>.kind` | `list` (default), `linspace`, `logspace` | how the values are produced |
+| `study.parameters.<name>.values` | list of floats, `[]` | `list`: numeric values |
+| `study.parameters.<name>.strings` | list of strings, `[]` | `list`: string values (enums, file names) |
+| `study.parameters.<name>.json` | list of strings, `[]` | `list`: values as JSON texts, for vectors and booleans |
+| `study.parameters.<name>.start`, `.stop`, `.count` | float, float, int; 0 | `linspace`, `logspace` (geometric between the two values, both > 0) |
+
+Static errors are located (exit 3, nothing runs): `study.parameters.<n>.path` (empty, unknown setting, the study's own section, a
+path swept twice), `.values.<i>` / `.strings.<i>` / `.json.<i>` (value rejected by the setting's type, enum or range), `.count`
+and `.start` (sweep definition), `study.combine` (zip lengths), `study.outputs.<i>` (no such report), `study.parallel`,
+`study.parameters` (no parameters for `rcfd study`). `Case::set` now also creates named entries nested deeper than one level
+(`--set study.parameters.k.path=...`).

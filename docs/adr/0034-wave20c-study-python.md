@@ -184,3 +184,66 @@ Not delivered by this wave, named up front: in-process PyO3 bindings and wheel (
 exploration, studies of chains, a distributed or queueing runner, expression-valued (named expression) sweep parameters,
 parametrising mesh file imports other than by path, resuming a single interrupted point (resume is per completed point), the
 service/MCP exposure of studies (the CLI and the Python package only), F-139 and F-242.
+
+## Addendum: measured results and deviations (written after the runs; no registered limit was changed)
+
+Everything below was measured with the release build (`cargo test --release -p rcfd-cli --test study_w20c` and
+`--test python_w20c`), tests in `crates/rcfd-cli/tests/study_w20c.rs`, `python/tests/test_rcfd.py` and
+`crates/rcfd-cli/tests/python_w20c.rs`. Baseline hashes: `baseline_hashes` passes unchanged (not re-recorded).
+
+### Deviations from the registered set-up (disclosed)
+
+1. S1 set-up defect (my error): the registered closed form assumed a unit depth. `box_2d` is one cell thick with depth `lx / nx`, so
+   the exact heat flow is `k * ly * (lx/nx) * dT / lx = k ly dT / nx`, independent of `lx`. The registered formula is kept as the
+   ignored test `s1_unit_depth_known_miss` (measured: relative error 0.9969 at the worst point, i.e. a miss by the factor
+   `lx/nx`); the corrected test `s1_corrected_depth` takes the depth from the mesh (total cell volume divided by `lx * ly`), not from
+   the formula under test. The reported value is negative for this case (sign convention of the report not investigated): the comparison is on the absolute
+   value as registered.
+2. The registered solver setting `tolerance_u = 1e-12` never meets the residual target on this case (the energy residual stalls at
+   about 1e-11; the run stops at the 400-iteration cap, exit 5, `not_converged`), so every point of the S1 study has status `failed`
+   with exit 5 at that tolerance, which is also a demonstration of the exit-code contract. `s1_corrected_depth` is run at both
+   tolerances (identical q to the digit shown below); S2-S6 and the Python tests use `tolerance_u = 1e-9` (converges in 4
+   iterations, exit 0), a new set-up chosen before those runs, not tuned on a result.
+3. S7: the generator is `channel_2d` (patches `inlet`, `outlet`, `walls`), not `box_2d` with `ymin/ymax`, and `depth = 0.1`; the
+   inlet velocity is a vector setting, which the scalar `values` list cannot express, so the parameter kind `list` got an additive key
+   `json` (list of JSON texts) beside `values` and `strings`. This extends D2.
+4. D2 said sweep paths are applied "exactly like `--set`"; to make `rcfd study --set study.parameters.<n>.path=...` (used by the Python
+   helper) work, `Case::set` now creates named entries nested deeper than one level (it only handled `<collection>.<name>.<field>`).
+   Existing paths behave as before (baseline hashes unchanged).
+5. S4 crafted point: `mesh.nx = 0`, a negative `ly` and similar values are rejected statically by the schema ranges (exit 3, nothing
+   runs), which is the S5 behaviour. The crafted point is therefore `mesh.source` swept over the strings `generator, file, generator`:
+   the middle point selects `file` without `mesh.file` and fails with exit 3 (`mesh.source = "file" requires mesh.file`).
+6. P5 is implemented as registered; the text search is a regular expression on `os.environ` / `getenv` in the package sources (the
+   only hit is the `RCFD_BIN` read). P6 checks that every module newly imported by `import rcfd` under `python -I` lives under the
+   interpreter prefix or the package directory and that numpy is not imported.
+7. F-083 route: the PyO3 build was not attempted. The decision in D5 rests on three checked facts (unsafe code forbidden by the
+   workspace lints, no pyo3 in the offline cargo cache, only a Microsoft Store Python 3.9), not on a failed build.
+8. F-239 and F-238 slices (D6) were not done (time); both stay `todo`. F-139/F-242 were not attempted.
+
+### Measured against the registered limits
+
+| check | limit | measured | verdict |
+| --- | --- | --- | --- |
+| S1 corrected (18 points) | relative error of every point <= 1e-6 | 3.34e-10 (both solver tolerances); sweep end points bit-equal | met; the registered unit-depth form is a known miss (deviation 1) |
+| S1 equivalence | (added) point 7 equals `rcfd run --set` of the same values | `solution.vtu` and `monitors.csv` byte-identical | met |
+| S2 | 0 differing bytes, parallel 1 vs 3; order by point index | 0 differing bytes in `table.csv` and `table.json`; row order and grid/zip order as registered | met |
+| S3 | 7 rows after the partial run; resume runs 11, skips 7; final tables byte-identical to a fresh run; second resume runs 0; changed base setting runs all 18 | exactly these | met |
+| S4 | one failed row, others ok within the S1 tolerance, study exit code = the failed row's code (non-zero), same bytes for parallel 1 and 3 | exit 3; other two rows within 1e-6; identical bytes | met |
+| S5 | 15 invalid sweeps give exit 3 with the exact located path and create nothing; bad command lines give exit 2 | all 15 and the three exit-2 cases | met |
+| S6 | not converged point gives exit 5, the other rows recorded; `--list` runs nothing | exit 5, rows 1 and 2 ok, values of the failed row recorded | met |
+| S7 | every point within 1 percent of `12 rho nu U L / h^2` | 1.91, 1.90, 1.88, 1.87, 1.86 percent low for U = 0.02 ... 0.1 (ny = 10) | MISS, `s7_poiseuille_map_known_miss` is ignored with the limit intact |
+| P1 | equality of get/set and of the resolved settings | 10 settings equal, resolved JSON equal to `--set ... --print-settings`; a failed `set` leaves the case unchanged; `0.1 + 0.2` round-trips | met |
+| P2 | 0 differing bytes | `monitors.csv`, `monitors.json`, `solution.vtu` identical; report equals the last CSV row exactly | met |
+| P3 | same paths as the command line and as S5 | four settings errors and six study errors carry the CLI paths | met |
+| P4 | same rows, same CSV bytes as the CLI | identical `table.csv` and `table.json` | met |
+| P5 | marker nowhere | not found in any file, repr or str; only `RCFD_BIN` read from the environment | met |
+| P6 | clean import under `python -I` | imports only standard-library modules and the package, no output | met |
+| P7 | visible skip without Python | the harness test ran the 9 Python tests; the skip branch prints `SKIPPED: ...` (not exercised on this machine) | met (skip path untested) |
+
+S7 diagnosis (not tuned): at 10 cells across the gap the pressure deficit is 1.9 percent and it falls to 0.29 percent at 20 cells
+(`poiseuille_error_decreases_with_refinement`, a diagnostic added after the miss, not a replacement). The probable cause (consistent with the
+refinement trend, not isolated by a separate experiment) is the first-order
+treatment of the wall in the cell-centred finite-volume scheme (wall shear from `u_P / (dy/2)` of a parabolic profile is low by
+`dy / (2 h)`, so the discrete channel is slightly more conductive), plus half a cell of pressure extrapolation at the inlet face
+(about 0.5 percent of `dp`). The estimate in S7 ("a few tenths of a percent") ignored the wall-treatment term. The sweep is also
+nearly linear in `U` (dp/U constant to 1e-3 over three values; the convective terms break exactness), also unregistered.
