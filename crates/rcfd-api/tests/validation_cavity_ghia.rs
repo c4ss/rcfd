@@ -201,8 +201,10 @@ fn c2_re400_against_ghia_u_with_grid_sequence() {
 }
 
 /// The Re = 1000 sequence is shared by the passing checks and the known miss below (one 100 s solve).
-fn re1000_sequence() -> &'static (Vec<f64>, Vec<f64>, Vec<f64>, Vec<Mesh>) {
-    static SEQ: std::sync::OnceLock<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<Mesh>)> = std::sync::OnceLock::new();
+type Re1000Sequence = (Vec<f64>, Vec<f64>, Vec<f64>, Vec<Mesh>);
+
+fn re1000_sequence() -> &'static Re1000Sequence {
+    static SEQ: std::sync::OnceLock<Re1000Sequence> = std::sync::OnceLock::new();
     SEQ.get_or_init(|| {
         let rows = read_numeric(&reference_dir().join("cavity_re1000_ghia_botella_u.csv"));
         let y: Vec<f64> = rows.iter().map(|r| r[0]).collect();
