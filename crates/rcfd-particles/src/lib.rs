@@ -6,6 +6,8 @@
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
+pub mod coupling;
+pub mod dispersion;
 pub mod drag;
 pub mod inject;
 pub mod locate;
@@ -14,7 +16,9 @@ pub mod tracker;
 pub mod vtp;
 
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
-pub use inject::{rr_oversize, rr_sample, InjKind, InjectorSpec, SizeDist, VelMode};
+pub use coupling::{Coupling, Thermal};
+pub use dispersion::Dispersion;
+pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
 pub use rng::SplitMix64;
 pub use tracker::{fluid_at, Flow, Interp, Options, Particle, State, Tracker, WallAction};

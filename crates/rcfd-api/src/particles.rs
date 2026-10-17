@@ -13,7 +13,8 @@ use rcfd_core::settings::Schema;
 use rcfd_core::vec3::Vec3;
 use rcfd_particles::vtp::write_vtp;
 use rcfd_particles::{
-    DragLaw, Flow, InjKind, InjectorSpec, Interp, Options, Scheme, SizeDist, Tracker, VelMode, WallAction,
+    ConeSpec, Dispersion, DragLaw, Flow, InjKind, InjectorExt, InjectorSpec, Interp, Options, Scheme, SizeDist,
+    Tracker, VelMode, WallAction,
 };
 
 /// Sentinel of the numeric keys that are not set.
@@ -105,14 +106,25 @@ pub fn schema() -> Schema {
             .field("parcel_count", Schema::float(1.0).doc("Real particles represented by one parcel (> 0)"))
             .field(
                 "distribution",
-                Schema::enumeration("constant", &["constant", "rosin_rammler"])
-                    .doc("Diameter distribution: constant (`diameter`) or Rosin-Rammler (oversize mass fraction exp(-(d/rr_d_bar)^rr_n))"),
+                Schema::enumeration("constant", &["constant", "rosin_rammler", "uniform"])
+                    .doc("Diameter distribution: constant (`diameter`), Rosin-Rammler (oversize mass fraction exp(-(d/rr_d_bar)^rr_n)) or uniform in [d_min, d_max] (both required)"),
             )
             .field("diameter", Schema::float(UNSET).doc("distribution = constant: diameter [m] (> 0), -1 = unset"))
             .field("rr_d_bar", Schema::float(UNSET).doc("Rosin-Rammler size constant [m] (> 0), -1 = unset"))
             .field("rr_n", Schema::float(UNSET).doc("Rosin-Rammler spread parameter (> 0), -1 = unset"))
             .field("d_min", Schema::float(UNSET).doc("Rosin-Rammler lower truncation [m]; -1 = none"))
-            .field("d_max", Schema::float(UNSET).doc("Rosin-Rammler upper truncation [m]; -1 = none")),
+            .field("d_max", Schema::float(UNSET).doc("Rosin-Rammler upper truncation [m]; -1 = none"))
+            .field(
+                "mass_flow",
+                Schema::float(UNSET).doc("Mass flow [kg/s] of the injection (ADR 0057): every parcel carries mass_flow/rate and the parcel weight (real particles per parcel) follows from its diameter, overriding parcel_count; -1 = off (parcel_count)"),
+            )
+            .field(
+                "cone_half_angle",
+                Schema::float(UNSET).doc("Cone injection: half angle [deg] in (0, 180]; directions uniform in solid angle about cone_axis with speed cone_speed (overrides velocity_mode); -1 = no cone"),
+            )
+            .field("cone_inner_half_angle", Schema::float(0.0).doc("Hollow cone: inner half angle [deg] in [0, cone_half_angle)"))
+            .field("cone_axis", Schema::list(Schema::float(0.0)).doc("Cone axis [x, y, z] (3 components, non-zero)"))
+            .field("cone_speed", Schema::float(UNSET).doc("Cone injection speed [m/s] (> 0); -1 = unset")),
     )
     .doc("Particle injections by name");
     let walls = Schema::named(
@@ -160,6 +172,15 @@ pub fn schema() -> Schema {
             Schema::enumeration("reflect", &["reflect", "stick", "escape"]).doc("Action at wall patches without an entry in `walls`"),
         )
         .field("restitution", Schema::float(1.0).range(0.0, 1.0).doc("Restitution coefficient of reflecting walls"))
+        .field(
+            "dispersion",
+            Schema::enumeration("none", &["none", "drw"]).doc("Turbulent dispersion (ADR 0057): none, or the discrete random walk with eddy lifetime T_L = dispersion_cl k/eps and eddy length C_mu^(3/4) k^(3/2)/eps in homogeneous isotropic turbulence of the given k and epsilon"),
+        )
+        .field("dispersion_k", Schema::float(UNSET).doc("dispersion = drw: turbulent kinetic energy [m^2/s^2] (> 0), -1 = unset"))
+        .field("dispersion_epsilon", Schema::float(UNSET).doc("dispersion = drw: dissipation rate [m^2/s^3] (> 0), -1 = unset"))
+        .field("dispersion_cl", Schema::float(0.15).doc("dispersion = drw: constant C_L of the Lagrangian integral time T_L = C_L k/epsilon (> 0)"))
+        .field("dispersion_crossing", Schema::boolean(true).doc("dispersion = drw: limit the interaction time by the eddy crossing time"))
+        .field("dispersion_seed", Schema::int(1).at_least(0.0).doc("dispersion = drw: seed of the dispersion random numbers"))
         .field("walls", walls)
         .field("injection", injection)
         .field("output_file", Schema::string("").doc("VTK PolyData (.vtp) file of the particles written at the end by the library hooks track_frozen / track_transient (relative to the working directory); the run path (rcfd run, service) writes particles.vtp into the output directory instead; empty = none"))
@@ -287,11 +308,77 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     out.push(d(p("d_max"), "d_max must exceed d_min"));
                 }
             }
+            "uniform" => {
+                let (lo, hi) = (gf(case, &p("d_min")), gf(case, &p("d_max")));
+                if !(lo > 0.0) {
+                    out.push(d(p("d_min"), "a uniform distribution needs d_min > 0"));
+                }
+                if !(hi > 0.0) {
+                    out.push(d(p("d_max"), "a uniform distribution needs d_max > 0"));
+                } else if lo > 0.0 && hi <= lo {
+                    out.push(d(p("d_max"), "d_max must exceed d_min"));
+                }
+            }
             _ => {
                 if gf(case, &p("diameter")) <= 0.0 {
                     out.push(d(p("diameter"), "particle diameter must be set (> 0); -1 means unset"));
                 }
             }
+        }
+        let mf = gf(case, &p("mass_flow"));
+        if mf != UNSET && !(mf > 0.0) {
+            out.push(d(
+                p("mass_flow"),
+                "mass_flow must be positive (or -1 for parcel_count weighting)",
+            ));
+        }
+        let ha = gf(case, &p("cone_half_angle"));
+        if ha != UNSET {
+            if !(ha > 0.0 && ha <= 180.0) {
+                out.push(d(
+                    p("cone_half_angle"),
+                    "cone_half_angle must be in (0, 180] degrees (or -1 for no cone)",
+                ));
+            } else {
+                let hi = gf(case, &p("cone_inner_half_angle"));
+                if !(hi >= 0.0 && hi < ha) {
+                    out.push(d(
+                        p("cone_inner_half_angle"),
+                        "cone_inner_half_angle must be in [0, cone_half_angle) degrees",
+                    ));
+                }
+            }
+            match vec3_of(case, &p("cone_axis")) {
+                Ok(Some(v)) if v.iter().all(|x| x.is_finite()) && v.iter().any(|x| *x != 0.0) => {}
+                Ok(_) => out.push(d(
+                    p("cone_axis"),
+                    "a cone injection needs a non-zero cone_axis = [x, y, z]",
+                )),
+                Err(k) => out.push(d(p("cone_axis"), format!("expected 3 components [x, y, z], got {k}"))),
+            }
+            if !(gf(case, &p("cone_speed")) > 0.0) {
+                out.push(d(
+                    p("cone_speed"),
+                    "a cone injection needs cone_speed > 0; -1 means unset",
+                ));
+            }
+        }
+    }
+    if gs(case, "particles.dispersion") == "drw" {
+        if !(gf(case, "particles.dispersion_k") > 0.0) {
+            out.push(d(
+                "particles.dispersion_k",
+                "dispersion = drw needs dispersion_k > 0; -1 means unset",
+            ));
+        }
+        if !(gf(case, "particles.dispersion_epsilon") > 0.0) {
+            out.push(d(
+                "particles.dispersion_epsilon",
+                "dispersion = drw needs dispersion_epsilon > 0; -1 means unset",
+            ));
+        }
+        if !(gf(case, "particles.dispersion_cl") > 0.0) {
+            out.push(d("particles.dispersion_cl", "dispersion_cl must be positive"));
         }
     }
     out
@@ -391,6 +478,11 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
                 d_min: opt(gf(case, &p("d_min"))),
                 d_max: opt(gf(case, &p("d_max"))),
             }
+        } else if gs(case, &p("distribution")) == "uniform" {
+            SizeDist::Uniform {
+                d_min: gf(case, &p("d_min")),
+                d_max: gf(case, &p("d_max")),
+            }
         } else {
             SizeDist::Constant(gf(case, &p("diameter")))
         };
@@ -417,6 +509,37 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             };
             vec![d(p(field), e.to_string())]
         })?;
+        let mf = gf(case, &p("mass_flow"));
+        let ha = gf(case, &p("cone_half_angle"));
+        let ext = InjectorExt {
+            mass_flow: (mf != UNSET).then_some(mf),
+            cone: (ha != UNSET).then(|| ConeSpec {
+                axis: vec3_of(case, &p("cone_axis")).ok().flatten().unwrap_or([0.0, 0.0, 1.0]),
+                half_angle: ha.to_radians(),
+                inner_half_angle: gf(case, &p("cone_inner_half_angle")).to_radians(),
+                speed: gf(case, &p("cone_speed")),
+            }),
+            temperature: None,
+        };
+        if ext != InjectorExt::default() {
+            tr.set_injector_ext(n, ext)
+                .map_err(|e| vec![d(format!("particles.injection.{n}"), e.to_string())])?;
+        }
+    }
+    if gs(case, "particles.dispersion") == "drw" {
+        let nc = sim.geom.mesh.n_cells();
+        let model = Dispersion {
+            c_l: gf(case, "particles.dispersion_cl"),
+            crossing: gb(case, "particles.dispersion_crossing"),
+        };
+        let dseed = (gi(case, "particles.dispersion_seed").max(0) as u64).wrapping_add(0x5EED_D15B);
+        tr.set_dispersion(
+            model,
+            vec![gf(case, "particles.dispersion_k"); nc],
+            vec![gf(case, "particles.dispersion_epsilon"); nc],
+            dseed,
+        )
+        .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
     }
     Ok(tr)
 }
