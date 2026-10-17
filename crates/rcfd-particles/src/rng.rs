@@ -30,4 +30,11 @@ impl SplitMix64 {
     pub fn uniform_open0(&mut self) -> f64 {
         1.0 - self.uniform()
     }
+
+    /// Standard normal number (Box-Muller, one of the pair per call).
+    pub fn gauss(&mut self) -> f64 {
+        let u1 = self.uniform_open0();
+        let u2 = self.uniform();
+        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+    }
 }

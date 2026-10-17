@@ -1,7 +1,9 @@
 //! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6).
 
+use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
+use crate::dispersion::{Dispersion, Eddy};
 use crate::drag::{drag_factor, reflect, step_particle, tau_p, DragLaw, Fluid, Scheme};
-use crate::inject::{InjKind, InjectorSpec, VelMode};
+use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
 use crate::rng::SplitMix64;
 use crate::{err, Result};
@@ -114,8 +116,41 @@ impl Default for Options {
     }
 }
 
+/// Per-parcel state of the extensions (kept beside `Particle` so that its literal stays valid).
+#[derive(Debug, Clone, Copy)]
+struct Aux {
+    eddy: Eddy,
+    /// Particle temperature [K]; NaN = not yet set.
+    tp: f64,
+}
+
+impl Default for Aux {
+    fn default() -> Self {
+        Aux {
+            eddy: Eddy::default(),
+            tp: f64::NAN,
+        }
+    }
+}
+
+/// Dispersion context: model, per-cell turbulence fields and the generator.
+struct DispCtx {
+    model: Dispersion,
+    k: Vec<f64>,
+    eps: Vec<f64>,
+    rng: SplitMix64,
+}
+
+/// Extension contexts handed to the per-parcel advance.
+struct Ctx<'a> {
+    disp: Option<&'a mut DispCtx>,
+    thermal: Option<&'a Thermal>,
+    cpl: Option<&'a mut Coupling>,
+}
+
 struct Injector {
     spec: InjectorSpec,
+    ext: InjectorExt,
     rng: SplitMix64,
     emitted: u64,
     /// Surface injection: faces and cumulative areas.
@@ -130,6 +165,10 @@ pub struct Tracker {
     pub opts: Options,
     actions: Vec<WallAction>,
     injectors: Vec<Injector>,
+    aux: Vec<Aux>,
+    disp: Option<DispCtx>,
+    thermal: Option<Thermal>,
+    coupling: Option<Coupling>,
     /// All parcels, including finished ones.
     pub particles: Vec<Particle>,
     /// Current time [s].
@@ -186,9 +225,84 @@ impl Tracker {
             opts,
             actions,
             injectors: Vec::new(),
+            aux: Vec::new(),
+            disp: None,
+            thermal: None,
+            coupling: None,
             particles: Vec::new(),
             time: 0.0,
         })
+    }
+
+    /// Switch on turbulent dispersion by the discrete random walk with per-cell `k` and `eps` (ADR 0057 D2).
+    pub fn set_dispersion(&mut self, model: Dispersion, k: Vec<f64>, eps: Vec<f64>, seed: u64) -> Result<()> {
+        let n = self.loc.mesh().n_cells();
+        if k.len() != n || eps.len() != n {
+            return err("dispersion: k and epsilon must have one value per cell");
+        }
+        if !(model.c_l.is_finite() && model.c_l > 0.0) {
+            return err("dispersion: C_L must be positive");
+        }
+        self.disp = Some(DispCtx {
+            model,
+            k,
+            eps,
+            rng: SplitMix64::new(seed),
+        });
+        Ok(())
+    }
+
+    /// Switch on convective heat transfer with the given carrier data (the temperature field may be refreshed with
+    /// [`Tracker::thermal_mut`] before each step).
+    pub fn set_thermal(&mut self, th: Thermal) -> Result<()> {
+        if th.t_fluid.len() != self.loc.mesh().n_cells() {
+            return err("thermal: the carrier temperature needs one value per cell");
+        }
+        if !(th.cp_p > 0.0 && th.k_f > 0.0 && th.cp_f > 0.0) {
+            return err("thermal: specific heats and conductivity must be positive");
+        }
+        self.thermal = Some(th);
+        Ok(())
+    }
+
+    /// The heat-transfer data, if on.
+    pub fn thermal_mut(&mut self) -> Option<&mut Thermal> {
+        self.thermal.as_mut()
+    }
+
+    /// Start recording the exchange with the carrier (ADR 0057 D1). Observation only: the particles do not change.
+    pub fn enable_coupling(&mut self) {
+        let n = self.loc.mesh().n_cells();
+        self.coupling = Some(Coupling::new(n));
+    }
+
+    /// The recorded exchange.
+    pub fn coupling(&self) -> Option<&Coupling> {
+        self.coupling.as_ref()
+    }
+
+    /// The recorded exchange, mutable (for `reset`).
+    pub fn coupling_mut(&mut self) -> Option<&mut Coupling> {
+        self.coupling.as_mut()
+    }
+
+    /// Temperature of parcel `i` [K] (NaN when heat transfer is off).
+    pub fn temperature(&self, i: usize) -> f64 {
+        self.aux.get(i).map_or(f64::NAN, |a| a.tp)
+    }
+
+    /// Attach extensions (cone, mass flow, temperature) to the injector `name`.
+    pub fn set_injector_ext(&mut self, name: &str, ext: InjectorExt) -> Result<()> {
+        if let Err((field, msg)) = ext.validate() {
+            return err(format!("injector '{name}': {field} {msg}"));
+        }
+        match self.injectors.iter_mut().find(|i| i.spec.name == name) {
+            Some(i) => {
+                i.ext = ext;
+                Ok(())
+            }
+            None => err(format!("unknown injector '{name}'")),
+        }
     }
 
     /// The locator.
@@ -230,6 +344,7 @@ impl Tracker {
         }
         let rng = SplitMix64::new(spec.seed);
         self.injectors.push(Injector {
+            ext: InjectorExt::default(),
             spec,
             rng,
             emitted: 0,
@@ -298,13 +413,28 @@ impl Tracker {
             VelMode::Fluid => fluid_at(mesh, flow, self.opts.interp, cell, x),
         };
         let d = ij.spec.dist.draw(&mut ij.rng);
+        let mut v = v;
+        if let Some(cone) = &ij.ext.cone {
+            let (u1, u2) = (ij.rng.uniform(), ij.rng.uniform());
+            v = scale(cone.direction(u1, u2), cone.speed);
+        }
+        let parcel = match ij.ext.mass_flow {
+            Some(mdot) => (mdot / ij.spec.rate) / (ij.spec.density * std::f64::consts::PI * d * d * d / 6.0),
+            None => ij.spec.parcel_count,
+        };
+        let tinj = ij.ext.temperature;
+        self.aux.resize(self.particles.len(), Aux::default());
+        self.aux.push(Aux {
+            eddy: Eddy::default(),
+            tp: tinj.unwrap_or(f64::NAN),
+        });
         self.particles.push(Particle {
             id,
             x,
             v,
             d,
             rho: ij.spec.density,
-            parcel: ij.spec.parcel_count,
+            parcel,
             cell,
             age: 0.0,
             state: State::Active,
@@ -323,13 +453,19 @@ impl Tracker {
         let t0 = self.time;
         let t1 = t0 + dt;
         let n_old = self.particles.len();
+        self.aux.resize(n_old, Aux::default());
         {
             let opts = self.opts.clone();
             let loc = &self.loc;
             let actions = &self.actions;
-            for p in self.particles[..n_old].iter_mut() {
+            let mut ctx = Ctx {
+                disp: self.disp.as_mut(),
+                thermal: self.thermal.as_ref(),
+                cpl: self.coupling.as_mut(),
+            };
+            for (p, a) in self.particles[..n_old].iter_mut().zip(self.aux.iter_mut()) {
                 if p.state == State::Active {
-                    advance_particle(loc, &opts, actions, flow, p, dt)?;
+                    advance_particle(loc, &opts, actions, flow, p, a, &mut ctx, dt)?;
                 }
             }
         }
@@ -343,7 +479,13 @@ impl Tracker {
                 let left = (t1 - tm).max(0.0);
                 let opts = self.opts.clone();
                 let p = &mut self.particles[idx];
-                advance_particle(&self.loc, &opts, &self.actions, flow, p, left)?;
+                let a = &mut self.aux[idx];
+                let mut ctx = Ctx {
+                    disp: self.disp.as_mut(),
+                    thermal: self.thermal.as_ref(),
+                    cpl: self.coupling.as_mut(),
+                };
+                advance_particle(&self.loc, &opts, &self.actions, flow, p, a, &mut ctx, left)?;
             }
         }
         self.time = t1;
@@ -372,12 +514,40 @@ impl Tracker {
     }
 }
 
+/// Lumped-sphere heat exchange over a sub-step: new particle temperature and the heat taken from the carrier [J].
+fn heat_step(th: &Thermal, fl: Fluid, p: &Particle, t0: f64, cell: usize, rel_speed: f64, h: f64) -> (f64, f64) {
+    let pr = fl.mu * th.cp_f / th.k_f;
+    let re = fl.rho * p.d * rel_speed / fl.mu;
+    let tau_t = tau_thermal(p.rho, th.cp_p, p.d, th.k_f, nusselt(re, pr));
+    let tf = th.t_fluid[cell];
+    // expm1 keeps the update accurate for h << tau_t.
+    let t1 = t0 + (tf - t0) * -(-h / tau_t).exp_m1();
+    let m = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+    (t1, m * th.cp_p * (t1 - t0))
+}
+
+/// Book the exchange of one sub-step (before any wall reflection) in the cell `cell` where it started.
+#[allow(clippy::too_many_arguments)]
+fn book(cpl: &mut Coupling, cell: usize, m: f64, geff: Vec3, x0: Vec3, v0: Vec3, x1: Vec3, v1: Vec3, h: f64, dq: f64) {
+    let j = scale(sub(sub(v1, v0), scale(geff, h)), m);
+    for k in 0..3 {
+        cpl.impulse[cell][k] -= j[k];
+    }
+    let dke = 0.5 * m * (dot(v1, v1) - dot(v0, v0));
+    let wg = m * dot(geff, sub(x1, x0));
+    cpl.energy_mech[cell] -= dke - wg;
+    cpl.energy_heat[cell] -= dq;
+}
+
+#[allow(clippy::too_many_arguments)]
 fn advance_particle(
     loc: &Locator,
     opts: &Options,
     actions: &[WallAction],
     flow: &Flow,
     p: &mut Particle,
+    aux: &mut Aux,
+    ctx: &mut Ctx,
     dt: f64,
 ) -> Result<()> {
     let mesh = loc.mesh();
@@ -386,6 +556,13 @@ fn advance_particle(
         rho: flow.rho,
         mu: flow.mu,
     };
+    let geff = scale(opts.gravity, 1.0 - fl.rho / p.rho);
+    let mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+    if let Some(th) = ctx.thermal {
+        if aux.tp.is_nan() {
+            aux.tp = th.t_fluid[p.cell];
+        }
+    }
     let mut rem = dt;
     let mut bounces = 0usize;
     let mut guard = 0usize;
@@ -397,7 +574,27 @@ fn advance_particle(
         let cell0 = p.cell;
         let x0 = p.x;
         let v0 = p.v;
-        let u_start = fluid_at(mesh, flow, opts.interp, cell0, x0);
+        let u_mean = fluid_at(mesh, flow, opts.interp, cell0, x0);
+        let mut u_start = u_mean;
+        if let Some(dc) = ctx.disp.as_deref_mut() {
+            if !(aux.eddy.t_left > 0.0) {
+                let re = fl.rho * p.d * norm(sub(u_mean, v0)) / fl.mu;
+                let f = drag_factor(opts.drag, re);
+                let tau_eff = if f > 0.0 {
+                    tau_p(p.d, p.rho, fl.mu) / f
+                } else {
+                    f64::INFINITY
+                };
+                aux.eddy
+                    .draw(&mut dc.rng, &dc.model, dc.k[cell0], dc.eps[cell0], tau_eff, u_mean, v0);
+            }
+            u_start = add(u_mean, aux.eddy.uprime);
+        }
+        let upr = if ctx.disp.is_some() {
+            Some(aux.eddy.uprime)
+        } else {
+            None
+        };
         let mut h = rem;
         let sp = norm(v0);
         if sp > 0.0 {
@@ -411,13 +608,20 @@ fn advance_particle(
         if rem - h <= 1e-12 * rem {
             h = rem;
         }
+        if upr.is_some() && aux.eddy.t_left < h {
+            h = aux.eddy.t_left;
+        }
         let mut u_at = |x: Vec3| -> Vec3 {
             if x == x0 {
                 return u_start;
             }
-            match loc.locate(x, Some(cell0)) {
+            let u = match loc.locate(x, Some(cell0)) {
                 Some(c) => fluid_at(mesh, flow, opts.interp, c, x),
                 None => fluid_at(mesh, flow, opts.interp, cell0, x),
+            };
+            match upr {
+                Some(up) => add(u, up),
+                None => u,
             }
         };
         let (x1, v1) = step_particle(
@@ -434,11 +638,23 @@ fn advance_particle(
         );
         match loc.walk(cell0, x0, x1) {
             Walk::Inside(c) => {
+                let mut dq = 0.0;
+                if let Some(th) = ctx.thermal {
+                    let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h);
+                    aux.tp = t1;
+                    dq = q;
+                }
+                if let Some(cpl) = ctx.cpl.as_deref_mut() {
+                    book(cpl, cell0, mass, geff, x0, v0, x1, v1, h, dq);
+                }
                 p.x = x1;
                 p.v = v1;
                 p.cell = c;
                 p.age += h;
                 rem -= h;
+                if upr.is_some() {
+                    aux.eddy.t_left -= h;
+                }
             }
             Walk::Lost => return err(format!("particle {}: the cell walk did not terminate", p.id)),
             Walk::Boundary { cell, face, point } => {
@@ -475,14 +691,32 @@ fn advance_particle(
                 let (face, cell) = (hit_face, hit_cell);
                 let n = loc.face_normal(face);
                 let (h_hit, x_hit) = (hi, hit_pt);
+                let mut dq = 0.0;
+                if let Some(th) = ctx.thermal {
+                    let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h_hit);
+                    aux.tp = t1;
+                    dq = q;
+                }
+                if let Some(cpl) = ctx.cpl.as_deref_mut() {
+                    book(cpl, cell0, mass, geff, x0, v0, x_hit, v_hit, h_hit, dq);
+                }
                 p.x = x_hit;
                 p.v = v_hit;
                 p.cell = cell;
                 p.age += h_hit;
                 rem -= h_hit;
+                if upr.is_some() {
+                    aux.eddy.t_left -= h_hit;
+                }
                 match actions[face - nint] {
                     WallAction::Reflect(e) => {
                         p.v = reflect(v_hit, n, e);
+                        if let Some(cpl) = ctx.cpl.as_deref_mut() {
+                            let dj = scale(sub(p.v, v_hit), mass);
+                            for k in 0..3 {
+                                cpl.wall_impulse[k] += dj[k];
+                            }
+                        }
                         bounces += 1;
                         if bounces > opts.max_bounces {
                             p.state = State::Stuck;
