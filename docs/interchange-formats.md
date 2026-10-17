@@ -87,3 +87,21 @@ fraction. These marks are adaption-style flags only: there is no mesh adaption (
 bounds and alignment, exact min / max of position data, index range and primitive-restart values, normal length, colour
 types, reference ranges, hostile input) with a JSON pointer in every error; `gltf::check_glb` delegates to it.
 `scripts/validate_glb.js` runs the Khronos `gltf-validator` (npm, run with node) on exported files.
+
+## Format registry and structural load deck (F-237, ADR 0051)
+
+`rcfd_io::registry` lists every format with its direction and a conformance case: `registry::run_all()` writes a small
+known data set per supported format, reads it back where a reader exists, and checks the values. Supported (12): vtu, vtp,
+vtk_legacy, openfoam, ensight, stl, tecplot, xdmf, plot3d, gmsh, fluent, nastran_deck. Registered as `NotSupported` with a
+reason: cgns and hdf5 (not delivered). A tampered data value makes the case fail with the format name.
+
+`rcfd_io::nastran::Deck` writes and parses a free-field (comma separated) Nastran-style load deck in full double
+precision (`{:?}` formatting, so the round trip is bit-exact): `GRID`, `CTRIA3`, `CQUAD4`, `CHEXA` (second line `,G7,G8`),
+`PLOAD4,SID,EID,P1..P4` (blank P2..P4 = uniform), `TEMP,SID,G1,T1,G2,T2,G3,T3`. Parse errors carry `line N`.
+Verified (pyNastran documentation pages, read): the PLOAD4 and TEMP field layouts. Unverified (recalled): GRID field order,
+element node orders, CHEXA continuation form, free-field syntax in a given solver, and the PLOAD4 sign convention (here a
+positive value is fluid pressure pressing on the structure). No third-party solver has read these decks; acceptance by
+one cannot be tested here and is not claimed. Heat-rate (QBDY) loads are not delivered.
+
+`rcfd_post::structural` maps wall pressure by conservative parameter-space overlap (x,y for planes, theta,z for cylinders
+with 2 pi periodicity) and temperature through `remap` followed by a linear nodal recovery.

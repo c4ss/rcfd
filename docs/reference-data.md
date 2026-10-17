@@ -920,3 +920,18 @@ from memory. HDF5 and CGNS layouts were not read or used.
 | Ghia et al. 1982 cavity centreline Re 100 | verified | two secondary copies (see wave 25B) |
 | Ray-cast parity point-in-solid, 2:1 octree balance, hanging-node polyhedra | unverified | from memory of the general literature; not checked against a source |
 | Layer-height rules (uniform, aspect ratio, last ratio) | derived | ADR 0047 |
+
+## Wave 27C viscoelasticity and structural export (F-135, F-237, ADR 0051)
+
+| Item | Status | Note |
+|------|--------|------|
+| Oldroyd-B start-up `tau_xy = eta_p gdot (1 - e^{-t/lambda})`, N1 start-up | derived | from the constitutive ODE |
+| Uniaxial extension `C_zz = 1/(1 - 2 Wi_e)`, linear growth at `Wi_e = 0.5` | derived | |
+| Steady shear: PTT `Y^2 (Y-1) = 2 eps Wi^2`, FENE-P `L2 f^2 (f-1) = 2 Wi^2`, Giesekus implicit form in `f = -A_yy` | derived | checked against the ODE to 1e-12 |
+| Giesekus closed form as recalled from the literature (chi form) | unverified, found wrong | 5.1e-3 relative error at Wi = 0.1; kept only as an ignored `known_miss` test |
+| FENE-P normalisation `f = (L2-3)/(L2-tr C)`, tau = G(fC - I) | unverified | recalled |
+| Log-conformation (matrix logarithm) transport, divided-difference form | derived | chain rule of the matrix logarithm |
+| Poiseuille start-up modal series (Oldroyd-B) | derived | cross-checked against an independent 1-D PDE solve in the test |
+| PLOAD4, TEMP field layouts | verified | pyNastran documentation pages |
+| GRID, element node orders, CHEXA continuation, free-field syntax, PLOAD4 sign | unverified | recalled |
+| Third-party solver acceptance of the deck | not tested | no solver available |
