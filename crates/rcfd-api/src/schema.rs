@@ -74,9 +74,9 @@ pub fn case_schema() -> Schema {
             "generator",
             Schema::enumeration(
                 "cavity_2d",
-                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d", "annulus_3d", "annulus_3d_interface", "pipe_sweep"],
+                &["cavity_2d", "box_2d", "channel_2d", "channel_2d_interface", "cylinder_ogrid", "wedge_2d", "nozzle_2d", "annulus_3d", "annulus_3d_interface", "annulus_3d_stage", "pipe_sweep"],
             )
-            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides); annulus_3d is a full cylindrical annulus r_in <= r <= r_out about the z axis, height lz, nx cells around, ny radial, nz axial (patches inner, outer, zmin, zmax; F-031); annulus_3d_interface is two such blocks (heights lz/2) joined at z = lz/2 through a non-conformal interface, the upper block having ny_right x nz_right cells (0 = same as ny / nz); pipe_sweep is an all-hexahedral circular pipe along z of radius r_out and length lz made by sweeping a multizone O-grid + core disc (nx x nx Cartesian core of half-width core_fraction * r_out, four ring sectors of nx x ny cells, 4 nx cells around, nz axial layers, grading = last/first ring cell size ratio; patches wall, zmin, zmax; periodic_z makes zmin/zmax a cyclic pair; F-235, ADR 0047)"),
+            .doc("Built-in generator (used when source = generator); wedge_2d is a box_2d whose lower wall turns by ramp_angle at ramp_start (patches xmin, xmax, ymin, ymax); nozzle_2d is the upper half of a converging-diverging duct (box_2d with a cosine wall profile from the inlet half-height ly through the throat half-height throat_height to exit_height at xmax; patches xmin, xmax, ymin = centre line, ymax = wall; F-061); channel_2d_interface is a channel_2d made of two blocks of nx x ny and nx_right x ny_right cells that meet at x = lx/2 through a non-conformal interface (F-114; patches inlet, outlet, walls, sides); annulus_3d is a full cylindrical annulus r_in <= r <= r_out about the z axis, height lz, nx cells around, ny radial, nz axial (patches inner, outer, zmin, zmax; F-031); annulus_3d_interface is two such blocks (heights lz/2) joined at z = lz/2 through a non-conformal interface, the upper block having ny_right x nz_right cells (0 = same as ny / nz); annulus_3d_stage is the same two blocks NOT connected (patches inner and outer of both blocks, zmin, plane_out = top of the lower block, plane_in = bottom of the upper block, zmax; the upper block has nx_right x ny_right x nz_right cells, 0 = same as nx / ny / nz) for a mixing plane (mixing_plane section, F-126, ADR 0059); pipe_sweep is an all-hexahedral circular pipe along z of radius r_out and length lz made by sweeping a multizone O-grid + core disc (nx x nx Cartesian core of half-width core_fraction * r_out, four ring sectors of nx x ny cells, 4 nx cells around, nz axial layers, grading = last/first ring cell size ratio; patches wall, zmin, zmax; periodic_z makes zmin/zmax a cyclic pair; F-235, ADR 0047)"),
         )
         .field(
             "nx",
@@ -94,7 +94,7 @@ pub fn case_schema() -> Schema {
             "nx_right",
             Schema::int(0)
                 .range(0.0, 100000.0)
-                .doc("Cells in x of the second block of channel_2d_interface (0 = same as nx)"),
+                .doc("Cells in x of the second block of channel_2d_interface (0 = same as nx); cells around the upper block of annulus_3d_stage (0 = same as nx)"),
         )
         .field(
             "ny_right",
@@ -110,7 +110,7 @@ pub fn case_schema() -> Schema {
             "nz_right",
             Schema::int(0)
                 .range(0.0, 100000.0)
-                .doc("Axial cells of the upper block of annulus_3d_interface (0 = same as nz)"),
+                .doc("Axial cells of the upper block of annulus_3d_interface and annulus_3d_stage (0 = same as nz)"),
         )
         .field(
             "lz",
@@ -1773,6 +1773,7 @@ pub fn case_schema() -> Schema {
         .field("solids", crate::cht::solids_schema())
         .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field("particles", crate::particles::schema())
+        .field("mixing_plane", crate::mixing_run::schema())
         .field("dynamic_mesh", crate::dynmesh::schema())
         .field(
             "boundaries",

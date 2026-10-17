@@ -585,6 +585,131 @@ pub fn annulus_3d(
     Mesh::from_cell_faces(points, &cells, &specs)
 }
 
+/// One block of the staged annulus: points and hex cells of `annulus_3d` with the patch faces split by side, appended to
+/// `points` (indices offset) and `cells`.
+#[allow(clippy::too_many_arguments)]
+fn annulus_block(
+    points: &mut Vec<Vec3>,
+    cells: &mut Vec<Vec<Vec<usize>>>,
+    n_theta: usize,
+    n_r: usize,
+    n_z: usize,
+    rs: &[f64],
+    height: f64,
+    z0: f64,
+) -> Result<[Vec<Vec<usize>>; 4]> {
+    let zs = axis_coords(n_z, height, Grading::Uniform)?;
+    let base = points.len();
+    let pid = |ir: usize, it: usize, k: usize| base + ir + (n_r + 1) * ((it % n_theta) + n_theta * k);
+    for &z in &zs {
+        for it in 0..n_theta {
+            let th = 2.0 * std::f64::consts::PI * it as f64 / n_theta as f64;
+            for &r in rs {
+                points.push([r * th.cos(), r * th.sin(), z0 + z]);
+            }
+        }
+    }
+    let (mut inner, mut outer, mut lo, mut hi) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for k in 0..n_z {
+        for it in 0..n_theta {
+            for ir in 0..n_r {
+                let mut p = [0usize; 8];
+                for (c, pc) in p.iter_mut().enumerate() {
+                    *pc = pid(ir + (c & 1), it + ((c >> 1) & 1), k + (c >> 2));
+                }
+                let faces = hex_faces(p);
+                if ir == 0 {
+                    inner.push(faces[0].clone());
+                }
+                if ir + 1 == n_r {
+                    outer.push(faces[1].clone());
+                }
+                if k == 0 {
+                    lo.push(faces[4].clone());
+                }
+                if k + 1 == n_z {
+                    hi.push(faces[5].clone());
+                }
+                cells.push(faces);
+            }
+        }
+    }
+    Ok([inner, outer, lo, hi])
+}
+
+/// Two annular blocks `r_in <= r <= r_out` about the z axis that are NOT connected (a stage for a mixing plane, F-126,
+/// ADR 0059): the lower block of `(n_theta, n_r, n_z)` cells over `0 <= z <= height/2`, the upper block of
+/// `(n_theta_up, n_r_up, n_z_up)` cells over `height/2 <= z <= height`, with the radial grading `grading` in both. Patches:
+/// `inner` and `outer` (both blocks), `zmin` (lower bottom), `plane_out` (lower top), `plane_in` (upper bottom), `zmax`
+/// (upper top); no face joins the blocks. A mixing plane (or nothing at all) has to couple `plane_out` and `plane_in`.
+#[allow(clippy::too_many_arguments)]
+pub fn annulus_3d_stage(
+    n_theta: usize,
+    n_r: usize,
+    n_z: usize,
+    n_theta_up: usize,
+    n_r_up: usize,
+    n_z_up: usize,
+    r_in: f64,
+    r_out: f64,
+    height: f64,
+    grading: Grading,
+) -> Result<Mesh> {
+    if n_theta < 3
+        || n_theta_up < 3
+        || n_r < 1
+        || n_r_up < 1
+        || n_z < 1
+        || n_z_up < 1
+        || r_in <= 0.0
+        || r_out <= r_in
+        || height <= 0.0
+    {
+        return Err(Error::Mesh(
+            "annulus_3d_stage needs at least 3 cells around, 1 radial and 1 axial cell in each block, 0 < r_in < r_out and height > 0"
+                .into(),
+        ));
+    }
+    let radii = |n: usize| -> Result<Vec<f64>> {
+        Ok(axis_coords(n, r_out - r_in, grading)?
+            .into_iter()
+            .map(|r| r + r_in)
+            .collect())
+    };
+    let half = 0.5 * height;
+    let mut points = Vec::new();
+    let mut cells = Vec::new();
+    let [i1, o1, zmin, plane_out] = annulus_block(&mut points, &mut cells, n_theta, n_r, n_z, &radii(n_r)?, half, 0.0)?;
+    let [i2, o2, plane_in, zmax] = annulus_block(
+        &mut points,
+        &mut cells,
+        n_theta_up,
+        n_r_up,
+        n_z_up,
+        &radii(n_r_up)?,
+        half,
+        half,
+    )?;
+    let spec = |name: &str, faces: Vec<Vec<usize>>| BoundarySpec {
+        name: name.into(),
+        kind: PatchKind::Wall,
+        faces,
+    };
+    let join = |mut a: Vec<Vec<usize>>, b: Vec<Vec<usize>>| {
+        a.extend(b);
+        a
+    };
+    let specs = vec![
+        spec("inner", join(i1, i2)),
+        spec("outer", join(o1, o2)),
+        spec("zmin", zmin),
+        spec("plane_out", plane_out),
+        spec("plane_in", plane_in),
+        spec("zmax", zmax),
+    ];
+    Mesh::from_cell_faces(points, &cells, &specs)
+}
+
 /// Annular sector `r_in <= r <= r_out`, `0 <= theta <= angle` about the z axis
 /// (2D, one cell in z) for rotational-periodicity work. Patches: `inner`,
 /// `outer` (walls), `theta_min` / `theta_max` (a rotationally cyclic pair, the
