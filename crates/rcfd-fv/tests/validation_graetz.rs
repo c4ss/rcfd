@@ -283,7 +283,8 @@ fn check_nu(fails: &mut Vec<String>, tag: &str, got: f64, want: f64, pct: f64) {
 }
 
 fn plates_checks(heating: Heating) -> Vec<String> {
-    let (tag, rows, stations, tols): (&str, Vec<(f64, f64, f64)>, &[f64], &[f64]) = match heating {
+    type Row = (f64, f64, f64);
+    let (tag, rows, stations, tols): (&str, Vec<Row>, &[f64], &[f64]) = match heating {
         Heating::WallT => (
             "constant wall T",
             table("Tw"),
@@ -332,11 +333,7 @@ fn plates_checks(heating: Heating) -> Vec<String> {
     }
     // C3 fully developed limit
     let nu_end = at(&fine.cols, 0.1 * D_H_PE, &|c| c.nu);
-    if heating == Heating::WallT {
-        check_nu(&mut fails, "C3 Nu(0.1)", nu_end, nu_fd, 1.0);
-    } else {
-        check_nu(&mut fails, "C3 Nu(0.1)", nu_end, nu_fd, 1.0);
-    }
+    check_nu(&mut fails, "C3 Nu(0.1)", nu_end, nu_fd, 1.0);
     // C4 entry behaviour
     let cols: Vec<&Column> = fine
         .cols
