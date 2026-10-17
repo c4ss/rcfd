@@ -574,10 +574,12 @@ fn mp9_cancelling_band_is_a_failure() {
 }
 
 /// MP4 pressure limit as registered (`max |p - p_exact - mean| <= 0.05 P`). KNOWN MISS (ADR 0059 addendum 2): 6.85e-2 P, found
-/// in the innermost radial cell of BOTH blocks (block means differ by 4e-3 P), the first-order zero-gradient wall pressure of the
-/// fixed-velocity hub wall against the exact centripetal gradient `Gamma^2/r^3`; the plane-free control below shows the same.
+/// in the innermost radial cell of BOTH blocks (block means differ by 4e-3 P). The plane-free control below gives 1.13e-1, 6.62e-2,
+/// 4.24e-2 P for 4, 8, 16 radial layers: the same error, converging at roughly first order (observed order 0.8 then 0.64), so it is
+/// the near-hub-wall pressure discretisation (attributed to the zero-gradient wall pressure against the exact centripetal
+/// gradient `Gamma^2/r^3`; that attribution is an order-of-magnitude estimate, not isolated), not the plane.
 #[test]
-#[ignore = "KNOWN MISS: pressure error 6.85e-2 P against 5e-2 P, hub-wall pressure treatment, not the plane (ADR 0059 addendum 2)"]
+#[ignore = "KNOWN MISS: pressure error 6.85e-2 P against 5e-2 P, near-hub-wall pressure discretisation, not the plane (ADR 0059 addendum 2)"]
 fn mp4_pressure_known_miss() {
     let sim = run(Opt::default());
     let (_, dp) = exact_error(&sim);
@@ -589,47 +591,30 @@ fn mp4_pressure_known_miss() {
 }
 
 /// Control for the MP4 pressure miss (informational, no criterion): the same exact flow in ONE connected annulus without a
-/// plane (`annulus_3d`, 10 axial layers, the same MRF box).
+/// plane (`annulus_3d`, 10 axial layers, the same MRF box), with 4, 8 and 16 radial layers.
 #[test]
 #[ignore = "diagnostic control, prints only"]
 fn mp4_control_single_block() {
-    let o = Opt::default();
-    let mut t = text(&Opt { hub: 0.5, ..o });
+    let mut t = text(&Opt::default());
     let a = t.find("[mixing_plane]").unwrap();
     t.truncate(a);
     let t = t
         .replace("annulus_3d_stage", "annulus_3d")
+        .replace("nz = 4\nnx_right = 0\nnz_right = 6\n", "nz = 10\n")
         .replace(
-            "nz = 4
-nx_right = 0
-nz_right = 6
-",
-            "nz = 10
-",
-        )
-        .replace(
-            "[boundaries.plane_out]
-velocity = \"zero_gradient\"
-pressure = \"fixed\"
-pressure_value = 0.0
-[boundaries.plane_in]
-velocity = \"fixed\"
-velocity_value = [0.0, 0.0, 1.0]
-",
+            "[boundaries.plane_out]\nvelocity = \"zero_gradient\"\npressure = \"fixed\"\npressure_value = 0.0\n[boundaries.plane_in]\nvelocity = \"fixed\"\nvelocity_value = [0.0, 0.0, 1.0]\n",
             "",
         );
-    let mut sim = Simulation::new(&parse(&t)).unwrap_or_else(|e| {
-        panic!(
-            "{e:?}
-{t}"
-        )
-    });
-    sim.run(3000);
-    let (du, dp) = exact_error(&sim);
-    println!(
-        "CONTROL single block: converged {}, |u-ue| {:.3e} V, |p-pe-mean| {:.4e} P",
-        sim.is_converged(),
-        du / VREF,
-        dp / PSCALE
-    );
+    for ny in [4, 8, 16] {
+        let t = t.replace("ny = 8", &format!("ny = {ny}"));
+        let mut sim = Simulation::new(&parse(&t)).unwrap_or_else(|e| panic!("{e:?}\n{t}"));
+        sim.run(4000);
+        let (du, dp) = exact_error(&sim);
+        println!(
+            "CONTROL single block ny = {ny}: converged {}, |u-ue| {:.3e} V, |p-pe-mean| {:.4e} P",
+            sim.is_converged(),
+            du / VREF,
+            dp / PSCALE
+        );
+    }
 }

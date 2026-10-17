@@ -294,3 +294,85 @@ Closed form: `v = U - (U - v0) e^{-t/tau}`, `x = x0 + U t - (U - v0) tau (1 - e^
 * PL1b `|F_s - mdot_p (v_L - v0)| <= 1e-6 F`; PL2b `|(p_in - p_out) A / rho - F| <= 1e-3 F` with the inlet pressure the cell value extrapolated with the body-force gradient of the fixed-flux condition (a definition, as used for PL2 in the corrected measurement);
 PL3b `max |u_x - 1| <= 2e-3` and `max |u_y| <= 2e-3` (estimate: the cell-pressure-gradient inconsistency at the start of the source is `a_max/2` with `a_max = mdot_p (U - v0)/(tau v0 rho A) = 0.08`, giving `dx a_max / (2 U^2) = 5e-4`; the limit has a factor 4).
 The measured values and the diagnosis are recorded in the result addendum. Definition notes for the measured PL1: `F_s := -sum rho V a` (the force the carrier exerts on the parcels; the record gives the momentum TO the carrier, which is minus that).
+
+## Addendum 2 (result addendum, written after all runs)
+
+Everything below was measured in release builds with `RUST_TEST_THREADS=3`. No published data was read or used for either feature (no web page was fetched).
+A published particle-laden jet and a published turbomachine are NOT ATTEMPTED. Limits are those registered above and in addendum 1; none was widened, replaced or deleted.
+
+### F-128, measured against the registered limits
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| PL1 force on parcels = parcel momentum flux (PLUG) | 9.71e-8 | 1e-6 | met |
+| PL2 pressure drop (PLUG) | 1.64e-3 | 1e-3 | MISS (`pl2_steady_plug_pressure_drop_known_miss`, ignored) |
+| PL3 plug uniformity (PLUG) | 1.526e-2 | 1e-6 | MISS (`pl3_plug_stays_uniform_known_miss`, ignored) |
+| PL4 coupling change < 1e-8 within 40 updates | first at update 144 | 40 | MISS (`pl4_coupling_converges_within_40_updates_known_miss`, ignored) |
+| PL5 | 4.44e-16 | 1e-6 | met |
+| PL6a transient identity (piso, pimple) | 0 and 1.99e-16 | 1e-12 | met |
+| PL6b transient delivered vs exchanged (piso, pimple) | 4.31e-14 and 1.75e-14 | 1e-12 | met |
+| PL7 pressure drop, transient (piso, pimple) | -2.26e-3 and -2.27e-3 relative | 1e-2 | met |
+| PL7, PL7b plug uniformity, transient | 1.14e-2 | 1e-6 | MISS (ignored known_miss tests, same cause as PL3) |
+| PL8 unset keys: steady, transient, heat/energy | bit-identical | bit-identical | met |
+| PL1b (PLUG-B) | 1.836e-5 | 1e-6 | MISS (ignored known_miss test) |
+| PL2b (PLUG-B) | 7.60e-4 | 1e-3 | met |
+| PL3b (PLUG-B) | 5.30e-4 | 2e-3 | met |
+| J1 jet convergence: coupling change, res_u, res_p | 4.67e-9 (27 updates, 288 iterations), 9.9e-10, 1.7e-10 | 1e-6 | met, converged = true |
+| J2 raw record vs particle sum / used vs raw | 5.65e-16 / 2.34e-9 | 1e-12 / 1e-6 | met |
+| J3 x-momentum balance residual (convective 1.058e-4, pressure 2.640e-2, viscous 8.088e-3, source 1.8415e-2) | 3.9e-11 | 2e-2 | met |
+| J3 y residual / `|F_y|/|F_x|` | 2.06e-13 / 3.4e-13 | 1e-6 / 1e-9 | met |
+| J4 `D(0.1)/D(0.01)` (D = 6.554e-3, 6.275e-2, 0.4571 at f = 0.01, 0.1, 1), monotone | 9.57 | [9, 11] | met |
+| J5 stationarity | 1.82e-9 | 1e-5 | met |
+| E1 outlet temperature rise 13.3582 K against the closed form 13.3682 K | 7.46e-4 | 2e-2 | met |
+| E2 delivered heat 668.230569 W vs particle loss 668.230568 W / enthalpy flux rise | 4.7e-10 / 4.80e-4 | 1e-6 / 1e-3 | met |
+| E3 | 4.35e-14 | 1e-6 | met |
+| LE1 located errors (including the runtime "particles.end_time ... still in flight") | all present | all present | met |
+
+Acceptance (roadmap F-128: "a two-way coupled particle-laden jet conserves total momentum"): reached on the first-principles jet (J3 residual 3.9e-11 against 2e-2, J2 5.65e-16). Not a published jet.
+
+Diagnoses and deviations (F-128):
+
+* PL2/PL3/PL4/PL7 uniformity (addendum 1 diagnosis confirmed). The deviation falls only about as `h^(1/2)` with refinement (nx = 40, 80, 160, 320: 2.1e-2, 1.5e-2, 1.1e-2, 7.6e-3), as expected from the `x^(-1/2)` source of parcels injected at rest in the boundary cell, plus the collocated Green-Gauss cell pressure gradient being inconsistent with the face balance for a source that varies on the cell scale. PL4: the coupling change cannot settle faster than the carrier (a mis-specified limit, kept).
+* PL1b (a registered PLUG-B limit) missed, 1.836e-5 against 1e-6. Cause: the closed form assumes an exactly uniform carrier, but the discrete carrier deviates from uniform by up to 5.3e-4 (PL3b), which changes the drag by that relative amount in the first cells. The identity "force on the carrier = momentum of the parcels, from the record" holds to 2.1e-16, but that check was added AFTER the PL1b miss (post-hoc, not a registered criterion; reported as such).
+* PLUG-B was run with `max_iterations = 1500`; it did NOT meet the residual criterion (`converged` false, residual stall) while the coupling change fell below 1e-8 at update 102; PL2b and PL3b are measured on that state. The PLUG-B test therefore does not assert `is_converged`.
+* Change metric (a definition fixed during the work, not a limit): the denominators of the relative change have floors of 1e-3 of the momentum (heat) content the parcels carry. Without the floor a heat-only case has a momentum record that is pure round-off (1e-15) and its relative change stalls at about 3e-3 and the run can never be converged; with it, 7.5e-9.
+* `particles.heat_transfer` requires `particles.two_way` (a located error otherwise); the one-way thermal path is NOT delivered. Only `energy_heat` is fed into the temperature equation; the mechanical exchange (drag dissipation) is neglected.
+* Sign and definitions: the record is the momentum TO the carrier; in the tests `F_s := -sum rho V a` is the force the carrier exerts on the parcels. PL2 uses the inlet pressure extrapolated with the body-force gradient of the fixed-flux condition, `p_in = p_c0 - x_c0 a_c0`, because `pressure_face_values` returns the cell value at fixed-velocity faces.
+* PL8 and LE1 test bounds: tolerances below 1e-14 are rejected by the schema, so the tightest tolerance used is 1e-14; `physics.cp` and `physics.conductivity` have valid defaults, so they are not in the expected error list of LE1.
+* `write_run_outputs` for a steady two-way run still tracks the final field once with the one-way `steady_run` (not the tracker of the last coupling update).
+* The steady coupling needs every parcel to leave or deposit within `particles.end_time`; otherwise it is a located failure at `particles.end_time`.
+
+### F-126, measured against the registered limits (set-up MP exactly as registered)
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| MP1 exchange change `res_mixing` after 189 iterations, converged = true | 4.23e-14 | 1e-8 | met |
+| MP2 mass per band / total / duct inlet vs outlet | 2.47e-14 / 4.54e-15 / 6.75e-14 | 1e-7 / 1e-9 / 1e-9 | met |
+| MP3 angular momentum per band; duct totals in and out (-0.939789, 0.937900) | 2.40e-14; 2.01e-3 | 1e-7; 1e-2 | met |
+| MP4 velocity error, all cells | 6.00e-3 V_ref | 2e-2 V_ref | met |
+| MP4 `plane_in` face velocity error | 2.94e-3 V_ref | 2e-2 V_ref | met |
+| MP4 pressure error after removing the mean | 6.85e-2 P | 5e-2 P | MISS (`mp4_pressure_known_miss`, ignored) |
+| MP5 `enabled = false` (with and without other keys, with and without the section) on `annulus_3d_interface` | bit-identical in ux, uy, uz, p, flux; no `res_mixing` monitor | bit-identical | met |
+| MP6 relax 0.3 vs 0.7 (329 iterations for 0.3) | 2.63e-13 V_ref | 1e-6 V_ref | met |
+| MP7 mass / angular momentum per band (cos-theta distortion) | 5.05e-13 / 5.33e-13 | 1e-7 | met |
+| MP7 polar spread of `plane_in` velocity within a band | 6.66e-16 | 1e-12 | met |
+| MP7 energy flux up 1.325413, down 1.168667: loss / E | +1.18e-1 | >= -1e-6 | met |
+| MP8 (36 cells around above) mass / angular momentum per band; velocity error | 1.47e-14 / 1.49e-14; 6.12e-3 V_ref | 1e-7; 3e-2 V_ref | met |
+| MP9 located errors (each mutation), runtime cancelling band message prefix `mixing_plane:`, valid input clean | all present | all present | met |
+| BL baseline hashes and existing tests | see below | unchanged | see the final gate |
+
+Acceptance (roadmap F-126, a public compressor case reproducing pressure ratio and efficiency): NOT MET, NOT ATTEMPTED. Reached here: the steady swirling annular duct with a known exact solution through the plane, mass and angular momentum conserved across the plane.
+
+Diagnoses and deviations (F-126):
+
+* MP4 pressure: the maximum is in the innermost radial cell of both blocks (the block means differ by 4e-3 P), and a plane-free control (one connected annulus, `annulus_3d`, same exact flow, informational, no criterion, ignored test `mp4_control_single_block`) gives 1.13e-1, 6.62e-2, 4.24e-2 P for 4, 8, 16 radial layers: the same error without a plane, converging at roughly first order. The cause is attributed to the near-hub-wall pressure discretisation (the zero-gradient wall pressure against the exact centripetal gradient); that attribution is an order-of-magnitude estimate (`dp/dr dr/4 = 0.0167` against the measured 0.0164), not an isolated proof. The limit stays as registered.
+* MP2 and MP3 are identities of the passing construction (`u_n = Q/A'`, `u_theta = Gamma/r`) at the band level, evaluated on the solver flux; they test the wiring and the installed boundary state, and are not independent physics checks. MP4, MP6 and MP8 are the independent checks.
+* Generator: the sector polygon of the two blocks coincides in radius extremes; for MP8 the two rings differ in area, the passed axial velocity is scaled (accounted for in the registered MP8 limit).
+* The `nx_right` and `nz_right` keys are reused by `annulus_3d_stage` (0 = same as `nx`, `nz`) instead of new keys; `ny_right` likewise.
+* The exchange runs at the top of every `every`-th iteration from the FIRST (the donor is then the initial field), not from the second as D10 planned; the initial downstream state is the installed boundary value read from the fields, and the upstream pressure is the installed pressure.
+* MP9: patch names exist only in the mesh, so "unknown upstream/downstream patch" is a located error of `Simulation::new` (path `mixing_plane.upstream_patch` / `.downstream_patch`), not of `Case::semantic_errors`; the boundary checks of the patches that have a `[boundaries]` section are in `semantic_errors`; a mesh patch without a `[boundaries]` section is a located error at `boundaries.<name>` from `Simulation::new`.
+* The exchange fails the run through the existing failure channel (`failure()` and `stop_reason()`), message prefix `mixing_plane:`.
+
+### Not delivered (confirmed)
+
+F-128: breakup, wall film, erosion, evaporation, turbulence-model dispersion fields, the mechanical energy exchange, sub-iteration of the transient exchange, the one-way thermal path (`heat_transfer` without `two_way`), a published comparison. F-126: see D12 (transient and coupled solvers, compressible mixed-out state, rothalpy, curved or non-aligned interfaces, band edges that do not follow cell layers, sector periodicity of a stage, the downstream-velocity constraint, flow-regime options, turbulence or scalar transfer), a published turbomachine.
