@@ -71,10 +71,25 @@ A transient run with particles is not restartable.
 ASCII VTK PolyData (`.vtp`): points and point data `id`, `diameter`, `velocity`, `density`, `parcel_count`, `cell`, `age`, `state`
 (0 active, 1 deposited, 2 escaped, 3 stuck). `particles.output_file`, `particles.output_every`.
 
-## Not delivered (F-056 stays partial; F-128 not started)
+## Extensions of wave 29C (F-128, ADR 0057)
+
+* Two-way exchange record (`rcfd_particles::Coupling`, `Tracker::enable_coupling`). Per integration sub-step (before any wall
+  reflection) the carrier receives minus the DRAG IMPULSE `m (v1 - v0) - m g_eff h` in the cell where the sub-step starts, and minus the
+  particle's total-energy gain `Delta KE - W_g + m c_p Delta T_p` (`W_g = m g_eff . Delta x`; with `Tracker::set_thermal`, Ranz-Marshall
+  lumped-sphere heat transfer). `Coupling::sources(volumes, dt)` returns the per-cell momentum [N/m^3] and total-energy [W/m^3]
+  sources. Wall reflections are booked separately in `wall_impulse`. Recording never changes the particles (bit-identical). The sources
+  are NOT applied to the carrier by `Simulation::step`: the caller feeds them into its equations (the checks use an explicit cell
+  momentum update in a closed particle/carrier loop).
+* Discrete random walk (`Dispersion`, `Tracker::set_dispersion`; case keys `particles.dispersion*`): see ADR 0057 D2 and the closed
+  form `sigma_p^2 = sigma^2 T_L/(T_L + tau_p)`. Homogeneous isotropic turbulence of given k and epsilon only.
+* Injection: `uniform` diameters, equal-mass parcels from `mass_flow`, cone injections (`ConeSpec`, `InjectorExt`).
+
+## Not delivered (F-056 stays partial; F-128 partial)
 
 Cyclone separation case (the roadmap acceptance names settling and cyclone sanity cases; only closed-form settling-type checks exist),
-droplet / combusting / multicomponent particle types, cone / group / file injections, parcel-count control, two-way coupling, turbulent
-dispersion, heat and mass transfer, breakup, wall film, erosion, periodic patches, tracking through unjoined non-conformal pairs,
-gradient limiting in the interpolation, checkpointing of the tracker state, compressible and variable-density flows, a time-dependent sequence of
+droplet / combusting / multicomponent particle types, group / file injections, feedback of the two-way sources inside `Simulation::step`
+(the exchange is a library record only), dispersion from the turbulence-model k and epsilon fields (constants only), turbulent dispersion
+of the heat transfer, evaporation and mass transfer, breakup, wall film, erosion, periodic patches, tracking through unjoined
+non-conformal pairs, gradient limiting in the interpolation, checkpointing of the tracker state, compressible and variable-density flows,
+a time-dependent sequence of
 VTK files tied to the flow time (only every n tracking steps), a pure-walk guarantee on non-convex domains (see ADR 0028 results).

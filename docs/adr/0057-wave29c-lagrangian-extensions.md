@@ -127,3 +127,58 @@ All in `crates/rcfd-particles/tests/lagrangian_ext.rs` (library) unless stated; 
 Solver-loop feedback of the sources (the carrier equations of `Simulation::step` do not receive them), a particle-laden jet case, dispersion
 from the turbulence model fields (constants only), cone injections with swirl, droplet evaporation, breakup, wall film, erosion,
 particle reactions, tracker checkpointing.
+
+## Addendum 1: results (measured against the registered limits; no limit was changed)
+
+Release build, `cargo test --release -p rcfd-particles --test lagrangian_ext` and `-p rcfd-api --test particles_ext_case`. All registered
+checks were met on the first run, except the set-up defect of L1 (walls) described below.
+
+| Check | Measured | Limit |
+| --- | --- | --- |
+| L1 momentum residual, no wall hit (relative to sum abs(m dv)) | 3.6e-16 | 1e-12 |
+| L1b momentum residual with wall hits (wall impulse 1.3e-4 against scale 8.6e-4) | 6.3e-17 | 1e-12 |
+| L2 total-energy residual (kinetic, gravity work, heat) | 2.7e-16 | 1e-12 |
+| L3 trajectories with exchange recorded vs not | bit-identical | exact |
+| L3 terminal velocity (Stokes, quiescent, recording on) | 3.6e-9 | 1e-6 |
+| L3 relaxation in uniform flow | 3.5e-16 | 1e-12 |
+| L4 relative velocity at t = tau, phi = 1, dt = tau/100 (relative error) | 1.005e-2 | 2e-2 |
+| L4 ratios of the errors for dt = tau/100, /200, /400 | 2.0050, 2.0025 | [1.8, 2.2] |
+| L4 momentum m v + M u | 0 (exact) | 1e-13 |
+| L5 abs(v_two - v_one)/abs(v0), phi = 1e-2, 1e-4, 1e-6 | 0.2616 phi, 0.2624 phi, 0.2624 phi | 0.5 phi |
+| L5 ratio of the differences at 1e-2 and 1e-4 | 99.705 | [90, 110] |
+| L6 heat relaxation (excess over fluid) and heat bookkeeping | 0 and 0 | 1e-12 |
+| L7 crossing-time relative distance | 0 | 1e-10 |
+| L8 variance error tau/T_L = 0.1, 1, 5 (N = 40000, seed 20260329) | 0.31 %, 0.31 %, 0.15 % | 4 % |
+| L8 mean velocity (limit 4 sigma_p/sqrt(N)) | 7.6e-3, 3.4e-3, 2.4e-4 (limits 1.9e-2, 1.4e-2, 8.2e-3) | as stated |
+| L8 mean eddy lifetime / T_L; variance of u' | 1.0031, 1.0031, 1.0004; 0.9941, 0.9941, 1.0076 | 4 %; 2.5 % |
+| L9 tracker-level variance (N = 4000, tau/T_L = 1) | 1.0 % | 8 % |
+| L10 Kolmogorov distance RR, RR truncated, uniform (N = 20000) | 0.00487, 0.00531, 0.00487 | 0.01379 |
+| L10 worst mass-fraction deviation at five quantiles | 0.0045, 0.0039, 0.0045 | 0.01379 |
+| L11 total mass vs N mass_flow/rate | 3.0e-13 | 1e-12 |
+| L12 cone angles / speed / KS of cos(phi) and azimuth | [0.100005, 0.399980] within [0.1, 0.4]; 2.8e-16; 0.00939, 0.00548 | 1e-12 rad; 1e-14; 0.01379 |
+| L13 surface injection left-half fraction; inside the patch; inward offset | 0.50205 (limit +-0.01414); all inside; all within 2.5e-9 | as stated |
+| L14 located errors (13 invalid inputs, valid input clean) | all located at the full key path | all |
+| L15 transverse position std, none / drw | 3.3e-16 / 4.3e-2; reproducible; other seed differs | > 0 for drw |
+
+Baseline hashes (`baseline_hashes`), the existing particle suites (`closed_forms`, `particles_case`, `particle_run`, CLI `particle_run`)
+pass unchanged.
+
+Set-up defect (L1 with walls). The first version computed the gravity impulse of every parcel over the full tracked time. Parcels that
+come to rest on the reflecting floor are declared stuck after 1000 reflections (ADR 0028 A2) and are no longer advanced, so their elapsed
+time is shorter; the residual was 1.7e-3 of the scale. Root cause: the independent particle-side sum used the wrong time, not the tracker.
+The old test is kept as the ignored `l1_walls_full_time_setup_defect`; the corrected `l1b_momentum_balance_with_walls` uses each parcel's
+own elapsed time (`age`) with the same limit 1e-12.
+
+Deviations from the text above.
+* Case-tree angles (`cone_half_angle`, `cone_inner_half_angle`) are in degrees; the library takes radians.
+* `dispersion_seed` seeds the dispersion generator directly (plus a fixed offset); it is not derived from `particles.seed`.
+* L5: the ADR quoted the closed form for the relative velocity; the measured quantity is the particle velocity, whose first-order
+  closed form is `(1 - 2/e) phi = 0.264 phi` (derived from `v = (phi v0 + w)/(1 + phi)`, `w = w0 exp(-(1+phi) t/tau)`); the registered limit 0.5 phi is
+  unchanged and met (0.262 phi).
+* L9: the exactness claim "dispersion none equals the previous behaviour" is checked by L15 (explicit `none` equals the default,
+  bit for bit) and by the unchanged existing suites; L9 itself checks the variance, determinism and the seed dependence.
+* Heat transfer and the exchange record have no case keys (library only). The turbulence-model k and epsilon are not read.
+
+Not delivered: solver-loop feedback of the sources into `Simulation::step` (no particle-laden jet case, so the roadmap acceptance of F-128
+is not met), dispersion from model fields, evaporation and mass transfer, breakup, wall film, erosion, particle reactions, group and file
+injections, a published comparison. The stretch item (D5 breakup, wall film) was not attempted.
