@@ -1,0 +1,9 @@
+quantity,value,source
+Nu_D_circular_tube_constant_wall_T,3.66,BYU ME340 table 8.4 (eq 8.55)
+Nu_D_circular_tube_constant_heat_flux,4.36,BYU ME340 table 8.4 (eq 8.53)
+Nu_Dh_parallel_plates_constant_wall_T,7.5407,NPTEL ME-662 L19 slide 15 ((8/3) lambda_0^2)
+Nu_Dh_parallel_plates_constant_heat_flux,8.2353,NPTEL ME-662 L19 slide 19
+Hausen_c0,3.66,BYU ME340 table 8.4 (eq 8.56)
+Hausen_c1,0.0668,BYU ME340 table 8.4 (eq 8.56)
+Hausen_c2,0.04,BYU ME340 table 8.4 (eq 8.56)
+Hausen_exponent,0.6666666667,BYU ME340 table 8.4 (eq 8.56)
