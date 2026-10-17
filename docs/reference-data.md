@@ -1016,3 +1016,17 @@ No source was read in this wave; every reference below is recalled from memory a
 | Fisher / KPP (1937) front speed 2 sqrt(Gamma k) for the Zeldovich cubic | unverified | the closed form m = sqrt(Gamma k/2) of the cubic was derived; the paper was not read |
 | Sandia flames D to F, any published flame | not used | no comparison attempted |
 | Published ignition-delay measurements | not used | the 5 percent point is met against the same mechanism integrated directly only |
+
+## Wave 29D distributed-memory layer (F-100, F-016, ADR 0058)
+
+No source was read in this wave; every reference below is recalled from memory and is unverified. No MPI library, no vendor code or
+binary was used or installed.
+
+| Item | Status | Note |
+|------|--------|------|
+| Saad, "Iterative Methods for Sparse Linear Systems": preconditioned CG and BiCGStab, block-Jacobi and additive-Schwarz preconditioning | unverified | the algorithms are the ones already in `rcfd-linalg`, copied with global inner products; the book was not read in this wave |
+| Higham, "Accuracy and Stability of Numerical Algorithms": `gamma_k = k u / (1 - k u)` bounds for dot products and matrix-vector products | unverified | the bound used in B4/B5 is DERIVED from the standard model of floating-point arithmetic; the text was not read |
+| Condition number of the 2-D Dirichlet five-point Laplacian, `kappa = cot^2(pi / (2 (n+1)))` | derived | from the known eigenvalues `4 - 2 cos` sums; used to state the solution-difference limit 2e-7 (kappa 973 for 48 x 48) |
+| Rank-ordered sequential reduction (deterministic, O(P) messages) | derived | a design choice, not taken from an MPI implementation; MPI collectives do not guarantee a fixed order, which is why the order is fixed here |
+| Green-Gauss gradient with linear face interpolation, upwind convection with deferred linear-upwind correction | unverified | standard finite-volume practice recalled from memory; verified here only by exactness on linear fields and by distributed-versus-serial agreement |
+| Strong-scaling timings of in-process threads | measured | one 16-logical-core host, shared memory bandwidth and rayon pool; NOT a cluster or network measurement and not compared with any published scaling |
