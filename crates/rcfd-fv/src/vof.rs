@@ -12,6 +12,7 @@
 //!   of the order of the linear-solver tolerance.
 
 use crate::bc::{FixedValue, Profile};
+use crate::cavitation::Cavitation;
 use crate::convection::{convection, face_flux, ConvScheme};
 use crate::diffusion::laplacian;
 use crate::field::{ScalarField, VectorField};
@@ -19,6 +20,7 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::masstransfer::{HertzKnudsen, R_UNIVERSAL};
+use crate::mixture::{MixtureSettings, SlipTransport};
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc,
     solve_pressure_parts_src, PressureControls,
@@ -129,6 +131,8 @@ pub struct AlphaTransport {
     pub courant_max: f64,
     /// Upper bound on the number of sub-steps (a larger need is an error).
     pub max_sub: usize,
+    /// Algebraic-slip (drift-flux) transport of the mixture model (`None` = none, bit-identical to the plain path).
+    pub slip: Option<SlipTransport>,
     delta: f64,
 }
 
@@ -142,6 +146,7 @@ impl AlphaTransport {
             c_alpha,
             courant_max,
             max_sub: 2000,
+            slip: None,
             delta: 1e-8 / vmean.cbrt(),
         }
     }
@@ -172,7 +177,7 @@ impl AlphaTransport {
 
     /// Advance `alpha` by `dt` with the frozen face flux `phi`.
     pub fn advance(&mut self, phi: &[f64], dt: f64) -> Result<AlphaInfo> {
-        let co = self.courant(phi, dt);
+        let co = self.courant(phi, dt) + self.slip_courant(dt);
         let n_sub = ((co / self.courant_max).ceil() as usize).max(1);
         if n_sub > self.max_sub {
             return Err(Error::InvalidValue {
@@ -193,6 +198,24 @@ impl AlphaTransport {
             courant: co,
             alpha_phi: acc,
         })
+    }
+
+    /// Courant number of the slip signal speed (`dt max_c sum_f bound |gs| / V`); zero without slip.
+    fn slip_courant(&self, dt: f64) -> f64 {
+        let Some(sl) = &self.slip else { return 0.0 };
+        let g = &self.geom;
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        let mut out = vec![0.0; g.n_cells()];
+        for f in 0..g.n_internal {
+            if g.empty[f] {
+                continue;
+            }
+            let w = sl.bound * sl.gs[f].abs();
+            out[own[f]] += w;
+            out[nei[f]] += w;
+        }
+        let vol = g.mesh.cell_volumes();
+        dt * out.iter().zip(vol).map(|(o, v)| o / v).fold(0.0, f64::max)
     }
 
     fn substep(&mut self, phi: &[f64], dts: f64, weight: f64, acc: &mut [f64]) {
@@ -218,8 +241,19 @@ impl AlphaTransport {
             let gf = [0, 1, 2].map(|k| w * grad[o][k] + (1.0 - w) * grad[nb][k]);
             let nd = vec3::dot(gf, sf[f]) / (vec3::norm(gf) + self.delta);
             let phi_r = self.c_alpha * phi[f].abs() / vec3::norm(sf[f]) * nd;
-            let high = phi[f] * lin + phi_r * lin * (1.0 - lin);
+            let mut high = phi[f] * lin + phi_r * lin * (1.0 - lin);
             f_low[f] = phi[f] * up;
+            if let Some(sl) = &self.slip {
+                let gs = sl.gs[f];
+                if gs != 0.0 && !g.empty[f] {
+                    let low_s = sl.godunov(gs, a[o], a[nb]);
+                    let high_s = sl.central(gs, lin);
+                    if low_s != 0.0 || high_s != 0.0 {
+                        f_low[f] += low_s;
+                        high += high_s;
+                    }
+                }
+            }
             anti[f] = high - f_low[f];
             net[o] += f_low[f];
             net[nb] -= f_low[f];
@@ -434,6 +468,10 @@ pub struct VofSettings {
     pub linear: LinearOptions,
     /// Interfacial mass transfer (`None` = none; the path is then bit-identical to the one without it).
     pub mass_transfer: Option<MassTransfer>,
+    /// Mixture model with algebraic slip (drift flux, ADR 0056; `None` = none).
+    pub mixture: Option<MixtureSettings>,
+    /// Schnerr-Sauer cavitation (ADR 0056; `None` = none; exclusive with `mass_transfer`).
+    pub cavitation: Option<Cavitation>,
     /// Wave inlet and relaxation zones (`None` = none).
     pub waves: Option<WaveSettings>,
 }
@@ -471,6 +509,8 @@ impl VofSettings {
             },
             linear: LinearOptions::default(),
             mass_transfer: None,
+            mixture: None,
+            cavitation: None,
             waves: None,
         }
     }
@@ -616,6 +656,58 @@ impl VofSolver {
         };
         let g = self.geom.clone();
         let n = g.n_cells();
+        if let Some(mx) = &self.settings.mixture {
+            if !(mx.dispersed_phase == 1 || mx.dispersed_phase == 2) {
+                return Err(bad("multiphase.mixture.dispersed_phase", "must be 1 or 2".into()));
+            }
+            if !(mx.diameter.is_finite() && mx.diameter > 0.0) {
+                return Err(bad(
+                    "multiphase.mixture.particle_diameter",
+                    "must be finite and > 0".into(),
+                ));
+            }
+        }
+        if let Some(cv) = &self.settings.cavitation {
+            if self.settings.mass_transfer.is_some() {
+                return Err(bad(
+                    "multiphase.cavitation",
+                    "cannot be combined with the thermal mass transfer".into(),
+                ));
+            }
+            if !(cv.liquid_phase == 1 || cv.liquid_phase == 2) {
+                return Err(bad("multiphase.cavitation.liquid_phase", "must be 1 or 2".into()));
+            }
+            for (path, v) in [
+                ("multiphase.cavitation.saturation_pressure", cv.p_sat),
+                ("multiphase.cavitation.bubble_number_density", cv.n0),
+                ("multiphase.cavitation.nucleus_radius", cv.r_nucleus),
+            ] {
+                if !(v.is_finite() && v > 0.0) {
+                    return Err(bad(path, "must be finite and > 0".into()));
+                }
+            }
+            if !(cv.f_vap.is_finite() && cv.f_vap >= 0.0 && cv.f_cond.is_finite() && cv.f_cond >= 0.0) {
+                return Err(bad(
+                    "multiphase.cavitation",
+                    "vaporisation_factor and condensation_factor must be finite and >= 0".into(),
+                ));
+            }
+            if !pressure_bc(&g, &self.u, &self.p_rgh).has_dirichlet() {
+                return Err(bad(
+                    "multiphase.cavitation",
+                    "a net volume source needs a pressure (fixed p_rgh) patch to leave through".into(),
+                ));
+            }
+            // vapour nuclei exist everywhere in the liquid: the seed of inception
+            let floor = cv.alpha_floor();
+            for a in self.transport.alpha.values.iter_mut() {
+                if cv.liquid_phase == 1 {
+                    *a = a.min(1.0 - floor);
+                } else {
+                    *a = a.max(floor);
+                }
+            }
+        }
         if let Some(mt) = &self.settings.mass_transfer {
             if !(mt.liquid_phase == 1 || mt.liquid_phase == 2) {
                 return Err(bad("multiphase.mass_transfer.liquid_phase", "must be 1 or 2".into()));
@@ -704,7 +796,122 @@ impl VofSolver {
                 })
                 .collect();
         }
+        if let Some(mx) = self.settings.mixture {
+            let gv = self.settings.gravity;
+            let g_mag = vec3::norm(gv);
+            if g_mag > 0.0 {
+                let ghat = vec3::scale(gv, 1.0 / g_mag);
+                let sf = g.mesh.face_area_vectors();
+                let gs: Vec<f64> = (0..g.n_internal).map(|f| vec3::dot(ghat, sf[f])).collect();
+                let bound = mx.speed_bound(self.settings.rho, self.settings.mu, g_mag);
+                self.transport.slip = Some(SlipTransport {
+                    mixture: mx,
+                    rho: self.settings.rho,
+                    mu: self.settings.mu,
+                    g_mag,
+                    gs,
+                    bound,
+                });
+            }
+        }
         Ok(())
+    }
+
+    /// Cell force density `-div(j (x) J + T)` (N/m^3) of the drift mass flux and drift stress of the mixture model (ADR 0056 A),
+    /// from the current phase fraction and flux; `None` when the mixture model is off or its slip is zero everywhere.
+    pub fn drift_force(&self) -> Option<Vec<Vec3>> {
+        let sl = self.transport.slip.as_ref()?;
+        let g = &self.geom;
+        let n = g.n_cells();
+        let [r1, r2] = self.settings.rho;
+        let ghat = vec3::scale(self.settings.gravity, 1.0 / sl.g_mag);
+        let a = &self.transport.alpha.values;
+        // cell drift mass flux direction coefficient jc = J . ghat and stress coefficient tc (T = tc ghat (x) ghat)
+        let mut jc = vec![0.0; n];
+        let mut tc = vec![0.0; n];
+        let mut any = false;
+        for c in 0..n {
+            let al = a[c].clamp(0.0, 1.0);
+            let v = sl.c(al);
+            if v != 0.0 {
+                any = true;
+                jc[c] = al * (1.0 - al) * (r1 - r2) * v;
+                tc[c] = al * (1.0 - al) * ((1.0 - al) * r1 + al * r2) * v * v;
+            }
+        }
+        if !any {
+            return None;
+        }
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let vol = mesh.cell_volumes();
+        let mut div = vec![[0.0; 3]; n];
+        for f in 0..g.n_internal {
+            if g.empty[f] {
+                continue;
+            }
+            let (o, nb) = (own[f], nei[f]);
+            let w = g.weights[f];
+            let jf = w * jc[o] + (1.0 - w) * jc[nb];
+            let tf = w * tc[o] + (1.0 - w) * tc[nb];
+            // flux vector through the face: phi J_f + T_f . S = (phi jf + tf gs) ghat
+            // (j (x) J: the face carries the flux of the vector J by phi; J = jc ghat)
+            let fl = self.phi[f] * jf + tf * sl.gs[f];
+            for k in 0..3 {
+                div[o][k] += fl * ghat[k];
+                div[nb][k] -= fl * ghat[k];
+            }
+        }
+        Some((0..n).map(|c| [0, 1, 2].map(|k| -div[c][k] / vol[c])).collect())
+    }
+
+    /// Face force flux `lap_coeff (b_f . delta)` of a cell force density `b` (the analogue of `-grad p`) on internal faces.
+    fn body_force_flux(&self, b: &[Vec3]) -> Vec<f64> {
+        let g = &self.geom;
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        (0..g.n_internal)
+            .map(|f| {
+                let w = g.weights[f];
+                let bf = [0, 1, 2].map(|k| w * b[own[f]][k] + (1.0 - w) * b[nei[f]][k]);
+                g.lap_coeff[f] * vec3::dot(bf, g.delta[f])
+            })
+            .collect()
+    }
+
+    /// Apply the Schnerr-Sauer cavitation source to the transported `alpha` (ADR 0056 D); the pressure is that of the start of the
+    /// step. Same bookkeeping as [`Self::apply_mass_transfer`].
+    pub fn apply_cavitation(&mut self, dt: f64) -> PhaseChange {
+        let cv = self.settings.cavitation.expect("checked by the caller");
+        let n = self.geom.n_cells();
+        let vol = self.geom.mesh.cell_volumes();
+        let [r1, r2] = self.settings.rho;
+        let liquid_is_1 = cv.liquid_phase == 1;
+        let (rl, rv) = if liquid_is_1 { (r1, r2) } else { (r2, r1) };
+        let mut mdot = vec![0.0; n];
+        let mut vol_src = vec![0.0; n];
+        let (mut volume, mut rate) = (0.0, 0.0);
+        for c in 0..n {
+            let a = self.transport.alpha.values[c];
+            let al = if liquid_is_1 { a } else { 1.0 - a };
+            let av = 1.0 - al;
+            let av_new = cv.advance(av, rl, self.p[c], dt);
+            let new_l = 1.0 - av_new;
+            let m_eff = rl * (al - new_l) / dt;
+            mdot[c] = m_eff;
+            let a_new = if liquid_is_1 { new_l } else { 1.0 - new_l };
+            self.transport.alpha.values[c] = a_new;
+            volume += (a_new - a) * vol[c];
+            rate += m_eff * vol[c];
+            vol_src[c] = m_eff * (1.0 / rv - 1.0 / rl) * vol[c];
+        }
+        PhaseChange {
+            mdot,
+            vol_src,
+            volume,
+            rate,
+            h_fg: 0.0,
+            requested: rate,
+        }
     }
 
     /// Replace the velocity and phase-fraction conditions of the wave-inlet patch by the wave values at time `t`.
@@ -1012,6 +1219,8 @@ impl VofSolver {
         let ainfo = self.transport.advance(&self.phi, dt)?;
         let transfer = if self.settings.mass_transfer.is_some() {
             Some(self.apply_mass_transfer(dt, &alpha_start))
+        } else if self.settings.cavitation.is_some() {
+            Some(self.apply_cavitation(dt))
         } else {
             None
         };
@@ -1028,7 +1237,15 @@ impl VofSolver {
                 }
             })
             .collect();
-        let force = self.force_flux(&rho);
+        let mut force = self.force_flux(&rho);
+        if let Some(b) = self.drift_force() {
+            let df = self.body_force_flux(&b);
+            for (fo, d) in force.iter_mut().zip(df) {
+                if d != 0.0 {
+                    *fo += d;
+                }
+            }
+        }
 
         // old-level flux defect for the transient Rhie-Chow term
         let ddt_defect: Vec<f64> = if s.ddt_correction {
