@@ -177,3 +177,38 @@ Energy equation in the multiphase path (latent heat feedback, Stefan problem); s
 (Nusselt film) wiring; irregular-wave and Stokes-2 inlets in the tank (the inlet supports order 2 in the library path but the
 registered run uses Airy); a generation relaxation zone (only the inlet boundary generates); 3-D tanks; F-228 population balance
 (not attempted unless stated in the addendum).
+
+## Addendum 1 (written after the AMG diagnosis, before any fix): root cause of the AMG breakdown
+
+Bisect (scratch copy of HEAD with a temporary matrix dump in `solve_pressure_parts`; nothing of it is committed):
+1. A1 reproducer (`rcfd-linalg/tests/amg_contrast.rs`, `contrast_matrices`): 120 x 40 two-density Poisson matrices (1:1000 flat, 1000:1
+   flat, slanted, wavy, one-row film, anchor at the bottom or the top, 1:1 control) give AMG-CG in 12 to 15 iterations to a relative
+   residual of 1e-10, 3 levels, operator complexity 1.33 to 1.39, a symmetric (relative asymmetry <= 3e-11) and positive
+   preconditioner; plain CG does not converge in 3000 iterations on the contrast cases (484 on the 1:1 control). So the density jump
+   alone neither breaks AMG nor is its cause; AMG is the right solver for this matrix family.
+2. Replay of the dam-break pressure matrix of the first failing solve (step 120, first corrector; 4800 unknowns, finite entries,
+   positive diagonal 1.8e-8 to 3.4e-5, finite right-hand side and start vector): the preconditioner output is NaN from the first
+   application, so the breakdown is in the AMG hierarchy, not in CG, and not in the coefficients (plain CG on the same system
+   converges in 2601 iterations).
+3. Level trace: level 0 is finite (`fdiag/diag >= 0.23`); on level 1 (840 unknowns, `theta = 0.04`) coarse row 13 has `diag =
+   3.185e-8` equal to the sum of the magnitudes of its ten off-diagonals (zero row sum, Neumann operator), and every coupling is
+   below the strength threshold (largest ratio `|a_ij|/sqrt(a_ii a_jj) = 0.0378 < 0.04`). `build_level` lumps the weak couplings
+   to the diagonal, `fdiag_i = a_ii + sum_weak a_ij`, which is then EXACTLY 0. The power iteration for the spectral radius
+   divides by `fdiag` (`rho = NaN`), `omega = (4/3)/rho = NaN`, the smoothed prolongator has 2390 non-finite entries, the Galerkin
+   product 1148, and the coarse LU / smoother return NaN. CG then sees `rz = NaN`, never meets a stopping test (NaN comparisons are
+   false) and runs to the 5000-iteration cap; the NaN iterate becomes the pressure. The three correctors of step 120 each run to
+   the cap (15000 iterations), matching the 27A observation.
+4. Setup reuse is not the cause (the hierarchy is rebuilt from the current coefficients on every call). The singular all-Neumann
+   system is not the cause (the anchor makes the matrix nonsingular and the failing row is interior to the hierarchy). The smoother
+   and dense coarse solve never run on a finite hierarchy here. The contrast acts only as the trigger: the 1000:1 coefficient field
+   produces coarse rows whose couplings are spread over many neighbours with no dominant one.
+5. Deterministic reproducer without the dam break (`weak_row_has_finite_hierarchy`): a 200-node heavy chain plus one zero-row-sum
+   node coupled with 1 to twenty heavy nodes (strength ratio 0.005 < 0.08): `fdiag = 0`, `rho = omega = NaN` already on level 0,
+   37 percent of the prolongator non-finite. It fails on HEAD.
+
+Fix and its acceptance, registered before the fix: in `build_level`, a row whose filtered diagonal is not positive in the
+relative sense, `fdiag_i <= 1e-10 |a_ii|`, keeps its unfiltered row (`fdiag_i = a_ii`, all couplings of that row enter the Jacobi
+smoothing of the prolongator); every other row is computed exactly as before, so a hierarchy that was finite and sane is bit-identical
+(the baseline hashes must not change; if any does, STOP and report). Acceptance: `weak_row_has_finite_hierarchy` passes with a finite
+preconditioner output and AMG-CG converging in at most 60 iterations; the replayed dam-break matrix gives a finite hierarchy and
+AMG-CG converging well below the cap; A4 (the AMG dam break, registered above) passes; all existing `rcfd-linalg` tests unchanged.
