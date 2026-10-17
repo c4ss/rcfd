@@ -191,3 +191,21 @@ roadmap; the final gate on a `git archive` copy.
   the boundary face centres; `AmrMesh` base 16 x 16 on `[0,1]^2` with thickness 0.1 and `frontAndBack` empty.
 * Error is the volume-weighted L2 norm of `phi_h(x_c) - phi(x_c)` at the cell centres.
 * The cell count limit is read as `n_cells(adapted) <= 2048` (half of 64 x 64).
+
+## Addendum 2 (written after the first A4 run, before the A4b run): A4 miss and the corrected set-up A4b
+
+First A4 run (threshold 0.25 of the peak gradient, two rounds, balance on): uniform L2 errors E16 = 3.774e-2, E32 = 5.508e-3,
+E64 = 1.329e-3 (order 32 to 64: 2.05); adapted mesh 1024 cells, E_a = 4.932e-3: `E_a/E16 = 0.131` (limit 0.35, met), cells 1024 (limit
+2048, met), `E_a/E64 = 3.71` (limit 3, MISSED). The order check passed. The missed assertion moves unchanged into the ignored test
+`a4_adapted_vs_fine_known_miss`.
+
+Diagnosis (ignored test `a4_diag_error_by_level` in `rcfd-fv/tests/amr_diag.rs`): 72 percent of the squared error sits in the 192
+unrefined level-0 cells, the largest cell errors (1.0e-2) are at |x - 0.5| = 0.086 where level 2 meets level 1. The gradient
+criterion with a 0.25 relative threshold stops at |x - 0.5| of about 0.1, but the tanh shoulders still carry a large second
+derivative (h/w = 1 on the base mesh), so the truncation error `h^2 phi''/12` of the coarse cells beside the band dominates. The
+criterion's set-up (threshold fraction), not the refinement operator, is the cause: error per cell does not follow the gradient
+magnitude but the second derivative.
+
+Corrected set-up A4b (registered here, before it is run; the threshold fraction is chosen from the diagnosis, so this is NOT an
+independent confirmation of the registered A4 factor): the same procedure with threshold `0.05 max|grad phi|` (|grad| >= 5 percent of the
+peak extends the band to about |x - 0.5| = 3 w = 0.18). Limits identical to A4: `E_a <= 0.35 E16`, `E_a <= 3 E64`, `n_cells <= 2048`.
