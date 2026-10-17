@@ -213,3 +213,26 @@ Not attempted (see below); no limit registered.
 Order: this ADR is committed first (docs only); then the reference tables and manifest entries; then each test file; then the measured results addendum; the final gate runs on a `git archive`
 copy of the last commit (`cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --release --no-fail-fast`).
 Heavy tests are `#[ignore]` with the documented command `cargo test --release -p <crate> --test <file> -- --ignored --nocapture` and are each run once by the author.
+
+## Addendum 1 (after the first Sod run): first-order conservation set-up defect
+
+B1 as registered (change below 1e-10 relative at every n) fails for the first-order configurations at n = 100 (mass 3e-10 to 1e-9, energy up to 3e-9). Diagnosis: first-order numerical diffusion
+reaches the fixed boundary cells, which is a violation of the stated premise ("waves do not reach the ends"): |rho_0 - 1| is 3.3e-7 at n = 100, 3e-12 at n = 200 and 0 at n = 400. This is a set-up
+defect of the criterion, not a solver defect. The original first-order tests stay in the file as `#[ignore]` and a corrected test per configuration asserts B1 from n = 200 (B2 to B5 unchanged).
+
+## Addendum 2 (after the first Sod run): Van Albada limiter overflow (known miss, solver not changed)
+
+HLLC + Van Albada + RK3 aborts at step 1 with "non-positive density or pressure" for every n and CFL (Euler and RK2 are fine). Cause, proven by a scratch-copy bisect: `TvdLimiter::VanAlbada.psi`
+evaluates (r^2 + r)/(r^2 + 1), which is NaN for r > 1.34e154; the gradient ratio reaches that range through the 1e-300 `safe()` guard in smooth start-up cells. A scratch copy with the branch
+`if r > 1e150 { (r + 1)/(r + 1/r) }` passes B3 to B5 (n = 800 L1: rho 8.87e-4, u 1.34e-3, p 5.28e-4). The edit of `crates/rcfd-fv/src/convection.rs` was refused by the permission system, so the solver is
+not modified; the defect is recorded by the ignored tests `b_hllc_vanalbada_rk3_known_miss` and `van_albada_limiter_is_finite_for_huge_ratios_known_miss`. Proposed patch: the branch above (bit-identical for every r <= 1e150).
+
+## Addendum 3 (after the first Graetz run): constant-flux pipe, reference-side set-up defect, corrected criterion C7'
+
+Measured with the registered C7 (length 12, x+ = 0.06): constant-T pipe passes (Nu_D 3.7154 vs 3.66, +1.5 percent; Hausen Nu_m within 1 percent at Gz 100, 50, 20); constant-flux pipe misses (4.5255 vs 4.36,
++3.80 percent; Nu(0.05) +5.14 percent). A diagnostic on longer pipes (L = 24, x+ to 0.12) showed Nu still decaying monotonically toward 4.36 at x+ = 0.12 (4.40 on the (13, 9, 540) mesh), with no outlet
+distortion. Diagnosis: the entry-length rule x_fd,t = 0.05 Re Pr D of R3(a) is the constant-wall-temperature rule; the constant-flux profile develops more slowly, so "fully developed at x+ = 0.06" was a wrong
+premise of C7, not a solver defect. The original constant-flux test stays as the ignored `c_pipe_constant_flux_known_miss`. The author had seen the diagnostic numbers above when registering C7'.
+C7' (registered before the corrected run): constant-flux pipe, length 30 (x+ up to 0.15), meshes (n, n_ring, nz) = (4, 3, 200), (6, 4, 300), (9, 6, 450); finest-mesh Nu_D at the last column within 2 percent of
+4.36; Nu_D(x+ = 0.005) more than 20 percent above 4.36; mesh sequence converging monotonically with observed order and GCI reported. The 5 percent Nu(x+ = 0.05) check does not apply to constant flux.
+The pipe constant-T C7 stands unchanged. A refined-mesh diagnostic (`diag_pipe_constant_flux_finer_mesh`) is kept ignored and has no limit.
