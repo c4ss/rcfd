@@ -1,0 +1,16 @@
+[package]
+name = "rcfd-dist"
+description = "Transport-agnostic distributed-memory layer: communicator, halo exchange, distributed matrix and Krylov solvers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-core.workspace = true
+rcfd-mesh.workspace = true
+rcfd-linalg.workspace = true
+rayon.workspace = true
