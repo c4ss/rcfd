@@ -781,6 +781,26 @@ mod tests {
         assert!(worst <= 1e-13);
     }
 
+    /// Registered X7 as written (ADR 0055): 10 bands of width 0.05 on the 48 x 16 donor mesh; the 16 layers do not tile the
+    /// bands (addendum 4 gives the measured value). Kept next to the corrected 8-band test.
+    #[test]
+    #[ignore]
+    fn x7_mesh_geometry_swirl_as_registered_10_bands_known_miss() {
+        let (omega_s, w) = (3.0, 2.0);
+        let mp = MixingPlane::uniform([0.0; 3], AX, 0.5, 1.0, 10).unwrap();
+        let (d, _) = mesh_pair();
+        let donor = donor_from(&d, |x| [-omega_s * x[1], omega_s * x[0], w], 0.0, |_| 0.0);
+        let bands = mp.average(&donor).unwrap();
+        let mut worst: f64 = 0.0;
+        for (b, st) in bands.iter().enumerate() {
+            let (r1, r2): (f64, f64) = (0.5 + 0.05 * b as f64, 0.5 + 0.05 * (b + 1) as f64);
+            let exact = w * omega_s * 2.0 * PI * (r2.powi(4) - r1.powi(4)) / 4.0;
+            worst = worst.max(rel(st.gamma * st.q, exact));
+        }
+        println!("X7 as registered (10 bands): worst relative error {worst:.3e} (limit 1e-2)");
+        assert!(worst <= 1e-2);
+    }
+
     #[test]
     fn x7_mesh_geometry_swirl_close_to_the_closed_form() {
         // ADR 0055 addendum 1: 8 bands of two radial layers each (edges aligned with the 16 layers of the donor mesh)
