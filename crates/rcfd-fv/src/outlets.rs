@@ -69,6 +69,10 @@ pub enum PressureUpdate {
     Bernoulli,
     /// Secant slope of the last two iterates (magnitude of `dp/dm`, which is negative), safeguarded.
     Secant,
+    /// Secant slope accepted only when the last mass-flow change is not dominated by the spin-up transient
+    /// (`|dm| <= 0.5 |e|`) and the slope lies within `[0.1, 10]` times the dynamic-head estimate; otherwise the dynamic-head
+    /// slope (ADR 0055 D5).
+    GuardedSecant,
 }
 
 /// State of the pressure update of one target-mass-flow outlet.
@@ -105,6 +109,17 @@ impl PressureUpdater {
                     let s = -(p - p0) / dm; // m falls as the back pressure rises
                     if s > 0.0 {
                         slope = s.clamp(0.01 * bernoulli, 1000.0 * bernoulli);
+                    }
+                }
+            }
+        }
+        if self.strategy == PressureUpdate::GuardedSecant {
+            if let Some((p0, m0)) = self.prev {
+                let dm = m - m0;
+                if dm.abs() > 1e-9 * m.abs().max(target.abs()) && dm.abs() <= 0.5 * e.abs() {
+                    let s = -(p - p0) / dm;
+                    if s >= 0.1 * bernoulli && s <= 10.0 * bernoulli {
+                        slope = s;
                     }
                 }
             }

@@ -800,7 +800,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "pressure_update",
-            Schema::enumeration("bernoulli", &["bernoulli", "secant"]).doc("target_mass_flow_outlet: pressure update from the mass-flow error: dynamic-head sensitivity or safeguarded secant slope"),
+            Schema::enumeration("bernoulli", &["bernoulli", "secant", "guarded_secant"]).doc("target_mass_flow_outlet: pressure update from the mass-flow error: dynamic-head sensitivity, safeguarded secant slope, or the secant slope accepted only when the last mass-flow change is not spin-up dominated (|dm| <= 0.5 |e|, slope within 0.1 to 10 times the dynamic-head slope; ADR 0055 D5)"),
         )
         .field(
             "pressure_relax",
