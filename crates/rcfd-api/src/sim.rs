@@ -706,6 +706,8 @@ pub struct Simulation {
     phase: Option<PhaseState>,
     /// Particle tracking driven by the transient step (F-056, ADR 0037 D1).
     particles: Option<crate::particle_run::ParticleRun>,
+    /// Steady two-way particle coupling (ADR 0059), `None` unless `particles.two_way` with a steady algorithm.
+    two_way: Option<crate::particle_coupling::SteadyCoupling>,
     /// Iterations performed with a prescribed flow (the flow solver is not advanced).
     frozen_iter: usize,
     props: Option<Properties>,
@@ -1575,6 +1577,7 @@ impl Simulation {
             electric,
             phase,
             particles: None,
+            two_way: None,
             frozen_iter: 0,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
@@ -1631,6 +1634,17 @@ impl Simulation {
             let tracker = crate::particles::build_tracker(case, &sim)?;
             if matches!(sim.engine, Engine::Transient(_)) {
                 sim.particles = Some(crate::particle_run::ParticleRun::new(case, tracker, sim.time()));
+            } else if crate::particles::two_way(case) {
+                if !matches!(sim.engine, Engine::Steady(_)) {
+                    return Err(diag(
+                        "particles.two_way",
+                        "two-way coupling is available with the simple, simplec, piso and pimple algorithms",
+                    ));
+                }
+                sim.two_way = Some(crate::particle_coupling::SteadyCoupling::new(
+                    case,
+                    sim.geom.mesh.n_cells(),
+                ));
             }
         }
         let mut post_diags = crate::postproc::check_sim(&sim);
@@ -1797,6 +1811,11 @@ impl Simulation {
     /// The particle run driven by the transient step, if `particles.enabled` with a transient algorithm.
     pub fn particle_run(&self) -> Option<&crate::particle_run::ParticleRun> {
         self.particles.as_ref()
+    }
+
+    /// The steady two-way particle coupling, if active (ADR 0059).
+    pub fn two_way(&self) -> Option<&crate::particle_coupling::SteadyCoupling> {
+        self.two_way.as_ref()
     }
 
     /// Stop the built-in particle hook (the library hook `particles::track_transient` tracks by itself).
@@ -2023,6 +2042,15 @@ impl Simulation {
         self.update_marangoni();
         let mut reason_override: Option<String> = None;
         let mut udf_error: Option<String> = None;
+        if let Some(mut tw) = self.two_way.take() {
+            // steady two-way coupling (ADR 0059 D4): re-track on the current field when due
+            if tw.due(self.iteration()) {
+                if let Err(e) = tw.update(self) {
+                    udf_error = Some(format!("particle coupling: {e}"));
+                }
+            }
+            self.two_way = Some(tw);
+        }
         let frozen = self.cht.as_ref().is_some_and(|c| c.frozen_flux.is_some());
         let summary = match &mut self.engine {
             Engine::Steady(s) if frozen => {
@@ -2165,13 +2193,14 @@ impl Simulation {
                     s.conv_flux_offset.is_some() || get_s(&self.case, "solver.component_diagonal") == "corrected";
                 s.wall_pressure_trapezoid =
                     src_force.is_some() && self.sources.as_ref().is_some_and(|x| x.wall_pressure_trapezoid);
-                if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() {
+                let tw_force = self.two_way.as_ref().and_then(|t| t.force().cloned());
+                if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() || tw_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
                         en.buoyancy
                             .then(|| boussinesq_force(&self.geom, &en.solver.t, en.beta, en.gravity, en.t_ref))
                     });
                     let mut total = self.base_body.clone();
-                    for part in [bous, udf_force, src_force].into_iter().flatten() {
+                    for part in [bous, udf_force, src_force, tw_force].into_iter().flatten() {
                         match &mut total {
                             Some(t) => t.add(&part),
                             None => total = Some(part),
@@ -2198,6 +2227,7 @@ impl Simulation {
                         Err(e) => udf_error = Some(e),
                     }
                 }
+                let chem_on = chem_heat.is_some();
                 if let Some(en) = &mut self.energy {
                     let mut base_alpha = None;
                     if let Some(pr) = &self.props {
@@ -2220,6 +2250,18 @@ impl Simulation {
                     if let Some(mut h) = chem_heat.take() {
                         // the other sources of this iteration were assigned above; add the heat release
                         if self.components.is_some() || self.zone_sources.is_some() {
+                            if let Some(b) = &en.solver.source {
+                                for (x, y) in h.iter_mut().zip(b) {
+                                    *x += y;
+                                }
+                            }
+                        }
+                        en.solver.source = Some(h);
+                    }
+                    if let Some(q) = self.two_way.as_ref().and_then(|t| t.heat_source()) {
+                        // heat given to the carrier by the parcels (ADR 0059 D7), K/s
+                        let mut h = q.to_vec();
+                        if self.components.is_some() || self.zone_sources.is_some() || chem_on {
                             if let Some(b) = &en.solver.source {
                                 for (x, y) in h.iter_mut().zip(b) {
                                     *x += y;
@@ -2251,7 +2293,8 @@ impl Simulation {
                     && i.res_p < self.tol_p
                     && res_sc < self.tol_u
                     && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u)
-                    && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u);
+                    && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u)
+                    && self.two_way.as_ref().map_or(true, |t| t.converged());
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,
@@ -2481,6 +2524,17 @@ impl Simulation {
                 if let Some(e) = &udf_error {
                     reason_override = Some(e.clone());
                 }
+                if let Some(pr) = &mut self.particles {
+                    if pr.is_two_way() {
+                        // ADR 0059 D2: the particles first, over this step, on the field of the old time level
+                        let temp = self.energy.as_ref().map(|e| e.solver.t.values.as_slice());
+                        if let Err(e) = pr.pre_step(&self.case, &self.geom, &s.u, temp, dt) {
+                            let e = format!("particle tracking: {e}");
+                            reason_override = Some(e.clone());
+                            udf_error = Some(e);
+                        }
+                    }
+                }
                 if let Some(t) = &mut self.turb {
                     // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
                     // velocity and flux of the old time level, no relaxation
@@ -2504,6 +2558,12 @@ impl Simulation {
                         Err(e) => udf_error = Some(e),
                     }
                 }
+                let tw_heat_cfg = self.particles.as_ref().is_some_and(|p| p.is_two_way())
+                    && crate::particles::heat_transfer(&self.case);
+                let tw_heat: Option<Vec<f64>> = self
+                    .particles
+                    .as_ref()
+                    .and_then(|p| p.two_way_heat().map(|q| q.to_vec()));
                 if let Some(en) = &mut self.energy {
                     // temperature first, on the flux of the previous step; the flow then sees the new buoyancy
                     if let Some(cm) = &mut self.components {
@@ -2517,6 +2577,21 @@ impl Simulation {
                             None
                         };
                         zs.apply_temperature(&mut en.solver, base, s.time + dt);
+                    }
+                    if tw_heat_cfg {
+                        // heat given to the carrier by the parcels over this step (ADR 0059 D7), K/s
+                        if self.components.is_some() || self.zone_sources.is_some() {
+                            if let Some(mut h) = tw_heat {
+                                if let Some(b) = &en.solver.source {
+                                    for (x, y) in h.iter_mut().zip(b) {
+                                        *x += y;
+                                    }
+                                }
+                                en.solver.source = Some(h);
+                            }
+                        } else {
+                            en.solver.source = tw_heat;
+                        }
                     }
                     en.res_t = en.solver.advance(&s.phi, dt, s.settings.time_scheme);
                     let bous = en
@@ -2554,8 +2629,14 @@ impl Simulation {
                             }
                         }
                     },
-                    None if self.sources.is_some() || self.components.is_some() => {
-                        // momentum sources and lumped pressure components (ADR 0045): one evaluation per outer iteration
+                    None if self.sources.is_some()
+                        || self.components.is_some()
+                        || self.particles.as_ref().is_some_and(|p| p.is_two_way()) =>
+                    {
+                        // momentum sources and lumped pressure components (ADR 0045): one evaluation per outer iteration;
+                        // the two-way particle acceleration of the step (ADR 0059) is added to the source force
+                        let tw_force: Option<BodyForce> =
+                            self.particles.as_ref().and_then(|p| p.two_way_force().cloned());
                         let (geom, sources, components) = (&self.geom, &self.sources, &mut self.components);
                         let mut hook = |u: &VectorField, phi: &[f64]| {
                             let mut up = rcfd_fv::pimple::OuterUpdate::default();
@@ -2563,6 +2644,12 @@ impl Simulation {
                                 let (f, sk) = src.evaluate(geom, u);
                                 up.source_force = f;
                                 up.sink = sk;
+                            }
+                            if let Some(tf) = &tw_force {
+                                match &mut up.source_force {
+                                    Some(x) => x.add(tf),
+                                    None => up.source_force = Some(tf.clone()),
+                                }
                             }
                             if let Some(cm) = components.as_mut() {
                                 up.face_jump = cm.face_jump(geom, phi);
@@ -2637,6 +2724,9 @@ impl Simulation {
         }
         if let Some(t) = &self.turb {
             self.monitors.push("res_nut", "", x, t.change);
+        }
+        if let Some(t) = &self.two_way {
+            self.monitors.push("res_particles", "", x, t.change());
         }
         if let Some(sc) = &self.scalars {
             for (n, v) in sc.residuals() {

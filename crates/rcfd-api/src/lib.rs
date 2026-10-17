@@ -14,6 +14,7 @@ pub mod inflate;
 pub mod init;
 pub mod linsolver;
 pub mod lumped;
+pub mod particle_coupling;
 pub mod particle_run;
 pub mod particles;
 pub mod phase_change;
