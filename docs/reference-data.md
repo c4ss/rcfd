@@ -1065,3 +1065,23 @@ No published turbomachine (NASA Rotor 37, Hannover compressor, any pump or fan) 
 | Free-vortex swirl `u_theta = Gamma_0/r` and solid-body swirl `Omega r` | derived | closed-form angular momentum fluxes integrated here |
 | Taylor-Couette profile `A r + B/r` | derived | as in ADR 0008 |
 | Guarded secant rule thresholds (`|dm| <= 0.5 |e|`, slope within 0.1 to 10 of the dynamic-head slope) | derived | chosen from the diagnosed cause of the plain-secant miss (spin-up contaminated slope), not tuned to the result; one case (F1) exercises it |
+
+## Wave 29B mixture and cavitation (F-127, ADR 0056)
+
+No source was read in this wave; every reference below is recalled from memory and is UNVERIFIED. No vendor code, binary or install was used.
+No published cavitation data (cavitating venturi, hydrofoil sheet length, nozzle) and no bubble-column void-fraction profile was compared:
+NOT ATTEMPTED. Full multi-fluid Euler-Euler (per-phase momentum, lift, virtual mass, turbulent dispersion) is NOT delivered.
+
+| Item | Status | Note |
+|------|--------|------|
+| Mixture (algebraic-slip) model: slip flux `alpha (1-alpha) v_12`, drift mass flux and drift stress in the mixture momentum | unverified | the model class (Ishii drift flux, Manninen et al. 1996 mixture model) is recalled from memory; the equations used are DERIVED in ADR 0056 from the volume-averaged mixture balances and checked against analytic divergences (M3 order 1.99) |
+| Manninen 1996 relative velocity with Stokes factor `f = 1`; Schiller-Naumann `f = 1 + 0.15 Re^0.687` (1935) | unverified | the closure form and the 0.15 and 0.687 constants are recalled from memory; Stokes terminal velocity itself is derived (D2 1.5e-16, D3 balance 6.4e-16) |
+| Kynch batch-settling front (kinematic wave) | unverified | recalled (Kynch 1952); the front speed used in D4/D5 is the DERIVED flux `alpha v` characteristic; D4_corrected front 0.234 dx, D5_corrected 0.432 dx |
+| Schnerr-Sauer cavitation model, `alpha_v = x/(1+x)`, `x = n (4/3) pi R^3`, `mdot = rho_v rho_l/rho_m alpha(1-alpha)(3/R) R'` | unverified | the model is recalled from Schnerr and Sauer (2001); the algebra is checked here as an identity `D alpha_v/Dt = mdot rho_m/(rho_v rho_l)` (C1 exact); the bubble-number density `n = 1e11` and nucleus radius `1e-5 m` are set by the case, not taken from a source |
+| Rayleigh bubble growth `R' = sqrt(2 (p_sat - p)/(3 rho_l))` (Rayleigh 1917; Plesset 1949 adds viscosity and surface tension) | unverified | recalled; the inertial limit is derived from the energy balance of the liquid shell; the Rayleigh-Plesset integral comparison C4c (first integral 3.95e-10; `R_SS - R_RP` within `[0.56, 0.57] R_0`) is against the equation without viscosity or surface tension |
+| Saturation pressure of water, `p_sat(293 K) = 2339 Pa` | unverified | recalled from memory (steam-table value); used as a case input |
+| Bernoulli pressure drop in the venturi throat, `p = p_in - 0.5 rho (u_t^2 - u_in^2)` | derived | N1: throat pressure 99.3 Pa against Bernoulli-from-inlet 488.9 Pa (limit 1250 Pa); minimum throat-region pressure -1349.9 Pa < `p_sat`, so inception is expected |
+| Mixture mass and volume conservation | derived | D1_corrected volume 1.7e-15, mass 2.4e-16; M4b per-cell mass balance 7.9e-15 |
+| Cavitating venturi (2-D, 80 x 20): bounded vapour fraction | derived | N2: `alpha_v` in `[4.19e-4, 0.99993]` over 6000 steps; periodic cavity growth and collapse with a water-hammer-like pulse (ADR 0056 addendum) |
+| Cavitating venturi N3 end of run, N4, N4', N5 | MISS | known-miss tests with the registered limits intact: end-of-run phase (cavity collapsed), advection into `p >= p_sat` cells (31763 events), end-of-step source sign (16 events), global balance 1.96e-5 against 1e-6 |
+| Void-fraction profile of a bubble column, sheet-cavity length of a hydrofoil | not used | no comparison attempted |

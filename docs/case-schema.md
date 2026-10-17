@@ -1385,3 +1385,45 @@ ramp; the relaxation zone is applied after the pressure correction as `w * compu
 wave library, and the volume it adds or removes is reported (`relax_volume`) so that the volume balance stays an identity. Use
 `multiphase.reference_point` on the open top. Not delivered: irregular and directional waves in the tree, a wave-making piston,
 three-dimensional tanks, a relaxation target other than still water in the tree, and a general-direction inlet.
+
+## Wave 29B: `multiphase.mixture` and `multiphase.cavitation` (F-127, ADR 0056)
+
+Both sections are additive and inert (silent at their defaults, a located error when set) unless `multiphase.enabled = true` and the model
+is not `none`. A case without them is unchanged (baseline hashes bit-identical).
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `multiphase.mixture.model` | "none" | `none` or `drift_flux` (algebraic-slip mixture model) |
+| `multiphase.mixture.dispersed_phase` | "phase_2" | which phase is dispersed (particles, droplets, bubbles); the other is continuous |
+| `multiphase.mixture.particle_diameter` | -1 (unset) | `d_p` [m], required > 0 with `drift_flux` |
+| `multiphase.mixture.drag` | "stokes" | `stokes` or `schiller_naumann` (`C_D = 24/Re (1 + 0.15 Re^0.687)`) |
+| `multiphase.cavitation.model` | "none" | `none` or `schnerr_sauer` |
+| `multiphase.cavitation.liquid_phase` | "phase_1" | which phase is the liquid (the other is its vapour) |
+| `multiphase.cavitation.saturation_pressure` | -1 (unset) | `p_sat` [Pa], required > 0 with a model |
+| `multiphase.cavitation.bubble_number_density` | -1 (unset) | `n` per unit volume of liquid [1/m^3], required > 0 with a model |
+| `multiphase.cavitation.nucleus_radius` | -1 (unset) | `R_0` [m], required > 0: smallest bubble radius and inception seed |
+| `multiphase.cavitation.vaporisation_factor`, `condensation_factor` | 1, 1 | multipliers of the evaporation and condensation rates (>= 0) |
+
+Mixture model. The phase fraction is transported with the extra slip flux `alpha (1 - alpha) v_12` (Godunov low-order flux, central
+high-order flux, the existing Zalesak limiter; the sub-step Courant number includes the slip signal speed) and the momentum equation gets
+the drift mass flux and the drift stress, `-div(j (x) J + T)`. The slip `v_12` is the gravity-driven single-particle speed with the
+mixture buoyancy `(rho_d - rho_m) = (1 - alpha_d)(rho_d - rho_c)` and Stokes or Schiller-Naumann drag (Newton iteration). LIMITATIONS:
+only gravity drives the slip (no centrifugal or inertial terms), the time derivative of the drift mass flux is dropped, no turbulent
+dispersion, lift, virtual mass or wall lubrication, and no particle-size distribution. Zero slip (equal densities) reduces to the
+plain VOF path bit for bit. Located errors: `multiphase.mixture.particle_diameter` (unset or not positive), `physics.gravity` (zero),
+`multiphase.mixture.model` (with thermal `mass_transfer` or with `cavitation`, both untested combinations). NOT a multi-fluid
+(per-phase momentum) Euler-Euler model.
+
+Cavitation. Schnerr-Sauer with a bubble-number density: `alpha_v = x/(1 + x)`, `x = n (4/3) pi R^3`, inertia-controlled growth
+`R' = sign(p_sat - p) sqrt(2 |p_sat - p|/(3 rho_l))`, vapour mass source `mdot = rho_v rho_l/rho_m alpha_v (1 - alpha_v) (3/R) R'`.
+The source is coupled IMPLICITLY to the pressure equation: it is linearised by the chord to the saturation point, the slope goes on the
+diagonal of the pressure matrix and the linearisation is repeated until the delivered source equals the exact one to 1e-10 of a vapour
+fraction per step (at most 60 repetitions per pressure correction), so the pressure in a cavity sits at `p_sat` and the sign of the
+source is that of `p_sat - p` at the solved pressure. The vapour fraction never leaves `[alpha_floor, 1]`, `alpha_floor = x_0/(1 + x_0)`
+(every cell starts with the nuclei). The phase fraction is transported in advective form (`alpha_t + div(alpha phi) - alpha div phi`) when
+cavitation is on. The pressure is the absolute `p = p_rgh + rho g . (x - x_ref)`. LIMITATIONS: isothermal (no thermal effect on `p_sat`),
+no vapour compressibility, no non-condensable gas, no turbulence correction of the pressure, no surface tension in the growth law
+(Rayleigh without Plesset terms), no bubble-number transport; the flow Courant number must stay below about 1 through a cavity collapse
+(the incompressible liquid slug accelerates to several times the inlet speed; the registered `dt` did not). Located errors:
+`multiphase.cavitation.saturation_pressure`, `bubble_number_density`, `nucleus_radius` (unset or not positive),
+`multiphase.cavitation.model` (no `pressure = "fixed"` boundary for the volume to leave through; combined with `mass_transfer`).
