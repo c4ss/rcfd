@@ -36,6 +36,7 @@ pub mod sixdof;
 pub mod smoothing;
 pub mod solidification;
 pub mod sources;
+pub mod stepctl;
 pub mod thermal_bc;
 pub mod varden;
 pub mod viscoelastic;
