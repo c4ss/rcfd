@@ -8,6 +8,7 @@
 //! * faces `n_internal_faces..n_faces` are boundary faces, grouped by patch,
 //!   with the normal pointing out of the domain.
 
+pub mod adapt;
 pub mod edit;
 pub mod gen;
 pub mod inflate;
@@ -18,6 +19,7 @@ pub mod motion;
 pub mod non_conformal;
 pub mod octree;
 pub mod partition;
+pub mod polydual;
 pub mod predicates;
 pub mod quality;
 pub mod surface;
