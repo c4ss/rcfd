@@ -277,3 +277,20 @@ comparison (the acceptance of the roadmap entry cites none that I have read; a p
 
 1. This ADR committed alone. 2. F-128 code, targeted tests, runs. 3. F-126 code (generator, run module, keys), targeted tests, runs. 4. Docs (case-schema, reference-data, roadmap), addendum with measured values and deviations.
 5. Final gate on a `git archive` copy of the final commit.
+
+## Addendum 1 (registered after the first PLUG run, before any run of the corrected set-up)
+
+First PLUG run (as registered, steady, nx = 80): PL1 met (9.7e-8), PL5 met (4.4e-16), PL8 and LE1 met; PL2 missed (1.64e-3 against 1e-3), PL3 missed (1.5e-2 against 1e-6), PL4 missed (the change first fell below 1e-8 at update 144, against 40).
+Diagnosis so far (a, b are measured; c is the hypothesis the corrected set-up tests):
+(a) PL1 is exact by construction (the record is conservative); the measured p_c0 - p_last = 0.33884 against sum a_f dx = 0.33816 shows the face balance is not the cell balance, and the pressure the solver prints at the fixed-velocity inlet face (`pressure_face_values`) equals the
+cell value, without the body-force gradient term of the fixed-flux condition; (b) the deviation of u_x is largest in the first cell (-1.5e-2) and decays over about 5 cells; with refinement it falls only slowly (nx = 40, 80, 160, 320: 2.1e-2, 1.5e-2, 1.1e-2, 7.6e-3, about
+h^(1/2)), as expected from a source that is singular at the injection point (parcel number density ~ 1/v for parcels at rest, source ~ x^(-1/2)); (c) with a source that is smooth and starts away from the inlet boundary the plug is preserved much better and the global balance closes.
+PL4: the coupling change cannot fall faster than the carrier field it depends on settles (about 140 SIMPLE iterations for the cell pressure gradient and velocity to adjust to a changing source), so the registered 40 updates assumed a frozen carrier; this is a mis-specified limit, and is
+recorded as a known miss, not replaced.
+
+PL2, PL3 and PL4 stay as registered in ignored `*_known_miss` tests (PL3 and PL4) and PL2 (ignored, limit intact). New corrected set-up PLUG-B (a set-up defect: the rest-injection singularity at the boundary cell), registered here BEFORE it is run:
+`channel_2d` as PLUG, point injection at (0.4, 0.25, 0.05), velocity given (0.5, 0, 0), `tau = 5 s` (`d = 9.487e-3` for `rho_p = 1000`, `nu = 1e-3`), `rate = 2000`, window [0, 0.5], `mass_flow = 0.02`, tracking `end_time = 12`, `dt = 0.05`.
+Closed form: `v = U - (U - v0) e^{-t/tau}`, `x = x0 + U t - (U - v0) tau (1 - e^{-t/tau})`; `x(t_L) = L`; `F = mdot_p (v_L - v0)` (the parcels enter with momentum `mdot_p v0`).
+* PL1b `|F_s - mdot_p (v_L - v0)| <= 1e-6 F`; PL2b `|(p_in - p_out) A / rho - F| <= 1e-3 F` with the inlet pressure the cell value extrapolated with the body-force gradient of the fixed-flux condition (a definition, as used for PL2 in the corrected measurement);
+PL3b `max |u_x - 1| <= 2e-3` and `max |u_y| <= 2e-3` (estimate: the cell-pressure-gradient inconsistency at the start of the source is `a_max/2` with `a_max = mdot_p (U - v0)/(tau v0 rho A) = 0.08`, giving `dx a_max / (2 U^2) = 5e-4`; the limit has a factor 4).
+The measured values and the diagnosis are recorded in the result addendum. Definition notes for the measured PL1: `F_s := -sum rho V a` (the force the carrier exerts on the parcels; the record gives the momentum TO the carrier, which is minus that).
