@@ -345,8 +345,9 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             })
             .map_err(me)
         }
-        "annulus_3d" | "annulus_3d_interface" => {
-            // cylindrical annulus about z (F-031 MRF); the interface variant joins two blocks at z = lz/2
+        "annulus_3d" | "annulus_3d_interface" | "annulus_3d_stage" => {
+            // cylindrical annulus about z (F-031 MRF); the interface variant joins two blocks at z = lz/2; the stage
+            // variant (F-126, ADR 0059) leaves them unconnected for a mixing plane
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform
             } else {
@@ -360,6 +361,24 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             let nz = get_i(case, "mesh.nz").max(1) as usize;
             if get_s(case, "mesh.generator") == "annulus_3d" {
                 gen::annulus_3d(nx, ny, nz, r_in, r_out, lz, 0.0, g).map_err(me)
+            } else if get_s(case, "mesh.generator") == "annulus_3d_stage" {
+                let pick = |key: &str, same: usize| match get_i(case, key) {
+                    0 => same,
+                    n => n as usize,
+                };
+                gen::annulus_3d_stage(
+                    nx,
+                    ny,
+                    nz,
+                    pick("mesh.nx_right", nx),
+                    pick("mesh.ny_right", ny),
+                    pick("mesh.nz_right", nz),
+                    r_in,
+                    r_out,
+                    lz,
+                    g,
+                )
+                .map_err(me)
             } else {
                 let (nyr, nzr) = (
                     get_i(case, "mesh.ny_right") as usize,
@@ -708,6 +727,8 @@ pub struct Simulation {
     particles: Option<crate::particle_run::ParticleRun>,
     /// Steady two-way particle coupling (ADR 0059), `None` unless `particles.two_way` with a steady algorithm.
     two_way: Option<crate::particle_coupling::SteadyCoupling>,
+    /// Mixing plane between a frozen-rotor and a stationary zone (ADR 0059 D10), `None` unless `mixing_plane.enabled`.
+    mixing: Option<crate::mixing_run::MixingRun>,
     /// Iterations performed with a prescribed flow (the flow solver is not advanced).
     frozen_iter: usize,
     props: Option<Properties>,
@@ -1578,6 +1599,7 @@ impl Simulation {
             phase,
             particles: None,
             two_way: None,
+            mixing: None,
             frozen_iter: 0,
             props: Properties::from_case(case),
             t_init: get_f(case, "initial.temperature"),
@@ -1646,6 +1668,15 @@ impl Simulation {
                     sim.geom.mesh.n_cells(),
                 ));
             }
+        }
+        if crate::mixing_run::enabled(case) {
+            if !matches!(sim.engine, Engine::Steady(_)) {
+                return Err(diag(
+                    "mixing_plane.enabled",
+                    "the mixing plane is available with the steady simple and simplec algorithms",
+                ));
+            }
+            sim.mixing = Some(crate::mixing_run::MixingRun::new(case, &sim.geom)?);
         }
         let mut post_diags = crate::postproc::check_sim(&sim);
         post_diags.extend(crate::decomp::check_mesh(case, &sim.geom.mesh));
@@ -1816,6 +1847,11 @@ impl Simulation {
     /// The steady two-way particle coupling, if active (ADR 0059).
     pub fn two_way(&self) -> Option<&crate::particle_coupling::SteadyCoupling> {
         self.two_way.as_ref()
+    }
+
+    /// The mixing plane of a steady run (`mixing_plane.enabled`).
+    pub fn mixing(&self) -> Option<&crate::mixing_run::MixingRun> {
+        self.mixing.as_ref()
     }
 
     /// Stop the built-in particle hook (the library hook `particles::track_transient` tracks by itself).
@@ -2211,6 +2247,13 @@ impl Simulation {
                 if let Some(e) = &udf_error {
                     reason_override = Some(e.clone());
                 }
+                if let Some(mx) = &mut self.mixing {
+                    if mx.due(s.history.len()) {
+                        if let Err(e) = mx.exchange(&self.geom, &mut s.u, &mut s.p, &s.phi) {
+                            udf_error = Some(e);
+                        }
+                    }
+                }
                 if let Some(cat) = &mut self.catalogue {
                     cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
                 }
@@ -2294,7 +2337,8 @@ impl Simulation {
                     && res_sc < self.tol_u
                     && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u)
                     && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u)
-                    && self.two_way.as_ref().map_or(true, |t| t.converged());
+                    && self.two_way.as_ref().map_or(true, |t| t.converged())
+                    && self.mixing.as_ref().map_or(true, |m| m.converged());
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,
@@ -2727,6 +2771,9 @@ impl Simulation {
         }
         if let Some(t) = &self.two_way {
             self.monitors.push("res_particles", "", x, t.change());
+        }
+        if let Some(m) = &self.mixing {
+            self.monitors.push("res_mixing", "", x, m.change());
         }
         if let Some(sc) = &self.scalars {
             for (n, v) in sc.residuals() {
