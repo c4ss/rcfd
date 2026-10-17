@@ -408,6 +408,120 @@
       ]
     },
     {
+      "id": "lidcavity-re1000-ghia-botella",
+      "title": "Lid-driven cavity Re 1000 centreline u: Ghia et al. (1982) next to Botella and Peyret (1998)",
+      "case": "cavity",
+      "citation": "U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411; O. Botella, R. Peyret, Comput. Fluids 27 (1998) 421-433; both as tabulated in Table A-1 of arXiv:1807.04896",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://arxiv.org/abs/1807.04896",
+        "attribution": "Ghia, Ghia and Shin (1982); Botella and Peyret (1998)",
+        "notes": "Numbers read from Table A-1 of arXiv:1807.04896 (raw text of the PDF) on 2026-10-17; the original papers were not read. Only the 16 tabulated numbers per column are stored, not the paper. Used by crates/rcfd-api/tests/validation_cavity_ghia.rs (ADR 0060)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/cavity_re1000_ghia_botella_u.csv",
+          "retrieved": "2026-10-17",
+          "source_url": "https://arxiv.org/pdf/1807.04896",
+          "sha256": "584af490851179d633f9ac338c9d6e820c5f31717c882d3c9c498ea23f853cc1",
+          "bytes": 455
+        }
+      ]
+    },
+    {
+      "id": "bfs-er2-re800-literature",
+      "title": "Backward-facing step, expansion ratio 2, Re_D = 800: published reattachment lengths x_r/h",
+      "case": "backward_step",
+      "citation": "Table 2 of arXiv:2507.16509 (values of Rogers and Kwak, Barton, Erturk Comput. Fluids 37 (2008) 633, Kim and Moin, Lee and Mateescu, Guj and Stella, Grigoriev and Dargush, Keskar and Lyn, Gartling Int. J. Numer. Methods Fluids 11 (1990) 953, Gresho et al.)",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://arxiv.org/abs/2507.16509",
+        "attribution": "as listed in the citation",
+        "notes": "Ten numbers read from Table 2 of arXiv:2507.16509 on 2026-10-17; the originals were not read. Used by validation_bfs_step.rs (ADR 0060). Armaly et al. (1983) tables were not obtained."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/bfs_er2_re800_xr_literature.csv",
+          "retrieved": "2026-10-17",
+          "source_url": "https://arxiv.org/pdf/2507.16509",
+          "sha256": "4d58ed34a154f10c180f6374205da562989947383f26e0160b7a92e0b3cc52f3",
+          "bytes": 219
+        }
+      ]
+    },
+    {
+      "id": "blasius-lal-martin-2022",
+      "title": "Blasius boundary layer: f''(0), f'(eta) at eta = 1..5 and displacement-thickness coefficient",
+      "case": "flat_plate",
+      "citation": "A. Lal S., M. Martin, Accurate benchmark results of Blasius boundary layer problem using a leaping Taylor's series, arXiv:2204.02215 (2022)",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://arxiv.org/abs/2204.02215",
+        "attribution": "Lal and Martin (2022)",
+        "notes": "Seven numbers (15 digits) read from the tables of arXiv:2204.02215 on 2026-10-17. Used by validation_blasius_plate.rs (ADR 0060)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/blasius_lal_martin_2022.csv",
+          "retrieved": "2026-10-17",
+          "source_url": "https://arxiv.org/pdf/2204.02215",
+          "sha256": "6b582cb262fb93b7dbf08aa7b790551ae27c15663e2ec92b1db413f7d146e1ab",
+          "bytes": 198
+        }
+      ]
+    },
+    {
+      "id": "channel-mkm-chan180-sampled",
+      "title": "Turbulent channel Re_tau = 178.12 (nominal 180): sampled DNS mean velocity, centre-line and bulk velocity",
+      "case": "channel",
+      "citation": "R. D. Moser, J. Kim, N. N. Mansour, DNS of turbulent channel flow up to Re_tau=590, Phys. Fluids 11 (1999) 943-945; statistics file chan180/profiles/chan180.means",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Public DNS statistics; the file's redistribution terms are not stated, so only 9 sampled numbers derived from it are stored, not the file",
+        "url": "https://torroja.dmt.upm.es/turbdata/agard/chapter5/PCH10/chan180/profiles/chan180.means",
+        "attribution": "Moser, Kim and Mansour",
+        "notes": "U+ at y+ = 5, 10, 20, 30, 50, 100, 150 by linear interpolation of the 65-point half-channel file; U_c+ = file value at the centre; U_b+ = trapezoid integral of U over y in [0,1] (15.6787). Retrieved 2026-10-17 from the UPM mirror of the original site. Used by validation_channel_re180.rs (ADR 0060)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/mkm_chan180_sampled.csv",
+          "retrieved": "2026-10-17",
+          "source_url": "https://torroja.dmt.upm.es/turbdata/agard/chapter5/PCH10/chan180/profiles/chan180.means",
+          "sha256": "087299e077452c264ad8dbd3373d462c913564aa128c1f8b4f88d1c8fa10262a",
+          "bytes": 181
+        }
+      ]
+    },
+    {
+      "id": "cylinder-re100-literature",
+      "title": "Circular cylinder Re = 100: published Strouhal numbers and mean drag coefficients",
+      "citation": "Table 1 of arXiv:2303.09262 (Kravchenko et al., Oliveira, Sivakumar et al., Posdziech and Grundmann, Mossaz et al., Qu et al., Constant et al., Peng et al.; Williamson, Annu. Rev. Fluid Mech. 28 (1996), St only) and Table 3 of arXiv:1401.6513 (Ding)",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper, transcribed; no copyright claimed on the numbers",
+        "url": "https://arxiv.org/abs/2303.09262",
+        "attribution": "as listed in the citation",
+        "notes": "Numbers read from the raw text of the two arXiv PDFs on 2026-10-17; the original papers were not read. Used by validation_cylinder_re100.rs (ADR 0060)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/cylinder_re100_literature.csv",
+          "retrieved": "2026-10-17",
+          "source_url": "https://arxiv.org/pdf/2303.09262",
+          "sha256": "7eb78c3ffa7ff6e139c234392ebbf920b3a0e03bccf02b0fd15d9c1edad6c575",
+          "bytes": 276
+        }
+      ]
+    },
+    {
       "id": "dvd1983-tablev-natural-convection",
       "title": "Differentially heated square cavity, Pr 0.71, Ra 1e3 to 1e6: Table V benchmark results (de Vahl Davis 1983)",
       "case": "heated_cavity",

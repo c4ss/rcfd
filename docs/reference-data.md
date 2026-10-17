@@ -1118,3 +1118,20 @@ Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
 | Mixing loss non-negative for uniform pressure and non-negative normal velocity | derived | as ADR 0055; measured 11.8 percent of the energy flux for a 30 percent cosine axial distortion |
 | Ranz and Marshall (1952) correlation, Rosin-Rammler distribution, mixing-plane literature (Denton) | unverified | as in the wave 29A and 29C sections; not re-read |
 | Pressure error 6.85e-2 P at the hub wall against the exact centripetal gradient | measured | the plane-free control gives 1.13e-1, 6.62e-2, 4.24e-2 P for 4, 8, 16 radial layers (roughly first order); attributed, as an unisolated order-of-magnitude estimate, to the zero-gradient wall pressure; not compared with any other code |
+
+## Wave 30B: incompressible validation data actually read (ADR 0060, retrieved 2026-10-17)
+
+Every row below was read as raw text (`curl` plus `pdftotext -layout`, or the raw data file) in wave 30B; the numbers are stored in
+`validation-data/reference/` and registered in `validation-data/manifest.json`. Nothing here is typed from memory.
+
+| Value | Source and what was read | Result |
+|---|---|---|
+| Cavity Re 1000, u along x = 0.5, 15 rows, Ghia next to Botella and Peyret spectral values (largest difference 0.0063) | arXiv:1807.04896 Table A-1 ("Ghia, Table 1, p. 398" and "Botella, Table 9, p. 426") | verified (secondary copy of both); used in `validation_cavity_ghia.rs` |
+| Cavity Re 100 and 400 u, 16 rows each | raw CSV in github.com/PN-CourseWork/02689-AdvancedNumericalAlgorithmP3, equal to the in-repo table to the last digit | verified (secondary, student repository); the Ghia 1982 original, and Ghia v at Re 400 and 1000, were NOT obtained |
+| Backward step ER 2, Re_D = 800: ten published x_r/h values 11.48 to 12.20 | arXiv:2507.16509 Table 2 re-read in full (Rogers and Kwak, Barton, Erturk, Kim and Moin, Lee and Mateescu, Guj and Stella, Grigoriev and Dargush, Keskar and Lyn, Gartling, Gresho et al.) | verified as a quotation in a 2025 paper; the originals including Gartling (1990) and Erturk (2008) were NOT read. Armaly et al. (1983): data not obtained (host timed out, Cambridge paywalled), no check |
+| Blasius f''(0) = 0.33205733621519629893718, f'(eta) at 1..5, delta* = 1.72078765752 sqrt(nu x/U) | arXiv:2204.02215 (Lal and Martin 2022) Table 1 and benchmark tables, 32-digit Taylor series | verified; Cf = 0.664115/sqrt(Re_x) derived from f''(0) |
+| Channel DNS Re_tau = 178.12: U_c+ 18.301, U_b+ 15.6787, U+ at y+ = 5, 10, 20, 30, 50, 100, 150 | `chan180.means` of Moser, Kim and Mansour at torroja.dmt.upm.es/turbdata/agard/chapter5/PCH10/chan180/profiles/ (65 points, read and integrated); only the sampled numbers are stored (redistribution terms not stated) | verified (file read) |
+| Cylinder Re 100: C_D 1.314 to 1.370, St 0.164 to 0.167, experiment St 0.165 | arXiv:2303.09262 Table 1 (Newtonian rows) and arXiv:1401.6513 Table 3 | verified as quotations; the original papers were NOT read |
+| Moody, Colebrook, Dean friction correlations; Gartling and Ghia originals; Armaly | not obtained | still unverified or data not obtained; no wave 30B check uses them |
+
+Wave 30B measured results against the registered limits are in the addendum of ADR 0060 (known misses are the ignored `*_known_miss` tests in `crates/rcfd-api/tests/validation_*.rs`).

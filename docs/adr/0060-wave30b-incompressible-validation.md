@@ -195,3 +195,50 @@ unchanged; every printed table lists measured, limit and verdict.
 Armaly et al. (1983) tables and the Gartling and Ghia originals (not read); Ghia v at Re 400/1000; backward-step x_r for Re_D < 800
 from a published benchmark; the Moody/Colebrook/Dean pipe and channel friction correlations (not read; the friction check uses the
 DNS-derived 2/U_b+^2); turbulent cylinder; time-resolved quantities of the channel.
+
+## Addendum: measured results (2026-10-17)
+
+All limits above are unchanged. Commands: `cargo test --release -p rcfd-api --test validation_<name>`; ignored tests with `-- --ignored`.
+
+**V1 cavity (met except C5 at Re 1000).** Max |u - Ghia|: Re 100 n = 80 0.00449 (limit 0.010), |v - Ghia| 0.00915 (0.010); Re 400 n = 160 0.00184 (0.010);
+Re 1000 n = 128 0.00443 against Ghia and 0.00539 against Botella (0.012). C5: observed order of the RMS 2.14, 1.98, 1.85; GCI_fine(u_min) 0.29 %,
+0.19 %, 1.41 % (limit 1.0 %). MISS C5 at Re 1000 (ignored `c5_re1000_gci_known_miss`). Diagnosis: in the asymptotic range (p(u_min) 1.96), the
+Richardson-extrapolated u_min -0.3895 is within 0.001 of Botella's -0.38857 at y = 0.1719; n = 128 is too coarse for a 1 % GCI at Re 1000
+(u_min -0.32416, -0.37270, -0.38521). No solver defect. C6 converged on every run.
+
+**V2 step (all met).** x_r/h = 11.2393, 11.6720, 11.7965 on 5248, 20992, 83968 cells (3640 iterations on the fine mesh, 2166 s): inside
+[11.248, 12.432] (the coarse mesh alone would not be), -0.37 % from the mid-range 11.84; observed order 1.80, GCI_fine 0.53 % (limit 3 %).
+Data not obtained: Armaly (1983), Re_D < 800 benchmark values, Gartling original.
+
+**V3 Blasius (met with a corrected set-up).** SET-UP DEFECT: the registered plate starting right at the Dirichlet inlet missed everything
+(Cf sqrt(Re_x) deviation 9.6 to 14.4 %, profile 0.076, B4 p = 0.64; ignored `b1_b4_plate_at_inlet_setup_defect_known_miss`, limits intact). Bisection:
+independent of top boundary (open/slip/fixed), domain height, scheme, coupling, grading; it is the inlet/leading-edge interaction. The corrected test
+adds a 0.5 long shear-free moving-wall belt upstream of the plate (no solver change). Corrected results on 60/120/240 cells across: Cf sqrt(Re_x)
+within 0.27, 0.22, 0.46, 0.72 % at x = 0.25, 0.5, 0.75, 0.9 (limit 3 %); profile max |u/U - f'| 0.00228 (0.02); delta* + 0.013 %; order 1.11, GCI_fine 0.155 %
+(limits 1.0, 1 %). DEVIATION decided after seeing a miss: the registered B3 integral over the whole column missed (9.5 %, ill-conditioned because the
+free-stream displacement integral accumulates the outer-boundary error; ignored `b3_whole_column_displacement_thickness_known_miss`, limit 3 % intact);
+the corrected measurement integrates to eta = 10 with the local edge velocity and meets the same 3 % limit. Both disclosed here.
+
+**V4 channel Re_tau 178.** SST (wall resolved, ny 40/56/80, first-cell y+ 0.40/0.29/0.21): U_b+ 15.696, 15.542, 15.418 (DNS 15.679, finest +1.66 %,
+limit 5 %); Cf 3.41 % (10 %); U_c+ 17.954 (1.9 %, 5 %); U+ at y+ 10, 20, 30, 50, 100 within 2.4, 5.8, 4.9, 2.0, 0.5 % (8 %). D6 met. MISS D4: observed
+order 0.63 (>= 1.0) and GCI_fine 2.43 % (1 %), ignored `d4_sst_grid_convergence_known_miss`. Diagnosis: U_b+ keeps decreasing monotonically under
+refinement: ny 24 16.066, 112 15.335, 160 15.274 (successive differences 0.37, 0.155, 0.124, 0.083, 0.061), so the sequence has not reached the
+asymptotic range at ny = 80 and tends to about 15.1 to 15.2, i.e. the model's own mesh-converged value is about 3 % below the DNS; no defect proven.
+k-epsilon with wall functions (ny 8/12/16, cell-centre y+ 22/15/11): U_b+ 16.638, 18.256, 15.115 (+6.1, +16.4, -3.6 %); the ny = 8 and 16 deviations and all
+U_c+ points pass except ny = 12; MISS D5 ny = 12 U_b+ (0.164 > 0.10) and spread 18.8 % (> 5 %), ignored `d5_k_epsilon_wall_function_known_miss`. Diagnosis
+(`diagnose_channel_sequences`): ny 4..32 gives U_b+ 16.72, 16.64, 16.59, 16.64, 17.01, 18.26 (ny 12), 16.43, 15.12, 13.37, 12.29, 11.10 (y+ 44 down to 5.6):
+a bump near y+ 15 and a steady fall to -29 % when the first cell centre enters the buffer layer, i.e. a log-law wall function is used where the cell
+centre is outside its range of validity (y+ below about 30); no mesh-converged value exists, no defect proven.
+
+**V5 cylinder (ignored, 448 s).** 64x50 dt 0.1, 90x70 dt 0.07, 128x100 dt 0.05: St 0.14665, 0.15450, 0.15878 (fine -3.77 % of 0.165; K1 limit 3 %: MISS);
+C_D 1.2514, 1.2873, 1.3100 (fine -2.39 % of 1.342, K2 limit 4 %: met); observed order St 1.75, C_D 1.33, GCI_fine St 4.05 %, C_D 3.67 % (K3 limit 3 %: MISS);
+14, 15, 16 zero crossings (K4 met). Misses in ignored `k1_k3_strouhal_and_gci_known_miss`. Bisection in the registered order: (i) fine mesh with dt 0.025:
+St 0.16175 (-1.97 % of 0.165, inside 3 %), C_D 1.3234; (iii) r_out = 30 at dt 0.05: St 0.15781, C_D 1.2961 (-0.6 %, -1.1 %, so the far field is not the cause).
+Cause: temporal discretisation error of the first-order-in-time PISO step; mesh and dt were refined together, so the sequence is dominated by dt (halving
+dt alone moves St by +1.9 %). Steps (ii) and (iv) were not run. No defect proven; the registered K1 and K3 stand as missed.
+
+**Data pack.** Five datasets added to `validation-data/manifest.json` (`python validation-data/fetch.py verify` ok for all). `cargo test -p rcfd-cli --test data`
+currently fails with "manifest: sod-exact-marzouk2020: case 'sod' does not exist in cases/", an entry added by wave 30C, not by this wave.
+
+**Moved from unverified to verified:** see docs/reference-data.md, wave 30B section. Not obtained: Armaly (1983), Gartling and Ghia originals, Ghia v at Re 400/1000,
+Moody/Colebrook/Dean, Williamson original.
