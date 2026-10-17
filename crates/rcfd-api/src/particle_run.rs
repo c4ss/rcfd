@@ -10,6 +10,9 @@
 use crate::case::{Case, Diagnostic};
 use crate::particles::{self, UNSET};
 use crate::sim::Simulation;
+use rcfd_core::vec3::Vec3;
+use rcfd_fv::simple::BodyForce;
+use rcfd_fv::{FvGeometry, VectorField};
 use rcfd_particles::vtp::write_vtp;
 use rcfd_particles::{Flow, Particle, State, Tracker};
 use serde_json::{json, Value};
@@ -40,6 +43,25 @@ fn state_name(s: State) -> &'static str {
     }
 }
 
+/// Transient two-way coupling state (ADR 0059 D2-D3): the particles are advanced first, over the step interval, on the
+/// field of the old time level; the exchange of that interval is delivered to the carrier as a body acceleration that is
+/// constant over the step.
+pub struct TransientCoupling {
+    heat: bool,
+    rho: f64,
+    cp: f64,
+    /// The acceleration delivered to the current step (none when nothing was exchanged).
+    force: Option<BodyForce>,
+    /// The heat source of the current step [K/s] (heat transfer only).
+    heat_src: Option<Vec<f64>>,
+    /// Momentum delivered to the carrier so far, `sum rho V a h` [N s].
+    pub delivered: Vec3,
+    /// Momentum of the exchange record so far (the sum of the tracker records) [N s].
+    pub exchanged: Vec3,
+    /// Heat delivered to the carrier so far, `sum rho cp V q h` [J].
+    pub delivered_heat: f64,
+}
+
 /// Particle state of a running simulation.
 pub struct ParticleRun {
     /// The tracker (all parcels).
@@ -52,6 +74,7 @@ pub struct ParticleRun {
     track_every: usize,
     out_dir: Option<PathBuf>,
     tracks: Option<TrackLog>,
+    two_way: Option<TransientCoupling>,
 }
 
 fn io_err(e: std::io::Error, what: &str) -> String {
@@ -63,6 +86,20 @@ impl ParticleRun {
     pub fn new(case: &Case, tracker: Tracker, t0: f64) -> ParticleRun {
         let get = |p: &str| case.tree.get(p).ok();
         let int = |p: &str, d: i64| get(p).and_then(|v| v.as_i64()).unwrap_or(d);
+        let mut tracker = tracker;
+        let two_way = particles::two_way(case).then(|| {
+            tracker.enable_coupling();
+            TransientCoupling {
+                heat: particles::heat_transfer(case),
+                rho: get("physics.rho").and_then(|v| v.as_f64()).unwrap_or(1.0),
+                cp: get("physics.cp").and_then(|v| v.as_f64()).unwrap_or(1.0),
+                force: None,
+                heat_src: None,
+                delivered: [0.0; 3],
+                exchanged: [0.0; 3],
+                delivered_heat: 0.0,
+            }
+        });
         ParticleRun {
             tracker,
             steps: 0,
@@ -75,7 +112,87 @@ impl ParticleRun {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false)
                 .then(TrackLog::default),
+            two_way,
         }
+    }
+
+    /// Is the two-way coupling active?
+    pub fn is_two_way(&self) -> bool {
+        self.two_way.is_some()
+    }
+
+    /// The two-way state (delivered and exchanged totals), if active.
+    pub fn coupling(&self) -> Option<&TransientCoupling> {
+        self.two_way.as_ref()
+    }
+
+    /// The acceleration to deliver to the flow step in progress (two-way only).
+    pub fn two_way_force(&self) -> Option<&BodyForce> {
+        self.two_way.as_ref().and_then(|t| t.force.as_ref())
+    }
+
+    /// The heat source [K/s] of the flow step in progress (two-way with heat transfer only).
+    pub fn two_way_heat(&self) -> Option<&[f64]> {
+        self.two_way.as_ref().and_then(|t| t.heat_src.as_deref())
+    }
+
+    /// Two-way pre-step (before the flow step of length `dt`): advance the tracker by `min(dt, end - t)` on the old-level
+    /// velocity `u` (and temperature `temp`), then convert the exchange of that interval into the body acceleration and the
+    /// heat source of the step. Without two-way coupling this does nothing.
+    pub fn pre_step(
+        &mut self,
+        case: &Case,
+        geom: &FvGeometry,
+        u: &VectorField,
+        temp: Option<&[f64]>,
+        dt: f64,
+    ) -> Result<(), String> {
+        let Some(tw) = &mut self.two_way else { return Ok(()) };
+        tw.force = None;
+        tw.heat_src = None;
+        if !(self.tracker.time < self.end * (1.0 - 1e-12)) || !(dt > 0.0) {
+            return Ok(());
+        }
+        let h = dt.min(self.end - self.tracker.time);
+        if tw.heat {
+            if let (Some(t), Some(th)) = (temp, self.tracker.thermal_mut()) {
+                th.t_fluid.clear();
+                th.t_fluid.extend_from_slice(t);
+            }
+        }
+        if let Some(c) = self.tracker.coupling_mut() {
+            c.reset();
+        }
+        let fd = particles::flow_data_from(case, geom, u);
+        self.advance_step(&fd.flow(), h)?;
+        let tw = self.two_way.as_mut().expect("two-way");
+        let cpl = self.tracker.coupling().ok_or("the coupling record is missing")?;
+        let vol = geom.mesh.cell_volumes();
+        let mut cells = Vec::with_capacity(vol.len());
+        let mut any = false;
+        for c in 0..vol.len() {
+            let f = 1.0 / (tw.rho * vol[c] * h);
+            let a = [cpl.impulse[c][0] * f, cpl.impulse[c][1] * f, cpl.impulse[c][2] * f];
+            any |= a != [0.0; 3];
+            for k in 0..3 {
+                tw.exchanged[k] += cpl.impulse[c][k];
+                tw.delivered[k] += tw.rho * vol[c] * a[k] * h;
+            }
+            cells.push(a);
+        }
+        if any {
+            tw.force = Some(BodyForce::from_cells(geom, cells));
+        }
+        if tw.heat {
+            let q: Vec<f64> = (0..vol.len())
+                .map(|c| cpl.energy_heat[c] / (tw.rho * tw.cp * vol[c] * h))
+                .collect();
+            for c in 0..vol.len() {
+                tw.delivered_heat += tw.rho * tw.cp * vol[c] * q[c] * h;
+            }
+            tw.heat_src = Some(q);
+        }
+        Ok(())
     }
 
     /// Directory of the numbered `particles_<n>.vtp` files written during the run (none = not written).
@@ -121,6 +238,10 @@ impl ParticleRun {
         let t = sim.time();
         let dt = t - self.t_prev;
         self.t_prev = t;
+        if self.two_way.is_some() {
+            // the tracking of this step was done before the flow step (pre_step)
+            return Ok(());
+        }
         if !(self.tracker.time < self.end * (1.0 - 1e-12)) || dt <= 0.0 {
             return Ok(());
         }

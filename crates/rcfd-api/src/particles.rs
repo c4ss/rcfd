@@ -124,7 +124,11 @@ pub fn schema() -> Schema {
             )
             .field("cone_inner_half_angle", Schema::float(0.0).doc("Hollow cone: inner half angle [deg] in [0, cone_half_angle)"))
             .field("cone_axis", Schema::list(Schema::float(0.0)).doc("Cone axis [x, y, z] (3 components, non-zero)"))
-            .field("cone_speed", Schema::float(UNSET).doc("Cone injection speed [m/s] (> 0); -1 = unset")),
+            .field("cone_speed", Schema::float(UNSET).doc("Cone injection speed [m/s] (> 0); -1 = unset"))
+            .field(
+                "temperature",
+                Schema::float(UNSET).doc("Parcel temperature at injection [K] (ADR 0059); required (> 0) when particles.heat_transfer, -1 = unset"),
+            ),
     )
     .doc("Particle injections by name");
     let walls = Schema::named(
@@ -181,6 +185,13 @@ pub fn schema() -> Schema {
         .field("dispersion_cl", Schema::float(0.15).doc("dispersion = drw: constant C_L of the Lagrangian integral time T_L = C_L k/epsilon (> 0)"))
         .field("dispersion_crossing", Schema::boolean(true).doc("dispersion = drw: limit the interaction time by the eddy crossing time"))
         .field("dispersion_seed", Schema::int(1).at_least(0.0).doc("dispersion = drw: seed of the dispersion random numbers"))
+        .field("two_way", Schema::boolean(false).doc("Two-way coupling (ADR 0059): the momentum the parcels receive from the carrier is given back to the carrier momentum equation as a body acceleration impulse/(rho V T) (opposite sign to the parcel gain); transient: particles first on the field of the old time level, source constant over the step; steady: fixed-point iteration with a fresh tracker, source normalised by the injection window; constant-density segregated algorithms only"))
+        .field("two_way_relax", Schema::float(0.5).doc("Steady two-way: under-relaxation beta of the source, S <- S + beta (S_new - S), 0 < beta <= 1"))
+        .field("two_way_every", Schema::int(1).at_least(1.0).doc("Steady two-way: re-track every this many iterations (>= 1)"))
+        .field("two_way_start", Schema::int(0).at_least(0.0).doc("Steady two-way: first iteration (from 0) at which the coupling is updated"))
+        .field("two_way_tolerance", Schema::float(1e-6).doc("Steady two-way: the run counts as converged only if the relative change of the coupling source is below this (> 0)"))
+        .field("heat_transfer", Schema::boolean(false).doc("Ranz-Marshall lumped heat transfer between the parcels and the carrier (ADR 0059; needs energy.enabled, physics.cp, physics.conductivity, particle_cp and an injection temperature); with two_way the heat given by the parcels enters the temperature equation (the mechanical energy exchange and the drag dissipation are not fed in)"))
+        .field("particle_cp", Schema::float(UNSET).doc("Particle specific heat [J/(kg K)] (> 0 when heat_transfer), -1 = unset"))
         .field("walls", walls)
         .field("injection", injection)
         .field("output_file", Schema::string("").doc("VTK PolyData (.vtp) file of the particles written at the end by the library hooks track_frozen / track_transient (relative to the working directory); the run path (rcfd run, service) writes particles.vtp into the output directory instead; empty = none"))
@@ -198,12 +209,144 @@ pub fn schema() -> Schema {
         )
 }
 
+/// Is two-way coupling requested (ADR 0059)?
+pub fn two_way(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.two_way")
+}
+
+/// Is the lumped heat transfer requested (ADR 0059)?
+pub fn heat_transfer(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.heat_transfer")
+}
+
+/// Checks of the two-way coupling and heat-transfer keys (ADR 0059 D1-D9), located.
+fn check_coupling(case: &Case, out: &mut Vec<Diagnostic>) {
+    let two = gb(case, "particles.two_way");
+    let heat = gb(case, "particles.heat_transfer");
+    let names = injection_names(case);
+    if two {
+        let alg = gs(case, "solver.algorithm");
+        let steady = matches!(alg.as_str(), "simple" | "simplec");
+        if !matches!(alg.as_str(), "simple" | "simplec" | "piso" | "pimple") {
+            out.push(d(
+                "particles.two_way",
+                format!("two-way coupling is available with the simple, simplec, piso and pimple algorithms, not \"{alg}\" (ADR 0059)"),
+            ));
+        }
+        if gb(case, "solver.frozen_flow") {
+            out.push(d(
+                "particles.two_way",
+                "two-way coupling needs a solved flow; it is not available with solver.frozen_flow",
+            ));
+        }
+        if gb(case, "dynamic_mesh.enabled") {
+            out.push(d(
+                "particles.two_way",
+                "two-way coupling is not available with dynamic_mesh.enabled",
+            ));
+        }
+        if gf(case, "solver.error_tolerance") > 0.0 {
+            out.push(d(
+                "particles.two_way",
+                "two-way coupling is not available with solver.error_tolerance > 0 (the step is not known before the flow step)",
+            ));
+        }
+        if gs(case, "solver.time_advance") == "fractional_step" {
+            out.push(d(
+                "particles.two_way",
+                "two-way coupling is not available with solver.time_advance = fractional_step",
+            ));
+        }
+        let r = gf(case, "particles.two_way_relax");
+        if !(r > 0.0 && r <= 1.0) {
+            out.push(d(
+                "particles.two_way_relax",
+                "the coupling relaxation must be in (0, 1]",
+            ));
+        }
+        if !(gf(case, "particles.two_way_tolerance") > 0.0) {
+            out.push(d(
+                "particles.two_way_tolerance",
+                "the coupling tolerance must be positive",
+            ));
+        }
+        if steady && names.len() > 1 {
+            // one normalisation window for all injections
+            let end = gf(case, "particles.end_time");
+            let key = |n: &String| {
+                let p = |f: &str| format!("particles.injection.{n}.{f}");
+                let e = match gf(case, &p("end_time")) {
+                    t if t == UNSET => end,
+                    t => t,
+                };
+                (gf(case, &p("rate")), gf(case, &p("start_time")), e)
+            };
+            let k0 = key(&names[0]);
+            for n in &names[1..] {
+                if key(n) != k0 {
+                    out.push(d(
+                        format!("particles.injection.{n}.rate"),
+                        format!(
+                            "steady two-way coupling needs the same rate, start_time and end_time for all injections (differs from '{}')",
+                            names[0]
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    if heat {
+        if !two {
+            out.push(d(
+                "particles.heat_transfer",
+                "heat transfer needs particles.two_way = true (the temperature of the parcels is tracked with the carrier temperature fed back)",
+            ));
+        }
+        if !gb(case, "energy.enabled") {
+            out.push(d(
+                "particles.heat_transfer",
+                "heat transfer needs energy.enabled = true",
+            ));
+        }
+        if !(gf(case, "physics.cp") > 0.0) {
+            out.push(d("physics.cp", "heat transfer needs physics.cp > 0"));
+        }
+        if !(gf(case, "physics.conductivity") > 0.0) {
+            out.push(d(
+                "physics.conductivity",
+                "heat transfer needs physics.conductivity > 0",
+            ));
+        }
+        if !(gf(case, "particles.particle_cp") > 0.0) {
+            out.push(d(
+                "particles.particle_cp",
+                "heat transfer needs the particle specific heat (> 0); -1 means unset",
+            ));
+        }
+        for n in &names {
+            let k = format!("particles.injection.{n}.temperature");
+            if !(gf(case, &k) > 0.0) {
+                out.push(d(
+                    k,
+                    "heat transfer needs the injection temperature [K] (> 0); -1 means unset",
+                ));
+            }
+        }
+    }
+}
+
 /// Settings checks (no mesh needed).
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     if !enabled(case) {
+        for k in ["two_way", "heat_transfer"] {
+            if gb(case, &format!("particles.{k}")) {
+                out.push(d(format!("particles.{k}"), "needs particles.enabled = true (ADR 0059)"));
+            }
+        }
         return out;
     }
+    check_coupling(case, &mut out);
     if gf(case, "particles.density") <= 0.0 {
         out.push(d(
             "particles.density",
@@ -519,7 +662,8 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
                 inner_half_angle: gf(case, &p("cone_inner_half_angle")).to_radians(),
                 speed: gf(case, &p("cone_speed")),
             }),
-            temperature: None,
+            temperature: (heat_transfer(case) && gf(case, &p("temperature")) != UNSET)
+                .then(|| gf(case, &p("temperature"))),
         };
         if ext != InjectorExt::default() {
             tr.set_injector_ext(n, ext)
@@ -541,6 +685,19 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
         )
         .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
     }
+    if heat_transfer(case) {
+        // carrier temperature of the cells: the energy solution
+        let t_fluid = sim
+            .field("T")
+            .map_err(|e| vec![d("particles.heat_transfer", format!("carrier temperature: {e}"))])?;
+        tr.set_thermal(rcfd_particles::Thermal {
+            cp_p: gf(case, "particles.particle_cp"),
+            k_f: gf(case, "physics.conductivity"),
+            cp_f: gf(case, "physics.cp"),
+            t_fluid,
+        })
+        .map_err(|e| vec![d("particles.heat_transfer", e.to_string())])?;
+    }
     Ok(tr)
 }
 
@@ -553,8 +710,12 @@ pub(crate) struct FlowData {
 }
 
 pub(crate) fn flow_data(case: &Case, sim: &Simulation) -> FlowData {
-    let u = sim.velocity();
-    let geom = &sim.geom;
+    flow_data_from(case, &sim.geom, sim.velocity())
+}
+
+/// [`flow_data`] for an explicit geometry and velocity field (the two-way coupling tracks on the field of the old time
+/// level, ADR 0059).
+pub(crate) fn flow_data_from(case: &Case, geom: &rcfd_fv::FvGeometry, u: &rcfd_fv::VectorField) -> FlowData {
     let bv = u.boundary_values(geom);
     let n = u.values.len();
     let mut grad = vec![[[0.0; 3]; 3]; n];
@@ -639,6 +800,12 @@ pub fn track_frozen(case: &Case, sim: &Simulation) -> std::result::Result<Tracke
 /// Advance `sim` step by step (a transient algorithm) and track the particles over each flow step on the current field,
 /// until `particles.end_time` or the end of the simulation.
 pub fn track_transient(case: &Case, sim: &mut Simulation) -> std::result::Result<Tracker, Vec<Diagnostic>> {
+    if two_way(case) {
+        return Err(vec![d(
+            "particles.two_way",
+            "track_transient is one-way; two-way coupling runs inside Simulation::step",
+        )]);
+    }
     sim.detach_particles();
     let mut tr = build_tracker(case, sim)?;
     if sim.is_steady() {
