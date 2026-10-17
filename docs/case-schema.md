@@ -203,6 +203,12 @@ radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the c
 upper block has `ny_right` x `nz_right` cells (0 = same as the lower block). Both blocks have `nx` cells around, so the
 rim polygons coincide and the radial rings differ.
 
+`annulus_3d_stage` (ADR 0059): the same two blocks WITHOUT any connection: one mesh, one point list, no shared face or
+point. Patches `inner`, `outer` (both blocks), `zmin` (inlet of the lower block), `plane_out` (top of the lower block),
+`plane_in` (bottom of the upper block), `zmax`. The upper block has `nx_right` x `ny_right` x `nz_right` cells (0 = same as
+`nx`, `ny`, `nz`), so the numbers of cells around may differ. The plane is a pair of boundary patches coupled by the
+`mixing_plane` section (below), not by the F-114 join.
+
 ### Swept pipe (`mesh.generator = "pipe_sweep"`, F-235)
 
 An all-hex circular pipe of radius `r_out` and length `lz` along z: an `nx` x `nx` Cartesian core (half-width
@@ -1142,6 +1148,21 @@ numeric key has the sentinel `-1` = unset with a located error when needed. The 
 | `tracks` | `false` | run path: also write `particle_tracks.csv` (`id,time,x,y,z,state`) |
 | `track_every` | `1` (>= 1) | `tracks = true`: log a position every n tracking steps while the parcel is active (always at injection, when it leaves, and at the end) |
 
+Two-way coupling (F-128, ADR 0059), all keys additive and inert when unset:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `two_way` | `false` | give the momentum the parcels receive back to the carrier as a body acceleration `impulse/(rho V T)` with the opposite sign (momentum is conserved); needs `particles.enabled`; with `simple`/`simplec`/`piso`/`pimple` only |
+| `two_way_relax` | `0.5` | steady: under-relaxation of the source, `a <- a + beta (a_new - a)` from 0, `0 < beta <= 1` |
+| `two_way_every`, `two_way_start` | `1`, `0` | steady: re-track every n iterations from iteration `start` (a fresh tracker over `0..end_time` on the current field; every parcel must leave or deposit by `end_time`, else a located error at `particles.end_time`) |
+| `two_way_tolerance` | `1e-6` | steady: the run is converged only if the relative change of the source (monitor `res_particles`) is below this, with at least 2 updates |
+| `heat_transfer`, `particle_cp`, `injection.<n>.temperature` | `false`, `-1`, `-1` | Ranz-Marshall lumped heat transfer; with `two_way` the heat the parcels give the carrier enters the temperature equation (needs `energy.enabled`, `physics.cp`, `physics.conductivity`); dissipation is not fed in; `heat_transfer` without `two_way` is a located error |
+
+Steady source: window `W = N/R` (parcels injected per injection over the injection rate; all injections must have the same rate and window);
+the source is held fixed between updates. Transient: the tracker advances over each flow step on the old-level field, the source of that
+step is `impulse/(rho V h)`; the source is cleared when no force is set. Not delivered: sub-iteration of the transient exchange, the
+mechanical energy exchange, `heat_transfer` without `two_way`, `frozen_flow`, `dynamic_mesh` (located errors).
+
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
 --check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`
@@ -1155,6 +1176,34 @@ when the driver has an output directory), `particle_report.json` (`time`, `injec
 restartable (the tracker state is not in the checkpoint; the run-control warning is emitted). Service method `particles.report`
 (`session`, optional `with_tracks`) returns the report of the live session (a steady session is tracked on demand). The flow is
 never modified: its fields are bit-identical with `particles.enabled` true or false (ADR 0037 W3).
+
+## `mixing_plane`
+
+Stage (mixing-plane) interface between a frozen-rotor zone and a stationary zone in the steady loop (F-126, ADR 0055, ADR 0059).
+`mixing_plane.enabled = false` by default; with it off nothing changes (bit-identical). The two zones are joined only by two boundary
+patches, typically the mesh generator `annulus_3d_stage`. Before every `every`-th iteration the upstream outlet faces are circumferentially
+averaged in radial bands (mass, angular momentum and normal momentum flux conserved) and the state is passed to the downstream inlet
+faces as a per-face fixed absolute velocity; the band pressure of the downstream inlet is passed back to the upstream outlet faces as a
+per-face fixed pressure. Both are under-relaxed.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `false` | switch |
+| `upstream_patch` | `""` | outlet patch of the rotor zone; its `[boundaries]` section needs `velocity = "zero_gradient"`, `pressure = "fixed"` (the plane sets the value), no `bc_kind` |
+| `downstream_patch` | `""` | inlet patch of the stationary zone; `velocity = "fixed"` (the plane sets the value), no `bc_kind` |
+| `axis`, `origin` | `[0, 0, 1]`, `[0, 0, 0]` | rotation axis (non-zero) and a point on it |
+| `bands` | `-1` | number of equal radial bands (>= 1), must be set; the bands must coincide with radial cell layers of both sides |
+| `r_min`, `r_max` | `-1`, `-1` | band range; `-1` = the vertex radii extremes of the two patches; both or neither, `r_max > r_min >= 0` |
+| `relax` | `0.5` | under-relaxation, `0 < relax <= 1` |
+| `every` | `1` | exchange interval in iterations (>= 1) |
+| `tolerance` | `1e-6` | the run is converged only if the relative change of the exchange (monitor `res_mixing`) is below this, with at least 2 exchanges |
+
+Located errors: unknown or equal patches, patches without a `[boundaries]` section, a `bc_kind` on either patch, wrong velocity or pressure
+kinds, `bands` unset, `r_min >= r_max`, zero axis, `relax`, `every`, `tolerance` out of range, any algorithm other than `simple`/`simplec`,
+`solver.frozen_flow`; at run time a band whose flux cancels fails the run with a message starting `mixing_plane:`. Not delivered: transient
+and coupled solvers, compressible mixed-out state, rothalpy, area-fraction splitting across band edges, curved or non-aligned interfaces,
+sector periodicity, turbulence or scalar transfer through the plane. Unequal numbers of cells around are allowed (the passed axial
+velocity is scaled by the ratio of the two polygon areas).
 
 ## Wave 19C: `restart`, `chain`, setup rules (F-115, F-241, F-240, ADR 0031)
 

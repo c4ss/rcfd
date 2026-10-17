@@ -1085,3 +1085,19 @@ NOT ATTEMPTED. Full multi-fluid Euler-Euler (per-phase momentum, lift, virtual m
 | Cavitating venturi (2-D, 80 x 20): bounded vapour fraction | derived | N2: `alpha_v` in `[4.19e-4, 0.99993]` over 6000 steps; periodic cavity growth and collapse with a water-hammer-like pulse (ADR 0056 addendum) |
 | Cavitating venturi N3 end of run, N4, N4', N5 | MISS | known-miss tests with the registered limits intact: end-of-run phase (cavity collapsed), advection into `p >= p_sat` cells (31763 events), end-of-step source sign (16 events), global balance 1.96e-5 against 1e-6 |
 | Void-fraction profile of a bubble column, sheet-cavity length of a hydrofoil | not used | no comparison attempted |
+
+## Wave 30A two-way particle coupling and mixing plane in the solver loops (F-128, F-126, ADR 0059)
+
+No source was read in this wave and no web page was fetched; every reference below is derived from first principles or recalled from memory
+(unverified). No vendor code, binary or install was used. No published particle-laden jet, no spray, no published turbomachine (Rotor 37,
+Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
+
+| Item | Status | Note |
+|------|--------|------|
+| Momentum given to the carrier is minus the momentum the parcels receive from it; the sum is conserved | derived | Newton's third law on the drag impulse; the record is conservative to round-off (J2 5.7e-16) |
+| Steady plug: force on the carrier per unit area balances the pressure drop, `F = mdot_p (v_L - v0)`, with `v = U - (U - v0) e^{-t/tau}`, `x = x0 + U t - (U - v0) tau (1 - e^{-t/tau})` | derived | uniform stream cannot change by continuity; PLUG-B measured F 1.8e-5 and pressure drop 7.6e-4 off it (limits 1e-6 miss, 1e-3 met) |
+| Free-vortex plus uniform axial flow `u = W z + (Gamma/r) theta`, `p = p0 - Gamma^2/(2 r^2)` as an exact steady Navier-Stokes solution | derived | curl u = 0 so the viscous term vanishes; convection balances the radial pressure gradient; the MRF terms cancel for any axisymmetric field, so the field is exact for any rotor speed |
+| Mass flux and angular momentum flux conservation across the plane per band | derived | `u_n = Q/A'` and `u_theta = Gamma/r` by construction (identity checks, 1e-14), so MP2 and MP3 test the wiring, not the physics |
+| Mixing loss non-negative for uniform pressure and non-negative normal velocity | derived | as ADR 0055; measured 11.8 percent of the energy flux for a 30 percent cosine axial distortion |
+| Ranz and Marshall (1952) correlation, Rosin-Rammler distribution, mixing-plane literature (Denton) | unverified | as in the wave 29A and 29C sections; not re-read |
+| Pressure error 6.85e-2 P at the hub wall against the exact centripetal gradient | measured | the plane-free control gives 1.13e-1, 6.62e-2, 4.24e-2 P for 4, 8, 16 radial layers (roughly first order); attributed, as an unisolated order-of-magnitude estimate, to the zero-gradient wall pressure; not compared with any other code |
