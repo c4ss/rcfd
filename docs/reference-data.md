@@ -53,6 +53,23 @@ answered with HTTP 403 in this wave and was not re-read. The 1983 printed tables
 secondary sources* only. The coupled-solver tests claim agreement with these numbers within 2 percent (measured 0.02 to 0.74 percent),
 nothing more.
 
+Wave 30C (ADR 0061) re-check of the cavity table against the primary source: the 1983 paper itself was read as a page scan (https://elearning.univ-bejaia.dz/mod/resource/view.php?id=71697, Table V on page 256) and
+all eleven quantities at the four Rayleigh numbers were transcribed (`cases/heated_cavity/reference/devahldavis1983_tableV.csv`): Nu_avg 1.118, 2.243, 4.519, 8.800; Nu_max 1.505, 3.528, 7.717, 17.925 at z = 0.092, 0.143, 0.081, 0.0378;
+u_max 3.649, 16.178, 34.73, 64.63 at z = 0.813, 0.823, 0.855, 0.850; v_max 3.697, 19.617, 68.59, 219.36 at x = 0.178, 0.119, 0.066, 0.0379. Every value matches the secondary sources above, so Nu_avg, u_max, v_max and Nu_max
+are now *verified, primary* and the locations of the maxima are read for the first time. The paper states the accuracy as better than 1 percent at the highest Rayleigh number and down to one tenth of that at the lowest. Tables I to IV
+(the other Prandtl numbers and the reference-mesh listings) were not used. The transcription from the scan is by eye; the agreement with the independently published copies is the check on it.
+
+Other values read in wave 30C (all numeric tables of public pages, used by the ADR 0061 tests):
+
+| Value | Source | Status |
+|---|---|---|
+| Sod star state p* 0.30313, u* 0.92745, rho*L 0.42632, rho*R 0.26557, shock speed 1.75216, fan head -1.18322 and tail -0.07027 | Marzouk, Sci. Afr. 10 (2020) e00573 = arXiv:2108.01709 Table 2 (read as text); the shock speed also from the Rankine-Hugoniot condition | verified, secondary (paper read; Sod 1978 and Toro not read) |
+| Fully developed laminar tube Nu_D 3.66 (constant wall T) and 4.36 (constant flux); entry length x_fd,t = 0.05 Re Pr D; Hausen Nu_m = 3.66 + 0.0668 Gz / (1 + 0.04 Gz^(2/3)) | BYU ME340 table 8.4, https://www.et.byu.edu/~vps/ME340/TABLES/8.4.pdf | verified, secondary (Hausen's paper, Shah and London, Incropera not read). The 0.05 Re Pr D rule is the constant-T rule; constant flux needs a longer pipe (ADR 0061 addendum 3) |
+| Parallel-plate Graetz tables (theta_b, local Nu for constant wall T and constant flux, limits 7.5407 and 8.2353) | NPTEL ME-662 lecture 19, https://archive.nptel.ac.in/content/storage2/courses/112101002/downloads/l19.pdf, slides 11 to 19 | verified, secondary; the tube Graetz local-Nu table was not obtained (data not obtained) |
+| Flat plate Cf = 1 / (17.08 (log10 Re_theta)^2 + 25.11 log10 Re_theta + 6.012) (Karman-Schoenherr), Coles-law u+(y+) at Re_theta = 10000 | NASA TMR https://turbmodels.larc.nasa.gov/flatplate_val.html (page text) and its `cf_K-S.dat`, `u+y+.dat` (formula agrees with the data file to 1e-6; 71 of the 2685 rows stored) | verified, primary data of the TMR; the page draws 5 percent error bars on Cf, which is the only stated uncertainty |
+
+Not obtained in wave 30C: de Vahl Davis Tables I to IV, Shah and London, Hausen (1943), Incropera and Kays, Sod (1978), any NACA 0012 surface data (case not attempted).
+
 ## Exact Riemann solver, Sod problem and oblique shock
 
 Used in `crates/rcfd-fv/src/riemann.rs` tests, `compressible.rs` wedge tests.
