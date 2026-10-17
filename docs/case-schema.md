@@ -1331,5 +1331,48 @@ compressible are refused); `fluid.density` not `constant`; `turbulence.model`, `
 `mesh.periodic_x/y`; non-default `physics.rho` / `physics.nu`; a boundary velocity other than `fixed` (no-slip: value 0) or
 `zero_gradient` (so no `symmetry`, `partial_slip`, `marangoni`, `freestream`, `moving_wall`, `shear`), a pressure other than `fixed` or
 `zero_gradient`, a catalogue boundary kind; unset required keys. Reports that assume one density (force, moment, y_plus, heat_flow,
-mass_flow, mass_weighted_average, vector_flux) are refused. The pressure solve is plain preconditioned CG (the AMG option is not
-used: it breaks down on the 1000:1 density jump, see the ADR addendum).
+mass_flow, mass_weighted_average, vector_flux) are refused. The pressure solve is preconditioned CG, with smoothed-aggregation AMG
+as the preconditioner above 2000 cells (wave 28A: the earlier breakdown on the 1000:1 density jump was a zero filtered diagonal in the
+AMG setup, fixed in `rcfd-linalg`; ADR 0052 addendum 1).
+
+## Wave 28A: `multiphase.mass_transfer`, `multiphase.waves`, `multiphase.reference_point` (F-226, F-227, ADR 0052)
+
+All of these are inert (silent at their defaults, a located error when set) unless `multiphase.enabled = true` and the model or the
+wave section is switched on.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `multiphase.reference_point` | [] (origin) | `x_ref` of the gravity potential `g . (x - x_ref)`; for a tank with an open top give a point on that boundary so that still water is in equilibrium with `p_rgh = 0` there |
+| `multiphase.mass_transfer.model` | "none" | `none`, `lee` or `hertz_knudsen` |
+| `multiphase.mass_transfer.liquid_phase` | "phase_1" | which phase is the liquid (the other is its vapour) |
+| `multiphase.mass_transfer.saturation_temperature` | -1 (unset) | `T_sat` [K], required > 0 with a model |
+| `multiphase.mass_transfer.latent_heat` | -1 (unset) | `h_fg` [J/kg], required > 0 with a model; reported only, see below |
+| `multiphase.mass_transfer.temperature` | -1 (unset) | prescribed temperature [K] at `temperature_point`, required > 0 with a model |
+| `multiphase.mass_transfer.temperature_gradient` | [] | constant gradient [K/m] `[gx, gy, gz]`; empty = uniform |
+| `multiphase.mass_transfer.temperature_point` | [] (origin) | where the temperature equals `temperature` |
+| `multiphase.mass_transfer.evaporation_frequency`, `condensation_frequency` | 0 | `lee` only: `c_evap`, `c_cond` [1/s] |
+| `multiphase.mass_transfer.accommodation`, `schrage` | 1, false | `hertz_knudsen` only: accommodation coefficient in (0, 1], Schrage factor |
+| `multiphase.mass_transfer.molar_mass`, `vapour_pressure`, `saturation_pressure` | -1 (unset) | `hertz_knudsen` only: `M` [kg/mol], vapour-side pressure [Pa], `p_sat` at `T_sat` [Pa]; `p_sat(T)` is Clausius-Clapeyron with the constant `h_fg` |
+| `multiphase.waves.inlet_patch` | "" | boundary patch at the smallest `x` that generates the wave; its velocity must be `fixed` (replaced every step) |
+| `multiphase.waves.height`, `period`, `depth` | -1 (unset) | wave height `H`, period `T`, still-water depth `h` [m, s, m]; required > 0 with an inlet |
+| `multiphase.waves.level` | -1 (= `depth`) | `y` of the still-water surface |
+| `multiphase.waves.order`, `phase`, `ramp_periods` | 1, 0, 2 | 1 = Airy, 2 = second-order Stokes; phase offset [rad]; start-up ramp length in periods |
+| `multiphase.waves.beach` | "none" | `still_water`: relaxation zone that blends `alpha` and `u` toward still water |
+| `multiphase.waves.beach_x_inner`, `beach_x_outer` | 0, 0 | `x` where the computed solution has weight 1 / the target has weight 1; must differ |
+| `multiphase.waves.beach_blend`, `beach_exponent` | "exponential", 3.5 | weight shape `1 - (exp(chi^p) - 1)/(e - 1)` or `(1 - chi)^n` |
+
+Mass transfer. The liquid fraction loses `mdot dt / rho_l` (Lee: the exponential integrator of the frozen-temperature relaxation
+`d alpha / dt = -c theta alpha`, `theta = (T - T_sat)/T_sat`, so `alpha` stays in [0, 1]; Hertz-Knudsen: the kinetic flux times
+`|grad alpha|`), and the pressure equation receives the volume source `mdot (1/rho_vapour - 1/rho_liquid)`. The volume has to leave,
+so at least one boundary needs `pressure = "fixed"` (located error otherwise). LIMITATIONS: there is NO energy equation in the
+multiphase path. The temperature is a prescribed field (uniform plus a constant gradient); the latent heat `h_fg` is used for the
+Clausius-Clapeyron `p_sat` and for a reported latent power only, there is no latent-heat feedback on the temperature, no Stefan problem
+or boiling curve is solved, and the momentum equation has no phase-change term in `rho phi`. The rate is limited by the liquid or
+vapour available in the cell (clipping, ADR 0052 addendum 2).
+
+Waves. 2-D tank, propagation along +x, gravity along -y (any other gravity is a located error on `physics.gravity`), phase 1 the
+water. The inlet sets per-face velocity and `alpha` from the linear or second-order Stokes kinematics (`rcfd_fv::waves`) with the
+ramp; the relaxation zone is applied after the pressure correction as `w * computed + (1 - w) * target` with the weights of the
+wave library, and the volume it adds or removes is reported (`relax_volume`) so that the volume balance stays an identity. Use
+`multiphase.reference_point` on the open top. Not delivered: irregular and directional waves in the tree, a wave-making piston,
+three-dimensional tanks, a relaxation target other than still water in the tree, and a general-direction inlet.

@@ -6,7 +6,11 @@ use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
 use rcfd_core::settings::Schema;
 use rcfd_core::vec3;
-use rcfd_fv::vof::{shape_fraction, Shape, VofSettings, VofSolver};
+use rcfd_fv::vof::{
+    shape_fraction, MassTransfer, MassTransferModel, RelaxTarget, RelaxZone, Shape, VofSettings, VofSolver, WaveInlet,
+    WaveSettings,
+};
+use rcfd_fv::waves::{Blend, Wave};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use std::sync::Arc;
 
@@ -60,6 +64,47 @@ pub fn schema() -> Schema {
         .field("alpha_courant", Schema::float(0.25).range(1e-3, 0.5).doc("Largest Courant number of a phase-fraction sub-step (the phase fraction is sub-cycled inside each flow step)"))
         .field("curvature_smoothing", Schema::int(2).range(0.0, 10.0).doc("Smoothing passes of the phase fraction before the curvature is taken"))
         .field("initial", initial)
+        .field("reference_point", Schema::list(Schema::float(0.0)).doc("Point [x, y, z] where p_rgh equals p (origin of the gravity potential g.(x - x_ref)); empty = the origin. For a tank with an open top set a point on the open boundary so that still water is in equilibrium with p_rgh = 0 there"))
+        .field("mass_transfer", mass_transfer_schema())
+        .field("waves", waves_schema())
+}
+
+fn mass_transfer_schema() -> Schema {
+    let nums = |doc: &'static str| Schema::list(Schema::float(0.0)).doc(doc);
+    Schema::object()
+        .doc("Evaporation-condensation between the two phases (F-226, ADR 0052 B): sources in the phase-fraction equation (S_alpha = -mdot / rho_l for the liquid) and the continuity equation (volume source mdot (1/rho_v - 1/rho_l)). There is NO energy equation in the multiphase path: the temperature is a PRESCRIBED field (uniform plus an optional constant gradient) and the latent heat is only reported, never applied. A pressure patch (boundaries.<patch>.pressure = fixed) is required for the volume to leave through")
+        .field("model", Schema::enumeration("none", &["none", "lee", "hertz_knudsen"]).doc("none, lee (temperature-driven relaxation, rate c alpha rho theta with theta = (T - T_sat)/T_sat) or hertz_knudsen (kinetic flux times |grad alpha|, Clausius-Clapeyron saturation pressure)"))
+        .field("liquid_phase", Schema::enumeration("phase_1", &["phase_1", "phase_2"]).doc("Which phase is the liquid (the other is its vapour)"))
+        .field("saturation_temperature", Schema::float(UNSET).doc("T_sat [K] (> 0); -1 = unset"))
+        .field("latent_heat", Schema::float(UNSET).doc("h_fg [J/kg] (> 0); -1 = unset"))
+        .field("evaporation_frequency", Schema::float(0.0).at_least(0.0).doc("lee: c_evap [1/s]"))
+        .field("condensation_frequency", Schema::float(0.0).at_least(0.0).doc("lee: c_cond [1/s]"))
+        .field("temperature", Schema::float(UNSET).doc("Prescribed temperature at temperature_point [K] (> 0); -1 = unset"))
+        .field("temperature_gradient", nums("Constant temperature gradient [K/m] as [gx, gy, gz]; empty = uniform"))
+        .field("temperature_point", nums("Point [x, y, z] where the temperature is `temperature`; empty = the origin"))
+        .field("accommodation", Schema::float(1.0).range(0.0, 1.0).doc("hertz_knudsen: accommodation coefficient in (0, 1]"))
+        .field("schrage", Schema::boolean(false).doc("hertz_knudsen: Schrage factor 2 sigma / (2 - sigma)"))
+        .field("molar_mass", Schema::float(UNSET).doc("hertz_knudsen: molar mass [kg/mol] (> 0); -1 = unset"))
+        .field("vapour_pressure", Schema::float(UNSET).doc("hertz_knudsen: vapour-side pressure [Pa] (>= 0); -1 = unset"))
+        .field("saturation_pressure", Schema::float(UNSET).doc("hertz_knudsen: saturation pressure at saturation_temperature [Pa] (> 0); -1 = unset"))
+}
+
+fn waves_schema() -> Schema {
+    Schema::object()
+        .doc("Wave generation and absorption in a 2-D tank (F-227, ADR 0052 C): a wave-inlet boundary (velocity and phase fraction from linear or second-order Stokes kinematics on `inlet_patch`, the patch at the smallest x, propagation along +x, gravity along -y, phase 1 = water) and a relaxation-zone numerical beach that blends alpha and u toward still water with the weights of the wave library. Sub-keys are inert unless inlet_patch is set or beach = still_water")
+        .field("inlet_patch", Schema::string("").doc("Boundary patch that generates the wave (its velocity condition must be `fixed`; it is overridden every step); empty = no inlet"))
+        .field("height", Schema::float(UNSET).doc("Wave height H = 2 a [m] (> 0); -1 = unset"))
+        .field("period", Schema::float(UNSET).doc("Wave period [s] (> 0); -1 = unset"))
+        .field("depth", Schema::float(UNSET).doc("Still-water depth [m] above the bed (> 0); -1 = unset"))
+        .field("level", Schema::float(UNSET).doc("y of the still-water surface [m]; -1 = depth (bed at y = 0)"))
+        .field("order", Schema::int(1).range(1.0, 2.0).doc("1 = linear (Airy), 2 = second-order Stokes"))
+        .field("phase", Schema::float(0.0).doc("Phase offset [rad]"))
+        .field("ramp_periods", Schema::float(2.0).at_least(0.0).doc("Start-up ramp length in wave periods (0 = none)"))
+        .field("beach", Schema::enumeration("none", &["none", "still_water"]).doc("Relaxation zone: none or still_water (damps toward still water)"))
+        .field("beach_x_inner", Schema::float(0.0).doc("Beach: x where the computed solution has weight 1 [m]"))
+        .field("beach_x_outer", Schema::float(0.0).doc("Beach: x where the target has weight 1 [m] (!= x_inner)"))
+        .field("beach_blend", Schema::enumeration("exponential", &["exponential", "polynomial"]).doc("Weight shape: w = 1 - (exp(chi^p) - 1)/(e - 1) or w = (1 - chi)^n"))
+        .field("beach_exponent", Schema::float(3.5).at_least(0.0).doc("p (exponential) or n (polynomial)"))
 }
 
 /// Settings checks (no mesh needed).
@@ -98,6 +143,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 "only used with multiphase.enabled = true",
             ));
         }
+        extension_inert(case, &mut out);
         for (p, def) in [
             ("multiphase.initial.shape", "unset"),
             ("multiphase.initial.inside", "phase_1"),
@@ -190,6 +236,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             "only used with initial.shape = \"sphere\"",
         ));
     }
+    check_extensions(case, &mut out);
     // solver
     let alg = get_s(case, "solver.algorithm");
     if !matches!(alg.as_str(), "piso" | "pimple") {
@@ -324,6 +371,253 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
+/// Keys of `mass_transfer` and `waves` that differ from their defaults while the model is off.
+fn extension_inert(case: &Case, out: &mut Vec<Diagnostic>) {
+    let nonempty = |p: &str| {
+        case.tree
+            .get(p)
+            .ok()
+            .and_then(|v| v.as_array().map(|a| !a.is_empty()))
+            .unwrap_or(false)
+    };
+    if !enabled(case) && nonempty("multiphase.reference_point") {
+        out.push(d(
+            "multiphase.reference_point",
+            "only used with multiphase.enabled = true",
+        ));
+    }
+    let model = get_s(case, "multiphase.mass_transfer.model");
+    let why = if model == "none" || !enabled(case) {
+        Some("only used with multiphase.mass_transfer.model != \"none\" (and multiphase.enabled = true)")
+    } else {
+        None
+    };
+    if let Some(why) = why {
+        for k in [
+            "saturation_temperature",
+            "latent_heat",
+            "temperature",
+            "molar_mass",
+            "vapour_pressure",
+            "saturation_pressure",
+        ] {
+            let p = format!("multiphase.mass_transfer.{k}");
+            if get_f(case, &p) != UNSET {
+                out.push(d(p, why));
+            }
+        }
+        for k in ["evaporation_frequency", "condensation_frequency"] {
+            let p = format!("multiphase.mass_transfer.{k}");
+            if get_f(case, &p) != 0.0 {
+                out.push(d(p, why));
+            }
+        }
+        for k in ["temperature_gradient", "temperature_point"] {
+            let p = format!("multiphase.mass_transfer.{k}");
+            if nonempty(&p) {
+                out.push(d(p, why));
+            }
+        }
+        if get_f(case, "multiphase.mass_transfer.accommodation") != 1.0 {
+            out.push(d("multiphase.mass_transfer.accommodation", why));
+        }
+        if get_b(case, "multiphase.mass_transfer.schrage") {
+            out.push(d("multiphase.mass_transfer.schrage", why));
+        }
+        if get_s(case, "multiphase.mass_transfer.liquid_phase") != "phase_1" {
+            out.push(d("multiphase.mass_transfer.liquid_phase", why));
+        }
+    }
+    let inlet = !get_s(case, "multiphase.waves.inlet_patch").is_empty();
+    let beach = get_s(case, "multiphase.waves.beach") != "none";
+    let on = enabled(case);
+    let why_w =
+        "only used with multiphase.enabled = true and multiphase.waves.inlet_patch set (or beach = \"still_water\")";
+    if !(on && (inlet || beach)) {
+        for k in ["height", "period", "depth", "level"] {
+            let p = format!("multiphase.waves.{k}");
+            if get_f(case, &p) != UNSET {
+                out.push(d(p, why_w));
+            }
+        }
+        for (k, def) in [
+            ("phase", 0.0),
+            ("ramp_periods", 2.0),
+            ("beach_x_inner", 0.0),
+            ("beach_x_outer", 0.0),
+        ] {
+            let p = format!("multiphase.waves.{k}");
+            if get_f(case, &p) != def {
+                out.push(d(p, why_w));
+            }
+        }
+        if get_i(case, "multiphase.waves.order") != 1 {
+            out.push(d("multiphase.waves.order", why_w));
+        }
+        if get_s(case, "multiphase.waves.beach_blend") != "exponential" {
+            out.push(d("multiphase.waves.beach_blend", why_w));
+        }
+        if get_f(case, "multiphase.waves.beach_exponent") != 3.5 {
+            out.push(d("multiphase.waves.beach_exponent", why_w));
+        }
+        if !inlet && get_s(case, "multiphase.waves.inlet_patch") != "" {
+            out.push(d("multiphase.waves.inlet_patch", why_w));
+        }
+        if !on && beach {
+            out.push(d("multiphase.waves.beach", why_w));
+        }
+    }
+}
+
+/// Settings checks of the mass-transfer and wave sections (multiphase enabled).
+fn check_extensions(case: &Case, out: &mut Vec<Diagnostic>) {
+    let nonempty_len = |p: &str| {
+        case.tree
+            .get(p)
+            .ok()
+            .and_then(|v| v.as_array().map(|a| a.len()))
+            .unwrap_or(0)
+    };
+    let rp = nonempty_len("multiphase.reference_point");
+    if rp != 0 && rp != 3 {
+        out.push(d("multiphase.reference_point", "must be [x, y, z] or empty"));
+    }
+    let model = get_s(case, "multiphase.mass_transfer.model");
+    extension_inert(case, out);
+    if model != "none" {
+        for k in ["saturation_temperature", "latent_heat", "temperature"] {
+            let p = format!("multiphase.mass_transfer.{k}");
+            if get_f(case, &p) <= 0.0 {
+                out.push(d(
+                    p,
+                    format!("mass_transfer.model = \"{model}\" needs a positive {k} (-1 = unset)"),
+                ));
+            }
+        }
+        for k in ["temperature_gradient", "temperature_point"] {
+            let p = format!("multiphase.mass_transfer.{k}");
+            let n = nonempty_len(&p);
+            if n != 0 && n != 3 {
+                out.push(d(p, format!("{k} must be [x, y, z] or empty")));
+            }
+        }
+        if model == "lee" {
+            for k in ["molar_mass", "vapour_pressure", "saturation_pressure"] {
+                let p = format!("multiphase.mass_transfer.{k}");
+                if get_f(case, &p) != UNSET {
+                    out.push(d(p, "only used with mass_transfer.model = \"hertz_knudsen\""));
+                }
+            }
+            if get_b(case, "multiphase.mass_transfer.schrage") {
+                out.push(d(
+                    "multiphase.mass_transfer.schrage",
+                    "only used with mass_transfer.model = \"hertz_knudsen\"",
+                ));
+            }
+            if get_f(case, "multiphase.mass_transfer.accommodation") != 1.0 {
+                out.push(d(
+                    "multiphase.mass_transfer.accommodation",
+                    "only used with mass_transfer.model = \"hertz_knudsen\"",
+                ));
+            }
+        } else {
+            for k in ["evaporation_frequency", "condensation_frequency"] {
+                let p = format!("multiphase.mass_transfer.{k}");
+                if get_f(case, &p) != 0.0 {
+                    out.push(d(p, "only used with mass_transfer.model = \"lee\""));
+                }
+            }
+            if get_f(case, "multiphase.mass_transfer.molar_mass") <= 0.0 {
+                out.push(d(
+                    "multiphase.mass_transfer.molar_mass",
+                    "hertz_knudsen needs a positive molar_mass [kg/mol]",
+                ));
+            }
+            if get_f(case, "multiphase.mass_transfer.vapour_pressure") < 0.0 {
+                out.push(d(
+                    "multiphase.mass_transfer.vapour_pressure",
+                    "hertz_knudsen needs vapour_pressure >= 0 (-1 = unset)",
+                ));
+            }
+            if get_f(case, "multiphase.mass_transfer.saturation_pressure") <= 0.0 {
+                out.push(d(
+                    "multiphase.mass_transfer.saturation_pressure",
+                    "hertz_knudsen needs a positive saturation_pressure [Pa] at the saturation temperature",
+                ));
+            }
+            if get_f(case, "multiphase.mass_transfer.accommodation") <= 0.0 {
+                out.push(d("multiphase.mass_transfer.accommodation", "must be in (0, 1]"));
+            }
+        }
+        let has_pressure_patch = case
+            .tree
+            .names("boundaries")
+            .unwrap_or_default()
+            .iter()
+            .any(|n| get_s(case, &format!("boundaries.{n}.pressure")) == "fixed");
+        if !has_pressure_patch {
+            out.push(d(
+                "multiphase.mass_transfer.model",
+                "mass transfer creates volume: at least one boundary needs pressure = \"fixed\" for it to leave through",
+            ));
+        }
+    }
+    // waves
+    let inlet = get_s(case, "multiphase.waves.inlet_patch");
+    let beach = get_s(case, "multiphase.waves.beach") != "none";
+    if inlet.is_empty() && !beach {
+        return;
+    }
+    let wp = |k: &str| format!("multiphase.waves.{k}");
+    if !inlet.is_empty() {
+        for k in ["height", "period", "depth"] {
+            if get_f(case, &wp(k)) <= 0.0 {
+                out.push(d(wp(k), format!("waves.inlet_patch needs a positive {k} (-1 = unset)")));
+            }
+        }
+        let b = format!("boundaries.{inlet}");
+        if case
+            .tree
+            .names("boundaries")
+            .unwrap_or_default()
+            .iter()
+            .all(|n| *n != inlet)
+        {
+            out.push(d(wp("inlet_patch"), format!("no boundary named \"{inlet}\"")));
+        } else if get_s(case, &format!("{b}.velocity")) != "fixed" {
+            out.push(d(
+                format!("{b}.velocity"),
+                "the wave-inlet patch needs velocity = \"fixed\" (its value is replaced by the wave every step)",
+            ));
+        }
+    } else {
+        for k in ["height", "period", "depth"] {
+            if get_f(case, &wp(k)) != UNSET && k != "depth" {
+                out.push(d(wp(k), "only used with waves.inlet_patch set"));
+            }
+        }
+    }
+    if beach {
+        let (xi, xo) = (get_f(case, &wp("beach_x_inner")), get_f(case, &wp("beach_x_outer")));
+        if xi == xo {
+            out.push(d(wp("beach_x_outer"), "the beach needs beach_x_inner != beach_x_outer"));
+        }
+        if get_f(case, &wp("depth")) <= 0.0 && get_f(case, &wp("level")) <= 0.0 {
+            out.push(d(
+                wp("level"),
+                "the beach needs the still-water level: set waves.level (or waves.depth with the bed at y = 0)",
+            ));
+        }
+    }
+    let g = get_v(case, "physics.gravity", [0.0; 3]);
+    if !(g[1] < 0.0 && g[0].abs() <= 1e-12 * g[1].abs() && g[2].abs() <= 1e-12 * g[1].abs()) {
+        out.push(d(
+            "physics.gravity",
+            "waves need gravity along -y (propagation along +x, 2-D)".to_string(),
+        ));
+    }
+}
+
 /// Runtime state of a free-surface simulation.
 pub(crate) struct VofState {
     /// Solver.
@@ -371,6 +665,7 @@ impl VofState {
             ],
         );
         s.sigma = get_f(case, "multiphase.surface_tension");
+        s.x_ref = get_v(case, "multiphase.reference_point", [0.0; 3]);
         s.gravity = get_v(case, "physics.gravity", [0.0; 3]);
         s.c_alpha = get_f(case, "multiphase.compression");
         s.alpha_courant = get_f(case, "multiphase.alpha_courant");
@@ -390,9 +685,9 @@ impl VofState {
             get_i(case, "solver.p_ref_cell").max(0) as usize,
             get_f(case, "solver.p_ref_value"),
         );
-        // never AMG: the AMG-preconditioned CG stagnates and then breaks down on the 1000:1 density-jump pressure equation (the
-        // 120 x 40 dam break: 3 x 5000 iterations at step 120, then NaN; ADR 0049 addendum), the plain CG of the registered runs is used
-        s.amg_pressure = false;
+        // AMG as in the single-phase transient path (ADR 0052 A: the NaN hierarchy of the 1000:1 density-jump pressure matrix was a
+        // zero filtered diagonal in the AMG setup, fixed in rcfd-linalg; the 120 x 40 dam break passes with AMG)
+        s.amg_pressure = geom.n_cells() > 2000;
         let (mt, mi) = (
             get_f(case, "solver.momentum_rel_tol"),
             get_i(case, "solver.momentum_max_iter"),
@@ -418,6 +713,92 @@ impl VofState {
             s.pressure_solver.max_iter = pi as usize;
         }
         s.linear = crate::linsolver::options(case);
+        let wp = |k: &str| format!("multiphase.waves.{k}");
+        let mp = |k: &str| format!("multiphase.mass_transfer.{k}");
+        let model = get_s(case, &mp("model"));
+        if model != "none" {
+            let pt = get_v(case, &mp("temperature_point"), [0.0; 3]);
+            let gr = get_v(case, &mp("temperature_gradient"), [0.0; 3]);
+            let t0 = get_f(case, &mp("temperature"));
+            let temperature: Vec<f64> = geom
+                .mesh
+                .cell_centres()
+                .iter()
+                .map(|x| t0 + vec3::dot(gr, vec3::sub(*x, pt)))
+                .collect();
+            s.mass_transfer = Some(MassTransfer {
+                liquid_phase: if get_s(case, &mp("liquid_phase")) == "phase_2" {
+                    2
+                } else {
+                    1
+                },
+                model: if model == "lee" {
+                    MassTransferModel::Lee {
+                        c_evap: get_f(case, &mp("evaporation_frequency")),
+                        c_cond: get_f(case, &mp("condensation_frequency")),
+                    }
+                } else {
+                    MassTransferModel::HertzKnudsen {
+                        accommodation: get_f(case, &mp("accommodation")),
+                        molar_mass: get_f(case, &mp("molar_mass")),
+                        schrage: get_b(case, &mp("schrage")),
+                        p_vapour: get_f(case, &mp("vapour_pressure")),
+                        p_sat_ref: get_f(case, &mp("saturation_pressure")),
+                    }
+                },
+                t_sat: get_f(case, &mp("saturation_temperature")),
+                h_fg: get_f(case, &mp("latent_heat")),
+                temperature,
+            });
+        }
+        let inlet_patch = get_s(case, &wp("inlet_patch"));
+        let beach = get_s(case, &wp("beach")) != "none";
+        if !inlet_patch.is_empty() || beach {
+            let depth = get_f(case, &wp("depth"));
+            let level = if get_f(case, &wp("level")) != UNSET {
+                get_f(case, &wp("level"))
+            } else {
+                depth
+            };
+            let gmag = vec3::norm(s.gravity);
+            let mk_wave = || -> Result<Wave, Vec<Diagnostic>> {
+                let period = get_f(case, &wp("period"));
+                Wave::new(
+                    0.5 * get_f(case, &wp("height")),
+                    2.0 * std::f64::consts::PI / period,
+                    depth,
+                    gmag,
+                    get_f(case, &wp("phase")),
+                    get_i(case, &wp("order")).clamp(1, 2) as u8,
+                )
+                .map_err(|e| vec![d("multiphase.waves", e)])
+            };
+            let inlet = if inlet_patch.is_empty() {
+                None
+            } else {
+                Some(WaveInlet {
+                    patch: inlet_patch,
+                    wave: mk_wave()?,
+                    t_ramp: get_f(case, &wp("ramp_periods")) * get_f(case, &wp("period")),
+                })
+            };
+            let exponent = get_f(case, &wp("beach_exponent"));
+            let zones = if beach {
+                vec![RelaxZone {
+                    x_inner: get_f(case, &wp("beach_x_inner")),
+                    x_outer: get_f(case, &wp("beach_x_outer")),
+                    blend: if get_s(case, &wp("beach_blend")) == "polynomial" {
+                        Blend::Polynomial { n: exponent }
+                    } else {
+                        Blend::Exponential { p: exponent }
+                    },
+                    target: RelaxTarget::StillWater,
+                }]
+            } else {
+                vec![]
+            };
+            s.waves = Some(WaveSettings { level, inlet, zones });
+        }
         let solver =
             VofSolver::new(geom.clone(), u, p_rgh, alpha, s).map_err(|e| vec![d("multiphase", e.to_string())])?;
         Ok(VofState { solver, steps: 0 })
