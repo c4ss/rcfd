@@ -5,6 +5,7 @@ members = [
     "crates/rcfd-mesh",
     "crates/rcfd-linalg",
     "crates/rcfd-gpu",
+    "crates/rcfd-dist",
     "crates/rcfd-fv",
     "crates/rcfd-turb",
     "crates/rcfd-io",
@@ -37,6 +38,7 @@ rcfd-core = { path = "crates/rcfd-core" }
 rcfd-mesh = { path = "crates/rcfd-mesh" }
 rcfd-linalg = { path = "crates/rcfd-linalg" }
 rcfd-gpu = { path = "crates/rcfd-gpu" }
+rcfd-dist = { path = "crates/rcfd-dist" }
 rcfd-fv = { path = "crates/rcfd-fv" }
 rcfd-turb = { path = "crates/rcfd-turb" }
 rcfd-io = { path = "crates/rcfd-io" }
