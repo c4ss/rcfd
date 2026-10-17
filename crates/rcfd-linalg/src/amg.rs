@@ -221,13 +221,28 @@ fn build_level(a: &CsrMatrix, s: &AmgSettings, level: usize) -> Option<(CsrMatri
             }
         }
     }
+    // A row without any strong coupling and with a zero row sum (Neumann operator) has the filtered diagonal exactly 0
+    // (found on a coarse level of a 1000:1 variable-density pressure matrix, ADR 0052): the Jacobi smoothing below would
+    // divide by it. Such a row keeps its unfiltered coupling; every other row is untouched.
+    let keep_row: Vec<bool> = (0..n).map(|i| fdiag[i] <= 1e-10 * diag[i].abs()).collect();
+    for i in 0..n {
+        if keep_row[i] {
+            fdiag[i] = diag[i];
+        }
+    }
     // damped Jacobi smoothing of the tentative prolongator
+    let mut filtered_val = vec![0.0; a.nnz()];
+    for i in 0..n {
+        for k in a.row_ptr[i]..a.row_ptr[i + 1] {
+            filtered_val[k] = if strong[k] || keep_row[i] { a.val[k] } else { 0.0 };
+        }
+    }
     let filtered = CsrMatrix {
         n,
         ncols: n,
         row_ptr: a.row_ptr.clone(),
         col: a.col.clone(),
-        val: (0..a.nnz()).map(|k| if strong[k] { a.val[k] } else { 0.0 }).collect(),
+        val: filtered_val,
     };
     let mut fm = filtered.clone();
     for i in 0..n {
