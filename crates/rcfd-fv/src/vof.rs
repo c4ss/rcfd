@@ -11,16 +11,19 @@
 //!   and the cell velocity is reconstructed from the very same face quantities, so a still stratified pool has a velocity
 //!   of the order of the linear-solver tolerance.
 
+use crate::bc::{FixedValue, Profile};
 use crate::convection::{convection, face_flux, ConvScheme};
 use crate::diffusion::laplacian;
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
+use crate::masstransfer::{HertzKnudsen, R_UNIVERSAL};
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc, solve_pressure,
-    PressureControls,
+    boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc,
+    solve_pressure_parts_src, PressureControls,
 };
+use crate::waves::{liquid_fraction, ramp, relax, zone_chi, Blend, Wave};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
 use rcfd_linalg::{LinearOptions, SolveControl};
@@ -298,6 +301,94 @@ impl AlphaTransport {
     }
 }
 
+/// Interfacial mass-transfer model (ADR 0052 B; closures of [`crate::masstransfer`]).
+#[derive(Debug, Clone, Copy)]
+pub enum MassTransferModel {
+    /// Temperature-driven Lee form: evaporation `c_evap alpha_l rho_l theta`, condensation `c_cond alpha_v rho_v theta`
+    /// with `theta = (T - T_sat)/T_sat`.
+    Lee {
+        /// Evaporation frequency, 1/s.
+        c_evap: f64,
+        /// Condensation frequency, 1/s.
+        c_cond: f64,
+    },
+    /// Hertz-Knudsen (Schrage) flux times the interfacial area density `|grad alpha|`; the saturation pressure is
+    /// Clausius-Clapeyron with the constant latent heat, `p_sat(T) = p_sat_ref exp(h_fg M/R (1/T_sat - 1/T))`.
+    HertzKnudsen {
+        /// Accommodation coefficient in (0, 1].
+        accommodation: f64,
+        /// Molar mass, kg/mol.
+        molar_mass: f64,
+        /// Use the Schrage factor.
+        schrage: bool,
+        /// Vapour-side pressure, Pa.
+        p_vapour: f64,
+        /// Saturation pressure at `t_sat`, Pa.
+        p_sat_ref: f64,
+    },
+}
+
+/// Evaporation-condensation sources of the phase-fraction equation and the continuity equation (ADR 0052 B). The temperature
+/// is a PRESCRIBED per-cell field: the multiphase path has no energy equation, so no latent-heat feedback exists.
+#[derive(Debug, Clone)]
+pub struct MassTransfer {
+    /// Which phase is the liquid: 1 (`alpha = 1`) or 2.
+    pub liquid_phase: usize,
+    /// Closure.
+    pub model: MassTransferModel,
+    /// Saturation temperature, K.
+    pub t_sat: f64,
+    /// Latent heat, J/kg (diagnostic energy source only).
+    pub h_fg: f64,
+    /// Cell temperatures, K (one per cell).
+    pub temperature: Vec<f64>,
+}
+
+/// Wave-inlet boundary (ADR 0052 C1): per-face velocity and phase fraction from the wave kinematics.
+#[derive(Debug, Clone)]
+pub struct WaveInlet {
+    /// Boundary patch name (the patch is at the smallest `x`, propagation along +x).
+    pub patch: String,
+    /// The generated wave.
+    pub wave: Wave,
+    /// Start-up ramp duration, s.
+    pub t_ramp: f64,
+}
+
+/// Target state of a relaxation zone.
+#[derive(Debug, Clone, Copy)]
+pub enum RelaxTarget {
+    /// Still water: `alpha` from the still level, zero velocity.
+    StillWater,
+    /// The wave of the settings (with the given start-up ramp).
+    Wave(Wave, f64),
+}
+
+/// Relaxation zone / numerical beach (ADR 0052 C2): blend of `alpha` and `u` toward the target with the weights of
+/// [`crate::waves::Blend`] (weight 1 = computed solution at `x_inner`, 0 = target at `x_outer`).
+#[derive(Debug, Clone, Copy)]
+pub struct RelaxZone {
+    /// Inner edge (computed solution), m.
+    pub x_inner: f64,
+    /// Outer edge (target), m.
+    pub x_outer: f64,
+    /// Weight shape.
+    pub blend: Blend,
+    /// Target state.
+    pub target: RelaxTarget,
+}
+
+/// Wave generation and absorption (2-D, vertical coordinate `y`, phase 1 is the water).
+#[derive(Debug, Clone)]
+pub struct WaveSettings {
+    /// Still-water level `y`, m.
+    pub level: f64,
+    /// Optional wave inlet.
+    pub inlet: Option<WaveInlet>,
+    /// Relaxation zones.
+    pub zones: Vec<RelaxZone>,
+}
+
 /// Settings of [`VofSolver`].
 #[derive(Debug, Clone)]
 pub struct VofSettings {
@@ -341,6 +432,10 @@ pub struct VofSettings {
     pub pressure_solver: SolveControl,
     /// Linear solver device.
     pub linear: LinearOptions,
+    /// Interfacial mass transfer (`None` = none; the path is then bit-identical to the one without it).
+    pub mass_transfer: Option<MassTransfer>,
+    /// Wave inlet and relaxation zones (`None` = none).
+    pub waves: Option<WaveSettings>,
 }
 
 impl VofSettings {
@@ -375,6 +470,8 @@ impl VofSettings {
                 max_iter: 5000,
             },
             linear: LinearOptions::default(),
+            mass_transfer: None,
+            waves: None,
         }
     }
 }
@@ -408,6 +505,36 @@ pub struct VofStepInfo {
     pub alpha_max: f64,
     /// True when `dt` exceeded the capillary time-step limit.
     pub capillary_exceeded: bool,
+    /// Phase-1 volume leaving through the boundary, m^3/s (step average of the alpha flux).
+    pub alpha_outflow: f64,
+    /// Phase-1 volume added by the relaxation zones in this step, m^3.
+    pub relax_volume: f64,
+    /// Phase-1 volume added by phase change in this step, m^3.
+    pub transfer_volume: f64,
+    /// Delivered evaporation rate `sum mdot V`, kg/s (positive = liquid to vapour).
+    pub transfer_rate: f64,
+    /// Net volume source `sum S_v V` of the continuity equation, m^3/s.
+    pub volume_source: f64,
+    /// Latent-heat power `sum mdot h_fg V` that an energy equation would remove, W (diagnostic, never applied).
+    pub latent_power: f64,
+}
+
+/// Phase-change quantities of one step.
+#[derive(Debug, Clone)]
+pub struct PhaseChange {
+    /// Delivered evaporation rate of every cell, kg/(m^3 s).
+    pub mdot: Vec<f64>,
+    /// Net outflow each cell must produce, `S_v V`, m^3/s.
+    pub vol_src: Vec<f64>,
+    /// Phase-1 volume added, m^3.
+    pub volume: f64,
+    /// `sum mdot V`, kg/s.
+    pub rate: f64,
+    /// Latent heat, J/kg.
+    pub h_fg: f64,
+    /// Rate requested by the closure before the liquid inventory limit, `sum m V`, kg/s (Hertz-Knudsen; equal to
+    /// `rate` for Lee, whose exponential update never over-draws).
+    pub requested: f64,
 }
 
 /// Transient VOF solver state.
@@ -431,6 +558,12 @@ pub struct VofSolver {
     /// Diagnostics of every step.
     pub history: Vec<VofStepInfo>,
     step_no: usize,
+    /// Delivered evaporation rate of every cell in the last step, kg/(m^3 s).
+    pub mdot: Vec<f64>,
+    /// Velocity before the last relaxation blend (reference of the Rhie-Chow defect of the next step).
+    u_rc: Option<Vec<Vec3>>,
+    /// Vertical extent `[y_lo, y_hi]` of every cell (wave zones).
+    cell_y: Vec<[f64; 2]>,
     /// Inverse of `sum_f S S / |S|` per cell on the active dimensions (row-major).
     recon: Vec<[[f64; 3]; 3]>,
 }
@@ -465,10 +598,265 @@ impl VofSolver {
             time: 0.0,
             history: Vec::new(),
             step_no: 0,
+            mdot: Vec::new(),
+            u_rc: None,
+            cell_y: Vec::new(),
             recon,
         };
+        s.validate_extensions()?;
         s.update_pressure();
         Ok(s)
+    }
+
+    /// Settings checks of the mass-transfer and wave extensions; fills the cell extents used by the wave zones.
+    fn validate_extensions(&mut self) -> Result<()> {
+        let bad = |path: &str, reason: String| Error::InvalidValue {
+            path: path.into(),
+            reason,
+        };
+        let g = self.geom.clone();
+        let n = g.n_cells();
+        if let Some(mt) = &self.settings.mass_transfer {
+            if !(mt.liquid_phase == 1 || mt.liquid_phase == 2) {
+                return Err(bad("multiphase.mass_transfer.liquid_phase", "must be 1 or 2".into()));
+            }
+            if mt.temperature.len() != n || mt.temperature.iter().any(|t| !t.is_finite() || *t <= 0.0) {
+                return Err(bad(
+                    "multiphase.mass_transfer.temperature",
+                    format!("needs {n} finite positive cell temperatures"),
+                ));
+            }
+            if !(mt.t_sat.is_finite() && mt.t_sat > 0.0 && mt.h_fg.is_finite() && mt.h_fg > 0.0) {
+                return Err(bad(
+                    "multiphase.mass_transfer",
+                    "t_sat and h_fg must be finite and > 0".into(),
+                ));
+            }
+            match mt.model {
+                MassTransferModel::Lee { c_evap, c_cond } => {
+                    if !(c_evap.is_finite() && c_evap >= 0.0 && c_cond.is_finite() && c_cond >= 0.0) {
+                        return Err(bad(
+                            "multiphase.mass_transfer",
+                            "c_evap and c_cond must be finite and >= 0".into(),
+                        ));
+                    }
+                }
+                MassTransferModel::HertzKnudsen {
+                    accommodation,
+                    molar_mass,
+                    p_vapour,
+                    p_sat_ref,
+                    ..
+                } => {
+                    if !(accommodation > 0.0
+                        && accommodation <= 1.0
+                        && molar_mass > 0.0
+                        && p_vapour >= 0.0
+                        && p_sat_ref > 0.0)
+                    {
+                        return Err(bad(
+                            "multiphase.mass_transfer",
+                            "Hertz-Knudsen needs accommodation in (0, 1], molar_mass > 0, p_vapour >= 0, p_sat_ref > 0"
+                                .into(),
+                        ));
+                    }
+                }
+            }
+            if !pressure_bc(&g, &self.u, &self.p_rgh).has_dirichlet() {
+                return Err(bad(
+                    "multiphase.mass_transfer",
+                    "a net volume source needs a pressure (fixed p_rgh) patch to leave through".into(),
+                ));
+            }
+        }
+        if let Some(w) = &self.settings.waves {
+            if g.active[2] {
+                return Err(bad(
+                    "multiphase.waves",
+                    "wave inlets and zones are 2-D (x, y) only".into(),
+                ));
+            }
+            if let Some(inl) = &w.inlet {
+                if g.mesh.patch(&inl.patch).is_none() {
+                    return Err(bad("multiphase.waves.inlet", format!("no patch \"{}\"", inl.patch)));
+                }
+            }
+            for z in &w.zones {
+                if !(z.x_inner.is_finite() && z.x_outer.is_finite()) || z.x_inner == z.x_outer {
+                    return Err(bad(
+                        "multiphase.waves.zone",
+                        "x_inner and x_outer must be finite and different".into(),
+                    ));
+                }
+            }
+            let mesh = &g.mesh;
+            self.cell_y = (0..n)
+                .map(|c| {
+                    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+                    for &f in mesh.cell_faces(c) {
+                        for &pi in mesh.face_points(f) {
+                            let y = mesh.points()[pi][1];
+                            lo = lo.min(y);
+                            hi = hi.max(y);
+                        }
+                    }
+                    [lo, hi]
+                })
+                .collect();
+        }
+        Ok(())
+    }
+
+    /// Replace the velocity and phase-fraction conditions of the wave-inlet patch by the wave values at time `t`.
+    fn update_wave_inlet(&mut self, t: f64) {
+        let Some(w) = self.settings.waves.clone() else { return };
+        let Some(inl) = w.inlet else { return };
+        let g = self.geom.clone();
+        let mesh = &g.mesh;
+        let faces = mesh.patch(&inl.patch).expect("patch checked at construction").faces();
+        let r = ramp(t, inl.t_ramp);
+        let (mut vel, mut alp) = (Vec::new(), Vec::new());
+        for f in faces {
+            let xc = mesh.face_centres()[f];
+            let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+            for &pi in mesh.face_points(f) {
+                lo = lo.min(mesh.points()[pi][1]);
+                hi = hi.max(mesh.points()[pi][1]);
+            }
+            let z = xc[1] - w.level;
+            let eta = r * inl.wave.eta(xc[0], t);
+            let a = liquid_fraction(z, hi - lo, eta);
+            let (u, v) = inl.wave.velocity(xc[0], z.min(eta), t);
+            vel.push([a * r * u, a * r * v, 0.0]);
+            alp.push([a, 0.0, 0.0]);
+        }
+        self.u
+            .set_bc(&g, &inl.patch, Box::new(FixedValue(Profile::PerFace(vel))))
+            .expect("patch checked at construction");
+        self.transport
+            .alpha
+            .set_bc(&g, &inl.patch, Box::new(FixedValue(Profile::PerFace(alp))))
+            .expect("patch checked at construction");
+    }
+
+    /// Blend `alpha` and `u` toward the targets of the relaxation zones; returns the phase-1 volume added.
+    fn apply_relaxation(&mut self, t: f64) -> f64 {
+        let Some(w) = self.settings.waves.clone() else {
+            return 0.0;
+        };
+        if w.zones.is_empty() {
+            return 0.0;
+        }
+        let vol = self.geom.mesh.cell_volumes().to_vec();
+        let cc = self.geom.mesh.cell_centres().to_vec();
+        self.u_rc = Some(self.u.values.clone());
+        let mut added = 0.0;
+        for z in &w.zones {
+            for c in 0..self.geom.n_cells() {
+                let wgt = z.blend.weight(zone_chi(cc[c][0], z.x_inner, z.x_outer));
+                if wgt >= 1.0 {
+                    continue;
+                }
+                let [y_lo, y_hi] = self.cell_y[c];
+                let zc = 0.5 * (y_lo + y_hi) - w.level;
+                let (a_t, u_t) = match z.target {
+                    RelaxTarget::StillWater => (liquid_fraction(zc, y_hi - y_lo, 0.0), [0.0; 3]),
+                    RelaxTarget::Wave(wave, t_ramp) => {
+                        let r = ramp(t, t_ramp);
+                        let eta = r * wave.eta(cc[c][0], t);
+                        let a = liquid_fraction(zc, y_hi - y_lo, eta);
+                        let (u, v) = wave.velocity(cc[c][0], zc.min(eta), t);
+                        (a, [a * r * u, a * r * v, 0.0])
+                    }
+                };
+                let a_old = self.transport.alpha.values[c];
+                let a_new = relax(wgt, a_old, a_t);
+                self.transport.alpha.values[c] = a_new;
+                added += (a_new - a_old) * vol[c];
+                for k in 0..2 {
+                    self.u.values[c][k] = relax(wgt, self.u.values[c][k], u_t[k]);
+                }
+            }
+        }
+        added
+    }
+
+    /// Apply the phase-change source to the transported `alpha` (ADR 0052 B2); `alpha_start` is the phase fraction before the
+    /// transport (area density of the Hertz-Knudsen form).
+    pub fn apply_mass_transfer(&mut self, dt: f64, alpha_start: &[f64]) -> PhaseChange {
+        let mt = self.settings.mass_transfer.clone().expect("checked by the caller");
+        let g = self.geom.clone();
+        let n = g.n_cells();
+        let vol = g.mesh.cell_volumes();
+        let [r1, r2] = self.settings.rho;
+        let liquid_is_1 = mt.liquid_phase == 1;
+        let (rl, rv) = if liquid_is_1 { (r1, r2) } else { (r2, r1) };
+        let grad = match mt.model {
+            MassTransferModel::HertzKnudsen { .. } => {
+                let own = g.mesh.owner();
+                let bv: Vec<f64> = (0..g.mesh.n_boundary_faces())
+                    .map(|i| alpha_start[own[g.n_internal + i]])
+                    .collect();
+                Some(green_gauss(&g, alpha_start, &bv, 0))
+            }
+            _ => None,
+        };
+        let mut mdot = vec![0.0; n];
+        let (mut volume, mut rate, mut requested) = (0.0, 0.0, 0.0);
+        let mut vol_src = vec![0.0; n];
+        for c in 0..n {
+            let a = self.transport.alpha.values[c];
+            let al = if liquid_is_1 { a } else { 1.0 - a };
+            let t = mt.temperature[c];
+            let theta = (t - mt.t_sat) / mt.t_sat;
+            let mut req = None;
+            let new_l = match mt.model {
+                MassTransferModel::Lee { c_evap, c_cond } => {
+                    if t > mt.t_sat {
+                        al * (-c_evap * theta * dt).exp()
+                    } else if t < mt.t_sat {
+                        let lambda = c_cond * rv * theta.abs() / rl;
+                        1.0 - (1.0 - al) * (-lambda * dt).exp()
+                    } else {
+                        al
+                    }
+                }
+                MassTransferModel::HertzKnudsen {
+                    accommodation,
+                    molar_mass,
+                    schrage,
+                    p_vapour,
+                    p_sat_ref,
+                } => {
+                    let ai = vec3::norm(grad.as_ref().expect("gradient computed")[c]);
+                    let psat = p_sat_ref * (mt.h_fg * molar_mass / R_UNIVERSAL * (1.0 / mt.t_sat - 1.0 / t)).exp();
+                    let hk = HertzKnudsen {
+                        sigma: accommodation,
+                        molar_mass,
+                        schrage,
+                    };
+                    let m = hk.rate(psat, t, p_vapour, t, ai).unwrap_or(0.0);
+                    req = Some(m);
+                    (al - m * dt / rl).clamp(0.0, 1.0)
+                }
+            };
+            let m_eff = rl * (al - new_l) / dt;
+            mdot[c] = m_eff;
+            let a_new = if liquid_is_1 { new_l } else { 1.0 - new_l };
+            self.transport.alpha.values[c] = a_new;
+            volume += (a_new - a) * vol[c];
+            rate += m_eff * vol[c];
+            requested += req.unwrap_or(m_eff) * vol[c];
+            vol_src[c] = m_eff * (1.0 / rv - 1.0 / rl) * vol[c];
+        }
+        PhaseChange {
+            mdot,
+            vol_src,
+            volume,
+            rate,
+            h_fg: mt.h_fg,
+            requested,
+        }
     }
 
     /// Mixture density of every cell.
@@ -615,9 +1003,18 @@ impl VofSolver {
         let rho_old = self.density();
         let u_old: Vec<Vec3> = self.u.values.clone();
         let phi_old = self.phi.clone();
+        let u_rc = self.u_rc.take();
 
         // ---- phase fraction ---------------------------------------------------------
+        let t_new = self.time + dt;
+        self.update_wave_inlet(t_new);
+        let alpha_start = self.transport.alpha.values.clone();
         let ainfo = self.transport.advance(&self.phi, dt)?;
+        let transfer = if self.settings.mass_transfer.is_some() {
+            Some(self.apply_mass_transfer(dt, &alpha_start))
+        } else {
+            None
+        };
         let rho = self.density();
         let a = self.transport.alpha.values.clone();
         let mu_c: Vec<f64> = a.iter().map(|x| s.mu[1] + (s.mu[0] - s.mu[1]) * x).collect();
@@ -636,7 +1033,7 @@ impl VofSolver {
         // old-level flux defect for the transient Rhie-Chow term
         let ddt_defect: Vec<f64> = if s.ddt_correction {
             let zero_b = vec![[0.0; 3]; mesh.n_boundary_faces()];
-            let fo = face_flux(&g, &u_old, &zero_b);
+            let fo = face_flux(&g, u_rc.as_ref().unwrap_or(&u_old), &zero_b);
             (0..n_int).map(|f| phi_old[f] - fo[f]).collect()
         } else {
             vec![0.0; n_int]
@@ -752,7 +1149,9 @@ impl VofSolver {
                 };
                 let p_old = self.p_rgh.values.clone();
                 let mut p_new = p_old.clone();
-                let (r0, it) = solve_pressure(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls);
+                let vol_src = transfer.as_ref().map(|t| t.vol_src.as_slice());
+                let (r0, it, _) =
+                    solve_pressure_parts_src(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, false, vol_src);
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
@@ -781,6 +1180,7 @@ impl VofSolver {
             }
         }
 
+        let relax_volume = self.apply_relaxation(t_new);
         self.time += dt;
         self.update_pressure();
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |m, &b| m.max(b.abs()));
@@ -807,7 +1207,16 @@ impl VofSolver {
             alpha_min: amin,
             alpha_max: amax,
             capillary_exceeded: dt > self.capillary_dt(),
+            alpha_outflow: (n_int..nf).map(|f| ainfo.alpha_phi[f]).sum(),
+            relax_volume,
+            transfer_volume: transfer.as_ref().map_or(0.0, |t| t.volume),
+            transfer_rate: transfer.as_ref().map_or(0.0, |t| t.rate),
+            volume_source: transfer.as_ref().map_or(0.0, |t| t.vol_src.iter().sum()),
+            latent_power: transfer.as_ref().map_or(0.0, |t| t.rate * t.h_fg),
         };
+        if let Some(t) = transfer {
+            self.mdot = t.mdot;
+        }
         self.history.push(info);
         Ok(info)
     }
