@@ -153,7 +153,7 @@ impl StepSettings {
     pub fn next_target(&self, t: f64) -> Option<f64> {
         let mut best: Option<f64> = None;
         let mut offer = |x: f64| {
-            if best.is_none_or(|b| x < b) {
+            if best.map_or(true, |b| x < b) {
                 best = Some(x);
             }
         };
