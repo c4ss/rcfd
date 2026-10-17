@@ -38,6 +38,7 @@ pub mod solidification;
 pub mod sources;
 pub mod thermal_bc;
 pub mod varden;
+pub mod vof;
 pub mod viscoelastic;
 pub mod waves;
 
