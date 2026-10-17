@@ -245,8 +245,44 @@ pub fn solve_pressure_parts(
     ctl: &PressureControls,
     want_parts: bool,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
+    solve_pressure_parts_src(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None)
+}
+
+/// [`solve_pressure`] for a flow with a volume source: the corrected flux has the net outflow `vol_src[c]` (m^3/s, the
+/// source integrated over the cell) instead of zero, e.g. the volume created by evaporation (ADR 0052). Returns the
+/// normalised initial residual and the total linear iterations.
+pub fn solve_pressure_src(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    vol_src: &[f64],
+) -> (f64, usize) {
+    let (r, it, _) = solve_pressure_parts_src(geom, gamma_p, bc, phi_hby_a, p, ctl, false, Some(vol_src));
+    (r, it)
+}
+
+/// [`solve_pressure_parts`] with an optional cell volume source (see [`solve_pressure_src`]); `None` is the unchanged path.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_pressure_parts_src(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    want_parts: bool,
+    vol_src: Option<&[f64]>,
+) -> (f64, usize, Option<crate::simple::ResidualParts>) {
     let mut parts = None;
-    let div = divergence(geom, phi_hby_a);
+    let mut div = divergence(geom, phi_hby_a);
+    if let Some(src) = vol_src {
+        for (d, s) in div.iter_mut().zip(src) {
+            *d -= s;
+        }
+    }
     let gamma_eff = coupled_gamma(geom, bc, gamma_p);
     let (own, sf) = (geom.mesh.owner(), geom.mesh.face_area_vectors());
     let (mut res0, mut iters) = (0.0, 0);
