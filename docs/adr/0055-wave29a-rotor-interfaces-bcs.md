@@ -215,3 +215,16 @@ Measured (limit in brackets). Library unit tests in `rcfd-fv` (release):
 Deviations: X7 band alignment (addendum 1); X3 replaced by X3b/X3c (addendum 2); R5 flux limits miss (above); no case-tree keys for the frozen-rotor/mixing-plane library (no natural place, see D4) other than the new `pressure_update = "guarded_secant"` value.
 Not delivered: solver-coupled mixing plane, area-fraction band splitting, compressible mixed-out state, rothalpy, curved interfaces, sector periodicity, downstream-velocity constraint, any comparison with a published turbomachine (Rotor 37, Hannover compressor: NOT ATTEMPTED),
 F-204 items, time-varying mass flow, compressible mass-flow/total-pressure inlets.
+
+## Addendum 4 (review corrections, written after addendum 3)
+
+* X7 as registered (10 bands of width 0.05 on the 48 x 16 donor) was first replaced in place by the 8-band test of addendum 1. That broke the rule
+  (a set-up defect gets a NEW test and the old one is kept). The registered form is restored as `x7_mesh_geometry_swirl_as_registered_10_bands_known_miss` and was run: worst
+  per-band error 3.9e-1 (limit 1e-2), a MISS, ignored with the limit intact; the cause is the one stated in addendum 1 (face-centre band assignment with layers not tiling the bands). The 8-band test (7.4e-3) stays as the corrected check.
+* Addendum 2 called X3 a "set-up defect". More exactly it is a method limitation and a usage constraint: with centre-based band assignment the passed normal velocity is scaled by
+  `A_b/A'_b` (up to 27 % on that mesh pair). A uniform state passes unchanged only if the band edges line up with the radial face layers on both sides (or the band areas agree); mass is conserved exactly regardless.
+* R4 first attempt was rejected by MRF validation because the test's zone box ended at z = 0.2 instead of the interface z = 0.4 (test-code bug, no measurement); corrected in the same file before any result.
+* R5 compares the three frame choices against each other and against the single-frame (Omega = 0 in the lower zone) run on the SAME non-conformal mesh, not against a separate single-block mesh.
+* `docs/roadmap.json` gained a trailing newline in commit 49a9f06 (the file had none); removed again in the next docs commit.
+* `17a9e3f` reorders the `pub mod mixture;` line that wave 29B added in `rcfd-fv/src/lib.rs` to satisfy rustfmt.
+* F-200: no new BC kind was added; the closed-form checks asked for already exist as ADR 0022 A1, A5, D2, C2, C5; only `guarded_secant` is new. F-204 was not touched.
