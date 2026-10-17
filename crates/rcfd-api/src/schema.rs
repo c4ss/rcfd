@@ -838,6 +838,10 @@ pub fn case_schema() -> Schema {
                 .doc("Extra pressure solves for non-orthogonal meshes"),
         )
         .field(
+            "simplec_non_orthogonal_compensation",
+            Schema::boolean(false).doc("SIMPLEC with non_orthogonal_correctors > 0: add the non-orthogonal secondary-gradient part to the SIMPLEC flux compensation (ADR 0050). Without it the corrected flux weights the deferred non-orthogonal pressure part with rAtU instead of rAU and, for alpha_u near 1 on strongly non-orthogonal meshes (about 35 degrees tested), an axial mode of the outer iteration grows until the run diverges. Default false keeps every earlier result bit-identical; no effect for SIMPLE or without correctors"),
+        )
+        .field(
             "max_iterations",
             Schema::int(2000).range(1.0, 1e7).doc("Iteration cap for steady runs"),
         )
