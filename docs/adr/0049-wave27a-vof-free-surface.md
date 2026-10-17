@@ -250,3 +250,88 @@ convection tuned for two-phase flow; adaptive time stepping tied to the capillar
 periodic and moving-mesh variants; open boundaries with total-pressure conditions are available through the generic pressure
 conditions but are not validated here; energy/turbulence coupling; three-dimensional validation; the bubble benchmark unless E
 is reached; wiring of F-226 / F-227 / F-228 to the new host (not done in this wave).
+
+## Addendum (written after the runs): results, deviations and findings
+
+All numbers are release builds, single run, `CARGO_BUILD_JOBS=4`. No registered limit was changed, widened or removed.
+
+### Measured against the registered limits
+
+| Check | Measured | Limit | Verdict |
+|-------|----------|-------|---------|
+| A1 slug, c_alpha 1 | L1 6.0e-3, 4 mixed cells, bounds and volume at round-off | 0.05, 8 | met |
+| A1 slug, c_alpha 0 (reported) | L1 5.45e-2, 14 mixed cells | none but Z1 | reported |
+| A2 disk | L1 5.75e-2, width 1.28 cells | 0.10, 3.0 | met |
+| A3 Zalesak L1 / slot maximum | 0.1254 / 0.125 | 0.20 / 0.5 | met |
+| A3 phase-volume drift as registered | 2.3e-10 | 1e-12 | MISS (set-up defect, below) |
+| A3b exact flux balance (volume plus boundary outflow) | 1.6e-14 | 1e-12 | met |
+| A4 vortex reversal | L1 3.15e-2 | 0.25 | met (attempted) |
+| B1 interface on a face | max abs U 1.7e-12, pressure error 9.7e-12, alpha change 2.6e-14 | 1e-10, 1e-10, 1e-12 | met |
+| B2 interface inside a cell | 5.9e-13 (sigma 0), 4.4e-13 (sigma 0.07) | 1e-10 | met |
+| C1 Laplace jump | dp 3.8076 vs 4.0, error 4.8 percent | 10 percent | met |
+| C2 parasitic capillary number | 1.64e-3 | 1e-2 | met |
+| C3 | volume 4.8e-15, centroid drift 1.5e-12 dx | 1e-12, 0.01 dx | met |
+| D1 front velocity | v/sqrt(gH) = 1.504 | 1.44 to 1.94 and below 2 | met (11 percent below the reference 1.69) |
+| D2 deviation from the 1.69 line | 0.161 (t* = 2), 0.110 (t* = 3), front monotone | 0.20 | met |
+| D3 | volume 4.5e-15, alpha in [-4.75e-18, 1], max Courant 0.48 | 1e-12, 1e-9, 1.5 | met |
+| E rising bubble, free-slip sides | y_c(3) = 1.0282, v_max = 0.2204 at t = 0.850 | 1.0813 +- 0.12, 0.2417 +- 25 percent | met (reference values unverified) |
+| E, no-slip sides (labelled, not the benchmark wall condition) | y_c 1.0161, v_max 0.2148 | not applicable | reported |
+| F1 located errors | 27 rows, every expected path present | all | met |
+| F2 tree equals library | pool: pressure 3.9e-12, alpha 8.6e-29; dam break: front 5.5e-16 relative, alpha 6.4e-14, U 1.1e-12; D1 through the tree 1.504 | 1e-9 | met |
+| F3 fields | alpha in [-5e-91, 1], alpha, p_rgh, p, rho in `field()` and in `solution.vtu` | bounded | met |
+| F4 / G | explicit `enabled = false` section bit-identical; baseline hashes unchanged (3 passed, 1 ignored as before); `pimple.rs` not edited | | met |
+
+Run times: droplet 59 s, dam break 17 s (library) and 30 s (tree plus library in lock step), bubble 22 s (1200 steps).
+
+### The A3 miss and the corrected test
+
+The registered A3 asks for `|V - V_0| / V_0 <= 1e-12` along the whole rotation. It measured 2.3e-10. The Zalesak limiter conserves
+phase volume exactly for the fluxes it is given, so the drift is a flux balance question. The registered set-up rotates the disk
+inside a square domain that is not closed: the rotation field is not tangential at the square boundary, and the numerical tails of alpha
+(1e-7 size) leave through the boundary faces. The accumulated boundary outflow was -1.351e-7 and `V + outflow - V_0` is 1.6e-14. This is a
+set-up defect, not a limiter defect. The registered check is kept as the ignored test `a3_zalesak_slotted_disk_known_miss` with its
+limit intact; the new test `a3b_zalesak_slotted_disk_corrected` states conservation as the exact flux balance with the registered limit
+1e-12 and passes. The L1 and slot checks of A3 are in both tests and pass.
+
+### Deviations from the registered design
+
+1. Curvature smoothing at boundaries. A missing neighbour of a boundary cell is replaced by a zero-gradient mirror (the cell's own value).
+   Without the mirror the smoothing was asymmetric at the walls and B2 with sigma 0.07 gave a spurious velocity of 3.3e-3 (limit 1e-10). The
+   registered text said only "equal-weight neighbour average". Found by running B2; the fix is the mirror, no limit was touched.
+2. Rhie-Chow coefficient. The registered `gamma_p rho_old_f / dt` was unbounded at a density jump (B blew up: the velocity grew a factor 100 per
+   step). The implemented coefficient is `face_interpolate(rho rAU) / dt`, interpolated as a product, so a face between a water and an air cell is
+   bounded by the larger of the two cell values times 1/dt.
+3. Reconstruction sign. A first version of `reconstruct` gave the neighbour cell the wrong sign for the face force; both owner and neighbour get
+   `+q S/|S|`, which is the face-consistent least-squares reconstruction required by D4.
+4. Case tree. `initial.point` replaces the registered `initial.offset` for the half space (an offset has no unset sentinel, a point list
+   does). More refusals than registered, each with a located error: `solver.max_courant > 0`, `solver.time_scheme` other than euler,
+   `solver.viscous_stress = full`, `solver.bulk_velocity`, `solver.frozen_flow`, `rheology`, `properties`, `scalars`, `radiation`, `particles`,
+   `chemistry`, `electric`, `phase_change`, `solids`, `zone_sources`, a catalogue boundary kind, boundary velocity other than `fixed` or
+   `zero_gradient` (so `moving_wall`, `shear` and `freestream` are refused as well as the registered symmetry, partial slip and marangoni), and
+   pressure other than `fixed` or `zero_gradient`. Reports that assume one density are refused at evaluation.
+5. The pressure solve in the tree never uses the AMG option (finding below).
+6. Wall condition of the library tests: velocity `FixedValue` zero on all walls in A-D (no symmetry anywhere); E uses the library `Symmetry`
+   condition on the side walls for the benchmark's free slip. The tree refuses `symmetry` as registered, so E is a library test only.
+7. Time. `solver.dt` is fixed; no adaptive stepping. Capillary limit is checked in the library tests (`capillary_dt`), the step reports a flag.
+
+### Finding: AMG-preconditioned CG breaks down on the density jump
+
+The tree first chose the AMG pressure solver for meshes above 2000 cells, as the single-phase transient path does. The library run of the
+120 x 40 dam break with `amg_pressure = true` solved 119 steps (pressure iterations rising from 36 to 38), then at step 120 the three
+pressure correctors each ran to the 5000 iteration cap, after which the pressure was NaN. The registered library runs use the plain
+preconditioned CG (`amg_pressure = false`) and complete. Root cause: not investigated beyond this observation; it is a limitation of the
+AMG hierarchy built on the pressure matrix with coefficients varying by 1000:1. The multiphase path therefore always uses plain CG, which
+is slow on large meshes. The AMG behaviour on variable-density Poisson matrices is an open gap.
+
+### Expected failure modes of the registered list that did not occur
+
+Items 1, 2 and 4 (blow-up at the 1000:1 ratio with the registered consistent rhoPhi, C1 between 5 and 10 percent, front below 1.44) did not
+occur: no blow-up in the registered runs, C1 was 4.8 percent and D1 1.504. Item 3 (A3 corner rounding and slot erosion) did occur in the form
+of a 0.1254 L1 error and a partly filled slot (0.125), inside the limits. Item 5 (boundedness depends on the pressure tolerance) held: with
+`pressure_rel_tol` 1e-12 the coupled alpha bounds were at round-off.
+
+### Unverified references
+
+See `docs/reference-data.md`, section Wave 27A: only the Martin-Moyce 1.48 / 1.69 average front velocities (secondary source) were read. The
+Hysing reference values, the Zalesak set-up, the Brackbill CSF form, the interface-compression flux form, the LeVeque vortex field and the
+capillary constant are unverified; E therefore compares to unverified numbers and is reported as such.

@@ -1257,3 +1257,42 @@ and the structural load export (`rcfd_post::structural`, `rcfd_io::nastran`, `rc
 only, so existing cases parse, validate and run exactly as before (baseline hashes unchanged). Their errors are located
 by the API argument (model parameter, patch name, element or grid id, deck line number), not by a case key. A case-tree
 section is future work.
+
+## Wave 27A: `multiphase` (F-055, ADR 0049)
+
+`multiphase.enabled = true` selects the volume-of-fluid free-surface solver (`rcfd_fv::vof`) in place of the single-phase transient
+kernel: two incompressible immiscible fluids, the phase fraction `alpha` (1 = phase 1) transported with interface compression and a
+flux-corrected explicit limiter, sub-cycled to a Courant number `alpha_courant`; mixture density and viscosity linear in `alpha`;
+CSF surface tension; well-balanced `p_rgh` gravity. Everything is inert and silent while `enabled = false`; setting any
+`multiphase.*` key then is a located error. A case without the section is unchanged (baseline hashes bit-identical).
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `multiphase.enabled` | false | solve the two-phase free-surface flow |
+| `multiphase.model` | "vof" | only the algebraic volume of fluid |
+| `multiphase.density_1/2` | -1 (unset) | phase densities [kg/m^3], required > 0 |
+| `multiphase.viscosity_1/2` | -1 (unset) | dynamic viscosities [Pa s], required > 0 |
+| `multiphase.surface_tension` | 0 | sigma [N/m]; CSF, 90 degree contact angle at walls |
+| `multiphase.compression` | 1 | compression coefficient `c_alpha` (0 = none) |
+| `multiphase.alpha_courant` | 0.25 | largest Courant number of an alpha sub-step |
+| `multiphase.curvature_smoothing` | 2 | smoothing passes of alpha before the curvature |
+| `multiphase.initial.shape` | "unset" | `box` (`box_min`, `box_max`), `sphere` (`centre`, `radius`), `half_space` (`normal`, `point`: the side `n . (x - point) <= 0`); required |
+| `multiphase.initial.inside` | "phase_1" | which phase fills the shape; the other fills the rest |
+
+Cells are sub-sampled 10 per direction, so a face-aligned box is exact; in 2-D give the box a z range that covers the mesh thickness.
+Gravity is `physics.gravity`; the phase densities replace `physics.rho` and the viscosities `physics.nu`. The pressure is in Pa;
+`field("p")` is the pressure, `field("p_rgh")` the modified pressure `p - rho g . (x - x_ref)` (also what `pressure()` returns and what
+a `pressure = "fixed"` boundary value sets), `field("alpha")` and `field("rho")` are new; `alpha`, `p_rgh`, `p`, `rho` are written to
+`solution.vtu`. The time step is the fixed `solver.dt`; a time step above the capillary limit is flagged in the library
+(`capillary_dt`), not in the tree.
+
+Located errors (path in the tree) when `multiphase.enabled = true`: `solver.algorithm` not `piso`/`pimple` (steady, coupled and
+compressible are refused); `fluid.density` not `constant`; `turbulence.model`, `energy.enabled`, `rheology.model`, `properties`,
+`scalars`, `sources`, `components`, `radiation.model`, `statistics.enabled`, `dynamic_mesh.enabled`, `particles.enabled`, `chemistry`,
+`electric.enabled`, `phase_change.enabled`, `solids`, `zone_sources`; `solver.time_advance = fractional_step`; `solver.max_courant > 0`;
+`solver.time_scheme` not `euler`; `solver.viscous_stress = full`; `solver.bulk_velocity`; `solver.frozen_flow`; `physics.body_force`;
+`mesh.periodic_x/y`; non-default `physics.rho` / `physics.nu`; a boundary velocity other than `fixed` (no-slip: value 0) or
+`zero_gradient` (so no `symmetry`, `partial_slip`, `marangoni`, `freestream`, `moving_wall`, `shear`), a pressure other than `fixed` or
+`zero_gradient`, a catalogue boundary kind; unset required keys. Reports that assume one density (force, moment, y_plus, heat_flow,
+mass_flow, mass_weighted_average, vector_flux) are refused. The pressure solve is plain preconditioned CG (the AMG option is not
+used: it breaks down on the 1000:1 density jump, see the ADR addendum).
