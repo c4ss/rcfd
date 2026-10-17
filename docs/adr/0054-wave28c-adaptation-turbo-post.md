@@ -181,3 +181,13 @@ every value to `1e-15` relative; HTML escapes `<` and `&`; non-positive `Q`, `om
 
 ADR (this file) committed first; then `adapt.rs` + tests, `polydual.rs` + tests, the rcfd-fv solve test, `turbo.rs` + tests; docs and
 roadmap; the final gate on a `git archive` copy.
+
+## Addendum 1 (written before the A4 run): details the registered A4 left open
+
+* The A4 refinement threshold is relative: in each of the two rounds every cell with `|grad phi| >= 0.25 max|grad phi|` (least-squares
+  gradient of the solution on the current mesh, `scale_by_length = false`) is marked `Refine`; no coarsening in A4; balance on.
+* The solve is the steady diffusion operator `rcfd_fv::diffusion::laplacian` with the least-squares-gradient non-orthogonal correction
+  re-evaluated each outer iteration (at most 200 outer iterations, stop at max change <= 1e-12), Dirichlet from the exact solution at
+  the boundary face centres; `AmrMesh` base 16 x 16 on `[0,1]^2` with thickness 0.1 and `frontAndBack` empty.
+* Error is the volume-weighted L2 norm of `phi_h(x_c) - phi(x_c)` at the cell centres.
+* The cell count limit is read as `n_cells(adapted) <= 2048` (half of 64 x 64).
