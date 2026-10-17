@@ -513,7 +513,9 @@ mod tests {
         assert!(worst_k <= 1e-14);
     }
 
-    fn mesh_pair() -> (Vec<(Vec3, Vec3)>, Vec<(Vec3, Vec3)>) {
+    type FaceList = Vec<(Vec3, Vec3)>;
+
+    fn mesh_pair() -> (FaceList, FaceList) {
         (patch(48, 16, "zmax"), patch(29, 11, "zmin"))
     }
 
@@ -766,11 +768,11 @@ mod tests {
         let bands = mp.average(&donor).unwrap();
         let recv = receiver_from(&r);
         let st = mp.pass(&bands, &recv).unwrap();
-        let mut before = vec![0.0; 5];
+        let mut before = [0.0; 5];
         for f in &donor {
             before[mp.band_of(f.x).unwrap()] += vec3::dot(f.u, f.s) * f.h;
         }
-        let mut after = vec![0.0; 5];
+        let mut after = [0.0; 5];
         for (f, s) in recv.iter().zip(&st) {
             after[s.band] += vec3::dot(s.u, f.s) * s.h;
         }
