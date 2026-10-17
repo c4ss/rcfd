@@ -961,3 +961,22 @@ from memory. HDF5 and CGNS layouts were not read or used.
 | Capillary time-step constant `dt_cap = sqrt((rho_1 + rho_2) dx^3 / (8 pi sigma))` | unverified | from memory; the most restrictive reading is used |
 | LeVeque (1996) single-vortex deformation field | unverified | recalled; used with the registered period T = 2 |
 | Hysing et al. (2009) rising bubble case 1: `y_c(3)` = 1.0813, `v_max` = 0.2417 at t about 0.9317 | unverified | finest-grid reference values quoted from memory; the registered limits are loose (0.12 in height, 25 percent in velocity) because the 40 x 80 algebraic scheme is far from the references |
+
+## Wave 28C adaptation and turbomachinery post-processing (F-102, F-123, ADR 0054)
+
+No source was read in this wave; everything is first-principles or recalled.
+
+| Item | Status | Note |
+|------|--------|------|
+| Linear reconstruction exact for linear fields; volume-weighted restriction conserves the integral | derived | tested to 6.7e-16 |
+| Hanging-node face loops with all lattice vertices on the boundary edges (closed, two-cell faces) | derived | checked by closedness and face-count tests |
+| Zienkiewicz-Zhu error indicator (patch-recovered gradient minus cell gradient) | unverified | the recovery is the volume-weighted patch mean, a simplified form; the original SPR/ZZ papers were not read |
+| Gradient and Hessian indicators (least squares) | derived | |
+| Polyhedral dual of a tet mesh (centroid rings, edge midpoints) | derived | volume and patch areas exact by construction, tested to 1e-15 |
+| Kuhn six-tet split of the cube used for the dual test | derived | |
+| Manufactured tanh-front diffusion solution | derived | |
+| Pump head `dp0/(rho g)`, hydraulic efficiency `rho g H Q/(T omega)` | derived | definitions as used here; conventions of a specific standard not checked |
+| Compressor `eta_is = (PR^k-1)/(tau-1)`, `eta_p = k ln PR/ln tau`, `k = (gamma-1)/gamma` | derived | perfect gas, adiabatic; recalled to agree with textbook forms, no book consulted |
+| Head coefficient `gH/u_t^2`, flow coefficient `Q/(u_t A)` | unverified | normalisations vary between sources; these are the ones coded |
+| Mass-flow and area-weighted averaging formulas | derived | |
+| Published pump or compressor performance data (rotor 37, NASA, etc.) | not used | no comparison made; roadmap literature acceptance is not met |
