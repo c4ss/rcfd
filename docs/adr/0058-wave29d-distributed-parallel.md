@@ -178,3 +178,58 @@ MPI and socket transports (the user decides library, launcher and `--hostfile`);
 distributed AMG; distributed assembly of momentum, pressure-velocity coupling, turbulence, energy and the boundary-condition catalogue;
 `rcfd run` wiring and any case-schema key; parallel mesh reading/partitioned I/O; dynamic load balancing; multi-device GPU; tree
 (logarithmic) reductions; non-blocking communication overlap with computation; a cluster performance claim.
+
+## Addendum A (after the runs; limits above untouched)
+
+Measured with `cargo test -p rcfd-dist --release` (tests `structure.rs`, `numerics.rs`, `assemble.rs`); all registered checks passed at
+the first run, there are no `*_known_miss` tests. Host: 16 logical cores.
+
+* B1 partition structure: passed for cavity 24x24 and box 8x8x8, partitioners Rcb / Bisection(Cycle) / GraphPartitioner, P in
+  {1,2,4,8}: no cell lost or duplicated, ghost set equal to the independently computed neighbour set, message order consistent,
+  `validate_decomposition` Ok.
+* B2 located errors: all five corruptions and the matrix coupling outside the halo are rejected with part, peer and cell (row and
+  global column for the matrix) in the text.
+* B3 halo update: every ghost bit-equal to its owner value for both synthetic fields, both meshes, three partitioners, P in {2,4,8}.
+* B4 matvec: bit-identical to the serial product for ALL P (0 of 2304 rows differ in any bit at P = 1, 2, 4, 8), because the column
+  order of each row is the global one; the registered bound `2 gamma_k (|A||x|)_i` is therefore met with ratio 0.
+* B5 dot: P = 1 bit-identical; |dot_d - dot_s| = 1.2e-14 (P=2), 2.7e-15 (P=4), 4.4e-15 (P=8) against the limit 1.44e-10. Run-to-run:
+  20 repeats per P in {2,4,8} with a private rayon pool of 1, 2 or 4 threads per rank gave bit-identical solutions and statistics.
+  The `allreduce_sum` of rank-dependent values equals the sequential rank-order sum bit for bit on every rank (values chosen so that
+  the order matters).
+* B6 solves (cavity 48x48, tol_rel 1e-10): all 24 runs converged; true residual / |b| between 1.6e-11 and 9.8e-11 (limit 1.01e-10);
+  relative L2 difference to serial: CG none <= 7.9e-14, CG Jacobi <= 4.4e-15, CG block-Jacobi <= 4.3e-12, BiCGStab <= 4.1e-11
+  (limit 2e-7). The BiCGStab differences are larger because BiCGStab with different reduction orders follows a slightly different
+  path, but stay four orders of magnitude below the limit.
+* B7 P = 1: solution bits, iteration count and final residual bits equal the serial `rcfd-linalg` routines for CG and BiCGStab and
+  every preconditioner, both for `SerialComm` and the in-process one-rank thread path.
+* B8 iteration counts (CG): none 99 at all P; point Jacobi 97 at all P (serial 97); block-Jacobi ILU0 48 (serial ILU0, P=1), 64
+  (P=2, ratio 1.33), 58 (P=4, 1.21), 77 (P=8, 1.60) against the limit 2.5; BiCGStab block-Jacobi 32 -> 40, 40, 50 (ratio 1.56 at
+  P=8). Block-Jacobi at P = 8 (77) is not worse than point Jacobi (97).
+* B9 strong scaling (REPORTED, not a cluster measurement; 192x192 = 36864 cells, CG + block-Jacobi, tol_rel 1e-8, median of 3):
+  P=1 133 iterations 0.0684 s; P=2 188 it 0.0605 s (speed-up 1.13, efficiency 0.56); P=4 179 it 0.0448 s (1.52, 0.38); P=8 231 it
+  0.0421 s (1.62, 0.20). The solve is short (tens of milliseconds), the iteration count grows with P (block-Jacobi without coarse
+  space) and the rank threads share memory bandwidth and the rayon pool, so the numbers say nothing about cluster scaling. The
+  F-100 acceptance (70 percent efficiency to 16 ranks on 4M cells) is not tested and not claimed.
+* B10 (stretch, delivered for the scalar problem only): linear field gradient exact (interior cells 0, all cells 1.9e-14, limit
+  1.2e-12); smooth-field gradient distributed versus P = 1 differs by 0 (bit-identical, limit 2.3e-13) for P = 2, 4, 8; steady
+  convection-diffusion (Gamma 0.05, 32x32, rotating field, lid 1): 12 deferred-correction iterations, phi in [0.000216, 0.980854];
+  P = 2, 4, 8 differ from P = 1 by 7.9e-14, 1.2e-13, 3.9e-14 (limit 9.8e-10); P = 1 equals the serial `rcfd-linalg` BiCGStab path bit
+  for bit. NOT attempted: a converged distributed momentum/pressure (SIMPLE) laminar flow field.
+* B11 baselines: see Addendum B (final gate).
+
+Deviations and clarifications (none changes a limit):
+1. B2 (v) lost cell: the located error needs a peer; the validator reports as peer the part of the first face neighbour that lies in
+   another part (or the claimed part itself if there is none). The test selects a lost cell whose only foreign neighbours lie in
+   one peer, so the registered tokens are exact; for a cell with several foreign neighbour parts the peer named is the first by
+   face order.
+2. B5 dot bound: the registered `gamma_n sum|a_i b_i|` was used as written. A rigorous bound for the DIFFERENCE of two computed
+   dot products is `2 gamma_n sum|a_i b_i|` (each has error up to `gamma_n sum|a_i b_i|`); the measured differences (1e-14) are
+   10^4 times below either.
+3. B5 pools: ranks must not share one rayon pool for `install` (a blocking receive on the single worker would deadlock), so each rank
+   builds a private pool of 1, 2 or 4 threads; the global pool was not varied.
+4. B6/B8 serial reference for "block-Jacobi" is the global `Ilu0` (P = 1 equals it by construction, which B7 confirms).
+5. An unregistered extra check `b10_pure_diffusion_reproduces_linear_field` (without convection the discretisation reproduces a
+   linear field to 2e-13) was added as a sanity check of the assembly; it is not a registered limit.
+6. In the stretch assembly each rank reads the global `Mesh` once to copy the geometry of its owned and ghost cells and of the faces
+   touching owned cells (`RankGeometry`); all numerics then use only that copy. A real distributed-memory run would build the same
+   struct from a partitioned mesh file, which does not exist yet (parallel mesh I/O is not delivered).
