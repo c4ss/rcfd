@@ -1268,6 +1268,7 @@ impl Simulation {
             s.alpha_u = get_f(case, "solver.alpha_u");
             s.alpha_p = get_f(case, "solver.alpha_p");
             s.non_orth_correctors = get_i(case, "solver.non_orthogonal_correctors") as usize;
+            s.simplec_non_orth_compensation = get_b(case, "solver.simplec_non_orthogonal_compensation");
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             match get_s(case, "solver.h_operator").as_str() {
                 "from_solution" => s.h_from_solution = true,

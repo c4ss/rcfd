@@ -169,6 +169,11 @@ pub struct SimpleSettings {
     pub convection: ConvScheme,
     /// Extra pressure solves with non-orthogonal correction per iteration.
     pub non_orth_correctors: usize,
+    /// SIMPLEC with `non_orth_correctors > 0`: let the flux compensation `(rAtU - rAU)_f snGrad(p_old) |S|` carry the
+    /// non-orthogonal secondary-gradient part as well (ADR 0050 D1). Without it the deferred part of the corrected flux is
+    /// weighted with `rAtU` instead of `rAU` and an axial mode of the outer iteration grows for `alpha_u` near 1. Default
+    /// `false` (every earlier result unchanged); no effect for SIMPLE or without correctors.
+    pub simplec_non_orth_compensation: bool,
     /// Reference cell and value used when the pressure level is undetermined.
     pub p_ref: (usize, f64),
     /// Evaluate the H operator from the solved momentum predictor (as in classic SIMPLE and
@@ -199,6 +204,7 @@ impl SimpleSettings {
             alpha_p,
             convection: ConvScheme::Upwind,
             non_orth_correctors: 0,
+            simplec_non_orth_compensation: false,
             p_ref: (0, 0.0),
             h_from_solution: true,
             momentum_solver: SolveControl {
@@ -889,6 +895,12 @@ impl SimpleSolver {
             for f in 0..n_int {
                 phi_hby_a[f] += corr[f];
             }
+            if s.simplec_non_orth_compensation && s.non_orth_correctors > 0 {
+                let corr = self.simplec_non_orth_flux_correction(&r_au, &r_atu, &pbc);
+                for f in 0..n_int {
+                    phi_hby_a[f] += corr[f];
+                }
+            }
         }
         if let Some(j) = &self.face_jump {
             // jump faces: phi (1 + G K) = phiHbyA + G R_explicit - G snGrad(p) with G = gamma_p lap, the same face
@@ -1089,6 +1101,28 @@ impl SimpleSolver {
                 0.0
             };
             out[f] = dr * g.lap_coeff[f] * (p[nb] - p[o] - jump);
+        }
+        out
+    }
+
+    /// Non-orthogonal part of the SIMPLEC flux compensation, `(rAtU - rAU)_f k . grad(p_old)_f` with the least-squares cell
+    /// gradient and boundary values of the pressure corrector (ADR 0050 D1); internal faces only.
+    fn simplec_non_orth_flux_correction(&self, r_au: &[f64], r_atu: &[f64], pbc: &PressureBc) -> Vec<f64> {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let sf = mesh.face_area_vectors();
+        let bv = boundary_values_pbc(g, pbc, &self.p.values);
+        let gr = least_squares(g, &self.p.values, &bv);
+        let mut out = vec![0.0; mesh.n_faces()];
+        for f in 0..g.n_internal {
+            let d = g.delta[f];
+            let delta = vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d));
+            let k = vec3::sub(sf[f], delta);
+            let w = g.weights[f];
+            let gf = [0, 1, 2].map(|i| w * gr[own[f]][i] + (1.0 - w) * gr[nei[f]][i]);
+            let dr = w * (r_atu[own[f]] - r_au[own[f]]) + (1.0 - w) * (r_atu[nei[f]] - r_au[nei[f]]);
+            out[f] = dr * vec3::dot(k, gf);
         }
         out
     }
