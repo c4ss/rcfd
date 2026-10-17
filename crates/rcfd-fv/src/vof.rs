@@ -23,7 +23,7 @@ use crate::masstransfer::{HertzKnudsen, R_UNIVERSAL};
 use crate::mixture::{MixtureSettings, SlipTransport};
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc,
-    solve_pressure_parts_src, PressureControls,
+    solve_pressure_parts_src, solve_pressure_parts_src_k, PressureBc, PressureControls,
 };
 use crate::waves::{liquid_fraction, ramp, relax, zone_chi, Blend, Wave};
 use rcfd_core::vec3::{self, Vec3};
@@ -133,6 +133,11 @@ pub struct AlphaTransport {
     pub max_sub: usize,
     /// Algebraic-slip (drift-flux) transport of the mixture model (`None` = none, bit-identical to the plain path).
     pub slip: Option<SlipTransport>,
+    /// Advective (non-conservative) form for a flux with a volume source, `alpha_t + div(alpha phi) - alpha div(phi)`: set by the
+    /// cavitation coupling, whose lagged `div phi = S_v` would otherwise compress the liquid fraction above 1 when a cavity collapses
+    /// within one step (ADR 0056 addendum). `false` = the conservative form, bit-identical to the plain path.
+    pub advective: bool,
+    dilation: Option<Vec<f64>>,
     delta: f64,
 }
 
@@ -147,6 +152,8 @@ impl AlphaTransport {
             courant_max,
             max_sub: 2000,
             slip: None,
+            advective: false,
+            dilation: None,
             delta: 1e-8 / vmean.cbrt(),
         }
     }
@@ -190,9 +197,26 @@ impl AlphaTransport {
         }
         let dts = dt / n_sub as f64;
         let mut acc = vec![0.0; self.geom.mesh.n_faces()];
+        if self.advective {
+            // advective form for a flux with a volume source (`div phi = S_v`): `alpha_t + div(alpha phi) - alpha div(phi)`
+            let g = self.geom.clone();
+            let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+            let mut div = vec![0.0; g.n_cells()];
+            for f in 0..g.mesh.n_faces() {
+                if g.empty[f] {
+                    continue;
+                }
+                div[own[f]] += phi[f];
+                if f < g.n_internal {
+                    div[nei[f]] -= phi[f];
+                }
+            }
+            self.dilation = Some(div);
+        }
         for _ in 0..n_sub {
             self.substep(phi, dts, dts / dt, &mut acc);
         }
+        self.dilation = None;
         Ok(AlphaInfo {
             n_sub,
             courant: co,
@@ -266,7 +290,11 @@ impl AlphaTransport {
             f_bnd[f - n_int] = phi[f] * bv[f - n_int];
             net[own[f]] += f_bnd[f - n_int];
         }
-        let low: Vec<f64> = (0..n).map(|c| a[c] - dts / vol[c] * net[c]).collect();
+        let dil = self.dilation.clone();
+        let low: Vec<f64> = match &dil {
+            None => (0..n).map(|c| a[c] - dts / vol[c] * net[c]).collect(),
+            Some(d) => (0..n).map(|c| a[c] - dts / vol[c] * (net[c] - a[c] * d[c])).collect(),
+        };
 
         // Zalesak limiter
         let mut p_plus = vec![0.0; n];
@@ -319,8 +347,17 @@ impl AlphaTransport {
             net2[own[f]] += f_bnd[f - n_int];
             acc[f] += weight * f_bnd[f - n_int];
         }
-        for c in 0..n {
-            self.alpha.values[c] = a[c] - dts / vol[c] * net2[c];
+        match &dil {
+            None => {
+                for c in 0..n {
+                    self.alpha.values[c] = a[c] - dts / vol[c] * net2[c];
+                }
+            }
+            Some(d) => {
+                for c in 0..n {
+                    self.alpha.values[c] = a[c] - dts / vol[c] * (net2[c] - a[c] * d[c]);
+                }
+            }
         }
     }
 
@@ -577,6 +614,138 @@ pub struct PhaseChange {
     pub requested: f64,
 }
 
+/// Largest number of pressure re-linearisations per corrector of the implicit cavitation coupling.
+const CAV_MAX_ITERS: usize = 60;
+/// Convergence of the implicit coupling: the largest difference between the linearised and the exact source, as a vapour-fraction
+/// change per step (the registered tolerance of the fraction bounds is 1e-9).
+const CAV_TOL: f64 = 1e-9;
+/// Half-width (Pa) of the pressure band around saturation in which the chord slope is regularised.
+const CAV_D_REG: f64 = 1e-3;
+
+/// Implicit (pressure-coupled) Schnerr-Sauer source of one step (ADR 0056 D). The exact source `S(p)` of a cell is the exact
+/// radius update of [`Cavitation::advance`] at the pressure `p`, converted to the volume source `S_v V` of the host. It is
+/// linearised by the chord to the saturation point, `S_lin(p) = S_k (p - p_sat)/(p_k - p_sat)` (slope `K <= 0`, `S(p_sat) = 0`
+/// exactly), anchored at the latest pressure estimate `p_k`; the slope goes on the diagonal of the pressure equation. Re-anchoring
+/// at the new pressure converges to the exact nonlinear source (fixed-point ratio 1/2 for the square-root law), and the sign of
+/// the source is that of `p_sat - p` at the solved pressure by construction.
+struct CavIter {
+    cv: Cavitation,
+    rl: f64,
+    rv: f64,
+    dt: f64,
+    /// Vapour fraction after the transport, before the source.
+    av: Vec<f64>,
+    /// Mixture density at the start of the source.
+    rho_m: Vec<f64>,
+    /// `p - p_rgh` of every cell.
+    off: Vec<f64>,
+    vol: Vec<f64>,
+    /// Source delivered by the last pressure solve (m^3/s), the linearised value clipped to the bounds.
+    s_used: Vec<f64>,
+    /// Largest `|S_lin - S| dt/V` of the last re-linearisation of the last solve.
+    disc: f64,
+    /// Total re-linearisations of the step.
+    iters: usize,
+}
+
+impl CavIter {
+    /// Exact source (m^3/s) of cell `c` at the physical pressure `p`.
+    fn s_true(&self, c: usize, p: f64) -> f64 {
+        let av = self.av[c];
+        let g_dt = self.cv.advance(av, self.rl, p, self.dt) - av;
+        (self.rl - self.rv) / self.rho_m[c] * g_dt / self.dt * self.vol[c]
+    }
+
+    /// Bounds of the source of cell `c`: vapour fraction not above 1, not below the nuclei (or the start value if lower).
+    fn bounds(&self, c: usize) -> (f64, f64) {
+        let av = self.av[c];
+        let scale = (self.rl - self.rv) / self.rho_m[c] * self.vol[c] / self.dt;
+        (scale * (self.cv.alpha_floor().min(av) - av), scale * (1.0 - av))
+    }
+
+    /// Chord linearisation at the `p_rgh` estimate `p_k`: returns `(S_0, slope, p_a)` per cell, `S_lin(p) = S_0 + slope (p - p_a)`.
+    /// Normally `S_0 = S(p_k)`, `p_a = p_k` and the slope is the chord to the saturation point. Within `CAV_D_REG` of saturation, where
+    /// the square-root law has an unbounded slope, the chord is taken from the source at `p_sat -+ CAV_D_REG` (the model passes through
+    /// `(p_sat, 0)`), which keeps the slope finite and the iteration from alternating between an unconstrained and a pinned cell.
+    fn linearise(&self, p_k: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+        let n = p_k.len();
+        let mut s0 = vec![0.0; n];
+        let mut k = vec![0.0; n];
+        let mut pa = p_k.to_vec();
+        for c in 0..n {
+            let p = p_k[c] + self.off[c];
+            let s = self.s_true(c, p);
+            s0[c] = s;
+            let d = p - self.cv.p_sat;
+            // a source held at its bound (all vapour condensed to the nuclei, or no liquid left) is flat in the pressure: a chord
+            // through the saturation point would extend it beyond the bound, so it is held constant (slope 0) until the pressure
+            // leaves the range where the bound is active
+            let (lo, hi) = self.bounds(c);
+            let held = s <= lo + 1e-12 * lo.abs() || s >= hi - 1e-12 * hi.abs();
+            if held {
+                continue;
+            }
+            if d.abs() >= CAV_D_REG {
+                if s != 0.0 {
+                    k[c] = s / d;
+                }
+            } else {
+                let d_eff = if d > 0.0 { CAV_D_REG } else { -CAV_D_REG };
+                let s_a = self.s_true(c, self.cv.p_sat + d_eff);
+                k[c] = s_a / d_eff;
+                s0[c] = 0.0;
+                pa[c] = self.cv.p_sat - self.off[c];
+            }
+        }
+        (s0, k, pa)
+    }
+
+    /// Solve the pressure equation with the implicit source; `p_new` starts from the estimate `p_old` and ends at the converged
+    /// pressure. Returns the initial normalised residual of the first solve and the linear iterations.
+    #[allow(clippy::too_many_arguments)]
+    fn solve(
+        &mut self,
+        g: &FvGeometry,
+        gamma_p: &[f64],
+        pbc: &PressureBc,
+        phi_hby_a: &[f64],
+        p_old: &[f64],
+        p_new: &mut [f64],
+        ctl: &PressureControls,
+    ) -> (f64, usize) {
+        let n = p_old.len();
+        let mut est = p_old.to_vec();
+        let (mut res0, mut lin_iters) = (0.0, 0);
+        for it in 0..CAV_MAX_ITERS {
+            let (sk, k, pa) = self.linearise(&est);
+            // S_lin(p) = S_0 + K (p - p_a) = (S_0 - K p_a) + K p
+            let src: Vec<f64> = (0..n).map(|c| sk[c] - k[c] * pa[c]).collect();
+            p_new.copy_from_slice(&est);
+            let (r0, li, _) =
+                solve_pressure_parts_src_k(g, gamma_p, pbc, phi_hby_a, p_new, ctl, false, Some(&src), Some(&k));
+            if it == 0 {
+                res0 = r0;
+            }
+            lin_iters += li;
+            self.iters += 1;
+            let mut disc = 0.0f64;
+            for c in 0..n {
+                let (lo, hi) = self.bounds(c);
+                let lin = (sk[c] + k[c] * (p_new[c] - pa[c])).clamp(lo, hi);
+                self.s_used[c] = lin;
+                let exact = self.s_true(c, p_new[c] + self.off[c]);
+                disc = disc.max((lin - exact).abs() * self.dt / self.vol[c]);
+            }
+            self.disc = disc;
+            est.copy_from_slice(p_new);
+            if disc <= CAV_TOL {
+                break;
+            }
+        }
+        (res0, lin_iters)
+    }
+}
+
 /// Transient VOF solver state.
 pub struct VofSolver {
     /// Geometry.
@@ -600,6 +769,11 @@ pub struct VofSolver {
     step_no: usize,
     /// Delivered evaporation rate of every cell in the last step, kg/(m^3 s).
     pub mdot: Vec<f64>,
+    /// Implicit cavitation coupling, last step: largest difference between the delivered and the exact Schnerr-Sauer source as a
+    /// vapour-fraction change per step (0 without cavitation).
+    pub cav_disc: f64,
+    /// Implicit cavitation coupling, last step: total pressure re-linearisations (0 without cavitation).
+    pub cav_iters: usize,
     /// Velocity before the last relaxation blend (reference of the Rhie-Chow defect of the next step).
     u_rc: Option<Vec<Vec3>>,
     /// Vertical extent `[y_lo, y_hi]` of every cell (wave zones).
@@ -639,6 +813,8 @@ impl VofSolver {
             history: Vec::new(),
             step_no: 0,
             mdot: Vec::new(),
+            cav_disc: 0.0,
+            cav_iters: 0,
             u_rc: None,
             cell_y: Vec::new(),
             recon,
@@ -707,6 +883,7 @@ impl VofSolver {
                     *a = a.max(floor);
                 }
             }
+            self.transport.advective = true;
         }
         if let Some(mt) = &self.settings.mass_transfer {
             if !(mt.liquid_phase == 1 || mt.liquid_phase == 2) {
@@ -878,35 +1055,31 @@ impl VofSolver {
             .collect()
     }
 
-    /// Apply the Schnerr-Sauer cavitation source to the transported `alpha` (ADR 0056 D); the pressure is that of the start of the
-    /// step. Same bookkeeping as [`Self::apply_mass_transfer`].
-    pub fn apply_cavitation(&mut self, dt: f64) -> PhaseChange {
-        let cv = self.settings.cavitation.expect("checked by the caller");
+    /// Finish the implicit Schnerr-Sauer coupling after the pressure iterations (ADR 0056 D): the source the last pressure solve
+    /// enforced, `S` (m^3/s), is converted to the delivered mass source `mdot = S/((1/rho_v - 1/rho_l) V)` and the vapour fraction
+    /// grows by the material rate `D alpha_v/Dt = mdot rho_m/(rho_v rho_l)` (the Schnerr-Sauer identity).
+    fn finish_cavitation(&mut self, ci: &CavIter, dt: f64) -> PhaseChange {
         let n = self.geom.n_cells();
         let vol = self.geom.mesh.cell_volumes();
-        let [r1, r2] = self.settings.rho;
-        let liquid_is_1 = cv.liquid_phase == 1;
-        let (rl, rv) = if liquid_is_1 { (r1, r2) } else { (r2, r1) };
         let mut mdot = vec![0.0; n];
-        let mut vol_src = vec![0.0; n];
         let (mut volume, mut rate) = (0.0, 0.0);
+        let liquid_is_1 = ci.cv.liquid_phase == 1;
         for c in 0..n {
+            let m_eff = ci.s_used[c] / ((1.0 / ci.rv - 1.0 / ci.rl) * vol[c]);
+            mdot[c] = m_eff;
             let a = self.transport.alpha.values[c];
             let al = if liquid_is_1 { a } else { 1.0 - a };
-            let av = 1.0 - al;
-            let av_new = cv.advance(av, rl, self.p[c], dt);
-            let new_l = 1.0 - av_new;
-            let m_eff = rl * (al - new_l) / dt;
-            mdot[c] = m_eff;
+            // material growth of the vapour fraction over the step (the transport is advective, the dilation is not applied twice):
+            // `g dt = D alpha_v/Dt dt = mdot dt rho_m/(rho_v rho_l)`, inside the bounds of the source by construction
+            let new_l = al - m_eff * dt * ci.rho_m[c] / (ci.rv * ci.rl);
             let a_new = if liquid_is_1 { new_l } else { 1.0 - new_l };
             self.transport.alpha.values[c] = a_new;
             volume += (a_new - a) * vol[c];
             rate += m_eff * vol[c];
-            vol_src[c] = m_eff * (1.0 / rv - 1.0 / rl) * vol[c];
         }
         PhaseChange {
             mdot,
-            vol_src,
+            vol_src: ci.s_used.clone(),
             volume,
             rate,
             h_fg: 0.0,
@@ -1217,14 +1390,36 @@ impl VofSolver {
         self.update_wave_inlet(t_new);
         let alpha_start = self.transport.alpha.values.clone();
         let ainfo = self.transport.advance(&self.phi, dt)?;
-        let transfer = if self.settings.mass_transfer.is_some() {
+        let mut transfer = if self.settings.mass_transfer.is_some() {
             Some(self.apply_mass_transfer(dt, &alpha_start))
-        } else if self.settings.cavitation.is_some() {
-            Some(self.apply_cavitation(dt))
         } else {
             None
         };
         let rho = self.density();
+        let mut cav: Option<CavIter> = self.settings.cavitation.map(|cv| {
+            let (rl, rv) = if cv.liquid_phase == 1 { (r1, r2) } else { (r2, r1) };
+            let gh = self.gh_cells();
+            let av: Vec<f64> = self
+                .transport
+                .alpha
+                .values
+                .iter()
+                .map(|&a| if cv.liquid_phase == 1 { 1.0 - a } else { a })
+                .collect();
+            CavIter {
+                cv,
+                rl,
+                rv,
+                dt,
+                rho_m: av.iter().map(|&x| x * rv + (1.0 - x) * rl).collect(),
+                av,
+                off: (0..n).map(|c| rho[c] * gh[c]).collect(),
+                vol: vol.clone(),
+                s_used: vec![0.0; n],
+                disc: 0.0,
+                iters: 0,
+            }
+        });
         let a = self.transport.alpha.values.clone();
         let mu_c: Vec<f64> = a.iter().map(|x| s.mu[1] + (s.mu[0] - s.mu[1]) * x).collect();
         let mu_f = face_interpolate(&g, &mu_c);
@@ -1366,9 +1561,14 @@ impl VofSolver {
                 };
                 let p_old = self.p_rgh.values.clone();
                 let mut p_new = p_old.clone();
-                let vol_src = transfer.as_ref().map(|t| t.vol_src.as_slice());
-                let (r0, it, _) =
-                    solve_pressure_parts_src(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, false, vol_src);
+                let (r0, it) = if let Some(ci) = cav.as_mut() {
+                    ci.solve(&g, &gamma_p, &pbc, &phi_hby_a, &p_old, &mut p_new, &controls)
+                } else {
+                    let vol_src = transfer.as_ref().map(|t| t.vol_src.as_slice());
+                    let (r0, it, _) =
+                        solve_pressure_parts_src(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, false, vol_src);
+                    (r0, it)
+                };
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
@@ -1397,6 +1597,11 @@ impl VofSolver {
             }
         }
 
+        if let Some(ci) = &cav {
+            transfer = Some(self.finish_cavitation(ci, dt));
+            self.cav_disc = ci.disc;
+            self.cav_iters = ci.iters;
+        }
         let relax_volume = self.apply_relaxation(t_new);
         self.time += dt;
         self.update_pressure();
