@@ -208,3 +208,8 @@ Not delivered (named gaps): Aitken relaxation in the PIMPLE outer loop and the t
 iteration); local timescale factors; residual smoothing; stretched-mesh pseudo-time acceleration and the flat-plate acceptance; step
 control with energy, scalars, turbulence, dynamic mesh or the compressible solver; error control for BDF2; SIMPLEC compensation for the
 variable-density SIMPLEC (no correctors there). F-209 stays `partial`.
+
+Final gate (git archive of the commit before this note): `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings`
+clean, `cargo test --workspace --release --no-fail-fast` 261 test-result lines, 0 failed. The baseline hash tests and the existing
+SIMPLEC tests (`mrf`, `wall_motion`, `convergence_diagnosis`) passed unchanged, which closes S8 and R3. One clippy finding on the way
+(`is_none_or`, MSRV 1.75) was fixed in `stepctl.rs`.
