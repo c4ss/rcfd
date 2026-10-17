@@ -258,13 +258,39 @@ fn t1_located_errors() {
     }
     // disabled multiphase: the new keys are inert
     let off = "[mesh]\ngenerator = \"box_2d\"\nnx = 4\nny = 4\nlx = 1.0\nly = 1.0\n[multiphase]\nenabled = false\n";
-    for key in [
-        "[multiphase.mass_transfer]\nlatent_heat = 1.0e6\n",
-        "[multiphase.waves]\nheight = 0.1\n",
-        "[multiphase.waves]\ninlet_patch = \"xmin\"\n",
+    for (key, path) in [
+        (
+            "[multiphase.mass_transfer]
+latent_heat = 1.0e6
+",
+            "multiphase.mass_transfer.latent_heat",
+        ),
+        (
+            "[multiphase.waves]
+height = 0.1
+",
+            "multiphase.waves.height",
+        ),
+        (
+            "[multiphase.waves]
+inlet_patch = \"xmin\"
+",
+            "multiphase.waves.inlet_patch",
+        ),
+        (
+            "[multiphase.waves]
+beach = \"still_water\"
+",
+            "multiphase.waves.beach",
+        ),
+        (
+            "reference_point = [0.0, 1.0, 0.0]
+",
+            "multiphase.reference_point",
+        ),
     ] {
         let e = errors(&format!("{off}{key}"));
-        assert!(!e.is_empty(), "inert key not reported: {key}");
+        assert!(e.iter().any(|d| d.path == path), "inert key {path} not reported: {e:?}");
     }
 }
 
