@@ -949,7 +949,65 @@ pub fn case_schema() -> Schema {
             "max_courant",
             Schema::float(0.0)
                 .at_least(0.0)
-                .doc("Adaptive time-step Courant target; 0 keeps dt fixed"),
+                .doc("Adaptive time-step Courant target (MAX criterion); 0 keeps dt fixed. With none of the further step-control keys set, solver.dt is the cap and the step never grows by more than 1.2 per step; with any of them set the controller of ADR 0050 is used (solver.dt is then the first step and, unless solver.max_dt is set, the cap)"),
+        )
+        .field(
+            "max_courant_rms",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Adaptive step: target volume-weighted RMS Courant number sqrt(sum V Co^2 / sum V); 0 = off. Combined with max_courant the smaller step wins (ADR 0050, transient PISO/PIMPLE)"),
+        )
+        .field(
+            "dt_safety",
+            Schema::float(0.0)
+                .range(0.0, 1.0)
+                .doc("Adaptive step: the step aims at dt_safety x the Courant target; 0 = default 0.9"),
+        )
+        .field(
+            "dt_growth",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Adaptive step: largest growth factor per step (at least 1); 0 = default 1.2"),
+        )
+        .field(
+            "dt_shrink",
+            Schema::float(0.0)
+                .range(0.0, 1.0)
+                .doc("Adaptive step: smallest factor per step (the step shrinks at most by this factor); 0 = default 0.5"),
+        )
+        .field(
+            "min_dt",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Adaptive step: smallest step [s]; 0 = 1e-3 x solver.dt"),
+        )
+        .field(
+            "max_dt",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Adaptive step: largest step [s]; 0 = solver.dt"),
+        )
+        .field(
+            "error_tolerance",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Local-error step control by step doubling (implicit Euler, laminar constant density, no further physics): a step is accepted when max|u_2 - u_1| / max|u_2| per unit time is at most this tolerance, so the global relative error grows like tolerance x time (ADR 0050 D2); 0 = off"),
+        )
+        .field(
+            "period",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Period-based steps for periodic forcing: dt = period / steps_per_period, times k x dt landed exactly; 0 = off. Not combined with Courant or error control"),
+        )
+        .field(
+            "steps_per_period",
+            Schema::int(0)
+                .range(0.0, 1e9)
+                .doc("Steps per period (needs period); 0 = unset"),
+        )
+        .field(
+            "extrapolate_initial",
+            Schema::boolean(false).doc("Start every transient step from the linear extrapolation of the two previous time levels of velocity and face flux (ADR 0050 D5); changes the PISO result at the order of the time error"),
         )
         .field(
             "h_operator",
@@ -1180,6 +1238,16 @@ pub fn case_schema() -> Schema {
             Schema::int(0)
                 .range(0.0, 1e9)
                 .doc("Write a numbered VTK snapshot (snapshots/snapshot_<step>.vtu in the output directory) every N iterations/steps during rcfd run and run.headless with an output directory (0 = only the final solution.vtu)"),
+        )
+        .field(
+            "write_times",
+            Schema::list(Schema::float(0.0)).doc("Times [s] on which the transient step lands exactly (relative error 1e-12) and a numbered snapshot is written (needs the step control of ADR 0050; run path with an output directory); empty = none"),
+        )
+        .field(
+            "write_time_interval",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Land on every multiple of this interval [s] (as write_times); 0 = off"),
         )
         .field(
             "fields",

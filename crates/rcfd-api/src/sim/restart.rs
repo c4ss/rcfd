@@ -152,6 +152,9 @@ impl Simulation {
                 if let Some(l) = st.last {
                     c.put_f64s("last", &[l.time, l.dt, l.courant, l.continuity, l.res_u, l.res_p]);
                 }
+                if let Some(t) = &self.timectl {
+                    c.put_f64s("stepctl", &t.ctl.to_f64s());
+                }
             }
             _ => {
                 return Err(Error::Other(
@@ -191,6 +194,11 @@ impl Simulation {
                     unreachable!("checked by transient_restartable")
                 };
                 s.restore(&st)?;
+                if let Some(t) = &mut self.timectl {
+                    if c.get("stepctl").is_some() {
+                        t.ctl.restore_f64s(&c.get_f64s("stepctl")?).map_err(Error::Other)?;
+                    }
+                }
                 self.reset_run_state();
                 Ok(())
             }

@@ -349,6 +349,32 @@ pub fn drive(
                 }
             }
         }
+        if let Some(dir) = &opts.out_dir {
+            // ADR 0050: steps landed on output.write_times / output.write_time_interval write a snapshot
+            loop {
+                let mut g = lock_sim(sim);
+                let Some(t) = g.take_write_landing() else { break };
+                let snaps = dir.join("snapshots");
+                let name = format!("snapshot_t{t:.9}");
+                match g.export_vtu(&snaps, &name) {
+                    Ok(path) => {
+                        drop(g);
+                        sink(&event(
+                            "snapshot",
+                            &mut seq,
+                            t0.elapsed().as_secs_f64(),
+                            json!({"path": path.display().to_string(), "index": step.index, "time": t}),
+                        ));
+                    }
+                    Err(e) => sink(&event(
+                        "warning",
+                        &mut seq,
+                        t0.elapsed().as_secs_f64(),
+                        json!({"message": format!("snapshot failed: {e}")}),
+                    )),
+                }
+            }
+        }
         let body = json!({
             "index": step.index, "time": step.time, "res_u": step.res_u, "res_p": step.res_p,
             "continuity": step.continuity, "done": step.done,
