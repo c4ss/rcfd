@@ -15,9 +15,9 @@ pub mod rng;
 pub mod tracker;
 pub mod vtp;
 
-pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
 pub use coupling::{Coupling, Thermal};
 pub use dispersion::Dispersion;
+pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
 pub use rng::SplitMix64;
