@@ -77,6 +77,37 @@ impl DistCsr {
         })
     }
 
+    /// Build from rows assembled on this rank in the local numbering: `rows[i]` lists `(local column, value)` of owned row `i`.
+    /// Entries are ordered by the GLOBAL id of the column (like a global CSR matrix) and duplicates are summed in that order.
+    pub fn from_rows(sub: &rcfd_mesh::partition::SubDomain, rows: Vec<Vec<(usize, f64)>>) -> Self {
+        let global: Vec<usize> = sub.owned.iter().chain(sub.ghosts.iter()).copied().collect();
+        let mut row_ptr = vec![0usize];
+        let mut col = Vec::new();
+        let mut val: Vec<f64> = Vec::new();
+        for mut r in rows {
+            r.sort_by_key(|&(c, _)| global[c]);
+            let mut last = usize::MAX;
+            for (c, v) in r {
+                if c == last {
+                    *val.last_mut().expect("entry") += v;
+                } else {
+                    col.push(c);
+                    val.push(v);
+                    last = c;
+                }
+            }
+            row_ptr.push(col.len());
+        }
+        DistCsr {
+            rank: sub.part,
+            n_owned: sub.n_owned(),
+            n_local: sub.n_local(),
+            local: CsrMatrix::rect(sub.n_owned(), sub.n_local(), row_ptr, col, val),
+            plan: HaloPlan::from_subdomain(sub),
+            owned: sub.owned.clone(),
+        }
+    }
+
     /// Diagonal of the owned rows.
     pub fn diag(&self) -> Vec<f64> {
         let l = &self.local;

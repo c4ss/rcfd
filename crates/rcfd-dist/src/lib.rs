@@ -9,7 +9,9 @@
 //!   (a `Preconditioner`).
 //! * [`krylov`]: distributed CG and BiCGStab with deterministic global reductions.
 //! * [`solve`]: in-process driver with the serial fallback.
+//! * [`assemble`]: distributed assembly of one steady scalar convection-diffusion problem (not distributed SIMPLE).
 
+pub mod assemble;
 pub mod comm;
 pub mod halo;
 pub mod krylov;
