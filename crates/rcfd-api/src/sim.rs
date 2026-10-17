@@ -19,6 +19,7 @@ use crate::stats::{self, Statistics};
 use crate::turb::{self, TurbState};
 use crate::udf::Udf;
 use crate::vd::{self, VdState};
+use crate::vof::{self, VofState};
 use crate::wall_motion;
 use crate::zone_sources::ZoneSources;
 use rcfd_core::expr::Compiled;
@@ -637,6 +638,7 @@ enum Engine {
     Transient(Box<PimpleSolver>),
     Compressible(Box<CompState>),
     VarDensity(Box<VdState>),
+    Vof(Box<VofState>),
 }
 
 /// Outcome of one iteration or time step.
@@ -767,6 +769,13 @@ impl Simulation {
         }
         let compressible = comp::enabled(case);
         let vdens = vd::enabled(case);
+        let vof_on = vof::enabled(case);
+        if vof_on {
+            let e = vof::check(case);
+            if !e.is_empty() {
+                return Err(e);
+            }
+        }
         let mut temp = ScalarField::uniform("T", &geom, get_f(case, "initial.temperature"));
         let mut errs = Vec::new();
         let sctx = exprs::spatial_context(case);
@@ -1208,6 +1217,8 @@ impl Simulation {
             Engine::Compressible(Box::new(CompState::new(case, &geom)?))
         } else if vdens {
             Engine::VarDensity(Box::new(VdState::new(case, &geom, u, p, temp.clone())?))
+        } else if vof_on {
+            Engine::Vof(Box::new(VofState::new(case, &geom, u, p)?))
         } else if coupled_alg {
             let mut s = CoupledSettings::new(nu);
             s.convection = conv;
@@ -1419,7 +1430,7 @@ impl Simulation {
                 "a user-function viscosity cannot be combined with rheology.model / rheology.shift",
             ));
         }
-        if (compressible || vdens) && !udfs.is_empty() {
+        if (compressible || vdens || vof_on) && !udfs.is_empty() {
             return Err(diag(
                 "udf",
                 "user functions are not supported by the compressible solver",
@@ -1739,6 +1750,7 @@ impl Simulation {
             Engine::Compressible(c) => c.steady,
             Engine::VarDensity(v) => v.solver.settings.transient.is_none(),
         }
+            Engine::Vof(_) => false,
     }
 
     /// The particle run driven by the transient step, if `particles.enabled` with a transient algorithm.
@@ -1814,6 +1826,7 @@ impl Simulation {
             Engine::Steady(_) | Engine::Coupled(_) => 0.0,
             Engine::VarDensity(v) => v.solver.time,
             Engine::Transient(s) => s.time,
+            Engine::Vof(v) => v.solver.time,
             Engine::Compressible(c) => {
                 if c.steady {
                     0.0
@@ -1937,9 +1950,10 @@ impl Simulation {
             Engine::Compressible(c) => &c.u,
             Engine::VarDensity(v) => &v.solver.u,
         }
+            Engine::Vof(v) => &v.solver.u,
     }
 
-    /// Kinematic pressure field.
+    /// Kinematic pressure field (the modified pressure `p_rgh` [Pa] of a multiphase run; the pressure `p` is `field("p")`).
     pub fn pressure(&self) -> &ScalarField {
         match &self.engine {
             Engine::Steady(s) => &s.p,
@@ -1948,6 +1962,7 @@ impl Simulation {
             Engine::Compressible(c) => &c.p,
             Engine::VarDensity(v) => &v.solver.p,
         }
+            Engine::Vof(v) => &v.solver.p_rgh,
     }
 
     /// Face flux (volumetric for the incompressible algorithms, mass flux for the compressible solver).
@@ -1959,6 +1974,7 @@ impl Simulation {
             Engine::Compressible(c) => &c.phi,
             Engine::VarDensity(v) => &v.solver.phi,
         }
+            Engine::Vof(v) => &v.solver.phi,
     }
 
     /// Advance one iteration (steady) or time step (transient) and record monitors.
@@ -2351,6 +2367,46 @@ impl Simulation {
                 }
             }
             Engine::Transient(s) => {
+            Engine::Vof(v) => {
+                // two-phase free-surface step (ADR 0049): alpha sub-cycled, then PISO / PIMPLE on the mixture
+                let dt = self.dt.min((self.end_time - v.solver.time).max(1e-12));
+                match v.solver.step(dt) {
+                    Ok(si) => {
+                        v.steps += 1;
+                        let finite = si.res_u.is_finite() && si.res_p.is_finite() && si.continuity.is_finite();
+                        if !finite {
+                            reason_override = Some(format!(
+                                "free-surface solver diverged at time {} (non-finite residual); lower solver.dt",
+                                si.time
+                            ));
+                        }
+                        self.monitors.push("courant", "", si.time, si.courant);
+                        self.monitors.push("alpha_courant", "", si.time, si.alpha_courant);
+                        self.monitors.push("dt", "s", si.time, si.dt);
+                        StepSummary {
+                            index: si.step,
+                            time: si.time,
+                            res_u: si.res_u,
+                            res_p: si.res_p,
+                            continuity: si.continuity,
+                            done: !finite || si.time >= self.end_time - 1e-12,
+                            converged: false,
+                        }
+                    }
+                    Err(e) => {
+                        reason_override = Some(e.to_string());
+                        StepSummary {
+                            index: v.steps,
+                            time: v.solver.time,
+                            res_u: f64::NAN,
+                            res_p: f64::NAN,
+                            continuity: f64::NAN,
+                            done: true,
+                            converged: false,
+                        }
+                    }
+                }
+            }
                 let dt_prev = s.history.last().map_or(self.dt, |h| h.dt);
                 let mut dt = match &self.cfl {
                     Some(c) if !s.history.is_empty() => c.next_dt(&s.geom, &s.phi, dt_prev),
@@ -2653,6 +2709,11 @@ impl Simulation {
             }
         }
         if let Engine::VarDensity(v) = &self.engine {
+        if let Engine::Vof(v) = &self.engine {
+            if let Some(f) = v.field(name) {
+                return Ok(f);
+            }
+        }
             if name == "T" {
                 return Ok(v.solver.t.values.clone());
             }
@@ -2780,7 +2841,10 @@ impl Simulation {
                 return Ok(v.solver.t.boundary_values(g));
             }
         }
-        if matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
+        if matches!(
+            self.engine,
+            Engine::Compressible(_) | Engine::VarDensity(_) | Engine::Vof(_)
+        ) {
             // first-order face values: the adjacent cell state
             let cells = self.field(name)?;
             let own = g.mesh.owner();
@@ -2867,6 +2931,21 @@ impl Simulation {
             }
         }
         if let Engine::VarDensity(v) = &self.engine {
+        if matches!(self.engine, Engine::Vof(_)) {
+            if let ReportKind::Force
+            | ReportKind::Moment
+            | ReportKind::ForceCoefficient
+            | ReportKind::YPlus
+            | ReportKind::HeatFlow
+            | ReportKind::MassFlow
+            | ReportKind::MassWeightedAverage
+            | ReportKind::VectorFlux = r.kind
+            {
+                return Err(Error::Other(
+                    "force, moment, y_plus, heat_flow, mass_flow, mass_weighted_average and vector_flux reports are not available with multiphase.enabled (they assume one density)".into(),
+                ));
+            }
+        }
             match r.kind {
                 ReportKind::Force | ReportKind::Moment | ReportKind::ForceCoefficient | ReportKind::YPlus => {
                     return Err(Error::Other(
@@ -3333,6 +3412,13 @@ impl Simulation {
             }
         }
         if let Engine::VarDensity(v) = &self.engine {
+        if let Engine::Vof(v) = &self.engine {
+            for n in ["alpha", "p_rgh", "p", "rho"] {
+                if let Some(f) = v.field(n) {
+                    extra.push((n, f));
+                }
+            }
+        }
             extra.push(("T", v.solver.t.values.clone()));
             for n in ["rho", "mach", "p_abs"] {
                 if let Some(f) = v.field(n) {
