@@ -722,6 +722,10 @@ pub struct Simulation {
     end_time: f64,
     dt: f64,
     cfl: Option<CflController>,
+    /// Adaptive step control of ADR 0050 (`None`: fixed dt or the legacy `solver.max_courant` controller).
+    pub(crate) timectl: Option<rcfd_fv::stepctl::ControlledRun>,
+    /// Number of landed write times already handed out by [`Simulation::take_write_landing`].
+    landed_taken: usize,
     tol_u: f64,
     tol_p: f64,
     done: bool,
@@ -1528,6 +1532,21 @@ impl Simulation {
                 return Err(diag("solver.time_advance", format!("fractional_step {w}")));
             }
         }
+        let timectl = {
+            let transient = matches!(engine, Engine::Transient(_)) && !compressible;
+            let plain = energy.is_none()
+                && turb.is_none()
+                && scalars.is_none()
+                && rheology.is_none()
+                && sources.is_none()
+                && components.is_none()
+                && dynmesh.is_none()
+                && stats.is_none()
+                && expr_bcs.is_empty()
+                && chem.is_none()
+                && catalogue.is_none();
+            crate::timectl::from_case(case, transient, plain, dt, get_f(case, "solver.end_time"))?
+        };
         let mut sim = Simulation {
             case: case.clone(),
             geom,
@@ -1573,6 +1592,8 @@ impl Simulation {
                 min_dt: dt * 1e-3,
                 growth: 1.2,
             }),
+            timectl,
+            landed_taken: 0,
             tol_u: get_f(case, "solver.tolerance_u"),
             tol_p: get_f(case, "solver.tolerance_p"),
             done: false,
@@ -1741,6 +1762,25 @@ impl Simulation {
             en.solver.t.values = t;
         }
         Ok(())
+    }
+
+    /// Time of the next landed write time (`output.write_times` / `output.write_time_interval`, ADR 0050) not yet handed
+    /// out, `None` when there is none.
+    pub fn take_write_landing(&mut self) -> Option<f64> {
+        let c = self.timectl.as_ref()?;
+        let t = *c.landed.get(self.landed_taken)?;
+        self.landed_taken += 1;
+        Some(t)
+    }
+
+    /// Times at which steps landed on a write time or the end time so far.
+    pub fn landed_times(&self) -> &[f64] {
+        self.timectl.as_ref().map_or(&[], |c| c.landed.as_slice())
+    }
+
+    /// The step the adaptive controller proposes next (`None` without step control).
+    pub fn proposed_dt(&self) -> Option<f64> {
+        self.timectl.as_ref().map(|c| c.ctl.dt_next)
     }
 
     /// True for SIMPLE/SIMPLEC runs.
@@ -2409,11 +2449,24 @@ impl Simulation {
             }
             Engine::Transient(s) => {
                 let dt_prev = s.history.last().map_or(self.dt, |h| h.dt);
-                let mut dt = match &self.cfl {
-                    Some(c) if !s.history.is_empty() => c.next_dt(&s.geom, &s.phi, dt_prev),
+                // ADR 0050: planned step and landing target of the adaptive controller (error control runs its own loop)
+                let planned = match &self.timectl {
+                    Some(c) if c.ctl.settings.error_tol <= 0.0 => Some(c.plan(s, self.end_time)),
+                    _ => None,
+                };
+                let mut dt = match (&planned, &self.cfl) {
+                    (Some(p), _) => p.0,
+                    (None, Some(c)) if !s.history.is_empty() => c.next_dt(&s.geom, &s.phi, dt_prev),
                     _ => self.dt,
                 };
-                dt = dt.min((self.end_time - s.time).max(1e-12));
+                if planned.is_none() {
+                    dt = dt.min((self.end_time - s.time).max(1e-12));
+                }
+                if let (Some(c), Some(_)) = (&self.timectl, &planned) {
+                    if c.extrapolate {
+                        rcfd_fv::stepctl::extrapolate_initial(s, dt);
+                    }
+                }
                 for eb in &self.expr_bcs {
                     match eb.profile(&self.geom, s.time + dt, &mut self.udfs) {
                         Ok(prof) => {
@@ -2519,7 +2572,20 @@ impl Simulation {
                         };
                         s.step_with(dt, Some(&mut hook))
                     }
+                    None if self.timectl.as_ref().is_some_and(|c| c.ctl.settings.error_tol > 0.0) => {
+                        let c = self.timectl.as_mut().expect("checked");
+                        c.advance(s, self.end_time)
+                    }
                     None => s.step(dt),
+                };
+                if let (Some(c), Some((dtp, target))) = (&mut self.timectl, planned) {
+                    c.finish(s, dtp, target);
+                }
+                let i = if self.timectl.as_ref().is_some_and(|c| !c.landed.is_empty()) {
+                    // a landing snaps the time onto the target
+                    rcfd_fv::pimple::StepInfo { time: s.time, ..i }
+                } else {
+                    i
                 };
                 if let Some(cm) = &self.components {
                     for (name, v) in cm.values() {

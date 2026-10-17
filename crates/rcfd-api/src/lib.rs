@@ -33,6 +33,7 @@ pub mod sim;
 pub mod sources;
 pub mod stats;
 pub mod study;
+pub mod timectl;
 pub mod turb;
 pub mod udf;
 pub mod vd;
