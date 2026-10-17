@@ -958,7 +958,7 @@ variable-density and `coupled` runs reject every kind at `boundaries.<patch>.bc_
 | `loss_coefficient` K >= 0 | 0 | vent |
 | `flow_rate_weight` > 0 | 1 | outflow |
 | `radial_reference` `hub` or `area_average` | hub | radial_equilibrium_outlet |
-| `target_mass_flow` [kg/s, positive OUT], `pressure_update` `bernoulli` or `secant`, `pressure_relax` [0.01, 1] | 0, bernoulli, 0.5 | target_mass_flow_outlet |
+| `target_mass_flow` [kg/s, positive OUT], `pressure_update` `bernoulli`, `secant` or `guarded_secant`, `pressure_relax` [0.01, 1] | 0, bernoulli, 0.5 | target_mass_flow_outlet |
 
 Signs: `mass_flow_value` is positive into the domain, `target_mass_flow` positive out of the domain, and the `mass_flow` report
 positive out. Located errors (see `bc_cat.rs`): a direction that does not enter (`flow_direction`), unknown, own, cyclic or doubly
@@ -975,7 +975,9 @@ Practical notes. Dynamic-head conditions (total backflow, `total_pressure_inlet`
 lagged with a fixed relaxation weight 0.5. A frictionless duct driven by two pressure ends does not start from rest with plain
 under-relaxation (the first iterations diverge); use `solver.pseudo_mode = "physical"` with a small `pseudo_dt`. Walls that behave
 as symmetry planes need `solver.component_diagonal = "corrected"`. `pressure_update = "secant"` is a known miss (diverges on the
-registered case, ADR 0022 addendum); use `bernoulli`. Not delivered: solid circular-pipe mesh, compressible, variable-density
+registered case, ADR 0022 addendum); use `bernoulli` or `guarded_secant` (ADR 0055 D5: the secant slope is taken only when the last mass-flow change is
+at most half the present error and the slope lies within 0.1 to 10 times the dynamic-head slope, else the dynamic-head slope; the registered
+F1 case reaches 4e-16 relative error in 1880 iterations). Not delivered: solid circular-pipe mesh, compressible, variable-density
 and coupled support, temperature of a recirculated stream and per-boundary thermal conditions (F-051), time-varying mass flow,
 `pressure_average` on other kinds.
 

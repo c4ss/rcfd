@@ -608,10 +608,10 @@ impl Catalogue {
                     target: get_f(case, &p("target_mass_flow")),
                     p_t: kin(get_f(case, &p("bc_pressure"))),
                     updater: PressureUpdater::new(
-                        if get_s(case, &p("pressure_update")) == "secant" {
-                            PressureUpdate::Secant
-                        } else {
-                            PressureUpdate::Bernoulli
+                        match get_s(case, &p("pressure_update")).as_str() {
+                            "secant" => PressureUpdate::Secant,
+                            "guarded_secant" => PressureUpdate::GuardedSecant,
+                            _ => PressureUpdate::Bernoulli,
                         },
                         get_f(case, &p("pressure_relax")),
                     ),
