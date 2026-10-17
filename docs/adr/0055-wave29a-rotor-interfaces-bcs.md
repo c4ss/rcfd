@@ -186,3 +186,32 @@ areas). The registered X3 test stays as an ignored `*_known_miss` test with its 
 * X3c (mesh pair, unequal areas): the passed normal velocity equals `W A_b / A'_b` per band to `1e-13` relative (an identity of the
   method), `u_theta = u_r = 0` to `1e-13` and `h` unchanged to `1e-13`; the library function `MixingPlane::band_areas` reports `A'_b`.
   The maximum area mismatch of the pair is printed, not limited.
+
+## Addendum 3 (results, misses, deviations; written after the runs, no registered limit changed)
+
+Measured (limit in brackets). Library unit tests in `rcfd-fv` (release):
+
+* R1 worst errors 0 (zero field in the co-rotating frame), 1.7e-15 (a -> b transform of a rigid rotation), 9.5e-17 (round trip), 1.4e-16 (composition), all
+  relative to `W R` or `|v| + W R` (1e-14): met. R2 closed forms met (planar jump <= 1e-14 scaled, tangential-normal jump to 1e-14, sign of a reversed axis).
+  R3 on `annulus_3d_interface` (8x3 | 11x4, 48 around): 864 interface faces (> 528), area 2.349471459961 vs `(N/2) sin(2 pi/N)(r_o^2 - r_i^2)`
+  (relative difference <= 1e-12), non-axisymmetry 1.9e-16 (1e-12): met. R6 located errors: met (axis, omega, origin, mask length, identical masks, no interface, tilted axis names `frozen_rotor.face[..]`).
+* X1 band mean 1.7e-15 (1e-13), harmonics k = 1..15 1.2e-15 (1e-14): met. X2 mass per band 4.3e-16, total 0 (1e-13): met.
+  **X3 MISS** (registered as written): 3.7e-1 (1e-13), cause in addendum 2; ignored test `x3_uniform_axial_flow_passes_unchanged_known_miss`
+  keeps the limit. Corrected X3b 4.8e-15 (1e-13) met; X3c identity 1.8e-15 (1e-13) met, largest band-area mismatch of the 48x16 | 29x11 pair with 4 bands is 27 % (reported: sharp
+  face-to-band assignment by centre plus the different polygon areas), so a uniform flow passes that pair scaled by up to 27 %, a
+  known limitation of the sharp assignment (area-fraction splitting of faces across band edges is not implemented).
+  X4 donor closed form 1.9e-15 (1e-12); angular momentum across the mismatched receiver 6.3e-16 per band, 2.0e-16 total (1e-12); solid-body profile error
+  0.1513 (bound 0.1575), free vortex 1.8e-15 (1e-12): met. X5 `u` 0, `p` 2.1e-16, momentum 0 (1e-13), loss 3.3e-15 relative to the closed form (1e-12) and non-negative, uniform
+  flow no loss (1e-14): met. X6 2.3e-15 and 4.9e-16 (1e-13): met. X7 (8 aligned bands) 7.4e-3 (1e-2): met. X8 located errors: met.
+* R4 (solver, `rcfd-api/tests/rotor_interface.rs`): plug flow through the stationary/rotating pair (Omega = 5, 864 interface faces): `max |u - (0,0,1)|` 1.5e-14 (1e-6), pressure range 2.7e-13 (1e-6),
+  in/out and interface flux 4.7e-15 (1e-9), relative-frame flux vs absolute 1.9e-16 (1e-12): met. The normalised residual stalls at 4e-2 (it is meaningless for an exact uniform solution,
+  same note as ADR 0022); R4 asserts fields and fluxes, not the stop flag.
+* R5 velocity: each of the three runs (lower-zone frame Omega = 0, 0.5, 1 W_i) `max |u_theta - analytic|` 7.59e-3 V_i (2e-2); pairwise differences 4.5e-4, 9.1e-4, 4.6e-4 V_i (1e-2): met.
+  **R5 interface-flux MISS**: net flux 3.7e-5, 3.4e-5, 3.2e-5 V_i A_if (1e-8) and sum of absolute flux 1.009e-3, 1.007e-3, 1.000e-3 (1e-3). Cause: the open ends (zero-gradient velocity, fixed pressure) let a small axial flow through; this is the
+  known value of M4b in ADR 0008 (3.2e-5), and the limits registered here were copied from the symmetry-end M5 without taking that into account (a registration error, not tuned). Ignored test `r5_interface_flux_known_miss` keeps the limits.
+* G1 guarded secant on the F1 case: `m_out` error 4.2e-16 after 1880 iterations (1e-4 in 6000), converged, F2 slope 0.498 % (1 %), imbalance 9.2e-13 (1e-9): met. G2 met (identical to the secant to 1e-14 when the guard passes; the dynamic-head step otherwise).
+  The existing `secant` known miss is unchanged.
+
+Deviations: X7 band alignment (addendum 1); X3 replaced by X3b/X3c (addendum 2); R5 flux limits miss (above); no case-tree keys for the frozen-rotor/mixing-plane library (no natural place, see D4) other than the new `pressure_update = "guarded_secant"` value.
+Not delivered: solver-coupled mixing plane, area-fraction band splitting, compressible mixed-out state, rothalpy, curved interfaces, sector periodicity, downstream-velocity constraint, any comparison with a published turbomachine (Rotor 37, Hannover compressor: NOT ATTEMPTED),
+F-204 items, time-varying mass flow, compressible mass-flow/total-pressure inlets.

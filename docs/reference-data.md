@@ -1048,3 +1048,20 @@ binary, install or text was used.
 | Kolmogorov-Smirnov critical value 1.95/sqrt(N) (99.9 percent) | unverified | recalled from memory; used only to set a statistical bound, the constant 1.949 is the usual two-sided tail value |
 | Momentum and total-energy exchange definitions (drag impulse, `-(Delta KE - W_g + m c_p Delta T)`) | derived | conservative by construction; no source |
 | Particle-laden jet, spray penetration, falling-film thickness (Nusselt), any published experiment | not used | no comparison attempted |
+
+## Wave 29A rotor interfaces and guarded secant (F-126, F-200, ADR 0055)
+
+No source was read in this wave; every reference below is recalled from memory and is unverified. No vendor code, binary or install was used.
+No published turbomachine (NASA Rotor 37, Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
+
+| Item | Status | Note |
+|------|--------|------|
+| Frame velocity `Omega x r`, relative/absolute velocity `w = u - Omega x r` | derived | elementary kinematics; the transformation checks are exact vector identities (R1) |
+| Frozen-rotor (fixed relative position) interface as the steady limit of a rotor-stator interface | unverified | the usual textbook description recalled from memory; the solver form is the absolute-velocity MRF of ADR 0008 |
+| Mixing-plane / stage interface by circumferential averaging in radial bands, conserving mass, momentum and energy flux | unverified | the idea is recalled from the turbomachinery CFD literature (for example Denton's work on mixing); the formulas used here (u_n = Q/A, u_theta = Gamma/r, mixed-out pressure from normal momentum, flux-weighted scalar) are DERIVED in ADR 0055 D3 and checked against closed forms, not taken from a paper |
+| Euler turbine equation (torque from the change of angular momentum flux) | unverified | recalled; used only to justify conserving angular momentum flux |
+| Mixing loss `(A/2)(U sigma^2 + m3) >= 0` for uniform pressure and non-negative normal velocity | derived | from `<d^2 (d + U)> >= 0`; the two-jet closed form `(A/2) a(1-a)(u1-u2)^2 (U + (1-2a)(u1-u2))` was checked (3.3e-15) |
+| 3-point Gauss-Legendre nodes and weights (exact to degree 5) | unverified | standard values recalled from memory; verified indirectly by the exact band integrals of X1/X4 (1e-15) |
+| Free-vortex swirl `u_theta = Gamma_0/r` and solid-body swirl `Omega r` | derived | closed-form angular momentum fluxes integrated here |
+| Taylor-Couette profile `A r + B/r` | derived | as in ADR 0008 |
+| Guarded secant rule thresholds (`|dm| <= 0.5 |e|`, slope within 0.1 to 10 of the dynamic-head slope) | derived | chosen from the diagnosed cause of the plain-secant miss (spin-up contaminated slope), not tuned to the result; one case (F1) exercises it |
