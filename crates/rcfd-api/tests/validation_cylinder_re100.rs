@@ -19,7 +19,7 @@ use validation_common::*;
 const DEPTH: f64 = 0.1;
 const NU: f64 = 0.01;
 
-pub struct Shed {
+struct Shed {
     n_theta: usize,
     n_r: usize,
     dt: f64,
