@@ -383,7 +383,7 @@ fn plates_checks(heating: Heating) -> Vec<String> {
         }
         None => fails.push(format!("C5 Nu_x(0.01) sequence not monotone {q:?}")),
     }
-    if heating == Heating::WallT && !((q[2] - q[1]).abs() < (q[1] - q[0]).abs()) {
+    if heating == Heating::WallT && (q[2] - q[1]).abs() >= (q[1] - q[0]).abs() {
         fails.push("C5 sequence not converging".into());
     }
     // C6 energy balance (constant wall T only)
@@ -559,7 +559,7 @@ fn c_pipe_constant_flux_longer() {
         ),
         None => fails.push(format!("C7' sequence not monotone {ends:?}")),
     }
-    if !((ends[2] - ends[1]).abs() < (ends[1] - ends[0]).abs()) {
+    if (ends[2] - ends[1]).abs() >= (ends[1] - ends[0]).abs() {
         fails.push("C7' sequence not converging".into());
     }
     assert!(fails.is_empty(), "registered limits missed:\n{}", fails.join("\n"));
