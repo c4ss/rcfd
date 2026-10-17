@@ -5,6 +5,7 @@
 //! * [`fluent`] - Fluent `.msh` / `.cas` reader, ASCII and binary sections, 2D and 3D (F-014, F-118)
 //! * [`stl`], [`tecplot`], [`plot3d`], [`xdmf`] - interchange formats (F-119, ADR 0011)
 //! * [`ensight`] - EnSight Gold case/geometry/variable export, ASCII and C Binary (F-103, ADR 0048)
+//! * [`nastran`] - finite-element load deck (pressure and temperature loads), [`registry`] - format list with a conformance case per format (F-237, ADR 0051)
 //! * [`container`] - native case/data container (F-015)
 //!
 //! All formats are implemented from their public documentation.
@@ -17,8 +18,10 @@ pub mod ensight;
 pub mod fluent;
 pub mod gmsh;
 pub mod guard;
+pub mod nastran;
 pub mod openfoam;
 pub mod plot3d;
+pub mod registry;
 pub mod stl;
 pub mod tecplot;
 pub mod vtk;
