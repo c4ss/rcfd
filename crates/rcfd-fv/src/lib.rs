@@ -5,6 +5,7 @@
 pub mod actuator;
 pub mod ale;
 pub mod bc;
+pub mod cavitation;
 pub mod cht;
 pub mod compressible;
 pub mod compressible_bc;
@@ -22,6 +23,7 @@ pub mod hx;
 pub mod lorentz;
 pub mod lumped;
 pub mod masstransfer;
+pub mod mixture;
 pub mod mixing_plane;
 pub mod outlets;
 pub mod pimple;
