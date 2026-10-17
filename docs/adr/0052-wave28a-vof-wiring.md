@@ -212,3 +212,71 @@ smoothing of the prolongator); every other row is computed exactly as before, so
 (the baseline hashes must not change; if any does, STOP and report). Acceptance: `weak_row_has_finite_hierarchy` passes with a finite
 preconditioner output and AMG-CG converging in at most 60 iterations; the replayed dam-break matrix gives a finite hierarchy and
 AMG-CG converging well below the cap; A4 (the AMG dam break, registered above) passes; all existing `rcfd-linalg` tests unchanged.
+
+## Addendum 2 (written after the runs): results, misses, deviations
+
+Commits: ADR (ba3ec3d), AMG fix and reproducer (e4fffb7), A4 test, mass-transfer / wave / relaxation library and M tests (9aa5d53),
+wave-tank tests (b677781), tree wiring and documents (3b965fb). No registered limit was widened, replaced or deleted.
+
+AMG (A4, fix of addendum 1). `weak_row_has_finite_hierarchy` passes; A4 on the 120 x 40 dam break with AMG: finite, mean 12.4
+pressure iterations per corrector (plain CG 157.9; limit: at most half), at most 41 per step (cap 3 x 60), wall 13.0 s against 23.5 s
+for CG, D1 front velocity 1.504 (window 1.44 to 1.94, below Ritter 2), D2 monotone, D3 volume drift 5.6e-15, alpha in
+[-1.0e-17, 1.000000000], front(AMG) - front(CG) 3.7e-15 m (limit 1 dx). `baseline_hashes` unchanged (3 pass; the one ignored test is
+the pre-existing F-031 note); the existing `vof_tree` tests (including the tree dam break against the library, now with AMG in the
+tree) and all `rcfd-linalg` tests are unchanged and pass. AMG is therefore enabled in the multiphase path above 2000 cells.
+
+Mass transfer (M1-M5, `rcfd-fv/tests/vof_masstransfer.rs`, all pass): closed-form source 1.4e-14 (limit 1e-12); per-cell phase-mass
+balance 2.2e-16 (1e-12); coupled volume identity 9.2e-16 and liquid mass against transferred 1.2e-15 (1e-12), alpha in [0, 1]
+to 1e-9; zero transfer at saturation bit-identical to the run without a model; continuity (boundary flux against the volume source)
+2.1e-13 (limit 1e-6); Hertz-Knudsen requested flux against `j A` 1.1e-15 (limit 1e-9).
+
+Waves (`rcfd-fv/tests/vof_waves.rs`), tank depth 0.30 m, T = 1 s, H = 0.06 m, lambda = 1.3729 m, dx = lambda/32, dy = 0.01 m, dt = 2.5 ms:
+- W1 (10 periods): H at 0.5 lambda 0.0537 m (-10.5 percent; limit 12), at 1.5 lambda 0.0492 m (-18.0 percent; limit 25), periods
+  0.9997 and 0.9951 s (limit 2 percent). Met. The losses are the numerical damping the ADR estimated.
+- W2 beach, registered 10-period run: K_r = 0.0089 (limit 0.15). The CONTROL (end wall, no beach) MISSED: K_r = 0.061 against the limit
+  0.5 (`w2_control_reflecting_end_wall_known_miss`, ignored, limit intact). Root cause (set-up defect, not a physics miss): the window
+  [7T, 10T] ends before the reflected wave group has returned to the gauges (group speed about 0.9 m/s; front to the wall at 4.5
+  lambda and back to 2 lambda needs about 10 s), so the measurement saw no reflected wave. This also makes the beach K_r of the
+  10-period run vacuous. Corrected tests with the same limits and a 20-period run, window [16T, 20T]: control K_r = 0.524 (limit >= 0.5;
+  a narrow pass, the wall reflects 52 percent because of numerical damping over the 5 lambda round trip), beach K_r = 0.0142
+  (incident 0.0233, reflected 0.0003; limit <= 0.15). Both pass. The incident amplitude at the reflection gauges is 78 to 86
+  percent of 0.03 m (damping). Gauge spacing 0.25 lambda, away from the Goda-Suzuki singularity.
+- W3: volume identity 5.8e-14 (limit 1e-10; 6.2e-14 in the 20-period run), level drift 1.4e-3 m (limit 0.1 H = 6e-3 m), alpha in
+  [-9.2e-19, 1.000000000] (limit 1e-9). Met.
+- W4 (still water with the zone and a zero-height inlet, 200 steps): MISSED as registered with 3 PISO correctors: max |U| = 1.28e-8
+  (limit 1e-10) and |alpha - alpha_0| = 4.8e-12 (limit 1e-12) (`w4_still_water_with_zone_known_miss`, ignored, limits intact). The
+  zone is not the cause: the same run WITHOUT the beach gives the identical 1.284e-8 (`w4_noise_is_independent_of_the_zone`). The cause
+  is the base PISO splitting error of the thin, nearly inviscid air layer (decay factor about `(mu_air dt/(rho_air dy^2))^n_correctors`
+  per step). Corrected test `w4b` with 4 correctors (a changed set-up value, disclosed here): max |U| 8.3e-12 with the beach and
+  9.7e-12 without, alpha 2.1e-13 and 2.4e-13; limits 1e-10 and 1e-12 unchanged, met.
+- W5 (inlet values reproduce the wave): the first version of the test failed its own `checked >= 3` count because the phase list
+  missed t = 0.75 and the loop was too short (set-up defect, corrected by adding the phase and running 400 steps; the 3 percent limit
+  is unchanged). Result: surface elevation difference 1.4e-16 m, column-flux error 0.000 of the scale (limit 0.03).
+
+Tree (`rcfd-api/tests/vof_wiring_tree.rs`, T1-T4, all pass): 19 located-error rows (missing temperature, latent heat, saturation
+temperature, missing pressure patch, inert Hertz-Knudsen or Lee keys, bad gradient length, missing wave height or period, missing or
+non-fixed inlet patch, equal beach edges, no still level, wave order, sideways gravity, bad reference point), valid cases silent,
+disabled-section keys reported; mass transfer through the tree equals the library (alpha 6e-17, p 2e-11 relative; limit 1e-9); the
+wave tank through the tree equals the library (alpha 3e-16, p 6e-15; limit 1e-9) with maximum |u_x| 5.8e-2 m/s (the waves exist).
+The mass-transfer tree case uses an aggressive rate (c = 10 1/s at 20 K superheat); it loses 93 percent of the liquid in 50 ms because
+the 1000-fold vapour expansion pushes liquid out of the open top. That case is a wiring match, not a physical validation.
+
+Deviations from the ADR as written:
+1. Lee is applied to the transported alpha with the exponential integrator of the frozen-temperature relaxation (so alpha cannot leave
+   [0, 1]); Hertz-Knudsen takes its rate from `alpha_start` of the step. The delivered rate (`mdot_eff`) is the same in the alpha
+   equation and the continuity source.
+2. The delivered rate is clipped to the liquid or vapour present in the cell (M5: the kinetic flux through an interface cell with no
+   vapour-side or liquid-side mass delivers only half of the request in the test). Consequence: very large requested rates are
+   not honoured; no registered limit concerned this.
+3. The relaxation zone is applied after the corrector loop; the Rhie-Chow defect uses the pre-blend velocity; the volume the zone
+   adds or removes is reported and enters the W3 balance.
+4. Added tree key `multiphase.reference_point` (needed for an open-top tank, not in the ADR's key list); in the tree the beach target
+   is still water only; AMG threshold 2000 cells as in the single-phase transient path.
+5. W4 corrected with 4 correctors, W2 corrected with a long window, W5 corrected with the phase list (all new or corrected tests;
+   the originals are kept or have unchanged limits as stated above).
+
+Limitations. No energy equation exists in the multiphase path: the mass-transfer temperature is prescribed, there is no latent-heat
+feedback, no Stefan problem, and the latent power is a diagnostic; the momentum `rho phi` has no phase-change term; mass transfer
+needs a pressure patch. The wave tests are one coarse mesh (lambda/32, dy = 0.01 m), one wave, Airy; no refinement study and no
+comparison with published tank data. F-227 stays partial: generation and absorption are met on the registered coarse checks, not
+the full acceptance (no Stokes-2 / irregular run, no 3-D, no refinement). F-228 (population balance) was NOT attempted.
