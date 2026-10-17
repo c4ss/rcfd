@@ -1132,7 +1132,12 @@ numeric key has the sentinel `-1` = unset with a located error when needed. The 
 | `injection.<n>.rate`, `start_time`, `end_time` | `-1`, `0`, `-1` | parcels/s (must be set), window (`-1` = `particles.end_time`) |
 | `injection.<n>.velocity_mode`, `velocity` | `given`, `[]` | initial velocity (empty list = at rest) or the local fluid velocity |
 | `injection.<n>.parcel_count` | `1` | real particles per parcel |
-| `injection.<n>.distribution` | `constant` | `constant` (`diameter`) or `rosin_rammler` (`rr_d_bar`, `rr_n`, optional `d_min`, `d_max`) |
+| `injection.<n>.distribution` | `constant` | `constant` (`diameter`), `rosin_rammler` (`rr_d_bar`, `rr_n`, optional `d_min`, `d_max`) or `uniform` (diameter uniform in `[d_min, d_max]`, both required; ADR 0057) |
+| `injection.<n>.mass_flow` | `-1` | ADR 0057: mass flow [kg/s]; every parcel carries `mass_flow/rate` and its weight (real particles per parcel) follows from its diameter, overriding `parcel_count` (equal-mass parcels, unbiased mass distribution); `-1` = off |
+| `injection.<n>.cone_half_angle`, `cone_inner_half_angle`, `cone_axis`, `cone_speed` | `-1`, `0`, `[]`, `-1` | ADR 0057: cone injection. Half angle in degrees in (0, 180], inner half angle in `[0, half)` (hollow cone), non-zero axis, speed > 0; directions uniform in solid angle, overrides `velocity_mode`; `cone_half_angle = -1` = no cone. Positions follow `kind` (point or surface) |
+| `dispersion` | `none` | ADR 0057: `none` or `drw` (discrete random walk in homogeneous isotropic turbulence): eddy lifetime exponential with mean `T_L = dispersion_cl k/eps`, eddy length `0.09^0.75 k^1.5/eps`, fluctuation `sqrt(2k/3)` per component |
+| `dispersion_k`, `dispersion_epsilon` | `-1`, `-1` | `drw`: k [m^2/s^2] and epsilon [m^2/s^3] (> 0, homogeneous; the turbulence-model fields are not read); located errors when unset |
+| `dispersion_cl`, `dispersion_crossing`, `dispersion_seed` | `0.15`, `true`, `1` | `drw`: `C_L`, limit the interaction time by the eddy crossing time, seed of the dispersion generator (separate from `seed`) |
 | `output_file`, `output_every` | `""`, `0` | VTK PolyData file written by the LIBRARY hooks (relative to the working directory), extra files every n tracking steps; the run path writes `particles.vtp` / `particles_<n>.vtp` into the output directory instead |
 | `tracks` | `false` | run path: also write `particle_tracks.csv` (`id,time,x,y,z,state`) |
 | `track_every` | `1` (>= 1) | `tracks = true`: log a position every n tracking steps while the parcel is active (always at injection, when it leaves, and at the end) |
