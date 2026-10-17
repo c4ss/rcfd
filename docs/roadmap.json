@@ -1064,9 +1064,9 @@
       "F-054",
       "F-042"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A methane jet flame temperature profile and lift-off trend compare with a public benchmark (e.g. Sandia flames); the flamelet library reader is documented",
-    "note": "P3 (stretch). Gap: flamelet-with-PDF, burning-velocity and extended coherent flame models; non-premixed and premixed combustion. SCOPE (merged review): add progress-variable and flamelet-generated manifold models, G-equation with reinitialisation, burning-velocity and coherent-flame models, spark kernels and ignition-delay models as sub-criteria; pollutants in F-222."
+    "note": "PARTIAL (wave 28B, ADR 0053). Delivered as libraries (no case keys): mixture fraction with an HP equilibrium table and exact beta-PDF integration over the piecewise-linear table (mixfrac.rs), Burke-Schumann closed-form check (table within 2.6e-6 K of the closed form), steady laminar flamelet equations with chi_st continuation table and extinction trend (flamelet.rs), premixed progress variable with a phase-plane front speed (Zeldovich cubic within 3.0e-5 of the closed form) and a tabulated-source beta-PDF mean (progress.rs). NOT ATTEMPTED: any comparison with a published flame (Sandia etc.), a GRI flamelet table, G-equation, BML or thickened flame, coherent-flame, spark and ignition models, wiring of Z or the flamelet library into the case tree. Known miss: the temperature-based progress variable is not monotone for H2/air (induction period slightly endothermic); Y_H2O is used instead. P3 (stretch). Gap: flamelet-with-PDF, burning-velocity and extended coherent flame models; non-premixed and premixed combustion. SCOPE (merged review): add progress-variable and flamelet-generated manifold models, G-equation with reinitialisation, burning-velocity and coherent-flame models, spark kernels and ignition-delay models as sub-criteria; pollutants in F-222."
   },
   {
     "id": "F-130",
@@ -1614,9 +1614,9 @@
       "F-112",
       "F-054"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "0D ignition delay of a published fuel/mechanism pair reproduced within 5 percent with acceleration enabled, with a documented speed-up",
-    "note": "Priority P3. Size L. Area: reactor. Parallel-memory dependency deliberately dropped; works in shared memory."
+    "note": "PARTIAL (wave 28B, ADR 0053). Delivered: ISAT (Pope 1997) as a library with ellipsoid growth, element-active subspace and frozen-noise rule (crates/rcfd-reactor isat.rs); DRG static skeleton and dynamic per-step reduction (drg.rs); leader clustering of similar cells with increment transfer, tolerance 0 bit-identical (cluster.rs); case keys chemistry.acceleration (off|cluster|isat) and chemistry.accel_tolerance on the transient finite_rate step, chemistry.json acceleration object. Measured: 0D H2/air ignition delay with ISAT 1.7e-3 and with dynamic DRG 1.6e-3 relative difference to the direct integration (limit 5e-2), speed-up 118 for cell ISAT on repeated states and 5.4 to 9 for DRG (reported only). MISSES (ignored known-miss tests, limits intact): ISAT retrieval error 1.27e-3 against 1e-3 on the heated ensemble, element drift 2.4e-9 against 1e-9, and the profile test (cells did not ignite, 0 against 17 above 1500 K). NOT DELIVERED: comparison against a published ignition-delay measurement (the 5 percent point is met only against the same mechanism integrated directly), acceleration of steady or EDC closures, parallel tables. Priority P3. Size L. Area: reactor. Parallel-memory dependency deliberately dropped; works in shared memory."
   },
   {
     "id": "F-224",

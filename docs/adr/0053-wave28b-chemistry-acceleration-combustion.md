@@ -382,3 +382,61 @@ Release build, one machine; wall times are reported only and vary run to run.
 Acceptance point of F-223, "0D ignition delay of a published fuel/mechanism pair reproduced within 5 percent with acceleration
 enabled, with a documented speed-up": met for DRG (GRI-Mech 3.0 H2/air and CH4/air, speed-ups 9x and 1.2x at the stated points) and for
 ISAT (I4 delay 1.7e-3) but the documented ISAT speed-up in I4 is 0.23 (a slowdown). F-223 therefore stays `partial`.
+
+## Results addendum, part 2 (wiring W1 to W4 and F-129; measured values, limit in brackets)
+
+Wiring (`crates/rcfd-api/tests/chemistry_accel.rs`, K2b 4 x 4 isomerisation box, 200 steps):
+
+* W1 `cluster`, tolerance 0: 0 bit mismatches of 6400 values (0): pass. 594 integrations for 3200 cells over 200 steps. The planned
+  assertion "one integration per step" was wrong for tolerance 0 (cells are not bit-equal after transport); it was replaced by
+  "integrations <= cells", which is not a registered limit being widened, because the registered limit is the bit-identity.
+* W2 `isat`, 1e-3: worst scaled difference to `off` 7.0e-9 (1e-3); 196 of 3200 queries retrieved, 2992 grown, 12 added: pass.
+* W3 seven located refusals (eddy_dissipation, unset tolerance, negative tolerance, isat with 0, unknown value, tolerance with
+  `off`, steady algorithm): all name the key: pass. Some refusals arrive from `Case::parse_toml` and not from `Simulation::new`.
+* W4 default and explicit `off` identical, no `acceleration` key in `chemistry.json`: pass. `baseline_hashes` (3 pass, 1 ignored),
+  `tests/chemistry.rs` (8 pass, 1 ignored) and the 54 rcfd-api unit tests are unchanged.
+
+F-129 (`crates/rcfd-reactor/tests/combustion.rs`):
+
+* B1 302 nodes: max |T_eq - T_BS| 2.6e-6 K (1e-3), max |Y_eq - Y_BS| 8.4e-11 (1e-8), slope jump at Z_st 4.9e-10 K (1e-3): pass.
+* B2 beta PDF: linear function 9.7e-16 (1e-12), normalisation 0 (1e-12), v = 0 bitwise, v = 1e-8 difference 0 K (1.9e-3 K), maximum
+  variance 1.55e-3 K (0.19 K), independent quadrature 9.2e-13 (1e-8), Z mean 1.4e-15 (1e-12), Z^2 1.0e-8 (1e-6): pass.
+* B3 special functions: lnGamma 4.0e-15 (1e-13), incomplete beta 3.8e-15 (1e-12), erf(1) 1.3e-16, erfc round trip 1.0e-14 (1e-12): pass.
+* B4 mixing: toy element 3.2e-15 (1e-12), GRI 1.1e-14 (1e-9): pass. B5 variance dissipation 8e-17 from h^2/4, ratio 4.000: pass.
+  B6 all error cases located: pass. B7 (report only): GRI CH4/air Z_st 0.055185, T_max 2225.5 K at Z = 0.05519, T(Z_st/2) 1451.6 K,
+  T(2 Z_st) 1488.4 K.
+* F1 linear h profile 2.0e-14 (1e-12), 2 Newton iterations (2). F2 discrete 2.9e-14 (1e-9), continuous 4.4e-6 (2e-4).
+  F3 one-step flamelet T_max 2192.60, 2193.52, 2194.30 K against 2194.74 K (Burke-Schumann): relative deviation 1.13e-3, 6.4e-4,
+  2.3e-4, monotone in chi_st and <= 0.1; residual <= 4.2e-13 (1e-8); X linearity <= 2.4e-13 (1e-9): pass.
+  F4 19 burning values, T_max strictly decreasing from 2143 to 1777 K, extinction between the last burning chi_st and 3.469: pass.
+  F5 chi(Z_st) exact, symmetry 2.7e-15 (1e-12). F6 table lookup of a linear field 5.7e-14 (1e-10), v = 0 mean equals the lookup exactly.
+* P1 front flux 2.23613507 against 2.23606798 (Gamma k/2 closed form), relative error 3.0e-5 (1e-4). P2 9.9e-6 (1e-4).
+  P3 burnt T 2717.67 K, PDF mean of a linear source 4.4e-16 (1e-12): pass. P3 temperature-based c monotone: MISS
+  (`p3_temperature_progress_monotone_known_miss`, limit intact; dip about 6e-9 in c because the H2/air induction period is slightly
+  endothermic). The corrected `p3b_water_progress_variable_is_monotone` (Y_H2O based) passes; the old test is kept ignored.
+
+### Deviations and set-up defects (disclosed)
+
+* "Scaled residual" of F3 is the largest Newton update of Y.
+* B4 element tolerance is relative to the largest stream element value.
+* B2(e) independent quadrature is split at the kink of the table.
+* B3: the ADR text gave Gamma(10.5) = 945 sqrt(pi)/1024, which is Gamma(11/2)/32; the correct value 654729075 sqrt(pi)/1024 is used.
+* B1: the library HP equilibrium raised "singular equilibrium matrix" for nearly complete exothermic conversion at low T. A private
+  fallback `hp_equilibrium` in `mixfrac.rs` (T stepped down from 6000 K, bisection on TP equilibria, residual <= 1e-9) replaces it;
+  `equil.rs` is unchanged. For GRI CH4/air the node Z = 0.005 still does not converge and is omitted (reported by B7).
+* F4 first set-up (chi list with factor 4) found 2 burning values; corrected test uses a 1.25 factor, the old one is kept ignored.
+* ISAT: `FROZEN_NOISE` = 1e-10 for structurally zero coordinates (noise seen to 2.4e-15 at the first value 1e-15); sensitivities by
+  forward differences at the normal integrator tolerance; the enthalpy measure `enthalpy_change_in_kelvin` replaced the h/cp
+  difference (Amendment 2). Element drift of the ISAT paths is finite-difference noise, not conservation of the integrator.
+* The 2225 K maximum equilibrium temperature is recalled from memory and is not a check.
+* W1 assertion as above.
+
+### Final status
+
+F-223 `partial`: library ISAT, DRG and clustering, wired for the transient finite_rate step. Acceptance point met for the same mechanism
+integrated directly (1.7e-3 ISAT, 1.6e-3 dynamic DRG), not against a published measurement. Misses: I3 retrieval error, I4 and I5
+element drift, I5 profile. F-129 `partial`: libraries only.
+
+Not delivered / not attempted: any comparison with Sandia or other published flames (not attempted), a GRI flamelet table (only the
+toy and H2/air flamelets), G-equation, BML, thickened-flame and coherent-flame models, spark and ignition-kernel models, wiring of Z,
+variance or flamelet tables into the case tree, acceleration of steady or EDC chemistry, per-species log scales for the ISAT error.
