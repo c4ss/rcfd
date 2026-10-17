@@ -209,3 +209,19 @@ magnitude but the second derivative.
 Corrected set-up A4b (registered here, before it is run; the threshold fraction is chosen from the diagnosis, so this is NOT an
 independent confirmation of the registered A4 factor): the same procedure with threshold `0.05 max|grad phi|` (|grad| >= 5 percent of the
 peak extends the band to about |x - 0.5| = 3 w = 0.18). Limits identical to A4: `E_a <= 0.35 E16`, `E_a <= 3 E64`, `n_cells <= 2048`.
+
+## Addendum 3 (turbo run): T2 plane-area expectation was a set-up defect
+
+The registered T2 plane check expected the area `(N/2) sin(2 pi/N) (Ro^2 - Ri^2)`, the annulus between inscribed N-gons. The first run
+measured 2.356165 against 2.349471, a relative difference of 2.85e-3, so the registered `1e-11` limit is MISSED. Diagnosis: the plane cut
+of the polygonal annulus mesh gives the polygon annulus, but the clip and snap step moves every vertex lying on a chord of the mesh
+polygon to the exact radius (`r = 0.5` or `1.0`, measured range `[0.5, 1.0]` to 1e-12). The snapped surface therefore approaches the
+circular annulus `pi (Ro^2 - Ri^2) = 2.356194` (relative difference 1.2e-5), which is the intended behaviour of the snapping (D8 on
+exact radii); the polygon formula was the wrong expectation, not a code defect. Per the rules the registered check is kept unchanged
+and ignored as `t2_plane_area_polygon_known_miss` (limit 1e-11 intact, fails with 2.85e-3), and the corrected test
+`t2_constant_streamwise_plane_and_cone` asserts the circular-annulus area within 0.005 (measured 1.2e-5) plus the radius range.
+All other T1 to T5 limits were met unchanged. Measured: T1 cylinder radius error 1.1e-16 (unsnapped cut 2.7e-3), area error 8.8e-5 at
+48 and 2.1e-5 at 96 (ratio 4.1), frustum radius 2.2e-16 and area 1.3e-4; T2 cone vertices 2.2e-16, area 2.1e-4; T3 sampler path to
+round-off, mesh path linear 0 and harmonic 3.1e-3 (limit 1.4e-2); T4 mass mean 3.2222222222222223 vs 3.222222222222222, mass flow
+equal; T5 pump efficiency 0.8 exactly, wall torque 9.899494936611664 vs 9.899494936611665. T2/T3/T5 test code was written against the
+final API before its first run; one edit to the cone test (building the station from the contour start points) was made before any run.
