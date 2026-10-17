@@ -10,12 +10,15 @@ pub mod cell;
 pub mod cluster;
 pub mod drg;
 pub mod equil;
+pub mod flamelet;
 pub mod isat;
 pub mod json;
 pub mod mech;
+pub mod mixfrac;
 pub mod network;
 pub mod ode;
 pub mod pollutants;
+pub mod progress;
 pub mod reactors;
 pub mod toy;
 

@@ -891,7 +891,7 @@ fn c2_gri_cluster_tolerance_on_the_mixing_layer() {
     let mut count = 0;
     let mut f = |phi: &[f64]| -> Result<Vec<f64>, ReactorError> {
         count += 1;
-        Ok(BatchMap::new(
+        BatchMap::new(
             &m,
             BatchKind::ConstantPressure,
             Energy::Adiabatic,
@@ -899,7 +899,7 @@ fn c2_gri_cluster_tolerance_on_the_mixing_layer() {
             dt,
             Tol::default(),
         )
-        .apply(phi)?)
+        .apply(phi)
     };
     let res = advance_clustered(&states, &s, tau, &mut f).unwrap();
     let wall_c = t_c.elapsed().as_secs_f64();
