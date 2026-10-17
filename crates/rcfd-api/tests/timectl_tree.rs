@@ -133,6 +133,11 @@ fn s11_located_errors() {
     );
     assert_eq!(err_path(&tg_text("", "write_times = [2.0]")), "output.write_times");
     assert_eq!(err_path(&tg_text("period = 1.0", "")), "solver.steps_per_period");
+    let p = err_path(&tg_text("error_tolerance = 0.01
+period = 1.0
+steps_per_period = 10", ""));
+    println!("error control + period: {p}");
+    assert!(p.starts_with("solver."));
     let steady = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 8\nny = 8\n[physics]\nnu = 0.01\n[boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n[solver]\nalgorithm = \"simplec\"\nmax_courant_rms = 0.3\n";
     assert_eq!(err_path(steady), "solver.max_courant_rms");
 }

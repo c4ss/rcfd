@@ -211,7 +211,8 @@ An all-hex circular pipe of radius `r_out` and length `lz` along z: an `nx` x `n
 (z = 0), `outlet` (z = lz), `wall`; with `mesh.periodic_z = true` the end patches become a cyclic pair for fully developed flow
 (use `physics.body_force`). The cross-section is an inscribed polygon of polygon, see `docs/meshing.md`
 for the discrete volume and area deficit. Use `solver.non_orthogonal_correctors = 2`: the core-to-ring corners reach
-about 35 degrees of non-orthogonality.
+about 35 degrees of non-orthogonality. With the default SIMPLEC the corrector diverges on this mesh for nz >= 4 (axial
+mode); set `solver.simplec_non_orthogonal_compensation = true` (below) to converge it (ADR 0050).
 
 ```toml
 [mesh]
@@ -504,6 +505,42 @@ Example: `cases/channel/profile_inlet.toml`.
 standard deviation, minimum and maximum of transient incompressible runs as fields `<name>_mean` and so on.
 `output.write_interval`, `retain_snapshots`, `retain_checkpoints` and `fields` control numbered snapshots, backup
 retention and the variables written. Details and limits: `docs/run-control.md` (Output policy and statistics).
+
+## SIMPLEC non-orthogonal compensation (ADR 0050 Part 1)
+
+`solver.simplec_non_orthogonal_compensation` (bool, default `false`): with `solver.algorithm = "simplec"` and
+`solver.non_orthogonal_correctors > 0` the SIMPLEC flux compensation `(rAtU - rAU)_f snGrad(p_old)` also carries the deferred
+non-orthogonal secondary-gradient part of the pressure flux. Without it the corrector feeds back with a gain close to
+`alpha_u` and an axial mode of a swept mesh grows (diverged at `alpha_u = 0.9`, converged at 0.8 and below). `false`
+keeps every existing result bit for bit; the switch is inert without correctors and changes nothing beyond round-off on an
+orthogonal mesh. Not available for the variable-density SIMPLEC (it has no non-orthogonal correctors).
+
+## Adaptive time stepping (F-209, ADR 0050 Part 2)
+
+Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset
+(sentinel `0` / `false` / empty) the run is the fixed-`solver.dt` run (or the earlier `solver.max_courant` controller) bit for bit.
+Setting any of them switches to the controller of ADR 0050, where `solver.dt` is the first step and, unless `solver.max_dt` is
+given, the largest step.
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `solver.max_courant` | 0 | MAX Courant target (as before; with the keys below it joins the new controller) |
+| `solver.max_courant_rms` | 0 | volume-weighted RMS Courant target; with `max_courant` the smaller step wins |
+| `solver.dt_safety` | 0 (0.9) | the step aims at this fraction of the target |
+| `solver.dt_growth` | 0 (1.2) | largest growth factor per step (>= 1) |
+| `solver.dt_shrink` | 0 (0.5) | smallest factor per step |
+| `solver.min_dt`, `solver.max_dt` | 0 (1e-3 dt, dt) | step limits [s] |
+| `solver.error_tolerance` | 0 | local-error control by step doubling (implicit Euler, laminar constant density only): accepted when the relative velocity difference per unit time is below it; the global error then grows like tolerance x time |
+| `solver.period`, `solver.steps_per_period` | 0 | period-based steps `dt = period / steps_per_period`, not combined with Courant or error control |
+| `solver.extrapolate_initial` | false | start each step from the linear extrapolation of the two previous levels (changes the result at the time-error level) |
+| `output.write_times` | empty | list of times on which a step lands (relative 1e-12); a numbered snapshot `snapshot_t<time>` is written when the run has an output directory |
+| `output.write_time_interval` | 0 | land on every multiple of this interval |
+
+Located errors: negative or inconsistent values (`min_dt > max_dt`, `dt_growth < 1`), a write time beyond `solver.end_time`,
+`steps_per_period` without `period`, error control with energy, scalars, turbulence, rheology, sources, lumped components, dynamic
+mesh, statistics, expression boundary conditions or `time_scheme` other than `euler`, and any of the keys on a steady run.
+Restart files of such runs carry the controller state. Not wired: Aitken relaxation (library `stepctl::Aitken` only), local
+timescale factors, residual smoothing, the compressible solver.
 
 ## `rheology` viscosity laws (F-110)
 

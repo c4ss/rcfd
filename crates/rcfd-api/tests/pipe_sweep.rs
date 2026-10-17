@@ -159,6 +159,9 @@ fn s10_poiseuille_pipe_centreline_velocity_known_miss() {
 /// MISS (diverged): the iteration is stable for about 400 iterations and then an axial mode grows to NaN for nz = 4 and nz = 8
 /// (nz = 2 is stable); the convergence test of this helper originally read NaN as zero change. Cause of the growth not isolated
 /// (see ADR 0047 addendum); S10c below repeats the check on the z-uniform 2-layer mesh. Limits identical to S10.
+/// Wave 27B (ADR 0050): the cause is the SIMPLEC compensation that ignores the non-orthogonal part; this record stays ignored
+/// (default settings still diverge), and `pipe_sweep_compensation.rs` r1_s10d passes the same limits with
+/// `solver.simplec_non_orthogonal_compensation = true`.
 #[test]
 #[ignore = "known miss: diverges with nz = 8 and non-orthogonal correctors; see s10c"]
 fn s10b_poiseuille_pipe_centreline_velocity_with_non_orthogonal_correctors_known_miss() {
