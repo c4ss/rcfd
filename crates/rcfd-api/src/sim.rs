@@ -1749,8 +1749,8 @@ impl Simulation {
             Engine::Transient(_) => false,
             Engine::Compressible(c) => c.steady,
             Engine::VarDensity(v) => v.solver.settings.transient.is_none(),
-        }
             Engine::Vof(_) => false,
+        }
     }
 
     /// The particle run driven by the transient step, if `particles.enabled` with a transient algorithm.
@@ -1825,8 +1825,8 @@ impl Simulation {
         match &self.engine {
             Engine::Steady(_) | Engine::Coupled(_) => 0.0,
             Engine::VarDensity(v) => v.solver.time,
-            Engine::Transient(s) => s.time,
             Engine::Vof(v) => v.solver.time,
+            Engine::Transient(s) => s.time,
             Engine::Compressible(c) => {
                 if c.steady {
                     0.0
@@ -1949,8 +1949,8 @@ impl Simulation {
             Engine::Transient(s) => &s.u,
             Engine::Compressible(c) => &c.u,
             Engine::VarDensity(v) => &v.solver.u,
-        }
             Engine::Vof(v) => &v.solver.u,
+        }
     }
 
     /// Kinematic pressure field (the modified pressure `p_rgh` [Pa] of a multiphase run; the pressure `p` is `field("p")`).
@@ -1961,8 +1961,8 @@ impl Simulation {
             Engine::Transient(s) => &s.p,
             Engine::Compressible(c) => &c.p,
             Engine::VarDensity(v) => &v.solver.p,
-        }
             Engine::Vof(v) => &v.solver.p_rgh,
+        }
     }
 
     /// Face flux (volumetric for the incompressible algorithms, mass flux for the compressible solver).
@@ -1973,8 +1973,8 @@ impl Simulation {
             Engine::Transient(s) => &s.phi,
             Engine::Compressible(c) => &c.phi,
             Engine::VarDensity(v) => &v.solver.phi,
-        }
             Engine::Vof(v) => &v.solver.phi,
+        }
     }
 
     /// Advance one iteration (steady) or time step (transient) and record monitors.
@@ -2366,7 +2366,6 @@ impl Simulation {
                     converged,
                 }
             }
-            Engine::Transient(s) => {
             Engine::Vof(v) => {
                 // two-phase free-surface step (ADR 0049): alpha sub-cycled, then PISO / PIMPLE on the mixture
                 let dt = self.dt.min((self.end_time - v.solver.time).max(1e-12));
@@ -2407,6 +2406,7 @@ impl Simulation {
                     }
                 }
             }
+            Engine::Transient(s) => {
                 let dt_prev = s.history.last().map_or(self.dt, |h| h.dt);
                 let mut dt = match &self.cfl {
                     Some(c) if !s.history.is_empty() => c.next_dt(&s.geom, &s.phi, dt_prev),
@@ -2708,12 +2708,12 @@ impl Simulation {
                 return Ok(v);
             }
         }
-        if let Engine::VarDensity(v) = &self.engine {
         if let Engine::Vof(v) = &self.engine {
             if let Some(f) = v.field(name) {
                 return Ok(f);
             }
         }
+        if let Engine::VarDensity(v) = &self.engine {
             if name == "T" {
                 return Ok(v.solver.t.values.clone());
             }
@@ -2930,7 +2930,6 @@ impl Simulation {
                 _ => {}
             }
         }
-        if let Engine::VarDensity(v) = &self.engine {
         if matches!(self.engine, Engine::Vof(_)) {
             if let ReportKind::Force
             | ReportKind::Moment
@@ -2946,6 +2945,7 @@ impl Simulation {
                 ));
             }
         }
+        if let Engine::VarDensity(v) = &self.engine {
             match r.kind {
                 ReportKind::Force | ReportKind::Moment | ReportKind::ForceCoefficient | ReportKind::YPlus => {
                     return Err(Error::Other(
@@ -3411,7 +3411,6 @@ impl Simulation {
                 }
             }
         }
-        if let Engine::VarDensity(v) = &self.engine {
         if let Engine::Vof(v) = &self.engine {
             for n in ["alpha", "p_rgh", "p", "rho"] {
                 if let Some(f) = v.field(n) {
@@ -3419,6 +3418,7 @@ impl Simulation {
                 }
             }
         }
+        if let Engine::VarDensity(v) = &self.engine {
             extra.push(("T", v.solver.t.values.clone()));
             for n in ["rho", "mach", "p_abs"] {
                 if let Some(f) = v.field(n) {

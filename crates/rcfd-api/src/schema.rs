@@ -1697,11 +1697,11 @@ pub fn case_schema() -> Schema {
         .field("regions", crate::regions::schema())
         .field("electric", crate::electric::schema())
         .field("phase_change", crate::phase_change::schema())
+        .field("multiphase", crate::vof::schema())
         .field("solids", crate::cht::solids_schema())
         .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field("particles", crate::particles::schema())
         .field("dynamic_mesh", crate::dynmesh::schema())
-        .field("multiphase", crate::vof::schema())
         .field(
             "boundaries",
             Schema::named(boundary).doc("Boundary conditions by patch name"),
