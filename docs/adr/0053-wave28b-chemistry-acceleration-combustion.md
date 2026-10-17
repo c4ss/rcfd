@@ -296,3 +296,89 @@ lift-off; published ignition-delay comparisons (no verifiable numbers).
 Pope S.B. 1997 Combust. Theory Modelling 1:41 (ISAT); Lu T., Law C.K. 2005 Proc. Combust. Inst. 30:1333 (DRG); Peters N. 1984 Prog.
 Energy Combust. Sci. 10:319 (laminar diffusion flamelet models); Burke S.P., Schumann T.E.W. 1928 Ind. Eng. Chem. 20:998; Fisher R.A.
 1937 Ann. Eugenics 7:355, Kolmogorov Petrovskii Piskunov 1937. Citations are from memory unless an addendum says a page was read.
+
+## Amendment 1 (written before any registered check was run; no limit is changed)
+
+While writing the library the following implementation and set-up points were corrected. No registered check had been run.
+
+1. ISAT growth candidate (D1): the cap `d_grow = 25` is dropped (`d_grow = infinity`). Reason: with the cap, I2 (exactness on a linear
+   map: one record, 199 retrievals) cannot hold, because a far query would be added as a new record although the linear prediction is
+   exact there. Pope's algorithm tries to grow the record that the tree search returns, at any distance. The candidate is now the record
+   nearest in the scaled Euclidean distance of the stored states (n flops per record, evaluated only for a miss; the retrieval scan
+   keeps the exact axis-extent prefilter); the growth is accepted when the linear prediction error at the query is `<= eps_isat`, so the
+   controlled quantity is unchanged. (A far query whose linear prediction is accidentally accurate is accepted: the usual ISAT risk.)
+2. Ignition delay in I4: the time at which the stepped temperature first crosses `T0 + 400 K`, linearly interpolated between steps
+   (the maximum of the finite-difference dT/dt is not resolved at `dt = 5e-6` against a 1e-4 s delay). The same definition is applied to
+   the direct and the ISAT trajectory. In D2 to D4 the existing `Trajectory::time_of_max_dtdt` (Hermite refined) is used.
+3. Element conservation limits (I4, I5, C2) are RELATIVE to the element total: `max_e |n_e(out) - n_e(in)| / n_e(in) <= 1e-9`, with
+   `n_e` the moles of element atoms per kg (`Mechanism::element_mass_fractions`).
+4. I5 set-up: a probe of the EXISTING integrator showed that a 10 % H2 fuel stream mixed with 1000 K or 1250 K air does not ignite
+   within 2 ms or ignites with a temperature rise of only about 10 K (no heat release worth an ensemble). The registered set-up is
+   changed before any run to: fuel side H2 : N2 = 1 : 1 (mole) at 300 K, air side O2 : N2 = 1 : 3.76 at 1300 K (probe of homogeneous
+   adiabatic mixtures: delays 8e-5 to 1.4e-4 s for Z = 0.01 .. 0.1, rises of 70 to 650 K). Everything else of I5 is as registered.
+5. The Hermite and cell-model wording of I3 is unchanged. The F-129 and flamelet text is unchanged.
+
+## Amendment 2 (written after the first I3/I4 runs; no registered limit is changed)
+
+Design changes forced by the cost measurement of the first I4 run (speed-up 0.033), and set-up defects found in my own checks. Each
+defective check is kept as an ignored test with its original behaviour and a new corrected test is added.
+
+1. Sensitivities use the normal integration tolerance (the first version used a tight 1e-10 tolerance, 55 tight integrations per
+   added record). A probe on the I4 states gave a difference between normal-tolerance and tight sensitivities of at most 7e-5 in the
+   worst corner of the ellipsoid, against `eps_isat = 1e-3`. The reference value `R0` is reused from the miss integration.
+2. The table works on the element-active subspace: a species containing an element absent from the mixture has an identically zero
+   mass fraction for all time (every reaction needs its reactants), so its coordinate is not a dimension of the map. For H2/air in GRI
+   this removes 33 of 54 coordinates (21 remain). `Isat::with_active` takes the flags; a query whose frozen coordinate exceeds
+   `FROZEN_NOISE = 1e-10` in magnitude is an error. The integrator leaves round-off up to about 2.4e-15 in these coordinates (atol
+   1e-14); the bound is five orders below the resolution `eps * scale = 1e-5`.
+3. Set-up defect, I4 element measure: `|n_e(a) - n_e(b)| / n_e(a)` divided by a zero total (AR, C absent in H2/air) and read 1e268. The
+   corrected measure floors the denominator at `1e-8` times the largest element total. The first set-up stays as the ignored test
+   `i4_first_setup_unguarded_element_measure`.
+4. Set-up defect, enthalpy measure (I4, D2, D3): the first measure was the difference of `h/cp` between two states, which is not a
+   conserved quantity when `cp` changes (it read 65 K and 50 K for the DRG runs, whose integration conserves enthalpy to 1e-9 K). The
+   corrected measure is `(h(b) - h(a))/cp(b)` (`enthalpy_change_in_kelvin`), the temperature error of the enthalpy error. The limits
+   (I4: 1 K; D2: 1e-2 K, as registered) are unchanged. The first set-ups stay as ignored tests (`d2_first_setup_h_over_cp`,
+   `d3_first_setup_h_over_cp`, and the enthalpy line of the I4 first set-up). The earlier remark in this ADR that the 14.2 K I4 reading
+   was a genuine miss is withdrawn: it was this defect.
+5. The I3 retrieval clause and the I4/I5 element and I5 profile clauses are missed (below); the passing parts of each check and the
+   missed clause are separate tests so the limit stays intact in an ignored `*_known_miss` test.
+
+## Results addendum, part 1 (F-223; measured values, limit in brackets)
+
+Release build, one machine; wall times are reported only and vary run to run.
+
+* I1 FD sensitivity vs analytic: worst entry error relative to column maximum 7.0e-8 (1e-3): pass.
+* I2 exact on a linear map: 1 record, 195 retrievals, 4 growths, worst scaled error vs analytic 6.7e-9 (1e-5): pass.
+* I3 toy adiabatic ensemble (4000 queries, 1785 retrieved, 1586 grown, 629 added): crossing-time difference 5.0e-4 (5e-2): pass; worst
+  retrieval error 1.272e-3 (1e-3): MISS (`i3_retrieval_error_known_miss`). Root cause (diagnosed with `last_hit`): the growth rule
+  verifies the linear prediction only at the query that triggers the growth, so an ellipsoid grown several times contains points
+  where the linear error exceeds eps. A fix would be a secondary check or a conservative growth factor (not done: not tuned).
+* I4 GRI H2/air homogeneous ensemble (16 members, 40 steps, 640 queries, 193 retrieved, 407 grown, 40 records): worst retrieval error
+  9.7e-4 (1e-3), delay difference 1.7e-3 (5e-2), final T difference 0.39 K (10), enthalpy change 1.35e-3 K (1): pass. Element drift
+  2.37e-9 (1e-9): MISS (`i4_element_drift_known_miss`); the direct integration alone conserves the elements to 8.8e-16, so the drift
+  is finite-difference noise in the invariant columns of the sensitivity matrix (integration error about 1e-10 divided by delta).
+  Speed-up 0.23 (wall) and rhs-evaluation ratio 0.23, REPORTED only: with 16 members and 640 queries the 40 records each cost 22
+  extra integrations, which a retrieval fraction of 30 % does not repay.
+* I5 GRI mixing layer (6000 queries, 5902 retrieved, 97 grown, 1 record): worst retrieval error 3.2e-6 (1e-3) pass; speed-up 118 (> 1)
+  pass but not meaningful, see the miss; final profile difference 1222 K (10): MISS (`i5_profile_known_miss`): cells above 1500 K
+  direct 17, ISAT 0. Element drift 1.5e-7 (1e-9): MISS (`i5_element_drift_known_miss`). Root cause of the profile miss: the scaled error
+  norm (0.01 in mass fraction) cannot see the radical pool of the induction period (1e-10), so a single ellipsoid is grown over
+  states whose radical content differs by orders of magnitude while every scaled error stays below 1e-3 and the ignition is
+  suppressed. This is a limit of the registered error measure, not an integration fault. Named gap: per-species relative or log
+  scales for the error norm.
+* D1 DRG graph by hand: 0 (1e-12): pass.
+* D2 GRI H2/air static DRG: skeleton 18 of 53 species (<= 20), 69 of 325 reactions; delay differences 3.8e-8, 2.9e-7, 3.6e-6 at 1000,
+  1100, 1200 K (5e-2); final T difference <= 6.3e-6 K (5); element drift <= 1.9e-15 (1e-9); enthalpy change <= 1.4e-9 K (1e-2): pass.
+  Jacobian dimension 19 vs 54; wall 0.55 s vs 0.061 s at 1000 K (reported).
+* D3 GRI CH4/air static DRG: skeleton 49 of 53 (< 53), 307 of 325 reactions; delay difference 2.2e-3 (5e-2); T difference 1.7e-3 K (20);
+  element drift 2.2e-15; enthalpy change 2.2e-8 K: pass. Wall 0.84 s vs 0.71 s (reported). The CH4 skeleton at eps 0.01 is nearly
+  the whole mechanism: DRG gives little for methane here.
+* D4 dynamic DRG H2/air: delay difference 1.6e-3 (5e-2); T_end difference 0.20 K (5); mean active species 14.1 of 53: pass. Wall 0.83 s
+  vs 0.15 s (reported).
+* C1 clustering tolerance zero: 300 cells, 150 clusters = 150 distinct, 150 integrations, 0 bit mismatches: pass.
+* C2 clustering tolerance 1e-3 on the mixing layer at step 30: 90 clusters of 100 (< 100), worst member error 9.0e-9 (1e-2), element
+  drift 7.0e-16 (1e-12): pass. Speed-up 1.0 (reported).
+
+Acceptance point of F-223, "0D ignition delay of a published fuel/mechanism pair reproduced within 5 percent with acceleration
+enabled, with a documented speed-up": met for DRG (GRI-Mech 3.0 H2/air and CH4/air, speed-ups 9x and 1.2x at the stated points) and for
+ISAT (I4 delay 1.7e-3) but the documented ISAT speed-up in I4 is 0.23 (a slowdown). F-223 therefore stays `partial`.
