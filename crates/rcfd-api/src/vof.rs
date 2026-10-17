@@ -460,7 +460,7 @@ fn extension_inert(case: &Case, out: &mut Vec<Diagnostic>) {
         if get_f(case, "multiphase.waves.beach_exponent") != 3.5 {
             out.push(d("multiphase.waves.beach_exponent", why_w));
         }
-        if !inlet && get_s(case, "multiphase.waves.inlet_patch") != "" {
+        if !on && inlet {
             out.push(d("multiphase.waves.inlet_patch", why_w));
         }
         if !on && beach {
