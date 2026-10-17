@@ -28,10 +28,6 @@ struct Plate {
     converged: bool,
 }
 
-fn run(n: usize) -> Plate {
-    run_cfg(n, H, Top::Open, Outlet::Pressure)
-}
-
 #[derive(Clone, Copy, Debug)]
 enum Top {
     Open,
