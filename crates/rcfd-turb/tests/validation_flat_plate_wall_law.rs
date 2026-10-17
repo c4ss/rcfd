@@ -471,7 +471,7 @@ fn d3_sst_cf_mesh_convergence_known_miss() {
         Some((p, g)) => println!("  observed order {p:.2}, GCI_fine {:.3}%", 100.0 * g),
         None => println!("  sequence not monotone: no observed order"),
     }
-    if !((cf[2] - cf[1]).abs() < (cf[1] - cf[0]).abs()) {
+    if (cf[2] - cf[1]).abs() >= (cf[1] - cf[0]).abs() {
         fails.push("D3 sequence not converging".to_string());
     }
     if (cf[2] - cf[1]).abs() / cf[2] > 0.015 {
