@@ -21,8 +21,11 @@ use crate::scalars::ScalarState;
 use rcfd_core::settings::Schema;
 use rcfd_fv::energy::EnergySolver;
 use rcfd_reactor::cell::{edc_scales, relax_towards, CellModel, Closure, EdParams};
+use rcfd_reactor::cluster::advance_clustered;
+use rcfd_reactor::isat::{default_scales, CellMap, Isat, IsatStats, Outcome};
 use rcfd_reactor::reactors::Tol;
 use rcfd_reactor::Mechanism;
+use std::sync::Mutex;
 
 /// Settings section.
 pub fn schema() -> Schema {
@@ -88,6 +91,14 @@ pub fn schema() -> Schema {
         .field(
             "edc_c_tau",
             Schema::float(0.4082).doc("EDC time-scale constant C_tau (same source)"),
+        )
+        .field(
+            "acceleration",
+            Schema::enumeration("off", &["off", "cluster", "isat"]).doc("Acceleration of the transient finite_rate chemistry step (F-223, ADR 0053): off (the direct integration of every cell); cluster (one integration per group of cells within accel_tolerance in the scaled max-norm, 100 K and 0.01 in mass fraction; the other cells receive the representative's increment); isat (in-situ adaptive tabulation, Pope 1997, with accel_tolerance as the tabulation error in the same norm). Only the finite_rate closure of the transient operator-split path; a speed-up is a measurement, see chemistry.json"),
+        )
+        .field(
+            "accel_tolerance",
+            Schema::float(-1.0).doc("Tolerance of the acceleration in the scaled max-norm; -1 = unset, an error when acceleration is not off; 0 is allowed for cluster (bit-identical to off) and must be > 0 for isat"),
         )
         .field(
             "write_rates",
@@ -314,6 +325,41 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             "chemistry.heat_capacity is used only with chemistry.heat_release = true",
         ));
     }
+    // acceleration (F-223)
+    let accel = gs(case, "chemistry.acceleration");
+    let atol = gf(case, "chemistry.accel_tolerance");
+    if accel == "off" {
+        if atol >= 0.0 {
+            out.push(diag(
+                "chemistry.accel_tolerance",
+                "chemistry.accel_tolerance is used only with chemistry.acceleration = \"cluster\" or \"isat\"",
+            ));
+        }
+    } else {
+        if model != "finite_rate" {
+            out.push(diag(
+                "chemistry.acceleration",
+                format!("chemistry.acceleration = \"{accel}\" is implemented for the finite_rate closure only, not \"{model}\" (the turbulence closures depend on k and epsilon of the cell)"),
+            ));
+        }
+        if matches!(gs(case, "solver.algorithm").as_str(), "simple" | "simplec" | "coupled") {
+            out.push(diag(
+                "chemistry.acceleration",
+                "chemistry.acceleration applies to the transient operator-split step; the steady algorithms use the source-term path, which is not accelerated",
+            ));
+        }
+        if atol < 0.0 {
+            out.push(diag(
+                "chemistry.accel_tolerance",
+                format!("set chemistry.accel_tolerance (scaled max-norm, 100 K and 0.01 in mass fraction) for acceleration = \"{accel}\"; unset = -1"),
+            ));
+        } else if accel == "isat" && (atol.is_nan() || atol <= 0.0) {
+            out.push(diag(
+                "chemistry.accel_tolerance",
+                "acceleration = \"isat\" needs accel_tolerance > 0 (0 is allowed for \"cluster\", where it is bit-identical to off)",
+            ));
+        }
+    }
     // turbulent closures
     let turbulent = matches!(
         model.as_str(),
@@ -404,6 +450,32 @@ pub struct ChemState {
     c_xi: f64,
     c_tau: f64,
     nu: f64,
+    accel: Accel,
+    cache: Mutex<AccelCache>,
+}
+
+/// Acceleration of the transient finite-rate step (`chemistry.acceleration`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Accel {
+    Off,
+    /// Clustering with the scaled max-norm tolerance.
+    Cluster(f64),
+    /// ISAT with the tolerance.
+    Isat(f64),
+}
+
+/// Tables and counters of the acceleration (interior mutability: `step_split` takes `&self`).
+#[derive(Default)]
+struct AccelCache {
+    table: Option<Isat>,
+    /// Step the table belongs to (the map depends on `dt`).
+    dt: f64,
+    /// Counters of tables dropped by a change of `dt`.
+    done: IsatStats,
+    /// Cells seen and integrations done by the clustering.
+    cluster_cells: usize,
+    clusters: usize,
+    steps: usize,
 }
 
 impl ChemState {
@@ -441,6 +513,12 @@ impl ChemState {
             c_xi: gf(case, "chemistry.edc_c_xi"),
             c_tau: gf(case, "chemistry.edc_c_tau"),
             nu: gf(case, "physics.nu"),
+            accel: match gs(case, "chemistry.acceleration").as_str() {
+                "cluster" => Accel::Cluster(gf(case, "chemistry.accel_tolerance")),
+                "isat" => Accel::Isat(gf(case, "chemistry.accel_tolerance")),
+                _ => Accel::Off,
+            },
+            cache: Mutex::new(AccelCache::default()),
         }))
     }
 
@@ -514,7 +592,32 @@ impl ChemState {
         for (e, name) in self.mech.elements.iter().enumerate() {
             totals.insert(name.clone(), Value::from(elem[e]));
         }
-        json!({
+        let acceleration = match self.accel {
+            Accel::Off => None,
+            a => {
+                let c = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+                let mut st = c.done;
+                if let Some(t) = &c.table {
+                    st.queries += t.stats.queries;
+                    st.retrieved += t.stats.retrieved;
+                    st.grown += t.stats.grown;
+                    st.added += t.stats.added;
+                    st.direct += t.stats.direct;
+                }
+                Some(match a {
+                    Accel::Cluster(tau) => json!({
+                        "mode": "cluster", "tolerance": tau, "steps": c.steps,
+                        "cells": c.cluster_cells, "integrations": c.clusters,
+                    }),
+                    _ => json!({
+                        "mode": "isat", "tolerance": if let Accel::Isat(e) = a { e } else { 0.0 }, "steps": c.steps,
+                        "queries": st.queries, "retrieved": st.retrieved, "grown": st.grown, "added": st.added,
+                        "direct": st.direct, "records": c.table.as_ref().map_or(0, Isat::len),
+                    }),
+                })
+            }
+        };
+        let mut rep = json!({
             "model": self.model_name(),
             "mechanism": {
                 "species": ns,
@@ -527,7 +630,11 @@ impl ChemState {
             "element_moles": totals,
             "density": rho,
             "cells": n,
-        })
+        });
+        if let Some(a) = acceleration {
+            rep["acceleration"] = a;
+        }
+        rep
     }
 
     /// Net molar production rates `wdot_<species>` [mol/m3/s] of the closure on the given fields (the coarse state; for the
@@ -638,7 +745,12 @@ impl ChemState {
         let ns = self.mech.species.len();
         let n = tcol.len();
         let mut st = vec![0.0; ns + 1];
-        for c in 0..n {
+        if self.accel != Accel::Off {
+            self.accelerated_step(&mut cols, &mut tcol, dt)?;
+        }
+        // the direct loop below runs for every cell unless the accelerated step has already advanced them
+        let direct_cells = if self.accel == Accel::Off { n } else { 0 };
+        for c in 0..direct_cells {
             if tcol[c] < self.min_temperature {
                 continue;
             }
@@ -681,6 +793,91 @@ impl ChemState {
             if let Some(en) = energy {
                 en.t.values.copy_from_slice(&tcol);
                 en.history.old.copy_from_slice(&tcol);
+            }
+        }
+        Ok(())
+    }
+
+    /// Accelerated finite-rate step of all eligible cells (clustering or ISAT, F-223): the same map as `CellModel::advance`.
+    fn accelerated_step(&self, cols: &mut [Vec<f64>], tcol: &mut [f64], dt: f64) -> Result<(), String> {
+        let ns = self.mech.species.len();
+        let idx: Vec<usize> = (0..tcol.len()).filter(|&c| tcol[c] >= self.min_temperature).collect();
+        let states: Vec<Vec<f64>> = idx
+            .iter()
+            .map(|&c| {
+                let mut s = Vec::with_capacity(ns + 1);
+                s.push(tcol[c]);
+                s.extend((0..ns).map(|k| cols[k][c]));
+                s
+            })
+            .collect();
+        let cell = self.cell_model(0.0);
+        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.steps += 1;
+        let located = |c: usize, t: f64, e: rcfd_reactor::reactors::ReactorError| {
+            format!("chemistry failed in cell {c} (T = {t:.6e} K): {e}")
+        };
+        let outs: Vec<Vec<f64>> = match self.accel {
+            Accel::Off => return Ok(()),
+            Accel::Cluster(tau) => {
+                let scales = default_scales(ns);
+                let mut map = |phi: &[f64]| -> Result<Vec<f64>, (Vec<f64>, rcfd_reactor::reactors::ReactorError)> {
+                    let mut st = phi.to_vec();
+                    cell.advance(&mut st, dt).map_err(|e| (phi.to_vec(), e))?;
+                    Ok(st)
+                };
+                match advance_clustered(&states, &scales, tau, &mut map) {
+                    Ok(res) => {
+                        cache.cluster_cells += states.len();
+                        cache.clusters += res.clusters();
+                        res.out
+                    }
+                    Err((phi, e)) => {
+                        let j = states.iter().position(|s| *s == phi).unwrap_or(0);
+                        return Err(located(idx.get(j).copied().unwrap_or(0), phi[0], e));
+                    }
+                }
+            }
+            Accel::Isat(eps) => {
+                if cache.table.is_some() && (cache.dt - dt).abs() > 1e-12 * dt.abs() {
+                    if let Some(old) = cache.table.take() {
+                        cache.done.queries += old.stats.queries;
+                        cache.done.retrieved += old.stats.retrieved;
+                        cache.done.grown += old.stats.grown;
+                        cache.done.added += old.stats.added;
+                        cache.done.direct += old.stats.direct;
+                    }
+                }
+                if cache.table.is_none() {
+                    cache.table = Some(Isat::new(default_scales(ns), eps));
+                    cache.dt = dt;
+                }
+                let mut map = CellMap::new(&cell, dt);
+                let mut outs = Vec::with_capacity(states.len());
+                for (j, phi) in states.iter().enumerate() {
+                    let Some(table) = cache.table.as_mut() else {
+                        return Err("internal error: the ISAT table is missing".into());
+                    };
+                    match table.query(&mut map, phi) {
+                        Ok((out, o)) => {
+                            debug_assert!(matches!(
+                                o,
+                                Outcome::Retrieved | Outcome::Grown | Outcome::Added | Outcome::Direct
+                            ));
+                            outs.push(out);
+                        }
+                        Err(e) => return Err(located(idx[j], phi[0], e)),
+                    }
+                }
+                outs
+            }
+        };
+        for (j, &c) in idx.iter().enumerate() {
+            for k in 0..ns {
+                cols[k][c] = outs[j][1 + k];
+            }
+            if self.cp.is_some() {
+                tcol[c] = outs[j][0];
             }
         }
         Ok(())

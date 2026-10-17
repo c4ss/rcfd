@@ -708,12 +708,14 @@ there is one. No mechanism is shipped.
 | `eddy_dissipation_a`, `eddy_dissipation_b` | 4.0, 0.5 | Magnussen-Hjertager constants (UNVERIFIED, see `docs/reference-data.md`) |
 | `eddy_dissipation_product_limit` | true | include the product-limited term; false is the reactant-only form |
 | `edc_c_xi`, `edc_c_tau` | 2.1377, 0.4082 | EDC constants (secondary source, see `docs/reference-data.md`) |
+| `acceleration` | off | acceleration of the transient `finite_rate` step (F-223, ADR 0053): `off` (direct integration of every cell), `cluster` (one integration per group of cells within `accel_tolerance` in the scaled max-norm, 100 K and 0.01 in mass fraction; the other cells receive the representative's increment; tolerance 0 is bit-identical to `off`), `isat` (in-situ adaptive tabulation, Pope 1997, tabulation error `accel_tolerance`, table reset when `dt` changes). Located errors: other closures, the steady algorithms, an unset tolerance |
+| `accel_tolerance` | -1 (unset) | tolerance of the acceleration; an error when `acceleration` is not `off` and it is unset, an error when given with `off`; `isat` needs a value > 0 |
 | `write_rates` | false | also write the cell arrays `wdot_<species>` [mol/m3/s] (net production rate of the closure on the final fields; for `edc` the kinetic rate of the cell state) and, with `heat_release`, `heat_release_rate` [K/s] (the temperature source of the energy balance) to `solution.vtu` (ADR 0037 D2) |
 
 Outputs of the run path (`rcfd run`, service `run.headless`, `write_results`; ADR 0037): `chemistry.json` whenever `model` is not `off`:
 `model`, `mechanism {species, reactions, elements}`, per species `{min, max, volume_mean}`, `mass_fraction_sum {min, max}`,
 `temperature {min, max, source}`, `element_moles` (moles of element atoms in the domain, `sum V rho sum_k Y_k a_ke / W_k`),
-`density`, `cells`. The species themselves are user scalars and are in `solution.vtu`. The chemistry was already advanced by
+`density`, `cells`, and, only when `acceleration` is not `off`, an `acceleration` object (`cluster`: `steps`, `cells`, `integrations`; `isat`: `steps`, `queries`, `retrieved`, `grown`, `added`, `direct`, `records`). The species themselves are user scalars and are in `solution.vtu`. The chemistry was already advanced by
 `Simulation::step` (transient Lie splitting after the scalar sweeps, steady source form before the scalar solve); the binary and the
 service therefore give bit-identical fields to the in-process run (ADR 0037 C1, C2).
 
@@ -721,10 +723,10 @@ Transient runs (`piso`, `pimple`) use Lie operator splitting: after the flow ste
 by the stiff integrator over `dt` and the species and temperature are written back (first order in `dt`). Steady runs use a source
 form: the net rate is an explicit source with a diagonal implicit sink (finite-difference, plus Patankar's coefficient for
 negative sources), the heat release a lagged source of the energy equation. A chemistry failure stops the run with the cell
-index. Limits: constant density, sequential cell loop (no parallel or tabulated chemistry), no Strang splitting, no thickened-flame
+index. Limits: constant density, sequential cell loop (tabulated or clustered chemistry only through `acceleration` on the transient `finite_rate` step; ISAT and DRG are also library tools in `rcfd-reactor`: `isat`, `drg`, `cluster`), no Strang splitting, no thickened-flame
 or flamelet models, no comparison with published flames (F-054 stays `partial`).
 
-Library additions in `rcfd-reactor` (no case keys): `pollutants` (extended Zeldovich thermal NO rate, rate constants as inputs),
+Library additions in `rcfd-reactor` (F-129, ADR 0053, no case keys; mixture fraction and flamelet quantities are not wired into the case tree): `mixfrac` (mixture fraction, HP equilibrium table, beta-PDF mean, Burke-Schumann), `flamelet` (steady laminar flamelet equations, chi_st continuation table), `progress` (premixed progress variable, phase-plane front speed). Further library additions (no case keys): `pollutants` (extended Zeldovich thermal NO rate, rate constants as inputs),
 `network` (pre-exponential sensitivities, PSR into plug flow), `json` (mechanism interchange, format `rcfd-mechanism` version 1)
 and optional NASA nine-coefficient thermodynamics in `Species::nasa9`.
 

@@ -998,3 +998,21 @@ No source was read in this wave. Everything below is first-principles or recalle
 | Goda and Suzuki (1976) two-gauge incident / reflected separation | unverified | the 2 x 2 complex system is DERIVED here (`B_i = A_I e^{ikx_i} + A_R e^{-ikx_i}`) and solved directly; the paper was not read; the gauge spacing is 0.25 wavelength, away from the singularities at multiples of half a wavelength |
 | Damping estimates: implicit Euler `omega^2 dt/2`, first-order upwind `2 (|u| dx/2) k^2` | derived | used in the ADR to state the wave-height tolerances before the runs |
 | Wave-tank results (heights, periods, reflection) | measured | numerical results of this code on a coarse mesh (lambda/32, 10 and 20 periods), no comparison with published tank data |
+
+## Wave 28B chemistry acceleration and combustion extensions (F-223, F-129, ADR 0053)
+
+No source was read in this wave; every reference below is recalled from memory and is unverified.
+
+| Item | Status | Note |
+|------|--------|------|
+| Pope (1997), in-situ adaptive tabulation: ellipsoid of accuracy, retrieve / grow / add | unverified | the algorithm as coded is DERIVED from the recalled outline (Sherman-Morrison growth, linear error test at the query); the paper was not read |
+| Lu and Law (2005), directed relation graph reduction | unverified | interaction coefficients and graph search coded from the recalled outline; no published reduced-mechanism size is claimed |
+| Clustering of similar cells with increment transfer | derived | leader clustering in the scaled max-norm; no source |
+| Mixture fraction (Bilger element definition), unity-Lewis linear enthalpy mixing | unverified | derived here from element conservation |
+| Beta PDF of the mixture fraction, moments and parameters | derived | quadrature of the table is exact; the incomplete beta by continued fraction (modified Lentz), lnGamma by Stirling plus recurrence, tested to 4e-15 |
+| Burke and Schumann (1928) infinitely fast chemistry | unverified | the closed form is derived for a one-step toy mechanism with constant cp (Z_st 3/19, T_st 2194.7 K) |
+| Peters (1984) steady flamelet equations, chi(Z) from erfc^-1 | unverified | equations derived with unity Lewis number; the scalar-dissipation profile is the recalled form |
+| GRI CH4/air maximum equilibrium temperature about 2225 K | unverified | from memory, reported by test B7 only; not a check |
+| Fisher / KPP (1937) front speed 2 sqrt(Gamma k) for the Zeldovich cubic | unverified | the closed form m = sqrt(Gamma k/2) of the cubic was derived; the paper was not read |
+| Sandia flames D to F, any published flame | not used | no comparison attempted |
+| Published ignition-delay measurements | not used | the 5 percent point is met against the same mechanism integrated directly only |
