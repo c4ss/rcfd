@@ -737,9 +737,9 @@
       "F-010",
       "F-028"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Adapted cavity matches fine uniform solution with fewer cells",
-    "note": "SCOPE (merged review): list solution-variation, target node count, edge-length weighting, hanging-node, polyhedral, anisotropic, register-based and geometry-based criteria, plus precoarsening for multigrid."
+    "note": "SCOPE (merged review): list solution-variation, target node count, edge-length weighting, hanging-node, polyhedral, anisotropic, register-based and geometry-based criteria, plus precoarsening for multigrid. WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL. Delivered (library only): rcfd_mesh::adapt with gradient, curvature, ZZ-type and region/geometry indicators, thresholds with dead-band hysteresis and level limits, a conforming hanging-node octree/quadtree refinement and coarsening operator with injection or linear transfer (linear fields exact to 6.7e-16, conservative, face level jump <= 1 with balance), and rcfd_mesh::polydual::tet_to_polydual (closed polyhedra, volume and patch areas exact to ~1e-15). A manufactured tanh-front diffusion solve on an adapted mesh beats the coarse mesh with fewer cells than the fine one, but the registered adapted-within-3x-of-fine check missed (3.71, ignored a4_adapted_vs_fine_known_miss, limit intact); a wider-band set-up registered afterwards passes. NOT delivered: the acceptance on a lid-driven cavity (not run), a case-file or solver-loop hook, target-node-count, edge-length-weighted, anisotropic and register-based criteria, merge-based polyhedral conversion, precoarsening for multigrid, parallel adaptation."
   },
   {
     "id": "F-103",
@@ -992,9 +992,9 @@
       "F-071",
       "F-072"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "On a public pump or compressor case, constant-span surface averages and efficiency match an independent script; report exports to HTML/CSV",
-    "note": "P3. Gap: turbomachinery surface and line objects and turbomachinery report templates. SCOPE (merged review): add constant-span, streamwise, blade-aligned, theta and cone surfaces; inlet-outlet, hub-shroud and circumferential lines; machine-type report templates; isentropic and polytropic efficiency variables; 360-degree reconstruction. Acceptance addition: head coefficient, pressure ratio and efficiency on a published compressor or pump rotor match literature values within published uncertainty."
+    "note": "P3. Gap: turbomachinery surface and line objects and turbomachinery report templates. SCOPE (merged review): add constant-span, streamwise, blade-aligned, theta and cone surfaces; inlet-outlet, hub-shroud and circumferential lines; machine-type report templates; isentropic and polytropic efficiency variables; 360-degree reconstruction. Acceptance addition: head coefficient, pressure ratio and efficiency on a published compressor or pump rotor match literature values within published uncertainty. WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL. Delivered (library only): rcfd_post::turbo with constant-span (cylinder or hub/shroud-curve family) and constant-streamwise (plane, cone) surfaces snapped to exact geometry, 360-degree reconstruction, circumferential and area/mass-flow-weighted station averages, pump head and hydraulic efficiency, compressor pressure ratio with isentropic and polytropic efficiency, head and flow coefficients, torque from the wall-moment integrals, and CSV/HTML performance reports. Checked only geometrically and algebraically (closed forms to 1e-13..1e-14; cylinder area error 8.8e-5 at 48 sectors). One registered check missed (plane area vs inscribed polygon, 2.85e-3, ignored t2_plane_area_polygon_known_miss; corrected test vs circular annulus passes). NO turbomachinery flow solution is validated and nothing was compared with a public pump or compressor case or published data, so the acceptance and its literature clause are NOT met. Not delivered: blade-aligned, theta and cone surface families beyond the above, inlet-outlet and hub-shroud lines, machine-type templates, radial (non-monotone z) machines, case-file or CLI hooks."
   },
   {
     "id": "F-124",

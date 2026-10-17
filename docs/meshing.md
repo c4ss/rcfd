@@ -85,3 +85,50 @@ conforming. Inside/outside by ray-cast parity along three irrational directions 
 * Sphere (r = 0.5) in [-2,2]^3, Lmax 3: 12656 cells (hex fraction 0.889), non-orthogonality 77.4 degrees (limit 70, known miss),
   skewness 0.61, aspect 11.4; volume error 4.2e-3 (Lmax 3), 1.2e-3 (Lmax 4), order 1.84.
 * Cavity on a generated mesh matches Ghia within 0.008 (limit 0.03). Not attempted: flat-plate y+/Cf. Not run: sphere drag.
+
+## Adaptation criteria, conforming refinement and polyhedral dual (F-102, ADR 0054, status partial)
+
+`rcfd_mesh::adapt` (library only, no case-file hook). `AmrMesh` is a forest of octrees (quadtrees along an unrefined axis) over a
+tensor box with arbitrary monotone base coordinates; children are exact halves on a finest-level integer lattice. A face next to
+finer leaves is replaced by the finer leaves' faces and every face loop includes all existing lattice vertices on its edges, so
+cells are hanging-node polyhedra, every cell is closed and every face is shared by two cells for any level distribution (the 2:1
+face balance is optional and measured with `max_face_level_jump`).
+
+* Criteria on a cell field: `gradient_indicator` (least-squares gradient magnitude, optionally scaled by cell length),
+  `hessian_indicator` (Frobenius norm of the least-squares Hessian), `zz_indicator` (`eta = |g* - g| sqrt(V)`, `g*` the
+  volume-weighted patch mean of the gradient), `region_indicator` (box, sphere, slab, distance to a `SurfaceIndex`).
+* `MarkSpec` turns an indicator into `Coarsen/Keep/Refine` with a dead band (`coarsen_below < refine_above`, the hysteresis) and
+  min/max level limits; `combine_marks` takes the finest request. A parent merges only when all children are leaves marked
+  Coarsen (and, with balance, no neighbour ends more than one level finer).
+* `AmrMesh::adapt(&marks, balance)` returns the new mesh, a `Transfer` and an `AdaptReport`. `transfer_field` supports `Injection`
+  (conservative) and `Linear` (least-squares gradient reconstruction in the parent; exact for linear fields, conservative);
+  coarsening is the volume-weighted mean. Measured: linear-field transfer error 6.7e-16; face level jump <= 1 with balance.
+* Solve test (`rcfd-fv/tests/amr_solve.rs`): manufactured tanh-front diffusion problem. Adapted beats the coarse mesh with fewer
+  cells than the fine mesh, but the registered "adapted within 3x of the uniform fine error" missed (3.71, ignored
+  `a4_adapted_vs_fine_known_miss`); a wider-band set-up registered afterwards passes (`a4b`). The acceptance wording "adapted
+  cavity matches fine uniform" was NOT tested on a cavity.
+* `rcfd_mesh::polydual::tet_to_polydual`: one polyhedron per tet vertex (edge rings through tet centroids, boundary rings closed
+  through boundary-triangle centroids and edge midpoints, boundary quads carry the triangle tag). Volume agrees with the tet mesh
+  to about 1e-15 and patch areas are exact (Kuhn box 80 cells up to 16 faces, tetrahedralised icosphere 163 cells). Merge-based
+  conversion, anisotropic criteria, target-node-count and edge-length-weighted criteria, precoarsening for multigrid are NOT done.
+* Solver use: the adapted mesh is a general polyhedral `Mesh`, so FV solves run on it; non-orthogonal correction needs deferred
+  iterations (ADR 0054 addendum 1).
+
+## Turbomachinery post-processing (F-123, ADR 0054, status partial)
+
+`rcfd_post::turbo` (library only). Cylindrical frame `TurboAxis` (origin, axis, theta reference).
+
+* `span_surface` / `span_surface_cylinder`: marching-tet cut of `r - R_s(z)`, then every vertex moved radially to the exact radius;
+  `SpanFamily::Curves` revolves `R_h + s (R_t - R_h)` (hub and shroud need strictly increasing z, so radial impellers are not
+  supported and give an error). `streamwise_surface`: revolved hub-to-shroud segment (plane, cone or cylinder) clipped between hub and
+  shroud and snapped in the meridional plane; normals point downstream. `reconstruct_360` rotates a passage surface.
+* Averages: `circumferential_mean` (arithmetic mean over equispaced angles of a pitch or the circle; aliases a harmonic when the
+  sample count divides it), `StationGrid::average` (Simpson in span times `r dl`): area-weighted `sum f A / sum A` and
+  mass-flow-weighted `sum rho(u.n) f A / sum rho(u.n) A`; zero net mass flow is an error.
+* Performance: pump head `dp0/(rho g)` and `eta = rho g H Q/(T omega)`, compressor `PR`, `tau`, `eta_is = (PR^k-1)/(tau-1)`,
+  `eta_p = k ln PR/ln tau`, head and flow coefficients, `torque_on_fluid` from `wall_force_and_moment`, `PerformanceReport` CSV
+  (17 digits) and escaped HTML.
+* Checks are geometric and algebraic (closed forms to 1e-13 to 1e-14; cylinder area error 8.8e-5 at 48 and 2.1e-5 at 96 sectors).
+  NO turbomachinery flow solution was computed, and nothing was compared with published pump or compressor data, so the roadmap
+  acceptance (public case, literature values) is not met. Registered plane-area expectation missed (ignored
+  `t2_plane_area_polygon_known_miss`, corrected test compares with the circular annulus).
