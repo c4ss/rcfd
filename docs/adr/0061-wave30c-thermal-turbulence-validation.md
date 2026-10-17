@@ -244,3 +244,44 @@ about 0.5 percent, and the integrand u(1 - u) of the free stream (about -0.005) 
 U_e(x) = u of the cell of the column whose centre is nearest to y = 0.25 (outside the layer everywhere, delta < 0.07); theta = integral of (u/U_e)(1 - u/U_e) dy by the trapezoid rule on the cell
 centres from the wall (u = 0) up to y = 0.15; Re_theta = theta U_e / nu; Cf = 2 tau_w / U_e^2 (same U_e); u+ = u / u_tau with u_tau = sqrt(tau_w) (rho = 1). All limits of D1 to D4 are unchanged.
 The SST runs use the model exactly as `flat_plate_sst.rs` (no wall-mode call, default turbulence convection), the k-epsilon runs set the wall function as `common/plate.rs`.
+
+## Addendum 5: measured results (all against the limits registered above, none widened)
+
+Commands: `cargo test --release -p rcfd-fv --test validation_sod`, `... --test validation_natural_convection [-- --ignored]`, `... --test validation_graetz [-- --ignored]`,
+`cargo test --release -p rcfd-turb --test validation_flat_plate_wall_law [-- --ignored]`. Cases ignored for run time or as known misses are named in the files.
+
+### A. Heated cavity (de Vahl Davis Table V, primary source)
+Finest meshes, errors against Table V (hot/cold flux imbalance below 1e-9, residual below 1e-9 everywhere except the coarsest Ra 1e6 mesh):
+| Ra | mesh | Nu_avg | u_max | v_max | Nu_max | orders (Nu, u, v) | GCI_fine(Nu) |
+|---|---|---|---|---|---|---|---|
+| 1e3 | 64 | 1.1176 (-0.04 %) | 3.645 (-0.11 %) | 3.693 (-0.10 %) | 1.506 (+0.05 %) | 2.27, 2.40, 2.39 | 0.024 % |
+| 1e4 | 80 | 2.2445 (+0.07 %) | 16.178 (0.00 %) | 19.617 (0.00 %) | 3.532 (+0.11 %) | 2.46, 2.78, 3.24 | 0.014 % |
+| 1e5 | 96 | 4.5220 (+0.07 %) | 34.779 (+0.14 %) | 68.612 (+0.03 %) | 7.726 (+0.12 %) | 0.88, 1.31, 2.75 | 0.024 % |
+| 1e6 | 128 | 8.8287 (+0.33 %) | 64.841 (+0.33 %) | 220.559 (+0.55 %) | 17.568 (-1.99 %) | 1.04, 8.5, none | 0.13 % |
+Ra 1e3, 1e4 and 1e5 meet A0 to A6 (Ra 1e5 and 1e6 are ignored tests, 7 min together). Locations: z(u_max), x(v_max) within 0.003 of the table for Ra <= 1e5; Nu_max location within 0.02 at Ra 1e5 (0.0837 vs 0.081).
+Ra 1e6 (`a_ra_1e6_known_miss`): A1 to A4 and A6 are met (Richardson Nu 8.819, +0.22 %), but two registered convergence checks miss: the 32 x 32 mesh does not reach the residual limit (limit cycle at 1.3e-2 after 40000
+iterations) and v_max is non-monotone over the sequence (220.642, 220.651, 220.559, a 0.04 % spread, 25 times below the paper's own accuracy statement). Diagnosis by inspection only; no corrected criterion is registered.
+
+### B. Sod
+All registered limits met by 19 tests; second-order n = 800 L1(rho) 3.6e-4 (Superbee) to 1.22e-3 (Minmod), L1(u) and L1(p) inside the registered 3e-3 (HLLC + van Leer RK3: 1.09e-3 and 4.2e-4); first order 4.9e-3 to 7.5e-3; observed orders 0.5 to 1.1 (see Addenda 1 and 2 for the two misses/defects).
+
+### C. Graetz
+Parallel plates, finest mesh (400 x 80), Nu_x against the NPTEL tables: constant T +0.22, +0.05, +0.02, -0.02, -0.04, -0.04 % at x+ = 0.001, 0.003, 0.005, 0.01, 0.02, 0.05; theta_b within 0.03 %; constant flux +0.30, +0.03, 0.00,
+-0.03, -0.04 % at 0.001, 0.005, 0.01, 0.03, 0.05. Observed order 2.1 (both), GCI_fine 0.03 and 0.02 %. C6 energy balance: 7.7385 vs 7.7398 (x+ 0.01), 7.5362 vs 7.5375 (0.05). All C1 to C6 met (15 s).
+Circular pipe, constant T: Nu_D 3.7154 vs 3.66 (+1.5 %), Nu(0.05) 3.741 (+2.2 %), Hausen Nu_m 7.262/7.248, 5.880/5.825, 4.674/4.692 (Gz 100, 50, 20): met, order 1.7, GCI 1.2 %. Constant flux: original C7 missed
+(Addendum 3), corrected C7' met: 4.4303 vs 4.36 (+1.6 %), order 1.56, GCI 2.3 %; refined diagnostic meshes give 4.397 at x+ = 0.115 and still decreasing toward 4.36.
+
+### D. Flat plate (Karman-Schoenherr and Coles, TMR data)
+SST wall-resolved (30 min, finest 280 x 220, 6805 iterations): Cf deviation from K-S at Re_theta 5000, 7500, 10000, 12500: -8.65, -6.44, -5.18, -4.36 % (finest); -10.6, -8.3, -7.0, -6.2 % (medium); -13.2, -11.0, -9.7, -8.9 % (coarse).
+D1 MISSES (`d1_sst_cf_vs_karman_schoenherr_known_miss`: three of four stations outside 5 %). D3 MISSES (`d3_sst_cf_mesh_convergence_known_miss`: 1.94 % > 1.5 %, order 0.55, GCI 5.3 %), the sequence is monotone toward K-S.
+D2 bands met (u+ within 3 % of Coles from y+ 1 to 1000; deviation grows from -1 % at y+ 20 to +2.9 % at y+ 400 because u_tau is low by the Cf deficit); the log-law fit MISSES (`d2_sst_loglaw_fit_known_miss`):
+slope 2.7766 (kappa_eff 0.360) vs 2.4866 and intercept 3.689 vs 4.775 over y+ 50 to 300; the registered D2 was split into a band test and a fit test with unchanged limits.
+Diagnosis of the Cf deficit (`diag_sst_medium_mesh_variants`, no limit): on the medium mesh -7.02 % becomes -7.13 % with linear-upwind convection of k and omega and -7.10 % with twice the streamwise cells, so the
+dependence is wall-normal (y+ 1, 0.5, 0.25 with growth 1.21, 1.10, 1.049), not streamwise resolution or turbulence convection scheme. Suspected: the first-cell-height dependent omega wall treatment of `KOmegaSst` (documented in the F-043
+note as strongly factor dependent); not proven, no solver change made.
+k-epsilon wall functions (y+ 30, 95 s each): met. Cf deviation from K-S at Re_theta 7500, 10000, 12500: Scalable -4.76, -3.40, -2.50 %; Standard -4.89, -3.59, -2.73 % (finest; coarse and medium within 0.1 % of these, i.e. mesh independent);
+u+ within 5 % of Coles for 30 <= y+ <= 300 on both. The realised first-cell y+ at the station is 29.9 (applicable). The earlier catalogue miss of the Standard function against Prandtl-Schlichting is therefore a statement about that reference,
+at least partly: against K-S at equal Re_theta the Standard function is inside 5 %, but only -4.9 % at the lowest station.
+
+### E. NACA 0012
+Not attempted, as registered.
