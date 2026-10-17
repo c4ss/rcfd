@@ -236,3 +236,11 @@ premise of C7, not a solver defect. The original constant-flux test stays as the
 C7' (registered before the corrected run): constant-flux pipe, length 30 (x+ up to 0.15), meshes (n, n_ring, nz) = (4, 3, 200), (6, 4, 300), (9, 6, 450); finest-mesh Nu_D at the last column within 2 percent of
 4.36; Nu_D(x+ = 0.005) more than 20 percent above 4.36; mesh sequence converging monotonically with observed order and GCI reported. The 5 percent Nu(x+ = 0.05) check does not apply to constant flux.
 The pipe constant-T C7 stands unchanged. A refined-mesh diagnostic (`diag_pipe_constant_flux_finer_mesh`) is kept ignored and has no limit.
+
+## Addendum 4 (before the first flat-plate run): edge velocity in the momentum thickness
+
+The registered theta(x) = integral of (u/U)(1 - u/U) dy with U = 1 is not usable on this domain: the symmetry top at y = 1 over a boundary layer of 0.03 to 0.06 speeds the outer flow up by
+about 0.5 percent, and the integrand u(1 - u) of the free stream (about -0.005) integrated over the 0.9 height outweighs theta (about 0.0017). Definition used instead, registered before the first run:
+U_e(x) = u of the cell of the column whose centre is nearest to y = 0.25 (outside the layer everywhere, delta < 0.07); theta = integral of (u/U_e)(1 - u/U_e) dy by the trapezoid rule on the cell
+centres from the wall (u = 0) up to y = 0.15; Re_theta = theta U_e / nu; Cf = 2 tau_w / U_e^2 (same U_e); u+ = u / u_tau with u_tau = sqrt(tau_w) (rho = 1). All limits of D1 to D4 are unchanged.
+The SST runs use the model exactly as `flat_plate_sst.rs` (no wall-mode call, default turbulence convection), the k-epsilon runs set the wall function as `common/plate.rs`.
