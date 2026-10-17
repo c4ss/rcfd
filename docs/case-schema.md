@@ -1249,3 +1249,11 @@ Without any `regions` entry nothing changes (recorded baseline hashes are bit-id
 Unset keys keep their default. Errors are located at the key (`linear_solver.device`, `linear_solver.chebyshev_degree`). `device = cuda` or
 `auto` with `solver.algorithm = coupled`, a compressible/energy setting or a non-constant density is a semantic error at
 `linear_solver.device`. A build without the cargo feature `cuda` reports `device = cuda` at `linear_solver.device`; `auto` falls back to the CPU.
+
+## Wave 27C: viscoelastic models and structural load export (F-135, F-237, ADR 0051)
+
+No case-tree keys were added. The viscoelastic constitutive library and coupled channel solver (`rcfd_fv::viscoelastic`)
+and the structural load export (`rcfd_post::structural`, `rcfd_io::nastran`, `rcfd_io::registry`) are library-level APIs
+only, so existing cases parse, validate and run exactly as before (baseline hashes unchanged). Their errors are located
+by the API argument (model parameter, patch name, element or grid id, deck line number), not by a case key. A case-tree
+section is future work.

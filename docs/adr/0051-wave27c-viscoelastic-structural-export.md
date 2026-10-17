@@ -185,3 +185,78 @@ F-237
   stability at high Weissenberg number. The item stays `partial`.
 * F-237: CGNS (and therefore the CGNS acceptance), third-party solver acceptance, heat-rate loads, case tree, curved surfaces other than
   a tensor-product parametrisation, solid-face `PLOAD4`. The item stays `partial`.
+
+## Addendum A: measured results, misses and deviations (after the runs)
+
+Registered limits are unchanged. Tests: `crates/rcfd-fv/tests/w27c_viscoelastic_homog.rs`, `w27c_viscoelastic_channel.rs`,
+`crates/rcfd-io/tests/w27c_registry.rs`, `crates/rcfd-post/tests/w27c_structural.rs`.
+
+### F-135 measured against limit
+
+| Check | Measured | Limit |
+|-------|----------|-------|
+| V1 Oldroyd-B start-up, corrected (viscometric scale), conformation / log | 6.0e-12 / 4.7e-10 | 1e-9 / 1e-6 |
+| V1 as registered (relative to the instantaneous value), conformation | 8.359e-9 | 1e-9 (MISS, ignored `known_miss`) |
+| V2 steady shear, Oldroyd-B | ~1e-14 | 1e-8 |
+| V3 PTT and FENE-P steady shear closed forms | 1e-14 .. 1e-12 | 1e-6 |
+| V3 Giesekus, derived implicit form (ODE vs Newton 2.6e-14) | passes | 1e-6 |
+| V3 Giesekus recalled literature formula | 5.1e-3 at Wi 0.1 | 1e-6 (MISS, ignored `known_miss`) |
+| V4 shear thinning monotone | strictly decreasing for all three | - |
+| V5 uniaxial extension Wi_e 0.4 / 0.5 / 0.6 | 8.2e-9 abs / 1.4e-13 (log 8.2e-11) / 5e-13 | per ADR |
+| V6 log-conformation min eigenvalue | 0.1727 | > 1e-6 (plain explicit Euler at dt = 2.5 lambda: -9e33, report only) |
+| V7 eigen / log reconstruction | 2.4e-15 | per ADR |
+| P1 modal series vs independent 1-D PDE | 1.0e-4 | 2e-3 |
+| P1 Poiseuille start-up vs series, ny 40 / ratio 20 -> 40 | 6.57e-3 / 0.664 | 2e-2 / 0.75 |
+| P2 steady Oldroyd-B vs Newtonian (eta_s + eta_p) | 6.5e-3, wall shear rel 4.1e-6 | 1e-2 |
+| P3 shear thinning profiles (corrected test): Giesekus / PTT / FENE-P | 2.49e-3 / 4.44e-3 / 6.89e-3 | 2e-2 |
+| P5 Newtonian limit | eta_p = 0: 0 (bit-identical); eta_p = 1e-10: 1.65e-11 | 1e-8 |
+| P6 baseline hashes | unchanged, passing | - |
+| P4 contraction / cylinder | NOT ATTEMPTED | - |
+
+Log-conformation and conformation formulations give identical P1 numbers (the stress there is smooth); the log-conformation
+advantage is shown by V6 only.
+
+### Deviations and misses
+
+1. V1 metric defect (set-up defect in the registered metric): the relative error against the instantaneous value is
+   dominated by rounding in C_xx - C_yy at tiny t (10x smaller dt does not improve it). The registered test is kept as the
+   ignored `v1_..._known_miss`; a new `..._corrected` test uses the viscometric scale with the same dt and limits.
+2. Giesekus closed form recalled from the literature (chi form) is wrong (5.1e-3 relative eta error at Wi = 0.1). Kept as an
+   ignored known-miss test; the closed form derived in this wave (f = -A_yy) is used and agrees with the ODE to 2.6e-14.
+3. P3 registered claim "centre velocity smaller than Newtonian" has the wrong sign (shear thinning raises the centre
+   velocity). The old test is ignored; `p3_..._corrected` asserts u_c > Newtonian and u(h/2)/u_c > 0.75, plus the closed-form
+   profile error limit.
+4. First coupled runs used zero-gradient velocity walls (set-up defect, centre u ~ 96); fixed in place to no-slip before any
+   valid run.
+5. Coupling is first order in time and Green-Gauss gradients on the stress carrier are used; documented limits, not misses.
+6. FENE-P normalisation recalled and unverified.
+
+### F-237 measured against limit
+
+| Check | Measured | Limit |
+|-------|----------|-------|
+| R1 registry | 12 supported cases pass, cgns/hdf5 NotSupported, tamper detected | per ADR |
+| R2 deck round trip, located errors | bit exact, `line N` errors | per ADR |
+| R3 uniform pressure, plane 8x8 -> 5x7, 13x11, 8x8 and tube 96x24 -> 64x20 | 0 relative | 4 eps |
+| R4 plane force 5x7 / 13x11 | 2.5e-16 / 1.3e-16 relative | 1e-12 |
+| R4 plane moment 5x7 / 13x11 | 2.4e-3 / 6.4e-4 of S L | 5e-3 |
+| R4 tube force |dF|/S | 1.55e-4 | 1e-3 |
+| R4 tube moment |dM|/(S R) | 1.8e-15 | 5e-3 |
+| R5 linear T nodal error, LeastSquares / ConservativeOverlap (8^3, 6^3, 5x7x3) | <= 2.4e-14 / <= 3.6e-15 | 1e-11 |
+| R5 integral of T conserved | <= 1.5e-16 | 1e-12 |
+| R6 located errors | all pass | per ADR |
+| R7 third-party solver acceptance | not testable, not claimed | - |
+
+Deviations: (a) the first R3 run gave 4.7e-15 against 4 eps (8.9e-16): the normalised overlap weights sum to 1 only up to
+rounding, so averaging p directly gives p (1 + O(n eps)). Root-cause fix in the mapping (shifted average about a reference
+value) before any recorded pass; the limit is unchanged and now met with 0. (b) The plane fluid mesh is `box_mesh([8,8,1])` with
+patch `zmax` (the ADR text wrote [8,1,8]; same geometry, axes named differently). (c) The tube moment is about the axis
+midpoint (0,0,0.5).
+
+### Not delivered
+
+CGNS and HDF5 (the "public CGNS example round trip" acceptance is not met), heat-rate loads and the heat-rate part of the
+F-237 acceptance, case-tree keys for both items (D6), planar contraction / cylinder benchmark, stress inflow/outflow BCs,
+second-order stress transport, 3-D viscoelastic flow, third-party solver acceptance. Both roadmap items stay `partial`.
+Unverified references: FENE-P normalisation, recalled Giesekus formula (found wrong), GRID / element node orders / CHEXA
+continuation / free-field syntax / PLOAD4 sign (PLOAD4 and TEMP layouts were read from pyNastran documentation).

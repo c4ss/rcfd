@@ -1135,9 +1135,9 @@
       "F-110",
       "F-029"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions",
-    "note": "P4 (long-term). Gap: differential viscoelastic model set; models are in the public rheology literature."
+    "note": "P4 (long-term). Gap: differential viscoelastic model set; models are in the public rheology literature. WAVE 27C (ADR 0051), PARTIAL at library level. rcfd-fv viscoelastic: Oldroyd-B, Giesekus, simplified linear PTT, FENE-P with conformation and log-conformation (divided-difference matrix-log chain rule, RK4 local advance), coupled 2-D channel solver (PimpleSolver with nu_s+nu_p implicit, div(tau_p)-nu_p lap u explicit source, first order in time). Measured (see ADR addendum A): homogeneous start-up/steady shear/extension at Wi_e 0.4, 0.5, 0.6 and positive definiteness pass; Poiseuille start-up vs modal series 6.6e-3 (limit 2e-2), steady Oldroyd-B vs Newtonian 6.5e-3, shear-thinning profiles 2.5e-3..6.9e-3. Misses kept as ignored known_miss tests: V1 instantaneous-value metric 8.4e-9 (limit 1e-9, corrected test uses viscometric scale), recalled Giesekus closed form wrong (5.1e-3), P3 centre-velocity sign. Not delivered: planar contraction / cylinder benchmark (the item acceptance names a contraction: NOT attempted), case-tree wiring, stress inflow/outflow BCs, second-order stress transport, 3-D, high-Wi stability claims. FENE-P normalisation unverified."
   },
   {
     "id": "F-136",
@@ -1780,9 +1780,9 @@
       "F-103",
       "F-072"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1 percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly; each listed format has a pass/fail conformance case",
-    "note": "Priority P3. Size M. Area: io. Format names stay in the format registry documentation, not in this item."
+    "note": "Priority P3. Size M. Area: io. Format names stay in the format registry documentation, not in this item. WAVE 27C (ADR 0051), PARTIAL. rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported), Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located errors), rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap plus linear recovery. Measured: uniform pressure exact (0 vs 4 eps), tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force), plane force 2.5e-16, moments within limits, linear temperature exact to 2.4e-14 on 3 structural meshes. Not delivered: public CGNS round trip (acceptance NOT met), heat-rate loads and the heat-rate part of the acceptance, case-tree wiring, third-party solver acceptance (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified)."
   },
   {
     "id": "F-238",
