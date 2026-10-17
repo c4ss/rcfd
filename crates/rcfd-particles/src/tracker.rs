@@ -577,7 +577,7 @@ fn advance_particle(
         let u_mean = fluid_at(mesh, flow, opts.interp, cell0, x0);
         let mut u_start = u_mean;
         if let Some(dc) = ctx.disp.as_deref_mut() {
-            if !(aux.eddy.t_left > 0.0) {
+            if aux.eddy.t_left.is_nan() || aux.eddy.t_left <= 0.0 {
                 let re = fl.rho * p.d * norm(sub(u_mean, v0)) / fl.mu;
                 let f = drag_factor(opts.drag, re);
                 let tau_eff = if f > 0.0 {

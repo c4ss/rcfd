@@ -79,6 +79,7 @@ fn with_cone(extra: &str) -> String {
 }
 
 #[test]
+#[allow(clippy::vec_init_then_push)]
 fn l14_located_errors_for_invalid_input() {
     let mut cases: Vec<(String, &str)> = Vec::new();
     cases.push((

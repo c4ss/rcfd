@@ -54,9 +54,7 @@ impl Coupling {
 
     /// Clear the record.
     pub fn reset(&mut self) {
-        for v in &mut self.impulse {
-            *v = [0.0; 3];
-        }
+        self.impulse.fill([0.0; 3]);
         self.energy_mech.iter_mut().for_each(|x| *x = 0.0);
         self.energy_heat.iter_mut().for_each(|x| *x = 0.0);
         self.wall_impulse = [0.0; 3];

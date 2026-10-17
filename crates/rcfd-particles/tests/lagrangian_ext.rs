@@ -567,7 +567,8 @@ fn l10_l11_size_distributions_and_mass_flow() {
     let (ua, ub) = (2.0e-5, 2.0e-4);
     let f_u = |d: f64| (d - ua) / (ub - ua);
     let mdot = 0.05;
-    let cases: Vec<(&str, SizeDist, Box<dyn Fn(f64) -> f64>)> = vec![
+    type Case<'a> = (&'static str, SizeDist, Box<dyn Fn(f64) -> f64 + 'a>);
+    let cases: Vec<Case<'_>> = vec![
         (
             "rosin_rammler",
             SizeDist::RosinRammler {
