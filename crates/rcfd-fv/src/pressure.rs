@@ -276,6 +276,25 @@ pub fn solve_pressure_parts_src(
     want_parts: bool,
     vol_src: Option<&[f64]>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
+    solve_pressure_parts_src_k(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, vol_src, None)
+}
+
+/// [`solve_pressure_parts_src`] with a volume source that is linear in the pressure, `S(p) = vol_src + slope (p - 0)`: `slope[c] <= 0`
+/// (m^3/(s Pa)) is `dS/dp` of cell `c`. The term is implicit, `diag -= slope` (positive, so the matrix stays symmetric positive
+/// definite) and the caller passes `vol_src = S_k - slope p_k` for a source linearised at the pressure `p_k` (the implicit
+/// cavitation coupling of ADR 0056). `None` is the unchanged path (no operation is added to it).
+#[allow(clippy::too_many_arguments)]
+pub fn solve_pressure_parts_src_k(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    want_parts: bool,
+    vol_src: Option<&[f64]>,
+    slope: Option<&[f64]>,
+) -> (f64, usize, Option<crate::simple::ResidualParts>) {
     let mut parts = None;
     let mut div = divergence(geom, phi_hby_a);
     if let Some(src) = vol_src {
@@ -291,6 +310,11 @@ pub fn solve_pressure_parts_src(
         let mut pm: FvMatrix = laplacian(geom, &gamma_eff, &bc.coeffs, grad);
         for (b, d) in pm.b.iter_mut().zip(&div) {
             *b -= d;
+        }
+        if let Some(k) = slope {
+            for (d, kk) in pm.a.diag.iter_mut().zip(k) {
+                *d -= kk;
+            }
         }
         // implicit periodic coupling: drop the lagged partner value, add the matrix entry
         let mut extras: Vec<(usize, usize, f64)> = Vec::new();
