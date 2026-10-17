@@ -1701,6 +1701,7 @@ pub fn case_schema() -> Schema {
         .field("thermal_interfaces", crate::cht::interfaces_schema())
         .field("particles", crate::particles::schema())
         .field("dynamic_mesh", crate::dynmesh::schema())
+        .field("multiphase", crate::vof::schema())
         .field(
             "boundaries",
             Schema::named(boundary).doc("Boundary conditions by patch name"),

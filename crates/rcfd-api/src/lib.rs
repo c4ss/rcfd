@@ -36,6 +36,7 @@ pub mod study;
 pub mod turb;
 pub mod udf;
 pub mod vd;
+pub mod vof;
 pub mod wall_motion;
 pub mod wall_opts;
 pub mod workflow;
