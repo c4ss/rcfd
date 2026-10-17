@@ -6,6 +6,8 @@ use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
 use rcfd_core::settings::Schema;
 use rcfd_core::vec3;
+use rcfd_fv::cavitation::Cavitation;
+use rcfd_fv::mixture::{DragLaw, MixtureSettings};
 use rcfd_fv::vof::{
     shape_fraction, MassTransfer, MassTransferModel, RelaxTarget, RelaxZone, Shape, VofSettings, VofSolver, WaveInlet,
     WaveSettings,
@@ -67,6 +69,29 @@ pub fn schema() -> Schema {
         .field("reference_point", Schema::list(Schema::float(0.0)).doc("Point [x, y, z] where p_rgh equals p (origin of the gravity potential g.(x - x_ref)); empty = the origin. For a tank with an open top set a point on the open boundary so that still water is in equilibrium with p_rgh = 0 there"))
         .field("mass_transfer", mass_transfer_schema())
         .field("waves", waves_schema())
+        .field("mixture", mixture_schema())
+        .field("cavitation", cavitation_schema())
+}
+
+fn mixture_schema() -> Schema {
+    Schema::object()
+        .doc("Mixture model with an algebraic-slip (drift-flux) relative velocity between a dispersed and a continuous phase (F-127, ADR 0056): the phase fraction is transported with the extra flux alpha (1 - alpha) v_12 (Godunov low-order flux, central high-order flux, Zalesak limiter), the momentum equation gets the drift mass flux and drift stress, and the slip is the gravity-driven single-particle speed (Stokes or Schiller-Naumann drag) times the hindrance (1 - alpha_d). Only the gravity acceleration drives the slip (no centrifugal or inertial terms) and the time derivative of the drift mass flux is dropped. NOT a multi-fluid (per-phase momentum) model")
+        .field("model", Schema::enumeration("none", &["none", "drift_flux"]).doc("none or drift_flux"))
+        .field("dispersed_phase", Schema::enumeration("phase_2", &["phase_1", "phase_2"]).doc("Which phase is the dispersed one (particles, droplets, bubbles)"))
+        .field("particle_diameter", Schema::float(UNSET).doc("Dispersed-phase diameter d_p [m] (> 0); -1 = unset"))
+        .field("drag", Schema::enumeration("stokes", &["stokes", "schiller_naumann"]).doc("Particle drag law: stokes (C_D = 24/Re) or schiller_naumann (C_D = 24/Re (1 + 0.15 Re^0.687), Re < 1000)"))
+}
+
+fn cavitation_schema() -> Schema {
+    Schema::object()
+        .doc("Schnerr-Sauer cavitation mass transfer with a bubble-number density (F-127, ADR 0056 D): inertia-controlled bubble growth from the Rayleigh-Plesset equation, bubbles of radius R with n per unit liquid volume, vapour source mdot = rho_v rho_l/rho_m alpha_v (1 - alpha_v) (3/R) sign(p_sat - p) sqrt(2 |p_sat - p|/(3 rho_l)). The radius is advanced exactly per step (bounded, any time step); the nucleus radius is the floor and the inception seed (every cell starts with the nuclei vapour fraction). Isothermal, no vapour compressibility, no non-condensable gas, no turbulence correction. A pressure patch (boundaries.<patch>.pressure = fixed) is required; the pressure is the absolute p = p_rgh + rho g.(x - x_ref). Exclusive with mass_transfer and mixture")
+        .field("model", Schema::enumeration("none", &["none", "schnerr_sauer"]).doc("none or schnerr_sauer"))
+        .field("liquid_phase", Schema::enumeration("phase_1", &["phase_1", "phase_2"]).doc("Which phase is the liquid (the other is its vapour)"))
+        .field("saturation_pressure", Schema::float(UNSET).doc("Vapour pressure p_sat [Pa] (> 0); -1 = unset"))
+        .field("bubble_number_density", Schema::float(UNSET).doc("Number of bubbles per unit volume of liquid n [1/m^3] (> 0); -1 = unset"))
+        .field("nucleus_radius", Schema::float(UNSET).doc("Nucleus radius R_0 [m] (> 0): the smallest bubble radius and the initial vapour fraction n 4/3 pi R_0^3/(1 + n 4/3 pi R_0^3); -1 = unset"))
+        .field("vaporisation_factor", Schema::float(1.0).at_least(0.0).doc("Multiplier of the evaporation rate (1 = the pure inertial rate)"))
+        .field("condensation_factor", Schema::float(1.0).at_least(0.0).doc("Multiplier of the condensation rate (1 = the pure inertial rate)"))
 }
 
 fn mass_transfer_schema() -> Schema {
@@ -386,6 +411,46 @@ fn extension_inert(case: &Case, out: &mut Vec<Diagnostic>) {
             "only used with multiphase.enabled = true",
         ));
     }
+    // mixture and cavitation (ADR 0056): sub-keys are inert while their model is off or multiphase is disabled
+    for (sec, keys) in [
+        ("mixture", vec![("dispersed_phase", "phase_2"), ("drag", "stokes")]),
+        ("cavitation", vec![("liquid_phase", "phase_1")]),
+    ] {
+        let m = get_s(case, &format!("multiphase.{sec}.model"));
+        let off = m == "none" || !enabled(case);
+        if m != "none" && !enabled(case) {
+            out.push(d(
+                format!("multiphase.{sec}.model"),
+                "only used with multiphase.enabled = true",
+            ));
+        }
+        if off {
+            let why = format!("only used with multiphase.{sec}.model != \"none\" (and multiphase.enabled = true)");
+            for (k, def) in keys {
+                let p = format!("multiphase.{sec}.{k}");
+                if get_s(case, &p) != def {
+                    out.push(d(p, why.clone()));
+                }
+            }
+            let floats: &[(&str, f64)] = if sec == "mixture" {
+                &[("particle_diameter", UNSET)]
+            } else {
+                &[
+                    ("saturation_pressure", UNSET),
+                    ("bubble_number_density", UNSET),
+                    ("nucleus_radius", UNSET),
+                    ("vaporisation_factor", 1.0),
+                    ("condensation_factor", 1.0),
+                ]
+            };
+            for (k, def) in floats {
+                let p = format!("multiphase.{sec}.{k}");
+                if get_f(case, &p) != *def {
+                    out.push(d(p, why.clone()));
+                }
+            }
+        }
+    }
     let model = get_s(case, "multiphase.mass_transfer.model");
     let why = if model == "none" || !enabled(case) {
         Some("only used with multiphase.mass_transfer.model != \"none\" (and multiphase.enabled = true)")
@@ -469,6 +534,72 @@ fn extension_inert(case: &Case, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Settings checks of the mixture and cavitation sections (multiphase enabled).
+fn check_mixture_cavitation(case: &Case, out: &mut Vec<Diagnostic>) {
+    let mx = get_s(case, "multiphase.mixture.model");
+    let cv = get_s(case, "multiphase.cavitation.model");
+    let tm = get_s(case, "multiphase.mass_transfer.model");
+    if mx == "drift_flux" {
+        if get_f(case, "multiphase.mixture.particle_diameter") <= 0.0 {
+            out.push(d(
+                "multiphase.mixture.particle_diameter",
+                "mixture.model = \"drift_flux\" needs a positive particle_diameter [m] (-1 = unset)",
+            ));
+        }
+        if vec3::norm(get_v(case, "physics.gravity", [0.0; 3])) <= 0.0 {
+            out.push(d(
+                "physics.gravity",
+                "the algebraic slip is driven by gravity: mixture.model = \"drift_flux\" needs a non-zero physics.gravity",
+            ));
+        }
+        if tm != "none" {
+            out.push(d(
+                "multiphase.mixture.model",
+                "the mixture model cannot be combined with multiphase.mass_transfer.model (untested combination)",
+            ));
+        }
+        if cv != "none" {
+            out.push(d(
+                "multiphase.mixture.model",
+                "the mixture model cannot be combined with multiphase.cavitation.model (untested combination)",
+            ));
+        }
+    }
+    if cv == "schnerr_sauer" {
+        for (k, what) in [
+            ("saturation_pressure", "vapour pressure [Pa]"),
+            ("bubble_number_density", "bubble-number density [1/m^3]"),
+            ("nucleus_radius", "nucleus radius [m]"),
+        ] {
+            let p = format!("multiphase.cavitation.{k}");
+            if get_f(case, &p) <= 0.0 {
+                out.push(d(
+                    p,
+                    format!("cavitation.model = \"schnerr_sauer\" needs a positive {k}, the {what} (-1 = unset)"),
+                ));
+            }
+        }
+        if tm != "none" {
+            out.push(d(
+                "multiphase.cavitation.model",
+                "cavitation cannot be combined with multiphase.mass_transfer.model (both create volume)",
+            ));
+        }
+        let has_pressure_patch = case
+            .tree
+            .names("boundaries")
+            .unwrap_or_default()
+            .iter()
+            .any(|n| get_s(case, &format!("boundaries.{n}.pressure")) == "fixed");
+        if !has_pressure_patch {
+            out.push(d(
+                "multiphase.cavitation.model",
+                "cavitation creates volume: at least one boundary needs pressure = \"fixed\" for it to leave through",
+            ));
+        }
+    }
+}
+
 /// Settings checks of the mass-transfer and wave sections (multiphase enabled).
 fn check_extensions(case: &Case, out: &mut Vec<Diagnostic>) {
     let nonempty_len = |p: &str| {
@@ -484,6 +615,7 @@ fn check_extensions(case: &Case, out: &mut Vec<Diagnostic>) {
     }
     let model = get_s(case, "multiphase.mass_transfer.model");
     extension_inert(case, out);
+    check_mixture_cavitation(case, out);
     if model != "none" {
         for k in ["saturation_temperature", "latent_heat", "temperature"] {
             let p = format!("multiphase.mass_transfer.{k}");
@@ -749,6 +881,36 @@ impl VofState {
                 t_sat: get_f(case, &mp("saturation_temperature")),
                 h_fg: get_f(case, &mp("latent_heat")),
                 temperature,
+            });
+        }
+        if get_s(case, "multiphase.mixture.model") == "drift_flux" {
+            s.mixture = Some(MixtureSettings {
+                dispersed_phase: if get_s(case, "multiphase.mixture.dispersed_phase") == "phase_1" {
+                    1
+                } else {
+                    2
+                },
+                diameter: get_f(case, "multiphase.mixture.particle_diameter"),
+                drag: if get_s(case, "multiphase.mixture.drag") == "schiller_naumann" {
+                    DragLaw::SchillerNaumann
+                } else {
+                    DragLaw::Stokes
+                },
+            });
+        }
+        if get_s(case, "multiphase.cavitation.model") == "schnerr_sauer" {
+            let cp = |k: &str| format!("multiphase.cavitation.{k}");
+            s.cavitation = Some(Cavitation {
+                liquid_phase: if get_s(case, &cp("liquid_phase")) == "phase_2" {
+                    2
+                } else {
+                    1
+                },
+                p_sat: get_f(case, &cp("saturation_pressure")),
+                n0: get_f(case, &cp("bubble_number_density")),
+                r_nucleus: get_f(case, &cp("nucleus_radius")),
+                f_vap: get_f(case, &cp("vaporisation_factor")),
+                f_cond: get_f(case, &cp("condensation_factor")),
             });
         }
         let inlet_patch = get_s(case, &wp("inlet_patch"));
