@@ -1,0 +1,14 @@
+quantity,value
+rho_left,1.0
+p_left,1.0
+rho_right,0.125
+p_right,0.1
+gamma,1.4
+t_end,0.2
+fan_head_speed,-1.18322
+fan_tail_speed,-0.07027
+contact_speed_u_star,0.92745
+p_star,0.30313
+rho_star_left,0.42632
+rho_star_right,0.26557
+shock_speed,1.75216
