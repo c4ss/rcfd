@@ -111,6 +111,7 @@ Per check, measured against the registered limit. All numbers from `cargo test -
 | M3 periodicity | node rotation 1.1e-16 m, face centres 2.4e-16 m; `FvGeometry::new` accepts | 1e-12 m | pass |
 | M4 set-up A (138 192 cells) | non-orth 73.4 deg (mean 12.5, p99 47.1, 2 707 above 50, 23 above 60), skewness 7.57, aspect 810 | 70, 2.0, 300 | MISS, `m4_quality_gates_known_miss` (ignored, limits intact) |
 | M4 set-up B (239 472 cells) | 89.8 deg (p99 58.2, 14 286 above 50, 3 306 above 60), skewness 66, aspect 19 123 | 70, 2.0, 3000 | MISS (same test) |
+| M4 set-up A with `n_mid = 1` (a different set-up, everything else as A, 133 104 cells) | non-orth 68.3 deg, skewness 0.75, aspect 405 | 70, 2.0, 300 | two of three gates pass (`m4_set_up_a_single_mid_cell_meets_two_of_three_gates`); aspect MISS (`m4_set_up_a_single_mid_cell_aspect_known_miss`, ignored). The three middle-band cells of the registered A raise the shear; set-up B with `n_mid = 1` is unchanged (89.8 deg, 66) |
 | M5 set-up A | 4.5e-13 relative, h1 from y+ exact to 1e-14, centre y+ exact | 1e-12, 1e-14 | pass |
 | M5 set-up B at 1e-12 | 9.9e-12 | 1e-12 | MISS, `m5_first_cell_b_1e12_known_miss` (ignored); set-up defect: h1 = 7.3e-6 at coordinates up to 0.3 is below the f64 resolution of a coordinate difference (eps * 0.4 / h1 = 1.2e-11); corrected test at 4 eps * 0.4 / h1 passes |
 | S1 empty passage | 1.2e-12 of U | 1e-8 | pass (the residual normalisation of the steady solver stays large, the 400 iterations report not converged, the field is exact from the start) |
@@ -130,3 +131,5 @@ Deviations and fixes made during the work (nothing in the criteria above was edi
 * Cases hook: `mesh.generator = "axial_fan_sector"`, nested section `mesh.fan` (rcfd-api `fan_case.rs`), example `cases/axial_fan_sector`.
 
 Not claimed: any accuracy of fan performance, any comparison with a published fan, y+ of a converged solution, sharp or rounded edges.
+
+After the final-gate run found that the example case (n_mid = 2, non-orthogonality 78 deg) raises the rules warning SV101, the example uses `n_mid = 1` (13 332 cells, non-orthogonality 69.6 deg, aspect 392). The n_mid dependence was found by a scan of the small set-up (n_mid 1 / 2 / 3: 69.6 / 78.1 / 81.4 deg; truncation 0.05 to 0.15 with n_mid = 1: 65.5 to 67.8 deg).

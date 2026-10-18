@@ -181,7 +181,7 @@ resolution, a spacing of 7.3e-6 at coordinates of 0.3).
 trailing face at mid-span (aspect 810, skewness 7.6, non-orthogonality 73 deg): the band is only the trailing-face thickness
 high there while the axial spacing is the boundary-layer first cell; the axial columns are sheared by about the stagger angle
 against the blade seams. The cause was located by cell index; a topology that turns the grid lines with the blade (O-grid or
-C-grid) is the likely remedy and was not attempted. Two generator fixes (smoothing of the pitchwise line displacement, opening of
+C-grid) is the likely remedy and was not attempted. With a single cell across the blunt edge faces (`n_mid = 1`) set-up A reaches 68.3 deg and skewness 0.75 (both inside the gates) and aspect ratio 405 (gate 300 missed); more cells across the blunt faces make the shear worse. Two generator fixes (smoothing of the pitchwise line displacement, opening of
 the band toward the inlet and outlet) reduced aspect from 2 562 and non-orthogonality from 88 deg but not below the gates.
 
 **Solver use.** The sector is accepted by `FvGeometry::new` (the existing rotational periodicity). The absolute-formulation `mrf`

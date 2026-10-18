@@ -312,5 +312,5 @@ fn example_case_parses_and_builds() {
     let text = include_str!("../../../cases/axial_fan_sector/axial_fan_sector.toml");
     let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
     let sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
-    assert_eq!(sim.geom.mesh.n_cells(), 13784);
+    assert_eq!(sim.geom.mesh.n_cells(), 13332);
 }

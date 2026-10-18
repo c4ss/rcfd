@@ -577,6 +577,30 @@ fn m4_quality_gates_known_miss() {
     assert!(qb.max_non_orthogonality <= 70.0 && qb.max_skewness <= 2.0 && qb.max_aspect_ratio <= 3000.0);
 }
 
+/// Set-up A with a single cell across the blunt edge faces (`n_mid = 1`, everything else as A): a different set-up, kept beside
+/// the registered one. Non-orthogonality and skewness meet the registered gates; the aspect ratio does not (405 against 300).
+#[test]
+fn m4_set_up_a_single_mid_cell_meets_two_of_three_gates() {
+    let mut spec = spec_a();
+    spec.n_mid = 1;
+    let sm = build_sector_mesh(&blade_b(), &spec).unwrap();
+    let q = report_quality("A, n_mid 1", &sm);
+    closed_cells_and_topology(&sm.mesh);
+    first_cell_checks(&sm, 1e-12);
+    assert!(q.max_non_orthogonality <= 70.0, "non-orth {}", q.max_non_orthogonality);
+    assert!(q.max_skewness <= 2.0, "skew {}", q.max_skewness);
+}
+
+/// The aspect gate of that set-up (300): KNOWN MISS, 405.
+#[test]
+#[ignore = "known miss: aspect ratio 405 against the registered 300 for A with n_mid = 1, see ADR 0065 addendum"]
+fn m4_set_up_a_single_mid_cell_aspect_known_miss() {
+    let mut spec = spec_a();
+    spec.n_mid = 1;
+    let sm = build_sector_mesh(&blade_b(), &spec).unwrap();
+    assert!(report_quality("A, n_mid 1", &sm).max_aspect_ratio <= 300.0);
+}
+
 fn zs_of(sm: &SectorMesh, i: usize, j: usize, k: usize) -> (f64, f64) {
     let p = sm.grid[sm.node(i, j, k)];
     let r = p[0].hypot(p[1]);
