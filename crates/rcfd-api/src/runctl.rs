@@ -304,8 +304,12 @@ pub fn drive(
                 let (steady, conv) = (g.is_steady(), g.is_converged());
                 let reason = g.stop_reason().unwrap_or("finished").to_string();
                 let failure = g.failure().map(String::from);
+                let diverged = g.diverged();
                 drop(g);
-                break if let Some(f) = failure {
+                break if let (Some(f), true) = (&failure, diverged) {
+                    // the PIMPLE/PISO divergence guard (ADR 0067) is a divergence, as non-finite residuals are
+                    finish("diverged", exit::DIVERGED, f.clone())
+                } else if let Some(f) = failure {
                     finish("failed", exit::FAIL, f)
                 } else if conv {
                     finish("converged", exit::OK, reason)
@@ -386,7 +390,14 @@ pub fn drive(
             pending = Some(body);
         }
         if !step.res_u.is_finite() || !step.res_p.is_finite() {
-            break finish("diverged", exit::DIVERGED, "residuals are not finite".into());
+            let why = {
+                let g = lock_sim(sim);
+                g.diverged()
+                    .then(|| g.failure().map(String::from))
+                    .flatten()
+                    .unwrap_or_else(|| "residuals are not finite".into())
+            };
+            break finish("diverged", exit::DIVERGED, why);
         }
         if opts.checkpoint_every > 0 && steps % opts.checkpoint_every == 0 {
             save(&mut seq, sink, "periodic");

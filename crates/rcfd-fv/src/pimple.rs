@@ -73,6 +73,67 @@ pub struct PimpleSettings {
     pub full_viscous_stress: bool,
     /// Non-iterative fractional-step (projection) advance instead of the PISO/PIMPLE loop (ADR 0037); `None` = PISO.
     pub fractional: Option<fractional::FractionalSettings>,
+    /// Divergence guard (ADR 0067): a step whose maximum Courant number exceeds this limit, or whose velocity, pressure or flux
+    /// is not finite, stops the run with a located [`Divergence`]. Default [`DEFAULT_DIVERGENCE_COURANT_LIMIT`]; a non-finite
+    /// state is always fatal.
+    pub divergence_courant_limit: f64,
+}
+
+/// Default Courant number above which a step is declared diverged (ADR 0067).
+pub const DEFAULT_DIVERGENCE_COURANT_LIMIT: f64 = 1e6;
+
+/// Where and why the divergence guard stopped a run (ADR 0067).
+#[derive(Debug, Clone)]
+pub struct Divergence {
+    /// Step number (1-based) that tripped.
+    pub step: usize,
+    /// Outer iteration (0-based) in progress, `None` for a check after the step.
+    pub outer: Option<usize>,
+    /// Stage of the algorithm: `momentum predictor`, `pressure right-hand side`, `pressure solve`,
+    /// `velocity correction`, `end of step`.
+    pub stage: &'static str,
+    /// Quantity that was bad: `velocity`, `phiHbyA`, `pressure`, `flux`, `courant`.
+    pub quantity: &'static str,
+    /// Cell (or owner cell of a face) holding the first bad value, if known.
+    pub cell: Option<usize>,
+    /// The offending value.
+    pub value: f64,
+    /// The Courant limit that applied.
+    pub limit: f64,
+    /// The record returned for the tripping step and for every later `step` call.
+    pub info: StepInfo,
+}
+
+impl Divergence {
+    /// One-line located message; `centres` (cell centres of the mesh) adds the position of the cell.
+    pub fn message(&self, centres: Option<&[Vec3]>) -> String {
+        let at = match (self.cell, centres) {
+            (Some(c), Some(x)) if c < x.len() => {
+                format!(", cell {c} at ({:.4e}, {:.4e}, {:.4e})", x[c][0], x[c][1], x[c][2])
+            }
+            (Some(c), _) => format!(", cell {c}"),
+            _ => String::new(),
+        };
+        let outer = self
+            .outer
+            .map_or(String::new(), |o| format!(", outer iteration {}", o + 1));
+        let what = if self.quantity == "courant" {
+            format!(
+                "maximum Courant number is {:.4e}, above the limit {:.1e}",
+                self.value, self.limit
+            )
+        } else {
+            format!("{} is {} (not finite)", self.quantity, self.value)
+        };
+        format!(
+            "PIMPLE divergence guard: {what} at step {}{outer}, {}{at}; lower solver.dt or the relaxation factors",
+            self.step, self.stage
+        )
+    }
+}
+
+fn first_nonfinite(v: &[f64]) -> Option<(usize, f64)> {
+    v.iter().copied().enumerate().find(|(_, x)| !x.is_finite())
 }
 
 impl PimpleSettings {
@@ -103,6 +164,7 @@ impl PimpleSettings {
             linear: LinearOptions::default(),
             full_viscous_stress: false,
             fractional: None,
+            divergence_courant_limit: DEFAULT_DIVERGENCE_COURANT_LIMIT,
         }
     }
 
@@ -257,6 +319,9 @@ pub struct PimpleSolver {
     pub(crate) ale: Option<moving::AleStep>,
     /// Pressure increment of the previous fractional step (lagged boundary treatment, ADR 0037).
     pub(crate) fs_q: Vec<f64>,
+    /// Set when the divergence guard stopped the run (ADR 0067); every later `step` returns at once. Cleared by `restore`
+    /// and `reinitialise`.
+    pub diverged: Option<Divergence>,
 }
 
 impl PimpleSolver {
@@ -284,7 +349,68 @@ impl PimpleSolver {
             face_jump: None,
             ale: None,
             fs_q: Vec::new(),
+            diverged: None,
         }
+    }
+
+    /// Record a trip of the divergence guard and build the record returned for the step.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn trip(
+        &mut self,
+        dt: f64,
+        outer: Option<usize>,
+        stage: &'static str,
+        quantity: &'static str,
+        cell: Option<usize>,
+        value: f64,
+        (res_u, res_p, p_iters): (f64, f64, usize),
+    ) -> StepInfo {
+        let limit = self.settings.divergence_courant_limit;
+        let info = StepInfo {
+            step: self.step_no,
+            time: self.time,
+            dt,
+            courant: if quantity == "courant" { value } else { f64::NAN },
+            continuity: f64::NAN,
+            res_u,
+            res_p,
+            p_iters,
+        };
+        self.diverged = Some(Divergence {
+            step: self.step_no,
+            outer,
+            stage,
+            quantity,
+            cell,
+            value,
+            limit,
+            info,
+        });
+        info
+    }
+
+    /// Check after the pressure/velocity update of a step and before the history advances (ADR 0067): finite flux and
+    /// velocity and a Courant number within the limit. Returns the tripping record, if any.
+    pub(crate) fn guard_end(&mut self, dt: f64, courant: f64, res: (f64, f64, usize)) -> Option<StepInfo> {
+        if let Some((f, v)) = first_nonfinite(&self.phi) {
+            let cell = self.geom.mesh.owner().get(f).copied();
+            return Some(self.trip(dt, None, "end of step", "flux", cell, v, res));
+        }
+        if let Some((c, v)) = self.bad_velocity() {
+            return Some(self.trip(dt, None, "end of step", "velocity", Some(c), v, res));
+        }
+        let limit = self.settings.divergence_courant_limit;
+        if !courant.is_finite() || courant > limit {
+            return Some(self.trip(dt, None, "end of step", "courant", None, courant, res));
+        }
+        None
+    }
+
+    /// First cell with a non-finite velocity component.
+    fn bad_velocity(&self) -> Option<(usize, f64)> {
+        let c = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite()))?;
+        let v = self.u.values[c].iter().copied().find(|x| !x.is_finite())?;
+        Some((c, v))
     }
 
     /// Advance one time step of size `dt`.
@@ -296,6 +422,10 @@ impl PimpleSolver {
     /// velocity and flux and supplies the solution-dependent momentum sources of that iteration (ADR 0045). The hook is not
     /// used by the non-iterative fractional-step advance.
     pub fn step_with(&mut self, dt: f64, mut hook: Option<&mut OuterHook>) -> StepInfo {
+        if let Some(d) = &self.diverged {
+            // the guard has stopped this run (ADR 0067): do no work
+            return d.info;
+        }
         if self.settings.fractional.is_some() && self.ale.is_none() {
             return self.step_fractional(dt);
         }
@@ -482,6 +612,17 @@ impl PimpleSolver {
                 mats[k] = Some(m);
                 links[k] = lk;
             }
+            if let Some((c, v)) = self.bad_velocity() {
+                return self.trip(
+                    dt,
+                    Some(outer),
+                    "momentum predictor",
+                    "velocity",
+                    Some(c),
+                    v,
+                    (res_u, res_p, p_iters),
+                );
+            }
             for a in a_p.iter_mut() {
                 *a /= n_active;
             }
@@ -531,6 +672,18 @@ impl PimpleSolver {
                         gamma_j[f] = gamma_p[f] / den;
                     }
                 }
+                if let Some((f, v)) = first_nonfinite(&phi_hby_a) {
+                    let cell = mesh.owner().get(f).copied();
+                    return self.trip(
+                        dt,
+                        Some(outer),
+                        "pressure right-hand side",
+                        "phiHbyA",
+                        cell,
+                        v,
+                        (res_u, res_p, p_iters),
+                    );
+                }
                 let controls = PressureControls {
                     p_ref: s.p_ref,
                     non_orth_correctors: s.non_orth_correctors,
@@ -544,6 +697,17 @@ impl PimpleSolver {
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
+                }
+                if let Some((c, v)) = first_nonfinite(&p_new) {
+                    return self.trip(
+                        dt,
+                        Some(outer),
+                        "pressure solve",
+                        "pressure",
+                        Some(c),
+                        v,
+                        (res_u, res_p, p_iters),
+                    );
                 }
                 self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
@@ -562,6 +726,17 @@ impl PimpleSolver {
                         }
                     }
                 }
+                if let Some((c, v)) = self.bad_velocity() {
+                    return self.trip(
+                        dt,
+                        Some(outer),
+                        "velocity correction",
+                        "velocity",
+                        Some(c),
+                        v,
+                        (res_u, res_p, p_iters),
+                    );
+                }
                 let last_corr = corr + 1 == s.n_correctors;
                 let a = if last_corr { alpha_p } else { 1.0 };
                 for c in 0..n {
@@ -571,6 +746,10 @@ impl PimpleSolver {
         }
 
         // ---- finish the step ------------------------------------------------
+        let courant = max_courant(&g, &self.phi, dt);
+        if let Some(info) = self.guard_end(dt, courant, (res_u, res_p, p_iters)) {
+            return info;
+        }
         for k in 0..3 {
             let new: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
             self.hist_u[k].push(new, dt);
@@ -583,7 +762,7 @@ impl PimpleSolver {
             step: self.step_no,
             time: self.time,
             dt,
-            courant: max_courant(&g, &self.phi, dt),
+            courant,
             continuity: cont / area_scale.max(1e-300),
             res_u,
             res_p,
@@ -813,6 +992,7 @@ impl PimpleSolver {
         self.phi_hist = st.phi_hist.clone();
         self.history.clear();
         self.history.extend(st.last);
+        self.diverged = None;
         Ok(())
     }
 
@@ -846,6 +1026,7 @@ impl PimpleSolver {
         self.time = time;
         self.step_no = 0;
         self.history.clear();
+        self.diverged = None;
         Ok(())
     }
 }
