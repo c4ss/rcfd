@@ -7,6 +7,7 @@ pub mod chemistry;
 pub mod cht;
 pub mod comp;
 pub mod decomp;
+pub mod design;
 pub mod dynmesh;
 pub mod electric;
 pub mod exprs;

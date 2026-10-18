@@ -3528,6 +3528,27 @@ impl Simulation {
     }
 
     /// Initialise this simulation from a solution computed on another mesh (F-115, the
+    /// Start the run from the given cell velocity and pressure (a warm start for the next point of an operating map, ADR 0067):
+    /// the face flux is rebuilt, the iteration counter restarts at zero and the convergence flags are cleared. Available for the
+    /// steady SIMPLE/SIMPLEC engine without scalar, energy or turbulence fields to carry over; other set-ups return `Err` and
+    /// the caller starts cold.
+    pub fn seed_fields(&mut self, u: Vec<Vec3>, p: Vec<f64>) -> std::result::Result<(), String> {
+        if self.turb.is_some() || self.energy.is_some() {
+            return Err(
+                "warm start carries velocity and pressure only; this case has energy or turbulence fields".into(),
+            );
+        }
+        let Engine::Steady(s) = &mut self.engine else {
+            return Err("warm start is available for the steady SIMPLE and SIMPLEC algorithms".into());
+        };
+        s.set_fields(u, p).map_err(|e| e.to_string())?;
+        self.done = false;
+        self.converged = false;
+        self.last = None;
+        self.stop_reason = None;
+        Ok(())
+    }
+
     /// solution transfer between meshes for initialisation. `src_case`
     /// describes the source mesh and `checkpoint` is a checkpoint written for it; velocity,
     /// pressure and (when both cases solve the energy equation) temperature are interpolated onto
