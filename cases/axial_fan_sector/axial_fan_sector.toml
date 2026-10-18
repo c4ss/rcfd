@@ -4,7 +4,7 @@
 #
 # SCOPE: a smoke case for the geometry, the mesh and the plumbing (axial inflow, outlet pressure, hub and blade no-slip in the
 # rotating frame, shroud stationary in the absolute frame). It is laminar at Re_c of about 5 and NOT a prediction of fan
-# performance: the mesh has blunt axially truncated blade edges and misses the registered quality gates of ADR 0065 M4.
+# performance: the mesh has blunt axially truncated blade edges and is at the edge of the registered quality gates of ADR 0065 M4 (non-orthogonality 69.6 deg, aspect ratio 392).
 title = "axial fan, single periodic passage (laminar smoke case)"
 
 [mesh]
@@ -33,7 +33,7 @@ n_up = 8
 n_chord = 12
 n_down = 8
 n_side = 10
-n_mid = 2
+n_mid = 1
 n_span = 16
 n_gap = 7
 n_bl = 2
