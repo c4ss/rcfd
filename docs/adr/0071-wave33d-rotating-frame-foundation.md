@@ -111,4 +111,49 @@ Written after the first runs of C1-C5 and the first, failed C6 run, before C6c w
   (32, 32, 56): G error <= 0.08, F error <= 0.1 max F, convergence (`tolerance_u = tolerance_p = 1e-7`, 6000 iterations); the coarse mesh is reported only.
 
 ## Addendum (measured values)
-(filled after the runs)
+
+All runs are release builds, one run per set-up (no set-up was run twice to pick a favourable one; the corrected set-ups named in the amendments are new tests).
+Tests: `crates/rcfd-fv/tests/rotating_foundation.rs` (6 tests: 3 pass, 3 ignored known misses) and `crates/rcfd-api/tests/rotating_foundation.rs` (18 tests: 10 pass, 8 ignored).
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| C1a `rotating_frame`, rest in the inertial frame, 3 meshes | max abs(u_rel)/(Omega r_o) 1.0e-13, 4.9e-13, 3.3e-12; pressure error 1.7e-3, 5.2e-4, 1.4e-4 of range | 1e-3; 1e-2 | pass |
+| C1b `mrf`, walls at Omega x r, 3 meshes | velocity 1.58e-2, 4.2e-3, 1.1e-3; pressure 3.14e-2, 1.92e-2, 1.06e-2 | 2e-2; 5e-2 | pass (the M1 pressure miss of ADR 0008 was on the interface mesh, a different set-up) |
+| C2a Taylor-Couette, `rotating_frame`, full annulus (registered set-up) | not converged on 12 x 4 x 2 in 4000 iterations (end-plane correction of ADR 0010 missing) | converged | MISS of the set-up, ignored `c2a_taylor_couette_in_the_rotating_frame_mesh_sequence_known_miss` |
+| C2a corrected (`component_diagonal = corrected`) | errors 9.76e-2, 2.61e-2, 6.76e-3 V_i; orders 1.90, 1.95 | finest <= 5e-3; orders >= 1.0, mean >= 1.5 | orders PASS; finest-mesh error MISS 6.76e-3 (ignored `c2a_corrected_finest_error_known_miss`) |
+| C2b periodic sector (fv level) | errors 9.74e-2, 2.61e-2, 6.76e-3 V_i; orders 1.90, 1.95 | same | orders PASS; finest MISS 6.76e-3 (ignored `c2b_finest_error_known_miss`). Sector and full annulus agree to 4 digits |
+| C3 Ekman (registered residual criterion) | not converged at N = 16 in 4000 iterations (res_u stalls at 6e-3 while max_du is 7e-7) | converged | MISS of the criterion (ignored), normalisation defect |
+| C3b Ekman, converged on the velocity change | errors 4.04e-2, 1.30e-2, 3.58e-3 U_g (N = 16, 32, 64); orders 1.64, 1.86; max abs(w) 0.3227 against 0.3224 | finest <= 2e-3; orders; abs(w) within 5 % | orders and spiral amplitude PASS (the sign of the Coriolis force is right); finest error MISS 3.58e-3 (ignored `c3b_ekman_finest_error_known_miss`) |
+| C4 frame invariance (registered, no `component_diagonal`) | inertial run not converged, error 3.06e-2 V_i; `rotating_frame` runs 6.4e-2, 2.1e-2 V_i | 1.5e-2 | MISS of the set-up (ignored) |
+| C4 corrected: analytic error of runs (a)-(e) | 6.76e-3 V_i in all five | 1.5e-2 | pass |
+| C4 corrected: absolute-velocity difference to the inertial run | mrf 1.0: 8.8e-4; rotating 1.0: 6.43e-3; rotating 0.5: 1.58e-3; mrf 0.5: 4.3e-4 V_i | 1e-2 | pass |
+| C4 corrected: spurious radial/axial speed | inertial 1.41e-3, mrf 1.0 5.3e-4, rotating 1.0 6.43e-3, rotating 0.5 1.58e-3, mrf 0.5 9.7e-4 V_i | 1e-3 | MISS for the inertial and the two `rotating_frame` runs (ignored `c4_corrected_spurious_speed_known_miss`). Diagnosis: the `rotating_frame` value is a discretisation error, 7.9e-2, 2.4e-2, 6.4e-3 V_i on the three C2a meshes (orders 1.7, 1.9) |
+| C5a analytic sector, seam, Omega = 0, 1, 5, 20 | abs(m_lo + m_hi)/abs(m_lo) 0, 0, 1.6e-16, 2.9e-15; continuity <= 1.6e-13; seam flow within 0.66 %, 0.31 %, 0.37 %, 0.004 % of analytic; congruence 2.4e-15 | 1e-10; 1e-9; 2 %; 1e-12 | pass: the solver is exact on an axisymmetric sector |
+| C5b fan sector seam geometry | 644 pairs, abs(S_hi + R S_lo)/abs(S) 6.5e-14, centre mismatch 1.7e-13 | threshold 1e-9 | below the threshold: the mesh generator is NOT the cause |
+| C5b fan sector stored flux per pair, before the fix | Omega 2: sum 1.1e-7, worst pair 1.8e-6; Omega 20: sum 2.4e-6, worst pair 9.5e-6 (max abs(phi) 3.8e-3, 2.7e-2) | diagnosis | real per-face non-antisymmetry |
+| C5b after the fix | sum 6.7e-18 and 6.2e-17, worst pair 5.0e-18 and 4.8e-17; S3 abs(m_in + m_out)/abs(m_in) = 3.1e-7 | 1e-6 (ADR 0065 S3) | pass |
+| C6a torque coefficient (both sides) | pi G'(0) = -1.9347 (G'(0) = -0.61585, F'(0) = 0.51012) | within 0.5 % of -1.94 | pass (0.27 %) |
+| C6a axial inflow read at eta = 7.5 | -0.8744 | within 1e-3 of -0.886 | MISS (ignored): defective reading point |
+| C6a corrected, eta_max = 12, read at 11 | -0.8840 | within 1e-3 of -0.886 | MISS (ignored): the solved far-field value differs from the published number as read by 2.0e-3; the secondary source rounds or misquotes, or its attribution is wrong; the primary sources were not read |
+| C6b open top (registered) | not converged in 6000 iterations on (24, 24, 40) and (32, 32, 56) (res_u 3.6e-2, 9.2e-3); entrainment wrong | converged | MISS (ignored); the zero-gradient open top is the suspected cause, not tested separately; that run used the first (wrong-root) reference solution, the miss is the convergence |
+| C6c top inflow of the similarity solution (the eta = 7.5 value -0.8744 sqrt(nu Omega) imposed), rcfd vs ODE at r = 0.6 | coarse: G error 0.0061, F error 0.0142; fine: G error 0.0067, F error 0.0083 (limit 0.0181); converged in 116 and 172 iterations; axial velocity at z = 8 delta within 0.5 % | G <= 0.08, F <= 0.1 max F | pass |
+
+Defect found and fixed (C5): `SimpleSolver::iterate` added the body-force term of the face flux as `rAU_f f_f . S_f` with `rAU_f` equal to the owner value on every boundary
+face. On the two faces of a periodic pair the owner values differ whenever the solution is not the same on both sides of the seam, so the Coriolis and centrifugal face terms made
+`phi_lo + phi_hi` nonzero (S3 of ADR 0065: 3.5e-6 to 2.7e-5 of the seam flow; per face up to 3.6e-4 of the largest face flux). The fix uses the distance-weighted mean of the two cells of
+the pair (the convention of `boundary_hby_a` and `coupled_gamma`) in the new field `coupled_body_pair_mean`, off by default; the API switches it on together with `wall_pressure_trapezoid`
+(rotating-frame source), so every other case is bit-identical. Not an error of the mesh generator (deviation from the registered decision rule, which predicted that cause).
+
+Deviations: see the amendments. The C2/C3 finest-mesh limits were registered without a prior mesh study and missed; the observed orders show the solver is second order in all three
+formulations. The `rotating_frame` formulation needs `solver.component_diagonal = "corrected"` with symmetry end planes (ADR 0010); only `mrf` enables it by itself. This is a
+usability finding, not changed here (it would move the rotating-channel behaviour). The ignored `s3_laminar_rotating_passage_known_miss` in `fan_sector.rs` now passes when run
+(3.1e-7) and is left as it is.
+
+F-126: the roadmap acceptance (a public low-speed compressor or rotor case reproducing pressure ratio and efficiency within published scatter) is NOT MET and was not attempted; no
+compressor data was read. C6 compares the existing solver with a classical rotating-flow solution (von Karman disk) and passes with the corrected set-up; it is not the F-126 acceptance.
+
+Unverified references: the von Karman similarity ODEs and the numbers -0.886 and -1.94 were read only from the Wikipedia article "Von Karman swirling flow" (secondary; its attributions to
+Cochran 1934 and Schlichting 1960 are not verified; the primary papers were not read). The starting guess F'(0) = 0.51, G'(0) = -0.616 is from memory and only seeds the Newton iteration.
+The Taylor-Couette and Ekman solutions are derived in this ADR from the equations. A search for a published critical Taylor/Reynolds number for the onset of Taylor vortices
+(eta = 0.5) did not yield a verified primary value (a secondary snippet gave Re_c 68.2 to 68.4, not used); Marcus (1984, JFM 146, read on the Berkeley site) was read for its torque
+statements but gives no table usable as a pass/fail number, so no Taylor-vortex comparison was made.
