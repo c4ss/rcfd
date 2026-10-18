@@ -61,3 +61,22 @@ No coefficient is tuned to DNS or TMR data; factor scans (HA1) are diagnostics a
 ## Process
 
 ADR first, committed; probe tests are ignored diagnostics (no limit); old known-miss tests stay ignored with their limits; baseline hashes and all existing tests untouched; new tests for any corrected behaviour are new.
+
+## Addendum 1 (before any solver change): deviations so far and the limits registered for the k-epsilon opt-in treatment
+
+Probe infrastructure (no solver source changed yet): `crates/rcfd-turb/tests/diag_w31b_sst_probe.rs` (test-side copy of `sst.rs` with switches; `probe_matches_library`: worst relative Cf difference 0.0 on the coarse mesh, 1249 iterations each)
+and `crates/rcfd-turb/tests/diag_w31b_channel_wf.rs` (k-epsilon channel sequences). Both are ignored diagnostics without limits.
+
+DEVIATION 1 (disclosed): while running HA9 the profile-based Re_theta of ADR 0061 addendum 4 turned out to be negative at x = 0.06 and 0.10 (coarse mesh) and 25 to 35 % below the momentum integral
+int Cf/2 dx in the range x = 0.5 to 1; the symmetry top at y = 1 makes u/U_e at y = 0.25 differ from the outer-layer values by about 0.2 percent and the integrand of the free-stream part accumulates (0.15 x 0.002 = 3e-4 against theta ~ 1e-3).
+The registered HA9 variants (integration bounds 0.10 and 0.20) do not remove it; two further Re_theta definitions were therefore added to the probe (not registered beforehand): (a) theta from the profile with the edge at the first cell above the
+nu_t maximum where nu_t/nu < 1 (edge velocity there); (b) theta = int_0^x Cf/2 dx' (zero-pressure-gradient momentum integral). Both are reported next to the registered definition. The registered D1 limits and the ignored `d1_..._known_miss` test are untouched;
+the new readings are additional evidence and never replace the registered measurement.
+
+Limits registered for the k-epsilon treatment (part B) before any code for it is written. Candidate (named after the experiment that suggested it, HB3): `WallTreatment::Equilibrium`, a NEW enum variant; default `Smooth` and all existing arms unchanged.
+In every wall cell, whatever y*: `eps = Cmu^(3/4) k^(3/2)/(kappa y)` and `G = tau_w^2 / (kappa Cmu^(1/4) sqrt(k) y)` with `tau_w = (nu + nu_t,w) u_t / y` (`nu_t,w` from `nut_wall_from_k`, i.e. the laminar shear below y*_lam),
+the equilibrium forms printed for the standard wall function in the ANSYS FLUENT 12.0 Theory Guide, section 4.12.2 (Eqs. 4.12-10 to 4.12-12; U* = ln(E y*)/kappa for y* > 11.225, U* = y* below; zero normal gradient of k; fetched, see addendum 2).
+Acceptance (channel Re_tau 178, uniform mesh, ny = 6, 8, 10, 12, 14, 16, 20, 24, 32, i.e. cell-centre y+ 30 down to 5.6, converged to du < 1e-9 and change < 1e-8):
+(E1) |U_b+/15.6787 - 1| <= 10 % on every mesh; (E2) (max - min)/mean of U_b+ over these meshes <= 5 %; (E3) default-treatment results bit-identical (existing tests unchanged, `baseline_hashes` unchanged).
+If E1 or E2 fail the candidate is not claimed, the code is not kept as a feature and the part-B conclusion stays at the diagnosis. The comparison treatments `Smooth`, `Switch`, `Hysteresis` and `WallFunction::Scalable` stay in the measured table.
+No library schema key is added in this wave (the new variant is selectable through the library field `KEpsilon::wall_treatment`; wiring it into the settings tree would touch `rcfd-api` files owned by other agents of the wave).
