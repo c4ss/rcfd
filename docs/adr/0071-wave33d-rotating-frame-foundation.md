@@ -90,5 +90,25 @@ Tests only unless a registered check shows a defect. Fixes are opt-in where a ba
 Test files: `crates/rcfd-api/tests/rotating_foundation.rs` (C1, C2a, C4, C5b, C6), `crates/rcfd-fv/tests/rotating_foundation.rs` (C2b, C3, C5a). The decision rule for a miss: the
 limit stays, the test is `#[ignore]`d as `*_known_miss`, and the measured value is recorded in the addendum.
 
+## Amendments registered before the runs they govern (no limit changed)
+
+Written after the first runs of C1-C5 and the first, failed C6 run, before C6c was run.
+* Corrected set-ups (new tests, the old ones stay ignored): C2a and C4 add `solver.component_diagonal = "corrected"` (the ADR 0010 end-plane requirement that the
+  registered set-up omitted; the first run of C4 (a) did not converge and showed the damping). Limits unchanged.
+* C3: the registered convergence criterion (normalised momentum residual 1e-10) is ill-conditioned for a nearly uniform free stream (the residual stalls at ~6e-3 while the
+  velocity change per iteration is 7e-7); the corrected test c3b converges on `max_du < 1e-11` and continuity < 1e-9, limits unchanged.
+* C1a: the fluid at rest has no meaningful normalised residual either; the run uses the wave 9 criterion of `sources.rs` (2500 iterations, then the fields must change by < 1e-6
+  of their scale over 200 more).
+* C5: the decision rule predicted a mesh-generator cause for the seam imbalance. The measured congruence of the fan seam is 6.5e-14, so the rule gave "cause open"; the cause was
+  then looked for in the flux itself, per pair (diagnosis test, no limit), and found in `SimpleSolver::iterate` (see the addendum). The fix is opt-in
+  (`coupled_body_pair_mean`, off by default, switched on with the rotating-frame wall treatment). The S3 limit of ADR 0065 (1e-6) is re-run unchanged.
+* C6a: the shooting solver is started from F'(0) = 0.51, G'(0) = -0.616 (a starting guess only, UNVERIFIED from memory; the first guess 0.5, -0.6 converged to a spurious
+  root) and uses `eta_max = 8` (not 12); `w_inf` is read at eta = 7.5. Limits unchanged.
+* C6b as registered (open top and outer boundary) did not converge in 6000 iterations on either mesh; it stays as an ignored known miss. C6c, the corrected set-up, is
+  registered now: identical geometry and meshes, but the top plane `zmax` is a fixed velocity `(0, 0, w_inf)` with `w_inf = sqrt(nu Omega) H(7.5)` of the similarity solution
+  (the published far-field axial velocity, the number checked in C6a) instead of an open boundary; the outer boundary stays open. Because the axial velocity is now prescribed,
+  metric (ii) is replaced by the radial velocity: `max |u_r/(Omega r) - F(eta)|` over the same cells, limit `0.1 max F` (F is computed by the shooting solver). Limits on the finest mesh
+  (32, 32, 56): G error <= 0.08, F error <= 0.1 max F, convergence (`tolerance_u = tolerance_p = 1e-7`, 6000 iterations); the coarse mesh is reported only.
+
 ## Addendum (measured values)
 (filled after the runs)
