@@ -248,6 +248,10 @@ impl PimpleSolver {
         }
 
         // ---- finish the step -------------------------------------------------
+        let courant = max_courant(&g, &self.phi, dt);
+        if let Some(info) = self.guard_end(dt, courant, (res_u, res_p, p_iters)) {
+            return info;
+        }
         for k in 0..3 {
             let new: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
             self.hist_u[k].push(new, dt);
@@ -260,7 +264,7 @@ impl PimpleSolver {
             step: self.step_no,
             time: self.time,
             dt,
-            courant: max_courant(&g, &self.phi, dt),
+            courant,
             continuity: cont / area_scale.max(1e-300),
             res_u,
             res_p,

@@ -872,6 +872,10 @@ pub fn case_schema() -> Schema {
                 .doc("End time (transient)"),
         )
         .field(
+            "divergence_courant_limit",
+            Schema::float(0.0).at_least(0.0).doc("PISO/PIMPLE divergence guard (ADR 0067): the run stops with a located error (state diverged, exit 6) when a step's maximum Courant number exceeds this value; 0 = unset, the built-in 1e6 applies (use 1e300 to disable the Courant criterion). Non-finite velocity, pressure or flux always stops the run"),
+        )
+        .field(
             "time_scheme",
             Schema::enumeration("euler", &["euler", "bdf2", "bdf2_bounded"]).doc("Time integration scheme (transient): euler, bdf2, or bdf2_bounded (second order, falls back toward euler at temporal extrema; ADR 0016)"),
         )

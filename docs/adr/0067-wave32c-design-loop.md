@@ -153,4 +153,14 @@ Commits are local, own hunks only (temporary index). `crates/rcfd-fv/src/lib.rs`
 The final gate runs on a `git archive` of the final commit: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --release --no-fail-fast`.
 
 ## Addenda
-(none yet)
+
+### Addendum 1 (guard implementation, measured)
+* G1 candidate selection: candidate A (12 x 12 cavity, central, PISO, dt 2.0) does NOT blow up within 500 steps; candidate B (PIMPLE, alpha_u 1.9, alpha_p 1.5, 4 outer iterations) does: the guard trips at
+  **step 130** with a maximum Courant number of 5.76e18 (limit 1e6), stage `end of step`, wall time of the whole test 0.7 s. By the registered rule B is the synthetic unstable run. Limits met: 130 <= 300 steps,
+  stopping step within 3000 pressure iterations, later `step()` calls return the stale record without work, `restore()` clears the guard (test `g1_unstable_run_stops_located_and_cheaply`).
+* G3 deviation: the registered tree-level check used candidate A, which is stable, and candidate B needs `alpha_u` > 1 which the schema (range 0.05 to 1) rejects, so no unstable run is reachable from the case tree.
+  The tree plumbing (state `diverged`, exit 6, located reason, negative value rejected, unset = 0 sentinel, a stable run unaffected) is therefore tested with `solver.divergence_courant_limit = 1e-3` on a stable
+  PISO cavity (the guard trips at step 1 on the Courant criterion). The limit values of G3 are otherwise as registered.
+* Clarification of the design: the end-of-step check runs before the time-level history advances, so a tripped step never enters the history (also for the Courant criterion); the check of a non-finite velocity
+  after the momentum predictor precedes any pressure work, so the 12000-iteration cost of the wave 31A scenario cannot occur.
+* G2/G4: `baseline_hashes`, `runctl`, `timectl_tree`, `fractional_tree`, `dynamic_mesh` (api) and the `rcfd-fv` lib tests, `fractional_step`, `adaptive_step`, `ale_flows` pass unchanged; the full workspace run is the final gate.

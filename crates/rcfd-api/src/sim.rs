@@ -1375,6 +1375,10 @@ impl Simulation {
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             s.ddt_correction = get_b(case, "solver.ddt_correction");
             s.full_viscous_stress = get_s(case, "solver.viscous_stress") == "full";
+            let dcl = get_f(case, "solver.divergence_courant_limit");
+            if dcl > 0.0 {
+                s.divergence_courant_limit = dcl;
+            }
             if get_s(case, "solver.time_advance") == "fractional_step" {
                 s.fractional = Some(rcfd_fv::pimple::fractional::FractionalSettings {
                     incremental: get_s(case, "solver.fractional_form") != "chorin",
@@ -1946,6 +1950,11 @@ impl Simulation {
     /// Set when the run stopped because a user function failed (trap, fuel, bad value).
     pub fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
+    }
+
+    /// Whether the PIMPLE/PISO divergence guard stopped the run (ADR 0067).
+    pub fn diverged(&self) -> bool {
+        matches!(&self.engine, Engine::Transient(s) if s.diverged.is_some())
     }
 
     /// Registry key and label of the active turbulence model (`None` for laminar runs).
@@ -2711,6 +2720,12 @@ impl Simulation {
                 };
                 if let (Some(c), Some((dtp, target))) = (&mut self.timectl, planned) {
                     c.finish(s, dtp, target);
+                }
+                if let Some(d) = &s.diverged {
+                    // divergence guard (ADR 0067): the run stops with a located message
+                    if udf_error.is_none() {
+                        udf_error = Some(d.message(Some(self.geom.mesh.cell_centres())));
+                    }
                 }
                 let i = if self.timectl.as_ref().is_some_and(|c| !c.landed.is_empty()) {
                     // a landing snaps the time onto the target
