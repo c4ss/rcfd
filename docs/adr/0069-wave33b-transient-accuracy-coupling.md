@@ -170,3 +170,72 @@ exactly once; the result is final whatever it is. Reference numbers (ADR 0062, E
 Ferziger and Peric, Computational Methods for Fluid Dynamics, 3rd ed., sec. 6.3.2 (variable-step BDF2; cited by ADR 0009, not re-read);
 Issa (1986) PISO; Choi (1999) transient Rhie-Chow; Zang, Street, Koseff (1994) collocated fractional step; Kim and Moin (1985); Guermond, Minev,
 Shen (2006) review of projection methods on the effect of pressure extrapolation (all UNVERIFIED, recalled from memory, not read in this session).
+
+## Amendment 1 (written after the first run of D0, O1 to O9, X1 to X7, S0 and the first run of the stability harness, BEFORE any solver change; nothing above was changed)
+
+Order of events, for the record: the harness `crates/rcfd-fv/tests/w33b_transient_order.rs` was written and run once (all registered checks and the whole
+diagnostic matrix), then the stability harness `w33b_stability.rs` (smoke subset first, then the full required set and scan, still running when this amendment
+was written), then ONE extra exploratory probe (`Bdf2Bounded` against `Bdf2` on the three problems and both paths, scratch file, dt 0.1, 0.05, 0.025) after S0
+had shown a gross failure; a scratch-only one-line change of `ddt_history_weights` (Bounded treated like BDF2) was tried once inside S0's registered
+"consistent in the scratch tree" check and reverted. No repository solver file was changed.
+
+### Measured (registered limits unchanged)
+
+Orders of the pair (dt, dt/2) against the same-scheme dt = 1/1280 reference, N = 32; band [1.9, 2.3] (Euler [0.9, 1.15]):
+
+| check | fine pair (0.025) | coarse pair (0.1) | verdict |
+|---|---|---|---|
+| D0 quadratic weights, r = 0.5, 1, 1.7 | residual 4.4e-15, 1.8e-15, 2.8e-15 | | met (<= 1e-12) |
+| O1 TG PISO BDF2 | 1.624 (e 4.378e-5, 1.420e-5) | 2.290 | fine MISS, coarse met |
+| O2 TG PIMPLE-C BDF2 | 1.223 | 1.587 | MISS, MISS |
+| O3 TG PIMPLE-4 BDF2 | 1.031 | | MISS |
+| O4 TG FRAC BDF2 | 0.965 (e 3.883e-4, 1.989e-4) | 1.460 | MISS, MISS |
+| O5 MODE PISO and FRAC BDF2 | 2.016 | 2.070 | met, met (identical numbers on both paths: no convection, no pressure) |
+| O6 MMS PISO BDF2 | 1.939 | 1.605 | fine met, coarse MISS |
+| O7 variable step, TG PISO | 1.832 | | MISS |
+| O8 Euler controls (TG, MODE, MMS PISO; TG, MODE FRAC) | 1.079, 1.040, 1.060, 1.044, 1.040 | | met |
+| O9 joint refinement vs exact, TG PISO BDF2 | 3.814 (16 to 32), 3.254 (32 to 64) | | met |
+
+(O6 PIMPLE-C and O7 MMS were run and are in the test output; they are reported in the final addendum.) Rule application (a factor is a cause only if it alone moves
+the fine-pair order into the band or by >= 0.3 toward it): for TG PISO, X1 (1.044), X2 (1.623), X3 (0.854), X4 (1.358), X5 (1.031) move it AWAY or not at all at the
+fine pair (the error at dt = 0.0125 does not fall below about 1.3e-5 in any variant, whereas the error at dt = 0.025 does), X7 (1.150); so by the registered rule NO
+registered single factor is a cause for O1/O2/O3 and none is "cleared" either, because the floor is independent of all of them. X6 mesh dependence (e = a dt^2 + b h^2 dt):
+PISO: h^2 dt part 29.0 % of the fit at (32, 0.025), BELOW the registered 30 % ("not present" by the rule; the relative rms misfit is 0.216, a poor fit), but the
+individual errors show a strongly mesh-dependent floor (dt = 0.0125: 5.76e-5, 1.42e-5, 1.05e-5 for N = 16, 32, 64; observed orders at N = 64 are 2.29 and 2.36, at
+N = 16 1.24 and 1.04); FRAC: 80.7 % ("present", misfit 0.192). Startup (X1) is cleared for all FRAC and MODE/MMS rows and is not the cause of the TG PISO floor either.
+
+### Findings that were not registered diagnostics (stated as such)
+
+1. `Bdf2Bounded` on the PISO path is grossly wrong (S0): error against the exact solution 6.4e-2, 1.7e-1, 2.2e-1 for dt 0.1, 0.05, 0.025 on TG, 8.1e-2, 3.7e-1,
+   3.7e-1 on MODE (pure diffusion, no convection, no Choi term since the flux defect is exactly zero there), and 6.3e-3, 2.2e-2, 2.2e-2 on MMS, against 1.7e-3 and
+   1.8e-3 and 5.7e-3 for `Bdf2`. The same scheme on the FRAC path is fine (MODE 8.7e-3, 2.9e-3, 1.3e-3). The registered S0 reading (Choi/extrapolation weights
+   `(1, 0)` against the matrix weights) is NOT the cause: making the weights BDF2-like in the scratch tree made TG worse (error 0.47, 3.95), and MODE has no Choi term. The
+   remaining difference between the two paths is the use of the mean diagonal `a_P = (1/n_active) sum_k a_k` in `HbyA = H/a_P` and `rAU = V/a_P` (PISO): the
+   `Bdf2Bounded` diagonal `V/dt (theta c0 + 1 - theta)` has a per-cell, PER-COMPONENT `theta`, so `a_k != a_P`, and `H` omits the `(a_P - a_k) u_k` term that
+   makes the corrector consistent with the component equation (the same family as ADR 0010). Hypothesis H-diag, tested by F3 below.
+2. The PIMPLE smoke test of the stability harness (uniform 32 x 32, Re 100, Co_t = 4) is unstable for PIMPLE-2 (n_outer 2, 1 corrector, alpha_u 0.8, alpha_p 0.5) with both
+   Euler and BDF2, stable for PIMPLE-4; PISO at Co_t = 1 is stable. The full stability sets follow in the addendum.
+
+### Hypotheses and fixes registered before the code is touched (all opt-in, default off, `PimpleSettings` fields)
+
+* **H-seam / F1 `ddt_correction_coupled`** (iterative path). The transient Rhie-Chow carry-over `ddt_defect` exists for internal faces only; the translationally periodic
+  coupled boundary faces (the two seams of the doubly periodic vortex) are interpolated without it. Observations consistent with this: the floor appears only
+  on the periodic problem (MODE and MMS fine pairs reach 2.0 and 1.94), is of the size expected when 2 of 32 face rows of the O(dt) `ddt_correction`-off error
+  (X3: 1.9e-4 at dt = 0.0125) are unprotected (about 1.2e-5, measured floor 1.3e-5), and grows relative to the signal as N falls. F1 extends `ddt_defect` to coupled boundary faces with
+  the face values of the solver's own periodic boundary interpolation. Acceptance: with F1 on, O1 (fine and coarse), O2 (fine and coarse), O3, O7 (TG) lie in [1.9, 2.3].
+  If they do not, H-seam is falsified and the miss stays (ignored `*_known_miss` tests with the limits unchanged); F1 is kept only if it does not harm (O5, O6, O8, O9
+  unchanged to 1e-12 with the flag on, because those problems have no coupled faces, and the TG errors vs exact within 5 % of the default).
+* **H-frac / F2 `fractional_ddt_carryover`** (fractional path). The face term `dte (interp(grad p^n).S - snGrad p^n |S|)` is the O(dt h^2) mechanism of ADR 0043; the
+  PISO path carries the old-level flux defects `d = phi - interp(u).S` over with the BDF2 weights and shows an error 9 times lower at the same dt (O1 against O4:
+  4.4e-5 against 3.9e-4). F2 adds the same carry-over to the intermediate flux: `phi*_f += (c1 d^n_f - c2 d^{n-1}_f)/c0` with `c0 = c1 - c2` (so the factor is `dte/dt`, the
+  fractional analogue of `gamma_p/dt`), on internal faces and (with F1's boundary definition) periodic coupled faces. Acceptance: with F2 on, O4 (fine and coarse) in [1.9, 2.3].
+  The default Chorin/incremental behaviour, the Kim-Moin condition and the divergence-free projection are untouched.
+* **H-diag / F3 `component_diagonal`** (iterative path, any scheme whose diagonal differs between components). With the flag on, `HbyA_k = (H_k + (a_P - a_k) u_k)/a_P` with `u_k` the
+  current corrector velocity and `a_k` the diagonal of component `k` (the standard consistent form). Acceptance: `Bdf2Bounded` on the PISO path, errors against the exact solution at
+  dt = 0.05 at most three times the `Bdf2` values: MODE <= 5.6e-3 (Bdf2 1.855e-3), TG <= 5.2e-3 (1.709e-3), MMS <= 1.7e-2 (5.686e-3). With the flag on, every `Bdf2`/`ImplicitEuler`
+  result changes by less than 1e-10 relative (the diagonal is component independent there except at boundaries where the standard form is exact).
+* **Default bit-identity (C1).** Fingerprints (rotate-xor-multiply over `u`, `p`, `phi`; test `w33b_default_bits.rs`), recorded from the UNCHANGED code: TG 32 x 32 nu 0.05 central dt 0.02 t = 1:
+  PISO BDF2 `e9dca234e513bec8`; PIMPLE n_outer 2 (alpha 0.9) Euler `72d935a8d4993955`; fractional BDF2 `e46fbe511183e9fc`; cavity 16 x 16 nu 0.01 linear upwind dt 0.05 t = 1:
+  PISO `Bdf2Bounded` `c21a6553acb2a7a6`; PIMPLE n_outer 2 (alpha 0.9) BDF2 `2c71144215f1d245`. Limit: zero differing bits with every new option off; `baseline_hashes` unchanged.
+* **Not fixed, reported (no mechanism found or by design).** The PISO splitting error (X4: three correctors lower the MMS error by 30 %; X5: outer iteration to convergence lowers it
+  by 10 times), the coarse-pair misses of O6 (pre-asymptotic) and the dt-dependence of `ddt_correction` off (X3) are properties of the algorithm, not defects.
