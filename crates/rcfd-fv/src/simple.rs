@@ -479,6 +479,12 @@ pub struct SimpleSolver {
     /// rotating-frame sources, F-031). With SIMPLEC it also applies the lagged (rAU - rAtU) correction to the wall
     /// pressure gradient of the flux balance.
     pub wall_pressure_trapezoid: bool,
+    /// Use the distance-weighted mean of `rAU` of the two cells of a periodic pair for the body-force term of the face flux on
+    /// periodic boundary faces (ADR 0071 C5). The default (owner value) makes the two fluxes of a pair differ by
+    /// `(rAU_a - rAU_b) f_f . S` whenever the solution is not the same on both sides of the seam, so a body force that acts on
+    /// the seam faces (Coriolis, centrifugal) breaks the exact antisymmetry of the rotational pair. Off by default so that every
+    /// earlier case stays bit-identical; the API switches it on together with `wall_pressure_trapezoid` (rotating-frame sources).
+    pub coupled_body_pair_mean: bool,
     /// Per-face offset subtracted from the flux that convects momentum (`phi_conv = phi - offset`, F-031 MRF zones:
     /// the frame flux `(Omega x r) . S`); the pressure equation and `phi` itself are unaffected.
     pub conv_flux_offset: Option<Vec<f64>>,
@@ -588,6 +594,7 @@ impl SimpleSolver {
             pressure_parts_history: Vec::new(),
             driver: None,
             wall_pressure_trapezoid: false,
+            coupled_body_pair_mean: false,
             conv_flux_offset: None,
             component_diag_correction: false,
             iteration: 0,
@@ -874,7 +881,16 @@ impl SimpleSolver {
         let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a0);
         let mut phi_hby_a = face_flux(&g, &hby_a0, &hb);
         if let Some(bf) = &body {
-            let r_au_f = face_interpolate(&g, &r_au);
+            let mut r_au_f = face_interpolate(&g, &r_au);
+            if self.coupled_body_pair_mean {
+                for (i, cp) in pbc.coupled.iter().enumerate() {
+                    if let Some(gf) = *cp {
+                        let (dp, dq) = (g.dn[i], g.dn[gf - n_int]);
+                        let w = dq / (dp + dq);
+                        r_au_f[n_int + i] = w * r_au[mesh.owner()[n_int + i]] + (1.0 - w) * r_au[mesh.owner()[gf]];
+                    }
+                }
+            }
             for f in 0..mesh.n_faces() {
                 if !g.empty[f] {
                     phi_hby_a[f] += r_au_f[f] * bf.face[f];
