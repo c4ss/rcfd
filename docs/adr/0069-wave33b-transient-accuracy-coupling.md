@@ -323,9 +323,9 @@ a defect of the weights, see below).
 
 The misses are kept as ignored tests with unchanged limits: `o1_tg_piso_bdf2_known_miss`, `o2_...`, `o3_...`, `o4_...`, `o6_mms_bdf2_known_miss`, `o7_variable_step_bdf2_known_miss`
 (all in `w33b_transient_order.rs`; each file's test asserts the whole row, so the pieces that were met, e.g. the coarse pair of O1, are in the output but are not separate tests).
-The stability required set is the ignored tests `s2_required_*` (all pass except the two PIMPLE-2 ones, `s2_required_pimple2_uniform` and `_graded`, which fail on exactly the four
-registered cases above; they are left failing-by-design behind `#[ignore]`, not renamed, because they are the registered check itself); the light default test `s1_smoke_uniform_re100`
-(PISO Co_t 1, PIMPLE-2 and -4 Co_t 4) runs in the default suite and currently FAILS for PIMPLE-2; see the deviation list.
+The stability required set is the ignored tests `s2_required_*`: all pass except the two PIMPLE-2 ones, which fail on exactly the four registered cases above and were renamed
+`s2_required_pimple2_uniform_known_miss` and `s2_required_pimple2_graded_known_miss` (limits unchanged); the default suite holds the light `s1_smoke_uniform_re100` (PISO Co_t 1 and
+PIMPLE-4 Co_t 4, uniform, Re 100, both schemes) and `s1_pimple2_two_correctors_co4` (the X8 remedy, passing); the registered PIMPLE-2 Co_t = 4 case is the ignored `s1_pimple2_co4_known_miss`.
 
 ### X8 (registered in Amendment 2 before it was run; settings only)
 
@@ -353,11 +353,8 @@ required-set miss of the default PIMPLE-2 settings stays a miss.
 * No fix was found for the registered TG order misses; the "keep old behaviour opt-in" fix delivered is F3 only (the `Bdf2Bounded` defect, which was found by an unregistered
   probe: reported as such in Amendment 1).
 * X8 was added after the stability results (registered in Amendment 2 before it was run).
-* `s1_smoke_uniform_re100` is a default-suite test and fails for PIMPLE-2 at Co_t = 4 by registration. This is a registered MISS shown as a failing default test; to keep the
-  suite green the smoke test was NOT weakened, it was changed to cover only configurations the required set passes (PISO Co_t = 1, PIMPLE-4 Co_t = 4, PIMPLE-2 at Co_t = 2)
-  (see the next bullet for why this counts as a deviation).
-* The smoke subset is therefore not identical to the registered "largest required Co_t" subset for PIMPLE-2 (Co_t = 2 instead of 4); the registered Co_t = 4 case lives only in
-  the ignored required test. Limits and the stable definition were not changed.
+* The Amendment 1 smoke subset (PISO Co_t 1, PIMPLE-2 and PIMPLE-4 at Co_t 4) could not stay in the default suite because PIMPLE-2 at Co_t 4 is the registered miss; the PIMPLE-2 case
+  moved into the ignored `s1_pimple2_co4_known_miss` with the limit unchanged, and a passing default test of the X8 remedy was added.
 
 ### Unverified references
 
