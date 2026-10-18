@@ -232,3 +232,55 @@ Farassat 1A and the permeable terms: as in ADR 0013. Gutin (1936), Lowson (1965)
 (1955), Proudman (1952), Lilley, Sarkar and Hussaini (NASA/ICASE report, a scanned PDF that could not be read): not read;
 alpha = 0.1 and M_t = sqrt(2k)/c0 from vendor documentation (secondary). Ffowcs Williams and Hall (1970): exponent from a
 review snippet. IEC 61672-1 and IEC 61260-1: not read; A-weighting constants from Wikipedia and metricgate.com.
+
+## Addendum 1: results, misses and deviations (written after the runs)
+
+### Measured results (release build, git-archive overlay of the final tree)
+
+Limits are the registered ones above; "pass" means measured <= limit.
+
+| Check | Measured | Result |
+|---|---|---|
+| W1a/W1b non-compact pulsating sphere, thickness-only closed form and full radiating sphere (R = 10 and 100) | rms-relative 1.63e-5, amplitude 4.4e-6 .. 4.5e-6, phase 0.5e-9 .. 5e-9 rad | pass |
+| W2 compact dipole directivity and series | directivity <= 2.5e-9, series 7.85e-5 | pass |
+| W3 Gutin-type formula against FW-H (B = 1, 3; theta = 45, 90, 135; m = 1..3) | relative 1.1e-7 .. 3.97e-5; non-multiple harmonics n != mB below 2.2e-10 of the n = B line | pass |
+| W4 observer-time convergence | errors 3.1e-7, 1.9e-8, 1.2e-9; orders 3.998, 4.016 | pass |
+| W5a, W5b impermeable sphere in uniform flow | 7.695e-2 and 6.673e-2 | MISS (limits 1e-2 and 1e-3), ignored known-miss tests |
+| W5c medium-frame transformation invariance | 0 (scale 8.8e-2) | pass |
+| W5d permeable pulsating sphere in uniform flow, downstream, upstream, off axis | amplitude 4.5e-6, phase 1.3e-4 .. 2.5e-4 rad, off-axis 4.5e-6 | pass |
+| W6a quadrature and sound power identity | 8.9e-16, 2.4e-15 | pass |
+| W6b, W6c sound power monopole and dipole against closed forms | 9.05e-5, 1.55e-4 | pass |
+| M1 .. M4 metrics (OASPL, A weighting, spectrum/bands, Bessel) | OASPL exact to the printed digits; Parseval 1.1e-15 / 4.4e-16; band assignment correct for 100, 1000, 1250, 5000 Hz and the 1122/1123 Hz edge; Bessel vs trapezoid 2.6e-15; A-weight table recalled from memory agrees within 0.049 dB (memory table, not a source) | pass |
+| M5 located errors | all registered messages found | pass |
+| S1 round trip and rotation kinematics | bit exact; radius 2.2e-16, velocity 0, normal 0 | pass |
+| S2 adapter | areas, normals, centroids to <= 1e-12 | pass |
+| S3 CLI against library, with and without flow; OASPL in the JSON spectrum | difference 0 relative; OASPL identical; exit codes 3 / 2 as registered | pass |
+| P1 .. P3 proxy identities and scalings | <= 1e-12 (P2 sphere integral 1.1e-15) | pass (identities only, no validation) |
+
+### The W5a/W5b miss
+
+Registered: W5a (on axis, M = 0.3, amplitude <= 1e-2 and phase <= 5e-3 rad against the closed form of a compact point
+source at rest in the stream) and W5b (off axis, <= 1e-3 against the Lienard-Wiechert field of a moving monopole) for
+an impermeable pulsating sphere. Measured 7.695e-2 and 6.673e-2. The hypothesis, not proven: the reference is the field
+of a point mass source, whereas the impermeable sphere held in a stream is a different physical problem (the steady flow
+around the body carries steady loading that the constructed data omit, and the face data used constant areas), so the
+error scales with U and the registered reference does not describe the constructed problem. Diagnostic run
+after the miss (not a gate): at M = 0.01 the same construction gives 2.4e-3, consistent with an error proportional to U.
+To check the medium-frame and moving-observer machinery itself, a new check W5d was added with the same limit as W5a
+(1e-2): a permeable pulsating sphere, whose field in the medium frame is exact, observed downstream, upstream and off
+axis in a stream; measured 4.5e-6 (amplitude) and phase errors of 1e-4 .. 2.5e-4 rad. W5d does not replace W5a/W5b; the
+original tests remain ignored with their limits intact, and the impermeable-in-flow case is therefore NOT verified
+against an exact solution in this wave.
+
+### Other deviations from the registration
+
+1. Band range: the registration said centres in [f_min, f_max]; with f_min = 20 that dropped the 20 Hz band. Bands
+   containing f_min .. f_max are reported instead (docs/acoustics.md).
+2. `parse_pressure_csv` compares each time step with the first step (relative 1e-6) rather than an average step, so a
+   non-uniform column is located at its row.
+3. The CLI flag set (`--observer`, `--flow`, `--times`, `--out`, `--spectrum`, `--narrowband`, `--fmin`, `--fmax`,
+   `--window`) was fixed during implementation; the registration did not list flags.
+4. The A-weighting table check M2 uses a table recalled from memory (see Unverified references); it is a consistency
+   check on the formula, not a verification against IEC 61672-1.
+5. Concurrent work of waves 32A/32C was present in the working tree; the final gate was run on a git-archive build of
+   the committed state.

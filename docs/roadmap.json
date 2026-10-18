@@ -1854,8 +1854,8 @@
       "F-136",
       "F-062"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Impedance-tube reflection coefficient matches the closed form; a quiet boundary reflects a pulse by less than 1 percent",
-    "note": "Priority P3. Size M. Area: fv,post. Complements the far-field integral post-processing."
+    "note": "Priority P3. Size M. Area: fv,post. Complements the far-field integral post-processing. WAVE 32B (ADR 0066, partial; the acceptance text above is NOT met: no impedance boundary, no quiet boundary, no wave solver, no modal export). Built: time-domain FW-H 1A for moving impermeable surfaces from sampled surface pressure with uniform-flow evaluation in the medium frame and moving observers (rcfd-post fwh.rs), Gutin-type rotor tonal harmonics derived and checked against FW-H (rotor.rs), SPL/OASPL/A-weighting/1-3 octave/sound power from an observer sphere with JSON/CSV spectra (acoustics.rs), `rcfd-surface-series` v1 reader and adapter from rcfd-post surface sampling (surface_series.rs), `rcfd fwh` CLI, steady-RANS broadband proxies (Proudman, Curle, trailing edge; noise_proxies.rs) which are NOT validated against measurements and are labelled non-predictive. docs/acoustics.md. Registered checks passed except W5a/W5b (impermeable sphere in uniform flow, measured 7.7e-2 and 6.7e-2 against 1e-2 and 1e-3): kept as ignored known-miss tests; a separate permeable-surface flow check W5d passes (4.5e-6). Not done: impedance and quiet boundaries, wave-equation solver with sponge layers, modal export, quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling from a running solver."
   }
 ]
