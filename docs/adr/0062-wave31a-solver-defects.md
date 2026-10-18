@@ -116,3 +116,12 @@ The v_max non-monotonicity (registered A5 check form: |Q_f - Q_m| < |Q_m - Q_c|)
 
 Corrected test `a_ra_1e6_alpha05` (ignored heavy, 322 s, all limits A0 to A6 unchanged, alpha_u 0.5): PASSES. n = 32, 64, 128 converge in 336, 1057, 3592 iterations (residual below 1e-9, hot/cold imbalance below 5e-11); finest Nu_avg 8.8286 (+0.326 %, limit 1.5 %), u_max 64.842 (+0.33 %, limit 2.0 %),
 v_max 220.559 (+0.55 %, limit 2.0 %), Nu_max 17.568 (-1.99 %, limit 4.0 %), locations within 0.02, Nu_avg observed order 1.84, GCI_fine 0.053 % (limit 1 %), Richardson Nu 8.8249 (+0.28 %, limit 1.5 %). The old `a_ra_1e6_known_miss` stays ignored and still reports the unconverged run.
+
+## Addendum 3 (registered before the probe below is run): step (ii) at dt = 0.05 on 181 x 141 does not complete
+
+Facts so far (cylinder file of this ADR, item 3): the matrix cells and the corrected sequence completed (Addendum 4). The registered step (ii) run (181 x 141, dt 0.05, set-up of the wave 30B file) ran for 2 h 20 min without finishing (the first run had no progress output
+and was stopped by me; a first 60 steps cost 0.22 s each, 2x the 128 x 100 cost as expected). The second run, with a progress line every 10 time units, printed t = 10, 20, 30 (|u|max 1.99, 1.71, 2.33; 42, 80, 119 s) and then nothing for more than 10 minutes of busy CPU (stopped by me): the step
+slows down by orders of magnitude between t = 30 and 40 of the start-up transient. Both runs of that cell are used up (limit: two). Registered probe (prints only, one run, aborts by itself when a single step takes longer than 30 s of wall time or a value is not finite):
+`probe_181x141_dt0050_slow_step` in `validation_cylinder_re100_w31.rs` prints from t = 28 on every 0.5 time units the largest speed, the largest Courant number of the new flux, the pressure-solver iterations of the step (`StepInfo::p_iters`), the continuity residual and the wall time of the step, to find out whether the run
+blows up (growing |u|, Courant), or the pressure solver stalls (p_iters at the cap). Decision: if the probe shows blow-up the cell is reported as "the registered dt is unstable on the 181 x 141 mesh" (a stability limit of the PISO step, Courant number); if it shows pressure-solver
+stalling it is reported as a solver-robustness finding, with no code change in this wave. In both cases the finer-mesh evidence is taken from the dt = 0.025 run of the same mesh (run once), and the dt-versus-h separation uses the matrix.
