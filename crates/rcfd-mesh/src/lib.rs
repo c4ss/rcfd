@@ -10,6 +10,8 @@
 
 pub mod adapt;
 pub mod edit;
+pub mod fan;
+pub mod fan_mesh;
 pub mod gen;
 pub mod inflate;
 pub mod layers;
