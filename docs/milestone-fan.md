@@ -39,3 +39,7 @@ Claude, through the assistant tool layer, iterates on fan shape and size, sets u
 - Wave 34 (planned): noise estimate on the operating curve (proxy plus FW-H on a transient run), robust multi-point objective, a full assistant-driven iteration demo with its measured limitations.
 
 Open decisions for the user: whether to add structural/FSI coupling for the material dimension; which published fan case to target for validation if several are available.
+
+## Deferred by decision (2026-10-18)
+
+Structural coupling (the material dimension: stiffness, mass, damping, blade deformation, FSI) is to be added to `docs/roadmap.json` only after the full assistant-driven fan workflow (waves 32 to 34) exists. Until then it stays in the backlog (`docs/product-suites.md` S-01 and the FSI row of `docs/parity-matrix.md`) and the open decision above is answered: geometry, size and speed only.
