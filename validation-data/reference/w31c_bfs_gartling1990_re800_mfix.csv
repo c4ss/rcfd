@@ -1,0 +1,5 @@
+quantity,value_in_channel_heights_H,value_in_step_heights_h,note
+lower_wall_reattachment_L1,6.10,12.20,"Gartling 1990 as tabulated in the MFIX-Exa tutorial (Table II); H = 1 downstream channel height, step height h = 0.5 (inlet profile 24 y (0.5 - y))"
+upper_wall_separation_x,4.85,9.70,"Gartling 1990 as tabulated in the MFIX-Exa tutorial (Table III)"
+upper_wall_reattachment_x,10.48,20.96,"Gartling 1990 as tabulated in the MFIX-Exa tutorial (Table III)"
+upper_wall_bubble_length_Lu,5.63,11.26,"Gartling 1990 as tabulated in the MFIX-Exa tutorial (Table III)"
