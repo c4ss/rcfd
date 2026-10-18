@@ -2060,7 +2060,9 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let svc = Service::new(ServiceConfig {
             root: Some(root.clone()),
-            max_run_seconds: Some(0.05),
+            // zero cap: the worker checks `elapsed > cap` before its first step, so the cap trips on any clock and any
+            // machine load; the run (tolerance 1e-14, 1e6 iterations) could never finish by itself (ADR 0068)
+            max_run_seconds: Some(0.0),
             ..Default::default()
         });
         let id = svc.call("session.create", &json!({"toml": CAVITY_TOML})).unwrap()["session"]
@@ -2103,8 +2105,26 @@ mod tests {
             .call("run.wait", &json!({"session": id, "timeout_ms": 20000}))
             .unwrap();
         assert_eq!(st["state"], "stopped");
-        let ev = svc.call("events.poll", &json!({"after": 0, "session": id})).unwrap();
-        assert!(ev["events"].as_array().unwrap().iter().any(|e| e["kind"] == "limit"));
+        // read every page of events (the worker emits one `iteration` event per step, so the number of events before
+        // the `limit` event depends on how many steps ran) and look for the cap event and its reason
+        let mut after = 0u64;
+        let mut reasons = Vec::new();
+        loop {
+            let ev = svc
+                .call("events.poll", &json!({"after": after, "session": id, "limit": 5000}))
+                .unwrap();
+            let list = ev["events"].as_array().unwrap();
+            if list.is_empty() {
+                break;
+            }
+            reasons.extend(
+                list.iter()
+                    .filter(|e| e["kind"] == "limit")
+                    .map(|e| e["data"]["reason"].as_str().unwrap_or("").to_string()),
+            );
+            after = ev["next"].as_u64().unwrap();
+        }
+        assert_eq!(reasons, vec!["max_run_seconds exceeded".to_string()]);
         std::fs::remove_dir_all(&root).unwrap();
     }
 
