@@ -239,3 +239,54 @@ N = 16 1.24 and 1.04); FRAC: 80.7 % ("present", misfit 0.192). Startup (X1) is c
   PISO `Bdf2Bounded` `c21a6553acb2a7a6`; PIMPLE n_outer 2 (alpha 0.9) BDF2 `2c71144215f1d245`. Limit: zero differing bits with every new option off; `baseline_hashes` unchanged.
 * **Not fixed, reported (no mechanism found or by design).** The PISO splitting error (X4: three correctors lower the MMS error by 30 %; X5: outer iteration to convergence lowers it
   by 10 times), the coarse-pair misses of O6 (pre-asymptotic) and the dt-dependence of `ddt_correction` off (X3) are properties of the algorithm, not defects.
+
+## Amendment 2 (after the full stability run and the ONE acceptance run of the registered fixes; written BEFORE the extra PIMPLE diagnostic X8 below is run)
+
+Correction of Amendment 1: the sentence "O6 PIMPLE-C and O7 MMS were run and are in the test output" was wrong. In the first run the assertion sat inside the
+loop, so the first miss aborted the test and those two rows were never reached. The harness was corrected (orders are collected and asserted after the loop) and the
+rows were then run once: O6 MMS PISO 1.939 (fine, met) and 1.605 (coarse, miss); O6 MMS PIMPLE-C 1.738 (fine, miss) and 2.834 (coarse, above the upper bound 2.3, miss);
+O7 variable step MMS 1.902 (met), TG 1.832 (miss). The limits were not changed.
+
+### Registered fixes: one acceptance run each, as registered in Amendment 1 (limits unchanged)
+
+* **F1 `ddt_correction_coupled` (H-seam): FALSIFIED, not kept.** With the flag on, every result of O1, O2, O3, O7 (TG) is identical to the default to all printed digits
+  (O1 e 4.3779e-5 / 1.4204e-5, order 1.624; O2 1.223 / 1.587; O3 1.031; O7 1.832). A debug print of the carried-over defect on the periodic faces (scratch only,
+  removed) showed `max |c1 (phi_old - U_old,f . S) - c2 (...)|` of 0 to 6e-16 over all 2176 boundary faces: the solver's own flux on a periodic seam equals the face
+  interpolation of the cell velocity to round-off, so there is no defect to carry over. The mechanism "2 of 32 face rows unprotected" is wrong. The flag is removed
+  from the code; nothing about O1/O2/O3/O7 is explained by it.
+* **F2 `fractional_ddt_carryover` (H-frac): rejected, not kept.** O4 with F2 (and F1's boundary definition): order 2.002 (fine) and 1.997 (coarse), inside [1.9, 2.3],
+  BUT the error against the exact solution at dt = 0.05 rises from 1.054e-3 to 2.728e-2 (25.9 times, registered no-harm limit 1.05 times). The order is then of a
+  scheme that converges to the wrong spatial limit: the carried defect `d/c0` does not vanish as dt -> 0 (it is a spatial, O(h^2), quantity), so the metric
+  "error against the same-scheme dt = 1/1280 reference" cannot see it. By the registered no-harm clause F2 is not kept; the O4 miss stays an ignored
+  `o4_tg_frac_bdf2_known_miss`. This is also a lesson about the order metric: a pass of the self-reference order is necessary, not sufficient (O9 against the exact
+  solution is the check that cannot be fooled this way).
+* **F3 `component_diagonal` (H-diag): MET, kept, default off.** `Bdf2Bounded` on the PISO path, error against the exact solution at dt = 0.05: MODE 2.893e-3 (limit
+  5.6e-3, before 8.1e-2..3.7e-1), TG 1.277e-3 (limit 5.2e-3), MMS 4.032e-3 (limit 1.7e-2). With the flag on, `Bdf2` and `ImplicitEuler` change by exactly 0 on all three
+  problems (limit 1e-10). Fingerprints C1 with the new option present and off: all five identical to the Amendment 1 values (test `w33b_default_bits`). H-diag is
+  confirmed as the mechanism of the `Bdf2Bounded` failure on the iterative path (MODE has no convection and no pressure, so only the mean-diagonal splitting differs).
+* Items not fixed: the TG order misses O1 (fine pair), O2, O3, O4, O7 (TG), O6 (coarse pair of PISO; both pairs of PIMPLE-C) remain registered misses with no mechanism
+  identified; the only persistent evidence is X6 (the h^2 dt part is 80.7 % for the fractional path, 29.0 % with a poor fit for PISO).
+
+### Stability: measured (registered set-up, one run; `w33b_stability.rs`, ignored heavy tests)
+
+Required set (88 configurations: 2 Re x 2 meshes x 2 time schemes x 3 or 4 Co_t per algorithm, x 3 algorithms): PISO 24 of 24 stable; PIMPLE-4 32 of 32 stable;
+PIMPLE-2 28 of 32 stable. The 4 failures are exactly PIMPLE-2 at Co_t = 4 at Re = 100 on both meshes with both time schemes (blow-up in 10 to 26 steps; first violated
+criterion max|u| 2.138 at t = 0.75 uniform Euler, 1.536 at t = 2.125 uniform BDF2, max|p| 91.6 at t = 0.094 graded Euler, 55.5 at t = 0.227 graded BDF2); PIMPLE-2 at
+Re = 1000 is stable up to Co_t = 4. Classification by the registered rule: no defect at PISO Co_t <= 1 (none found); the PIMPLE-2 failures are the registered MISS of the
+required set. Report-only scan: PISO stable up to the largest tried Co_t = 8 (achieved Courant 7.2 uniform, 4.1 graded) at both Re, both meshes, both schemes;
+PIMPLE-2 unstable at Co_t = 8 and 16 at Re = 100 on both meshes and schemes, stable at Co_t = 8 and, for the graded mesh, 16 at Re = 1000 (uniform Re = 1000: Co_t = 16 unstable);
+PIMPLE-4 unstable at Co_t = 8 and 16 at Re = 100 (exceptions: graded BDF2 Co_t = 8 stable) and stable at Re = 1000 up to Co_t = 16. The remaining instability is therefore a
+low-Reynolds, large-Courant-number, impulsive-start blow-up of the outer-iteration algorithms, onset between Co_t = 2 and 4 (PIMPLE-2) and between 4 and 8
+(PIMPLE-4), not present in PISO; the pressure grows first (max|p| 91 at t = 0.09 graded). The mechanism is NOT identified.
+
+### Extra diagnostic X8 (registered now, before it is run; settings only, no solver change)
+
+PIMPLE-2 at Co_t = 4, Re = 100, both meshes, both time schemes (4 cases per variant), with (a) `n_correctors = 2` and (b) `n_outer = 3`; everything else as registered.
+Reading rule, fixed now: if variant (a) is stable in all 4 cases the final single pressure corrector is the weak link and the advice is a setting (`n_correctors >= 2`
+with `n_outer = 2`); if (b) is stable in all 4 the outer-iteration count is the limit; if neither, the cause is not in either. Whatever the outcome, the required-set MISS of
+PIMPLE-2 with the registered settings stays a MISS and no solver code is changed on its account.
+
+### Default bit-identity
+
+`PimpleSettings::component_diagonal` is the only new field and defaults to `false`; `FractionalSettings` is unchanged. The five fingerprints of Amendment 1 are
+unchanged with the new code (zero differing bits).
