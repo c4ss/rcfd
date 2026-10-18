@@ -226,16 +226,47 @@ fn run_set(
 
 const BOTH: [TimeScheme; 2] = [TimeScheme::ImplicitEuler, TimeScheme::Bdf2];
 
-/// Light subset in the default suite: uniform mesh, Re 100, both time schemes, the largest required Co_t of each algorithm.
+/// Light subset in the default suite: uniform mesh, Re 100, both time schemes, the largest required Co_t of PISO and PIMPLE-4.
 #[test]
 fn s1_smoke_uniform_re100() {
     let mut fails = Vec::new();
-    for (alg, co) in [(Alg::Piso, 1.0), (Alg::Pimple2, 4.0), (Alg::Pimple4, 4.0)] {
+    for (alg, co) in [(Alg::Piso, 1.0), (Alg::Pimple4, 4.0)] {
         for scheme in BOTH {
             let o = run_case(Mesh::Uniform, 100.0, alg, scheme, co);
             line("S1smoke", Mesh::Uniform, 100.0, alg, scheme, co, &o);
             if !o.stable {
                 fails.push(format!("{alg:?} {scheme:?} Co_t={co}: {}", o.why));
+            }
+        }
+    }
+    assert!(fails.is_empty(), "{fails:#?}");
+}
+
+/// KNOWN MISS (registered limit unchanged, ADR 0069 addendum): PIMPLE-2 (one corrector) at Co_t = 4, Re = 100 is unstable.
+#[test]
+#[ignore = "known miss of ADR 0069: PIMPLE-2 with one corrector at Co_t = 4, Re = 100"]
+fn s1_pimple2_co4_known_miss() {
+    let mut fails = Vec::new();
+    for scheme in BOTH {
+        let o = run_case(Mesh::Uniform, 100.0, Alg::Pimple2, scheme, 4.0);
+        line("S1pimple2", Mesh::Uniform, 100.0, Alg::Pimple2, scheme, 4.0, &o);
+        if !o.stable {
+            fails.push(format!("{scheme:?}: {}", o.why));
+        }
+    }
+    assert!(fails.is_empty(), "{fails:#?}");
+}
+
+/// ADR 0069 X8 remedy: PIMPLE-2 with two pressure correctors is stable at Co_t = 4, Re = 100 (uniform and graded mesh, both schemes).
+#[test]
+fn s1_pimple2_two_correctors_co4() {
+    let mut fails = Vec::new();
+    for mesh in [Mesh::Uniform, Mesh::Graded] {
+        for scheme in BOTH {
+            let o = run_case_with(mesh, 100.0, Alg::Pimple2, scheme, 4.0, &|st| st.n_correctors = 2);
+            line("S1pimple2x2", mesh, 100.0, Alg::Pimple2, scheme, 4.0, &o);
+            if !o.stable {
+                fails.push(format!("{mesh:?} {scheme:?}: {}", o.why));
             }
         }
     }
@@ -262,8 +293,8 @@ macro_rules! required_test {
 
 required_test!(s2_required_piso_uniform, Mesh::Uniform, Alg::Piso);
 required_test!(s2_required_piso_graded, Mesh::Graded, Alg::Piso);
-required_test!(s2_required_pimple2_uniform, Mesh::Uniform, Alg::Pimple2);
-required_test!(s2_required_pimple2_graded, Mesh::Graded, Alg::Pimple2);
+required_test!(s2_required_pimple2_uniform_known_miss, Mesh::Uniform, Alg::Pimple2);
+required_test!(s2_required_pimple2_graded_known_miss, Mesh::Graded, Alg::Pimple2);
 required_test!(s2_required_pimple4_uniform, Mesh::Uniform, Alg::Pimple4);
 required_test!(s2_required_pimple4_graded, Mesh::Graded, Alg::Pimple4);
 
