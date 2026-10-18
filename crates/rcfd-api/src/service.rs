@@ -60,7 +60,7 @@ pub struct RpcError {
 }
 
 impl RpcError {
-    fn new(code: i64, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: i64, message: impl Into<String>) -> Self {
         RpcError {
             code,
             message: message.into(),
@@ -68,11 +68,11 @@ impl RpcError {
         }
     }
 
-    fn params(message: impl Into<String>) -> Self {
+    pub(crate) fn params(message: impl Into<String>) -> Self {
         Self::new(code::INVALID_PARAMS, message)
     }
 
-    fn validation(diags: Vec<Diagnostic>) -> Self {
+    pub(crate) fn validation(diags: Vec<Diagnostic>) -> Self {
         let text = diags.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("; ");
         RpcError {
             code: code::VALIDATION,
@@ -96,7 +96,7 @@ impl std::fmt::Display for RpcError {
     }
 }
 
-type Rpc<T = Value> = std::result::Result<T, RpcError>;
+pub(crate) type Rpc<T = Value> = std::result::Result<T, RpcError>;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -115,6 +115,8 @@ pub struct ServiceConfig {
     pub event_capacity: usize,
     /// Wall-clock cap for one `run.start` (seconds); the run is stopped when exceeded.
     pub max_run_seconds: Option<f64>,
+    /// Largest number of case runs one `design.*` call may start (operating-map points, study evaluations; ADR 0067).
+    pub max_design_evaluations: usize,
 }
 
 impl Default for ServiceConfig {
@@ -125,6 +127,7 @@ impl Default for ServiceConfig {
             max_steps_per_call: 10_000_000,
             event_capacity: 20_000,
             max_run_seconds: None,
+            max_design_evaluations: 1000,
         }
     }
 }
@@ -313,6 +316,13 @@ impl Service {
             .get(id)
             .cloned()
             .ok_or_else(|| RpcError::new(code::NO_SESSION, format!("no session '{id}'")))
+    }
+
+    /// The settings of a session as a case (for `design.create_study`).
+    pub(crate) fn session_case(&self, p: &Value) -> Rpc<Case> {
+        let s = self.session(p)?;
+        let inner = lock(&s.inner);
+        Ok(inner.case.clone())
     }
 
     /// Resolve a client path inside the sandbox root.
@@ -1043,6 +1053,7 @@ impl Service {
                     .map_err(|e| RpcError::params(format!("cannot read {}: {e}", path.display())))?;
                 runctl::summarize_stream(&text).map_err(RpcError::params)
             }
+            m if m.starts_with("design.") => crate::design::tools::call(self, m, p),
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),
@@ -1813,6 +1824,16 @@ pub const METHODS: &[&str] = &[
     "run.check",
     "run.headless",
     "status.read",
+    "design.create_study",
+    "design.create_variant",
+    "design.run_map",
+    "design.run_study",
+    "design.evaluate",
+    "design.record",
+    "design.get_metrics",
+    "design.compare",
+    "design.propose",
+    "design.list_study",
 ];
 
 /// Minimal blocking client for the line protocol (tests, CLI, scripts).
