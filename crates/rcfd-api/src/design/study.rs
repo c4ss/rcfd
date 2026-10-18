@@ -686,7 +686,7 @@ impl<'a> Study<'a> {
             if f.f.is_infinite() && !f.feasible() {
                 continue;
             }
-            if best.as_ref().is_none_or(|(_, b)| f.better(b)) {
+            if best.as_ref().map_or(true, |(_, b)| f.better(b)) {
                 best = Some((i, f));
             }
         }
