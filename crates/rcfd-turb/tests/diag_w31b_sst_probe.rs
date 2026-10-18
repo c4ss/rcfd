@@ -533,6 +533,7 @@ struct Res {
     first: f64,
 }
 
+#[allow(clippy::type_complexity)]
 fn run(kind: Kind, m: Mesh, kin: f64, omega_in: f64) -> Res {
     let ut_end = flat_plate_u_tau(1.0, NU, 2.0);
     let first = first_cell_height_from_y_plus(m.y_plus, ut_end, NU);
