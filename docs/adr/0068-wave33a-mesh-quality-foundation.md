@@ -89,6 +89,24 @@ they are not adjusted after the measurement.
 * Small set-up S (refinement, solves): n_up 8, n_chord 16, n_down 8, n_side 10, n_nose 4, n_core 1, n_span 14, n_gap 7, n_bl 2,
   g 1.2, h1 = 1e-3; levels use the stated counts.
 
+## Amendment 1 (written before any mesh code existed or ran; nothing measured yet)
+
+Pencil analysis of the corner geometry (no mesh was generated) showed three construction problems in the text above. They are fixed here, before implementation, and
+the gates and set-ups are untouched:
+
+1. **Wall normal everywhere** is the rotation of the central difference of the neighbouring nodes of the wall-and-wake curve (one-sided only at the two outlet ends). There
+   is no exception at the leading edge (forcing -z would point 46 deg away from the true normal of a staggered, cambered nose and tangle the nose cells) and none at the
+   trailing edge (a pitchwise trailing-edge j-line crosses the neighbouring pressure-side stack lines, a concave corner). The trailing-edge node has two normals (suction
+   side uses the wake neighbour and the first suction node, pressure side the first pressure node and the wake neighbour).
+2. **Wake line** leaves the trailing edge along the tangent of the PRESSURE surface (slope sigma_0 = ds/dz at x = 1) and bends to axial:
+   s_w(z) = s_TE + sigma_0 lambda_w (1 - exp(-(z - z_TE)/lambda_w)), lambda_w = 0.2 c. (An axial wake would make a concave turn of about the stagger angle on the pressure side where
+   the stack lines would fold; along the pressure tangent the pressure side is smooth and the suction side has a convex turn of the trailing-edge wedge angle.) The wake stations carry
+   a stack along the wake normal (first spacing d1_w, n_bl layers) while its thickness is <= 0.25 of the width to the nearest seam, otherwise a pure geometric fit.
+3. **Seam point of a station**: z_out(h) = z_a - (q_c - z_f) exp(-(z_a - q_c)/lambda) where z_a = (z of the stack edge on the lower line + z of the stack edge on the upper
+   mirror line)/2 and q_c = z_a at the corner station (lambda = 0.25 c). The same z_out serves both seams. (Replaces the camber-line formula; at mid chord the two coincide.)
+4. **Chord stations** x(u) = 0.85 (1 - cos(pi u))/2 + 0.15 u, u = m / n_chord (a 15 % linear share keeps the end spacing from collapsing, which the stack thickness at y+ = 30
+   would otherwise exceed at the trailing edge).
+
 ## Pre-registered checks
 
 Tests: `crates/rcfd-mesh/tests/fan_cgrid.rs`, `crates/rcfd-api/tests/fan_cgrid_case.rs`, `crates/rcfd-api/tests/seam_flux_w33a.rs`.
