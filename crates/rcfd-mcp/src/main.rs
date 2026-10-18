@@ -12,7 +12,7 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --cases <dir>           cases directory for list_cases");
+        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --max-design-evaluations <n>  case runs one design call may start (default 1000)\n    --cases <dir>           cases directory for list_cases");
         return ExitCode::SUCCESS;
     }
     let val = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
@@ -25,6 +25,9 @@ fn main() -> ExitCode {
     }
     if let Some(n) = val("--max-steps").and_then(|v| v.parse().ok()) {
         cfg.max_steps_per_call = n;
+    }
+    if let Some(n) = val("--max-design-evaluations").and_then(|v| v.parse().ok()) {
+        cfg.max_design_evaluations = n;
     }
     cfg.max_run_seconds = val("--max-run-seconds").and_then(|v| v.parse().ok());
     let policy = if args.iter().any(|a| a == "--read-only") {
