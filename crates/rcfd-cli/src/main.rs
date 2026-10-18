@@ -6,7 +6,9 @@
 //! its convergence targets, 6 run diverged, 7 interrupted (stop file), 8 wall-clock limit
 //! reached (see docs/run-control.md).
 
+mod cmd_fwh;
 mod cmd_gapc;
+mod cmd_map;
 mod cmd_study;
 mod cmd_w19c;
 mod cmd_wiring;
@@ -76,6 +78,9 @@ COMMANDS:
                                an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh
     study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=value]
                                parametric study from the `study` section: one run per design point, table.csv/table.json
+    map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure] [--no-retry] [--serpentine] [--max-steps n] [--json] [--set path=value]
+                               operating map: chained runs over settings values (for example boundary values), each restarting
+                               from the previous converged solution; map.csv/map.json; exit 5 if a point did not converge
     data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]
                                public validation-data pack (F-125): datasets with licence, checksum
                                verification of local copies (offline), provenance report (markdown)
@@ -118,6 +123,11 @@ COMMANDS:
     acoustics <surface.json> --observer x,y,z [--observer ...] [--times t0:t1:n] [--out <file.csv>]
                                Ffowcs Williams-Hawkings far field (formulation 1A, permeable data surface
                                of the rcfd-fwh-surface format); default times: the whole valid window
+    fwh <series.json> --observer x,y,z [--observer ...] [--flow ux,uy,uz] [--times t0:t1:n] [--out <file.csv>]
+        [--spectrum bands.csv|spectrum.json] [--narrowband <file.csv>] [--fmin hz] [--fmax hz] [--window hann|rect]
+                               FW-H far field of an impermeable moving surface from a pressure time series on
+                               surface faces (rcfd-surface-series format, docs/acoustics.md), uniform mean flow,
+                               SPL/OASPL/dB(A) and 1/3-octave spectra
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
 
@@ -189,6 +199,7 @@ fn dispatch(args: &[String]) -> u8 {
         "restart" => cmd_w19c::cmd_restart(rest),
         "check" => cmd_w19c::cmd_check(rest),
         "study" => cmd_study::cmd_study(rest),
+        "map" => cmd_map::cmd_map(rest),
         "check-mesh" => cmd_check_mesh(rest),
         "partition" => cmd_wiring::cmd_partition(rest),
         "sample" => cmd_wiring::cmd_sample(rest),
@@ -202,6 +213,7 @@ fn dispatch(args: &[String]) -> u8 {
         "data" => cmd_data(rest),
         "reactor" => cmd_gapc::cmd_reactor(rest),
         "acoustics" => cmd_gapc::cmd_acoustics(rest),
+        "fwh" => cmd_fwh::cmd_fwh(rest),
         other => usage_error(&format!("unknown command '{other}'")),
     }
 }

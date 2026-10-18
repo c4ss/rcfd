@@ -493,3 +493,251 @@ impl Surface {
         Ok(s)
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Wave 32B (ADR 0066): impermeable surfaces, uniform mean flow through the medium frame, moving observers.
+// Everything above this line is unchanged from ADR 0013.
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Which source terms an impermeable surface contributes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceMode {
+    /// Thickness and loading: `U_i = v_i`, `L_i = p' n_i` (fluid velocity on the surface equals the surface velocity,
+    /// `rho' = 0`).
+    Impermeable,
+    /// Loading only: `U_i = 0`, `L_i = p' n_i` (`u = 0`, `rho' = 0`).
+    LoadingOnly,
+}
+
+/// One face of an impermeable surface: constant area and per-sample position, unit normal, velocity and p'.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Face {
+    /// Area (m^2).
+    pub area: f64,
+    /// Position per sample.
+    pub x: Vec<[f64; 3]>,
+    /// Unit outward normal per sample.
+    pub n: Vec<[f64; 3]>,
+    /// Surface velocity per sample (medium-at-rest frame).
+    pub v: Vec<[f64; 3]>,
+    /// Acoustic pressure p' = p - p_ref per sample.
+    pub p: Vec<f64>,
+}
+
+impl Surface {
+    /// Build an impermeable (or loading-only) surface from faces.
+    pub fn impermeable(rho0: f64, c0: f64, t0: f64, dt: f64, faces: Vec<Face>, mode: SourceMode) -> Surface {
+        let elements = faces
+            .into_iter()
+            .map(|f| {
+                let ns = f.p.len();
+                let u = match mode {
+                    SourceMode::Impermeable => f.v.clone(),
+                    SourceMode::LoadingOnly => vec![[0.0; 3]; ns],
+                };
+                Element {
+                    area: f.area,
+                    x: f.x,
+                    n: f.n,
+                    v: f.v,
+                    p: f.p,
+                    rho: vec![0.0; ns],
+                    u,
+                }
+            })
+            .collect();
+        Surface {
+            rho0,
+            c0,
+            t0,
+            dt,
+            elements,
+        }
+    }
+
+    /// Transform a surface given in the body frame (medium streaming past with the uniform velocity `flow`) into the
+    /// frame in which the medium is at rest: `x_m = x_b - flow t`, `v_m = v_b - flow`, `u_m = u_b - flow`
+    /// (p', rho', n and areas are unchanged). Use [`medium_frame_observer`] for body-fixed observers.
+    pub fn into_medium_frame(&self, flow: V3) -> Result<Surface, FwhError> {
+        if flow.iter().any(|c| !c.is_finite()) {
+            return Err(FwhError(format!("flow: components must be finite (got {flow:?})")));
+        }
+        if norm(flow) >= self.c0 {
+            return Err(FwhError(format!(
+                "flow: speed {} is not subsonic (c0 = {})",
+                norm(flow),
+                self.c0
+            )));
+        }
+        let mut s = self.clone();
+        for e in &mut s.elements {
+            for i in 0..e.p.len() {
+                let t = self.t0 + i as f64 * self.dt;
+                e.x[i] = sub(e.x[i], scale(flow, t));
+                e.v[i] = sub(e.v[i], flow);
+                e.u[i] = sub(e.u[i], flow);
+            }
+        }
+        s.validate()?;
+        Ok(s)
+    }
+
+    /// Solve the retarded time of one element for an observer at `obs` and reception time `t`.
+    fn retarded_time(&self, e_x: &[V3], e_v: &[V3], obs: V3, t: f64) -> f64 {
+        let ns = e_x.len();
+        let c = self.c0;
+        let locate = |tau: f64| -> (usize, f64) {
+            let s = (tau - self.t0) / self.dt;
+            let i = (s.floor() as isize).clamp(1, ns as isize - 3) as usize;
+            (i, s - i as f64)
+        };
+        let mut tau = t - norm(sub(obs, e_x[ns / 2])) / c;
+        for _ in 0..60 {
+            let (i, f) = locate(tau);
+            let w = lagrange(f);
+            let y = interp3(e_x, i, &w);
+            let vv = interp3(e_v, i, &w);
+            let r = sub(obs, y);
+            let rn = norm(r);
+            let g = tau + rn / c - t;
+            let gp = 1.0 - dot(vv, r) / (c * rn);
+            let step = g / gp;
+            tau -= step;
+            if step.abs() < 1e-14 * (1.0 + tau.abs()) {
+                break;
+            }
+        }
+        tau
+    }
+
+    /// Largest contiguous run of reception times `t_lo + k step` (in `[t_lo, t_hi]`) for which every element's retarded
+    /// time lies in the usable part of the record, for an observer on the path `obs(t)`. Errors if none does.
+    pub fn valid_window_moving(
+        &self,
+        obs: &dyn Fn(f64) -> V3,
+        t_lo: f64,
+        t_hi: f64,
+        step: f64,
+    ) -> Result<(f64, f64), FwhError> {
+        self.validate()?;
+        if !(step > 0.0) || !(t_hi > t_lo) {
+            return Err(FwhError(format!(
+                "valid_window_moving: need step > 0 and t_hi > t_lo (step = {step}, t_lo = {t_lo}, t_hi = {t_hi})"
+            )));
+        }
+        let ns = self.samples();
+        let t_first = self.t0 + 3.0 * self.dt;
+        let t_last = self.t0 + (ns as f64 - 4.0) * self.dt;
+        let n = ((t_hi - t_lo) / step).floor() as usize;
+        let mut best: Option<(usize, usize)> = None;
+        let mut start: Option<usize> = None;
+        for k in 0..=n {
+            let t = t_lo + k as f64 * step;
+            let o = obs(t);
+            let ok = self.elements.iter().all(|e| {
+                let tau = self.retarded_time(&e.x, &e.v, o, t);
+                tau.is_finite() && tau >= t_first && tau <= t_last
+            });
+            if ok {
+                if start.is_none() {
+                    start = Some(k);
+                }
+            } else if let Some(s) = start.take() {
+                if best.map_or(true, |(a, b)| k - 1 - s > b - a) {
+                    best = Some((s, k - 1));
+                }
+            }
+        }
+        if let Some(s) = start {
+            if best.map_or(true, |(a, b)| n - s > b - a) {
+                best = Some((s, n));
+            }
+        }
+        match best {
+            Some((a, b)) => Ok((t_lo + a as f64 * step, t_lo + b as f64 * step)),
+            None => Err(FwhError(
+                "no reception time in the searched range has all retarded times inside the record".into(),
+            )),
+        }
+    }
+
+    /// Acoustic pressure for an observer on the path `obs(t)` (position at reception time `t`). Same arithmetic as
+    /// [`Surface::signal`]; errors name the element and time when the retarded time leaves the usable record.
+    pub fn signal_moving(&self, obs: &dyn Fn(f64) -> V3, times: &[f64]) -> Result<Vec<Signal>, FwhError> {
+        self.validate()?;
+        let prep = self.prepare();
+        let ns = self.samples();
+        let c = self.c0;
+        let rho0 = self.rho0;
+        let t_first = self.t0 + 3.0 * self.dt;
+        let t_last = self.t0 + (ns as f64 - 4.0) * self.dt;
+        let mut out = Vec::with_capacity(times.len());
+        for &t in times {
+            if !t.is_finite() {
+                return Err(FwhError(format!("observer time {t} is not finite")));
+            }
+            let o = obs(t);
+            if o.iter().any(|c| !c.is_finite()) {
+                return Err(FwhError(format!("observer position at t = {t:.6e} s is not finite")));
+            }
+            let (mut pt, mut pl) = (0.0, 0.0);
+            for (k, e) in prep.iter().enumerate() {
+                let tau = self.retarded_time(&e.x, &e.v, o, t);
+                if !(tau >= t_first && tau <= t_last) {
+                    return Err(FwhError(format!(
+                        "observer time {t:.6e} s: retarded time {tau:.6e} s of elements[{k}] is outside the usable record [{t_first:.6e}, {t_last:.6e}] s"
+                    )));
+                }
+                let s = (tau - self.t0) / self.dt;
+                let i = (s.floor() as isize).clamp(1, ns as isize - 3) as usize;
+                let w = lagrange(s - i as f64);
+                let y = interp3(&e.x, i, &w);
+                let vv = interp3(&e.v, i, &w);
+                let vd = interp3(&e.vdot, i, &w);
+                let nn = interp3(&e.n, i, &w);
+                let nd = interp3(&e.ndot, i, &w);
+                let uu = interp3(&e.uvec, i, &w);
+                let ud = interp3(&e.udot, i, &w);
+                let ll = interp3(&e.l, i, &w);
+                let ld = interp3(&e.ldot, i, &w);
+                let rv = sub(o, y);
+                let r = norm(rv);
+                if !(r > 0.0) {
+                    return Err(FwhError(format!(
+                        "observer coincides with elements[{k}] at t = {t:.6e} s (distance zero)"
+                    )));
+                }
+                let rh = scale(rv, 1.0 / r);
+                let m = scale(vv, 1.0 / c);
+                let mr = dot(m, rh);
+                let m2 = dot(m, m);
+                let mdr = dot(scale(vd, 1.0 / c), rh);
+                let om = 1.0 - mr;
+                let un = dot(uu, nn);
+                let udn = dot(ud, nn) + dot(uu, nd);
+                let common = r * mdr + c * (mr - m2);
+                pt += e.area * (rho0 * udn / (r * om * om) + rho0 * un * common / (r * r * om * om * om));
+                let lr = dot(ll, rh);
+                let lm = dot(ll, m);
+                let ldr = dot(ld, rh);
+                pl += e.area
+                    * ((ldr / c) / (r * om * om)
+                        + (lr - lm) / (r * r * om * om)
+                        + lr * common / (c * r * r * om * om * om));
+            }
+            let kk = 1.0 / (4.0 * std::f64::consts::PI);
+            out.push(Signal {
+                t,
+                p_thickness: pt * kk,
+                p_loading: pl * kk,
+            });
+        }
+        Ok(out)
+    }
+}
+
+/// Path of a body-fixed observer at `obs_body` in the medium frame, for a stream `flow` past the body:
+/// `x_o(t) = obs_body - flow t`.
+pub fn medium_frame_observer(obs_body: [f64; 3], flow: [f64; 3]) -> impl Fn(f64) -> [f64; 3] {
+    move |t| sub(obs_body, scale(flow, t))
+}
