@@ -1,0 +1,21 @@
+code,n_cells,cf
+CFL3D compressible M0.2,208896,2.69085355E-03
+CFL3D compressible M0.2,52224,2.68299226E-03
+CFL3D compressible M0.2,13056,2.66477116E-03
+CFL3D compressible M0.2,3264,2.62624887E-03
+CFL3D compressible M0.2,816,2.55183387E-03
+FUN3D incompressible,208896,2.717360621E-03
+FUN3D incompressible,52224,2.709812019E-03
+FUN3D incompressible,13056,2.691188129E-03
+FUN3D incompressible,3264,2.653050236E-03
+FUN3D incompressible,816,2.579304855E-03
+SC/Tetra incompressible,208896,2.7211939E-03
+SC/Tetra incompressible,52224,2.7173136E-03
+SC/Tetra incompressible,13056,2.7014893E-03
+SC/Tetra incompressible,3264,2.6766260E-03
+SC/Tetra incompressible,816,2.6469855E-03
+GHOST incompressible,208896,2.7108542E-03
+GHOST incompressible,52224,2.7001589E-03
+GHOST incompressible,13056,2.6757238E-03
+GHOST incompressible,3264,2.6187797E-03
+GHOST incompressible,816,2.5038836E-03

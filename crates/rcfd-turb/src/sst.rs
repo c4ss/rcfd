@@ -88,6 +88,50 @@ pub fn blend_f2(k: f64, omega: f64, d: f64, nu: f64) -> f64 {
     (a * a).tanh()
 }
 
+/// Strain-rate magnitude `S = sqrt(2 S_ij S_ij)` of cell `c` from the velocity gradient `gr[i][c][j] = d u_i / d x_j`
+/// (NASA TMR SST page; the vorticity magnitude is NOT used by the 2003 form).
+pub(crate) fn strain_magnitude(gr: &[Vec<[f64; 3]>], c: usize) -> f64 {
+    let mut s2 = 0.0;
+    for i in 0..3 {
+        for j in 0..3 {
+            let sij = 0.5 * (gr[i][c][j] + gr[j][c][i]);
+            s2 += sij * sij;
+        }
+    }
+    (2.0 * s2).sqrt()
+}
+
+/// Limited production `P~ = min(P, 10 beta* k omega)` of both equations (SST-2003, TMR SST page).
+pub fn limited_production(p: f64, k: f64, omega: f64) -> f64 {
+    p.min(10.0 * BETA_STAR * k * omega)
+}
+
+/// Cross-diffusion `2 sigma_w2 / omega  grad k . grad omega` (without the `(1 - F1)` factor and without the 1e-10 floor of F1).
+pub fn cross_diffusion(grad_k: [f64; 3], grad_w: [f64; 3], omega: f64) -> f64 {
+    2.0 * SIGMA_W[1] / omega * vec3::dot(grad_k, grad_w)
+}
+
+/// Splits the omega-equation cross-diffusion term `cdc = (1 - F1) CD` into an explicit source and an implicit
+/// (always non-negative) diagonal coefficient; on the right-hand side `source - coefficient * omega = cdc` for either sign
+/// of `cdc` (the coefficient is added to the matrix diagonal, i.e. it is a sink when `cdc < 0`).
+pub fn cross_diffusion_split(cdc: f64, omega: f64) -> (f64, f64) {
+    if cdc >= 0.0 {
+        (cdc, 0.0)
+    } else {
+        (0.0, -cdc / omega.max(1e-30))
+    }
+}
+
+/// Blend `phi = F1 phi_1 + (1 - F1) phi_2` of an inner/outer constant pair.
+pub fn blend_constant(f1: f64, a: [f64; 2]) -> f64 {
+    f1 * a[0] + (1.0 - f1) * a[1]
+}
+
+/// Wall value of omega on a wall face, `10 * 6 nu / (beta_1 y^2)` with `y` the first-cell centre distance (TMR SST page).
+pub fn wall_omega(nu: f64, y: f64) -> f64 {
+    10.0 * 6.0 * nu / (BETA[0] * y * y)
+}
+
 /// Steady k-omega SST model state.
 pub struct KOmegaSst {
     /// Geometry.
@@ -156,7 +200,7 @@ impl KOmegaSst {
                     .faces()
                     .map(|f| {
                         let y = geom.dn[f - geom.n_internal];
-                        [10.0 * 6.0 * nu / (BETA[0] * y * y), 0.0, 0.0]
+                        [wall_omega(nu, y), 0.0, 0.0]
                     })
                     .collect();
                 omega.set_bc(
@@ -276,18 +320,7 @@ impl KOmegaSst {
         let nu = self.nu;
         let vol = g.mesh.cell_volumes().to_vec();
         let gr = velocity_gradient(&g, u);
-        let mut s_mag: Vec<f64> = (0..n)
-            .map(|c| {
-                let mut s2 = 0.0;
-                for i in 0..3 {
-                    for j in 0..3 {
-                        let sij = 0.5 * (gr[i][c][j] + gr[j][c][i]);
-                        s2 += sij * sij;
-                    }
-                }
-                (2.0 * s2).sqrt()
-            })
-            .collect();
+        let mut s_mag: Vec<f64> = (0..n).map(|c| strain_magnitude(&gr, c)).collect();
         let kv = self.k.values.clone();
         let wv = self.omega.values.clone();
 
@@ -340,12 +373,12 @@ impl KOmegaSst {
         let mut f2 = vec![0.0; n];
         for c in 0..n {
             let (kc, wc, d) = (kv[c].max(1e-30), wv[c].max(1e-30), self.wall_dist[c]);
-            cd[c] = 2.0 * SIGMA_W[1] / wc * vec3::dot(gk[c], gw[c]);
+            cd[c] = cross_diffusion(gk[c], gw[c], wc);
             f1[c] = blend_f1(kc, wc, d, nu, cd[c]);
             f2[c] = blend_f2(kc, wc, d, nu);
         }
         self.f1 = f1.clone();
-        let mix = |f: f64, a: [f64; 2]| f * a[0] + (1.0 - f) * a[1];
+        let mix = blend_constant;
         let (c_sigma_k, c_sigma_w, c_beta, c_gamma) = self.coeffs();
 
         // eddy viscosity used in the transport equations (consistent with the strain used here)
@@ -359,7 +392,7 @@ impl KOmegaSst {
         let mut ptil = vec![0.0; n];
         for c in 0..n {
             let p = wall_g[c].unwrap_or(nut_now[c] * s_mag[c] * s_mag[c]);
-            ptil[c] = p.min(10.0 * BETA_STAR * kv[c] * wv[c]);
+            ptil[c] = limited_production(p, kv[c], wv[c]);
         }
 
         // ---- k equation
@@ -383,11 +416,9 @@ impl KOmegaSst {
             mw.b[c] += gamma * ptil[c] / nut_c * vol[c];
             mw.a.diag[c] += beta * wv[c] * vol[c];
             let cdc = (1.0 - f1[c]) * cd[c];
-            if cdc >= 0.0 {
-                mw.b[c] += cdc * vol[c];
-            } else {
-                mw.a.diag[c] += -cdc / wv[c].max(1e-30) * vol[c];
-            }
+            let (src, coef) = cross_diffusion_split(cdc, wv[c]);
+            mw.b[c] += src * vol[c];
+            mw.a.diag[c] += coef * vol[c];
         }
         mw.relax(self.relax_turb, &wv);
         for &c in &wall_cells {
@@ -485,5 +516,149 @@ mod tests {
             let (a, b) = (blend_f1(0.01, 50.0, d, nu, 0.3), blend_f2(0.01, 50.0, d, nu));
             assert!((0.0..=1.0).contains(&a) && (0.0..=1.0).contains(&b));
         }
+    }
+
+    // ---- Wave 33C (ADR 0070): term-by-term audit against the NASA TMR SST page, hand values computed independently.
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() <= 1e-12 * b.abs().max(1e-300)
+    }
+
+    #[test]
+    fn w33c_constants_and_model_kappa() {
+        assert_eq!(BETA_STAR, 0.09);
+        assert_eq!(A1, 0.31);
+        assert_eq!(SIGMA_K, [0.85, 1.0]);
+        assert_eq!(SIGMA_W, [0.5, 0.856]);
+        assert_eq!(BETA, [0.075, 0.0828]);
+        assert_eq!(GAMMA, [5.0 / 9.0, 0.44]);
+        // kappa^2 = sqrt(beta*) (beta/beta* - gamma) / sigma_w for both sets (TMR: kappa = 0.41 in the consistency relation)
+        for (i, want) in [(0usize, 0.408248290463863), (1, 0.410151556214798)] {
+            let k = (BETA_STAR.sqrt() * (BETA[i] / BETA_STAR - GAMMA[i]) / SIGMA_W[i]).sqrt();
+            assert!(close(k, want), "set {i}: {k}");
+        }
+        assert!(close(bsl_gamma(0), 0.5531666666666668) && close(bsl_gamma(1), 0.4403546666666667));
+    }
+
+    #[test]
+    fn w33c_constant_blending() {
+        let f = 0.3;
+        assert!(close(blend_constant(f, SIGMA_K), 0.955));
+        assert!(close(blend_constant(f, SIGMA_W), 0.7492));
+        assert!(close(blend_constant(f, BETA), 0.08046));
+        assert!(close(blend_constant(f, GAMMA), 0.4746666666666667));
+        assert_eq!(blend_constant(1.0, BETA), BETA[0]);
+        assert_eq!(blend_constant(0.0, BETA), BETA[1]);
+    }
+
+    #[test]
+    fn w33c_f1_branches_and_cd_floor() {
+        let nu = 1.5e-5;
+        // (k, omega, d, CD) -> F1; the active branch of the min/max is named
+        assert!(close(blend_f1(0.006561, 10.0, 0.1, nu, 0.01), 0.5757621252496801)); // sqrt(k)/(beta* w d)
+        assert!(close(blend_f1(1e-6, 100.0, 0.01, nu, 0.01), 0.3062538284406168)); // 500 nu/(d^2 w)
+        assert!(close(blend_f1(0.01, 10.0, 0.1, nu, 10.0), 0.013743826901846232)); // 4 sigma_w2 k/(CD d^2)
+        assert!(close(blend_f1(0.01, 10.0, 0.1, nu, -5.0), 0.90941951863331)); // CD floored at 1e-10
+    }
+
+    #[test]
+    fn w33c_f2_branches() {
+        let nu = 1.5e-5;
+        assert!(close(blend_f2(0.006561, 10.0, 0.1, nu), 0.9969370765859934));
+        assert!(close(blend_f2(1e-6, 100.0, 0.01, nu), 0.5098299737352566));
+        assert!(close(blend_f2(0.01, 10.0, 0.1, nu), 0.9998972742141851));
+    }
+
+    #[test]
+    fn w33c_cross_diffusion_value_and_split() {
+        let cd = cross_diffusion([0.2, -0.1, 0.0], [3.0, 4.0, 0.0], 25.0);
+        assert!(close(cd, 0.013696));
+        for &t in &[0.013696, -0.013696, 0.0] {
+            let (src, coef) = cross_diffusion_split(t, 25.0);
+            assert!(coef >= 0.0, "implicit coefficient must not be negative");
+            assert!((src - coef * 25.0 - t).abs() < 1e-15);
+        }
+    }
+
+    #[test]
+    fn w33c_strain_magnitude_is_not_vorticity() {
+        let g = 3.0;
+        let one = |m: [[f64; 3]; 3]| -> Vec<Vec<[f64; 3]>> { (0..3).map(|i| vec![m[i]]).collect() };
+        // simple shear du/dy = g
+        let shear = one([[0.0, g, 0.0], [0.0; 3], [0.0; 3]]);
+        assert!(close(strain_magnitude(&shear, 0), g));
+        // plane strain (a x, -a y): S = 2 a
+        let strain = one([[g, 0.0, 0.0], [0.0, -g, 0.0], [0.0; 3]]);
+        assert!(close(strain_magnitude(&strain, 0), 2.0 * g));
+        // solid-body rotation u = (-W y, W x): S = 0 although the vorticity is 2 W
+        let rot = one([[0.0, -g, 0.0], [g, 0.0, 0.0], [0.0; 3]]);
+        assert!(strain_magnitude(&rot, 0) < 1e-15);
+    }
+
+    #[test]
+    fn w33c_eddy_viscosity_limiter_branches() {
+        let mesh = rcfd_mesh::gen::box_2d(4, 4, 1.0, 1.0, false, false).unwrap();
+        let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+        let sst = KOmegaSst::new(geom, 1.5e-5, &["ymin"], 1e-3, 10.0).unwrap();
+        // strain-limited: a1 w = 3.1 < S F2 = 4
+        assert!(close(sst.nut_of(0.01, 10.0, 5.0, 0.8), 7.75e-4));
+        // omega-limited: a1 w = 3.1 > S F2 = 1.8 -> k / omega
+        assert!(close(sst.nut_of(0.01, 10.0, 2.0, 0.9), 1.0e-3));
+    }
+
+    #[test]
+    fn w33c_production_limiter_both_branches() {
+        // P = nu_t S^2 = 1e-3 * 100^2 = 10 is limited to 10 beta* k w = 0.45; 0.1 stays
+        assert!(close(limited_production(1e-3 * 100.0 * 100.0, 0.01, 50.0), 0.45));
+        assert!(close(limited_production(0.1, 0.01, 50.0), 0.1));
+    }
+
+    #[test]
+    fn w33c_wall_omega_on_the_wall_face() {
+        // the helper: 10 * 6 nu/(beta1 y^2); nu 2e-7, y 1e-5 -> 1.6e6
+        assert!(close(wall_omega(2e-7, 1e-5), 1.6e6));
+        // and the field really carries it: first cell height 2e-5 -> centre distance 1e-5
+        let mesh = rcfd_mesh::gen::box_2d_graded(
+            4,
+            10,
+            1.0,
+            1.0,
+            [
+                rcfd_mesh::gen::Grading::Uniform,
+                rcfd_mesh::gen::Grading::WallLayers {
+                    first: 2e-5,
+                    growth: 1.2,
+                    layers: 5,
+                    both: false,
+                },
+            ],
+            false,
+            false,
+        )
+        .unwrap();
+        let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+        let sst = KOmegaSst::new(geom.clone(), 2e-7, &["ymin"], 1e-6, 100.0).unwrap();
+        let wb = sst.omega.boundary_values(&geom);
+        let patch = geom.mesh.patch("ymin").unwrap();
+        for f in patch.faces() {
+            assert!(close(wb[f - geom.n_internal], 1.6e6), "{}", wb[f - geom.n_internal]);
+        }
+    }
+
+    #[test]
+    fn w33c_wall_modes_set_k_boundary() {
+        let mesh = rcfd_mesh::gen::box_2d(4, 4, 1.0, 1.0, false, false).unwrap();
+        let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+        let mut sst = KOmegaSst::new(geom.clone(), 1e-3, &["ymin"], 0.5, 10.0).unwrap();
+        let patch = geom.mesh.patch("ymin").unwrap();
+        let f0 = patch.faces().next().unwrap() - geom.n_internal;
+        sst.set_wall_mode(SstWallMode::LowRe).unwrap();
+        assert_eq!(sst.k.boundary_values(&geom)[f0], 0.0);
+        sst.set_wall_mode(SstWallMode::Automatic).unwrap();
+        assert_eq!(
+            sst.k.boundary_values(&geom)[f0],
+            0.5,
+            "zero gradient takes the cell value"
+        );
     }
 }

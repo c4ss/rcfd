@@ -785,6 +785,50 @@
           "bytes": 485
         }
       ]
+    },
+    {
+      "id": "w33c-tmr-sst-flatplate-channel",
+      "title": "NASA TMR SST results: flat plate u+(y+), Cf(x), Cf grid sequences (CFL3D, incompressible codes) and high-Re channel Karman measure",
+      "case": "flat_plate",
+      "citation": "NASA Turbulence Modeling Resource, 2DZP SST-Vm results (https://tmbwg.github.io/turbmodels/flatplate_sst.html) and 2DFDC SSTm results (https://tmbwg.github.io/turbmodels/channelflow_val_sst.html); CFL3D, FUN3D, SC/Tetra, GHOST",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA TMR (TMBWG), CFL3D / FUN3D / SC-Tetra / GHOST results as posted on the pages above",
+        "notes": "Re-formatted columns of the TMR data files (u+y+ at x = 0.97008 for y+ <= 3000, Cf(x) of the CFL3D 545 x 385 grid for x >= 0, the Cf(x = 0.97008) grid sequences of CFL3D (compressible M 0.2) and of the incompressible FUN3D, SC/Tetra and GHOST runs, the channel u+, log10 y+ and Karman measure for y+ between 8 and 160000 converted to y+). The flat-plate case is compressible (M = 0.2); the incompressible sequences are the like-for-like reference for rcfd. Used by validation_w33c_sst_plate.rs and validation_w33c_sst_wall_layer.rs (ADR 0070)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w33c_tmr_sst_uplus_yplus_x0p97008.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://tmbwg.github.io/turbmodels/FlatPlate/SST/flatplate_u+y+_sstv.dat",
+          "sha256": "0018c86bc5f7aadcd0182a6dee850030bc82b5278b1292f624219616c83e13ee",
+          "bytes": 5004
+        },
+        {
+          "local": "validation-data/reference/w33c_tmr_sst_cf_x_cfl3d_545x385.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://tmbwg.github.io/turbmodels/FlatPlate/SST/cf_plate_sstv.dat",
+          "sha256": "f2091cdc3c032915aff1a473fc618aec15d15ba97ac3f2d41201e0580ed998aa",
+          "bytes": 11205
+        },
+        {
+          "local": "validation-data/reference/w33c_tmr_sst_cf_convergence_x0p97008.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://tmbwg.github.io/turbmodels/FlatPlate/SST/cf_convergence_sstv.dat and https://tmbwg.github.io/turbmodels/FlatPlate_validation/cf_incomp_results_sstv.dat",
+          "sha256": "576e69f242b23a1d842a939ffb46685109bd0d3e792238a83a88943ef1a2add0",
+          "bytes": 873
+        },
+        {
+          "local": "validation-data/reference/w33c_tmr_sst_channel_km_cfl3d.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://tmbwg.github.io/turbmodels/ChannelFlow/Validation/sst_u+y+KM_cfl3d.dat",
+          "sha256": "fce158eefc1cb5b432cd575042dc7620b328f7a9ee3efebe87d042a2ad74d030",
+          "bytes": 5525
+        }
+      ]
     }
   ]
 }
