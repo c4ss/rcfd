@@ -421,6 +421,7 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             )
             .map_err(me)
         }
+        "axial_fan_sector" => crate::fan_case::build(case),
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform

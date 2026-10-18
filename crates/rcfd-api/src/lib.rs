@@ -11,6 +11,7 @@ pub mod design;
 pub mod dynmesh;
 pub mod electric;
 pub mod exprs;
+pub mod fan_case;
 pub mod inflate;
 pub mod init;
 pub mod linsolver;
