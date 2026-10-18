@@ -58,6 +58,9 @@ pub struct PimpleSettings {
     pub alpha_p: f64,
     /// Apply the transient Rhie-Chow correction.
     pub ddt_correction: bool,
+    /// Consistent split of the momentum matrix when its diagonal differs between the velocity components,
+    /// `HbyA_k = (H_k + (a_P - a_k) u_k) / a_P` (ADR 0069 F3). Default `false`: `HbyA_k = H_k / a_P`.
+    pub component_diagonal: bool,
     /// Reference cell and value for a pressure level that is otherwise undetermined.
     pub p_ref: (usize, f64),
     /// Use AMG-preconditioned CG for the pressure equation.
@@ -149,6 +152,7 @@ impl PimpleSettings {
             alpha_u: 1.0,
             alpha_p: 1.0,
             ddt_correction: true,
+            component_diagonal: false,
             p_ref: (0, 0.0),
             amg_pressure: false,
             momentum_solver: SolveControl {
@@ -538,6 +542,7 @@ impl PimpleSolver {
                 PeriodicLinks::default(),
             ];
             let mut a_p = vec![0.0; n];
+            let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             let u_iter: Vec<Vec3> = self.u.values.clone();
             // second-order linearisation: on the first outer iteration of a BDF2 step the
             // convecting flux and the deferred-correction state are extrapolated in time
@@ -609,6 +614,7 @@ impl PimpleSolver {
                     self.u.values[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
+                diag_k[k] = m.a.diag.clone();
                 mats[k] = Some(m);
                 links[k] = lk;
             }
@@ -637,7 +643,11 @@ impl PimpleSolver {
                         let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
                         let h = links[k].h_operator(m, &cells);
                         for c in 0..n {
-                            hby_a[c][k] = h[c] / a_p[c];
+                            hby_a[c][k] = if s.component_diagonal {
+                                (h[c] + (a_p[c] - diag_k[k][c]) * self.u.values[c][k]) / a_p[c]
+                            } else {
+                                h[c] / a_p[c]
+                            };
                         }
                     }
                 }
