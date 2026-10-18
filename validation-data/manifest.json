@@ -634,6 +634,158 @@
           "bytes": 1559
         }
       ]
+    },
+    {
+      "id": "w31c-ghia1982-centerlines-read",
+      "title": "Ghia, Ghia and Shin (1982) centreline tables Re 100/400/1000, read from two to three secondary copies",
+      "case": "cavity",
+      "citation": "U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411, Tables I and II (original not read)",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://gist.github.com/ivan-pi/caa6c6737d36a9140fbcf2ea59c78b3c",
+        "attribution": "Ghia et al. 1982 via gists ivan-pi/3e9326d18a366ffe6a8e5bfda6353219 (u) and caa6c6737d36a9140fbcf2ea59c78b3c (v), github.com/PN-CourseWork/02689-AdvancedNumericalAlgorithmP3 data/validation/ghia, Uppsala thesis diva2:1668016 Tables 1 and 2",
+        "notes": "u: gist, student repository and thesis agree cell for cell. v: three copies agree except Re 400 x = 0.5 (0.05186 gist and repository, 0.05188 thesis; 0.05186 stored) and Re 1000 x = 0.9063 (-0.5155 repository and thesis, -0.51500 gist; -0.5155 stored). The printed Re 400 v value -0.23827 at x = 0.9063 is the known misprint (flagged by two of the copies), stored as printed. Used by validation_refs_w31c.rs."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_ghia1982_u_centerline_read.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://gist.githubusercontent.com/ivan-pi/3e9326d18a366ffe6a8e5bfda6353219/raw",
+          "sha256": "63b540237aad79e1acb07faa01bc3a2f007ca7a7033da9426055e9c257e4a42b",
+          "bytes": 541
+        },
+        {
+          "local": "validation-data/reference/w31c_ghia1982_v_centerline_read.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://gist.githubusercontent.com/ivan-pi/caa6c6737d36a9140fbcf2ea59c78b3c/raw",
+          "sha256": "6bd5f10f5c75f215be05260d072cf440a68a078aa55bf97ce41a84f08b97c19d",
+          "bytes": 538
+        }
+      ]
+    },
+    {
+      "id": "w31c-bfs-gartling1990-re800",
+      "title": "Backward-facing step Re 800: Gartling (1990) lengths as tabulated in the MFIX-Exa tutorial",
+      "case": "backward_step",
+      "citation": "D. K. Gartling, Int. J. Numer. Methods Fluids 11 (1990) 953-967 (original not read); values quoted from https://mfix.netl.doe.gov/doc/mfix-exa/guide/latest/tutorials/fluid/steady-backward-facing-step.html",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://mfix.netl.doe.gov/doc/mfix-exa/guide/latest/tutorials/fluid/steady-backward-facing-step.html",
+        "attribution": "MFIX-Exa documentation quoting Gartling 1990",
+        "notes": "Six numbers; H = 1 downstream channel height, step height 0.5. The AMCA 2013 paper (Teruel and Fogliatto, Mecanica Computacional XXXII) prints a different row labelled Gartling (1990): 11.9, 9.5, 20.6 (see ADR 0064). Armaly et al. 1983 give the reattachment length only as figures 4 and 14 (data not obtained)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_bfs_gartling1990_re800_mfix.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://mfix.netl.doe.gov/doc/mfix-exa/guide/latest/tutorials/fluid/steady-backward-facing-step.html",
+          "sha256": "be69544ab46d637e6ff04a8648eb43881f00f034ba66a0990a2ef4fe15b1369f",
+          "bytes": 562
+        }
+      ]
+    },
+    {
+      "id": "w31c-williamson1989-st-re-fit",
+      "title": "Williamson (1989) Strouhal-Reynolds fit for parallel shedding behind a circular cylinder",
+      "case": "cylinder",
+      "citation": "C. H. K. Williamson, J. Fluid Mech. 206 (1989) 579-627, equation (6), read in the author copy https://authors.library.caltech.edu/records/wavw6-f7k56/files/WILjfm89a.pdf",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://authors.library.caltech.edu/records/wavw6-f7k56",
+        "attribution": "C. H. K. Williamson, J. Fluid Mech. 206 (1989) 579-627",
+        "notes": "Three coefficients and the rms error printed in the paper (primary source, read in full text); no copyright claimed on the numbers."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_cylinder_williamson1989_st_re_fit.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://authors.library.caltech.edu/records/wavw6-f7k56/files/WILjfm89a.pdf",
+          "sha256": "bae086dcca1695313f5d9abc208b74dfe74ecc1d1cc6ed942162d0a178212890",
+          "bytes": 295
+        }
+      ]
+    },
+    {
+      "id": "w31c-dean1978-channel-friction-table",
+      "title": "Dean's channel friction correlation: Reynolds-number table of arXiv:1405.1750 Appendix A",
+      "case": "channel",
+      "citation": "R. B. Dean, J. Fluids Eng. 100 (1978) 215-223 (original not read); relation and Table 1 as printed in Appendix A of arXiv:1405.1750",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://arxiv.org/abs/1405.1750",
+        "attribution": "arXiv:1405.1750 Appendix A (alpha = 0.0614, Re_tau = 0.1752 Re_b^(7/8), Table 1)",
+        "notes": "Re_b = U_b h / nu with h the channel half-width. The table row Re_tau 100 prints U_b/u_tau 14.4 whereas Eq. (A1) gives 14.13; the PDF text extraction may be at fault."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_dean1978_channel_friction_table.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://arxiv.org/pdf/1405.1750",
+          "sha256": "88f94512456557c00b26e0e278f608cba800b573af1005a5affe9fa1292ac86c",
+          "bytes": 233
+        }
+      ]
+    },
+    {
+      "id": "w31c-graetz-tube-eigenvalues-clarkson",
+      "title": "Graetz problem, circular tube, constant wall temperature: first five eigenvalues",
+      "case": "channel",
+      "citation": "Clarkson University CH490 notes, Graetz Problem (R. Subramanian)",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://lin-web.clarkson.edu/projects/subramanian/ch490/notes/Graetz%20Problem.pdf",
+        "attribution": "Clarkson University CH490 lecture notes, Graetz Problem",
+        "notes": "Eigenvalues of phi'' + phi'/Y + lambda^2 (1 - Y^2) phi = 0 with phi'(0) = 0, phi(1) = 0, and the printed Nu_inf = 3.656. The local-Nu table of the tube was not obtained."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_graetz_tube_cwt_eigenvalues_clarkson.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://lin-web.clarkson.edu/projects/subramanian/ch490/notes/Graetz%20Problem.pdf",
+          "sha256": "9e683c245a836cf6a769a52977e7ace2cca8175cee6afdbf181a553a5c42a6fd",
+          "bytes": 108
+        }
+      ]
+    },
+    {
+      "id": "w31c-naca0012-tmr-subsets",
+      "title": "NACA 0012 experiment subsets from the NASA TMR data (Ladson tripped Cl/Cd, Gregory and O'Reilly Cp)",
+      "case": "naca0012",
+      "citation": "NASA TMR https://tmbwg.github.io/turbmodels/naca0012_val.html; files NACA0012_validation/CLCD_Ladson_expdata.dat and CP_Gregory_expdata.dat of TMBWG/turbmodels at the commit pinned in dataset naca0012-tmr",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA TMR (TMBWG); Ladson, NASA TM 4074 (1988); Gregory and O'Reilly, NASA R&M 3726 (1970)",
+        "notes": "Subsets copied from the pinned files (CC0 repository, experimental data originate from the cited reports). Ladson: Re 6e6, M 0.15, transition tripped with 80 grit, 17 rows (alpha -4.04 to 19.08 deg, the last two rows are post-stall). Gregory and O'Reilly: Re = 2.88e6 in the file header (the TMR page text says 3 million), digitised from a photocopy so only approximate, upper surface, alpha = 0, 25 rows."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w31c_naca0012_ladson1988_80grit_cl_cd.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CLCD_Ladson_expdata.dat",
+          "sha256": "057bccfdfbd88e6306c04c5aab14a6b0e45c51980fffe0118d53626dbf0a2a90",
+          "bytes": 372
+        },
+        {
+          "local": "validation-data/reference/w31c_naca0012_gregory1970_cp_upper_alpha0.csv",
+          "retrieved": "2026-10-18",
+          "source_url": "https://raw.githubusercontent.com/TMBWG/turbmodels/20a39f549dbff988a6accc421ac84dafc4487695/NACA0012_validation/CP_Gregory_expdata.dat",
+          "sha256": "74f5f62a327f031a823ddabe5bcb8b35b9b958f0cdd1181e4f480ed423a17813",
+          "bytes": 485
+        }
+      ]
     }
   ]
 }

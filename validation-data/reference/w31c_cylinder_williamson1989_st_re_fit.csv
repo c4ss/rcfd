@@ -1,0 +1,5 @@
+name,value,note
+A,-3.3265,"S = A/Re + B + C Re, equation (6), Williamson JFM 206 (1989) 579-627; least-squares fit to the parallel-shedding data (Re 49 to 178 in that study)"
+B,0.1816,"same"
+C,1.600e-4,"same"
+rms_error_of_fit,0.000089,"as printed in the paper (average percentage error 0.06 %)"
