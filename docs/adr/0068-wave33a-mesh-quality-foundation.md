@@ -107,6 +107,27 @@ the gates and set-ups are untouched:
 4. **Chord stations** x(u) = 0.85 (1 - cos(pi u))/2 + 0.15 u, u = m / n_chord (a 15 % linear share keeps the end spacing from collapsing, which the stack thickness at y+ = 30
    would otherwise exceed at the trailing edge).
 
+## Amendment 2 (written after development runs of the small set-up S only; A' and B' have NOT been run)
+
+Development iterations on S (a layer-by-layer check of 2-D cell areas and a per-face listing of non-orthogonality; S is not a gated set-up) changed the line construction. They
+are listed here so that the later measurement can be read against them. Gates, set-up counts and `front_gap` 0.3 for A', B', S are unchanged.
+
+1. **Pursuit lines instead of straight rays.** A straight ray from the stack edge to its seam or front-edge target grazes the wall near the pressure-side nose and folds (negative
+   2-D areas on S, cell 121 of the first build). Each line now leaves along the wall normal and turns smoothly to aim at its target (direction blend weight smoothstep of
+   q / (0.7 n) over the n cells outside the stack), reaching the target exactly; step lengths keep the graded fractions of the remaining distance. The outlet lines (i = 0, n_i) are
+   straight so that the outlet stays planar. A Bezier variant was tried first and hooked at the trailing edge; it is not used.
+2. **Common first height everywhere.** The wake stacks use d1 = h1 as the blade (not 0.5 x the local axial spacing): a first height that varies by 20 % between neighbouring lines misaligns
+   the rows by more than the line spacing and gave 80+ deg faces in the wake on S. The wake cells are therefore thin in the stack rows (aspect is gated, the wake is not a wall).
+3. **Front-edge nodes** start at the nose with the width of three wall cells and grow geometrically to the seam corners (previously the reverse).
+4. **Known geometric limit, measured on S only:** at `front_gap` 0.3 the nose fan spreads n_nose lines over the 0.28 m front edge that lies 0.02 m ahead of the nose; the lines are
+   oblique by construction. S gives max non-orthogonality 78.8 deg and 371 faces above 60 deg of 11536 cells. A larger `front_gap` (1 chord and more) tangles the pressure-side
+   fan (lines graze the staggered pressure surface) and is rejected by the generator with a located error. I therefore expect A' and B' to MISS the 70 deg gate; this is a
+   prediction written before they run, not a gate change.
+
+**Decision rule (registered before A' and B' run):** A' and B' are run once each with the construction above. A measured value beyond a limit becomes an `#[ignore]`d `*_known_miss`
+test with the limit unchanged; no re-run with another construction to pick a better value. A corrected set-up is added only for a defect of the set-up itself (not of the quality), and
+then as a new test with the old one left ignored.
+
 ## Pre-registered checks
 
 Tests: `crates/rcfd-mesh/tests/fan_cgrid.rs`, `crates/rcfd-api/tests/fan_cgrid_case.rs`, `crates/rcfd-api/tests/seam_flux_w33a.rs`.
