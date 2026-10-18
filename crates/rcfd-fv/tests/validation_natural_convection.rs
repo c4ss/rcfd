@@ -107,7 +107,7 @@ fn cell_width(geom: &FvGeometry, c: usize, axis: usize) -> f64 {
     hi - lo
 }
 
-fn solve(ra: f64, n: usize, ratio: f64, max_iter: usize) -> Outcome {
+fn solve(ra: f64, n: usize, ratio: f64, alpha_u: f64, max_iter: usize) -> Outcome {
     let g = Grading::Symmetric(ratio);
     let mesh = Arc::new(box_2d_graded(n, n, 1.0, 1.0, [g, g], false, false).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
@@ -123,7 +123,7 @@ fn solve(ra: f64, n: usize, ratio: f64, max_iter: usize) -> Outcome {
     t.set_bc(&geom, "ymax", Box::new(ZeroGradient)).unwrap();
     let mut s = SimpleSettings::new(PR, Coupling::Simplec);
     s.convection = ConvScheme::Tvd(TvdLimiter::VanLeer);
-    s.alpha_u = 0.8;
+    s.alpha_u = alpha_u;
     let flow = SimpleSolver::new(geom.clone(), u, p, s);
     let mut energy = EnergySolver::new(geom.clone(), t, 1.0);
     energy.convection = ConvScheme::Tvd(TvdLimiter::VanLeer);
@@ -209,6 +209,7 @@ fn order_gci(q: [f64; 3], r: f64) -> Option<(f64, f64, f64)> {
 
 struct Case {
     ra: f64,
+    alpha_u: f64,
     sizes: [usize; 3],
     ratio: f64,
     u_ref_pct: f64,
@@ -217,7 +218,11 @@ struct Case {
 
 fn run_case(c: &Case) {
     let r = reference(c.ra);
-    let outs: Vec<Outcome> = c.sizes.iter().map(|&n| solve(c.ra, n, c.ratio, 40000)).collect();
+    let outs: Vec<Outcome> = c
+        .sizes
+        .iter()
+        .map(|&n| solve(c.ra, n, c.ratio, c.alpha_u, 40000))
+        .collect();
     let pct = |v: f64, rf: f64| 100.0 * (v / rf - 1.0);
     for o in &outs {
         println!(
@@ -309,6 +314,7 @@ fn run_case(c: &Case) {
 const CASES: [Case; 4] = [
     Case {
         ra: 1e3,
+        alpha_u: 0.8,
         sizes: [16, 32, 64],
         ratio: 4.0,
         u_ref_pct: 0.1,
@@ -316,6 +322,7 @@ const CASES: [Case; 4] = [
     },
     Case {
         ra: 1e4,
+        alpha_u: 0.8,
         sizes: [20, 40, 80],
         ratio: 4.0,
         u_ref_pct: 0.2,
@@ -323,6 +330,7 @@ const CASES: [Case; 4] = [
     },
     Case {
         ra: 1e5,
+        alpha_u: 0.8,
         sizes: [24, 48, 96],
         ratio: 6.0,
         u_ref_pct: 0.5,
@@ -330,6 +338,7 @@ const CASES: [Case; 4] = [
     },
     Case {
         ra: 1e6,
+        alpha_u: 0.8,
         sizes: [32, 64, 128],
         ratio: 8.0,
         u_ref_pct: 1.0,
@@ -357,8 +366,22 @@ fn a_ra_1e5() {
 /// (Nu_avg +0.33 percent, u_max +0.33, v_max +0.55, Nu_max -1.99, extrapolated Nu 8.819), but two registered convergence
 /// checks miss: the 32 x 32 mesh does not reach the residual limit in 40000 iterations (limit cycle at 1.3e-2), and v_max
 /// is non-monotone over the sequence (220.642, 220.651, 220.559, a 0.04 percent spread, below the table's own 1 percent).
+/// Wave 31A (ADR 0062 item 2): the cause is an unstable relaxation of the iteration (alpha_u 0.8) on the 32 x 32 mesh, not the discretisation;
+/// the corrected run `a_ra_1e6_alpha05` below meets every limit. This record stays as measured.
 #[test]
 #[ignore = "known miss, heavy (about 6 min): see doc comment"]
 fn a_ra_1e6_known_miss() {
     run_case(&CASES[3]);
+}
+
+/// Wave 31A (ADR 0062 item 2, addendum 1): corrected set-up of the Ra = 1e6 run. The registered iteration (alpha_u 0.8) does not converge on
+/// the 32 x 32 mesh although a steady state exists (diagnosis `diag_cavity_ra1e6.rs`: a lower alpha_u or a lower energy relaxation converges, the
+/// stall is independent of the convection scheme), so the corrected run uses alpha_u = 0.5 for all three meshes; every limit A0 to A6 is unchanged.
+#[test]
+#[ignore = "heavy (about 6 min); corrected set-up of a_ra_1e6_known_miss, see ADR 0062 addendum 1"]
+fn a_ra_1e6_alpha05() {
+    run_case(&Case {
+        alpha_u: 0.5,
+        ..CASES[3]
+    });
 }

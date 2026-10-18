@@ -84,3 +84,35 @@ Open: v_max over the mesh sequence. With the converged 32 x 32 value 220.48 the 
   not converge on a mesh that has a steady state); the corrected run uses alpha_u = 0.5 for all three meshes and every other setting and EVERY limit A0 to A6 unchanged. alpha_u = 0.5 was the first value tried in D1 and 0.3 gives the same answer
   to 3e-5; it is not selected from a set by the outcome. Whatever the corrected test measures stays registered (a miss becomes a `*_known_miss`). No solver code is changed and no opt-in key is added (the existing
   `alpha_u` and `relax` keys already carry the remedy; the case-file default values are not changed).
+
+## Addendum 2: measured results, item 2 (Ra 1e6 cavity, all numbers from `crates/rcfd-fv/tests/diag_cavity_ra1e6.rs` and `validation_natural_convection.rs`)
+
+Deviations disclosed: (a) the first run of the diagnostic extracted v_max wrongly (the two cell rows next to y = 0.5 were not averaged, giving 8e14); fixed before any reported number, the D0/D1 run was repeated. (b) The registered
+decision rule for D4/D5 had two outcomes (steady state reached and the steady iteration stays converged from it, or no steady state); the measured third outcome is described below and no rule was
+re-worded. (c) D7 and the corrected test were registered in addendum 1 after D0 to D3 had been seen.
+
+Baseline D0 (reproduced): 40000 iterations, residual 1.31e-2, v_max 220.6422, Nu 8.8581, peak-to-peak over the last 2000 iterations 7e-4 (Nu) and 5e-3 (v_max).
+* D1 under-relaxation (one factor): alpha_u 0.5 converges (336 iterations, Nu 8.87276, v_max 220.4816); alpha_u 0.3 (581, 8.87249, 220.4785); energy relax 0.7 (748, 8.87317, 220.4870); energy relax 0.5 (1697, same); alpha_u 0.5 with relax 0.5 (1767, 8.87276).
+* D3 classic SIMPLE (0.7, 0.3): 250 iterations, Nu 8.87280, v_max 220.4795; with (0.5, 0.2): 336 iterations, 8.87262.
+* D2 convection scheme (momentum and energy both, and each alone, with the baseline relaxation): upwind, linear-upwind, minmod, Koren, Van Albada, MUSCL all stall at residual 0.9e-2 to 2.5e-2 with peak-to-peak 1e-3 to 5e-3
+  in v_max (18 runs); no scheme or limiter converges.
+* D4 transient (PISO, van Leer, same mesh, from rest, dt from Courant 0.5 and 2 on v_max 220): the flow becomes exactly steady: max|dT/dt| 6e-9 at t = 0.40 and 5e-10 at t = 0.5, max|du/dt|/v_max 1.4e-8 and 2e-9 (Courant 0.5; Courant 2: 6e-9, 1e-8, 6e-10, 1e-9),
+  v_max 220.4968 (Co 0.5) and 220.4929 (Co 2), Nu 8.87298 and 8.87299. This agrees with the converged steady iterations of D1 (8.87249 to 8.87317, 220.478 to 220.487) to 3e-5 (Nu) and 7e-5 (v_max): a steady state of the discrete system exists, it is the one D1 converges to.
+* D5 initial condition and restart: starting from the conduction profile, from rest, and from the stalled state again (second 40000 iterations) all give the same limit cycle (residual 1.31e-2, Nu 8.85813, v_max 220.6422). Starting the steady iteration with the baseline
+  relaxation from the converged transient state (the true discrete steady state) does NOT stay there: it leaves it and ends in the same kind of limit cycle (residual 1.48e-2, Nu 8.86185). The steady state is a repelling fixed point of the
+  baseline iteration map.
+* D6 mesh: n = 32, ratio 2 and 4 converge (221 and 215 iterations; Nu 9.270 and 9.001); ratio 6, 8, 10 stall (8.8e-3, 1.3e-2, 2.2e-2); ratio 8 with n = 30, 31, 33, 36 stall (3.1e-2, 2.3e-2, 1.4e-2, 3.7e-3, the residual falls with n), n = 40 converges (330 iterations),
+  as do 48 to 128. So the instability of the baseline iteration is not specific to one mesh; its strength grows with the wall clustering and decreases with the cell count, and it vanishes at 40 and more cells for ratio 8.
+* D7 converged v_max sequence at alpha_u 0.5 (n = 32, 48, 64, 96, 128; Nu 8.87276, 8.84764, 8.83827, 8.83121, 8.82865): v_max by the parabola of the validation test 220.4816, 220.1378, 220.6504, 220.6298, 220.5589; raw cell maximum 220.4811, 218.8066, 220.3645, 220.0842, 220.4832;
+  cubic through four cells 220.5909, 220.4631, 220.5593, 220.5769, 220.5722 (maximum at x = 0.0373 to 0.0377).
+
+Root cause (item 2): the SIMPLEC iteration with alpha_u 0.8 and energy relaxation 0.9 and the lagged buoyancy-temperature coupling is linearly unstable on the 32 x 32 ratio 8 mesh (and, with weaker amplitude, on neighbouring meshes up to 36 cells), although the discrete
+steady problem has a unique converged state (found by lower relaxation, classic SIMPLE, and the transient march). It is not a limiter or scheme effect (upwind stalls the same), not an initial-condition effect, and not the absence of a steady state. The "limit cycle at 1.3e-2" is
+the nonlinear saturation of that iteration instability. The remedy is the relaxation of the iteration path, which does not change the converged answer beyond 5e-5. No solver defect is proven (no wrong equation, no NaN, no
+non-physical result), so no code is changed and no opt-in key is added (the existing `alpha_u` and `relax` keys carry the remedy).
+The v_max non-monotonicity (registered A5 check form: |Q_f - Q_m| < |Q_m - Q_c|): with the converged coarse member the registered A5 check on v_max passes (|220.5589 - 220.6504| = 0.092 < |220.6504 - 220.4816| = 0.169), so the registered miss was caused by the unconverged
+32 x 32 member (220.642 instead of 220.482). The sequence is NOT monotone in the strict sense even when converged (220.482, 220.650, 220.559), and the five-mesh D7 sequence is not monotone with any of the three extractions; the parabola extraction scatters by up to 0.2 percent
+(n = 48: 220.14) and the cubic by 0.06 percent, both larger than the asymptotic differences, so the non-monotonicity of v_max is the sampling of a peak in a graded boundary layer by cell-centre values (extraction error), not a statement about the discretisation order.
+
+Corrected test `a_ra_1e6_alpha05` (ignored heavy, 322 s, all limits A0 to A6 unchanged, alpha_u 0.5): PASSES. n = 32, 64, 128 converge in 336, 1057, 3592 iterations (residual below 1e-9, hot/cold imbalance below 5e-11); finest Nu_avg 8.8286 (+0.326 %, limit 1.5 %), u_max 64.842 (+0.33 %, limit 2.0 %),
+v_max 220.559 (+0.55 %, limit 2.0 %), Nu_max 17.568 (-1.99 %, limit 4.0 %), locations within 0.02, Nu_avg observed order 1.84, GCI_fine 0.053 % (limit 1 %), Richardson Nu 8.8249 (+0.28 %, limit 1.5 %). The old `a_ra_1e6_known_miss` stays ignored and still reports the unconverged run.
