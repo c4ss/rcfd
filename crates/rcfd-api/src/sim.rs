@@ -2239,6 +2239,7 @@ impl Simulation {
                     s.conv_flux_offset.is_some() || get_s(&self.case, "solver.component_diagonal") == "corrected";
                 s.wall_pressure_trapezoid =
                     src_force.is_some() && self.sources.as_ref().is_some_and(|x| x.wall_pressure_trapezoid);
+                s.coupled_body_pair_mean = s.wall_pressure_trapezoid;
                 let tw_force = self.two_way.as_ref().and_then(|t| t.force().cloned());
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() || tw_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {
