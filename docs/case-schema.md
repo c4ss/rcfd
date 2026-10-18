@@ -1476,3 +1476,18 @@ no vapour compressibility, no non-condensable gas, no turbulence correction of t
 (the incompressible liquid slug accelerates to several times the inlet speed; the registered `dt` did not). Located errors:
 `multiphase.cavitation.saturation_pressure`, `bubble_number_density`, `nucleus_radius` (unset or not positive),
 `multiphase.cavitation.model` (no `pressure = "fixed"` boundary for the volume to leave through; combined with `mass_transfer`).
+
+## Divergence guard of the transient solvers (`solver.divergence_courant_limit`)
+
+`solver.divergence_courant_limit` (float, >= 0, default 0) applies to `solver.algorithm = "piso"` and `"pimple"` (ADR 0067).
+The solver stops a run at the first step whose velocity, predicted flux, pressure or flux is not finite, or whose Courant number is
+not finite or exceeds the limit. The value 0 (unset) means the built-in limit 1e6; a positive value replaces it (`1e300` disables
+the Courant criterion in practice; a non-finite state is always fatal). The run ends with the state `diverged`, exit code 6 and
+a located message that names the quantity, step, outer iteration, stage and cell. For finite runs below the limit the checks only
+read the state, so results are bit-identical to runs without the key.
+
+## Design-loop files (not part of the case schema)
+
+Operating maps (`rcfd map`), design studies and the `design_*` tools do not add a section to the case: a map or a study is a driver
+that overrides settings of a base case (`rcfd map <case> --axis path=v1,v2,...`; `study.json` next to `evaluations.jsonl` in a study
+directory). Their formats are described in `docs/design-loop.md`. The existing `study` section (ADR 0034) is unchanged.

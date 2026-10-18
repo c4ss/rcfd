@@ -1196,3 +1196,18 @@ Computed-by-rcfd results of this wave (not literature, not validation data): the
 | Reference pressure 20 uPa | common standard value | used as the SPL reference |
 
 No measured fan or airfoil noise data were read or used. The broadband proxies (Proudman, Curle, trailing edge) are NOT validated; validation would need measured or scale-resolving wall-pressure and far-field data for a known operating point, calibration of the constants on one data set and a held-out comparison on another.
+
+## Wave 32C: design-loop infrastructure (ADR 0067, docs/design-loop.md)
+
+| Item | What was read (source) | Result |
+|---|---|---|
+| Nelder-Mead simplex | Nelder and Mead (1965) NOT read; standard coefficients 1, 2, 0.5, 0.5 and the 5 % initial simplex from general knowledge | implemented and checked on Rosenbrock (20 of 20 seeds, f < 1e-18); no claim about the original text |
+| Differential evolution | Storn and Price (1997) NOT read; DE/rand/1/bin with F = 0.5, CR = 0.9 from general knowledge | checked on Rastrigin d = 4 (20 of 20 seeds, f = 0) |
+| Deb's feasibility rules and fast non-dominated sorting | Deb (2000) and Deb et al. (2002) NOT read; rules as commonly stated | checked on analytic fronts (ZDT1-like, quarter circle, plane) |
+| Latin hypercube | McKay, Beckman, Conover (1979) NOT read | stratification property tested exactly |
+| Sobol sequence, Joe-Kuo direction numbers | Sobol (1967), Antonov and Saleev (1979), Joe and Kuo (2008) NOT read; the direction numbers for dimensions 2 to 10 were recalled from memory | UNVERIFIED as a transcription; verified only by the net properties (first 8 points of dimensions 1 and 2 exact, power-of-two stratification in all 10 dimensions, (0, m, 2)-net of the first two dimensions, L2-star discrepancy 0.0051 against a random mean of 0.0131) |
+| Warnock's L2-star discrepancy formula | from memory | used only as a relative comparison between Sobol and random points |
+| xoshiro256** and SplitMix64 | Blackman and Vigna generators recalled from memory | used for seeded reproducibility only; no statistical quality claim beyond the stratification and determinism tests |
+| Contraction channel (E1) | no reference data; the 40 % claim of the ADR is an estimate from a lubrication argument | computed by rcfd: pressure drop 9.94 to 5.07 (49 %) with the outlet velocity ratio at the constraint 1.3 |
+
+No measured data and no vendor material were read or used in this wave.
