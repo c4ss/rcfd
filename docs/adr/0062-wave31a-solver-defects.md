@@ -67,3 +67,20 @@ refined mesh and dt together (so its GCI mixes the two errors, a set-up defect o
 same K1 (finest mesh), K2 (finest) and K3 (GCI_fine of the spatial triple, refinement ratio sqrt 2) limits. If it passes it becomes a new ignored heavy test that passes (cost above the 5 minute guideline); if it misses it is a `*_known_miss`.
 
 Order: this ADR is committed first (docs only); then the limiter fix with its tests and the Sod runs; then the diagnostic test files, then runs; then addenda with measured numbers.
+
+## Addendum 1 (registered after D0 to D3 and before D7 and the corrected Ra 1e6 test; no number below was changed by it)
+
+Measured so far (diagnostic file, prints only): D0 reproduces the miss (40000 iterations, residual 1.31e-2, v_max 220.6422, Nu 8.8581; last-2000 peak-to-peak 7e-4 in Nu). D1: alpha_u = 0.5 alone,
+alpha_u = 0.3 alone, energy relax 0.7 alone and 0.5 alone all converge to residual < 1e-9 in 336, 581, 748, 1697 iterations. D3: classic SIMPLE (0.7, 0.3) converges in 250 iterations. D2: every convection scheme
+(upwind, linear-upwind, minmod, Koren, Van Albada, MUSCL, and each of momentum or energy alone) stalls at residual 1e-2 with the same relaxation factors. So a steady state of the discrete system exists, the stall
+does not depend on the limiter or on the scheme order, and it disappears when the lagged buoyancy-temperature loop is damped more (lower alpha_u or lower energy relax) or when SIMPLE is used.
+The converged answer depends on alpha_u only at 5e-5 in Nu_avg and 3e-5 in v_max (8.87276, 8.87249, 8.87317; 220.4816, 220.4785, 220.4870): the known relaxation dependence of the Rhie-Chow face flux.
+Open: v_max over the mesh sequence. With the converged 32 x 32 value 220.48 the sequence is 220.48, 220.651, 220.559, still non-monotone, so the unconverged member does not explain it. Registered now:
+* D7 v_max extraction and sequence: with alpha_u = 0.5 (energy relax 0.9, everything else as the baseline) all of n = 32, 48, 64, 96, 128 at ratio 8 are converged (residual < 1e-9) and v_max is extracted three
+  ways from the same fields (parabola through three cells as the validation test, the raw maximum cell value, and a cubic through the four cells around the maximum), with Nu_avg and the location. Rule fixed before the run:
+  the non-monotonicity "belongs to the unconverged member" only if the converged n = 32, 64, 128 triple (same alpha_u) is monotone; "belongs to the extraction" if it is non-monotone for the parabola but monotone for the
+  cubic or raw maximum; otherwise it is "a property of the discrete sequence outside its asymptotic range" (reported with the observed pattern over the five meshes).
+* New corrected test `a_ra_1e6_alpha05` (ignored heavy, in `validation_natural_convection.rs`, old `a_ra_1e6_known_miss` kept): the set-up defect is the relaxation of the registered run (the iteration at alpha_u 0.8 does
+  not converge on a mesh that has a steady state); the corrected run uses alpha_u = 0.5 for all three meshes and every other setting and EVERY limit A0 to A6 unchanged. alpha_u = 0.5 was the first value tried in D1 and 0.3 gives the same answer
+  to 3e-5; it is not selected from a set by the outcome. Whatever the corrected test measures stays registered (a miss becomes a `*_known_miss`). No solver code is changed and no opt-in key is added (the existing
+  `alpha_u` and `relax` keys already carry the remedy; the case-file default values are not changed).
