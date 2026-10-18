@@ -1181,3 +1181,18 @@ No new external source was read in this wave. The reference values used are the 
 of `validation-data/reference/cylinder_re100_literature.csv`, St 0.164 to 0.167 and C_D 1.314 to 1.370; the Sod exact values of Marzouk). All limits were taken unchanged from ADR 0060 and ADR 0061.
 Computed-by-rcfd results of this wave (not literature, not validation data): the Ra 1e6 cavity diagnosis (converged 32 x 32 value v_max 220.48, Nu 8.873 at alpha_u 0.5), and the cylinder time-step and mesh study
 (St extrapolated to zero time step and mesh 0.1669, C_D 1.357 by a fitted model with first-order time and second-order space terms, versus the unchanged literature windows).
+
+## Wave 32B: aeroacoustics for fan noise (ADR 0066, docs/acoustics.md)
+
+| Item | What was read (source) | Result |
+|---|---|---|
+| FW-H formulation 1A (Farassat, Brentner) | not read in this wave; formulas as in ADR 0013 (from memory of the papers) | UNVERIFIED as transcription; the implementation is verified only against closed-form fields (pulsating sphere, compact dipole, rotor point force, moving observer in flow) |
+| Gutin rotor harmonics | Gutin (1936) and Lowson (1965) NOT read | the closed form was derived in ADR 0066 from the compact-dipole far field and checked against the FW-H solver (<= 4e-5); no claim to match the published form |
+| Curle (1955), Proudman (1952) | NOT read | surface-dipole and isotropic-turbulence scalings re-derived or taken as scalings (U^6 dipole power, U^8 quadrupole) |
+| Proudman constant alpha = 0.1 and M_t = sqrt(2k)/c0 | vendor documentation text via secondary search results; the Sarkar and Hussaini report (a scanned PDF) could not be read | UNVERIFIED, secondary; default only, not calibrated |
+| Ffowcs Williams and Hall (1970) trailing-edge U^5 law | a review snippet; the paper was not read | only the exponent is used; the constant K_TE has no value from a source |
+| A weighting | IEC 61672-1 NOT read; formula constants (20.6, 107.7, 737.9, 12194 Hz) from Wikipedia and metricgate.com | formula implemented; the tabulated A-weights matched the formula to 0.049 dB at exact base-10 frequencies when compared from memory of the usual table (table itself unverified) |
+| 1/3-octave band definition | IEC 61260-1 NOT read | base-10 bands (ratio 10^(1/10)), as commonly stated; nominal labels from the usual rounded list |
+| Reference pressure 20 uPa | common standard value | used as the SPL reference |
+
+No measured fan or airfoil noise data were read or used. The broadband proxies (Proudman, Curle, trailing edge) are NOT validated; validation would need measured or scale-resolving wall-pressure and far-field data for a known operating point, calibration of the constants on one data set and a held-out comparison on another.
