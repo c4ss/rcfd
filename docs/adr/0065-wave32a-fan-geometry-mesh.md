@@ -90,3 +90,43 @@ Test blade B: N = 5, r_hub 0.10, r_tip 0.30, clearance 0.01, NACA 4412-like line
   present behaviour, asserted so that a later solver change is noticed. Hence S3 uses the existing relative-frame formulation.
 
 Baseline hashes and all existing tests stay bit-identical; no solver code is changed.
+
+## Addendum 1: measured results and deviations (written after the implementation; the criteria above are unchanged)
+
+Per check, measured against the registered limit. All numbers from `cargo test --release -p rcfd-mesh --test fan` and
+`-p rcfd-api --test fan_sector` (the ignored known-miss tests run with `--include-ignored`).
+
+| Check | Measured | Limit | Outcome |
+|---|---|---|---|
+| G1 chord, closed form area, thickness | chord to round-off, NACA 00xx closed form 1.0e-15, max thickness and arc max thickness as registered | 1e-13, 1e-5, 1 % / 1e-12 | pass |
+| G1 polygon area, 400 points per side | 1.03e-5 (NACA 0012) | 1e-5 | MISS, `g1_sections_match_analytic_formulas_known_miss` (ignored, limit intact) |
+| G1 polygon area, corrected set-up of 1000 points | 1.6e-6 to 1.7e-6 (NACA 0012, 4412-like, circular arc) | 1e-5 | pass (set-up defect: a 400-point polygon cannot meet 1e-5; the 400-point test is kept) |
+| G2 area and volume at (80,24) | volume 7.3e-4, area 6.4e-5 | 1e-3, 2e-3 | pass |
+| G2 refinement (160,48), (320,96) | volume 1.8e-4, 4.6e-5; area 1.6e-5, 4.2e-6; observed order 2.00 and 1.96 | monotone, order >= 1.5 | pass |
+| G3 watertight | edges, Euler, volume > 0 | exact | pass |
+| M1 conservation | residual 1.8e-16 of V_env | 1e-11 | pass |
+| M1 envelope vs analytic | 1.16e-2, 1.5e-3, 3.4e-4 for n_side 8, 16, 32 | 5e-3 (finest), decreasing | pass at 16 and 32 (the coarsest exceeds 5e-3; read as the limit on the refined meshes) |
+| M1 blade solid vs z-truncated quadrature | 1.9e-2, 1.2e-3, 4.3e-5 for n_chord 12, 24, 48 | 2e-3 (refined), decreasing | pass at 24 and 48 |
+| M2 topology | closure 3.4e-15 of sum |S| | 1e-13 | pass |
+| M3 periodicity | node rotation 1.1e-16 m, face centres 2.4e-16 m; `FvGeometry::new` accepts | 1e-12 m | pass |
+| M4 set-up A (138 192 cells) | non-orth 73.4 deg (mean 12.5, p99 47.1, 2 707 above 50, 23 above 60), skewness 7.57, aspect 810 | 70, 2.0, 300 | MISS, `m4_quality_gates_known_miss` (ignored, limits intact) |
+| M4 set-up B (239 472 cells) | 89.8 deg (p99 58.2, 14 286 above 50, 3 306 above 60), skewness 66, aspect 19 123 | 70, 2.0, 3000 | MISS (same test) |
+| M5 set-up A | 4.5e-13 relative, h1 from y+ exact to 1e-14, centre y+ exact | 1e-12, 1e-14 | pass |
+| M5 set-up B at 1e-12 | 9.9e-12 | 1e-12 | MISS, `m5_first_cell_b_1e12_known_miss` (ignored); set-up defect: h1 = 7.3e-6 at coordinates up to 0.3 is below the f64 resolution of a coordinate difference (eps * 0.4 / h1 = 1.2e-11); corrected test at 4 eps * 0.4 / h1 passes |
+| S1 empty passage | 1.2e-12 of U | 1e-8 | pass (the residual normalisation of the steady solver stays large, the 400 iterations report not converged, the field is exact from the start) |
+| S2 thin blade at nu 1e-3 | L2 0.0995, 0.0956, 0.0936 for t = 0.06, 0.03, 0.015 | monotone, <= 0.08 at 0.015 | MISS of the limit (monotone), `s2_thin_blade_sequence_known_miss` (ignored): the no-slip blade carries a viscous layer whatever its thickness (Re_c = 100) |
+| S2 corrected set-up nu 1e-4 | 0.0566, 0.0528, 0.0512; runs NOT converged to the tolerance in 1500 iterations | same | pass; the sequence is monotone and under the limit but not converged, read it as a smoke check |
+| S3 convergence | converged in 408 iterations at 1e-11 | residual target within the cap | pass |
+| S3 abs(m_in + m_out) | 4.5e-5 of |m_in| (Omega 2, 10, 20: 2.1e-6, 7.1e-5, 4.5e-5) | 1e-6 | MISS, `s3_laminar_rotating_passage_known_miss` (ignored). The balance over all patches is 7e-16; hub, blade zero; the faceted shroud wall moving tangentially leaks 1.7e-8; the mass flows of the two seam patches (0.283) do not cancel (relative 3.5e-6 to 2.7e-5) and account for the rest. Cause not investigated (a property of the existing rotational-periodic flux treatment or of this mesh); no solver code was changed. The corrected test asserts the balance including the seam fluxes |
+| S4 | `mrf` refused with the located diagnostic on `sources.<name>.zone` containing "surface of revolution" | asserted | pass |
+
+Deviations and fixes made during the work (nothing in the criteria above was edited):
+
+* The blade end caps were first single flat strips: their sagitta made G2 non-monotone. They are now subdivided across the thickness (`n_cap = max(n_chord / 8, 2)`), and the G2 reference area is integrated over the full span, order 2.
+* The test cell counts of the specifications (`n_up`, `n_span`, ...) were enlarged where the exact boundary-layer ridge could not fit (a located error `n_up`, `n_span`, `n_gap`). The mesh rejects a specification it cannot fit.
+* `wall_line` (displacement of the pitchwise lines decaying toward the seam, blended into the first spacing) and `BAND_FAR` (the middle band opens linearly to 0.15 pitch at inlet and outlet) were added to lower the shear: set-up A aspect 2 562 to 810, non-orthogonality 88 to 73 deg, skewness 10 to 7.6. They did not reach the registered gates. The worst cells are the first columns downstream of the trailing plane at mid-span, where the band height is the trailing-face thickness over `n_mid` cells and the axial spacing is the boundary-layer first cell.
+* The validation test of the mesh-level error uses a specification error (`n_span` too small) because the stagger angle that failed earlier now meshes.
+* `include_blade = false` builds the same nodes with the footprint cells kept (empty passage for S1 and M1).
+* Cases hook: `mesh.generator = "axial_fan_sector"`, nested section `mesh.fan` (rcfd-api `fan_case.rs`), example `cases/axial_fan_sector`.
+
+Not claimed: any accuracy of fan performance, any comparison with a published fan, y+ of a converged solution, sharp or rounded edges.
