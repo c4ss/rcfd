@@ -125,3 +125,42 @@ slows down by orders of magnitude between t = 30 and 40 of the start-up transien
 `probe_181x141_dt0050_slow_step` in `validation_cylinder_re100_w31.rs` prints from t = 28 on every 0.5 time units the largest speed, the largest Courant number of the new flux, the pressure-solver iterations of the step (`StepInfo::p_iters`), the continuity residual and the wall time of the step, to find out whether the run
 blows up (growing |u|, Courant), or the pressure solver stalls (p_iters at the cap). Decision: if the probe shows blow-up the cell is reported as "the registered dt is unstable on the 181 x 141 mesh" (a stability limit of the PISO step, Courant number); if it shows pressure-solver
 stalling it is reported as a solver-robustness finding, with no code change in this wave. In both cases the finer-mesh evidence is taken from the dt = 0.025 run of the same mesh (run once), and the dt-versus-h separation uses the matrix.
+
+## Addendum 4: measured results, item 3 (cylinder Re 100; `crates/rcfd-api/tests/validation_cylinder_re100_w31.rs`, logs from the author's scratch directory)
+
+Deviations disclosed. (a) Run counts. 181 x 141 at dt 0.05 was started three times: the first (no progress output) was stopped by me after more than 2 h 20 min, the second (progress output) after it stalled past t = 30, and the registered probe of addendum 3 (which stops by itself) was the third;
+no number from them is used except the blow-up of the probe. 181 x 141 at dt 0.025 was completed once; an orphaned loop of my own started a duplicate of that cell after the first completed and I stopped it within minutes (no result read from it). All other cells ran once.
+(b) Step (ii) at the registered dt 0.05 is impossible (below); the dt-versus-h comparison rule of the registration (evaluated at dt 0.05) is therefore evaluated at dt 0.025 and, as a second view, by the fitted model. (c) A blow-up guard (panic when the Courant number of the new flux is non-finite or above 1e4)
+was added to the runner of the new file after the blow-up was found; it cannot change a run that completes. The guard test (`step_ii_181x141_dt0050_known_miss`) was not re-run.
+
+Step (iv), probe independence: 128 x 100, dt 0.05: St 0.15878 at (3, 0, 0.05) and 0.15878 at (2, 0, 0.1) (difference below 5e-6; limit 0.5 %): met. C_D 1.30996 (equal to the wave 30B fine-mesh value 1.3100).
+Step (ii), next finer mesh: 181 x 141 at dt 0.05 is numerically unstable. The probe shows Courant numbers of 10 to 30 and |u|max 1.7 to 4.9 (physical order 1.4) from t = 28, growth to |u|max 13, 28, 124, 3852 at t = 33.5, 34, 34.5, 35 (Courant 91, 135, 680, 13305), then NaN and 12000
+pressure-solver iterations (30 s) per step: the apparent "hang" of the first two runs. dt 0.025 on the same mesh is stable: St 0.16255, C_D 1.33013 (17 crossings). Solver findings (no code change here): the PISO step with linear-upwind convection has no time-step stability limit it checks (the registered dt, fine for 128 x 100, is
+unstable on the mesh with 2x the cells) and `PimpleSolver::step` has no divergence guard (a NaN field makes every following step iterate the pressure solver to its cap).
+
+Matrix (St; C_D in the second block; 17 crossings at the finest; all runs have at least 14 crossings):
+| mesh \ dt | 0.1 | 0.05 | 0.025 | 0.0125 |
+|---|---|---|---|---|
+| 64 x 50 | 0.14665 | 0.15189 | 0.15475 | |
+| 90 x 70 | 0.15139 | 0.15671 | 0.15966 | |
+| 128 x 100 | 0.15353 | 0.15878 | 0.16175 | 0.16338 |
+| 181 x 141 | | unstable | 0.16255 | |
+
+| mesh \ dt | 0.1 | 0.05 | 0.025 | 0.0125 |
+|---|---|---|---|---|
+| 64 x 50 | 1.25143 | 1.27744 | 1.29283 | |
+| 90 x 70 | 1.27313 | 1.29803 | 1.31325 | |
+| 128 x 100 | 1.28844 | 1.30996 | 1.32341 | 1.33150 |
+| 181 x 141 | | unstable | 1.33013 | |
+(the three cells of the wave 30B sequence agree with its numbers: 64 x 50 dt 0.1, 128 x 100 dt 0.05 and dt 0.025 reproduce to all printed digits.)
+
+Separation of the errors (arithmetic in the author's scratch script `fit.py`, observed orders from three values, Roache 1.25, refinement ratio 2 in dt and sqrt 2 in h):
+* time step at fixed mesh: observed order of St 0.87, 0.85, 0.82 (64, 90, 128 cells; dt 0.1, 0.05, 0.025), 0.87 on 128 x 100 for 0.05, 0.025, 0.0125; of C_D 0.76, 0.71, 0.68 and 0.73: the step is first order in time. Richardson extrapolation in dt on 128 x 100: St 0.16536, C_D 1.3437.
+* mesh at fixed dt: observed order of St 2.29, 2.44, 2.46 (dt 0.1, 0.05, 0.025), of C_D 1.01, 1.57, 2.01; at dt 0.025 with the fourth mesh (90, 128, 181 cells): St 2.77, C_D 1.19; extrapolation h -> 0 at dt 0.025: St 0.16330 (three coarsest) and 0.16305 (three finest), C_D 1.3335 and 1.3433.
+* combined model St = S0 + a h^p + b dt^q fitted to the 11 points (p, q scanned, S0, a, b by least squares; rms 3.2e-5 for St, 1.1e-3 for C_D): St: p 2.50, q 0.85, S0 = 0.16686; C_D: p 1.75, q 0.80, S0 = 1.357. At the wave 30B fine point (128 x 100, dt 0.05) the St deficit of 0.0149
+  to S0 splits into 0.0066 temporal (4.0 % of S0) and 0.0015 spatial (0.9 %); for C_D 0.0328 temporal (2.4 %) and 0.0139 spatial (1.0 %). Both extrapolated values lie inside the literature windows (St 0.164 to 0.167, C_D 1.314 to 1.370): S0 is +1.1 % of 0.165 for St and +1.1 % of 1.342 for C_D.
+Registered rule (dt-dominated if the effect of halving dt exceeds the effect of the next mesh by more than a factor of 2): at dt 0.05 the finer mesh is unstable, so at dt 0.025: halving dt on 128 x 100 changes St by +0.00163, the next finer mesh by +0.00080, ratio 2.04 (just above 2); at dt 0.05 the fitted terms give 0.0066 / 0.0015 = 4.4.
+Verdict: the missed K1 of wave 30B (St -3.77 %) is a time-discretisation error of the first-order-in-time PISO step combined with a dt refined together with the mesh; the mesh error at the registered fine mesh is about 1 %. The far field (r_out 30: ADR 0060) and the probe position (step iv) are not causes. Step (i) of wave 30B was also consistent.
+
+Corrected sequence `k_corrected_sequence_common_dt_0025` (meshes 64 x 50, 90 x 70, 128 x 100 at the common dt 0.025; limits unchanged), run once, 1167 s, PASSES: K4 15, 16, 17 crossings (limit above 9); K1 St 0.16175, deviation 1.97 % (limit 3 %); K2 C_D 1.32341, deviation 1.39 % (limit 4 %); K3 GCI_fine(St) 1.62 % (observed
+order 2.46) and GCI_fine(C_D) 0.96 % (order 2.02), limit 3 %. The old `k1_k3_strouhal_and_gci_known_miss` stays ignored and unchanged. Registered diagnostic caveat: the sequence is still the first-order-in-time dt 0.025 error (St 0.0067 below S0 at the finest), the corrected GCI is a GCI of the spatial error only.

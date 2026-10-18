@@ -119,7 +119,14 @@ fn run(n_theta: usize, n_r: usize, dt: f64) -> Shed {
     let t0 = std::time::Instant::now();
     let mut next_report = 10.0;
     while s.time < 160.0 {
-        s.step(dt);
+        let info = s.step(dt);
+        // blow-up guard (wave 31A): the 181x141 run at dt 0.05 diverges at t = 35 and the pressure solver then spends 12000 iterations per step on NaN
+        assert!(
+            info.courant.is_finite() && info.courant < 1e4,
+            "blow-up at t = {:.2}: Courant number {}",
+            s.time,
+            info.courant
+        );
         if s.time >= next_report {
             let umax = s.u.values.iter().map(|v| v[0].hypot(v[1])).fold(0.0, f64::max);
             println!(
@@ -183,8 +190,17 @@ cell!(cell_90x70_dt0050, 90, 70, 0.05);
 cell!(cell_128x100_dt0100, 128, 100, 0.1);
 cell!(cell_128x100_dt0125, 128, 100, 0.0125);
 // bisection step (ii): next finer mesh (ratio sqrt 2 on the fine mesh), same dt as the fine mesh, and half of it
-cell!(step_ii_181x141_dt0050, 181, 141, 0.05);
 cell!(step_ii_181x141_dt0025, 181, 141, 0.025);
+
+/// KNOWN MISS (registered step (ii), ADR 0062 addendum 3): 181 x 141 at the dt = 0.05 of the 128 x 100 mesh is numerically unstable (Courant number 10 to 30
+/// from t = 28, diverging at t = 35, then NaN). Measured by `probe_181x141_dt0050_slow_step`; this test was not re-run after the blow-up guard was added
+/// (both permitted runs of that cell were used), the guard turns the former endless NaN loop into a panic at t about 35.
+#[test]
+#[ignore = "known miss: dt 0.05 is unstable on 181x141 (ADR 0062 addendum 3); about 3 minutes until the guard panics"]
+fn step_ii_181x141_dt0050_known_miss() {
+    let r = run(181, 141, 0.05);
+    assert!(r.crossings > 9, "K4: {} crossings", r.crossings);
+}
 
 /// Bisection step (iv): probe-position independence, 128x100 at dt 0.05 (the fine mesh of the wave 30B sequence) with the second
 /// probe at (2, 0, 0.1). Registered criterion: St from the two probes agrees to 0.5 %.
