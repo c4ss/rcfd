@@ -44,7 +44,14 @@ impl TvdLimiter {
             TvdLimiter::Minmod => r.clamp(0.0, 1.0),
             TvdLimiter::VanLeer => (r + r.abs()) / (1.0 + r.abs()),
             TvdLimiter::VanAlbada => {
-                if r > 0.0 {
+                if r > 1e150 {
+                    // r * r overflows (NaN for r > 1.34e154, ADR 0062); the algebraically identical form cannot.
+                    if r.is_infinite() {
+                        1.0
+                    } else {
+                        (r + 1.0) / (r + 1.0 / r)
+                    }
+                } else if r > 0.0 {
                     (r * r + r) / (r * r + 1.0)
                 } else {
                     0.0
@@ -520,6 +527,38 @@ mod tests {
             let orders: Vec<f64> = e.windows(2).map(|w| (w[0] / w[1]).log2()).collect();
             println!("2D {name}: errors {e:?} orders {orders:?}");
             assert!(*orders.last().unwrap() > min_order, "{name}: {orders:?}");
+        }
+    }
+
+    /// ADR 0062 item 1: the Van Albada limiter used to return NaN for r > 1.34e154 (r * r overflows).
+    #[test]
+    fn van_albada_is_finite_continuous_and_tvd_for_huge_ratios() {
+        let psi = |r: f64| TvdLimiter::VanAlbada.psi(r);
+        let old = |r: f64| if r > 0.0 { (r * r + r) / (r * r + 1.0) } else { 0.0 };
+        for r in [1e150, 1.2e154, 1e154, 1.4e154, 1e200, 1e300, f64::MAX, f64::INFINITY] {
+            let v = psi(r);
+            assert!(v.is_finite() && (v - 1.0).abs() < 1e-9, "psi({r:e}) = {v}");
+        }
+        // NaN handled as before the fix: not greater than anything, so the zero branch
+        assert_eq!(psi(f64::NAN), 0.0);
+        assert_eq!(psi(f64::NAN).to_bits(), old(f64::NAN).to_bits());
+        // continuity across the switch at 1e150
+        let above = f64::from_bits(1e150f64.to_bits() + 1);
+        assert!((psi(1e150) - psi(above)).abs() <= 1e-12);
+        assert!((psi(1e150) - psi(1.0000001e150)).abs() <= 1e-12);
+        // TVD bounds, psi(1) = 1, zero for r <= 0, and bit identity with the old formula for r <= 1e150
+        assert_eq!(psi(1.0), 1.0);
+        for r in [0.0, -1e-300, -1.0, -1e300, f64::NEG_INFINITY] {
+            assert_eq!(psi(r), 0.0);
+        }
+        let mut r = 1e-300;
+        while r < 1e300 {
+            let v = psi(r);
+            assert!((0.0..=2.0).contains(&v), "psi({r:e}) = {v}");
+            if r <= 1e150 {
+                assert_eq!(v.to_bits(), old(r).to_bits(), "r = {r:e}");
+            }
+            r *= 1.7;
         }
     }
 }

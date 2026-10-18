@@ -399,8 +399,10 @@ sod_case!(b_hllc_minmod_rk3, Hllc, Some(L::Minmod), Rk3, true);
 // KNOWN MISS (ADR 0061 addendum 2): the Van Albada limiter overflows to NaN for ratios above 1.34e154, so RK3 aborts in the first
 // step ("non-positive density or pressure"). With the overflow-safe form of `psi` (scratch copy, not committed) the registered
 // limits B3 to B5 are all met. Limits intact.
+// Wave 31A (ADR 0062): the overflow is fixed in `TvdLimiter::VanAlbada.psi`; this record is kept (ignored) and now passes with
+// `--ignored`; the passing twin `b_hllc_vanalbada_rk3` below has the same limits.
 #[test]
-#[ignore = "KNOWN MISS: Van Albada psi overflows to NaN for r > 1.34e154, RK3 aborts at step 1; see ADR 0061 addendum 2"]
+#[ignore = "KNOWN MISS (fixed in wave 31A, ADR 0062; kept as a record, passes with --ignored): Van Albada psi overflowed to NaN for r > 1.34e154"]
 fn b_hllc_vanalbada_rk3_known_miss() {
     check(
         "b_hllc_vanalbada_rk3_known_miss",
@@ -413,6 +415,7 @@ fn b_hllc_vanalbada_rk3_known_miss() {
         0,
     );
 }
+sod_case!(b_hllc_vanalbada_rk3, Hllc, Some(L::VanAlbada), Rk3, false);
 sod_case!(b_hllc_superbee_rk3, Hllc, Some(L::Superbee), Rk3, false);
 sod_case!(b_hllc_muscl_rk3, Hllc, Some(L::Muscl), Rk3, false);
 sod_case!(b_hllc_koren_rk3, Hllc, Some(L::Koren), Rk3, false);
@@ -578,14 +581,34 @@ fn diag_vanalbada_cfl_scan() {
     }
 }
 
+// Wave 31A (ADR 0062): fixed; kept as a record (ignored, passes with --ignored). The new passing test is
+// `van_albada_limiter_is_finite_for_huge_ratios` below, plus the unit test in `convection.rs`.
 #[test]
-#[ignore = "KNOWN MISS: Van Albada psi overflows to NaN for r > 1.34e154; see ADR 0061 addendum 2"]
+#[ignore = "KNOWN MISS (fixed in wave 31A, ADR 0062; kept as a record, passes with --ignored)"]
 fn van_albada_limiter_is_finite_for_huge_ratios_known_miss() {
     // ADR 0061 addendum 2: the unguarded `(r^2 + r)/(r^2 + 1)` overflowed to NaN for r > 1.34e154 (reached through the
     // 1e-300 guard of the gradient ratio when a face difference is exactly zero next to a non-zero gradient).
     for r in [1e10, 1e100, 1e150, 1.2e154, 1.4e154, 1e200, 1e300] {
         let v = L::VanAlbada.psi(r);
         println!("psi_VanAlbada({r:e}) = {v}");
+        assert!(v.is_finite() && (v - 1.0).abs() < 1e-9, "psi({r:e}) = {v}");
+    }
+}
+
+#[test]
+fn van_albada_limiter_is_finite_for_huge_ratios() {
+    for r in [
+        1e10,
+        1e100,
+        1e150,
+        1.2e154,
+        1.4e154,
+        1e200,
+        1e300,
+        f64::MAX,
+        f64::INFINITY,
+    ] {
+        let v = L::VanAlbada.psi(r);
         assert!(v.is_finite() && (v - 1.0).abs() < 1e-9, "psi({r:e}) = {v}");
     }
 }
