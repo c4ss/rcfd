@@ -1174,3 +1174,10 @@ Method: public pages and PDFs were downloaded as raw bytes (`curl`) and converte
 | SST flat-plate reference | https://tmbwg.github.io/turbmodels/flatplate_sst.html (NASA TMR 2DZP) | read: CFL3D SST Cf(x = 0.97) = 0.00268299 on 273 x 193 (GCI 0.28 %, p = 1.21), plate x in [0, 2] behind a symmetry section. rcfd's Richardson-extrapolated Cf(0.97) is +2.6 ... +3.6 % above it; not resolved (virtual origin untested) |
 | Standard wall function (k-epsilon) | (unofficial copy, not linked) (ANSYS FLUENT 12.0 Theory Guide 4.12.2, public mirror); an unofficial copy (not linked) and an unofficial copy (not linked) of the same guide fetched, scalable-function text seen only through the fetch summary | read: y* definition, log law for y* > 11.225 and U* = y* below, k and epsilon of the wall-adjacent cell from equilibrium forms, zero normal gradient of k. rcfd differs for y* < y*_lam (G = 0, eps = 2 nu k/y^2); an opt-in test with the equilibrium forms removed the bump but not the fall and was removed (ADR 0063 Addendum 2) |
 | Launder and Spalding (1974), Grotjans and Menter (1998) | not read | secondary descriptions only (search results, the Fluent text above); no claim about the original formulations |
+
+## Wave 31A: solver defects found by the wave 30 validation (ADR 0062)
+
+No new external source was read in this wave. The reference values used are the ones already in the repository from waves 30B and 30C (de Vahl Davis 1983 Table V from the page scan; the cylinder literature rows
+of `validation-data/reference/cylinder_re100_literature.csv`, St 0.164 to 0.167 and C_D 1.314 to 1.370; the Sod exact values of Marzouk). All limits were taken unchanged from ADR 0060 and ADR 0061.
+Computed-by-rcfd results of this wave (not literature, not validation data): the Ra 1e6 cavity diagnosis (converged 32 x 32 value v_max 220.48, Nu 8.873 at alpha_u 0.5), and the cylinder time-step and mesh study
+(St extrapolated to zero time step and mesh 0.1669, C_D 1.357 by a fitted model with first-order time and second-order space terms, versus the unchanged literature windows).
