@@ -132,3 +132,60 @@ face balance is optional and measured with `max_face_level_jump`).
   NO turbomachinery flow solution was computed, and nothing was compared with published pump or compressor data, so the roadmap
   acceptance (public case, literature values) is not met. Registered plane-area expectation missed (ignored
   `t2_plane_area_polygon_known_miss`, corrected test compares with the circular annulus).
+
+## Axial-fan blade geometry and periodic-sector hex mesh (F-133 partial, ADR 0065)
+
+`rcfd_mesh::fan` (geometry) and `rcfd_mesh::fan_mesh` (mesh); case hook `mesh.generator = "axial_fan_sector"` (docs/case-schema.md).
+A lower-fidelity mesh of one blade passage. It is NOT validated for accurate fan performance prediction: nothing was compared with
+a published fan, and the registered quality gates are missed (below).
+
+**Parameters** (`AxialFan`, validated by `validate()` which returns every problem as `FanError { path, message }`, for example
+`stations[1].chord`): blade count `n_blades`, `r_hub`, `r_tip`, `tip_clearance` (shroud radius `r_tip + tip_clearance`),
+`axial_extent`, `z_le_root`, a section family and a table of radial stations (first at `r_hub`, last at `r_tip`, linear
+interpolation) with `chord`, `stagger`, `camber`, `camber_pos`, `thickness`, `sweep` (axial shift of the leading edge) and `lean`
+(tangential shift of the leading edge). Sections lie on cylinders and are described in the unrolled plane (z, s = r theta); the
+chord frame is `e_c = (cos g, -sin g)`, `e_v = (-sin g, -cos g)`, `v > 0` is the suction side (smaller theta), positive stagger
+turns the trailing edge toward -theta; rotation about +z, the rotor turns toward +theta.
+
+**Section families.** NACA 4-digit with the closed-trailing-edge coefficient (`yt = 5 t (0.2969 sqrt x - 0.1260 x - 0.3516 x^2 +
+0.2843 x^3 - 0.1036 x^4)`, camber `yc = m/p^2 (2 p x - x^2)` before and `m/(1-p)^2 ((1-2p) + 2 p x - x^2)` after the maximum-camber
+point, the thickness added along the camber normal); and a double circular arc (camber arc of radius `R = (1/4 + m^2)/(2 m)`,
+thickness arc of radius `Rt = (1/4 + h^2)/(2 h)`, `h = t/2`, same normal offset). The section area is
+`int 2 yt sqrt(1 + yc'^2) dx` (the curvature terms of the normal offset cancel) and the blade volume `int A(r) dr` exactly
+(`dV = dr ds dz` on cylinders).
+
+**Blade surface** (`AxialFan::blade_surface(n_chord, n_span)`): closed, oriented triangulation; checks `check_watertight` (every
+directed edge once and its reverse once, Euler characteristic 2). Measured (ADR 0065 addendum): area and volume converge with order
+1.96 and 2.00 (80/24 to 320/96 points: volume error 7.3e-4, 1.8e-4, 4.6e-5; area 6.4e-5, 1.6e-5, 4.2e-6).
+
+**Mesh** (`build_sector_mesh(fan, spec)`): one structured hex index space (i axial, j pitchwise, k radial), an H-grid with a slit.
+Per radial layer a 2-D grid in (z, s); the lower seam follows the camber line inside the chord range and is axial outside, the
+upper seam is the lower seam translated by the pitch `2 pi r / N` (so it is the lower seam rotated by exactly `2 pi / N`, matched
+to round-off, 1.1e-16 m measured). The blade is cut by axial planes at chord fractions `trunc_le` and `trunc_te`: its leading and
+trailing faces are flat and blunt (the mesh is for a thin blade with blunt edges, not a sharp-edge or rounded-edge resolution).
+Cells inside the footprint are deleted; the blade patch is the set of faces next to deleted cells. Patches `inlet`, `outlet`, `hub`,
+`shroud`, `blade` (both sides, both end faces, tip cap) and the rotational pair `seam_lo`, `seam_hi`
+(`set_periodic_rotation(seam_lo, seam_hi, 0, +z, 2 pi / N)`); cell zone `rotor` = all cells. The tip gap is `n_gap` radial layers
+without a slit. Section sheets must be monotone in z (located error otherwise) and the blade must fit between its seams.
+
+**Boundary-layer stack.** `n_bl` cells of exact geometric growth `h1 g^m` on the hub, the shroud, the tip cap, both end faces and
+both blade sides; the first cell height is given or from a target y+: `h1 = 2 y+ nu / u_tau`, `u_tau = U sqrt(Cf / 2)`,
+`Cf = 0.0576 Re_c^(-1/5)` (a flat-plate estimate at the mid-span chord). On the blade sides the offset in the unrolled plane is
+`h1 / cos(alpha)` so that the wall-normal distance there equals `h1`; the 3-D normal differs by the twist and lean rates. Measured
+first-cell and growth deviation: 4.5e-13 relative (y+ 30 set-up) and 9.9e-12 (y+ 1 set-up, limited by the f64 coordinate
+resolution, a spacing of 7.3e-6 at coordinates of 0.3).
+
+**Quality (registered gates are missed).** Set-up A (y+ 30, 138 192 cells): maximum non-orthogonality 73.4 deg (gate 70), mean 12.5,
+99th percentile 47.1, 2 707 faces above 50 deg and 23 above 60; maximum skewness 7.57 (gate 2.0); maximum aspect ratio 810 (gate
+300). Set-up B (y+ 1, 239 472 cells): 89.8 deg, skewness 66, aspect 19 123 (gate 3000). The worst cells of set-up A are the first columns directly downstream of the trailing plane, in the band behind the blunt
+trailing face at mid-span (aspect 810, skewness 7.6, non-orthogonality 73 deg): the band is only the trailing-face thickness
+high there while the axial spacing is the boundary-layer first cell; the axial columns are sheared by about the stagger angle
+against the blade seams. The cause was located by cell index; a topology that turns the grid lines with the blade (O-grid or
+C-grid) is the likely remedy and was not attempted. Two generator fixes (smoothing of the pitchwise line displacement, opening of
+the band toward the inlet and outlet) reduced aspect from 2 562 and non-orthogonality from 88 deg but not below the gates.
+
+**Solver use.** The sector is accepted by `FvGeometry::new` (the existing rotational periodicity). The absolute-formulation `mrf`
+source is refused on it (the blade and seam faces are not surfaces of revolution; located diagnostic on `sources.<name>.zone`), so
+smoke solves use the relative-frame `rotating_frame` source (cases/axial_fan_sector). Measured: an empty passage with walls moving at the
+inflow reproduces uniform flow to 1.2e-12 of the speed; mass over all patches is conserved to 1e-14 in the rotating passage, but
+the mass flows of the two seam patches do not cancel exactly (relative 3.5e-6 to 2.7e-5), so `m_in + m_out` alone shows 2e-6 to 7e-5 of `m_in`.

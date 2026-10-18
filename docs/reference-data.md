@@ -1211,3 +1211,14 @@ No measured fan or airfoil noise data were read or used. The broadband proxies (
 | Contraction channel (E1) | no reference data; the 40 % claim of the ADR is an estimate from a lubrication argument | computed by rcfd: pressure drop 9.94 to 5.07 (49 %) with the outlet velocity ratio at the constraint 1.3 |
 
 No measured data and no vendor material were read or used in this wave.
+
+## Wave 32A: fan geometry and sector mesh (ADR 0065)
+
+| Item | What was read (source) | Result |
+|---|---|---|
+| NACA 4-digit thickness and camber formulas | the Wikipedia page "NACA airfoil" fetched 2026-10-18, which cites Moran, "Fundamentals of Aerodynamics" (2003) p. 7; the originals (Jacobs, Ward, Pinkerton, NACA TR-460, 1933) NOT read | coefficients 0.2969, -0.1260, -0.3516, 0.2843 and the closed-trailing-edge -0.1036 as on that page; the code uses -0.1036; the NACA 00xx closed-form area matches the quadrature to 1e-15 |
+| Double circular arc section | constructed here from elementary geometry; no source | formulas stated in docs/meshing.md and checked by quadrature |
+| Flat-plate friction `Cf = 0.0576 Re^(-1/5)` for the first-cell estimate | the power-law form used earlier in this repository (wave 7); not re-read | used only to size the first cell; the y+ of a converged solution was not measured |
+| Published fan or blade data | none read | no comparison with a real fan was made; geometry and mesh are checked only against analytic formulas and conservation identities |
+
+Nothing in this wave is a validation against measured data.

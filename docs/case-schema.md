@@ -234,6 +234,23 @@ periodic_z = true
 
 `mesh.periodic_z` and `mesh.core_fraction` on any other generator are rejected with a located error.
 
+### Axial-fan periodic sector (`mesh.generator = "axial_fan_sector"`, F-133 partial, ADR 0065)
+
+One blade passage of an axial fan as an all-hex periodic sector of angle `2 pi / n_blades`, settings in the nested section
+`mesh.fan` (hub and tip station with linear variation; angles in degrees; every key has a default, the defaults describe the
+five-bladed test fan of the ADR). Geometry keys: `n_blades`, `r_hub`, `r_tip`, `tip_clearance`, `axial_extent`, `z_le_root`,
+`family` (`naca4` | `circular_arc`), `hub_` and `tip_` `chord`, `stagger`, `camber`, `thickness`, `sweep`, `lean`, and `camber_pos`.
+Mesh keys: `n_up`, `n_chord`, `n_down` (axial cells), `n_side` (pitchwise cells from the seam to the blade), `n_mid` (across the blunt
+edge faces), `n_span`, `n_gap` (radial cells in the blade span and the tip gap), `n_bl` and `growth` (boundary-layer cells of exact
+geometric growth on every wall), `first_cell_height` (or, when 0, `y_plus`, `ref_speed`, `nu` for a flat-plate estimate),
+`trunc_le`, `trunc_te` (chord fractions cut off by the flat blunt edge faces), `include_blade` (false = empty passage).
+Patches: `inlet` (z = 0), `outlet`, `hub`, `shroud`, `blade`, and the cyclic rotational pair `seam_lo` / `seam_hi` (no boundary
+entry is needed for the pair); cell zone `rotor` (all cells). Errors in the geometry or the mesh controls carry the path
+`mesh.fan.<name>` (for example `mesh.fan.stations[1].chord`). The absolute-formulation `mrf` source is refused on this mesh (blade
+and seam faces are not surfaces of revolution); use `rotating_frame`. Lower-fidelity mesh with blunt blade edges that misses the
+registered quality gates; NOT validated for fan performance prediction (docs/meshing.md). Example:
+`cases/axial_fan_sector/axial_fan_sector.toml`.
+
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
 For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:

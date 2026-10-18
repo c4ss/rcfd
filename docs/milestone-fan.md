@@ -16,8 +16,8 @@ Claude, through the assistant tool layer, iterates on fan shape and size, sets u
 
 | Link | Needed | State |
 |---|---|---|
-| Parametric blade/hub geometry | blade count, hub and tip radius, chord, twist, camber, sweep, tip gap | none |
-| Volume mesh of a periodic blade passage | body-fitted sector mesh with boundary layers, quality gates | partial pieces (swept hex, octree, tet, annulus stage), no blade mesher |
+| Parametric blade/hub geometry | blade count, hub and tip radius, chord, twist, camber, sweep, tip gap | wave 32A (ADR 0065): library `rcfd_mesh::fan`, NACA 4-digit and circular-arc sections, checked against analytic formulas only |
+| Volume mesh of a periodic blade passage | body-fitted sector mesh with boundary layers, quality gates | wave 32A: hex sector with blunt blade edges and exact boundary-layer stacks, accepted by the periodic solver machinery; the registered quality gates are MISSED (docs/meshing.md) |
 | Rotating-frame steady solve | MRF + periodic sector + SST | MRF exists; periodic sector fan case unvalidated |
 | Fan validation | published fan or compressor data compared | none (turbo is conservation-checked only) |
 | Operating map | flow/pressure sweep with restart, efficiency, characteristic curve | none (F-254 candidate) |
