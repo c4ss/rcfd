@@ -80,3 +80,75 @@ Acceptance (channel Re_tau 178, uniform mesh, ny = 6, 8, 10, 12, 14, 16, 20, 24,
 (E1) |U_b+/15.6787 - 1| <= 10 % on every mesh; (E2) (max - min)/mean of U_b+ over these meshes <= 5 %; (E3) default-treatment results bit-identical (existing tests unchanged, `baseline_hashes` unchanged).
 If E1 or E2 fail the candidate is not claimed, the code is not kept as a feature and the part-B conclusion stays at the diagnosis. The comparison treatments `Smooth`, `Switch`, `Hysteresis` and `WallFunction::Scalable` stay in the measured table.
 No library schema key is added in this wave (the new variant is selectable through the library field `KEpsilon::wall_treatment`; wiring it into the settings tree would touch `rcfd-api` files owned by other agents of the wave).
+
+## Addendum 2 (results; written after the experiments, limits above untouched)
+
+Outcome in one paragraph: neither deficit is isolated as a coding or boundary-condition defect against a published formulation, so NO solver change was made in this wave (no new key, no baseline touched, `baseline_hashes` unchanged).
+(A) The registered Re_theta is biased low and exaggerates the deficit; what remains is a slowly (first order) decaying sensitivity to the published wall-face omega factor 10, not a defect.
+(B) The mesh dependence is the validity limit of the log-law function with a viscous fall-back branch and a positive feedback of y* on k; the published equilibrium forms were tried as an opt-in treatment, removed the bump but not the fall, missed the registered limits E1 and E2 and were removed again.
+
+### Sources actually read (WebFetch, 2026-10-18)
+
+* https://tmbwg.github.io/turbmodels/sst.html (NASA TMR, SST-2003 as used by the TMR): the model equations, F1, F2, the cross-diffusion floor (1e-10), the production limiter 10 beta* rho k omega, nu_t = a1 k / max(a1 omega, S F2), the constants and the wall conditions k_w = 0, omega_w = 10 * 6 nu / (beta1 d1^2) with d1 the first-cell distance. (turbmodels.larc.nasa.gov redirects away and was not used.)
+* https://tmbwg.github.io/turbmodels/flatplate_sst.html (NASA TMR 2DZP, SST): the 273 x 193 CFL3D reference, Cf(x = 0.97) = 0.00268299 with GCI 0.28 % (p = 1.21), plate x in [0, 2] behind a symmetry section, U = 1, nu = 2e-7.
+* (unofficial copy, not linked) (ANSYS FLUENT 12.0 Theory Guide, 4.12.2 Standard Wall Functions, public mirror): y* = Cmu^1/4 k^1/2 y/nu, log law for y* > 11.225 and U* = y* below, k and epsilon not solved in wall-adjacent cells but set from the equilibrium wall-function forms, zero normal gradient of k. an unofficial copy (not linked) and an unofficial copy (not linked) of the same guide were also fetched; the scalable-function text there was seen only through the fetch summary.
+NOT read (secondary descriptions only): Menter (1994), Menter, Kuntz, Langtry (2003), Launder and Spalding (1974), Grotjans and Menter (1998). The original wall-function texts are therefore not claimed.
+
+### Part A: results
+
+Meshes: coarse 70 x 55 (y+ 1), medium 140 x 110 (y+ 0.5), finest 280 x 220 (y+ 0.25); all runs converged (du < 1e-9). Cf deviation from Karman-Schoenherr at Re_theta 5000/7500/10000/12500 with the registered Re_theta, baseline: coarse -13.2/-11.0/-9.7/-8.9 %, medium -10.6/-8.3/-7.0/-6.2 %, finest -8.65/-6.44/-5.18/-4.36 % (reproduces ADR 0061). `probe_matches_library`: with all switches off the relative Cf difference to the library is 0.0 (coarse).
+
+| id | experiment | result | verdict |
+|----|------------|--------|---------|
+| HA1 | omega_1/analytic on the finest mesh: cell 0 0.857, cell 1 1.43, then 1.39 ... 1.25. Factor on the wall-face omega 1 / 10 / 100, medium Cf(10000): 2.5717e-3 / 2.4485e-3 / 2.3722e-3 (+5.0 % / 0 / -3.1 %) | strongly influential. Factor 10 is the published TMR value, so no defect. With factor 1 the finest deficit is -6.28/-4.08/-2.86/-2.07 % (registered Re_theta) and +0.49 ... +0.70 % (momentum-integral Re_theta). Cf(10000) spread coarse/medium/finest with factor 1 is 3.1 % of the finest (limit 2 %) and the finest misses 5 % at Re_theta 5000 (-6.3 %): NOT isolated under the registered rule. Not adopted (no tuning) | influential, published value, no fix |
+| HA2 | first-cell omega fixed to 6 nu/(beta1 y1^2) (`cell1_analytic`), medium | Cf(10000) -0.45 %, deficits slightly larger (-11.0 ... -6.6 %) | negative |
+| HA3 | `LowRe` library mode and the plain wall strain | Cf(10000) +0.08 % (coarse), +0.01 % (medium); plain strain +0.08 % (coarse); inside the 0.11 % floor | negative |
+| HA4 | F1 profile at Re_theta 10000 (finest): 1.000 for y+ 10 ... 1000, 0.04 at y+ 3000. Cross-diffusion off: Cf(10000) +3.7 % (coarse), +3.9 % (medium) | F1 is 1 through the wall layer (k-omega branch). Cross-diffusion is influential (> 1 %) but is a term of the published model (sst.html); not removable, finest not run | influential, published term, no fix |
+| HA5 | max P/(10 beta* k omega) = 0.12 ... 0.14; limiter off | Cf identical to 7 digits (coarse) | negative |
+| HA6 | max relative |wall_distance - y| over the column | 0.0 (exact on the flat plate) | negative |
+| HA7 | k = 0 on the wall face with Automatic | Cf(10000) -0.007 % (coarse) | negative |
+| HA8 | least-squares gradient for the strain | Cf identical to the printed digits (coarse) | negative |
+| HA9 | Re_theta definition | see Deviation 1: the profile Re_theta (edge at y = 0.25 under the symmetry top) is negative for x < 0.1 and far below int Cf/2 dx for larger x (finest, x = 0.98: 5782 against 7891). Finest deviations from K-S with the momentum integral: -2.40/-2.15/-1.95/-1.79 %; with the nu_t-edge profile: -3.40/-2.99/-2.69/-2.46 %; medium -4.71 ... -3.73 % and -5.55 ... -4.36 %. Integration bound y <= 0.10 / 0.15 / 0.20 moves the registered Re_theta at x = 0.97 and the deviation there to -6.98 / -7.85 / -8.23 % (finest) | the registered measurement exaggerates the deficit by about 3 points; registered D1 limits and the ignored known-miss test unchanged |
+| HA10 | Cf(x = 0.97) against CFL3D 0.00268299. Baseline coarse/medium/finest 2.5770/2.6514/2.6984e-3 = -3.95/-1.18/+0.58 %, observed order 0.66, Richardson value 2.779e-3 (+3.6 %). Factor 1: 2.8329/2.7749/2.7589e-3 (+5.6/+3.4/+2.8 %), order 1.9, extrapolated 2.753e-3 (+2.6 %) | the literal rule (finest baseline within 2 %) would call the deficit a property of the published model, but the Richardson value is not within 2 %: ambiguous, no model-property conclusion claimed. A fixed-x comparison also depends on the virtual origin (the TMR case has a symmetry section upstream of the plate, rcfd starts the plate at the Dirichlet inlet); whether this explains the +3 % was not tested | unresolved |
+
+Log-law fit slope over y+ 50 ... 300: 2.78 (kappa_eff 0.36) for the baseline on all meshes, 2.76 with factor 1, 2.78 with cross-diffusion off: not explained. Term-by-term comparison with TMR sst.html (equations, F1 and F2 arguments, CD floor, limiter, nu_t with S and F2, constants, k_w = 0, omega_w factor 10 with the cell-centre distance): agrees with `sst.rs`. rcfd-only additions, none influential at the 0.2 % level where tested: Spalding-based `Automatic` overrides, k zero gradient and omega fixing for y+ > 5, nu_t cap, first-order k and omega convection (linear upwind moves Cf < 0.1 %, ADR 0061).
+
+Channel Re_tau 178, SST, U_b+ (DNS 15.6787):
+
+| ny | 24 | 40 | 80 | 160 |
+|----|----|----|----|-----|
+| baseline | 16.066 | 15.696 | 15.418 | 15.274 |
+| LowRe | 16.061 | not run | 15.418 | 15.274 |
+| wall-face omega factor 1 | 15.127 | 15.160 | 15.154 | 15.144 |
+| factor 100 | 16.706 | 16.081 | not run | 15.360 |
+| first-cell omega analytic | 16.153 | 15.748 | 15.444 | 15.286 |
+| cross-diffusion off | 16.066 | 15.696 | 15.418 | not run |
+
+Baseline change ny 80 to 160: 0.94 % (limit for an isolated cause 0.5 %). Factor 1 passes that limit (0.07 %; spread over ny 24 ... 160 is 0.2 %) at 3.4 % below DNS, but it is a scan of a published constant: reported, not adopted. Conclusion for A: the y+ dependence is the first-order decay of the solution's sensitivity to the wall-face omega value at the published factor 10; no defect is isolated.
+
+### Part B: results (channel Re_tau 178, uniform mesh, converged to change < 2e-10)
+
+| treatment | ny 8 | 10 | 12 | 14 | 16 | 20 | 24 | 32 |
+|-----------|------|----|----|----|----|----|----|----|
+| cell-centre y+ | 22.3 | 17.8 | 14.8 | 12.7 | 11.1 | 8.9 | 7.4 | 5.6 |
+| Standard, Smooth (default), U_b+ error % | +6.1 | +8.5 | +16.4 | +4.8 | -3.6 | -14.7 | -21.6 | -29.2 |
+| wall-cell y* (Smooth) | 21.3 | 16.4 | 7.45 | 6.18 | 5.39 | 4.31 | 3.57 | 2.60 |
+| wall-cell k (Smooth), u_tau^2 | 3.05 | 2.83 | 0.84 | 0.79 | 0.78 | 0.78 | 0.77 | 0.73 |
+| Standard, Switch / Hysteresis | +5.1 | +24.3 | +8.4 | -2.3 | -9.9 | -19.6 | -25.3 | -31.4 |
+| Scalable | +5.1 | +4.9 | +4.9 | +4.9 | +5.2 | +6.1 | +6.8 | +7.9 |
+| Equilibrium G and eps (removed candidate) | +4.1 | +4.2 | +4.3 | +4.4 | +1.8 | -8.7 | -15.2 | -22.4 |
+
+* HB1 (isolated): the bump is the wall cell entering the viscous branch. At ny 10 (Smooth) y* is still 16.4; at ny 12 the wall-cell k has collapsed from about 3.05 to 0.84 u_tau^2 (G/G_log 0.03, eps/eps_log 0.14) and y* = Cmu^1/4 sqrt(k) y/nu = 7.45 is far below y+ = 14.8: with G = 0 the wall-cell k decays, y* falls and the cell stays viscous (positive feedback). Switch and Hysteresis collapse already at ny 10 (y* 10.75, first crossing of 11.06). Criterion (a): the bump (ny 10 for Switch/Hysteresis, ny 12 for Smooth) coincides within one mesh with the first mesh whose wall-cell y* is below y*_lam: met.
+* HB2 (isolated): `WallFunction::Scalable` (y* clipped at y*_lam) gives +4.9 ... +7.9 % over ny 4 ... 32 (ny 4 to 6: +6.5 ... +5.5 %), a spread of 2.8 % of the mean, against 45.6 points for Standard: criterion (b) met. There is no k collapse. For y* below y*_lam the wall-cell effective viscosity is below nu (nu_t,w/nu -0.06 ... -0.54), a consequence of the clipped y* in the shear formula.
+* HB3: the Fluent 12.0 4.12.2 text (as fetched) sets equilibrium G_k and epsilon in every wall cell and switches only the velocity law at y* = 11.225. rcfd drops to G = 0 and eps = 2 nu k/y^2 below y*_lam (`wall_cell_sources_ext`): a discrepancy with the fetched form for y* < 11. The published forms were tried as `WallTreatment::Equilibrium` (limits E1, E2, E3 registered in Addendum 1 before any code): U_b+ error +4.1 ... +4.4 % for y+ >= 12.7 (bump removed) but +1.8, -8.7, -15.2, -22.4 % for y+ 11.1 ... 5.6. E1 (<= 10 % everywhere) fails at ny 20, 24, 32; E2 (spread <= 5 %) fails (about 27 %). By the registered rule the candidate is not claimed; the variant and its code were removed and `kepsilon.rs` equals HEAD. The remaining fall below y* about 11 is therefore not explained by the production/dissipation forms; it appears with the equilibrium forms and laminar wall shear, so it belongs to the high-Re k-epsilon core of the channel once the wall cell lies in the buffer layer (no low-Re damping); this attribution was not tested separately.
+* HB4: k zero gradient and the nearest wall face only: read in the code, consistent with 4.12.2.
+
+Conclusion for B: the mesh dependence of the Standard wall function in the channel is the validity limit of a high-Re k-epsilon model with a log-law wall function (first-cell centre y+ well above 30 for a clean log-law result; here +6 % at y+ 22), amplified by a bifurcation of the wall-cell k when the viscous branch is selected. `WallFunction::Scalable` in the existing library is mesh independent to 2.8 %; no solver code was changed. Old known-miss tests and their limits stay as they are.
+
+### Deviations from the registered plan
+
+1. Re_theta definitions beyond HA9 (Deviation 1 of Addendum 1). 2. The finest mesh was run twice (baseline as the reference for the new Re_theta definitions, and factor 1). 3. Not every treatment was run on every mesh (cells marked "not run"); HA2, HA3, HA5, HA7, HA8 were run on the coarse mesh (HA2, HA3 also medium), the effects being below the noise floor. 4. The scalable-function text of Fluent (an unofficial copy (not linked)) was seen only through the fetch summary and Grotjans-Menter was not read.
+
+### Not delivered
+
+No fix (no isolated cause). Unexplained: the log-law slope 2.78, the +3 % fixed-x difference against CFL3D after extrapolation (possible leading-edge set-up effect), the fall of the k-epsilon channel result for y* below about 11 with equilibrium forms. No test for corrected behaviour (none exists). Added: ignored diagnostics only (`diag_w31b_sst_probe.rs`, `diag_w31b_channel_wf.rs`).

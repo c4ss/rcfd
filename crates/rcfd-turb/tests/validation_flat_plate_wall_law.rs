@@ -432,6 +432,8 @@ const BANDS_SST: [(f64, f64, f64); 4] = [
 /// KNOWN MISS (ADR 0061 addendum 5): measured once, 30 min for the sequence. Finest mesh Cf versus Karman-Schoenherr:
 /// -8.65 percent at Re_theta 5000, -6.44 at 7500, -5.18 at 10000 (limit 5), -4.36 at 12500 (inside). The sequence converges toward K-S
 /// from below (Re_theta 10000: -9.72, -7.02, -5.18 percent), see `d3_sst_cf_mesh_convergence_known_miss` and the diagnostic test.
+/// NOTE (wave 31B, ADR 0063 addenda): the Re_theta of this runner (profile trapezoid to y = 0.15, edge velocity at y = 0.25) is biased low
+/// (negative near the leading edge, 25 percent below the momentum integral at x ~ 1), which inflates this deficit; limits and test unchanged.
 #[test]
 #[ignore = "known miss, heavy (30 min): see doc comment"]
 fn d1_sst_cf_vs_karman_schoenherr_known_miss() {

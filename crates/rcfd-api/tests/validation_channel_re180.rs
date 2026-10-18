@@ -231,6 +231,8 @@ fn d1_d3_d6_sst_wall_resolved_channel_re180() {
 /// is 0.63 (< 1.0) and GCI_fine 2.4 % (> 1 %). The physical checks D1 to D3 pass on every mesh. Diagnosis in the ADR
 /// 0060 addendum (the `diagnose_*` test below): the sequence keeps drifting at the 1 % level between successive meshes;
 /// no defect was proven, the cause is not isolated.
+/// NOTE (wave 31B, ADR 0063 addenda): the drift is the slow (first-order in y+) decay of the sensitivity to the wall-face omega value
+/// 10 * 6 nu / (beta1 y^2); with the factor 1 U_b+ is mesh independent to 0.2 percent over ny 24..160. The published factor is 10, so no defect; limits unchanged.
 #[test]
 #[ignore = "known miss D4 (observed order 0.63, GCI 2.4 %); cargo test --release -p rcfd-api --test validation_channel_re180 -- --ignored d4"]
 fn d4_sst_grid_convergence_known_miss() {
@@ -308,6 +310,8 @@ fn d5_d6_standard_k_epsilon_wall_function_channel_re180() {
 /// meshes is 18.8 % (> 5 %). Diagnosis in the ADR 0060 addendum: at Re_tau = 178 a log-law wall function cannot be placed at
 /// y+ > 30 on a sensible mesh (half height = 178 wall units); at y+ 11 to 22 the result depends erratically on where the
 /// cell centre falls relative to the viscous/log switch.
+/// NOTE (wave 31B, ADR 0063 addenda): the collapse of the wall-cell k once the cell enters the viscous branch (y* < 11.06) and the fall below it are the
+/// validity limit of the standard function; `WallFunction::Scalable` is mesh independent to 3 percent on the same meshes. Limits unchanged.
 #[test]
 #[ignore = "known miss D5 (ny=12 deviation 16 %, spread 19 %); cargo test --release -p rcfd-api --test validation_channel_re180 -- --ignored d5"]
 fn d5_k_epsilon_wall_function_known_miss() {
