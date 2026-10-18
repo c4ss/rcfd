@@ -291,7 +291,7 @@ fn stdio_loop_handles_a_scripted_session() {
         .collect();
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-03-26");
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 19);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 29);
     assert_eq!(lines[2]["error"]["code"], -32700);
 }
 

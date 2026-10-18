@@ -8,6 +8,7 @@
 
 mod cmd_fwh;
 mod cmd_gapc;
+mod cmd_map;
 mod cmd_study;
 mod cmd_w19c;
 mod cmd_wiring;
@@ -77,6 +78,9 @@ COMMANDS:
                                an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh
     study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=value]
                                parametric study from the `study` section: one run per design point, table.csv/table.json
+    map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure] [--no-retry] [--serpentine] [--max-steps n] [--json] [--set path=value]
+                               operating map: chained runs over settings values (for example boundary values), each restarting
+                               from the previous converged solution; map.csv/map.json; exit 5 if a point did not converge
     data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]
                                public validation-data pack (F-125): datasets with licence, checksum
                                verification of local copies (offline), provenance report (markdown)
@@ -195,6 +199,7 @@ fn dispatch(args: &[String]) -> u8 {
         "restart" => cmd_w19c::cmd_restart(rest),
         "check" => cmd_w19c::cmd_check(rest),
         "study" => cmd_study::cmd_study(rest),
+        "map" => cmd_map::cmd_map(rest),
         "check-mesh" => cmd_check_mesh(rest),
         "partition" => cmd_wiring::cmd_partition(rest),
         "sample" => cmd_wiring::cmd_sample(rest),

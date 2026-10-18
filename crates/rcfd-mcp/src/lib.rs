@@ -262,6 +262,145 @@ fn tools() -> Vec<Tool> {
             schema: || obj(json!({"path": {"type": "string"}}), &["path"]),
         },
         Tool {
+            name: "design_create_study",
+            description: "Define a design study in a directory inside the sandbox (writes study.json): named parameters with bounds mapped to settings paths, operating conditions, objectives with robust mode (mean, worst, mean_plus_k_sigma, weighted), constraints and a sampler or optimiser (factorial, lhs, sobol, nelder_mead, differential_evolution). The base case is a case file or the settings of a session.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "dir": {"type": "string", "description": "study directory (study.json and evaluations.jsonl live here)"},
+                        "base": {"type": "string", "description": "base case file inside the sandbox"},
+                        "session": sess(),
+                        "name": {"type": "string"},
+                        "parameters": {"type": "array", "items": {"type": "object"}, "description": "{name, lo, hi, init?, path | targets:[{path, scale?, offset?}]}"},
+                        "conditions": {"type": "array", "items": {"type": "object"}, "description": "{label, set:{settings path: value}}; default one condition 'base'"},
+                        "objectives": {"type": "array", "items": {"type": "object"}, "description": "{metric, sense: min|max, weight?, robust?, k?, weights?}"},
+                        "constraints": {"type": "array", "items": {"type": "object"}, "description": "{metric, cmp: <=|>=, limit, scale?}"},
+                        "method": {"type": "object", "description": "{type, budget?, restarts?, seed?, pop?, levels?, n?}"},
+                        "workers": {"type": "integer", "minimum": 1},
+                        "chain": {"type": "boolean", "description": "start each condition from the previous converged one (default true)"},
+                        "max_steps": {"type": "integer", "minimum": 1},
+                        "overwrite": {"type": "boolean"}
+                    }),
+                    &["dir", "parameters", "objectives", "method"],
+                )
+            },
+        },
+        Tool {
+            name: "design_create_variant",
+            description: "Write a variant case file: a base case file, or a study with parameter values, plus settings overrides, validated through the settings tree. Returns the file path and the settings fingerprint. Refuses to replace an existing file unless overwrite is true.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "path": {"type": "string", "description": "variant case file to write (.toml or .json)"},
+                        "base": {"type": "string"},
+                        "dir": {"type": "string", "description": "study directory (instead of base)"},
+                        "params": {"type": "object", "description": "parameter values of the study"},
+                        "condition": {"type": "string"},
+                        "overrides": {"type": "object", "description": "{settings path: value}"},
+                        "name": {"type": "string"},
+                        "overwrite": {"type": "boolean"}
+                    }),
+                    &["path"],
+                )
+            },
+        },
+        Tool {
+            name: "design_run_operating_map",
+            description: "Run an operating map: points over settings values (grid of axes, or an explicit list), each restarting from the previous converged solution; writes map.csv and map.json to out_dir and returns per-point status, restart kind, iterations and all report values. A repeated identical call returns the stored table without running. Bounded by max_design_evaluations.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "out_dir": {"type": "string"},
+                        "base": {"type": "string", "description": "case file inside the sandbox"},
+                        "dir": {"type": "string", "description": "study directory (instead of base) with params for a variant"},
+                        "params": {"type": "object"},
+                        "condition": {"type": "string"},
+                        "overrides": {"type": "object"},
+                        "axes": {"type": "array", "items": {"type": "object"}, "description": "{path, values} or {path, start, stop, count}; first axis slowest"},
+                        "points": {"type": "array", "items": {"type": "object"}, "description": "explicit points, each {settings path: value}"},
+                        "serpentine": {"type": "boolean"},
+                        "on_failure": {"type": "string", "enum": ["continue", "stop"]},
+                        "retry_cold": {"type": "boolean"},
+                        "cold": {"type": "boolean"},
+                        "max_steps": {"type": "integer", "minimum": 1}
+                    }),
+                    &["out_dir"],
+                )
+            },
+        },
+        Tool {
+            name: "design_run_study",
+            description: "Run the study's sampler or optimiser with the case solver, appending every evaluation to the study store; stops after max_evaluations new evaluations (bounded by max_design_evaluations) and continues from the store on the next call. Returns the best record and the Pareto front.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({"dir": {"type": "string"}, "max_evaluations": {"type": "integer", "minimum": 1}}),
+                    &["dir"],
+                )
+            },
+        },
+        Tool {
+            name: "design_evaluate",
+            description: "Evaluate one candidate of a study (all its operating conditions) with the case solver and store the result; a candidate already in the store is returned without running.",
+            access: Access::WriteFiles,
+            schema: || obj(json!({"dir": {"type": "string"}, "params": {"type": "object", "description": "{parameter name: value}"}}), &["dir", "params"]),
+        },
+        Tool {
+            name: "design_record",
+            description: "Record metrics computed elsewhere (for example by running the case through the other tools) for a candidate of a study. Metric values must be finite numbers; give metrics for a single-condition study or conditions [{label, metrics}] for several.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "dir": {"type": "string"},
+                        "params": {"type": "object"},
+                        "metrics": {"type": "object"},
+                        "conditions": {"type": "array", "items": {"type": "object"}},
+                        "ok": {"type": "boolean"},
+                        "note": {"type": "string"}
+                    }),
+                    &["dir", "params"],
+                )
+            },
+        },
+        Tool {
+            name: "design_get_metrics",
+            description: "Metrics of one stored evaluation of a study (by record index or exact parameter values), or the table of an operating map (map_dir).",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({"dir": {"type": "string"}, "index": {"type": "integer", "minimum": 0}, "params": {"type": "object"}, "map_dir": {"type": "string"}}),
+                    &[],
+                )
+            },
+        },
+        Tool {
+            name: "design_compare_variants",
+            description: "Compare stored evaluations of a study side by side: parameters, metrics per condition, exact metric differences against the first record and a ranking by the study objective (feasible first).",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({"dir": {"type": "string"}, "indices": {"type": "array", "items": {"type": "integer", "minimum": 0}}, "candidates": {"type": "array", "items": {"type": "object"}}}),
+                    &["dir"],
+                )
+            },
+        },
+        Tool {
+            name: "design_propose",
+            description: "The next candidate(s) the study's sampler or optimiser asks for, given the evaluations stored so far. Deterministic and free of side effects; evaluate or record them, then call again. complete is true when the method has nothing more to ask.",
+            access: Access::Read,
+            schema: || obj(json!({"dir": {"type": "string"}}), &["dir"]),
+        },
+        Tool {
+            name: "design_list_study",
+            description: "Definition, evaluation counts, best feasible record and Pareto front indices of a study.",
+            access: Access::Read,
+            schema: || obj(json!({"dir": {"type": "string"}}), &["dir"]),
+        },
+        Tool {
             name: "render_image",
             description: "Render a field as a PNG image (optionally with velocity vectors) and return it as an image content block.",
             access: Access::Read,
@@ -643,6 +782,37 @@ impl McpServer {
                 Ok(ok_result(svc.call("run.headless", &with(Value::Object(p))?)?))
             }
             "read_status_stream" => Ok(ok_result(svc.call("status.read", &json!({"path": args["path"]}))?)),
+            "design_create_study"
+            | "design_create_variant"
+            | "design_run_operating_map"
+            | "design_run_study"
+            | "design_evaluate"
+            | "design_record"
+            | "design_get_metrics"
+            | "design_compare_variants"
+            | "design_propose"
+            | "design_list_study" => {
+                let method = match name {
+                    "design_create_study" => "design.create_study",
+                    "design_create_variant" => "design.create_variant",
+                    "design_run_operating_map" => "design.run_map",
+                    "design_run_study" => "design.run_study",
+                    "design_evaluate" => "design.evaluate",
+                    "design_record" => "design.record",
+                    "design_get_metrics" => "design.get_metrics",
+                    "design_compare_variants" => "design.compare",
+                    "design_propose" => "design.propose",
+                    _ => "design.list_study",
+                };
+                let mut p = args.clone();
+                // a study can be made from the settings of the current session
+                if name == "design_create_study" && args.get("base").is_none() && args.get("session").is_none() {
+                    if let Some(id) = self.current_session() {
+                        p["session"] = json!(id);
+                    }
+                }
+                Ok(ok_result(svc.call(method, &p)?))
+            }
             "render_image" => {
                 let mut p = Map::new();
                 for k in ["field", "width", "vectors"] {
@@ -726,5 +896,7 @@ impl McpServer {
     }
 }
 
+#[cfg(test)]
+mod design_tests;
 #[cfg(test)]
 mod tests;
