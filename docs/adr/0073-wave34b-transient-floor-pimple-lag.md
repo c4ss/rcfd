@@ -189,3 +189,57 @@ Rotationally periodic faces in F-C; a SIMPLEC-type consistent corrector as a sta
 Komen et al. (2021), arXiv:2010.03931 (read: O(dt h^2) for the total-pressure collocated projection, O(dt^2 h^2) for the pressure-correction form, order drop to about
 one). Choi (1999); Tukovic, Peric, Jasak (2018); Issa (1986); Rhie and Chow (1983): recalled, UNVERIFIED (not read in this session). Van Doormaal and Raithby (1984)
 SIMPLEC: recalled, UNVERIFIED, mentioned only as out of scope. The Fourier model of R5 is derived here from first principles.
+
+## Amendment 1 (written after A0, A1, A2 (Y1, Y2), the F-C acceptance runs and the first F-K runs; BEFORE the code of F-G below exists; nothing above was changed)
+
+### What was run, in order
+
+A0 and Y2, then A1 (PISO, PIMPLE-4, FRAC) together with Y1 (one process), then F-C was written and its acceptance tests (C-O1 to C-S2, C-O9, N1, N3) ran
+together with the F-K tests (A4, N4) and the lag tests B2, B3, B4c (one process, still running when this amendment was written). Results so far (all as
+registered; no limit was changed):
+
+* A0: the dt = 0.0125 errors change by 2.8 % to 3.6 % with the 1/2560 reference: adequate.
+* A1 (N = 16, 24, 32, 48, 64): fit M finds the floor PRESENT on all three paths: PISO c-share 42.6 % (s 2.90, r 0.54), PIMPLE-4 79.4 % (s 2.65, r 0.82), FRAC
+  83.5 % (s 2.50, r 0.84, "identified as O(dt h^2)" by the registered rule). Fine-pair orders PIMPLE-4: 1.005, 0.961, 1.031, 1.719, 2.010 for N = 16 ... 64.
+* Y1 (uniform-rate split; the registered falsifier of H-COMM): PIMPLE-4 fine-pair order 2.012 (N = 16), 2.007 (32), 2.007 (64); the O(dt) share of the two-term
+  fit at N = 32 falls from 89.7 % to -1.3 %; PISO 2.113, 2.233, 2.326; fit M share 1.4 % (PIMPLE-4) and 0.5 % (PISO), "not present". By the registered rule
+  **H-COMM stands**: the spatial variation of rAU is the cause of the iterative-path floor.
+* Y2 (TG PISO N = 32): the commutator flux of the old levels is 1.85e-4, 1.11e-4, 8.4e-6 at dt 0.025, 0.0125, 1/1280 (O(dt)), against 2.13e-4, 1.18e-4, 8.2e-6
+  for `gamma R(p)`.
+* **F-C failed** (rejected, the code is removed): C-O1 0.930 / 1.370, C-O2 0.938, C-O3 0.917, C-O7 0.938, C-S1 0.984 (all MISS), errors 5 times LARGER than the
+  default (TG PISO fine pair 2.38e-4 / 1.25e-4 against 4.38e-5 / 1.42e-5); N1 failed (TG velocity error ratio 1.16 to 1.24, TG-S 1.14 to 1.28); N3 floor present
+  (share 98.8 %). C-O9 3.628 / 3.197 met.
+
+### Why F-C was the wrong fix (algebra, written down after the F-C runs)
+
+R2 tracked the old-level part of `phiHbyA` alone. What the converged equations constrain is the face defect `d = phi - interp(u).S`, and `interp(u^{n+1})`
+contains the same `interp(HbyA)` as the flux. With `u^{n+1} = HbyA - rAU (G p - b)` (`b` the body-force cell value) and
+`phi^{n+1} = phiHbyA - gamma snGrad(p)|S| + gamma b_f`:
+
+    default:  d^{n+1} = (gamma/dt)(c1 d^n - c2 d^{n-1}) + gamma R(p) - gamma R_b + C(G p - b),
+    F-C:      d^{n+1} = (gamma/dt)(c1 d^n - c2 d^{n-1}) - (1/dt)(c1 C(u^n) - c2 C(u^{n-1})) + gamma R(p) - gamma R_b + C(G p - b),
+
+with `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` and `R_b = b_f - interp(b).S`. The default carry-over is the right one for `d`; the inconsistent
+source is `C(G p - b)`, which is O(dt) because `rAU = dt/(c0 + a dt)` has an O(dt) relative spatial variation (Y1 makes it vanish and removes the floor). F-C
+ADDS a second O(dt) source of the same size. The textbook momentum interpolation `u_f = interp(u) - gamma (snGrad p - interp(G p))` (Rhie and Chow 1983,
+recalled, UNVERIFIED as to the exact published form) differs from the code's `interp(HbyA) - gamma snGrad p` exactly by `C(G p)`.
+
+### F-G `PimpleSettings::rhie_chow_consistent` (registered now; default false; iterative path, non-ALE)
+
+Deviation from the registration: Part A3 said "no second fix is tried in this wave". This amendment overrides that sentence (the deviation is reported), because the
+registered falsifier Y1 identified the mechanism and F-C failed on an algebra mistake, not on the mechanism. F-G is specified before it is written or run:
+
+* Every corrector subtracts `C(G p_lag - b)` from `phiHbyA` before the pressure solve, `p_lag` = the cell pressure at the start of that corrector (the one of the
+  previous corrector or outer iteration, or of the previous step), `G` the Green-Gauss gradient the corrector uses for the velocity, `b` the effective body-force
+  cell value (zero without a body force), `rAU` and `gamma` those of the current outer iteration. Faces: internal faces, and translationally periodic coupled faces
+  with the seam weights (distance weights of `boundary_hby_a`, `gamma` the coupled mean).
+* On translationally periodic coupled faces the default carry-over `(gamma/dt)[c1 (phi^n - u^n_f.S) - c2 (phi^{n-1} - u^{n-1}_f.S)]` is added as well
+  (`u_f` the seam interpolation), because R3 shows those faces carry `d = gamma R(p)` every step otherwise (ADR 0069 F1 revisited; TG cannot test it, TG-S can).
+  Rotationally periodic faces: unchanged (stated).
+* With the outer iteration converged `p_lag = p^{n+1}` and `d` obeys `(c0 d^{n+1} - c1 d^n + c2 d^{n-1})/dt = R(p) - R_b - a_f d^{n+1}` with `dt/gamma = c0 + a_f dt`;
+  the dt-dependence left is in `a_f` (second order in cell-to-cell differences of `a`) and, for PISO, the corrector lag `C(G(p_new - p_lag))`.
+* Acceptance: exactly the registered A3 set with F-G in place of F-C (C-O1 fine and coarse, C-O2 fine, C-O3 fine, C-O7 fine, C-S1 fine, C-S2 fine, all in
+  [1.9, 2.3]; C-O9 >= 1.9; N1 at 1.05; N2 zero differing bits; N3 prints; C-O6r reported), and the A5 cylinder rule with F-G in place of F-C. The orders of Y1
+  were seen before this registration; F-G is a different discretisation (it keeps the variable `rAU` of the cell momentum and corrects the face flux), so its
+  numbers are not known.
+* If F-G fails, the iterative-path floor stays a miss with its mechanism identified (H-COMM, Y1) and no third fix is tried.
