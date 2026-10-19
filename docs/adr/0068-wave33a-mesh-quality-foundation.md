@@ -232,14 +232,19 @@ code paths that define the angle slightly differently; not reconciled.
 
 ### Seam-flux diagnosis (b)
 
-e_pair (limit "clean" 1e-12): D1 translational Couette 3.5e-18; D2 circular Couette, empty C-grid sector 7.0e-17 (converged, 856 iterations); D3 the same in the
+e_pair (limit "clean" 1e-12): D1 translational Couette 3.5e-18 (NOT converged either: res_p 0.054 after 3000 iterations, res_u 3.7e-16; a deviation from "converged solution"); D2 circular Couette, empty C-grid sector 7.0e-17 (converged, 856 iterations); D3 the same in the
 rotating frame 1.6e-17 (NOT converged: res_u 0.22 after 4000 iterations; the pair metric is a structural property, but this is a deviation from "converged
 solution"); D4 S3' fan passage 7.8e-17 (converged, 358 iterations; the solver default is already no non-orthogonal corrector, so the "correction replaced by none"
 variant is the same run). D5 (not registered, control): the 0065 H-slit example case, 644 pairs, e_pair 8.4e-17, patch level 5.9e-16, converged.
-Outcome: all registered tests are clean, so rules (i) to (iv) do not fire, and the 0065 mismatch of 3.5e-6 to 2.7e-5 is NOT reproduced on the current HEAD, not even
-on the H-slit mesh. I did not run the 0065 commit, so I cannot say what changed; the commit log of this tree contains wave 33D's "periodic-pair body-force flux fix",
-which is a candidate (hypothesis, not tested). No solver change was made. What does remain in `m_in + m_out` of a rotating passage is the flux of the faceted
-shroud wall that moves tangentially (S3' above), which the 0065 corrected test did not include either.
+Outcome: all registered tests are clean, so rules (i) to (iv) do not fire on this HEAD, and the 0065 mismatch of 3.5e-6 to 2.7e-5 is NOT reproduced, not even on the H-slit mesh (D5).
+Attribution: wave 33D (ADR 0071, C5) found the cause in the solver, `SimpleSolver::iterate`: the body-force term of the face flux used the owner `rAU` on boundary faces, which
+differ across a periodic pair, so the Coriolis and centrifugal terms made phi_lo + phi_hi nonzero; the fix (`coupled_body_pair_mean`) is opt-in and the API switches it on with the
+rotating-frame source. My D3, D4 and D5 runs have the rotating-frame source and therefore the fix on; D1 and D2 have no body force. I did not run D3 or D5 with the fix off (no case-level
+switch was used), so the attribution rests on ADR 0071's before/after numbers, not on my own measurement; under the registered rule it would be case (iii). No solver change was made here.
+
+Separate from the pair: the converged rotating passage on the C-grid mesh has a mass flux through the no-slip, moving shroud of -3.2e-6 (6.0e-5 of m_in), about 200 times the
+H-slit mesh value in 0065 (1.7e-8 of the flow). That is a real leak on this mesh, not only a metric problem: the faceted shroud wall moves tangentially, so its facets
+carry a wall-normal velocity component. The corrected S3' test (shroud flux included) hides none of it: it reports the value above and the registered test stays ignored.
 
 ### Deviations from the registered plan
 
@@ -250,6 +255,7 @@ shroud wall that moves tangentially (S3' above), which the 0065 corrected test d
 * Several combinations produced raw mesh-validation errors ("directed edge appears twice", "normal does not point from owner to neighbour") that the fold check did not catch. They are
   now wrapped into located `mesh` errors with block, indices, layer and the controls; this changed only the error path (A'/B' numbers identical on rerun).
 * `front_gap` values of 1 and 2 chords fold and are rejected with a located error (a known limit).
+* Q8: the registered rule `n_nose >= n_chord` is implemented as `n_nose + 2 <= n_chord` (cases n_nose = 16 and 15 against n_chord 16 are both tested); `mesh.fan.n_nose` doc text corrected accordingly.
 * Q8 front_gap beyond the inlet reports path `z_le_root` (not `front_gap`); the test accepts that path. A fold test and a tangled-family test were added.
 * The Q7 B' 1e-12 known-miss test was removed (never registered).
 * New ADR text not registered beforehand: D5 control; the S3' corrected test with the shroud flux.

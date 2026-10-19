@@ -71,7 +71,7 @@ pub fn schema() -> Schema {
             Schema::enumeration("h_slit", &["h_slit", "c_grid"])
                 .doc("Mesh topology: h_slit (ADR 0065, blunt truncated blade edges) or c_grid (ADR 0068, body-fitted C-grid with the true blade edges; ignores n_mid, trunc_le and trunc_te)"),
         )
-        .field("n_nose", cnt(8, 1.0, "c_grid only: cells from the leading edge to each seam corner (must be smaller than n_chord)"))
+        .field("n_nose", cnt(8, 1.0, "c_grid only: cells from the leading edge to each seam corner (n_nose + 2 must not exceed n_chord)"))
         .field("n_core", cnt(2, 1.0, "c_grid only: cells across the blade thickness in the tip gap above the blade"))
         .field("front_gap", Schema::float(0.3).at_least(0.0).doc("c_grid only: axial distance of the front edge of the leading-edge fan ahead of the leading edge, in local chords"))
         .field("include_blade", Schema::boolean(true).doc("false leaves the blade footprint filled: an empty passage with the same nodes (verification)"))
