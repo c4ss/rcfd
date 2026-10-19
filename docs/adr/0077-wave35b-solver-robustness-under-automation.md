@@ -224,3 +224,67 @@ Amended checks:
 * A5 corrected (new test `a5_corrected_diverged_candidate_is_a_failed_evaluation`): x in [0, 1], `solver.alpha_u = 0.25 x + 0.75`, `solver.alpha_p = 0.75 x + 0.25`
   (0.75/0.25 at x = 0 and exactly 1.0/1.0 at x = 1); smoke run of the (0.75, 0.25) point: converged in 60 iterations (res_u 1.8e-6 at 50). Limits as registered for A5, with
   "x = 0.7" read as x = 0 and "x = 1.0" as x = 1. The registered A5 test is kept, ignored, as `a5_registered_setup_defect` (limits unchanged).
+
+## Amendment 2 (2026-10-19): part B outcome of the registered diagnostics; the H0 fix and the safe-scheme check registered before either is written
+
+Written after D0 to D9 and the smallest-case runs, BEFORE any code of the H0 fix or of the check below, and before the A3/C4 instrumented suite run.
+The diagnostic switches of D2 to D5 were environment variables read by scratch-tree solver code (not committed).
+
+Measured (FAN-01 attempt-2 set-up, laminar, the registered criterion; U_b = 40.03 m/s):
+
+| run | outcome |
+|-----|---------|
+| control `linear_upwind` | UNSTABLE (guard trip at iteration 7, `velocity_runaway`) |
+| control `upwind` | STABLE (max speed 10..300 = 47.7, continuity 8.2e-5 at 10, max 6.1e-5 over 200..300) |
+| D0 gradient of the initial field (exact gradient constant) | interior 9 792 cells: max error 2.1e-13 Omega; seam 1 092 cells: 0.173 Omega; inlet 4.0e-2, outlet 4.3e-2 (corner cells next to the seams), wall 2.2e3 (the no-slip jump, legitimate). H0 STANDS |
+| D1 localisation | the largest speed at iterations 1 and 2 is in wall cell 295 (hub, r = 0.124, z = 0.333, downstream of the blade; aspect ratio 781, largest face non-orthogonality 73.3 deg), at iteration 3 in wall cell 13023 (shroud, r = 0.250, aspect ratio 944 = the mesh maximum, non-orthogonality 62.9 deg); the largest linear-upwind face corrections at iteration 1 (630 to 734 m/s against a boundary maximum of 40 m/s) are in wall cells next to the blade (aspect ratio 150 to 200) |
+| D2 `linear_upwind` without the momentum non-orthogonal correction | UNSTABLE (trip at 7): H1 not necessary |
+| D2s `upwind` with the momentum non-orthogonal correction | STABLE: H1 not sufficient; H1 FALSIFIED |
+| D3 `linear_upwind` with the Barth-Jespersen-limited gradient | STABLE (max speed 51.0): H2 STANDS |
+| D4 centre-line extrapolation | UNSTABLE (trip at 7): H2b FALSIFIED |
+| D5 upwind on the periodic coupled faces | UNSTABLE (trip at 7): H2p FALSIFIED |
+| D6 the mesh at rest (no frame) | UNSTABLE (trip at 7): H3 FALSIFIED |
+| D7 one non-orthogonal pressure corrector with the compensation | UNSTABLE (trip at 7): H4 FALSIFIED |
+| D8 `linear_upwind` after 300 `upwind` iterations | UNSTABLE (trip at 6 of the second phase): H5 FALSIFIED |
+| D9 `tvd_van_leer` / `tvd_minmod` | UNSTABLE (trip at 40) / STABLE (max speed 52.9) |
+| smallest case (a) `cases/axial_fan_sector` | `linear_upwind` and `upwind` both STABLE (laminar at Re_c about 5): does not reproduce |
+| smallest case (b) FAN-01 with `n_span = 6` | refused by the generator (`mesh.fan.n_span`: the boundary layers and the tip gap leave no room): set-up defect, not run |
+
+By the registered rule the reproducing case is FAN-01 itself (13 332 cells). Two hypotheses stand, H0 and H2, so the registered decision rule gives: no fix of the
+linear-upwind face value; the safe-scheme rule is documented and enforced by a located check (below); and H0, a defect of the gradient, is fixed (opt-in, below).
+
+Mechanism read from D0 to D9 (stated as the reading, not a further test): the unlimited linear-upwind extrapolation `grad(u)_U . (x_f - x_U)` from wall cells of very high
+aspect ratio whose faces are strongly non-orthogonal. The least-squares gradient of such a cell is dominated by the near-wall jump, and the extrapolation over the long side of
+the cell turns it into face values tens of times the largest boundary speed (D1). Limiting the gradient removes the instability (D3); projecting the extrapolation vector on
+the centre line does not (D4); neither the rotating frame (D6) nor the start-up (D8) nor the pressure equation (D7) nor the viscous non-orthogonal correction (D2) is needed.
+
+### H0 fix (opt-in), registered now
+
+D0 shows that on rotationally periodic seams whose cells are not aligned across the seam, the least-squares gradient takes the coupled face value (the distance-weighted
+mean of the owner and the rotated partner cell value) at the face centre, which for a linear field is not the value at the face centre: the error of the seam-cell gradient
+is O(1) of the gradient (0.17 Omega). Fix F-H0: with the opt-in key `solver.periodic_gradient = "partner_cell"` (default `"face_value"`, the historical form) the steady
+SIMPLE/SIMPLEC momentum gradient uses, on every coupled (periodic) boundary face, the partner cell itself: displacement `(x_f - x_o) + R (x_q - x_g)` (f the face, o its
+owner, g the partner face, q its owner, R the rotation of the pair or the identity for a translation) and value `(R u_q)_k - u_o,k`, which is exact for linear fields. Only
+the momentum gradient of the steady kernel uses it (not the transient kernel, not scalars, not turbulence); stated.
+Acceptance (all): H0-a D0 rerun with `partner_cell`: interior and seam max gradient error <= 1e-10 Omega (an exact solution: the exact gradient of a linear field); inlet,
+outlet and wall reported. H0-b with the key unset or `face_value`, FAN-01 `upwind` 20 iterations bit-identical (`to_bits` of u, p, phi) between the key absent and
+`face_value`, and the full suite unchanged. H0-c (reported, no limit) FAN-01 laminar `linear_upwind` with `partner_cell` classified by the registered criterion. If H0-a or
+H0-b fails the fix is removed (rule (b) of wave 35). Default: opt-in, because a gradient change moves every periodic case that uses a gradient scheme (the registered rule
+allowed a default only if no baseline moves; that was not tested, so the conservative choice is taken and stated).
+
+### The safe-scheme rule and its located check, registered now
+
+Metric (from D1): per cell `M_c = AR_c tan(theta_c)`, AR the cell aspect ratio of `rcfd_mesh::quality::compute_metrics`, theta the largest non-orthogonality of the
+cell's faces (capped at 89.9 deg); the mesh value `M = max_c M_c`. On FAN-01 M = 2 759; the two cells where the blow-up starts have M_c = 2 597 and 1 842 and rank 15 and
+38 of 13 332 cells by M_c (by aspect ratio alone 140 and 1, by non-orthogonality alone 572 and 2 897).
+Threshold study (registered, run with the A3a instrumentation): every steady SIMPLE/SIMPLEC simulation of the suite that uses `linear_upwind` or `tvd_van_leer` logs M and
+whether the guard tripped. T = 2 x the largest M of those that did not trip, rounded up to two significant digits. The check is written only if T < 2 759 (it separates
+FAN-01); otherwise the metric does not separate and no check is written (the rule is documented with the FAN-01 numbers, and the guard message carries it).
+Check (if written): the mesh quality report gets `max_aspect_non_orthogonality` (= M; `serde(default)` for old reports); a setup rule `SV106`, severity WARNING, category
+`solver`, path `solver.convection`, when `solver.algorithm` is `simple` or `simplec` (`coupled` not included: not tested), `solver.convection` is `linear_upwind` or
+`tvd_van_leer` (the two schemes measured unstable on FAN-01) and `$mesh.max_aspect_non_orthogonality > T`; the message names the metric, its value and the remedy
+(`upwind` or `tvd_minmod`, both measured stable on FAN-01). It is evaluated where the rules already are (`--check-only`, the `run.headless` warnings, the design loop). The
+steady-guard message gets the same hint when it trips on a run with one of these schemes on a mesh above T. Severity warning, not error: the rule rests on one case, and the
+guard stops the divergence within the first iterations; making it an error is the user's decision (recorded).
+Checks: S-a FAN-01 laminar `linear_upwind` gives exactly one SV106 warning at `solver.convection`; S-b the same case with `upwind` and with `tvd_minmod` gives none; S-c
+`cases/axial_fan_sector` (M reported) gives none unless its M exceeds T (reported); S-d the A2a reason contains the hint.
