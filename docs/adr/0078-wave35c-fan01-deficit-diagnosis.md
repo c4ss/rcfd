@@ -284,3 +284,10 @@ share.
 
 Run order from here (two at a time): X2a + N1b, X2b + X2d, E1 + C2, N2 + C3, X2c + D2, C0 + C1, D0 + D1, K alone. The machine is shared: the
 60-minute wall-clock stop stays as registered.
+
+## Amendment 3 (2026-10-19): one more numerics run, registered after X2a, X2b, X2d and N1b had run
+
+What I knew: the X2a, X2b, X2d and N1b results of the addendum (N1b: torque 1.680 N m, Delta p_ts 27.4 Pa; the angular-momentum excess falls from
+2.06 to 0.19 N m). No other arm beyond 30 iterations. Added: KN = N1b + N2 (`tvd_minmod` with `n_chord` 20, `n_side` 16; 27 004 cells), run once
+after the registered queue, common stop rules. Purpose: whether the two numerics changes together move the torque further (question 2). It is
+not an F-126 attempt; the attribution rules apply unchanged (KN - E0 is the combined numerics effect; additivity against N1b + N2 is reported).
