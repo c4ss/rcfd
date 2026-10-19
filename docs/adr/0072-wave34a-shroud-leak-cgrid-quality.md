@@ -235,6 +235,80 @@ rows kept algebraic), (displacement x 0.5), (x 0.25), (x 0) is tried, the same i
 `mesh.fan.c_grid_construction = "smoothed"` (default `"pursuit"`, the 33A construction, unchanged). The registered Q1-E to R1-E checks run once
 each with this construction; nothing is changed after they run (a change would be disclosed and its numbers reported as unregistered).
 
+## Addendum: measured values, misses and deviations
+
+All values from release builds, one run per registered set-up unless stated. Limits are the registered ones, unchanged. Reference values: the
+rigid-rotation facet flux and the Couette profile `u_theta = A r + B/r` are derived here (Stokes' theorem; the polar Navier-Stokes equations, as ADR 0071);
+the Winslow equations and the control-function idea are recalled from Thompson, Warsi & Mastin (1985) and Thomas & Middlecoff (1980), UNVERIFIED (not
+re-read); no external reference value is used by any gate. No fan performance claim.
+
+### Part 1: the moving-shroud wall leak
+
+| Check | Registered limit | Measured | Status |
+|---|---|---|---|
+| F1 L-H1: `abs(m_shroud - G)` | <= 1e-12 `abs(m_in)` confirms | 0 (bit-identical, G = m_shroud = -3.2216608166e-6 = 6.0e-5 m_in) | L-H1 confirmed |
+| F1 characterisation: exact facet sum / sum of magnitudes | expected <= 1e-13 | 1.3e-12 (round-off floor of the edge formula, see Amendment 2) | above expectation, no gate |
+| per-face leak on the C-grid shroud | reported | sum of magnitudes 0.45 % of m_in; largest `abs(u_w . n)/abs(u_w)` 1.0e-2; H-slit 1.7e-3 | real per-face leak |
+| T1 as registered | converged, continuity < 1e-9 | set-up defect (closed domain, net facet flux 4.8e-7 / 1.3e-8 / 4.3e-10, continuity floor 1.2e-5 / 1.2e-6 / 1.6e-7); not run | ignored, corrected test added |
+| T1 corrected: projected wall leak | <= 1e-13 | 1.3e-16, 1.7e-16, 1.9e-16 | met |
+| T1 corrected: finest projected error | <= 1.5e-2 V_i | 2.7155e-3 | met |
+| T1 corrected: orders | >= 1.0 | 1.83, 1.91 (unprojected 1.83, 1.90) | met |
+| T1 corrected: `e_projected <= e_unprojected` | every mesh | 3.6187e-2 vs 3.6000e-2, 1.0171e-2 vs 1.0154e-2, 2.7155e-3 vs 2.7145e-3 | MISS: bookkeeping change, not an accuracy fix |
+| T1 corrected: positive control `tilt >= 1e-4` | every mesh | 1.375e-3, 3.315e-4, 4.70e-5 (falls as h^2) | MISS on the finest mesh (set-up weakness) |
+| T1d decoupled: leak / finest error / orders | 1e-13 / 1.5e-2 / 1.0 | 1.9e-16 / 2.7158e-3 / 1.83, 1.91 | met |
+| T1d: `e_decoupled <= e_unprojected` | every mesh | 3.6252e-2, 1.0177e-2, 2.7158e-3 (all above) | MISS: bookkeeping change |
+| T2 empty C-grid sector: projected leak | <= 1e-13 | 1.8e-16 (unprojected 1.55e-2 of `abs(u_w) abs(S)`) | met |
+| T2: `e_projected <= e_unprojected`, converged | | 0.27328 vs 0.27329 of W2 R2; 854 / 856 iterations | met (both far from the profile on this coarse upwind set-up) |
+| S3'' (projected shroud, S3' limit) | `abs(m_in + m_out)` <= 1e-6 m_in; shroud <= 1e-14; pair <= 1e-12 | 1.5e-14; 5.6e-17; 6.0e-16; converged in 406 iterations | met (the 0068 S3' miss is closed by the opt-in) |
+| T3 default unchanged | rejection | the 33A message; projection on `partial_slip` rejected with a located error | met |
+
+Verdict: the leak is a real per-face defect of prescribing `u_w(c_f) . S_f` on a faceted wall of revolution (L-H1 confirmed bit for bit), and the
+opt-in `wall_velocity_projection = "tangential"` removes it exactly. On the analytic faceted Couette (T1) neither the projection nor the decoupled
+treatment (zero flux, face-centre velocity) is more accurate than the leaking wall (differences 0.05 % to 0.7 %); so the projection is a mass
+bookkeeping fix, not a demonstrated accuracy fix. The decoupled flag is an fv-level opt-in only (no case key).
+
+### Part 2: C-grid quality
+
+Diagnostics and verdicts: Amendments 2 and 4 (N1 holds, N2 holds for S/A' and is falsified for B', N3 falsified, K1 falsified, W1 and W2 falsified as
+registered; mechanisms found: thin-layer rotation wedge, and the y+ = 1 blade-stack face warp `L (d phi/dr) Delta r` against h1).
+
+| Check (construction E) | Registered limit | Measured | Status |
+|---|---|---|---|
+| Q1-E A' non-orthogonality / skewness / aspect | 70 / 2.0 / 300 | 61.38 deg (mean 11.5, p99 44.5, 3 faces above 60) / 0.863 / **395.1** | non-orthogonality and skewness MET (33A: 81.57 deg); aspect MISS (`q1e_quality_gates_a_prime_known_miss`; met-gates test added) |
+| Q1-E B' | 70 / 2.0 / 3000 | **78.17** / **7.08** / **8532** | MISS, predicted in Amendment 4 (33A: 83.73 / 4.85 / 2651; skewness and aspect are worse) |
+| Q2-E closure, S / A' | 1e-13 | 5.4e-16 / 1.25e-15; topology, volumes > 0 | met |
+| Q3-E (corrected Q3) | 1e-11 | 1.8e-16; C nodes of bladed and empty builds identical | met |
+| Q6-E periodicity | 1e-12 | nodes 1.1e-16, face centres 5.6e-16, area vectors 3.3e-13 (S, A', other lean/sweep) | met |
+| Q7-E stacks A' / B' | 1e-12 / 4.9e-11 | 3.2e-13, 1.3e-13 / 1.7e-11, 4.6e-12 | met |
+| Q4a'-E envelope, levels (8,16,8,8,4), (16,32,16,16,8), (32,64,32,32,16) | decreasing, finest 5e-3, order 1.5 | 6.39e-3, 1.55e-3, 3.81e-4; order 2.02 | met |
+| Q4a' with the 33A construction | same | level 1 5.00e-3; level 2 folds | MISS (`..._33a_known_miss`) |
+| Q4b/Q5-E solid volume, levels (16,8), (32,16), (64,32) | finest 2e-3, order 1.5 | 1.20e-2, 1.73e-3, 2.04e-4; order 3.08 | met (first time measurable) |
+| Q4b/Q5-E lateral area | finest 2e-3, order 1.5 | 5.36e-3, 7.21e-4, 2.22e-4; order 1.70 | met |
+| R-E scan (117 combinations) | every one builds and validates | 107 (33A: 38); failures: n_chord 16 with n_side 32 (n_nose 2/6/8), n_chord 32 / n_nose 2 / n_side 6, n_chord 32 / n_nose 6 / n_side 32 (both blade states each) | MISS (`r_e_..._known_miss`) |
+| R-E quality of the built meshes (reported) | none | E: 41 of 107 at or below 70 deg, median 74.5 deg, worst 89.1, skewness <= 2 in 75, aspect up to 1456; 33A: 0 of 38 at or below 70, median 83.7 | reported |
+| R1-E example case with `c_grid_construction = "smoothed"` | no error-level finding | 0 findings, 53.82 deg, skewness 0.596, `check_mesh` ok (pursuit: 79.65 deg, SV101) | met |
+
+Unregistered observations: the A' and B' aspect maxima sit in the cells next to the irregular seam corner (C cell (h_c - 1, n_side - 1) and the last
+F row at the seam) in the first layers below the shroud and the tip cap (in-plane edge about 0.09 m against h1): the smoother stretches the corner
+cells and the end-wall first height turns that into aspect. Development runs (DS, DA, S, unregistered combinations) are summarised in Amendment 4.
+
+### Deviations from the registered plan (candid list)
+
+* G2 (planar control) was replaced before it ran (Amendment 1); G2a folded (inconclusive).
+* T1 had a set-up defect (incompatible closed pressure equation) found before it ran; T1d was added after T1's coarse meshes ran (Amendment 3).
+* The construction was developed in several steps on the development set-ups after Amendment 2 (untangling, line-implicit relaxation, the
+  kept-algebraic quarter, exact controls near the stacks with a fade length chosen on S and unregistered combinations, the fallback chain); W1 and W2
+  were each falsified as registered, W1 is nevertheless part of construction E (it reduced the DA end-wall maxima), W2 is not. Everything was frozen in
+  Amendment 4 before the registered checks ran; nothing was changed after they ran.
+* The R1-E test first failed on a defect of its own text substitution (it also rewrote a comment line of the example case); corrected before any
+  R1-E measurement existed.
+* The registered Q4b/Q5 set-up names only (n_chord, n_span); the rest is S, as registered.
+* The final gate shows clippy errors in `crates/rcfd-api/tests/fan01_validation.rs` (wave 34D's file, committed by 34D), not in files of this wave.
+
+### Unverified references
+
+Thompson, Warsi & Mastin (1985) and Thomas & Middlecoff (1980) for the elliptic system and control functions (recalled, not re-read). Nothing else.
+
 ## Not claimed
 
 Fan performance; any comparison with a published fan; turbulence quantities; the accuracy of the absolute `mrf` formulation next to a stationary faceted

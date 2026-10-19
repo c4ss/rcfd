@@ -16,7 +16,7 @@ use crate::sim::{get_b, get_f, get_i, get_s};
 use rcfd_core::settings::Schema;
 use rcfd_core::units::Dimension;
 use rcfd_mesh::fan::{AxialFan, SectionFamily, Station};
-use rcfd_mesh::fan_cgrid::{build_cgrid_mesh, CGridSpec};
+use rcfd_mesh::fan_cgrid::{build_cgrid_mesh_with, CGridOptions, CGridSpec};
 use rcfd_mesh::fan_mesh::{build_sector_mesh, FirstCell, SectorSpec};
 use rcfd_mesh::Mesh;
 
@@ -75,6 +75,11 @@ pub fn schema() -> Schema {
         .field("n_core", cnt(2, 1.0, "c_grid only: cells across the blade thickness in the tip gap above the blade"))
         .field("front_gap", Schema::float(0.3).at_least(0.0).doc("c_grid only: axial distance of the front edge of the leading-edge fan ahead of the leading edge, in local chords"))
         .field("include_blade", Schema::boolean(true).doc("false leaves the blade footprint filled: an empty passage with the same nodes (verification)"))
+        .field(
+            "c_grid_construction",
+            Schema::enumeration("pursuit", &["pursuit", "smoothed"])
+                .doc("c_grid only: pursuit (ADR 0068, the default) or smoothed (ADR 0072: elliptic in-plane smoothing with periodic seams and the radial remap of the far grid; better orthogonality, more robust against the controls)"),
+        )
         .field("station_radius", flist("Optional radial stations [m] of the blade (ADR 0075): when this list is not empty, the station_* lists (all of the same length, first radius r_hub, last radius r_tip, strictly increasing) replace the hub_* / tip_* values and the blade varies linearly between neighbouring stations"))
         .field("station_chord", flist("Chord [m] at each station_radius"))
         .field("station_stagger", flist("Stagger [deg] at each station_radius (angle of the chord from the axis, as hub_stagger)"))
@@ -283,7 +288,16 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             .collect()
     };
     if get_s(case, "mesh.fan.topology") == "c_grid" {
-        return build_cgrid_mesh(&fan, &cgrid_spec_of(case))
+        let opts = if get_s(case, "mesh.fan.c_grid_construction") == "smoothed" {
+            CGridOptions {
+                radial_remap: true,
+                smoothing: true,
+                ..CGridOptions::default()
+            }
+        } else {
+            CGridOptions::default()
+        };
+        return build_cgrid_mesh_with(&fan, &cgrid_spec_of(case), &opts)
             .map(|s| s.mesh)
             .map_err(to_diag);
     }
