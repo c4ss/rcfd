@@ -53,7 +53,7 @@ also after an interrupted or failed run.
 | 3 | invalid case or settings | |
 | 4 | the mesh failed its quality check | |
 | 5 | steady run stopped at its iteration cap without meeting the tolerances | `not_converged` |
-| 6 | residuals became non-finite | `diverged` |
+| 6 | residuals became non-finite, or a divergence guard stopped the run (PISO/PIMPLE, ADR 0067; steady, ADR 0077) | `diverged` |
 | 7 | interrupted through the stop file | `interrupted` |
 | 8 | `--max-elapsed` reached | `time_limit` |
 
@@ -66,9 +66,14 @@ within one launch) and `wall_s`. Events:
 - `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
-- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`
+- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`; a
+  pressure-lag warning of PISO/PIMPLE (ADR 0077, `solver.pressure_lag_check = "warn"`) also has `kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`
 - `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `rules` (setup-rule diagnostics, `id severity category path message [fix]`), `mesh` (quality report)
-- `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`
+- `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`; a run stopped by a divergence guard (state `diverged`) also has
+  `divergence` (ADR 0077): `solver` (`steady` or `transient`), `kind` (steady: `non_finite`, `continuity_growth`, `velocity_runaway`, `pressure_runaway`;
+  transient: `non_finite`, `courant`, `lag_amplification`), `quantity`, `iteration` (steady) or `step`, `outer`, `stage` (transient), `cell`, `position`,
+  `value`, `limit`, `last_good` (steady: the iteration with the smallest continuity before the trip; transient: the previous step). `summarize_stream`
+  passes it on as `divergence`.
 
 The MCP tool `read_status_stream` (service method `status.read`) summarises such a file; the
 tool `run_headless` (service method `run.headless`) produces the same stream through the service.

@@ -154,6 +154,15 @@ is non-finite or above `solver.divergence_courant_limit` (default 1e6 when the k
 exit code 6 and a located message (`PIMPLE divergence guard: <quantity> is <value> at step <n>, outer iteration <k>, <stage>, cell <i>
 (x, y, z); limit <L>`). The checks only read the state, so finite runs are bit-identical to before. See ADR 0067 section 0.
 
+## Divergence guard (steady SIMPLE, SIMPLEC, coupled)
+
+Since ADR 0077 a steady run is also stopped when it diverges: a non-finite residual or field, a continuity that grows by 1e6 over 50 iterations,
+or a speed or pressure range that runs away against its value after the first iteration (`solver.steady_divergence_guard`, `docs/case-schema.md`).
+The design loop's runs go through the run-control driver, so a diverged candidate or operating point ends after the tripping iteration with status
+`diverged` (a failed evaluation, `Fitness::FAILED`) and the located reason, including the kind and the last good iteration, in the record's message
+(before, a finite blow-up such as SIMPLE with alpha 1/1 ran to its iteration cap as `not_converged`). PISO/PIMPLE runs with one pressure corrector also
+make one pressure-lag estimate and report a `pressure_lag` warning when the lagged pressure error will be amplified (`solver.pressure_lag_check`).
+
 ## Not delivered
 
 CMA-ES, multi-objective evolutionary search, Halton sequences, gradient (adjoint) optimisation, surrogate models, warm start for

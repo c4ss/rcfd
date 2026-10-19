@@ -106,3 +106,21 @@ slip-wall and packed-bed tests included).
    than `packed_bed` is bit-identical; three tests that assert today's default or its defect need rewording; the lumped heat-exchanger channel stops
    converging and would need a diagnosis (or the key set to `averaged` in that case) first.
 3. Keep `averaged` but warn (a run-time diagnostic) when a segregated kernel meets a symmetry-type boundary with the averaged diagonal (not implemented).
+
+## Update 2026-10-19 (wave 35B, ADR 0077 part D): the heat-exchanger channel is not a convergence regression
+
+The `lumped` z4 channel has the exact solution u = (2, 0, 0) m/s, p = 0 (both walls `symmetry`, uniform inlet, a heat exchanger without pressure
+loss, no buoyancy, constant properties). Measured with `crates/rcfd-api/tests/w35b_hx_corrected.rs` (the three z4 set-ups, 10 000 iterations):
+
+| | `averaged` (default) | `corrected` |
+|---|---|---|
+| max abs(ux - 2) / U at iteration 1 500 | 9.4e-6 | 1.9e-13 (1.2e-13 to 1.5e-13 at 5 000 and 10 000) |
+| max abs(p) / (U^2 / 2) at iteration 1 500 | 3.6e-4 | 7.5e-14 (3.2e-14 at 10 000) |
+| change of ux / U, of p / (U^2 / 2) over 500 iterations | - | at most 2.5e-13, 1.3e-13 |
+| ADR 0012 energy balance (enthalpy change vs duty, 1e-6; reported duty 1e-9; effectiveness rise vs duty 1e-6; duty vs eps C_min (T_sec - T_in) 1e-9) | met (ADR 0012) | met: 1.7e-12, 0, 5.6e-13 / 1.3e-12, 1.1e-15 / 0 |
+
+`corrected` reaches the exact plug flow to round-off and stays there; `averaged` is stationary on a solution that is off by the symmetry-plane sink of ADR 0010.
+The "not stationary" verdict of the table above comes from the `run()` helper of `lumped.rs`, which divides the change of p by `max(max|p|, 1e-12)`: with
+`corrected` max|p| is about 6e-14 and the change over 300 iterations 1.8e-13, so the ratio reads 0.18 (reproduced: 0.177). It is a relative criterion applied
+to a round-off pressure field, not a solver defect. Option 2 above therefore needs no diagnosis of this channel; the two z4 tests would need an absolute
+(dynamic-pressure scaled) stationarity criterion, or `averaged` set explicitly, if the default were changed. The default is unchanged (the user's decision).
