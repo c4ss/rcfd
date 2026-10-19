@@ -1375,6 +1375,8 @@ impl Simulation {
             s.alpha_p = get_f(case, "solver.alpha_p");
             s.p_ref = (p_ref_cell, get_f(case, "solver.p_ref_value"));
             s.ddt_correction = get_b(case, "solver.ddt_correction");
+            // ADR 0074 W1: the key also selects the component-consistent split of the transient kernel (ADR 0069 F3)
+            s.component_diagonal = get_s(case, "solver.component_diagonal") == "corrected";
             s.full_viscous_stress = get_s(case, "solver.viscous_stress") == "full";
             let dcl = get_f(case, "solver.divergence_courant_limit");
             if dcl > 0.0 {
