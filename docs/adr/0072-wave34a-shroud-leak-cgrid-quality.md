@@ -127,6 +127,15 @@ Decision rule: A' and B' are run once each with the frozen construction; a measu
 limit unchanged. No re-run with another construction to pick a better value; a construction change after an A'/B' measurement is disclosed in the
 addendum and its numbers are reported separately as unregistered.
 
+## Amendment 1 (written after F1 ran and before any G diagnostic ran; no limit changed)
+
+* **G2 as registered is not a valid control** (pencil, before running): mapping layer k to the Cartesian `(r, s, z)` with `s = r theta` turns the radial
+  node lines (constant theta) into lines of slope `ds/dr = theta`, up to 2 pi / N = 1.26 rad across the passage, so the planar mesh would ADD a radial
+  tilt of up to about 50 deg instead of removing the curvature. No planar map keeps both the in-plane metric of every layer and the radial lines. G2 is
+  replaced by two single-factor runs of the first cell height, which is the factor named by K1 (facet warp against h1): **G2a** = B' counts with the
+  first cell height of A' (y+ 30), **G2b** = A' counts with the first cell height of B' (y+ 1). K1 is falsified if G2a's skewness exceeds 2.0 or G2b's does not.
+  N1 keeps its G3 criterion; G4 (untwisted blade) separates the radial variation of the in-plane grid from the rest of the 3-D effects.
+
 ## Not claimed
 
 Fan performance; any comparison with a published fan; turbulence quantities; the accuracy of the absolute `mrf` formulation next to a stationary faceted
