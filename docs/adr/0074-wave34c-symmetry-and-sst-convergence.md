@@ -195,7 +195,8 @@ bit-identical.
 | W1 transient key (packed bed, PISO, 100 steps) | default bit-identical to `averaged`; `corrected` changes u_x by 1.8e-6; max abs(u_y) 8.4e-7 (averaged), 4.2e-14 (corrected) | as registered | pass |
 
 A10 (prediction falsified): with the averaged diagonal the converged half channel is not x-invariant (max abs(u_y) 0.026, u_x varying by 0.73 along the four
-periodic cells; the first momentum solves, with a relative tolerance of 1e-3, seed x-variations that the averaged fixed point keeps), so the owner-value
+periodic cells, already present after the first iteration; a candidate source is the momentum solve with a relative tolerance of 1e-3 seeding
+x-variations that the averaged fixed point keeps, NOT tested), so the owner-value
 body-force term of the periodic faces (the ADR 0071 defect) leaves a continuity defect of 4.0e-5 that never converges; `coupled_body_pair_mean` removes it
 (2e-14) and moves u_max by 1.2e-4 relative. It is a second, small symptom, not the cause of the no-slip behaviour. With the corrected diagonal the state is
 x-invariant to 1e-12 and the option does not matter.
@@ -223,7 +224,11 @@ Decision rule B: no single factor on rcfd's own mesh family is confirmed; H6c sh
 within 1 percent of their mean on every grid, u+ offset decaying with an order of about 1.1). The ADR 0070 P2f miss is therefore a property of rcfd's own mesh
 family/set-up, not of the SST implementation. As registered, H6c becomes the NEW corrected P2f-type test (it asserts the H6 rule and the ADR 0070 P2a/P2f
 limits); the ADR 0070 known miss stays ignored with its limits. The assertions were written after the run, which was not repeated (deviation 4).
-Open: (a) the constant -0.82 percent offset against the TMR codes on identical grids (candidates, not tested: the `Symmetry` top instead of the TMR farfield,
+H2 and the default wall-omega treatment, by inference from H6c (not a passed H2 run): H6c uses the same first-order upwind k and omega convection and
+the same wall-omega face value as the ADR 0070 runs and reaches order 1.07, so neither is by itself sufficient to produce the order 0.66.
+The H6c agreement is "consistent" only under the registered H6 rule: rcfd lies 0.82 to 0.87 percent below the mean of the three incompressible codes on
+every grid, which on the 13056 and 52224 grids is BELOW the lowest of the three codes (by about 0.3 and 0.5 percent; inside their range only on the 3264
+grid). Open: (a) that constant offset (candidates, not tested: the `Symmetry` top instead of the TMR farfield,
 the fixed-velocity inlet instead of the TMR total-pressure inflow, Cf normalised with the local u at y = 0.25 instead of U = 1, the Spalding-based `Automatic`
 wall shear; the three TMR codes themselves spread by 2.2, 1.0 and 0.6 percent on these grids); (b) which part of the TMR family (wall spacing 5e-7 x 2^level with
 a near-wall growth of about 1.002, or the leading-edge clustering) restores the order: not separated; (c) H3a shows that the wall-omega distance convention
@@ -248,6 +253,8 @@ is stationary to 4e-10 from iteration 1000): a real cost of the change whose cau
 5. Stage-1 coarse/medium values are combined with the stage-2 finest run of the same hypothesis made in a separate process (the runs are deterministic: H0
    reproduces ADR 0070 exactly).
 6. Up to four runs were made in parallel; iteration counts are unaffected, wall times are not comparable with ADR 0070.
+7. The registered trigger for a NEW corrected P2f test was a CONFIRMED cause; H6c is "consistent with the TMR codes" under the separate H6 rule, not a
+   confirmed single cause, yet it was made the new P2f-type test (with the ADR 0070 P2a/P2f limits). This is a deviation from the registered wording.
 
 ### Unverified / not read
 Menter (1994) and Menter, Kuntz, Langtry (2003) were not read; the TMR SST page does not define `Delta d_1` in words. The TMR plate grid, the boundary-condition
