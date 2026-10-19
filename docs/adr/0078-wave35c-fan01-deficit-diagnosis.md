@@ -171,3 +171,67 @@ Tests in `crates/rcfd-api/tests/fan01_diagnosis_w35c.rs` (long runs ignored, con
 `turb.rs`; F-RE in `bc_cat.rs` + schema + `docs/case-schema.md` (only if RE-H is not falsified); `fan01_validation.rs` and the ADR 0075 tests are
 not edited. Before the long runs, every new set-up gets a construction check and a 30-iteration smoke (continuity finite); the smoke results are
 recorded in an amendment before the runs they govern.
+
+## Amendment 1 (2026-10-19): checks, smoke results and set-up corrections, written before any registered long run
+
+Code state of every run below and of the long runs: 0cef8f5 plus the wave-35C files exactly as committed in 1ce94c0 (built in a private copy of
+the tree; commits of other wave-35 agents between 0cef8f5 and 1ce94c0 are not in the runs).
+
+What I knew when writing this: the construction and the 30-iteration smoke values below, the X1 results, S2a/S2b, the N1 smoke, and the
+blade-element values. No arm has been run beyond 30 iterations (N1 schemes: 300).
+
+S2 (moving_wall with SST). S2a first failed to parse: the channel walls given as `fixed` with a non-zero velocity and no `turbulence = "wall"` are
+read as inlets (role `auto`), a set-up defect of the test text; `turbulence = "wall"` was added to both walls before any S2a value existed. Measured:
+largest difference of u, p, k, omega after 200 iterations 0 (bit-identical). S2b: k-epsilon refused at `boundaries.ymin.velocity` and
+`boundaries.ymax.velocity`. S2 is kept.
+
+RE-H and F-RE. X1 with the code as it was: outlet pressure error 47.2 % (`Omega_f = 2`, predicted about 50 %) and 36.8 % (`Omega_f = 1`, predicted
+37.5 %) of the range: RE-H holds (ignored test `x1_..._without_the_frame_rate_known_miss`). With `radial_frame_rate = Omega_f`: outlet pressure
+0.376 % / 0.397 %, outlet absolute swirl 0.001 % / 0.020 %, mid-length pressure 0.390 % / 1.650 % (limits 3 %), settled in 180 / 184 iterations;
+the discrete balance of the applied pressures with the absolute swirl 3.0e-15 / 2.5e-15 of the range. The existing E2 test passes (0.408 %, 0.032 %,
+2.669 %, 2.3e-15). F-RE is accepted and kept. Restriction (documented): it assumes `p` is the static pressure, i.e. `rotating_frame` with
+`centrifugal = true`; only that case is checked.
+
+Construction (13 332 cells E0, E1, C2, C3; C1 21 060; D1 21 543; D2 15 684; N2 33 076; K 34 395; all `check_mesh` ok, max non-orthogonality
+79.0-79.1 deg). Count-rule DEFECT found at construction: the registered C1/D1 rule (largest axial cell at most E0's) does not keep the spacing near the
+trailing / leading edge, because the generator fills the region by geometric growth from the boundary-layer cells: E0 grows downstream with ratio 3.56
+(largest cell 0.165 m) and upstream with ratio 2.97 (0.067 m); C1 (n_down 24) has ratio 1.35, D1 (n_up 25) 1.28. C1 - E0 and D1 - E0 therefore mix
+the location with the axial grading. Correction, two new arms (C1 and D1 run as registered):
+* C0: E0 length with `n_down` the smallest count whose downstream growth ratio is at most C1's (n_down 21, ratio 1.344, 19 611 cells);
+* D0: E0 length with `n_up` the smallest count whose upstream growth ratio is at most D1's (n_up 21, ratio 1.272, 19 611 cells).
+Then outlet location = C1 - C0, inlet location = D1 - D0, and C0 - E0, D0 - E0 are axial-grading (numerics) effects. For the question-2 Delta p_ts rule
+the comparisons that count as "defensible outlet treatments" are C1 - C0 (location), C2 - E0 (backflow stabilisation) and C3 - E0 (type); C0 - E0 is
+a numerics result, not an outlet treatment.
+
+N2 amended to in-plane refinement only: `n_chord` 20, `n_side` 16, `n_up` and `n_down` stay 8 (the axial grading is measured by C0/D0); 33 076 cells
+was the registered variant, the amended one has 27 004 cells (max non-orthogonality 79.0 deg).
+
+N1 smoke (registered rule): `tvd_van_leer` continuity 1.03e-4 at iteration 10, 1.0e69 over 200-300 (diverged); `tvd_minmod` 1.03e-4 at 10,
+maximum 1.205e-4 over 200-300 (no growth beyond that, but above the iteration-10 value): both unstable by the registered rule, so N1 is NOT RUNNABLE
+as registered. N1b (added now, knowing this smoke): `tvd_minmod` run with the common stop rules (8000 iterations, divergence stop, 60 min).
+
+Hub length (raised by review before any run): the hub cylinder rotates over the whole domain, so C1, D1 and K add rotating hub surface; the
+harness now prints the blade, hub and shroud moments separately (with their last-1000-iteration change) and the pressure part of each. Rotor work on
+the extension arms is attributed with the blade moment and the U-to-D segment work, not with `W_M` / `W_L`; the inlet-to-U and D-to-outlet segment
+work is the hub (minus shroud) friction work and is quoted as such.
+
+Comparability of the cut diagnostics: cut U lies one cell downstream of the inlet-adjacent cell in E0's upstream grading, and cut D inside cells of
+up to about 0.05 m; spanwise and incidence numbers are compared only between arms that share a grading (E0, E1, C2, C3, D2, N1b; C0 and C1; D0 and
+D1).
+
+Smoke results (30 iterations, continuity at iteration 30, all finite): E0 1.22e-4, E1 1.23e-4, C1 1.16e-4, C2 1.22e-4, C3 1.15e-4, D1 1.70e-4,
+D2 1.37e-4, N2 (registered counts) 2.91e-5, K 1.28e-4, C0 5.51e-5, D0 1.33e-4. An observation from the smoke diagnostics (30 iterations, not
+converged, no conclusion drawn): the absolute angular-momentum flux at the outlet (3.29 N m in E0) is about 2.6 times the reported torque on blade,
+hub and shroud (1.27 N m), and cut U (ahead of the rotor) already carries 0.66 N m; with N2 the ratio is smaller (2.41 against 1.79). Whether this
+persists at convergence is part of arm B; if it does, it is a candidate defect or a discretisation error of the relative-velocity formulation, and a
+check is registered in an amendment before it is run.
+
+Blade-element estimate (arm E, analytic, computed now): design point EA 242.2 J/kg (torque 2.621 N m, psi 0.163), EB 222.2 J/kg (2.405 N m,
+psi 0.150); off-design EA 172.8 J/kg (2.404 N m), EB 179.4 J/kg (2.496 N m; above EA because the drag term adds tangential force and the cap is not
+active). Measured shaft: 197.9 J/kg (2.142 N m) and 135.3 J/kg (1.882 N m). Both variants exceed the measured shaft torque by 12-22 % (design) and
+28-33 % (off-design): the estimate overshoots the measurement on its own (isolated-airfoil lift at solidity up to 1.14, C_L up to 1.5 in EA, no
+3-D losses), so the yardstick for the CFD deficit is the measured shaft work, not EA or EB; EA/EB are "the two variants", not an ordered bracket.
+The torque decision rule's first condition ("the bracket contains or exceeds the measured shaft torque") is met at both points; the conclusion still
+needs a resolved numerics effect.
+
+Run order: E0 alone first (reproduction rule); then pairs, never two of N2 / K / C1 / D1 together.
