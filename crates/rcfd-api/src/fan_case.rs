@@ -173,7 +173,9 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             .collect()
     };
     if get_s(case, "mesh.fan.topology") == "c_grid" {
-        return build_cgrid_mesh(&fan, &cgrid_spec_of(case)).map(|s| s.mesh).map_err(to_diag);
+        return build_cgrid_mesh(&fan, &cgrid_spec_of(case))
+            .map(|s| s.mesh)
+            .map_err(to_diag);
     }
     let spec = spec_of(case);
     build_sector_mesh(&fan, &spec).map(|s| s.mesh).map_err(to_diag)

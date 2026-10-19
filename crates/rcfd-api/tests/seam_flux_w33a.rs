@@ -62,7 +62,11 @@ fn run(text: &str, iterations: usize) -> Simulation {
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
     let n = sim.run(iterations);
     assert!(sim.failure().is_none(), "{:?}", sim.failure());
-    println!("  {n} iterations, converged {}, last {:?}", sim.is_converged(), sim.last().map(|s| (s.res_u, s.res_p)));
+    println!(
+        "  {n} iterations, converged {}, last {:?}",
+        sim.is_converged(),
+        sim.last().map(|s| (s.res_u, s.res_p))
+    );
     sim
 }
 
@@ -94,7 +98,10 @@ tolerance_p = 1e-13
 "#;
     let sim = run(text, 3000);
     let (e, e_patch, n) = pair_metric(&sim, "xmin", "xmax", Map::Shift([1.0, 0.0, 0.0]));
-    println!("D1 {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}", sim.is_converged());
+    println!(
+        "D1 {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}",
+        sim.is_converged()
+    );
     assert!(e <= CLEAN, "D1 e_pair {e}");
 }
 
@@ -168,7 +175,10 @@ tolerance_p = 1e-12
 fn d2_d3(frame: f64, tag: &str) -> f64 {
     let sim = run(&couette_case(frame), 4000);
     let (e, e_patch, n) = pair_metric(&sim, "seam_lo", "seam_hi", Map::Rot(2.0 * PI / 5.0));
-    println!("{tag} {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}", sim.is_converged());
+    println!(
+        "{tag} {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}",
+        sim.is_converged()
+    );
     e
 }
 
@@ -191,7 +201,10 @@ fn d4_fan_passage_c_grid() {
     let text = include_str!("../../../cases/axial_fan_cgrid/axial_fan_cgrid.toml");
     let sim = run(text, 6000);
     let (e, e_patch, n) = pair_metric(&sim, "seam_lo", "seam_hi", Map::Rot(2.0 * PI / 5.0));
-    println!("D4 {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}", sim.is_converged());
+    println!(
+        "D4 {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}",
+        sim.is_converged()
+    );
     assert!(e <= CLEAN, "D4 e_pair {e}");
 }
 
@@ -201,5 +214,8 @@ fn d5_h_slit_fan_passage_observation() {
     let text = include_str!("../../../cases/axial_fan_sector/axial_fan_sector.toml");
     let sim = run(text, 6000);
     let (e, e_patch, n) = pair_metric(&sim, "seam_lo", "seam_hi", Map::Rot(2.0 * PI / 5.0));
-    println!("D5 (observation) {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}", sim.is_converged());
+    println!(
+        "D5 (observation) {n} pairs: e_pair {e:.3e}, patch-level {e_patch:.3e}, converged {}",
+        sim.is_converged()
+    );
 }
