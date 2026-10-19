@@ -257,3 +257,20 @@ registered falsifier Y1 identified the mechanism and F-C failed on an algebra mi
   `b2_b4a_step6_corrected`: the same runs with the check at step 1 and every 6 steps, the estimate made at step 6 is compared with the same B2/B4a limits (10 % for
   |G| >= 1.15, rho < 1 for |G| <= 0.85), all rows. Not changed: B4b keeps `every = 20` with the step-1 estimate included (for BDF2 runs the step-1 estimate is the
   Euler one, which is the larger; any false positive this causes is counted).
+
+## Amendment 3 (after the F-G acceptance runs C-O1 to C-S2, C-O9, N1 and N3-PISO; BEFORE the diagnostic Y3 below is written or run; nothing above was changed)
+
+F-G so far (registered limits): C-O1 2.232 / 2.260 met; C-O2 (PIMPLE-C) 1.237 MISS (default 1.223); C-O3 2.011 met; C-O7 2.194 met; C-S1 (TG-S PISO) 0.995 MISS
+(errors 6.12e-4 / 3.07e-4, default 6.73e-4 / 3.43e-4); C-S2 (TG-S PIMPLE-4) 2.011 met (default 0.823; the errors equal the TG PIMPLE-4 ones to all printed
+digits); C-O9 3.816 / 3.237 met; N1 MISS on one of 24 comparisons (TG-S velocity at dt 0.0125: ratio 1.0504 against the limit 1.05; all pressure ratios
+<= 1.003, TG ratios 0.987 to 0.996, MMS <= 1.002); N3 PISO: floor "not present" (share 0.6 %). F-G is therefore NOT accepted by the registered rule, and the
+A5 cylinder run (conditional on acceptance) is not made.
+
+The TG-S PISO miss with the converged-outer TG-S row met points at a lag that the outer iteration removes and that only exists where the periodic seam carries flux:
+on the first outer iteration of a BDF2 step the convection term takes the periodic partner value of the coupled faces from the boundary coefficients of the
+CURRENT velocity (`u^n`), while the convected cells are extrapolated (`(1 + r) u^n - r u^{n-1}`); the partner part of the central face value is then first order
+in time (the fractional path extrapolates it, ADR 0043 D1; the iterative path does not). Hypothesis H-SEAM-CONV.
+
+**Y3 (diagnostic, scratch tree only, prints).** On the first outer iteration of a BDF2 step, the boundary coefficients of the coupled faces (convection, Laplacian
+and the periodic links) are those of the extrapolated velocity, as in the fractional path. Run: TG-S PISO with F-G, fine pair. Reading rule: H-SEAM-CONV stands if the
+fine-pair order is in [1.9, 2.3]; otherwise it is falsified. No fix follows in this wave either way (amendment 1: no third fix); the result is reported.
