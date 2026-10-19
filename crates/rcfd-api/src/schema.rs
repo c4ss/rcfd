@@ -886,6 +886,18 @@ pub fn case_schema() -> Schema {
             Schema::float(0.0).at_least(0.0).doc("PISO/PIMPLE divergence guard (ADR 0067): the run stops with a located error (state diverged, exit 6) when a step's maximum Courant number exceeds this value; 0 = unset, the built-in 1e6 applies (use 1e300 to disable the Courant criterion). Non-finite velocity, pressure or flux always stops the run"),
         )
         .field(
+            "steady_divergence_guard",
+            Schema::enumeration("on", &["on", "off"]).doc("Divergence guard of the steady simple/simplec/coupled solvers (ADR 0077): on stops the run with a located error (state diverged, exit 6) when the continuity grows by 1e6 over 50 iterations above 1e-6 of the reference speed, the largest cell speed exceeds 1e6 times, or the pressure range 1e12 times, their references taken after the first iteration; off keeps only the always-active check of non-finite residuals, velocity, pressure and flux. The checks only read the state"),
+        )
+        .field(
+            "periodic_gradient",
+            Schema::enumeration("face_value", &["face_value", "partner_cell"]).doc("Least-squares velocity gradient of the steady simple/simplec momentum equation on periodic (cyclic) faces (ADR 0077): face_value uses the interpolated face value at the face centre (historical; not exact for linear fields where the cells are not aligned across the seam), partner_cell uses the partner cell mapped into the owner's frame (exact for linear fields). Only used with a gradient-based convection scheme or non-orthogonal correctors"),
+        )
+        .field(
+            "pressure_lag_check",
+            Schema::enumeration("warn", &["warn", "raise", "off"]).doc("PISO/PIMPLE pressure-lag check (ADR 0073 B4, ADR 0077), made only with n_correctors = 1: one estimate of the per-step amplification of the lagged pressure error (step 1; step 2 with bdf2/bdf2_bounded); warn emits a located warning event when it reaches 1 (the solution is unchanged), raise stops the run (state diverged, exit 6), off skips the estimate. Not used by the fractional step or dynamic meshes"),
+        )
+        .field(
             "time_scheme",
             Schema::enumeration("euler", &["euler", "bdf2", "bdf2_bounded"]).doc("Time integration scheme (transient): euler, bdf2, or bdf2_bounded (second order, falls back toward euler at temporal extrema; ADR 0016)"),
         )

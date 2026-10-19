@@ -105,8 +105,10 @@ pub enum LagAction {
 /// a smaller step.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LagCheck {
-    /// Check at step 1 and then every `every` steps (0 = step 1 only).
+    /// Check at step `start` and then every `every` steps (0 = step `start` only).
     pub every: usize,
+    /// First step checked (1 = the first step; ADR 0077 uses 2 for BDF2, whose first step is an implicit Euler step).
+    pub start: usize,
     /// Power iterations per estimate.
     pub iterations: usize,
     /// Action when `rho >= 1`.
@@ -118,6 +120,7 @@ impl LagCheck {
     pub fn new(every: usize, action: LagAction) -> Self {
         LagCheck {
             every,
+            start: 1,
             iterations: 20,
             action,
         }
@@ -551,7 +554,7 @@ impl PimpleSolver {
 
         let lag_due = self.ale.is_none()
             && s.pressure_lag_check
-                .is_some_and(|c| self.step_no == 1 || (c.every > 0 && self.step_no % c.every == 0));
+                .is_some_and(|c| self.step_no == c.start.max(1) || (c.every > 0 && self.step_no % c.every == 0));
         let mut lag_ctx: Option<LagCtx> = None;
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer;

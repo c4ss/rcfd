@@ -26,7 +26,8 @@ fn text(algorithm: &str, particles_on: bool, extra_particles: &str) -> String {
         ("algorithm = \"piso\"\ndt = 0.01\nend_time = 0.4\n", 0.4)
     } else {
         (
-            "algorithm = \"simple\"\nmax_iterations = 60\ntolerance_u = 1e-14\ntolerance_p = 1e-14\ndt = 0.01\n",
+            // this SIMPLE set-up (schema relaxation 0.9/1.0) diverges; ADR 0077: keep the run going to its cap as before the steady guard
+            "algorithm = \"simple\"\nmax_iterations = 60\ntolerance_u = 1e-14\ntolerance_p = 1e-14\ndt = 0.01\nsteady_divergence_guard = \"off\"\n",
             0.3,
         )
     };

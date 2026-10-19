@@ -1597,6 +1597,12 @@ impl Service {
             };
             taken += 1;
             self.record(s, &step);
+            if let Some(m) = lock(sim).steady_divergence_message() {
+                // the steady divergence guard (ADR 0077 amendment 3): the background run ends as on non-finite residuals
+                s.set_state(RunState::Failed(m.clone()));
+                self.events.emit(&s.id, "error", json!({"message": m}));
+                return;
+            }
             if !step.res_u.is_finite() || !step.res_p.is_finite() {
                 s.set_state(RunState::Failed("residual is not finite (diverged)".into()));
                 self.events.emit(&s.id, "error", json!({"message": "diverged"}));
