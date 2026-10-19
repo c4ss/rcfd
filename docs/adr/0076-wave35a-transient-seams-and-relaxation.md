@@ -154,3 +154,19 @@ transposed viscous stress on rotational seams (`transposed_stress_source` keeps 
 
 No new literature. SWIRL is an exact solution derived here (azimuthal flow: the theta momentum equation is linear and the radial one is balanced by
 `dp/dr = u_theta^2 / r`); SECT-M is manufactured. Every limit is either an order band, an order derived from the smoke study above, or a ratio to the default.
+
+## Amendment 1 (after Y4; BEFORE F-R was run and before any acceptance run; nothing above was changed)
+
+Order of work so far: F-S and the rotational F-G were written; the five `w33b_default_bits` fingerprints were checked with every option off (identical, N2);
+then Y4 ran once (F-G + F-S on, F-R not yet written), TG N = 32, PIMPLE n_outer 2, two correctors, fine pair against the dt = 1/1280 reference:
+
+| row | alpha_u, alpha_p | errors vs reference | vs exact | order |
+|---|---|---|---|---|
+| Y4a | 1, 1 | 1.7822e-5 / 4.3243e-6 | 1.7208e-3 / 1.7238e-3 | 2.043 |
+| Y4b | 0.9, 1 | 7.6707e-5 / 3.2492e-5 | 1.7080e-3 / 1.7169e-3 | 1.239 |
+| Y4c | 1, 0.9 | 1.7476e-5 / 4.2990e-6 | 1.7209e-3 / 1.7238e-3 | 2.023 |
+
+By the registered rule **H-RELAX stands** (Y4a in band) and Y4b is outside the band (the velocity anchor alone reproduces the floor; the pressure anchor, Y4c,
+does not), so F-R (velocity anchor only) was written as specified. Observation recorded before the F-R runs: with the `u^n` anchor the error against the
+exact solution is 0.7 % / 0.4 % SMALLER than without relaxation (the O(dt) term partly cancels the spatial error), so N5 (F-R against the default PIMPLE-C, limit
+1.05) is not a foregone conclusion.
