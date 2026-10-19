@@ -878,8 +878,8 @@
           "local": "validation-data/reference/w34c_tmr_flatplate_545x385_axes.csv",
           "retrieved": "2026-10-19",
           "source_url": "https://www.nasa.gov/wp-content/uploads/2026/02/flatplategrids-grids.zip (FlatPlate/Grids/flatplate_clust2.p2dfmt.gz)",
-          "sha256": "d18a9c74af328d6f2223bfe640587bd971a815a82ce0c3c88c321ca627584934",
-          "bytes": 26869
+          "sha256": "f5a97a7841f94d587e7727eec0510fab411ccb9c442af602ab01e43e0085ba89",
+          "bytes": 25938
         }
       ]
     }
