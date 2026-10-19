@@ -221,3 +221,19 @@ settings if anything folds (`CGridMesh::construction_step` records the step; A' 
 seam corner in the end-wall layers); B' 78.2 deg, skewness 7.1, aspect 8532 (all three MISSED, predicted); envelope volume order 2.0 and blade volume /
 area orders 3.1 / 1.7 now measurable; 107 of 117 scan combinations build (33A: 38), but many built meshes are poor (median 74.5 deg). The default
 stays the 33A construction.
+
+**Camber-seam construction (ADR 0079, `mesh.fan.c_grid_construction = "camber_seam"`, `CGridOptions::camber_seam_construction()`).** For
+blades that straight seams cannot hold: at the FAN-01 hub (chord 99 mm, stagger 44 deg, pitch 87 mm) the blade spans 68 mm of the pitch and its
+wake drifts another 18 mm, so `pursuit` and `smoothed` refuse it (`mesh.fan.n_down`). The seams follow the passage centre line (camber line inside
+the chord, the wake curve downstream, the leading-edge camber slope turning axial over a third of the front gap upstream) at half a pitch on either
+side; the tip-gap first height is `min(h1, L_gap / (2 S + (n_gap - 2 n_bl) g^n_bl))` (the y+ = 30 height left 4-micrometre middle cells in the
+2.5 mm FAN-01 gap); a radial filter (two Jacobi passes towards the linear interpolation in r, far nodes only) removes the layer-to-layer jumps of
+the independently smoothed far grids; two last fallback steps start the smoothing from a Laplace-smoothed grid. FAN-01 on the ADR 0075 counts
+(11 536 cells): builds, closes (7.9e-16), periodic to 1.8e-13, exact stacks and wall nodes, accepted by `FvGeometry::new`, `check_mesh` and the rules
+(one warning), but 83.3 deg / skewness 3.98 / aspect 227 against the 70 / 2.0 / 300 target, and a laminar smoke solve at the design point grows its
+continuity residual (finite, no failure). The construction is not robust at the FAN-01 tip (stagger 70 deg): of the registered scan, 20 of 39
+in-range FAN-01 combinations build (none meets the target), against 35 of 38 for test blade B (28 meet it). The C lines meet a blade-parallel seam at
+about `90 - stagger` deg whatever the target rule (the periodic pair is an index-matched s-translation). Blade B with this construction: A' 66.2 deg /
+0.89 / 394, B' 80.9 / 8.9 / 8805 (smoothed: 61.4 / 0.86 / 395 and 78.2 / 7.1 / 8532). ADR 0079 also isolated the B' mechanisms of `smoothed` (the
+trailing-edge lean against an in-plane stack, the smoother compressing the first outer row at the nose, the wake first-height wedge, the corner
+stretch); four single-factor fixes each removed their own defect but moved another maximum, and were rejected by the registered rule.
