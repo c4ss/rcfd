@@ -191,3 +191,36 @@ Own scratch clone `<scratch dir>`, target `<target dir>`. Commits of own hunks o
 HEAD at hand-back: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --release --no-fail-fast`. Documentation:
 `docs/case-schema.md` (the two keys), `docs/run-control.md` (the `divergence` object, the `pressure_lag` warning), `docs/design-loop.md` (steady guard), `docs/milestone-fan.md`
 (robustness row), `docs/component-diagonal-default.md` (part D).
+
+## Amendment 1 (2026-10-19): the steady guard stops runs in the run-control driver, not in `Simulation::step`; A5 set-up defect
+
+Written after the first runs of A1a-A1c, A2a, A2b, A4, A5 and A6 on the registered design, BEFORE A3 and before the corrected A5 test below was run.
+
+What was run and what it showed (registered limits unchanged):
+* A1a trips at iteration 6 (`continuity_growth`), A1b at iteration 5 against the twin's first non-finite state at 375, A1c at 26; A2a at 7 (`velocity_runaway`, 0.7 s),
+  A2b at 8 (`continuity_growth`, 1.2 s); A6 runs to its cap (3000, `not_converged`). These meet their limits.
+* A4: the registered set-up (cavity 20 x 20, SIMPLE, `linear_upwind`, schema defaults alpha_u 0.9 / alpha_p 1.0, 60 iterations) is the `baseline_hashes` case
+  `cavity-simple`, and that case DIVERGES: a smoke trace with the guard off gives max speed 0.55 (iteration 1), 2.3e4 (10), 1.9e8 (20), 2.3e25 (60) and pressure range 1.2e50 at
+  iteration 60; the registered hash (60, 07e7461c36893384) fingerprints iteration 60 of a divergence. With the guard on the run trips at iteration 14 (`continuity_growth`).
+  The A4 test failed on an assertion I had added that is NOT part of the registration (`!diverged()`); its registered limit (bit identity on/off) was not reached.
+* A5: set-up defect. `(7/3) x - 4/3` at x = 1.0 is 1.0000000000000002 in floating point, outside the schema range of `solver.alpha_p`; the candidate was recorded `failed`
+  with that located error after 0 iterations, so the divergence path was not exercised.
+
+Consequence for the design: with the registered design the run of `cavity-simple` would end at iteration 14 and `baseline_hashes::cavity_paths_match_registered_hashes`
+would change from (60, 07e7461c36893384) to (14, ...). Hashes are never re-recorded, so the design changes as follows (D-A1):
+* `Simulation::step` keeps observing and RECORDS the first trip (`Simulation::steady_divergence()`, `diverged()` true, `divergence_json()`); it does not set `failure` or end the
+  run, and later `step()` calls keep iterating (no stale return; the guard stops checking after its first trip). Every result of a direct caller (`Simulation::step`/`run`,
+  the GUI, library users, `baseline_hashes`) is bit-identical with and without the guard.
+* `runctl::drive` ends the run after the step that tripped: state `diverged`, exit code 6, reason = the located message, `finish.divergence` = the record. Every automated
+  path goes through it: `rcfd run`, the `run.headless` service method and its MCP tool, the design loop (`case_eval::run_case`, hence studies and operating maps).
+* The PIMPLE/PISO guard of ADR 0067 is unchanged (it stops inside the solver).
+
+Amended checks:
+* A3a: a trip on a run that diverges is correct. Every trip outside this wave's tests is logged by the instrumentation with the test binary, the kind, the trip iteration,
+  the final iteration, `is_converged()` at the end, and the final max speed over `U_ref`. A trip is a FALSE POSITIVE if the simulation is converged at the end or its final fields
+  are finite with max speed <= 10 `U_ref`; otherwise it is a true divergence. Limit: zero false positives. (Already known when writing this: `cavity-simple` trips at 14 and
+  diverges to 2.3e25 `U_ref` units by 60; it will be listed as a true divergence.) A3b applies to the simulations without a trip.
+* A4 is run as registered (bit identity of u, p, phi with `on` and `off` after 60 iterations of the `cavity-simple` set-up); the trip iteration with `on` is reported.
+* A5 corrected (new test `a5_corrected_diverged_candidate_is_a_failed_evaluation`): x in [0, 1], `solver.alpha_u = 0.25 x + 0.75`, `solver.alpha_p = 0.75 x + 0.25`
+  (0.75/0.25 at x = 0 and exactly 1.0/1.0 at x = 1); smoke run of the (0.75, 0.25) point: converged in 60 iterations (res_u 1.8e-6 at 50). Limits as registered for A5, with
+  "x = 0.7" read as x = 0 and "x = 1.0" as x = 1. The registered A5 test is kept, ignored, as `a5_registered_setup_defect` (limits unchanged).
