@@ -243,3 +243,17 @@ registered falsifier Y1 identified the mechanism and F-C failed on an algebra mi
   were seen before this registration; F-G is a different discretisation (it keeps the variable `rAU` of the cell momentum and corrects the face flux), so its
   numbers are not known.
 * If F-G fails, the iterative-path floor stays a miss with its mechanism identified (H-COMM, Y1) and no third fix is tried.
+
+## Amendment 2 (after B2, B3, B4c and the F-K acceptance runs; BEFORE the F-G runs and before B4b; nothing above was changed)
+
+* F-K: C-O4 2.002 / 1.997 and C-O4S 1.997 met, A4 decomposition "floor not present" (fine-pair orders 2.007, 2.002, 1.984 at N = 16, 32, 64), so H-K is NOT
+  falsified; but N4 FAILED (TG velocity error 1.17 to 1.21 x the default at dt 0.05 to 0.0125, TG-S 1.17 to 1.21 x; cavity max velocity difference 0.036 > 0.02;
+  the checkerboard indicator 0.298 against 0.823 for the default, met). By the registered rule F-K is not kept (code removed); the fractional floor stays a miss with
+  its mechanism identified.
+* B3: all seven new cavity predictions of the model correct. B2a/B2b met on every row. B4c met (rho 0.133 uniform, 0.206 graded with two correctors).
+* **B4a set-up defect.** For the BDF2 rows the registered B4a compares the check's estimate at STEP 1 with the growth measured over steps 6 to 12; step 1 of a BDF2
+  run is an implicit Euler step (c0 = 1 instead of 1.5), so the step-1 estimate is that of a different scheme (it equals the Euler estimate at 1.5 D: e.g. BDF2 D = 4
+  gives rho 2.702 = the Euler D = 6 value). The registered test is kept, renamed `b2_b4a_periodic_stokes_box_known_miss` (ignored, limits unchanged). New corrected test
+  `b2_b4a_step6_corrected`: the same runs with the check at step 1 and every 6 steps, the estimate made at step 6 is compared with the same B2/B4a limits (10 % for
+  |G| >= 1.15, rho < 1 for |G| <= 0.85), all rows. Not changed: B4b keeps `every = 20` with the step-1 estimate included (for BDF2 runs the step-1 estimate is the
+  Euler one, which is the larger; any false positive this causes is counted).
