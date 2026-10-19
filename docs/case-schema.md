@@ -253,8 +253,7 @@ registered quality gates; NOT validated for fan performance prediction (docs/mes
 
 `mesh.fan.topology` (`h_slit`, the default, or `c_grid`, ADR 0068) selects the passage mesh. `c_grid` is a body-fitted C-grid that keeps the true
 blade edges (rounded leading edge, closed trailing edge) and has exact boundary-layer stacks along the blade normal; it uses the keys above
-except `n_mid`, `trunc_le` and `trunc_te` (ignored), and adds `n_nose` (cells from the leading edge to each seam corner, smaller than
-`n_chord`), `n_core` (cells across the blade thickness in the tip gap) and `front_gap` (distance of the front edge of the leading-edge fan
+except `n_mid`, `trunc_le` and `trunc_te` (ignored), and adds `n_nose` (cells from the leading edge to each seam corner; `n_nose + 2 <= n_chord`), `n_core` (cells across the blade thickness in the tip gap) and `front_gap` (distance of the front edge of the leading-edge fan
 ahead of the leading edge, in local chords). Unfittable controls give located errors on `mesh.fan.<name>` (a folded leading-edge fan reports
 `mesh.fan.front_gap`; a tangled cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer).
 The generator is not robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold

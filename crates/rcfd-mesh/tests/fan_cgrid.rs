@@ -635,6 +635,7 @@ fn err_of(fan: &AxialFan, spec: &CGridSpec, what: &str) -> Vec<FanError> {
 fn q8_validation_errors_are_located() {
     let fan = blade_b();
     let cases: Vec<(&str, CGridSpec)> = vec![
+        ("n_nose", CGridSpec { n_nose: 16, ..spec_s() }),
         ("n_nose", CGridSpec { n_nose: 15, ..spec_s() }),
         ("n_nose", CGridSpec { n_nose: 0, ..spec_s() }),
         ("n_side", CGridSpec { n_side: 2, ..spec_s() }),
@@ -711,7 +712,7 @@ fn q8_validation_errors_are_located() {
     let mut f = blade_b();
     f.n_blades = 40;
     let e = err_of(&f, &spec_s(), "blade does not fit between its seams");
-    assert!(!e.is_empty(), "{e:?}");
+    assert!(e.iter().any(|x| x.path == "n_side"), "{e:?}");
     // an invalid fan is reported by the fan validator
     let mut f = blade_b();
     f.r_tip = 0.05;
