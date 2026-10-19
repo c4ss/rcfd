@@ -38,6 +38,12 @@ struct Cfg {
     scheme: TimeScheme,
     /// F-G `rhie_chow_consistent`
     fg: bool,
+    /// ADR 0076 F-S `seam_extrapolation`
+    fs: bool,
+    /// ADR 0076 F-R `relax_extrapolated`
+    fr: bool,
+    /// relaxation override (alpha_u, alpha_p), ADR 0076 Y4
+    alpha: Option<(f64, f64)>,
 }
 
 impl Cfg {
@@ -47,6 +53,9 @@ impl Cfg {
             path,
             scheme: TimeScheme::Bdf2,
             fg: false,
+            fs: false,
+            fr: false,
+            alpha: None,
         }
     }
 }
@@ -162,6 +171,12 @@ fn settings(cfg: &Cfg) -> PimpleSettings {
         Path::Frac => s.fractional = Some(FractionalSettings::default()),
     }
     s.rhie_chow_consistent = cfg.fg;
+    s.seam_extrapolation = cfg.fs;
+    s.relax_extrapolated = cfg.fr;
+    if let Some((au, ap)) = cfg.alpha {
+        s.alpha_u = au;
+        s.alpha_p = ap;
+    }
     s.momentum_solver = SolveControl {
         tol_abs: 1e-14,
         tol_rel: 1e-12,
@@ -494,10 +509,13 @@ fn orders(id: &str, cfg: &Cfg, n: usize, pairs: &[f64], variable: bool) -> Vec<f
             let e = [rel_l2(&a.u.values, &refr.u.values), rel_l2(&b.u.values, &refr.u.values)];
             let o = (e[0] / e[1]).log2();
             println!(
-                "RESULT {id} {:?}/{:?} fg={} N={n} dt={dt}{}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}) order {o:.3} {}",
+                "RESULT {id} {:?}/{:?} fg={} fs={} fr={} alpha={:?} N={n} dt={dt}{}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}) order {o:.3} {}",
                 cfg.prob,
                 cfg.path,
                 cfg.fg,
+                cfg.fs,
+                cfg.fr,
+                cfg.alpha,
                 if variable { " variable" } else { "" },
                 e[0],
                 e[1],
@@ -653,5 +671,119 @@ fn c_fg_met_rows() {
         &orders("C-S2", &fg(Prob::TgS, Path::Pimple4), 32, &[FINE], false),
         &mut bad,
     );
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+// ---- ADR 0076 (wave 35A): the candidate K = F-G + F-S (+ F-R if written) -------------------------------------------------------------
+fn k(prob: Prob, path: Path) -> Cfg {
+    let mut c = fg(prob, path);
+    c.fs = true;
+    c.fr = true;
+    c
+}
+
+/// ADR 0076 Y4: falsifier of H-RELAX (PIMPLE n_outer 2 with F-G + F-S, relaxation varied). Prints only.
+#[test]
+#[ignore = "ADR 0076 Y4 (prints)"]
+fn y4_relaxation_falsifier() {
+    for (id, a) in [("Y4a", (1.0, 1.0)), ("Y4b", (0.9, 1.0)), ("Y4c", (1.0, 0.9))] {
+        let mut c = k(Prob::Tg, Path::PimpleC);
+        c.fr = false; // Y4 ran before F-R existed
+        c.alpha = Some(a);
+        orders(id, &c, 32, &[FINE], false);
+    }
+}
+
+/// ADR 0076 Part A with K: the ADR 0073 order rows (limits unchanged) and the reported C-O6r rows.
+#[test]
+#[ignore = "ADR 0076 Part A orders with K (heavy)"]
+fn w35a_k_orders() {
+    let mut bad = Vec::new();
+    band(
+        "C-O1",
+        &orders("C-O1", &k(Prob::Tg, Path::Piso), 32, &[FINE, COARSE], false),
+        &mut bad,
+    );
+    band(
+        "C-O2",
+        &orders("C-O2", &k(Prob::Tg, Path::PimpleC), 32, &[FINE], false),
+        &mut bad,
+    );
+    band(
+        "C-O3",
+        &orders("C-O3", &k(Prob::Tg, Path::Pimple4), 32, &[FINE], false),
+        &mut bad,
+    );
+    band(
+        "C-O7",
+        &orders("C-O7", &k(Prob::Tg, Path::Piso), 32, &[FINE], true),
+        &mut bad,
+    );
+    band(
+        "C-S1",
+        &orders("C-S1", &k(Prob::TgS, Path::Piso), 32, &[FINE], false),
+        &mut bad,
+    );
+    band(
+        "C-S2",
+        &orders("C-S2", &k(Prob::TgS, Path::Pimple4), 32, &[FINE], false),
+        &mut bad,
+    );
+    // reported only (C-O6r)
+    orders("C-O2r", &k(Prob::Tg, Path::PimpleC), 32, &[COARSE], false);
+    for path in [Path::Piso, Path::PimpleC] {
+        orders("C-O6r", &k(Prob::Mms, path), 32, &[FINE, COARSE], false);
+    }
+    for path in [Path::Piso, Path::Pimple4] {
+        orders("TG-S default", &Cfg::new(Prob::TgS, path), 32, &[FINE], false);
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// ADR 0076 C-O9 with K.
+#[test]
+#[ignore = "ADR 0076 C-O9 with K"]
+fn w35a_k_c_o9() {
+    let cfg = k(Prob::Tg, Path::Piso);
+    let errs: Vec<f64> = [(16usize, 0.1), (32, 0.05), (64, 0.025)]
+        .iter()
+        .map(|&(n, dt)| exact_error(&run_seq(&cfg, n, &const_seq(dt)), Prob::Tg))
+        .collect();
+    let o = [(errs[0] / errs[1]).log2(), (errs[1] / errs[2]).log2()];
+    println!(
+        "RESULT C-O9 K errors {:.4e} {:.4e} {:.4e} orders {:.3} {:.3} (limit >= 1.9)",
+        errs[0], errs[1], errs[2], o[0], o[1]
+    );
+    assert!(o[0] >= 1.9 && o[1] >= 1.9, "{o:?}");
+}
+
+/// ADR 0076 N1 with K: PISO, exact velocity and pressure errors against the default, limit 1.05.
+#[test]
+#[ignore = "ADR 0076 N1 with K (heavy)"]
+fn w35a_k_n1_no_harm() {
+    let mut bad = Vec::new();
+    for prob in [Prob::Tg, Prob::TgS, Prob::Mms, Prob::Mode] {
+        no_harm("N1-K", &k(prob, Path::Piso), &Cfg::new(prob, Path::Piso), &mut bad);
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// ADR 0076 N5 (F-R): PIMPLE-C, exact velocity and pressure errors with K against the default PIMPLE-C, limit 1.05; K without F-R printed.
+#[test]
+#[ignore = "ADR 0076 N5 with K (heavy)"]
+fn w35a_k_n5_pimple_c_no_harm() {
+    let mut bad = Vec::new();
+    for prob in [Prob::Tg, Prob::TgS, Prob::Mms] {
+        no_harm("N5", &k(prob, Path::PimpleC), &Cfg::new(prob, Path::PimpleC), &mut bad);
+        let mut nofr = k(prob, Path::PimpleC);
+        nofr.fr = false;
+        let mut info = Vec::new();
+        no_harm(
+            "N5-info K without F-R",
+            &nofr,
+            &Cfg::new(prob, Path::PimpleC),
+            &mut info,
+        );
+    }
     assert!(bad.is_empty(), "{bad:#?}");
 }
