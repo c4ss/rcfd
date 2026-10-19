@@ -168,3 +168,35 @@ MET only if both points meet all three. Modelling differences that are part of t
 no struts/motor/diffuser and no exit loss to ambient (the measured Delta p_ts is an installation value); uniform outlet pressure (no radial equilibrium); fully turbulent RANS
 at chord Reynolds numbers 1.25e5-1.5e5; NACA 4-digit thickness form instead of the CAD thickness; assumed density; bearing friction in the measured torque (not stated
 whether subtracted). Whatever the outcome, no fan performance claim is made beyond this comparison.
+
+## Amendment 2 (2026-10-19): outcome of the registered attempt, and a second attempt registered before any code or solver run
+
+Outcome of the amendment 1 attempt: NOT RUNNABLE, for three independent reasons found before any solver iteration.
+1. C-grid generator (registered first choice) refuses the blade: `mesh.fan.n_down`: "the wake line (s from -0.0683 to -0.0862) leaves the passage (-0.0774, 0.0092)
+   [layer k=0 (r = 0.12400)]". At the hub the blade (chord 99 mm, stagger 43.6 deg) spans 68 mm of the 86.6 mm pitch; the straight wake line of the C-grid leaves
+   the sector whose seams are not aligned with the blade. A geometric limit of the generator, independent of the cell counts.
+2. H-slit generator (registered fallback) refuses the mesh: `mesh.fan.n_gap`: "cannot fit 3 cells of geometric growth into the remaining length 1.2e-5 after the
+   boundary layers": the first cell from the registered y+ = 30 rule is too high for 2 + 2 boundary-layer cells in the 2.5 mm tip gap. A set-up defect of the
+   registered mesh rule (the rule did not check the gap).
+3. The case itself is refused: `boundaries.shroud.turbulence`: "moving walls are not supported by the wall functions (the wall velocity must be zero)". In the
+   rotating frame the stationary casing is a moving wall; in the absolute frame the blade and hub would be (and `mrf` is refused on the sector mesh, ADR 0065 S4).
+   So NO turbulent rotor-in-casing case can be set up with the existing solver: this blocks every rotating-machinery RANS validation, not only FAN-01.
+
+Second attempt (attempt 2), registered now; the amendment 1 physics, operating points, computed quantities, convergence criterion and LIMITS are unchanged:
+* Mesh (corrected set-up): H-slit with the amendment 1 counts and `first_cell_height = 2.0e-4` m instead of the y+ rule (2 + 2 boundary-layer cells of 0.2 and 0.24 mm
+  leave 1.6 mm for the 3 core cells of the gap; by the flat-plate estimate of the generator the first-cell centre is at y+ of about 10 at mid-span, inside the range of the
+  automatic wall treatment). The C-grid is not retried (reason 1 is geometric). If the H-slit refuses this mesh, the outcome is NOT RUNNABLE, final.
+* Solver change S1 (SST with moving walls), hypothesis H-MW: the refusal is the only obstacle, and the SST wall treatment is wrong for a moving wall because
+  `KOmegaSst::tangential_speed` takes the absolute cell velocity; with the velocity relative to the wall face velocity (the fixed boundary value) the wall treatment is
+  Galilean invariant. Fix: both call sites use the tangential part of `u_c - u_wall,f`; the API check is relaxed for `k_omega_sst` only (k-epsilon and Spalart-Allmaras
+  keep the refusal, and `moving_wall`/`shear`/`partial_slip`/`marangoni` walls keep theirs). For walls at rest `u_wall,f = 0` exactly, so every existing case is
+  bit-identical (checked by the existing SST tests and `baseline_hashes.rs`).
+* Falsifier G1, run with the OLD wall speed first and then with the fix: the periodic SST channel of ADR 0070 (`channel` of `validation_w33c_sst_wall_layer.rs`:
+  4 cells in x, body force 1, u_tau = 1, Re_tau = 395, both walls), (A) both walls at rest, (B) both walls moving at `-U_f` with `U_f = 10` and the initial field shifted by
+  `-U_f`, automatic wall mode, two meshes: first-cell centre y+ = 1 and y+ = 30. In a fully developed x-uniform periodic channel the discrete convection cancels in any frame,
+  so `u_B + U_f = u_A` must hold. Limits with the fix: `max |u_B + U_f - u_A| <= 1e-6 U_cl,A` and the k fields equal within `1e-6 max k`. Prediction with the old wall speed:
+  the difference exceeds `1e-2 U_cl,A` on the y+ = 30 mesh (if it does not, the old code was not wrong there and H-MW is falsified as stated). If the fix does not meet the
+  limits, H-MW is falsified and no FAN-01 run is made.
+* API check S1b: the FAN-01 case (attempt 2) is accepted by `Case`/`Simulation::new`; the same shroud with `k_epsilon` is still refused at `boundaries.shroud.turbulence`.
+* Then the two FAN-01 operating points are run once each and compared with the amendment 1 limits. Omega is 1486 x 2 pi / 60 = 155.614 rad/s (amendment 1 printed
+  155.62, a rounding slip; the code uses 155.614).
