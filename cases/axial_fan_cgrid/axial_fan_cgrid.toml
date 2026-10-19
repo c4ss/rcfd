@@ -1,0 +1,88 @@
+# Single blade passage of a five-bladed axial fan on the body-fitted C-grid mesh (mesh.fan.topology = "c_grid", ADR 0068): a periodic
+# sector of angle 2 pi / 5 with the true (rounded leading, closed trailing) blade edges, hub and shroud walls and the rotational pair
+# seam_lo / seam_hi, solved laminar in the relative frame (rotating_frame source).
+#
+# SCOPE: a smoke case for the geometry, the mesh and the plumbing, not a prediction of fan performance. This small mesh (S of ADR 0068,
+# about 11 500 cells) has a maximum non-orthogonality of about 79 deg (rule SV101 warns above 70 deg); the larger registered set-ups
+# miss the quality gates of ADR 0065/0068 (docs/meshing.md).
+title = "axial fan, single periodic passage on a C-grid mesh (laminar smoke case)"
+
+[mesh]
+generator = "axial_fan_sector"
+
+[mesh.fan]
+topology = "c_grid"
+n_blades = 5
+r_hub = 0.10
+r_tip = 0.30
+tip_clearance = 0.01
+axial_extent = 0.7
+z_le_root = 0.3
+family = "naca4"
+hub_chord = 0.10
+tip_chord = 0.07
+hub_stagger = 35.0   # deg
+tip_stagger = 20.0
+hub_camber = 0.04
+tip_camber = 0.04
+camber_pos = 0.4
+hub_thickness = 0.10
+tip_thickness = 0.06
+tip_sweep = 0.01
+tip_lean = 0.005
+n_up = 8
+n_chord = 16
+n_down = 8
+n_side = 10
+n_nose = 4
+n_core = 1
+front_gap = 0.3
+n_span = 14
+n_gap = 7
+n_bl = 2
+growth = 1.2
+first_cell_height = 1e-3
+
+[physics]
+nu = 0.02
+rho = 1.0
+
+[boundaries.inlet]
+velocity = "fixed"
+velocity_value = [0.0, 0.0, 1.0]
+
+[boundaries.outlet]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.hub]
+velocity = "fixed"
+
+[boundaries.blade]
+velocity = "fixed"
+
+[boundaries.shroud]
+velocity = "fixed"
+velocity_expression_x = "20.0 [1/s] * y"
+velocity_expression_y = "-20.0 [1/s] * x"
+
+[sources.frame]
+type = "rotating_frame"
+rotation_axis = [0.0, 0.0, 1.0]
+angular_velocity = 20.0
+centrifugal = true
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+max_iterations = 6000
+tolerance_u = 1e-10
+tolerance_p = 1e-10
+
+[reports.m_in]
+type = "mass_flow"
+patch = "inlet"
+
+[reports.m_out]
+type = "mass_flow"
+patch = "outlet"
