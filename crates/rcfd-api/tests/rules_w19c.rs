@@ -588,14 +588,16 @@ fn e2_zero_false_positives_known_miss() {
     );
 }
 
-/// What does hold: no error-level diagnostic on any of the cases, and every warning is the mesh
-/// aspect-ratio warning SV103 about a mesh that really exceeds the threshold.
+/// What does hold: no error-level diagnostic on any of the cases, and every warning is a mesh-quality
+/// warning (SV103 aspect ratio; SV101 non-orthogonality, added by Wave 33D for the axial-fan sector
+/// mesh of `rotating_foundation.rs`, whose non-orthogonality really exceeds 70 degrees) about a mesh
+/// that really exceeds the threshold.
 #[test]
 fn e2_no_error_level_false_positives_and_warnings_are_only_sv103() {
     let (evaluated, bad, warned) = e2_run();
     assert!(evaluated >= 30, "under-powered: only {evaluated} case texts evaluated");
     assert!(bad.is_empty(), "error-level false positives:\n{}", bad.join("\n"));
-    assert!(warned.iter().all(|w| w.contains("SV103")), "{warned:?}");
+    assert!(warned.iter().all(|w| w.contains("SV103") || w.contains("SV101")), "{warned:?}");
 }
 
 // ---------------------------------------------------------------------------------------------
