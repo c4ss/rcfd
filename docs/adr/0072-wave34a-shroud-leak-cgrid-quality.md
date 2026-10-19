@@ -136,6 +136,57 @@ addendum and its numbers are reported separately as unregistered.
   first cell height of A' (y+ 30), **G2b** = A' counts with the first cell height of B' (y+ 1). K1 is falsified if G2a's skewness exceeds 2.0 or G2b's does not.
   N1 keeps its G3 criterion; G4 (untwisted blade) separates the radial variation of the in-plane grid from the rest of the 3-D effects.
 
+## Amendment 2 (written after F1 and G1-G5 ran; before T1, T2, S3'' and any construction change ran; no limit changed)
+
+### Results so far (recorded now; the addendum repeats them)
+
+* **F1**: S3' converged (406 iterations); `m_shroud = -3.2216608166e-6`, `G = -3.2216608166e-6`, `|m_shroud - G| / |m_in| = 0` (bit-identical): **L-H1
+  confirmed**, the shroud flow is the geometric face-centre wall flux, no solver term reaches it. `G / m_in = 6.0e-5`. Characterisation: the sum of
+  the exact facet fluxes is -3.1e-16 against a sum of magnitudes of 2.4e-4, ratio 1.3e-12 (registered expectation was <= 1e-13: above expectation; the edge
+  formula subtracts terms of size R^2 dz whose sum is c^2 dz/6 smaller, a cancellation of about R^2/c^2 = 1e2 to 1e3 at round-off, so 1e-12 is its
+  floor); the per-face facet flux is not small: the sum of magnitudes is 0.45 % of the throughflow, the largest `|u_w . n| / |u_w|` is 1.0e-2 and the centre
+  rule differs from the exact facet flux by up to 1.7e-3 `|u_w||S|`. The H-slit example mesh: G = -1.668e-8 (the 0065 value 1.7e-8 reproduced), largest
+  tilt 1.7e-3.
+* **G1/G3/G4/G5** (33A construction): S 79.65 deg (G3 in-plane 79.71), A' 81.57 (81.65), B' 83.73 (78.82); faces above 70 deg in the `nose` region: S
+  256 of 288, A' 2662 of 2887 (92 %), B' 8771 of 10215; `pressure` A' 145 of 2887. B' maximum: a `hub` boundary face of the first layer in the wake
+  (k = 0, j = 18), owner-to-face-centre angle 83.7 deg. B' skewness 4.85 on the wake cut (all layers); faces above skewness 2 in B': wake-stack j-faces
+  6477, cut faces 768, k-faces (F, wake/outer, pressure/outer, nose) 1258. G4 (untwisted blade): S 78.34, A' 79.44 deg (in-plane 78.40, 79.46). G5:
+  front_gap 0.2 gives 82.12, 0.4 gives 86.67 deg on S (both worse). G2a (B' counts, A' first cell) folds in the leading-edge fan (located error),
+  so it is inconclusive. G2b (A' counts, B' first cell): 87.67 deg (F-block hub boundary faces at k = 0), skewness 12.68 (k-faces), aspect 5299.
+* **Verdicts**: N1 holds for S, A' and B' (B' just: 4.9 deg); N2 holds for S and A', falsified for B' (its maximum is not in the nose region); N3 falsified
+  (5 % in `pressure`); K1 as registered falsified (the worst skew face of B' is the wake cut, in every layer, not an end-wall layer). The strong h1
+  dependence of G2b is a new finding, treated below as W1, not as a rescue of K1.
+
+### New mechanisms (pencil derivations from a probe of the worst cells; registered with falsifiers before any fix runs)
+
+* **W1 thin-layer rotation wedge.** The in-plane grid of every layer is built independently, so a node moves in angle between layers at the rate
+  `d theta/dr` (probe: 3.7 rad/m at the F-block hub corner of G2b, where the frame follows the blade's centre angle). Rotating the upper facet of a cell
+  about the axis by `d theta` tilts its plane by `d theta` against the lower facet, so the gap between them varies along an in-plane edge of length L by
+  `d theta L`: the relative thickness variation is `(d theta/dr) L`, independent of the layer thickness `Delta r`. The cell (and its end faces) is then a
+  thin wedge whose centroid moves along L by about `(d theta/dr) L^2 / 6`, against a half thickness `Delta r/2` (probe: L = 0.017 m, a 6 % wedge, a
+  9e-5 m shift against 3.7e-6 m: the 87.7 deg). The angle error is about `atan((d theta/dr) L^2 / (3 Delta r))`: harmless in thick layers, large in the
+  end-wall stacks when h1 is small. Prediction: if the angles of the nodes outside the blade stacks change between layers by `Delta theta_k` proportional
+  to `Delta r_k^2` (no rotation in the thin layers) the k-face skewness and the end-wall boundary-face non-orthogonality fall below the limits.
+* **W2 wake first-height wedge.** The wake stacks use `d1 = max(h1, dz/300)` (a post-registration change of 33A), so neighbouring wake lines have
+  different first heights (ratio of the axial cell growth) and every wake-stack cell is a wedge whose centroid moves along the wake by about
+  `L (Delta d1/d1)/6`, many times its thickness; the stack is also switched off on some wake lines. Prediction: one first height h1 and the full stack on
+  every wake line remove the wake-stack and cut-face skewness above 2.
+
+Development set-ups for these (named now): **DS** = S counts with `first_cell_height = 7.31e-6` m (the B' h1) and `n_bl = 3`; **DA** = G2b (A' counts, B'
+first cell), which reproduces both mechanisms (measured above). Falsifiers, run before the construction is frozen:
+* **W1** falsified if, on DA, a graded angle remap of the nodes outside the blade (and wake) stacks (single change to the 33A construction) does not bring
+  the maximum non-orthogonality of k-faces and of hub/shroud boundary faces under 70 deg and the k-face skewness under 2.0.
+* **W2** falsified if, on DA, one first height h1 with the stack on every wake line (single change) does not bring the wake-stack j-face and cut-face
+  skewness under 2.0. Aspect is re-measured with it (33A introduced the wake rule against the aspect ratio).
+
+### T1 set-up defect (found by a geometry-only computation before T1 ran)
+
+T1 is closed (walls and a periodic pair, no Dirichlet pressure). The unprojected arm prescribes `u_w(c_f) . S_f` on `inner`, whose net is not zero on
+warped facets (F1): -4.8e-7, -1.3e-8, -4.3e-10 on the three meshes, i.e. a solver continuity measure of 1.2e-5, 1.2e-6, 1.6e-7 that the registered
+`continuity < 1e-9` can never reach (the pinned reference cell carries the imbalance). Corrected (the registered test stays, ignored, if it fails for
+this reason): the unprojected arm is converged when `res_u < 1e-10` and the largest velocity change of an iteration is below `1e-12 V_i` (within 6000
+iterations), its continuity reported; the projected arm keeps the registered criterion (`res_u < 1e-10`, continuity `< 1e-9`). All other T1 gates unchanged.
+
 ## Not claimed
 
 Fan performance; any comparison with a published fan; turbulence quantities; the accuracy of the absolute `mrf` formulation next to a stationary faceted
