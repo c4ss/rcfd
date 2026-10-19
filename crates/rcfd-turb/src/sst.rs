@@ -290,10 +290,12 @@ impl KOmegaSst {
         effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut)
     }
 
-    fn tangential_speed(&self, u: &VectorField, f: usize) -> f64 {
+    /// Tangential speed of the wall cell relative to the wall (ADR 0075: the cell velocity minus the face boundary velocity, so a
+    /// moving wall is treated in its own frame; a wall at rest has the boundary velocity 0 exactly and is unchanged).
+    fn tangential_speed(&self, u: &VectorField, ub: &[vec3::Vec3], f: usize) -> f64 {
         let c = self.geom.mesh.owner()[f];
         let n = self.geom.normal(f);
-        let v = u.values[c];
+        let v = vec3::sub(u.values[c], ub[f - self.geom.n_internal]);
         vec3::norm(vec3::sub(v, vec3::scale(n, vec3::dot(v, n))))
     }
 
@@ -320,6 +322,7 @@ impl KOmegaSst {
         let nu = self.nu;
         let vol = g.mesh.cell_volumes().to_vec();
         let gr = velocity_gradient(&g, u);
+        let ub = u.boundary_values(&g);
         let mut s_mag: Vec<f64> = (0..n).map(|c| strain_magnitude(&gr, c)).collect();
         let kv = self.k.values.clone();
         let wv = self.omega.values.clone();
@@ -336,7 +339,7 @@ impl KOmegaSst {
             }
             let f = self.cell_wall_face[c];
             let y = g.dn[f - g.n_internal];
-            let uu = self.tangential_speed(u, f);
+            let uu = self.tangential_speed(u, &ub, f);
             let ut = if rough {
                 self.law.u_tau_rough(nu, uu, y, &self.roughness)
             } else {
@@ -454,7 +457,7 @@ impl KOmegaSst {
             .enumerate()
             .map(|(i, &f)| {
                 let y = g.dn[f - g.n_internal];
-                let uu = self.tangential_speed(u, f);
+                let uu = self.tangential_speed(u, &ub, f);
                 let ut = if uu <= 0.0 {
                     0.0
                 } else if low_re {

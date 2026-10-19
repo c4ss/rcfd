@@ -145,7 +145,11 @@ fn solve(mesh: (usize, usize, usize), frame: Frame, i1: bool) -> (Measured, bool
             sim.step();
         }
         let m2 = measure(&sim, frame.omega_rel());
-        Some(((m2.q - m.q).abs(), (m2.err - m.err).abs(), (m2.spurious - m.spurious).abs()))
+        Some((
+            (m2.q - m.q).abs(),
+            (m2.err - m.err).abs(),
+            (m2.spurious - m.spurious).abs(),
+        ))
     } else {
         None
     };
@@ -182,11 +186,7 @@ fn series(k: usize) -> &'static Vec<Run> {
 }
 
 fn orders(e: &[f64; 4]) -> [f64; 3] {
-    [
-        (e[0] / e[1]).log2(),
-        (e[1] / e[2]).log2(),
-        (e[2] / e[3]).log2(),
-    ]
+    [(e[0] / e[1]).log2(), (e[1] / e[2]).log2(), (e[2] / e[3]).log2()]
 }
 
 // ---------------------------------------------------------------- R1
@@ -208,7 +208,11 @@ fn r1_taylor_couette_full_annulus_registered_mesh_study() {
         }
     }
     for (k, (dq, de, _)) in i1 {
-        println!("R1 I1 mesh {k}: Q change {dq:.3e} (limit {:.3e}), error change {de:.3e} (limit {:.3e})", 1e-2 * (q[2] - q[3]).abs(), 1e-2 * e[3]);
+        println!(
+            "R1 I1 mesh {k}: Q change {dq:.3e} (limit {:.3e}), error change {de:.3e} (limit {:.3e})",
+            1e-2 * (q[2] - q[3]).abs(),
+            1e-2 * e[3]
+        );
         if dq > 1e-2 * (q[2] - q[3]).abs() || de > 1e-2 * e[3] {
             bad.push(format!("R1 I1 mesh {k}: {dq:.3e}, {de:.3e}"));
         }
@@ -256,7 +260,9 @@ fn r1_taylor_couette_full_annulus_registered_mesh_study() {
             bad.push(format!("R1 L2 order {p:.3}"));
         }
         if err_re > 0.2 * err_fine {
-            bad.push(format!("R1 L3 extrapolated error {err_re:.3e} vs finest {err_fine:.3e}"));
+            bad.push(format!(
+                "R1 L3 extrapolated error {err_re:.3e} vs finest {err_fine:.3e}"
+            ));
         }
         if err_fine / f_ex.abs() > gci {
             bad.push(format!("R1 L4 GCI {gci:.3e} below true {:.3e}", err_fine / f_ex.abs()));
@@ -320,10 +326,16 @@ fn r4_misses(k: usize) -> Vec<(&'static str, String)> {
     );
     if s[3] >= 1e-7 {
         if !(1.7..=2.3).contains(&o[2]) {
-            bad.push(("finest", format!("R4 {name}: finest-pair order {:.3} (values {s:?})", o[2])));
+            bad.push((
+                "finest",
+                format!("R4 {name}: finest-pair order {:.3} (values {s:?})", o[2]),
+            ));
         }
         if o[0] < 1.4 || o[1] < 1.4 {
-            bad.push(("earlier", format!("R4 {name}: earlier orders {:.3}, {:.3} (values {s:?})", o[0], o[1])));
+            bad.push((
+                "earlier",
+                format!("R4 {name}: earlier orders {:.3}, {:.3} (values {s:?})", o[0], o[1]),
+            ));
         }
     }
     bad

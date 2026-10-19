@@ -1,0 +1,26 @@
+# FAN-01 blade: cylindrical sections derived by rcfd wave 34D (ADR 0075) from cad_model.igs of Zenodo record 10.5281/zenodo.20037409
+# (licence CC BY 4.0; fan: Zenger, Junger, Kaltenbacher, Becker, SAE 2016-01-1805). Derived data, not published by the authors: the two side
+# surfaces of blade 1 were intersected with cylinders r = const by a pure-Python IGES/NURBS evaluator written for the wave. CAD frame: axis +x, flow
+# +x, theta = atan2(z, y), rotation +theta. Chord = straight line from the leading edge (point farthest from the trailing-edge patch centroid) to
+# the trailing-edge patch centroid; stagger from the axis; camber and thickness relative to that chord (max values and positions); the
+# camber is positive toward the suction side (-theta) in the rcfd generator convention (mean-line metal angles 58/42 deg at r = 140 mm).
+# Method check: a synthetic NACA 4510 through the same code returned camber 0.0392 at 0.507 and thickness 0.1002 at 0.297. Rows marked
+# extrapolated are linear extrapolations of the two neighbouring sections (root fillet below 127 mm, tip cap at 247.4-247.5 mm).
+r_mm,chord_mm,stagger_from_axis_deg,max_camber_c,camber_pos_c,max_thickness_c,le_x_mm,le_theta_deg,note
+124.0,98.92,43.63,0.0364,0.53,0.1086,-23.7,-15.93,extrapolated
+127.0,96.38,44.81,0.0365,0.53,0.1088,-22.4,-16.34,
+130.0,93.84,45.99,0.0366,0.53,0.109,-21.1,-16.75,
+140.0,85.99,49.94,0.0369,0.52,0.1094,-17.05,-18.05,
+150.0,79.23,53.26,0.0372,0.52,0.1097,-13.8,-19.26,
+160.0,73.68,55.89,0.0374,0.52,0.11,-11.35,-20.33,
+170.0,69.41,58.2,0.0375,0.52,0.1102,-9.43,-21.21,
+180.0,65.89,60.21,0.0375,0.52,0.1104,-7.87,-21.95,
+190.0,62.88,61.97,0.0376,0.52,0.1106,-6.59,-22.6,
+200.0,60.51,63.57,0.0376,0.52,0.1107,-5.53,-23.14,
+210.0,58.57,65.04,0.0376,0.52,0.1109,-4.62,-23.6,
+220.0,57.11,66.39,0.0376,0.52,0.111,-3.87,-23.98,
+230.0,56.19,67.67,0.0376,0.52,0.1111,-3.23,-24.29,
+240.0,55.49,68.83,0.0376,0.515,0.1111,-2.68,-24.55,
+245.0,55.08,69.35,0.0376,0.515,0.1111,-2.43,-24.69,
+247.0,54.91,69.55,0.0376,0.515,0.1112,-2.32,-24.74,
+247.5,54.87,69.6,0.0376,0.515,0.1112,-2.29,-24.76,extrapolated

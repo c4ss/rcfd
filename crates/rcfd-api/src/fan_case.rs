@@ -75,6 +75,107 @@ pub fn schema() -> Schema {
         .field("n_core", cnt(2, 1.0, "c_grid only: cells across the blade thickness in the tip gap above the blade"))
         .field("front_gap", Schema::float(0.3).at_least(0.0).doc("c_grid only: axial distance of the front edge of the leading-edge fan ahead of the leading edge, in local chords"))
         .field("include_blade", Schema::boolean(true).doc("false leaves the blade footprint filled: an empty passage with the same nodes (verification)"))
+        .field("station_radius", flist("Optional radial stations [m] of the blade (ADR 0075): when this list is not empty, the station_* lists (all of the same length, first radius r_hub, last radius r_tip, strictly increasing) replace the hub_* / tip_* values and the blade varies linearly between neighbouring stations"))
+        .field("station_chord", flist("Chord [m] at each station_radius"))
+        .field("station_stagger", flist("Stagger [deg] at each station_radius (angle of the chord from the axis, as hub_stagger)"))
+        .field("station_camber", flist("Maximum camber (chord fraction) at each station_radius"))
+        .field("station_camber_pos", flist("Position of the maximum camber (chord fraction) at each station_radius; empty = camber_pos everywhere"))
+        .field("station_thickness", flist("Maximum thickness (chord fraction) at each station_radius"))
+        .field("station_sweep", flist("Axial shift [m] of the leading edge at each station_radius; empty = 0"))
+        .field("station_lean", flist("Tangential shift [m] of the leading edge at each station_radius; empty = 0"))
+}
+
+fn flist(doc: &str) -> Schema {
+    Schema::list(Schema::float(0.0)).doc(doc)
+}
+
+/// The numbers of the list `mesh.fan.<key>` (empty when unset).
+fn list_of(case: &Case, key: &str) -> Vec<f64> {
+    case.tree
+        .get(&format!("mesh.fan.{key}"))
+        .ok()
+        .as_ref()
+        .and_then(|v| {
+            v.as_array()
+                .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(f64::NAN)).collect())
+        })
+        .unwrap_or_default()
+}
+
+/// Lists of the optional station form, in the order of [`Station`]'s fields after the radius.
+const STATION_LISTS: [&str; 7] = [
+    "station_chord",
+    "station_stagger",
+    "station_camber",
+    "station_camber_pos",
+    "station_thickness",
+    "station_sweep",
+    "station_lean",
+];
+
+/// Located problems of the optional station lists (ADR 0075 H2): every list given must have the length of `station_radius`
+/// (`station_camber_pos`, `station_sweep` and `station_lean` may be empty), the others are required.
+pub fn station_problems(case: &Case) -> Vec<Diagnostic> {
+    let r = list_of(case, "station_radius");
+    let mut out = Vec::new();
+    if r.is_empty() {
+        for k in STATION_LISTS {
+            if !list_of(case, k).is_empty() {
+                out.push(Diagnostic {
+                    path: format!("mesh.fan.{k}"),
+                    line: None,
+                    message: "station lists need mesh.fan.station_radius".into(),
+                });
+            }
+        }
+        return out;
+    }
+    for k in STATION_LISTS {
+        let v = list_of(case, k);
+        let optional = matches!(k, "station_camber_pos" | "station_sweep" | "station_lean");
+        if (v.is_empty() && !optional) || (!v.is_empty() && v.len() != r.len()) {
+            out.push(Diagnostic {
+                path: format!("mesh.fan.{k}"),
+                line: None,
+                message: format!("needs {} values (one per station_radius), has {}", r.len(), v.len()),
+            });
+        }
+    }
+    out
+}
+
+/// The stations of the optional list form, or `None` when `station_radius` is empty.
+fn stations_of(case: &Case) -> Option<Vec<Station>> {
+    let r = list_of(case, "station_radius");
+    if r.is_empty() {
+        return None;
+    }
+    let get = |k: &str, i: usize, default: f64| list_of(case, k).get(i).copied().unwrap_or(default);
+    let cp = get_f(case, "mesh.fan.camber_pos");
+    Some(
+        (0..r.len())
+            .map(|i| Station {
+                radius: r[i],
+                chord: get("station_chord", i, f64::NAN),
+                stagger: get("station_stagger", i, f64::NAN).to_radians(),
+                camber: get("station_camber", i, f64::NAN),
+                camber_pos: get("station_camber_pos", i, cp),
+                thickness: get("station_thickness", i, f64::NAN),
+                sweep: get("station_sweep", i, 0.0),
+                lean: get("station_lean", i, 0.0),
+            })
+            .collect(),
+    )
+}
+
+/// Library path `stations[i].field` as the case path `station_field[i]`.
+fn station_path(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("stations[") {
+        if let Some((i, field)) = rest.split_once("].") {
+            return format!("station_{field}[{i}]");
+        }
+    }
+    path.to_string()
 }
 
 /// The fan described by `mesh.fan`.
@@ -95,7 +196,7 @@ pub fn fan_of(case: &Case) -> AxialFan {
         sweep: f(&format!("{pre}_sweep")),
         lean: f(&format!("{pre}_lean")),
     };
-    AxialFan::linear(
+    let mut fan = AxialFan::linear(
         get_i(case, "mesh.fan.n_blades").max(0) as usize,
         f("r_hub"),
         f("r_tip"),
@@ -105,7 +206,11 @@ pub fn fan_of(case: &Case) -> AxialFan {
         family,
         st("hub"),
         st("tip"),
-    )
+    );
+    if let Some(stations) = stations_of(case) {
+        fan.stations = stations;
+    }
+    fan
 }
 
 /// The mesh controls described by `mesh.fan`.
@@ -162,11 +267,16 @@ pub fn cgrid_spec_of(case: &Case) -> CGridSpec {
 
 /// Build the sector mesh of the case; problems are reported with their `mesh.fan.*` path where the library names one.
 pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
+    let problems = station_problems(case);
+    if !problems.is_empty() {
+        return Err(problems);
+    }
     let fan = fan_of(case);
+    let listed = !list_of(case, "station_radius").is_empty();
     let to_diag = |errs: Vec<rcfd_mesh::fan::FanError>| -> Vec<Diagnostic> {
         errs.into_iter()
             .map(|e| Diagnostic {
-                path: format!("mesh.fan.{}", e.path),
+                path: format!("mesh.fan.{}", if listed { station_path(&e.path) } else { e.path }),
                 line: None,
                 message: e.message,
             })

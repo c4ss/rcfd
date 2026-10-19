@@ -829,6 +829,36 @@
           "bytes": 5525
         }
       ]
+    },
+    {
+      "id": "w34d-fan01-fau-eaa-axial-fan",
+      "title": "FAN-01 low-pressure axial fan (FAU / EAA benchmark): measured characteristic and blade sections derived from the published CAD",
+      "case": null,
+      "citation": "Kroemer, Junger, Becker, Kaltenbacher, Czwielong, Schoder, 'FAN 01 Benchmark: Low Pressure Axial Fan in a Short Duct', Zenodo, doi:10.5281/zenodo.20037409 (v5, 2026); fan and rig: Zenger, Junger, Kaltenbacher, Becker, SAE Technical Paper 2016-01-1805 (2016)",
+      "status": "available",
+      "licence": {
+        "spdx": "CC-BY-4.0",
+        "name": "Creative Commons Attribution 4.0 International (Zenodo record licence)",
+        "url": "https://doi.org/10.5281/zenodo.20037409",
+        "attribution": "FAN-01 benchmark, Friedrich-Alexander-Universitaet Erlangen-Nuernberg / EAA; cite Zenger et al., SAE 2016-01-1805",
+        "notes": "w34d_fan01_characteristic_n1ug.csv: the 20 measured points of characteristic_n1ug.mat transcribed at full precision (the column labelled P_shaft_in_Nm holds shaft power in W). w34d_fan01_cad_sections.csv: cylindrical blade sections DERIVED by rcfd wave 34D from cad_model.igs (not published by the authors; method in the file header and ADR 0075). The upstream zip files (characteristic.zip sha256 717433174a8c7c58974f5fb7a377fc116cc64422ee8a4df62fa7c065493cfbdf, cad_model.zip sha256 cc4663dc26e700c226881e34317789ce6d79eaec2928939cce7c2b0f7f39daa6 as downloaded 2026-10-19) are not vendored and have no fetch entry (zenodo.org is not on the fetch host list). Used by crates/rcfd-api/tests/fan01_validation.rs (ADR 0075, F-126 attempt)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w34d_fan01_characteristic_n1ug.csv",
+          "retrieved": "2026-10-19",
+          "source_url": "https://doi.org/10.5281/zenodo.20037409 (characteristic.zip / characteristic_n1ug.mat)",
+          "sha256": "f90d0f91b48ceed08b72951a3c4b0f4a6a8558843754563ee5e3a1f9907c9b29",
+          "bytes": 1752
+        },
+        {
+          "local": "validation-data/reference/w34d_fan01_cad_sections.csv",
+          "retrieved": "2026-10-19",
+          "source_url": "https://doi.org/10.5281/zenodo.20037409 (cad_model.zip / cad_model.igs), derived",
+          "sha256": "389cfbd6c3bf9ee15df3a1d21f47e86dd7b2d2400a1ffa1268306cceb00cc973",
+          "bytes": 2098
+        }
+      ]
     }
   ]
 }
