@@ -58,6 +58,12 @@ pub struct PimpleSettings {
     pub alpha_p: f64,
     /// Apply the transient Rhie-Chow correction.
     pub ddt_correction: bool,
+    /// Consistent momentum interpolation (ADR 0073 F-G): subtract `C(G p - b)` from the face flux of every corrector, with
+    /// `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` (the lagged pressure of the corrector, `b` the body-force cell value), so that the face
+    /// flux is the textbook Rhie-Chow form `interp(u) - gamma (snGrad p - interp(grad p))` also where `rAU` varies in space; and carry the
+    /// transient face defect over translationally periodic faces too. Removes the O(dt) dependence of the converged spatial operator that
+    /// the variable `rAU = dt/(c0 + a dt)` causes (the BDF2 order floor of ADR 0069). Default `false`.
+    pub rhie_chow_consistent: bool,
     /// Consistent split of the momentum matrix when its diagonal differs between the velocity components,
     /// `HbyA_k = (H_k + (a_P - a_k) u_k) / a_P` (ADR 0069 F3). Default `false`: `HbyA_k = H_k / a_P`.
     pub component_diagonal: bool,
@@ -80,6 +86,66 @@ pub struct PimpleSettings {
     /// is not finite, stops the run with a located [`Divergence`]. Default [`DEFAULT_DIVERGENCE_COURANT_LIMIT`]; a non-finite
     /// state is always fatal.
     pub divergence_courant_limit: f64,
+    /// Run-time check of the pressure-lag amplification of the step (ADR 0073 B4); `None` (default) = no check.
+    pub pressure_lag_check: Option<LagCheck>,
+}
+
+/// What the pressure-lag check does when the estimated amplification reaches one (ADR 0073 B4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LagAction {
+    /// Append a [`LagWarning`] to `PimpleSolver::lag_warnings` and continue.
+    Warn,
+    /// Stop the run through the divergence guard with a located message.
+    Raise,
+}
+
+/// Run-time check of the pressure-lag amplification (ADR 0073 B4).
+///
+/// With one pressure corrector the pressure of an outer iteration inherits the lag error of the pressure that drove its momentum
+/// predictor, multiplied by about `-D` (`D` = off-diagonal part of the momentum diagonal times `dt/c0`, the diffusion number of the
+/// diagonal for a smooth mode); under-relaxed outer iterations damp it only partly, so the step amplifies a smooth pressure error once
+/// `D` exceeds a threshold (`D* = 1, 3.33, 4.65, 5.65` for `n_outer = 1..4` with `alpha_u = 0.8`, `alpha_p = 0.5`). The check estimates
+/// the spectral radius `rho` of the linearised pressure-lag map of one step by power iteration with the matrices of the final outer
+/// iteration frozen (velocity error zero at the step start, homogeneous pressure conditions, no carry-over and no body force) and acts
+/// when `rho >= 1`. Settings rule: use `n_correctors >= 2` (a second corrector starts from a projected velocity and removes the lag) or
+/// a smaller step.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LagCheck {
+    /// Check at step 1 and then every `every` steps (0 = step 1 only).
+    pub every: usize,
+    /// Power iterations per estimate.
+    pub iterations: usize,
+    /// Action when `rho >= 1`.
+    pub action: LagAction,
+}
+
+impl LagCheck {
+    /// Check with 20 power iterations.
+    pub fn new(every: usize, action: LagAction) -> Self {
+        LagCheck {
+            every,
+            iterations: 20,
+            action,
+        }
+    }
+}
+
+/// One estimate of the pressure-lag check (ADR 0073 B4).
+#[derive(Debug, Clone, Copy)]
+pub struct LagWarning {
+    /// Step (1-based) at which the estimate was made.
+    pub step: usize,
+    /// Estimated amplification per step of the lagged pressure error.
+    pub rho: f64,
+    /// Cell holding the largest entry of the estimated mode.
+    pub cell: usize,
+}
+
+/// Matrices of the final outer iteration kept for the pressure-lag check.
+struct LagCtx {
+    mats: Vec<Option<FvMatrix>>,
+    links: Vec<PeriodicLinks>,
+    pbc: crate::pressure::PressureBc,
 }
 
 /// Default Courant number above which a step is declared diverged (ADR 0067).
@@ -125,6 +191,12 @@ impl Divergence {
                 "maximum Courant number is {:.4e}, above the limit {:.1e}",
                 self.value, self.limit
             )
+        } else if self.quantity == "lag amplification" {
+            return format!(
+                "PIMPLE pressure-lag check: the lagged pressure error is amplified by {:.3} per step (>= 1) at step {}, {}{at}; \
+                 with one pressure corrector the run will diverge: use solver.n_correctors >= 2 or a smaller solver.dt",
+                self.value, self.step, self.stage
+            );
         } else {
             format!("{} is {} (not finite)", self.quantity, self.value)
         };
@@ -152,6 +224,7 @@ impl PimpleSettings {
             alpha_u: 1.0,
             alpha_p: 1.0,
             ddt_correction: true,
+            rhie_chow_consistent: false,
             component_diagonal: false,
             p_ref: (0, 0.0),
             amg_pressure: false,
@@ -169,6 +242,7 @@ impl PimpleSettings {
             full_viscous_stress: false,
             fractional: None,
             divergence_courant_limit: DEFAULT_DIVERGENCE_COURANT_LIMIT,
+            pressure_lag_check: None,
         }
     }
 
@@ -326,6 +400,10 @@ pub struct PimpleSolver {
     /// Set when the divergence guard stopped the run (ADR 0067); every later `step` returns at once. Cleared by `restore`
     /// and `reinitialise`.
     pub diverged: Option<Divergence>,
+    /// Every estimate of the pressure-lag check (ADR 0073 B4).
+    pub lag_estimates: Vec<LagWarning>,
+    /// Estimates of the pressure-lag check with `rho >= 1` made in `Warn` mode.
+    pub lag_warnings: Vec<LagWarning>,
 }
 
 impl PimpleSolver {
@@ -354,6 +432,8 @@ impl PimpleSolver {
             ale: None,
             fs_q: Vec::new(),
             diverged: None,
+            lag_estimates: Vec::new(),
+            lag_warnings: Vec::new(),
         }
     }
 
@@ -476,6 +556,16 @@ impl PimpleSolver {
             vec![0.0; n_int]
         };
 
+        let lag_due = self.ale.is_none()
+            && s.pressure_lag_check
+                .is_some_and(|c| self.step_no == 1 || (c.every > 0 && self.step_no % c.every == 0));
+        let mut lag_ctx: Option<LagCtx> = None;
+        let rc_consistent = s.rhie_chow_consistent && self.ale.is_none();
+        let seam_defect: Vec<(usize, usize, usize, f64, f64)> = if rc_consistent && s.ddt_correction {
+            self.seam_defects(c1, c2)
+        } else {
+            Vec::new()
+        };
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
@@ -632,6 +722,13 @@ impl PimpleSolver {
             for a in a_p.iter_mut() {
                 *a /= n_active;
             }
+            if lag_due && last {
+                lag_ctx = Some(LagCtx {
+                    mats: mats.clone(),
+                    links: links.clone(),
+                    pbc: pbc.clone(),
+                });
+            }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             let gamma_p = face_interpolate(&g, &r_au);
 
@@ -668,6 +765,28 @@ impl PimpleSolver {
                 }
                 if let Some(a) = &self.ale {
                     a.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
+                }
+                if rc_consistent {
+                    // consistent momentum interpolation (ADR 0073 F-G): remove C(G p_lag - b) and carry the seam defect over
+                    let bv_lag = boundary_values_pbc(&g, &pbc, &self.p.values);
+                    let mut x = green_gauss(&g, &self.p.values, &bv_lag, 0);
+                    if let Some(j) = &self.face_jump {
+                        let fix = j.gradient_fix(&g, &j.totals(&self.phi));
+                        for (a, b) in x.iter_mut().zip(&fix) {
+                            *a = vec3::add(*a, *b);
+                        }
+                    }
+                    if let Some(bf) = body {
+                        for (a, b) in x.iter_mut().zip(&bf.cell) {
+                            *a = vec3::sub(*a, *b);
+                        }
+                    }
+                    for (f, c) in self.rc_commutator(&r_au, &x) {
+                        phi_hby_a[f] -= c;
+                    }
+                    for &(f, o, q, w, d) in &seam_defect {
+                        phi_hby_a[f] += (w * r_au[o] + (1.0 - w) * r_au[q]) / dt * d;
+                    }
                 }
                 // pressure jumps: phi (1 + G R) = phiHbyA + G rise - G snGrad p with G = gamma lap, as in the SIMPLE kernel
                 let mut gamma_j = gamma_p.clone();
@@ -756,6 +875,31 @@ impl PimpleSolver {
         }
 
         // ---- finish the step ------------------------------------------------
+        if let (Some(ctx), Some(chk)) = (&lag_ctx, s.pressure_lag_check) {
+            let (rho, cell) = self.lag_amplification(ctx, chk.iterations.max(2));
+            let w = LagWarning {
+                step: self.step_no,
+                rho,
+                cell,
+            };
+            self.lag_estimates.push(w);
+            if rho >= 1.0 {
+                match chk.action {
+                    LagAction::Warn => self.lag_warnings.push(w),
+                    LagAction::Raise => {
+                        return self.trip(
+                            dt,
+                            None,
+                            "pressure-lag check",
+                            "lag amplification",
+                            Some(cell),
+                            rho,
+                            (res_u, res_p, p_iters),
+                        );
+                    }
+                }
+            }
+        }
         let courant = max_courant(&g, &self.phi, dt);
         if let Some(info) = self.guard_end(dt, courant, (res_u, res_p, p_iters)) {
             return info;
@@ -780,6 +924,250 @@ impl PimpleSolver {
         };
         self.history.push(info);
         info
+    }
+
+    /// Translationally periodic coupled faces `(face, partner face, weight of the face's owner)` (ADR 0073 F-G).
+    fn seam_faces(&self) -> Vec<(usize, usize, f64)> {
+        let g = &self.geom;
+        let mut out = Vec::new();
+        for (pi, patch) in g.mesh.patches().iter().enumerate() {
+            let Some(map) = &g.periodic_partner[pi] else {
+                continue;
+            };
+            if g.periodic_rot[pi].is_some() || !self.p.bc(pi).is_coupled() {
+                continue;
+            }
+            for (local, f) in patch.faces().enumerate() {
+                if g.empty[f] {
+                    continue;
+                }
+                let gf = map[local];
+                let (dp, dq) = (g.dn[f - g.n_internal], g.dn[gf - g.n_internal]);
+                out.push((f, gf, dq / (dp + dq)));
+            }
+        }
+        out
+    }
+
+    /// `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` on internal and translationally periodic faces (ADR 0073 F-G), as (face, value).
+    fn rc_commutator(&self, r_au: &[f64], x: &[Vec3]) -> Vec<(usize, f64)> {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
+        let term = |f: usize, o: usize, q: usize, w: f64| -> f64 {
+            let gam = w * r_au[o] + (1.0 - w) * r_au[q];
+            let v = [0, 1, 2].map(|k| {
+                w * r_au[o] * x[o][k] + (1.0 - w) * r_au[q] * x[q][k] - gam * (w * x[o][k] + (1.0 - w) * x[q][k])
+            });
+            vec3::dot(v, sf[f])
+        };
+        let mut out: Vec<(usize, f64)> = (0..g.n_internal)
+            .filter(|&f| !g.empty[f])
+            .map(|f| (f, term(f, own[f], nei[f], g.weights[f])))
+            .collect();
+        for (f, gf, w) in self.seam_faces() {
+            out.push((f, term(f, own[f], own[gf], w)));
+        }
+        out
+    }
+
+    /// Old-level face defects of the translationally periodic faces, `c1 (phi^n - u^n_f.S) - c2 (phi^{n-1} - u^{n-1}_f.S)` with the seam
+    /// interpolation, as (face, owner cell, partner cell, weight, defect) (ADR 0073 F-G).
+    fn seam_defects(&self, c1: f64, c2: f64) -> Vec<(usize, usize, usize, f64, f64)> {
+        let g = &self.geom;
+        let (own, sf) = (g.mesh.owner(), g.mesh.face_area_vectors());
+        let at = |older: bool, c: usize| -> Vec3 {
+            [0, 1, 2].map(|k| {
+                let h = &self.hist_u[k];
+                if older {
+                    h.older.as_ref().map_or(h.old[c], |o| o[c])
+                } else {
+                    h.old[c]
+                }
+            })
+        };
+        self.seam_faces()
+            .into_iter()
+            .map(|(f, gf, w)| {
+                let (o, q) = (own[f], own[gf]);
+                let defect = |older: bool| -> f64 {
+                    let phi = if older {
+                        self.phi_hist.older.as_ref().unwrap_or(&self.phi_hist.old)[f]
+                    } else {
+                        self.phi_hist.old[f]
+                    };
+                    let (a, b) = (at(older, o), at(older, q));
+                    phi - vec3::dot([0, 1, 2].map(|k| w * a[k] + (1.0 - w) * b[k]), sf[f])
+                };
+                let mut d = c1 * defect(false);
+                if c2 != 0.0 {
+                    d -= c2 * defect(true);
+                }
+                (f, o, q, w, d)
+            })
+            .collect()
+    }
+
+    /// One application of the linearised pressure-lag map of a step (ADR 0073 B4): the pressure error `e` drives the momentum predictors
+    /// and correctors of every outer iteration with the frozen matrices of `ctx`; returns the pressure error at the end of the step.
+    fn lag_map(&self, ctx: &LagCtx, e: &[f64], pbc_h: &crate::pressure::PressureBc) -> Vec<f64> {
+        let g = &self.geom;
+        let s = &self.settings;
+        let n = g.n_cells();
+        let vol = g.mesh.cell_volumes();
+        let n_active = g.active.iter().filter(|&&a| a).count() as f64;
+        let zero_ub = vec![[0.0; 3]; g.mesh.n_boundary_faces()];
+        let controls = PressureControls {
+            p_ref: (s.p_ref.0, 0.0),
+            non_orth_correctors: s.non_orth_correctors,
+            solver: s.pressure_solver,
+            amg: s.amg_pressure,
+            linear: s.linear,
+        };
+        let mut p = e.to_vec();
+        let mut u: Vec<Vec3> = vec![[0.0; 3]; n];
+        for outer in 0..s.n_outer {
+            let last = outer + 1 == s.n_outer;
+            let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
+            let bv = boundary_values_pbc(g, pbc_h, &p);
+            let grad = green_gauss(g, &p, &bv, 0);
+            let mut used: Vec<Option<FvMatrix>> = vec![None, None, None];
+            let mut a_p = vec![0.0; n];
+            let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+            for k in 0..3 {
+                let Some(m0) = &ctx.mats[k] else {
+                    continue;
+                };
+                let mut m = m0.clone();
+                m.b.iter_mut().for_each(|b| *b = 0.0);
+                let uk: Vec<f64> = u.iter().map(|v| v[k]).collect();
+                if alpha_u < 1.0 {
+                    ctx.links[k].relax(&mut m, alpha_u, &uk);
+                }
+                let mut sys = m.clone();
+                for c in 0..n {
+                    sys.b[c] -= vol[c] * grad[c][k];
+                }
+                let mut x = vec![0.0; n];
+                ctx.links[k].solve(&sys, &mut x, &s.momentum_solver);
+                for c in 0..n {
+                    u[c][k] = x[c];
+                    a_p[c] += m.a.diag[c];
+                }
+                diag_k[k] = m.a.diag.clone();
+                used[k] = Some(m);
+            }
+            for a in a_p.iter_mut() {
+                *a /= n_active;
+            }
+            let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
+            let gamma = face_interpolate(g, &r_au);
+            for corr in 0..s.n_correctors {
+                let mut hby_a = vec![[0.0; 3]; n];
+                for k in 0..3 {
+                    if let Some(m) = &used[k] {
+                        let cells: Vec<f64> = u.iter().map(|v| v[k]).collect();
+                        let h = ctx.links[k].h_operator(m, &cells);
+                        for c in 0..n {
+                            hby_a[c][k] = if s.component_diagonal {
+                                (h[c] + (a_p[c] - diag_k[k][c]) * u[c][k]) / a_p[c]
+                            } else {
+                                h[c] / a_p[c]
+                            };
+                        }
+                    }
+                }
+                let hb = boundary_hby_a(g, pbc_h, &zero_ub, &hby_a);
+                let phi_h = face_flux(g, &hby_a, &hb);
+                let p_old = p.clone();
+                let mut p_new = p_old.clone();
+                solve_pressure(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls);
+                let bvn = boundary_values_pbc(g, pbc_h, &p_new);
+                let gn = green_gauss(g, &p_new, &bvn, 0);
+                for c in 0..n {
+                    for k in 0..3 {
+                        if g.active[k] {
+                            u[c][k] = hby_a[c][k] - r_au[c] * gn[c][k];
+                        }
+                    }
+                }
+                let a = if corr + 1 == s.n_correctors { alpha_p } else { 1.0 };
+                for c in 0..n {
+                    p[c] = p_old[c] + a * (p_new[c] - p_old[c]);
+                }
+            }
+        }
+        p
+    }
+
+    /// Power-iteration estimate of the spectral radius of the pressure-lag map (ADR 0073 B4) and the cell of the largest mode entry.
+    fn lag_amplification(&self, ctx: &LagCtx, iterations: usize) -> (f64, usize) {
+        let g = &self.geom;
+        let n = g.n_cells();
+        let vol = g.mesh.cell_volumes();
+        let tv: f64 = vol.iter().sum();
+        let mut pbc_h = ctx.pbc.clone();
+        for (c, cp) in pbc_h.coeffs.iter_mut().zip(&ctx.pbc.coupled) {
+            if cp.is_none() {
+                c.b = 0.0;
+                c.d = 0.0;
+            }
+        }
+        let fixed_level = pbc_h.has_dirichlet();
+        let norm = |e: &mut Vec<f64>| -> f64 {
+            if !fixed_level {
+                let m = e.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
+                e.iter_mut().for_each(|x| *x -= m);
+            }
+            e.iter().zip(vol).map(|(a, v)| a * a * v).sum::<f64>().sqrt()
+        };
+        // smooth start plus a small deterministic pseudo-random part
+        let cc = g.mesh.cell_centres();
+        let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+        for x in cc {
+            for k in 0..3 {
+                lo[k] = lo[k].min(x[k]);
+                hi[k] = hi[k].max(x[k]);
+            }
+        }
+        let mut seed: u64 = 0x2545F4914F6CDD1D;
+        let mut e: Vec<f64> = cc
+            .iter()
+            .map(|x| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                let r = (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+                let mut v = 1.0;
+                for k in 0..3 {
+                    if g.active[k] && hi[k] > lo[k] {
+                        v *= (std::f64::consts::PI * (x[k] - lo[k]) / (hi[k] - lo[k])).cos();
+                    }
+                }
+                v + 0.1 * r
+            })
+            .collect();
+        let n0 = norm(&mut e);
+        if n0 <= 0.0 || !n0.is_finite() {
+            return (0.0, 0);
+        }
+        e.iter_mut().for_each(|x| *x /= n0);
+        let mut logs = Vec::with_capacity(iterations);
+        for _ in 0..iterations {
+            let mut next = self.lag_map(ctx, &e, &pbc_h);
+            let nn = norm(&mut next);
+            if !(nn.is_finite() && nn > 0.0) {
+                logs.push(if nn == 0.0 { f64::NEG_INFINITY } else { f64::INFINITY });
+                break;
+            }
+            logs.push(nn.ln());
+            e = next.iter().map(|x| x / nn).collect();
+        }
+        let half = logs.len() / 2;
+        let tail = &logs[half..];
+        let rho = (tail.iter().sum::<f64>() / tail.len().max(1) as f64).exp();
+        let cell = (0..n).max_by(|&a, &b| e[a].abs().total_cmp(&e[b].abs())).unwrap_or(0);
+        (rho, cell)
     }
 
     /// Advance to `t_end` with a fixed step `dt` (the last step is shortened to land on `t_end`).
