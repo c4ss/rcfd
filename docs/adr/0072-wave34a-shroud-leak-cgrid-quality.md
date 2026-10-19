@@ -187,6 +187,24 @@ warped facets (F1): -4.8e-7, -1.3e-8, -4.3e-10 on the three meshes, i.e. a solve
 this reason): the unprojected arm is converged when `res_u < 1e-10` and the largest velocity change of an iteration is below `1e-12 V_i` (within 6000
 iterations), its continuity reported; the projected arm keeps the registered criterion (`res_u < 1e-10`, continuity `< 1e-9`). All other T1 gates unchanged.
 
+## Amendment 3 (written after T2, S3'', T3 and the two coarser T1 meshes ran, before the finest T1 mesh finished; no limit changed)
+
+Measured so far: S3'' converged in 406 iterations, `|m_in + m_out| / |m_in| = 1.5e-14`, `|m_shroud| / |m_in| = 5.6e-17`, pair 6.0e-16 (pass); T2 both
+arms converged, error 0.27329 (unprojected) and 0.27328 (projected) of `W2 R2` (the coarse empty sector with upwind is far from the profile in both),
+projected leak 1.8e-16 (pass); T3 pass. T1 corrected, meshes 1 and 2: the projected error is ABOVE the unprojected one (3.6187e-2 vs 3.6000e-2,
+1.0171e-2 vs 1.0154e-2 V_i), so the registered T1 criterion `e_projected <= e_unprojected` is expected to miss; by the registered rule the projection is then
+a bookkeeping change of the wall flux (it removes the leak exactly, it does not make the solution more accurate on T1).
+
+Reading of this (pencil): the projection changes two things at once, the mass flux (now zero) and the no-slip velocity (now tangential to the facet
+instead of equal to the true wall velocity at the face centre, an `O(tilt)` change of the momentum condition). A wall that is impermeable AND moves with
+the true wall velocity is the **decoupled** treatment: zero mass flux through the facet, the face-centre wall velocity kept in the momentum condition.
+Registered now as a further opt-in (`SimpleSolver::impermeable`, a per-boundary-face mask, default `None`, every earlier path bit-identical): the boundary
+values that carry the mass flux (`boundary_hby_a`, `corrected_flux`) use the tangential part on masked faces, the momentum matrix keeps the prescribed
+value. **T1d** (new test, same meshes, set-up and solver as T1): unprojected arm (corrected criterion) against the decoupled arm (registered criterion
+`res_u < 1e-10`, continuity `< 1e-9`); gates: converged, decoupled wall leak `<= 1e-13`, finest decoupled error `<= 1.5e-2 V_i`, orders `>= 1.0`, decoupled
+error `<=` unprojected on every mesh. If that last gate misses as well, neither treatment improves T1 accuracy and the decoupled treatment is recorded
+as a bookkeeping change too. Its API exposure is decided only after T1d (it needs a hunk in `sim.rs`, a shared file).
+
 ## Not claimed
 
 Fan performance; any comparison with a published fan; turbulence quantities; the accuracy of the absolute `mrf` formulation next to a stationary faceted
