@@ -259,3 +259,22 @@ by construction) + `gap_fit`. G = F + `checked_range` (Part 3; no change of the 
 and passes P1 and P3-P10 if its non-orthogonality stays below the 85 deg error threshold of `check_mesh`. Because no Part 2 change is accepted and the
 range check does not move a node, measurement (b) of FAN-01-C with G is the measurement (a) with F if the registered counts are inside the range of
 Part 3 (stated here before either runs).
+
+## Amendment 3 (written after the registered FAN-01-C (a) build failed, before the corrected build (a2) ran; no limit changed)
+
+**Outcome of (a)** (frozen F, registered counts, test `p1_p8_...` and `p2_...`, run once): **P1 MISS**, the mesh is not built. Every step of the
+fallback chain folds; the located error reported is `mesh.fan.front_gap`: "the line family is folded at layer 11 (r = 0.24544), C block around line
+23, row 2: the leading-edge fan cannot be built for this blade with the front_gap 0.3 and n_nose 4 given". P2-P10 are not measurable on (a).
+
+Diagnosis (pencil, from the message and the construction; no further build of the registered counts): line 23 is the suction-side nose line next
+to the leading-edge line 24, row 2 the edge of its stack. F splits the front edge at the centre line `C(z_f)`; upstream of the leading edge the
+centre line rises along the leading-edge camber slope (about -3.7 near the tip), so `C(z_f) = s_le + 3.7 lambda_u (1 - e^-3)`, about 19 mm above the
+leading edge at the tip. The suction-side nose lines start facing down and upstream and are sent to targets above the leading edge, across the
+leading-edge line: a fold. FD (n_nose 5, n_chord 20) happened to untangle; the registered n_nose 4 does not.
+
+**Change (F2)**: the front edge is split at `s_le` (straight ahead of the leading edge, as in E); the seams and the F block keep the centre line.
+Development only on FD and S: FD 78.36 deg (was 80.88), skewness 3.573, aspect 1482, step 0; the P1-P8 harness on FD passes (closure 1.3e-15,
+periodicity 8.0e-14, stacks 4.2e-14 / 6.0e-14, Q3 6.6e-16, wall nodes exact); DH hub first layer 37.98 deg; S on blade B 58.97 deg, 0.756, 128.1. B1 holds.
+
+**(a2)**: the registered FAN-01-C counts with F2, P1-P10 as registered, run once. (a) stays recorded as a miss. G = F2 + `checked_range`. F2 is the
+construction of the case value `camber_seam`.
