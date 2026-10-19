@@ -62,8 +62,16 @@ pub struct PimpleSettings {
     /// `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` (the lagged pressure of the corrector, `b` the body-force cell value), so that the face
     /// flux is the textbook Rhie-Chow form `interp(u) - gamma (snGrad p - interp(grad p))` also where `rAU` varies in space; and carry the
     /// transient face defect over translationally periodic faces too. Removes the O(dt) dependence of the converged spatial operator that
-    /// the variable `rAU = dt/(c0 + a dt)` causes (the BDF2 order floor of ADR 0069). Default `false`.
+    /// the variable `rAU = dt/(c0 + a dt)` causes (the BDF2 order floor of ADR 0069). Translationally and rotationally periodic seams
+    /// (ADR 0076). Default `false`.
     pub rhie_chow_consistent: bool,
+    /// Periodic seams on the first outer iteration of a BDF2 step (ADR 0076 F-S): the coupled-face coefficients of the momentum predictor
+    /// come from the extrapolated velocity, like the convected cells, instead of `u^n` (whose lag is first order in time). Default `false`.
+    pub seam_extrapolation: bool,
+    /// On the first outer iteration of a BDF2 step the implicit under-relaxation of the momentum predictor anchors at the extrapolated
+    /// velocity instead of `u^n` (ADR 0076 F-R; the `u^n` anchor makes an under-relaxed PIMPLE with few outer iterations first order in
+    /// time). The pressure relaxation is unchanged. Default `false`.
+    pub relax_extrapolated: bool,
     /// Consistent split of the momentum matrix when its diagonal differs between the velocity components,
     /// `HbyA_k = (H_k + (a_P - a_k) u_k) / a_P` (ADR 0069 F3). Default `false`: `HbyA_k = H_k / a_P`.
     pub component_diagonal: bool,
@@ -140,6 +148,9 @@ pub struct LagWarning {
     /// Cell holding the largest entry of the estimated mode.
     pub cell: usize,
 }
+
+/// A periodic face: (face, partner face, weight of the face's owner, rotation of the partner vectors).
+type SeamFace = (usize, usize, f64, Option<[[f64; 3]; 3]>);
 
 /// Matrices of the final outer iteration kept for the pressure-lag check.
 struct LagCtx {
@@ -225,6 +236,8 @@ impl PimpleSettings {
             alpha_p: 1.0,
             ddt_correction: true,
             rhie_chow_consistent: false,
+            seam_extrapolation: false,
+            relax_extrapolated: false,
             component_diagonal: false,
             p_ref: (0, 0.0),
             amg_pressure: false,
@@ -647,12 +660,35 @@ impl PimpleSolver {
                 Some(a) => a.relative_flux(&phi_conv),
                 None => phi_conv,
             };
+            // ADR 0076 F-S: the velocity whose boundary coefficients the coupled faces take on this outer iteration
+            let u_ext: Option<VectorField> = match extrap {
+                Some(r) if s.seam_extrapolation && self.ale.is_none() && g.coupled_face.iter().any(|&c| c) => {
+                    let mut ue = self.u.clone();
+                    for (c, v) in ue.values.iter_mut().enumerate() {
+                        for (j, x) in v.iter_mut().enumerate() {
+                            let h = &self.hist_u[j];
+                            *x = (1.0 + r) * h.old[c] - r * h.older.as_ref().map_or(h.old[c], |o| o[c]);
+                        }
+                    }
+                    Some(ue)
+                }
+                _ => None,
+            };
             for k in 0..3 {
                 if !g.active[k] {
                     continue;
                 }
                 let cells: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
-                let bc = self.u.boundary_coeffs(&g, k);
+                let mut bc = self.u.boundary_coeffs(&g, k);
+                if let Some(ue) = &u_ext {
+                    let be = ue.boundary_coeffs(&g, k);
+                    for (i, c) in bc.iter_mut().enumerate() {
+                        if g.coupled_face[i] {
+                            c.b = be[i].b;
+                            c.d = be[i].d;
+                        }
+                    }
+                }
                 let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
                 let conv_cells: Vec<f64> = match (extrap, &self.hist_u[k].older) {
                     (Some(r), Some(older)) => (0..n)
@@ -669,7 +705,11 @@ impl PimpleSolver {
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
                 // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
-                let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
+                // the partner values the coefficients were built from (F-S: the extrapolated cells)
+                let q_lag: Vec<f64> = match &u_ext {
+                    Some(ue) => ue.values.iter().map(|v| v[k]).collect(),
+                    None => u_iter.iter().map(|v| v[k]).collect(),
+                };
                 lk.fix_rhs(&mut m, &q_lag);
                 if let Some(sink) = &self.sink {
                     for c in 0..n {
@@ -686,7 +726,13 @@ impl PimpleSolver {
                     }
                 }
                 if alpha_u < 1.0 {
-                    lk.relax(&mut m, alpha_u, &cells);
+                    // ADR 0076 F-R: on the first outer iteration of a BDF2 step anchor the relaxation at the extrapolated velocity
+                    let anchor = if s.relax_extrapolated && extrap.is_some() && self.ale.is_none() {
+                        &conv_cells
+                    } else {
+                        &cells
+                    };
+                    lk.relax(&mut m, alpha_u, anchor);
                 }
                 let mut sys = m.clone();
                 for c in 0..n {
@@ -926,15 +972,16 @@ impl PimpleSolver {
         info
     }
 
-    /// Translationally periodic coupled faces `(face, partner face, weight of the face's owner)` (ADR 0073 F-G).
-    fn seam_faces(&self) -> Vec<(usize, usize, f64)> {
+    /// Periodic coupled faces `(face, partner face, weight of the face's owner, rotation of the partner vectors)` (ADR 0073 F-G; rotationally
+    /// periodic seams ADR 0076).
+    fn seam_faces(&self) -> Vec<SeamFace> {
         let g = &self.geom;
         let mut out = Vec::new();
         for (pi, patch) in g.mesh.patches().iter().enumerate() {
             let Some(map) = &g.periodic_partner[pi] else {
                 continue;
             };
-            if g.periodic_rot[pi].is_some() || !self.p.bc(pi).is_coupled() {
+            if !self.p.bc(pi).is_coupled() {
                 continue;
             }
             for (local, f) in patch.faces().enumerate() {
@@ -943,36 +990,37 @@ impl PimpleSolver {
                 }
                 let gf = map[local];
                 let (dp, dq) = (g.dn[f - g.n_internal], g.dn[gf - g.n_internal]);
-                out.push((f, gf, dq / (dp + dq)));
+                out.push((f, gf, dq / (dp + dq), g.periodic_rot[pi]));
             }
         }
         out
     }
 
-    /// `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` on internal and translationally periodic faces (ADR 0073 F-G), as (face, value).
+    /// `C(x) = interp(rAU x).S - interp(rAU) interp(x).S` on internal and periodic faces (ADR 0073 F-G), as (face, value).
     fn rc_commutator(&self, r_au: &[f64], x: &[Vec3]) -> Vec<(usize, f64)> {
         let g = &self.geom;
         let mesh = &g.mesh;
         let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
-        let term = |f: usize, o: usize, q: usize, w: f64| -> f64 {
+        let term = |f: usize, o: usize, q: usize, w: f64, xq: Vec3| -> f64 {
             let gam = w * r_au[o] + (1.0 - w) * r_au[q];
-            let v = [0, 1, 2].map(|k| {
-                w * r_au[o] * x[o][k] + (1.0 - w) * r_au[q] * x[q][k] - gam * (w * x[o][k] + (1.0 - w) * x[q][k])
-            });
+            let v = [0, 1, 2]
+                .map(|k| w * r_au[o] * x[o][k] + (1.0 - w) * r_au[q] * xq[k] - gam * (w * x[o][k] + (1.0 - w) * xq[k]));
             vec3::dot(v, sf[f])
         };
         let mut out: Vec<(usize, f64)> = (0..g.n_internal)
             .filter(|&f| !g.empty[f])
-            .map(|f| (f, term(f, own[f], nei[f], g.weights[f])))
+            .map(|f| (f, term(f, own[f], nei[f], g.weights[f], x[nei[f]])))
             .collect();
-        for (f, gf, w) in self.seam_faces() {
-            out.push((f, term(f, own[f], own[gf], w)));
+        for (f, gf, w, rot) in self.seam_faces() {
+            let q = own[gf];
+            let xq = rot.as_ref().map_or(x[q], |r| crate::field::rotate(r, x[q]));
+            out.push((f, term(f, own[f], q, w, xq)));
         }
         out
     }
 
-    /// Old-level face defects of the translationally periodic faces, `c1 (phi^n - u^n_f.S) - c2 (phi^{n-1} - u^{n-1}_f.S)` with the seam
-    /// interpolation, as (face, owner cell, partner cell, weight, defect) (ADR 0073 F-G).
+    /// Old-level face defects of the periodic faces, `c1 (phi^n - u^n_f.S) - c2 (phi^{n-1} - u^{n-1}_f.S)` with the seam
+    /// interpolation (partner velocity rotated on rotational seams), as (face, owner cell, partner cell, weight, defect) (ADR 0073 F-G).
     fn seam_defects(&self, c1: f64, c2: f64) -> Vec<(usize, usize, usize, f64, f64)> {
         let g = &self.geom;
         let (own, sf) = (g.mesh.owner(), g.mesh.face_area_vectors());
@@ -988,7 +1036,7 @@ impl PimpleSolver {
         };
         self.seam_faces()
             .into_iter()
-            .map(|(f, gf, w)| {
+            .map(|(f, gf, w, rot)| {
                 let (o, q) = (own[f], own[gf]);
                 let defect = |older: bool| -> f64 {
                     let phi = if older {
@@ -996,7 +1044,10 @@ impl PimpleSolver {
                     } else {
                         self.phi_hist.old[f]
                     };
-                    let (a, b) = (at(older, o), at(older, q));
+                    let a = at(older, o);
+                    let b = rot
+                        .as_ref()
+                        .map_or(at(older, q), |r| crate::field::rotate(r, at(older, q)));
                     phi - vec3::dot([0, 1, 2].map(|k| w * a[k] + (1.0 - w) * b[k]), sf[f])
                 };
                 let mut d = c1 * defect(false);
