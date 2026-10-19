@@ -278,3 +278,29 @@ periodicity 8.0e-14, stacks 4.2e-14 / 6.0e-14, Q3 6.6e-16, wall nodes exact); DH
 
 **(a2)**: the registered FAN-01-C counts with F2, P1-P10 as registered, run once. (a) stays recorded as a miss. G = F2 + `checked_range`. F2 is the
 construction of the case value `camber_seam`.
+
+## Amendment 4 (written after the registered (a2) run and a diagnosis on the registered counts, before (a3) ran; no limit changed)
+
+**(a2) results** (F2, registered counts, run once): P1 built (11 536 cells, construction step 0, h1 5.654e-4 m, h_gap 2.867e-4 m). P2 non-orthogonality
+87.22 deg (MISS), skewness 4.126 (MISS), aspect 227.2 (met). P3 closure 9.0e-16, topology ok. P4 periodicity 1.1e-13. P5 stacks radial 5.6e-14, wall
+9.7e-14. P6 C nodes identical, volume identity 4.0e-16. P7 wall nodes on the exact surface to 0 m. P8 solid volume 2.5e-3 below the section-area
+quadrature. P9 `FvGeometry::new` accepts; `check_mesh` error "max non-orthogonality 87.2 deg exceeds 85.0"; rules SV011 (error) and SV102 (warning,
+skewness above 4): **MISS**. P10 bounded: continuity 7.47e-4 at iteration 10, at most 2.97e-4 over 200-300, no failure, largest relative speed 42.4 m/s,
+`|m_in + m_out|` 7.2e-5 of `m_in`: **met**.
+
+**Diagnosis after the run (on the registered counts, disclosed):** the faces above 85 deg are seam faces and i-faces of the outer row next to the two
+seam corners in layer 10 (r = 0.240), whose node lines tilt by 74.5 deg between layers 10 and 11. Tracking the lower seam corner per layer: z = 0.1120,
+0.1014, 0.1113 m in layers 9, 10, 11 (layer 10 an outlier by 10 mm against 18 mm of radius). Every layer needs the local untangling of a folded
+algebraic grid; layers 10 (and its remapped far grid) need 8 passes, the tip layers 7. The control functions are computed after the untangling, so a
+different number of passes gives different controls and a different smoothed grid: the smoothed far grid is not continuous in the radius. Tried
+(development, disclosed): holding the corner at its algebraic position (FD 82.75 deg / skewness 5.55, worse); controls from the algebraic grid before
+the untangling (FD and the registered counts fold); a radial filter with a short ramp from the stack edge (folds next to the wake stack).
+
+**Change (F3)**: F2 + `radial_filter`: after all layers are written, two Jacobi passes move every interior layer's far node `(z, theta)` half-way
+towards the linear interpolation in r of its two neighbouring layers; the weight rises from 0 at each stack edge to 1 on the seam or front edge (smooth
+step); the wall and stack nodes, the outlet lines, the inlet row and the hub and shroud layers are not moved; both seam copies get the same weights, so
+the pair stays an exact rotation image. G = F3 + `checked_range`.
+
+**What I already knew when writing this:** FD with F3: 78.36 deg, skewness 3.46, aspect 149, step 0, P1-P8 harness passes; S on blade B: 58.28 deg,
+0.756, 128.1; B1 holds; and the registered counts with F3 built once as a diagnosis: 83.26 deg, skewness 3.98, aspect 227, step 0 (so (a3) is not blind for
+P1 and P2; P3-P10 have not been run with F3). **(a3)**: P1-P10 on the registered counts with F3, run once; (a) and (a2) stay recorded as misses.
