@@ -251,6 +251,15 @@ and seam faces are not surfaces of revolution); use `rotating_frame`. Lower-fide
 registered quality gates; NOT validated for fan performance prediction (docs/meshing.md). Example:
 `cases/axial_fan_sector/axial_fan_sector.toml`.
 
+`mesh.fan.topology` (`h_slit`, the default, or `c_grid`, ADR 0068) selects the passage mesh. `c_grid` is a body-fitted C-grid that keeps the true
+blade edges (rounded leading edge, closed trailing edge) and has exact boundary-layer stacks along the blade normal; it uses the keys above
+except `n_mid`, `trunc_le` and `trunc_te` (ignored), and adds `n_nose` (cells from the leading edge to each seam corner, smaller than
+`n_chord`), `n_core` (cells across the blade thickness in the tip gap) and `front_gap` (distance of the front edge of the leading-edge fan
+ahead of the leading edge, in local chords). Unfittable controls give located errors on `mesh.fan.<name>` (a folded leading-edge fan reports
+`mesh.fan.front_gap`; a tangled cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer).
+The generator is not robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold
+(docs/meshing.md). Example: `cases/axial_fan_cgrid/axial_fan_cgrid.toml`.
+
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
 For `box_2d` and `channel_2d` the y direction can carry geometric wall layers:

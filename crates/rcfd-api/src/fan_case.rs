@@ -5,14 +5,18 @@
 //! Patches of the mesh: `inlet`, `outlet`, `hub`, `shroud`, `blade`, and the rotational pair `seam_lo` / `seam_hi`
 //! (cyclic, angle 2 pi / n_blades, applied by the mesh). The cell zone `rotor` covers all cells.
 //!
-//! This is a lower-fidelity hex mesh with blunt (axially truncated) blade edges; it is not validated for accurate fan
-//! performance prediction (docs/meshing.md).
+//! `mesh.fan.topology = "h_slit"` (default) is the lower-fidelity hex mesh with blunt (axially truncated) blade edges
+//! (ADR 0065). `"c_grid"` selects the body-fitted C-grid passage mesh with the true blade edges (ADR 0068,
+//! [`rcfd_mesh::fan_cgrid`]); it uses `n_up`, `n_chord`, `n_down`, `n_side`, `n_span`, `n_gap`, `n_bl`, `growth` and the
+//! first-cell controls like the default topology, plus `n_nose`, `n_core` and `front_gap`; `n_mid`, `trunc_le` and `trunc_te`
+//! are ignored there. Neither mesh is validated for accurate fan performance prediction (docs/meshing.md).
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s};
 use rcfd_core::settings::Schema;
 use rcfd_core::units::Dimension;
 use rcfd_mesh::fan::{AxialFan, SectionFamily, Station};
+use rcfd_mesh::fan_cgrid::{build_cgrid_mesh, CGridSpec};
 use rcfd_mesh::fan_mesh::{build_sector_mesh, FirstCell, SectorSpec};
 use rcfd_mesh::Mesh;
 
@@ -62,6 +66,14 @@ pub fn schema() -> Schema {
         .field("nu", Schema::float(1.5e-5).at_least(0.0).doc("Kinematic viscosity [m^2/s] for the y+ estimate"))
         .field("trunc_le", Schema::float(0.02).range(0.0, 0.3).doc("Leading-edge truncation (chord fraction)"))
         .field("trunc_te", Schema::float(0.01).range(0.0, 0.3).doc("Trailing-edge truncation (chord fraction)"))
+        .field(
+            "topology",
+            Schema::enumeration("h_slit", &["h_slit", "c_grid"])
+                .doc("Mesh topology: h_slit (ADR 0065, blunt truncated blade edges) or c_grid (ADR 0068, body-fitted C-grid with the true blade edges; ignores n_mid, trunc_le and trunc_te)"),
+        )
+        .field("n_nose", cnt(8, 1.0, "c_grid only: cells from the leading edge to each seam corner (must be smaller than n_chord)"))
+        .field("n_core", cnt(2, 1.0, "c_grid only: cells across the blade thickness in the tip gap above the blade"))
+        .field("front_gap", Schema::float(0.3).at_least(0.0).doc("c_grid only: axial distance of the front edge of the leading-edge fan ahead of the leading edge, in local chords"))
         .field("include_blade", Schema::boolean(true).doc("false leaves the blade footprint filled: an empty passage with the same nodes (verification)"))
 }
 
@@ -126,11 +138,32 @@ pub fn spec_of(case: &Case) -> SectorSpec {
     }
 }
 
+/// The C-grid controls described by `mesh.fan`.
+pub fn cgrid_spec_of(case: &Case) -> CGridSpec {
+    let n = |k: &str| get_i(case, &format!("mesh.fan.{k}")).max(0) as usize;
+    let f = |k: &str| get_f(case, &format!("mesh.fan.{k}"));
+    let h = spec_of(case);
+    CGridSpec {
+        n_up: n("n_up"),
+        n_chord: n("n_chord"),
+        n_down: n("n_down"),
+        n_side: n("n_side"),
+        n_nose: n("n_nose"),
+        n_core: n("n_core"),
+        n_span: n("n_span"),
+        n_gap: n("n_gap"),
+        n_bl: n("n_bl"),
+        growth: f("growth"),
+        first_cell: h.first_cell,
+        front_gap: f("front_gap"),
+        include_blade: h.include_blade,
+    }
+}
+
 /// Build the sector mesh of the case; problems are reported with their `mesh.fan.*` path where the library names one.
 pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     let fan = fan_of(case);
-    let spec = spec_of(case);
-    build_sector_mesh(&fan, &spec).map(|s| s.mesh).map_err(|errs| {
+    let to_diag = |errs: Vec<rcfd_mesh::fan::FanError>| -> Vec<Diagnostic> {
         errs.into_iter()
             .map(|e| Diagnostic {
                 path: format!("mesh.fan.{}", e.path),
@@ -138,5 +171,10 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
                 message: e.message,
             })
             .collect()
-    })
+    };
+    if get_s(case, "mesh.fan.topology") == "c_grid" {
+        return build_cgrid_mesh(&fan, &cgrid_spec_of(case)).map(|s| s.mesh).map_err(to_diag);
+    }
+    let spec = spec_of(case);
+    build_sector_mesh(&fan, &spec).map(|s| s.mesh).map_err(to_diag)
 }

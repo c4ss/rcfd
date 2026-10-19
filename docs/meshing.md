@@ -189,3 +189,23 @@ source is refused on it (the blade and seam faces are not surfaces of revolution
 smoke solves use the relative-frame `rotating_frame` source (cases/axial_fan_sector). Measured: an empty passage with walls moving at the
 inflow reproduces uniform flow to 1.2e-12 of the speed; mass over all patches is conserved to 1e-14 in the rotating passage, but
 the mass flows of the two seam patches do not cancel exactly (relative 3.5e-6 to 2.7e-5), so `m_in + m_out` alone shows 2e-6 to 7e-5 of `m_in`.
+
+## Axial-fan C-grid passage mesh (ADR 0068)
+
+`rcfd_mesh::fan_cgrid::build_cgrid_mesh(fan, spec)`; case hook `mesh.fan.topology = "c_grid"` (docs/case-schema.md). The default `h_slit` topology
+of ADR 0065 is kept. Per radial layer, in the unrolled (z, s = r theta) plane, three blocks: a C block around the blade and its wake (the wake cut is a
+set of shared interior nodes), an F block from the inlet to the front edge, and a core block inside the blade (used only in the tip gap; the leading and
+trailing columns collapse, the trailing-edge wedge is one polyhedral cell per layer). The blade keeps its true edges. Boundary-layer stacks are exact: `n_bl`
+cells of `h1 g^q` along the central-difference wall normal; beyond the stack, pursuit lines run to targets on the seams and the front edge. The upper seam
+is the lower seam shifted by the pitch with an identical node list, so the pair is rotated by exactly 2 pi / N.
+
+Measured (ADR 0068 addendum has the full list). Periodicity: node rotation mismatch 1.1e-16 m, area vectors |S_hi + R S_lo| / |S_lo| 3.9e-13,
+closure 8e-16, stacks 3.2e-13 (A') and 1.7e-11 (B', limit 4.9e-11). Quality: set-up A' (y+ 30, 134 766 cells) non-orthogonality 81.6 deg (gate 70, missed),
+skewness 0.86 (gate 2.0, met), aspect 177 (gate 300, met); set-up B' (y+ 1, 593 250 cells) 83.7 deg (missed), skewness 4.85 (gate 2.0, missed), aspect 2651
+(gate 3000, met). The small case mesh (11 536 cells) has 79.7 deg.
+
+**Limits of the generator.** It is not robust against changes of the controls: of 144 combinations of `n_chord`, `n_nose`, `n_side` scanned (unregistered), 44
+built; the others fold in the leading-edge fan (located error on `front_gap`) or tangle in a way the fold check does not see (located by the mesh validation).
+The registered refinement studies (envelope and blade volume, blade area) could not be run for that reason. The oblique leading-edge fan at
+`front_gap` 0.3 and the sagitta of flat facets against a thin first cell on annular walls are the likely causes of the non-orthogonality and skewness misses
+(not isolated by a test). Not validated for fan performance prediction.
