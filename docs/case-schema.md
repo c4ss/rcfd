@@ -49,7 +49,9 @@ Menter's 2003 k-omega SST ("Ten years of industrial experience with the SST turb
 Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the form of the NASA
 Turbulence Modeling Resource page (constants and blending functions checked against it, see
 docs/reference-data.md). Same restrictions as `k_epsilon` (steady algorithms, a wall patch, no
-energy). Wall treatment: automatic. A Spalding (1961) law of the wall gives the wall shear for
+energy), except that a fixed wall may move: the wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the
+stationary casing of a rotor solved in the rotating frame is allowed (`turbulence = "wall"` must then be set on that patch, because the
+automatic role calls a moving fixed-velocity patch an inlet). Wall treatment: automatic. A Spalding (1961) law of the wall gives the wall shear for
 any first-cell y+, `omega` on the wall faces is `10 * 6 nu / (beta1 y^2)` (y = first cell-centre
 distance, the TMR recommendation), and for y+ > 5 the cell omega follows the blend of the viscous
 and the log-layer value. Wall-resolved meshes (y+ about 1) and wall-function-like meshes (y+ 30
@@ -240,6 +242,11 @@ One blade passage of an axial fan as an all-hex periodic sector of angle `2 pi /
 `mesh.fan` (hub and tip station with linear variation; angles in degrees; every key has a default, the defaults describe the
 five-bladed test fan of the ADR). Geometry keys: `n_blades`, `r_hub`, `r_tip`, `tip_clearance`, `axial_extent`, `z_le_root`,
 `family` (`naca4` | `circular_arc`), `hub_` and `tip_` `chord`, `stagger`, `camber`, `thickness`, `sweep`, `lean`, and `camber_pos`.
+Optional station lists (ADR 0075): `station_radius` (first value `r_hub`, last `r_tip`, strictly increasing) with `station_chord`,
+`station_stagger` (deg), `station_camber`, `station_thickness` of the same length and the optional `station_camber_pos`, `station_sweep`,
+`station_lean` (empty = `camber_pos`, 0, 0); when `station_radius` is not empty they replace the `hub_`/`tip_` values and the blade varies
+linearly between neighbouring stations. Unequal lengths are located errors on `mesh.fan.station_<name>`, station errors of the library on
+`mesh.fan.station_<name>[i]`.
 Mesh keys: `n_up`, `n_chord`, `n_down` (axial cells), `n_side` (pitchwise cells from the seam to the blade), `n_mid` (across the blunt
 edge faces), `n_span`, `n_gap` (radial cells in the blade span and the tip gap), `n_bl` and `growth` (boundary-layer cells of exact
 geometric growth on every wall), `first_cell_height` (or, when 0, `y_plus`, `ref_speed`, `nu` for a flat-plate estimate),

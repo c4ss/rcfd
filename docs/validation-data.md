@@ -36,6 +36,62 @@ Findings while pinning
   0.00268299 (273 x 193 grid from the TMR page). The rcfd value 0.002663 is -0.7 % against the
   page value and -1.0 % against the pinned finest-grid file. The test and its 5 % tolerance are unchanged.
 
+## Rotating machinery sources (wave 34D, ADR 0075)
+
+Searched and read on 2026-10-19 for the fan milestone (docs/milestone-fan.md) and the F-126 acceptance. "Read" means the document or data file
+was opened and the relevant content read; "seen" means only a citation, a record page summary or a search snippet. The solver that would run
+these cases: incompressible SIMPLE/SIMPLEC with `rotating_frame` (or `mrf`, refused on the fan sector mesh), rotational-periodic sector, mixing
+plane, k-omega SST; mesh generators `rcfd_mesh::fan` (NACA 4-digit or double-circular-arc sections on cylinders, cylindrical hub, cylindrical
+shroud with a tip gap; H-slit or C-grid passage). The compressible solver is explicit Euler without rotation, viscosity or turbulence.
+
+Ranking (criteria fixed in ADR 0075 before reading: incompressible regime, geometry public and representable, measured quantity defined,
+licence): 1. FAN-01; all others not runnable as they are.
+
+**1. FAN-01, FAU / EAA low-pressure axial fan** (rank 1, dataset `w34d-fan01-fau-eaa-axial-fan`).
+- Sources. Zenodo record "FAN 01 Benchmark: Low Pressure Axial Fan in a Short Duct", doi:10.5281/zenodo.20037409 (v5), licence CC BY 4.0:
+  READ `characteristic_n1ug.mat` (all 20 points, checked by a second independent parse), `cad_model.igs` (blade surfaces), the LDA time-averaged
+  `.mat` files and the rig description `LA_Case4_AxialFan_measurements.pdf`. Schoder, Junger, Kaltenbacher, Acta Acustica 4 (2020) 22 (CC BY 4.0),
+  READ. Schoder and Czwielong, arXiv:2211.12014 (pp. 1-4), READ. Junger, PhD thesis TU Wien 2019 (doi:10.34726/hss.2019.40572, section 4.1), READ.
+  Vourakis and Karlsson, round robin of the fan, FAN 2022 (CC BY 4.0), READ. Zenger, Junger, Kaltenbacher, Becker, SAE Technical Paper
+  2016-01-1805 (the primary fan and rig paper): NOT read (SAE page only). Kroemer 2018 thesis: seen (catalogue page).
+- Geometry: complete CAD (IGES and Parasolid) under CC BY 4.0. 9 blades, tip radius 247.5 mm, duct radius 250 mm (tip gap 2.5 mm), hub radius
+  124 mm, zero skew, published as "NACA 4510" sections; the CAD sections (derived here, `validation-data/reference/w34d_fan01_cad_sections.csv`)
+  have camber 0.0365-0.0376 at 0.52 chord and thickness 0.109-0.111 at 0.23 chord, chord 99 mm (hub) to 55 mm (tip), stagger 43.6 to 69.6 deg from
+  the axis; the chords are 4-5 % shorter than the published design table (103 / 58 mm).
+- Operating data: 1486 rpm (papers; not in the files), design 1.4 m^3/s, measured characteristic of 20 points from 0.20 to 2.08 m^3/s
+  (`validation-data/reference/w34d_fan01_characteristic_n1ug.csv`): total-to-static pressure rise of the installation (inlet-chamber depression
+  against ambient; ISO 5801 inlet chamber, bellmouth flow measurement) and shaft power (the file column says N m, the values are W). Design point
+  1.4032 m^3/s, 126.46 Pa, 333.30 W, efficiency 0.532. Stall onset about 1.1 m^3/s. No density, no ambient state, no FAU uncertainty statement in
+  anything read; the round robin quotes +-3 Pa and 1.5 % flow and agrees with the FAU curve within about 3 %. LDA profiles 20 mm and 90 (or 110) mm from
+  a datum that the sources read do not settle.
+- Representable: the rotor, hub cylinder and duct are; the bellmouth, the finite blunt hub, the 3 mm root fillet, struts, motor and diffuser are not;
+  the measured pressure rise includes them. Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE).
+
+**2. NASA Low-Speed Axial Compressor (LSAC)**: Wasserbauer, Weaver, Senyitko, NASA TM-4635 (1995), NTRS 19950016775, READ (summary, facility,
+Table I: 61 m/s tip speed, 980 rpm, 39 rotor blades, tip radius 61.0 cm, hub 48.8 cm, tip clearance 0.17 cm, pressure ratio 1.042). No blade
+coordinates, no profile family and no performance map in the TM; a "publicly available" geometry package is mentioned elsewhere (seen) and was not
+found. Four stages with IGV and stators. Not runnable.
+
+**3. DTMB 4119 propeller**: READ only through arXiv:2104.13363 (Tables 1-3: 3 blades, D = 0.305 m, NACA 66 (mod) thickness, a = 0.8 mean line (printed
+"a = 0.08"), radial distributions of chord, pitch, thickness and camber; K_T, K_Q at J = 0.833 from Jessup 1984/1989 as quoted there). The DTNSRDC
+reports were not read. Open propeller, no shroud, section family not in the generator. Not runnable as is.
+
+**4. NASA Rotor 37** (dataset `nasa-rotor37`, NASA TP-1337, READ): design 17 188.7 rpm, tip speed 454 m/s, 36 blades, rotor pressure ratio 2.106,
+inlet relative Mach 1.48 (tip) to 1.13 (hub), multiple-circular-arc sections, blade manufacturing coordinates in Appendix C (12 sections), overall
+performance Table V (100 % speed peak efficiency 0.876 at 20.74 kg/s, rotor pressure ratio 2.056); no tip clearance in the report. Transonic: not
+runnable.
+
+**5. NASA Rotor 67**: Strazisar et al., NASA TP-2879 (1989), design text pp. 1-12 READ: 22 blades, 16 043 rpm, tip relative Mach 1.38, pressure ratio
+1.63, coordinates on surfaces of revolution (Table I), contoured hub. Transonic: not runnable.
+
+**Not fans / not read**: Daily and Nece (1960) enclosed rotating disk (ASME, paywalled; only secondary snippets seen, coefficients UNVERIFIED);
+ERCOFTAC classic collection rotating cases (list read; no rotor-stator cavity case found in it); Dring et al. UTRC turbine rig (snippets only).
+
+What a fan validation with these tools needs (from the FAN-01 attempt, ADR 0075): blade input with more than two stations (added in wave 34D,
+`mesh.fan.station_*`); a passage mesh whose periodic seams follow the blade at high hub solidity (the C-grid wake line leaves the straight-seam
+sector at the FAN-01 hub); a turbulence wall treatment that accepts moving walls (a stationary casing is a moving wall in the rotating frame; fixed
+for k-omega SST in wave 34D); an inlet nozzle / finite hub / diffuser model or a rig-independent measured quantity to compare with.
+
 ## Provenance table (generated by `rcfd data provenance`)
 
 ## Lid-driven cavity centreline velocities (Ghia, Ghia and Shin 1982) (`cavity-ghia1982`)

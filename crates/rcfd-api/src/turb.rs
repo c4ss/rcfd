@@ -443,7 +443,9 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                         "moving_wall, shear, partial_slip and marangoni walls are not supported by the turbulence wall treatments (they assume a no-slip wall at rest); use a laminar run",
                     ));
                 }
-                if !velocity_is_zero(case, &b) && get_s(case, &format!("{b}.velocity")) == "fixed" {
+                // k-omega SST evaluates its wall law with the velocity relative to the wall (ADR 0075), so a fixed moving wall is
+                // allowed there (e.g. the stationary casing of a rotor solved in the rotating frame); the other models keep the refusal.
+                if !sst && !velocity_is_zero(case, &b) && get_s(case, &format!("{b}.velocity")) == "fixed" {
                     out.push(diag(
                         &format!("{b}.turbulence"),
                         "moving walls are not supported by the wall functions (the wall velocity must be zero)",

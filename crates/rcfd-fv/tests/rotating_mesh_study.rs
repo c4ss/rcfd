@@ -144,7 +144,16 @@ struct Sector {
 
 impl Sector {
     fn new(n_theta: usize, n_r: usize) -> Self {
-        let mesh = annulus_sector(n_theta, n_r, RI, RO, std::f64::consts::FRAC_PI_3, Grading::Uniform, DEPTH).unwrap();
+        let mesh = annulus_sector(
+            n_theta,
+            n_r,
+            RI,
+            RO,
+            std::f64::consts::FRAC_PI_3,
+            Grading::Uniform,
+            DEPTH,
+        )
+        .unwrap();
         let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
         let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
         let cf = geom.mesh.face_centres();
@@ -157,10 +166,18 @@ impl Sector {
                 .map(|f| [-w * cf[f][1], w * cf[f][0], 0.0])
                 .collect::<Vec<_>>()
         };
-        u.set_bc(&geom, "inner", Box::new(FixedValue(Profile::PerFace(wall("inner", W_I)))))
-            .unwrap();
-        u.set_bc(&geom, "outer", Box::new(FixedValue(Profile::PerFace(wall("outer", 0.0)))))
-            .unwrap();
+        u.set_bc(
+            &geom,
+            "inner",
+            Box::new(FixedValue(Profile::PerFace(wall("inner", W_I)))),
+        )
+        .unwrap();
+        u.set_bc(
+            &geom,
+            "outer",
+            Box::new(FixedValue(Profile::PerFace(wall("outer", 0.0)))),
+        )
+        .unwrap();
         let p = ScalarField::uniform("p", &geom, 0.0);
         let mut s = SimpleSettings::new(NU, Coupling::Simplec);
         s.alpha_u = 0.8;
@@ -184,7 +201,8 @@ impl Sector {
         let geom = self.solver.geom.clone();
         let ub = self.solver.u.boundary_values(&geom);
         let mut f = BodyForce::uniform(&geom, [0.0; 3]);
-        self.frame.add_force(&geom, &self.solver.u.values, &ub, &self.zone, &mut f);
+        self.frame
+            .add_force(&geom, &self.solver.u.values, &ub, &self.zone, &mut f);
         self.solver.body_force = Some(f);
         self.solver.wall_pressure_trapezoid = true;
         self.solver.iterate()
@@ -267,7 +285,11 @@ fn r2_study() -> ([f64; 4], [f64; 4], Vec<String>) {
         }
     }
     for (k, df, de) in i1 {
-        println!("R2 I1 mesh {k}: functional change {df:.3e} (limit {:.3e}), max-norm change {de:.3e} (limit {:.3e})", 1e-2 * (f[2] - f[3]).abs(), 1e-2 * e[3]);
+        println!(
+            "R2 I1 mesh {k}: functional change {df:.3e} (limit {:.3e}), max-norm change {de:.3e} (limit {:.3e})",
+            1e-2 * (f[2] - f[3]).abs(),
+            1e-2 * e[3]
+        );
         if df > 1e-2 * (f[2] - f[3]).abs() || de > 1e-2 * e[3] {
             bad.push(format!("R2 I1 mesh {k}: changes {df:.3e}, {de:.3e}"));
         }
@@ -392,7 +414,8 @@ impl Ekman {
         let geom = self.solver.geom.clone();
         let ub = self.solver.u.boundary_values(&geom);
         let mut f = BodyForce::uniform(&geom, [0.0, 0.0, -2.0 * EK_OMEGA * EK_UG]);
-        self.frame.add_force(&geom, &self.solver.u.values, &ub, &self.zone, &mut f);
+        self.frame
+            .add_force(&geom, &self.solver.u.values, &ub, &self.zone, &mut f);
         self.solver.body_force = Some(f);
         self.solver.wall_pressure_trapezoid = true;
         self.solver.iterate()
@@ -499,7 +522,10 @@ fn r3_finite_height_solution_satisfies_its_conditions() {
         let (a, b, c) = (ek_v(y - d), ek_v(y), ek_v(y + d));
         let lap = C((a.0 - 2.0 * b.0 + c.0) / (d * d), (a.1 - 2.0 * b.1 + c.1) / (d * d));
         let rhs = l2.mul(b);
-        assert!((lap.0 - rhs.0).abs() + (lap.1 - rhs.1).abs() < 1e-3 * (rhs.0.abs() + rhs.1.abs()), "y {y}");
+        assert!(
+            (lap.0 - rhs.0).abs() + (lap.1 - rhs.1).abs() < 1e-3 * (rhs.0.abs() + rhs.1.abs()),
+            "y {y}"
+        );
     }
     // transport by quadrature
     let n = 200000;
