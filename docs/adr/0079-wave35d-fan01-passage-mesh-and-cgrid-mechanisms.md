@@ -335,3 +335,83 @@ combination builds and validates: 100 %, per fan; (b) every out-of-range combina
 `front_gap`: 100 %. Reported: the fraction of in-range combinations that build AND meet 70 deg / 2.0 / 300, the median non-orthogonality, the
 `construction_step` distribution, and the count below the 85 deg error threshold. **Prediction (from the development data): (a) is met on blade B and
 MISSED on FAN-01.**
+
+## Addendum: measured values, misses and deviations
+
+Release builds; code state of the measurements: the scratch tree of this wave, committed as 5348934 (record commit, with the four Part 2 options)
+and 7b12fef (the rejected options removed; B1, P1-P8, P9, R-G (b) and the control-range test re-run there with identical numbers). Limits are the
+registered ones, unchanged. No external reference value enters any gate. No fan performance claim.
+
+### Part 1: FAN-01-C (registered counts of ADR 0075 amendment 1, y+ = 30 rule: h1 = 5.654e-4 m)
+
+| Check | Limit | (a) F | (a2) F2 | (a3) F3 (= G, = (b)) |
+|---|---|---|---|---|
+| P1 builds, validates, volumes > 0 | - | **MISS** (fold at layer 11, nose line 23, every fallback step) | 11 536 cells, step 0 | 11 536 cells, step 0 |
+| P2 non-orthogonality / skewness / aspect | 70 / 2.0 / 300 (target) | - | **87.22** / **4.126** / 227.2 | **83.26** / **3.978** / 227.2 (aspect met) |
+| P3 closure, topology | 1e-13 | - | 9.0e-16, ok | 7.9e-16, ok |
+| P4 periodicity (nodes, bijection, centres, area vectors) | 1e-12 | - | 1.1e-13 | 1.8e-13 |
+| P5 stacks (radial h1 / h_gap = 2.867e-4 m, wall) | 1e-12 | - | 5.6e-14, 9.7e-14 | 5.6e-14, 9.7e-14 |
+| P6 bladed vs empty C nodes, volume identity | 0, 1e-11 | - | 0, 4.0e-16 | 0, 4.0e-16 |
+| P7 wall nodes on the exact surface | 1e-12 m | - | 0 m | 0 m |
+| P8 solid volume against the section-area quadrature | reported | - | -2.5e-3 | -2.5e-3 |
+| P9 FvGeometry, check_mesh, rules | accepted, ok, no error | - | **MISS** (87.2 deg > 85: SV011 error; SV102 warning) | met (SV101 warning only) |
+| P10 laminar smoke, 300 iterations | ADR 0075 amendment 3 window | - | met (7.47e-4 at 10, 2.97e-4 over 200-300) | **MISS** (7.92e-4 at 10, 6.62e-3 over 200-300; finite, no failure, 63 m/s) |
+| DH hub | decides a hub change | no hub change (FD: first layer 37.98 deg, k-faces 46.41) | | FAN-01-C first layer 38.07 deg |
+
+Verdict: FAN-01 is meshed by the existing periodic-sector machinery for the first time (C-grid, through the case), closed, periodic to 1.8e-13,
+with exact stacks and an exact blade surface, and accepted by `FvGeometry::new`, `check_mesh` and the rules; it misses the quality target and the
+registered laminar smoke criterion. The (a2) mesh met P10 and missed P9; no mesh of this wave meets both. The FAN-01 C-grid is not robust (Part 3).
+
+### Part 2: the B' mechanisms (Amendment 1 and 2)
+
+D1 attribution and verdicts in Amendment 1 (M1 dropped by its rule, M2/M3 falsified as stated, M4 confirmed, M5 trailing-edge lean and M6 nose
+compression found). The four single-factor changes (Amendment 2 table): each removed its own target (wake skewness 4.85 -> 1.39, blade-stack
+skewness 2.06 -> 1.10, nose skewness 7.08 -> 1.31, A' aspect 395 -> 288) and each raised another Q1-E maximum by more than 1 % and lost R-E builds:
+**all four rejected and removed**. Construction G on blade B (registered "G itself", run once):
+
+| Set-up | Limit | E (ADR 0072) | G | Status |
+|---|---|---|---|---|
+| A' non-orthogonality / skewness / aspect | 70 / 2.0 / 300 | 61.38 / 0.863 / 395.1 | 66.18 / 0.889 / **394.4** | aspect MISS (`q1g_quality_gates_a_prime_known_miss`) |
+| B' | 70 / 2.0 / 3000 | 78.17 / 7.084 / 8531.6 | **80.94** / **8.897** / **8805.0** | MISS (`q1g_quality_gates_b_prime_known_miss`) |
+
+The B' gates stay missed with every construction of this wave; the mechanisms are now located and each has a demonstrated local fix whose side
+effects the registered rule did not allow.
+
+### Part 3: control range and the R-G scan (run once)
+
+| Check | Limit | Blade B | FAN-01 |
+|---|---|---|---|
+| (a) in-range combinations that build and validate | 100 % | **35 of 38** (3 folds at n_side 40) | **20 of 39** (folds in the leading-edge fan, one n_up refusal, two tangled) |
+| (b) out-of-range combinations refused with a located error | 100 % | 31 of 31 | 31 of 31 |
+| in range: build AND meet 70 / 2.0 / 300 (reported) | - | 28 of 38 | 0 of 39 |
+| below the 85 deg error threshold / median non-orthogonality (reported) | - | 35 / 64.2 deg | 17 / 83.1 deg |
+| construction steps of the built meshes (reported) | - | all step 0 | 13 step 0, 2 step 1, 5 step 7 (Laplace start) |
+
+(a) is MISSED for both fans (`r_g_in_range_combinations_build_known_miss`; FAN-01 predicted in Amendment 5, blade B not), (b) is met
+(`r_g_out_of_range_combinations_are_located_errors`). For comparison, ADR 0072's R-E scan of `smoothed`: 107 of 117 built, 41 of 107 at or below
+70 deg (with no range). Aggregation defect of the first R-G run (disclosed): the two-thread scan returned its results in even/odd order and the
+summary paired them with the wrong combinations (it printed "built 14 of 39" for blade B); the per-combination lines were correct; the summary above is
+recomputed from them and the corrected test (results back in list order) reproduces them.
+
+### Part 4: default behaviour
+
+B1 met: the FNV hashes of S and A' with `pursuit` and with E are those recorded on 0cef8f5, after every change of this wave and at 7b12fef; the
+default FAN-01 refusal message is unchanged. `baseline_hashes.rs` untouched (final gate below). The ADR 0072 tests are unchanged.
+
+### Deviations from the registered plan (candid list)
+
+* Construction F was changed three times after its registration, each in an amendment written before the run it governed: the upstream extension
+  `lambda_u = front_gap c / 3` (development, Amendment 2), the front edge split at `s_le` after (a) folded (Amendment 3), the radial filter after (a2)
+  missed P9 (Amendment 4; developed partly on the registered counts as a diagnosis, so (a3) is not blind for P1 and P2, as stated there). A blended seam
+  was tried and dropped during development. The Laplace-start fallback steps were added during the Part 3 development (they do not change a mesh that
+  builds at an earlier step).
+* C5 replaced the registered C3 families (Amendment 1); the Part 2 harness had a Q7 defect found by its smoke and corrected before the registered run.
+* The R-G aggregation defect above. P10 is a stress test (laminar at the design Reynolds number); its set-up passed on the H-slit control and on the
+  (a2) mesh and was not judged defective, so its miss on (a3) stands.
+* G = F3 on blade B is not E (Amendment 2 had kept that possibility open for the blended seam that was dropped); the registered "G itself" run shows it.
+* `p_checks_smoke_on_fd` prints the label "FAN-01-C" for the FD counts (cosmetic).
+
+### Unverified references
+
+Thompson, Warsi & Mastin (1985) for the elliptic system (recalled, as ADR 0072). The FAN-01 sections are the wave 34D CAD derivation (ADR 0075); the
+design-point speed, flow and the assumed density 1.2 kg/m^3 of the smoke set-up are the ADR 0075 values. Nothing else.

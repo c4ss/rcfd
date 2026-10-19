@@ -265,10 +265,14 @@ ahead of the leading edge, in local chords). Unfittable controls give located er
 `mesh.fan.front_gap`; a tangled cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer).
 The generator is not robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold
 (docs/meshing.md). Example: `cases/axial_fan_cgrid/axial_fan_cgrid.toml`.
-`mesh.fan.c_grid_construction` (`pursuit`, the default, the construction above, or `smoothed`, ADR 0072) selects how the `c_grid` lines
-are placed: `smoothed` relaxes every layer with an elliptic (Winslow) smoother whose seams are periodic interior lines, takes the far
+`mesh.fan.c_grid_construction` (`pursuit`, the default, the construction above, `smoothed`, ADR 0072, or `camber_seam`, ADR 0079) selects how
+the `c_grid` lines are placed: `smoothed` relaxes every layer with an elliptic (Winslow) smoother whose seams are periodic interior lines, takes the far
 grid of the thin end-wall layers from a remapped radius so it does not rotate between them, and falls back through a fixed chain of
-weaker settings when a layer would fold; the blade stacks stay exact. Measured quality and robustness are in docs/meshing.md.
+weaker settings when a layer would fold; the blade stacks stay exact. `camber_seam` is `smoothed` with seams that follow the camber line
+inside the chord and the wake downstream (for high-solidity hubs whose wake leaves straight seams, as FAN-01), a tip-gap first height fitted
+to the gap, a radial filter of the far grid between layers and two Laplace-start fallback steps; it refuses controls outside its documented
+range with a located error (`0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`).
+Measured quality and robustness are in docs/meshing.md.
 
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
