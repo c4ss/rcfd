@@ -492,6 +492,11 @@ pub fn case_schema() -> Schema {
             vec3([0.0; 3], "Point on the rotation axis [m]"),
         )
         .field(
+            "wall_velocity_projection",
+            Schema::enumeration("none", &["none", "tangential"])
+                .doc("moving_wall only: none (default) rejects a wall velocity that is not tangential to every face; tangential replaces the velocity of each face by its tangential part, so the faceted wall carries no flux (ADR 0072). Only for a wall invariant under its own motion (a surface of revolution rotating about its axis, a plane translating in itself), e.g. a stationary shroud in the rotating frame; wrong where the wall's normal motion is real"),
+        )
+        .field(
             "shear_stress",
             vec3([0.0; 3], "shear: tangential traction [Pa] exerted on the fluid by the boundary (its normal part is ignored); mu du_t/dn_out equals this value"),
         )
