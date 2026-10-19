@@ -490,7 +490,8 @@ cycle of the limiter switching (ADR 0016 results). **Time scheme** `solver.time_
 towards implicit Euler by the ratio of the last two backward difference quotients, so a temporal extremum or an accelerating front falls back to the monotone Euler (project-defined, no verified source, ADR 0016 D1).
 
 **Velocity kinds** of `boundaries.<patch>.velocity` (all impermeable, all `turbulence` role `wall`; the turbulence wall treatments
-themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error):
+themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error; exception: `moving_wall`
+with `k_omega_sst`, whose wall law uses the velocity relative to the wall (ADR 0075 S1, ADR 0078 S2; give the wall `turbulence = "wall"`)):
 * `moving_wall`: wall velocity `velocity_value` (must be tangential on every face, located error otherwise) plus an optional rotation
   `wall_rotation_rate` [rad/s] about `wall_rotation_axis` (default z) through `wall_rotation_origin`; `u_w = u_t + Omega x (x - x0)`.
   `wall_velocity_projection = "tangential"` (default `"none"`) replaces the velocity of each face by its tangential part instead of
@@ -1005,6 +1006,7 @@ variable-density and `coupled` runs reject every kind at `boundaries.<patch>.bc_
 | `loss_coefficient` K >= 0 | 0 | vent |
 | `flow_rate_weight` > 0 | 1 | outflow |
 | `radial_reference` `hub` or `area_average` | hub | radial_equilibrium_outlet |
+| `radial_frame_rate` [rad/s] | 0 | radial_equilibrium_outlet: in a `rotating_frame` case (with `centrifugal = true`, so `p` is the static pressure) set it to the frame's angular velocity about `swirl_axis`; the balance then uses the absolute swirl `w_theta + rate r` (ADR 0078 X1). The default balances the solved (relative) swirl, which is wrong in a rotating frame (47 % pressure error on the X1 check). |
 | `target_mass_flow` [kg/s, positive OUT], `pressure_update` `bernoulli`, `secant` or `guarded_secant`, `pressure_relax` [0.01, 1] | 0, bernoulli, 0.5 | target_mass_flow_outlet |
 
 Signs: `mass_flow_value` is positive into the domain, `target_mass_flow` positive out of the domain, and the `mass_flow` report

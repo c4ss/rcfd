@@ -801,6 +801,10 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("hub", &["hub", "area_average"]).doc("radial_equilibrium_outlet: bc_pressure is the pressure of the smallest-radius face (hub) or the area-average pressure"),
         )
         .field(
+            "radial_frame_rate",
+            Schema::float(0.0).doc("radial_equilibrium_outlet: angular velocity [rad/s] about swirl_axis of the frame the velocity is solved in (the rotating_frame rate); the balance uses the absolute swirl w_theta + rate r (ADR 0078). Default 0: the solved velocity"),
+        )
+        .field(
             "target_mass_flow",
             Schema::float(0.0).doc("target_mass_flow_outlet: mass flow rate [kg/s] leaving the domain through the patch"),
         )
