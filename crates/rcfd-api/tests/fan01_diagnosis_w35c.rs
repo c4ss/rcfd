@@ -80,6 +80,10 @@ struct Arm {
     n_side: usize,
     convection: &'static str,
     outlet: Outlet,
+    /// amendment 2 (X2): false = empty passage (no blade), hub and shroud at rest in the absolute frame
+    include_blade: bool,
+    /// amendment 2 (X2): false = inertial frame (no `rotating_frame`, velocities absolute)
+    rotating: bool,
 }
 
 fn e0() -> Arm {
@@ -95,6 +99,8 @@ fn e0() -> Arm {
         n_side: 10,
         convection: "upwind",
         outlet: Outlet::Fixed,
+        include_blade: true,
+        rotating: true,
     }
 }
 
@@ -273,6 +279,37 @@ fn arms() -> Vec<Arm> {
         arm_k(),
         arm_c0(),
         arm_d0(),
+        // amendment 2: X2 empty-passage check (exact absolute swirl zero)
+        Arm {
+            label: "X2a",
+            include_blade: false,
+            ..e0()
+        },
+        Arm {
+            label: "X2b",
+            include_blade: false,
+            rotating: false,
+            ..e0()
+        },
+        Arm {
+            label: "X2c",
+            include_blade: false,
+            n_chord: 20,
+            n_side: 16,
+            ..e0()
+        },
+        Arm {
+            label: "X2d",
+            include_blade: false,
+            convection: "tvd_minmod",
+            ..e0()
+        },
+        Arm {
+            label: "X2e",
+            include_blade: false,
+            convection: "linear_upwind",
+            ..e0()
+        },
     ]
 }
 
@@ -286,7 +323,7 @@ fn mesh_toml(a: &Arm) -> String {
     format!(
         "[mesh]\ngenerator = \"axial_fan_sector\"\n[mesh.fan]\nn_blades = 9\nr_hub = {R_HUB}\nr_tip = {R_TIP}\ntip_clearance = 0.0025\naxial_extent = {:?}\nz_le_root = {:?}\nfamily = \"naca4\"\n\
 station_radius = {}\nstation_chord = {}\nstation_stagger = {}\nstation_camber = {}\nstation_camber_pos = {}\nstation_thickness = {}\nstation_sweep = {}\nstation_lean = {}\n\
-n_up = {}\nn_chord = {}\nn_down = {}\nn_side = {}\nn_mid = 1\nn_span = 16\nn_gap = {}\nn_bl = 2\ngrowth = 1.2\nfirst_cell_height = {H1:?}\n",
+n_up = {}\nn_chord = {}\nn_down = {}\nn_side = {}\nn_mid = 1\nn_span = 16\nn_gap = {}\nn_bl = 2\ngrowth = 1.2\nfirst_cell_height = {H1:?}\n{}",
         a.axial_extent,
         a.z_le_root,
         list(|s| s[0] * 1e-3),
@@ -302,6 +339,7 @@ n_up = {}\nn_chord = {}\nn_down = {}\nn_side = {}\nn_mid = 1\nn_span = 16\nn_gap
         a.n_down,
         a.n_side,
         a.n_gap,
+        if a.include_blade { "" } else { "include_blade = false\n" },
     )
 }
 
@@ -311,10 +349,34 @@ fn case_toml(a: &Arm) -> String {
     let u_in = Q_DESIGN / annulus_area();
     let k = 1.5 * (0.01 * u_in) * (0.01 * u_in);
     let om = k.sqrt() / (0.09f64.powf(0.25) * 0.0176);
-    let shroud = if a.projected_casing {
-        format!("velocity = \"moving_wall\"\nwall_rotation_rate = {:?}\nwall_velocity_projection = \"tangential\"\nturbulence = \"wall\"\n", -w)
+    let projected = format!("velocity = \"moving_wall\"\nwall_rotation_rate = {:?}\nwall_velocity_projection = \"tangential\"\nturbulence = \"wall\"\n", -w);
+    let shroud = if !a.rotating {
+        "velocity = \"fixed\"\nturbulence = \"wall\"\n".to_string()
+    } else if a.projected_casing || !a.include_blade {
+        projected.clone()
     } else {
         format!("velocity = \"fixed\"\nvelocity_expression_x = \"{w:?} [1/s] * y\"\nvelocity_expression_y = \"-{w:?} [1/s] * x\"\nturbulence = \"wall\"\n")
+    };
+    // X2 (amendment 2): the empty passage has the hub at rest in the absolute frame too
+    let hub = if a.rotating && !a.include_blade {
+        projected
+    } else {
+        "velocity = \"fixed\"\n".to_string()
+    };
+    let rel = if a.rotating {
+        format!("velocity_expression_x = \"{w:?} [1/s] * y\"\nvelocity_expression_y = \"-{w:?} [1/s] * x\"\n")
+    } else {
+        String::new()
+    };
+    let blade = if a.include_blade {
+        "[boundaries.blade]\nvelocity = \"fixed\"\n[reports.m_blade]\ntype = \"moment\"\npatch = \"blade\"\ndirection = [0.0, 0.0, 1.0]\n"
+    } else {
+        ""
+    };
+    let frame = if a.rotating {
+        format!("[sources.frame]\ntype = \"rotating_frame\"\nrotation_axis = [0.0, 0.0, 1.0]\nangular_velocity = {w:?}\ncentrifugal = true\n")
+    } else {
+        String::new()
     };
     let outlet = match a.outlet {
         Outlet::Fixed => "velocity = \"zero_gradient\"\npressure = \"fixed\"\n".to_string(),
@@ -332,29 +394,17 @@ rho = {RHO:?}
 model = "k_omega_sst"
 [initial]
 velocity = [0.0, 0.0, {u_in:?}]
-velocity_expression_x = "{w:?} [1/s] * y"
-velocity_expression_y = "-{w:?} [1/s] * x"
-[boundaries.inlet]
+{rel}[boundaries.inlet]
 velocity = "fixed"
 velocity_value = [0.0, 0.0, {u_in:?}]
-velocity_expression_x = "{w:?} [1/s] * y"
-velocity_expression_y = "-{w:?} [1/s] * x"
-turbulence = "inlet"
+{rel}turbulence = "inlet"
 turbulence_spec = "values"
 k_value = {k:?}
 omega_value = {om:?}
 [boundaries.outlet]
 {outlet}[boundaries.hub]
-velocity = "fixed"
-[boundaries.blade]
-velocity = "fixed"
-[boundaries.shroud]
-{shroud}[sources.frame]
-type = "rotating_frame"
-rotation_axis = [0.0, 0.0, 1.0]
-angular_velocity = {w:?}
-centrifugal = true
-[solver]
+{hub}[boundaries.shroud]
+{shroud}{frame}{blade}[solver]
 algorithm = "simplec"
 convection = "{}"
 max_iterations = 8000
@@ -374,10 +424,6 @@ field = "p"
 type = "area_average"
 patch = "outlet"
 field = "p"
-[reports.m_blade]
-type = "moment"
-patch = "blade"
-direction = [0.0, 0.0, 1.0]
 [reports.m_hub]
 type = "moment"
 patch = "hub"
@@ -403,8 +449,7 @@ struct Sample {
     a: f64,
 }
 
-fn absolute(w: [f64; 3], x: [f64; 3]) -> [f64; 3] {
-    let om = omega();
+fn absolute(w: [f64; 3], x: [f64; 3], om: f64) -> [f64; 3] {
     [w[0] - om * x[1], w[1] + om * x[0], w[2]]
 }
 
@@ -413,7 +458,7 @@ fn polar(c: [f64; 3], x: [f64; 3]) -> (f64, f64, f64) {
     ((x[0] * c[0] + x[1] * c[1]) / r, (-x[1] * c[0] + x[0] * c[1]) / r, r)
 }
 
-fn patch_samples(sim: &Simulation, name: &str) -> Vec<Sample> {
+fn patch_samples(sim: &Simulation, name: &str, om: f64) -> Vec<Sample> {
     let g = &sim.geom;
     let ni = g.n_internal;
     let ub = sim.velocity().boundary_values(g);
@@ -428,7 +473,7 @@ fn patch_samples(sim: &Simulation, name: &str) -> Vec<Sample> {
             let s = if sf[f][2] >= 0.0 { 1.0 } else { -1.0 };
             Sample {
                 x: cf[f],
-                c: absolute(ub[f - ni], cf[f]),
+                c: absolute(ub[f - ni], cf[f], om),
                 p: pb[f - ni],
                 phi: s * phi[f],
                 a: sf[f][2].abs(),
@@ -438,7 +483,7 @@ fn patch_samples(sim: &Simulation, name: &str) -> Vec<Sample> {
 }
 
 /// Internal faces whose owner and neighbour centres lie on different sides of `z0`, oriented in +z; face values are cell means.
-fn cut_samples(sim: &Simulation, z0: f64) -> Vec<Sample> {
+fn cut_samples(sim: &Simulation, z0: f64, om: f64) -> Vec<Sample> {
     let g = &sim.geom;
     let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
     let (cf, sf, cc) = (g.mesh.face_centres(), g.mesh.face_area_vectors(), g.mesh.cell_centres());
@@ -462,7 +507,7 @@ fn cut_samples(sim: &Simulation, z0: f64) -> Vec<Sample> {
         let w = [0.5 * (ux[o] + ux[n]), 0.5 * (uy[o] + uy[n]), 0.5 * (uz[o] + uz[n])];
         out.push(Sample {
             x: cf[f],
-            c: absolute(w, cf[f]),
+            c: absolute(w, cf[f], om),
             p: 0.5 * (p[o] + p[n]),
             phi: s * phi[f],
             a: (s * sf[f][2]).abs(),
@@ -629,7 +674,9 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
     let w = omega();
     let u_in = Q_DESIGN / annulus_area();
     let mon = |k: &str| sim.monitors.last(k).unwrap_or(f64::NAN);
-    let torque = -N_BLADES * (mon("m_blade") + mon("m_hub"));
+    let om_f = if a.rotating { w } else { 0.0 };
+    let m_blade = if a.include_blade { mon("m_blade") } else { 0.0 };
+    let torque = -N_BLADES * (m_blade + mon("m_hub"));
     let torque_shroud = -N_BLADES * mon("m_shroud");
     let dp_ts_34d = RHO * (mon("p_out") - (mon("p_in") + 0.5 * u_in * u_in));
     // ADR 0075 harness Delta p_tt (owner-cell outlet values)
@@ -646,12 +693,17 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
     let (mut num, mut den) = (0.0, 0.0);
     for f in g.mesh.patch("outlet").unwrap().faces() {
         let c = own[f];
-        let ua = absolute([ux[c], uy[c], uz[c]], cc[c]);
+        let ua = absolute([ux[c], uy[c], uz[c]], cc[c], om_f);
         num += (p[c] + 0.5 * (ua[0] * ua[0] + ua[1] * ua[1] + ua[2] * ua[2])) * phi[f];
         den += phi[f];
     }
     let dp_tt_34d = RHO * (num / den - (mon("p_in") + 0.5 * u_in * u_in));
-    let nu_torque = series_change(&sim, &|v| -N_BLADES * (v[0] + v[1]), &["m_blade", "m_hub"], 1000);
+    let tkeys: &[&str] = if a.include_blade {
+        &["m_blade", "m_hub"]
+    } else {
+        &["m_hub"]
+    };
+    let nu_torque = series_change(&sim, &|v| -N_BLADES * v.iter().sum::<f64>(), tkeys, 1000);
     // amendment 1: blade and hub separately (the extension arms add rotating hub length), and the pressure part from the face pressures
     let pb = sim.boundary_field("p").unwrap();
     let (cf, sf) = (g.mesh.face_centres(), g.mesh.face_area_vectors());
@@ -664,6 +716,9 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
         -N_BLADES * m
     };
     for (name, key) in [("blade", "m_blade"), ("hub", "m_hub"), ("shroud", "m_shroud")] {
+        if name == "blade" && !a.include_blade {
+            continue;
+        }
         println!(
             "W35C {} TORQUE {name}: {:.5} N m (change over 1000 its {:.3e}), pressure part {:.5} N m",
             a.label,
@@ -707,10 +762,10 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
         a.label
     );
     // ---- energy and angular-momentum balance (ADR 0078 quantities)
-    let s_in = patch_samples(&sim, "inlet");
-    let s_out = patch_samples(&sim, "outlet");
-    let s_u = cut_samples(&sim, a.z_le_root - 0.04);
-    let s_d = cut_samples(&sim, a.z_le_root + 0.09);
+    let s_in = patch_samples(&sim, "inlet", om_f);
+    let s_out = patch_samples(&sim, "outlet", om_f);
+    let s_u = cut_samples(&sim, a.z_le_root - 0.04, om_f);
+    let s_d = cut_samples(&sim, a.z_le_root + 0.09, om_f);
     let (i_, o_, u_, d_) = (stats(&s_in), stats(&s_out), stats(&s_u), stats(&s_d));
     for (name, s) in [("inlet", i_), ("cut U", u_), ("cut D", d_), ("outlet", o_)] {
         println!(
@@ -758,10 +813,12 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
         o_.kz - o_.nonuni,
         o_.nonuni
     );
-    let cuts_ok = [u_, d_].iter().all(|s| (s.q - q).abs() <= 1e-3 * q);
+    // amendment 2: the cuts are checked against the flow through the mesh (the inlet patch), not against Q_DESIGN
+    let q_mesh = i_.q;
+    let cuts_ok = [u_, d_].iter().all(|s| (s.q - q_mesh).abs() <= 1e-3 * q_mesh);
     if cuts_ok {
         for (name, a0, b0) in [("inlet->U", i_, u_), ("U->D (rotor)", u_, d_), ("D->outlet", d_, o_)] {
-            let work = w * (b0.l_flux - a0.l_flux) / q;
+            let work = w * (b0.l_flux - a0.l_flux) / q_mesh;
             let dpt = b0.pt_mass - a0.pt_mass;
             println!(
                 "W35C {} SEGMENT {name}: work {work:.3} Pa, Delta p_t {dpt:.3} Pa, loss {:.3} Pa",
@@ -954,7 +1011,7 @@ fn smoke_n1_scheme_stability() {
                 cmax = cmax.max(st.continuity);
             }
         }
-        let stable = finite && cmax <= c10;
+        let stable = finite && sim.failure().is_none() && cmax <= c10;
         println!("W35C N1 smoke {scheme}: continuity at 10 {c10:.3e}, max over 200-300 {cmax:.3e}, stable {stable}");
         if stable {
             break;
@@ -1054,6 +1111,56 @@ fn w35c_c0_downstream_grading() {
 #[ignore = "ADR 0078 amendment 1 D0 (about 20 min)"]
 fn w35c_d0_upstream_grading() {
     registered("D0");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2 X2a (about 16 min)"]
+fn w35c_x2a_empty_passage_rotating_frame() {
+    registered("X2a");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2 X2b (about 16 min)"]
+fn w35c_x2b_empty_passage_inertial() {
+    registered("X2b");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2 X2c (about 30 min)"]
+fn w35c_x2c_empty_passage_rotating_refined() {
+    registered("X2c");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2 X2d (about 16 min)"]
+fn w35c_x2d_empty_passage_minmod() {
+    registered("X2d");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2 X2e (about 16 min)"]
+fn w35c_x2e_empty_passage_linear_upwind() {
+    registered("X2e");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 2: X2e scheme stability smoke (300 iterations)"]
+fn smoke_x2e_stability() {
+    let a = arm("X2e");
+    let case = Case::parse_toml(&case_toml(&a)).unwrap();
+    let mut sim = Simulation::new(&case).unwrap();
+    let (mut c10, mut cmax, mut finite) = (f64::NAN, 0.0f64, true);
+    for it in 1..=300 {
+        let st = sim.step();
+        if !st.continuity.is_finite() {
+            finite = false;
+            break;
+        }
+        if it == 10 {
+            c10 = st.continuity;
+        }
+        if it >= 200 {
+            cmax = cmax.max(st.continuity);
+        }
+    }
+    println!(
+        "W35C X2e smoke: continuity at 10 {c10:.3e}, max over 200-300 {cmax:.3e}, stable {}",
+        finite && sim.failure().is_none() && cmax <= c10
+    );
 }
 #[test]
 #[ignore = "ADR 0078 K (about 25 min)"]

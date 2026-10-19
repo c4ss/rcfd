@@ -235,3 +235,52 @@ The torque decision rule's first condition ("the bracket contains or exceeds the
 needs a resolved numerics effect.
 
 Run order: E0 alone first (reproduction rule); then pairs, never two of N2 / K / C1 / D1 together.
+
+## Amendment 2 (2026-10-19): E0 result, a harness correction, and check X2 registered before any other long run
+
+What I knew when writing this: the full E0 run (below) and the 30-iteration smoke of the X2 arms (below). No other arm has run beyond 30 iterations.
+
+E0 (registered run, 12.8 min): converged by the monitor criterion at 8000 iterations; Delta p_ts -3.813 Pa, Delta p_tt 112.520 Pa (ADR 0075
+definitions), torque 1.32007 N m: reproduction rule MET (attempt 3: -3.8 Pa, 1.320 N m). Blade 1.29630 N m (pressure part 1.22821), hub 0.02377,
+shroud -0.09303 N m on the fluid. Outlet: no backflow (0 by area and mass), axial non-uniformity term 0.95 Pa, `rho <c_theta^2/2>_m` = 58.82 Pa,
+`rho <c_z^2/2>_m` = 54.85 Pa; `Delta p_tt - Delta p_ts` = 113.94 Pa closes to 1e-14 with these terms.
+
+Harness correction (definition defect, found in E0's output): the registered cut check compares the cut flux with Q; the code used Q = 1.4032
+(the operating point) while the flow through the faceted mesh is 1.400024 m^3/s (the inscribed polygon has 0.23 % less annulus area than the circle,
+uniform inflow speed from the circle area), so both cuts failed by 2.26e-3 and the segment split was not printed. Corrected: the cuts are checked
+against the inlet-patch flow of the same run (E0: U and D agree with it to 1e-5) and the segment work uses that flow. `W_M`, `W_L` keep Q = 1.4032
+as registered (0.23 % effect). E0's segments recomputed from its printed values with Q = 1.400024: inlet->U work 74.1 Pa, Delta p_t -0.47 Pa;
+U->D work 243.2 Pa, Delta p_t 103.3 Pa; D->outlet work 48.2 Pa, Delta p_t +7.3 Pa.
+
+Finding in E0 that changes the diagnosis: the angular-momentum balance does not close. The absolute angular-momentum flux at the outlet is 3.288 N m
+(inlet 0), the torque on the fluid from blade, hub and shroud is 1.227 N m: 2.061 N m (168 % of the wall torque) has no wall source. Cut U, ahead of
+every blade, already carries 0.666 N m (mass-averaged pre-swirl 0.9-2.6 m/s), where only the hub friction (about 0.01 N m upstream) can act. The
+outlet swirl kinetic energy (58.8 Pa) is what ADR 0075 left "unexplained" (52 Pa); it is swirl, not axial non-uniformity or backflow.
+
+Hypothesis H-AM: the source is the discretisation of the relative-velocity formulation (`rotating_frame`): first-order upwind convection of the large
+solid-body part of the relative velocity (`|w_theta|` 19-39 m/s, against an absolute swirl of a few m/s) on this mesh creates spurious absolute
+angular momentum; it is a discretisation error (falls with refinement and with a higher-order scheme), not a code defect; it does not need the blade.
+Check X2 (exact solution: an empty passage with every wall at rest in the absolute frame and swirl-free inflow has `c_theta = 0`, so every N m of
+outlet angular-momentum flux is error): the E0 mesh with `include_blade = false`, hub and shroud `moving_wall` with `wall_rotation_rate = -Omega` and
+the projection, otherwise E0:
+* X2a `rotating_frame`, upwind; X2b inertial frame (no frame source, walls and inflow absolute), upwind; X2c `rotating_frame`, upwind, the N2
+  in-plane counts (n_chord 20, n_side 16); X2d `rotating_frame`, `tvd_minmod`; X2e `rotating_frame`, `linear_upwind`.
+* Decision rules: H-AM is confirmed as the mechanism class if X2a's outlet `|L|` >= 0.1 N m (5 % of E0's 2.06 N m) and X2b's `|L|` <= 1e-2 of
+  X2a's. "Discretisation error, not a defect" if, in addition, X2c or X2d is below X2a by a resolved amount (the harness has no monitor of L, so, as
+  registered for quantities without a monitor, the resolution is 5 x the run's larger relative torque / Delta p_ts change over the last 1000
+  iterations times |L|). If X2a < 0.1 N m, H-AM is falsified (the source needs the blade) and the blade wall treatment is examined next. If X2b is large
+  too, the source is not frame-specific and is examined before any other conclusion.
+* Smoke (30 iterations, not converged; disclosed, no conclusion drawn from it): outlet `L` X2a 2.106 N m, X2b 0.00016, X2c 0.981, X2d 0.0129;
+  X2e diverged (continuity 1.1e5 at iteration 10, 3.1e6 at 11; the 300-iteration stability smoke printed "stable true" because the loop compares a
+  non-finite maximum incorrectly, a harness defect of that smoke only): X2e is NOT RUNNABLE and is not run. The X2 meshes have 13 524 cells
+  (X2c 27 324).
+* N1b's relevance rises with X2d: the registered N1b run is unchanged.
+
+How the attribution reads after X2 (fixed now): blade work is measured by the blade moment (its pressure part is computed from the face pressures
+used by the momentum balance); `W_L` and the outlet swirl contain the spurious source and are not rotor work; the share of the Delta p_ts gap
+attributed to the spurious swirl is `rho <c_theta^2/2>_m(outlet)` of the arm minus that of a swirl distribution carrying only the wall torque, which
+cannot be computed without a profile; the addendum quotes the outlet swirl energy and the angular-momentum excess side by side instead of a single
+share.
+
+Run order from here (two at a time): X2a + N1b, X2b + X2d, E1 + C2, N2 + C3, X2c + D2, C0 + C1, D0 + D1, K alone. The machine is shared: the
+60-minute wall-clock stop stays as registered.
