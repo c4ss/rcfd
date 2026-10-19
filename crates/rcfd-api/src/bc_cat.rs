@@ -35,7 +35,7 @@ pub const KINDS: [&str; 8] = [
 const LAG_WEIGHT: f64 = 0.5;
 
 /// Keys that only some kinds use: a non-default value on another kind is a located error.
-const KEY_KINDS: [(&str, &[&str]); 19] = [
+const KEY_KINDS: [(&str, &[&str]); 20] = [
     ("mass_flow_value", &["mass_flow"]),
     ("mass_flow_shape_expression", &["mass_flow"]),
     ("mass_flow_source_patch", &["mass_flow"]),
@@ -68,6 +68,7 @@ const KEY_KINDS: [(&str, &[&str]); 19] = [
     ("loss_coefficient", &["vent"]),
     ("flow_rate_weight", &["outflow"]),
     ("radial_reference", &["radial_equilibrium_outlet"]),
+    ("radial_frame_rate", &["radial_equilibrium_outlet"]),
     ("target_mass_flow", &["target_mass_flow_outlet"]),
     ("pressure_update", &["target_mass_flow_outlet"]),
     ("pressure_relax", &["target_mass_flow_outlet"]),
@@ -379,6 +380,7 @@ enum Spec {
         origin: Vec3,
         hub: bool,
         p_ref: f64,
+        frame_rate: f64,
         p_old: Option<Vec<f64>>,
     },
     Target {
@@ -601,6 +603,7 @@ impl Catalogue {
                         origin,
                         hub: get_s(case, &p("radial_reference")) == "hub",
                         p_ref: kin(get_f(case, &p("bc_pressure"))),
+                        frame_rate: get_f(case, &p("radial_frame_rate")),
                         p_old: None,
                     }
                 }
@@ -810,16 +813,18 @@ impl Catalogue {
                     origin,
                     hub,
                     p_ref,
+                    frame_rate,
                     p_old,
                 } => {
                     let r: Vec<f64> = data.centre.iter().map(|x| radius(*x, *origin, *axis)).collect();
+                    // absolute swirl w_theta + Omega r when the velocity is solved in a rotating frame (ADR 0078); 0 leaves w unchanged
                     let w: Vec<f64> = (0..nf)
                         .map(|i| {
                             let x = vec3::sub(data.centre[i], *origin);
                             let ax = vec3::dot(x, *axis);
                             let rad = vec3::sub(x, vec3::scale(*axis, ax));
                             let th = vec3::cross(*axis, unit(rad));
-                            vec3::dot(uf[data.faces[i] - n_int], th)
+                            vec3::dot(uf[data.faces[i] - n_int], th) + *frame_rate * r[i]
                         })
                         .collect();
                     let reference = if *hub {

@@ -437,7 +437,10 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                         "the Reynolds stress model has no wall treatment (no wall functions, no low-Reynolds terms, no wall reflection): it is available for flows without wall patches (periodic boxes, free-slip or symmetry boundaries)",
                     ));
                 }
-                if crate::wall_motion::is_wall_motion(case, n) {
+                // a `moving_wall` builds the same fixed-value boundary as a `fixed` moving wall, which SST accepts (ADR 0078 S2)
+                if crate::wall_motion::is_wall_motion(case, n)
+                    && !(sst && get_s(case, &format!("{b}.velocity")) == "moving_wall")
+                {
                     out.push(diag(
                         &format!("{b}.velocity"),
                         "moving_wall, shear, partial_slip and marangoni walls are not supported by the turbulence wall treatments (they assume a no-slip wall at rest); use a laminar run",
