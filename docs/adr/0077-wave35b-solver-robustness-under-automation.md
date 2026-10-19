@@ -288,3 +288,42 @@ steady-guard message gets the same hint when it trips on a run with one of these
 guard stops the divergence within the first iterations; making it an error is the user's decision (recorded).
 Checks: S-a FAN-01 laminar `linear_upwind` gives exactly one SV106 warning at `solver.convection`; S-b the same case with `upwind` and with `tvd_minmod` gives none; S-c
 `cases/axial_fan_sector` (M reported) gives none unless its M exceeds T (reported); S-d the A2a reason contains the hint.
+
+## Amendment 3 (2026-10-19): results of the instrumented suite run; consequences registered before the code they govern
+
+Written after ONE run of `cargo test --workspace --release --no-fail-fast` on the scratch tree (wave code up to the H0 fix, without the SV106 check, with the
+instrumentation of A3a) and before any of the changes below. Totals of that run: 1846 passed, 2 failed, 490 ignored.
+
+What it showed:
+* The two failures are `particle_run::w2_steady_run_path_equals_track_frozen` and `w3_flow_untouched_and_baseline_files_unchanged`: their SIMPLE set-up (20 x 20 box, schema
+  relaxation 0.9/1.0, `linear_upwind`) diverges like `cavity-simple` (max speed 5.5e5 `U_ref` when stopped), they drive it through `runctl::drive` and accept only exit 0 or 5;
+  with the guard the run ends `diverged` (exit 6) at iteration 14.
+* A3a: 1181 steady simulations were logged, 22 tripped. Every trip outside this wave's tests is on a diverging set-up: `cavity-simple` and copies of it (`baseline_hashes`,
+  `gpu_case` c2 and d2, `particles_case` pt14, `particles_two_way` pl8 on a 12 x 12 variant, `particle_run` w2/w3; final max speed 5.5e5 to 2.3e25 `U_ref`), the `eval` suite
+  (trip at 5, 8.4e80 `U_ref` at its end), and one CLI run of the `rcfd` binary with `central` convection (trip at 95, `velocity_runaway`, 1.0e6 `U_ref`). Zero false positives by
+  the amendment 1 rule: A3a met.
+* A3b headroom over the 1159 steady simulations without a trip: K2 4 980 (`pipe_sweep_compensation` r3_r4), K3 234 (`mhd` a5), K4 396 (`sources` rotating_channel), against the limits
+  1e4, 1e4, 1e10: met. A3c: `baseline_hashes` passed (all registered hashes).
+* Threshold study for SV106: 514 steady `linear_upwind` simulations without a trip; the largest M is 18 725 (the non-conformal rotor-interface and MRF Taylor-Couette annulus meshes
+  of `rotor_interface.rs` and `mrf.rs`, 3 120 cells, converging), then 4 998 and 3 705, all above FAN-01's 2 759. By the registered rule the metric does NOT separate: no SV106 check
+  is written. The rule is documented with the FAN-01 numbers and the steady-guard message carries it (below). S-a to S-c are therefore not applicable; S-d is kept.
+* C4: 233 transient simulations made an estimate; 10 warnings outside C2/C3/C6, in 3 existing tests, all with `n_correctors = 2` (the schema default): `user_scalars` u3 (8 runs of a
+  fluid AT REST, closed box, rho 1.46 to 8.14), `rheology` transient_runs_use_the_law_too (rho 4.17), `transient_sources` t5 (rho 5.37). C4 as registered (zero warnings) is MISSED.
+  The u3 runs cannot grow (no flow, no pressure excitation): they are false positives by the ADR 0073 B4b definition (a stable run warned). The other two were not classified.
+  The ADR 0073 model and its accepted checks (B4a to B4d) are for one pressure corrector; with two correctors B4c measured rho 0.13 to 0.21 at moderate diffusion numbers, and these
+  warnings come from two-corrector runs at large diffusion numbers where the estimate is not validated.
+
+Consequences, registered now:
+* C-R (restriction of the default): `solver.pressure_lag_check` `warn` and `raise` make the estimate only when `solver.n_correctors = 1` (the regime of the ADR 0073 model and of
+  B4a-B4d); with more correctors no estimate is made. The key, values and default are unchanged. C4' (corrected C4): the same instrumented accounting on the final tree: zero
+  warnings outside C2/C3/C6. Stated now: no existing API-level test uses one corrector (searched: only `w26a_couette.rs`, fv level, sets it), so C4' on the existing suite is met
+  by construction and says nothing about one-corrector validation cases; it is reported as such. C1a-C1c, C2, C3, C5, C6 are re-run on the final tree (their set-ups use one
+  corrector except C1b, which then makes no estimate and stays bit-identical trivially).
+* The warning message names the configured correctors (it said "with one pressure corrector" for every run).
+* `particle_run` w2/w3: their SIMPLE text gets `steady_divergence_guard = "off"` (a set-up change of an existing test, no limit touched): it restores the previous behaviour of
+  that diverging set-up bit for bit; both tests test particle tracking, not the flow.
+* The service background run loop (`run.start`, `service.rs`) does not use `runctl::drive` (amendment 1 said every automated path does; that was wrong for this loop): it now ends
+  a run whose steady guard tripped with state `failed` and the located message (`error`), as it does for non-finite residuals. Check SV-1 (new test): `run.start` on the S2
+  unstable cavity ends `failed` with an error containing `steady divergence guard` within 30 s.
+* Guard hint (from the threshold result): when the steady guard trips on a run with `linear_upwind` or `tvd_van_leer`, the message adds that these schemes diverged on the
+  high-aspect, strongly non-orthogonal wall cells of the FAN-01 sector mesh where `upwind` and `tvd_minmod` were stable (ADR 0077 part B). S-d: the A2a reason contains it.
