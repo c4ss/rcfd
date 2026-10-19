@@ -63,8 +63,21 @@ pub fn maxwell_slip_length(specularity: f64, mean_free_path: f64) -> Option<f64>
 /// viscosity `rho nu` used to turn a traction into a velocity gradient.
 pub fn build(case: &Case, geom: &FvGeometry, patch: &str, b: &str, mu: f64) -> Result<Box<dyn Bc>, Vec<Diagnostic>> {
     let kind = get_s(case, &format!("{b}.velocity"));
-    let uw = wall_velocity(case, geom, patch, b)?;
+    let mut uw = wall_velocity(case, geom, patch, b)?;
     let faces: Vec<usize> = geom.mesh.patch(patch).map(|p| p.faces().collect()).unwrap_or_default();
+    let projection = get_s(case, &format!("{b}.wall_velocity_projection"));
+    if projection == "tangential" {
+        if kind != "moving_wall" {
+            return Err(diag(
+                &format!("{b}.wall_velocity_projection"),
+                "the tangential projection is available for velocity = \"moving_wall\" only",
+            ));
+        }
+        // ADR 0072: a wall of revolution moving in itself, represented by facets whose normals are not exactly perpendicular
+        // to its velocity; the tangential part of the velocity keeps the faceted wall impermeable (zero face flux)
+        let sf: Vec<Vec3> = faces.iter().map(|&f| geom.mesh.face_area_vectors()[f]).collect();
+        uw = rcfd_fv::bc::tangential_projection(&uw, &sf).0;
+    }
     // the wall velocity must be tangential on every face (impermeable)
     if matches!(kind.as_str(), "moving_wall" | "partial_slip") {
         for (u, &f) in uw.iter().zip(&faces) {

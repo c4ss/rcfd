@@ -482,6 +482,11 @@ towards implicit Euler by the ratio of the last two backward difference quotient
 themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error):
 * `moving_wall`: wall velocity `velocity_value` (must be tangential on every face, located error otherwise) plus an optional rotation
   `wall_rotation_rate` [rad/s] about `wall_rotation_axis` (default z) through `wall_rotation_origin`; `u_w = u_t + Omega x (x - x0)`.
+  `wall_velocity_projection = "tangential"` (default `"none"`) replaces the velocity of each face by its tangential part instead of
+  rejecting it: a wall of revolution that rotates in itself is represented by flat or warped facets whose normals are not exactly
+  perpendicular to `Omega x r`, so a prescribed `u_w . S_f` would carry fluid through every facet (ADR 0072: up to 1 % of the wall speed
+  on the C-grid fan shroud). Valid only for a wall invariant under its own motion (for example the stationary shroud of a rotating-frame
+  passage, `wall_rotation_rate = -Omega`); wrong where the wall's normal motion is real.
 * `shear`: tangential traction `shear_stress` [Pa] exerted on the fluid, `mu du_t/dn_out = tau` with `mu = physics.rho * physics.nu`.
 * `partial_slip`: Navier slip with `slip_length` [m] (0 is no-slip, large is symmetry) relative to the wall velocity of the
   `moving_wall` keys; alternatively `specularity` in [0, 1) with `mean_free_path` (Maxwell, `l = lambda (1 + s)/(1 - s)`; 1 is a located error).

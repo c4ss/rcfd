@@ -498,6 +498,10 @@ pub struct SimpleSolver {
     pub component_diag_correction: bool,
     /// Pressure jumps at internal faces (lumped fans and porous jumps, ADR 0012); `None` leaves the solver unchanged.
     pub face_jump: Option<crate::lumped::FaceJump>,
+    /// Per boundary face (index `f - n_internal`): `true` makes the mass flux of a fixed-velocity face zero while the momentum
+    /// condition keeps the prescribed wall velocity (ADR 0072, the impermeable wall of revolution whose facets are not exactly
+    /// perpendicular to its velocity). `None` (default) leaves the solver unchanged.
+    pub impermeable: Option<Vec<bool>>,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -584,6 +588,7 @@ impl SimpleSolver {
             body_force: None,
             sink: None,
             face_jump: None,
+            impermeable: None,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -877,8 +882,24 @@ impl SimpleSolver {
             }
         }
         let mut gamma_p = face_interpolate(&g, &r_atu);
+        // velocity that carries the boundary mass flux: the prescribed one, or its tangential part on impermeable faces
+        let ub_mass_store: Vec<Vec3>;
+        let ub_mass: &[Vec3] = match &self.impermeable {
+            None => &ub,
+            Some(mask) => {
+                let sfb: Vec<Vec3> = (0..ub.len()).map(|i| sf[n_int + i]).collect();
+                let (proj, _) = crate::bc::tangential_projection(&ub, &sfb);
+                ub_mass_store = ub
+                    .iter()
+                    .zip(proj)
+                    .zip(mask)
+                    .map(|((u, p), &m)| if m { p } else { *u })
+                    .collect();
+                &ub_mass_store
+            }
+        };
         // HbyA at boundary faces: prescribed velocity or owner value
-        let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a0);
+        let hb = boundary_hby_a(&g, &pbc, ub_mass, &hby_a0);
         let mut phi_hby_a = face_flux(&g, &hby_a0, &hb);
         if let Some(bf) = &body {
             let mut r_au_f = face_interpolate(&g, &r_au);
@@ -965,7 +986,15 @@ impl SimpleSolver {
         }
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
         let bv_new = self.gradient_wall_values(&pbc, body.as_ref(), &p_new);
-        self.phi = corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
+        self.phi = corrected_flux(
+            &g,
+            &gamma_p,
+            &pbc,
+            &phi_hby_a,
+            &p_new,
+            ub_mass,
+            s.non_orth_correctors > 0,
+        );
 
         // under-relax pressure, correct velocity
         for c in 0..n {

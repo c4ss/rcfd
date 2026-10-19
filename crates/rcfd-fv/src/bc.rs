@@ -107,6 +107,35 @@ impl Profile {
     }
 }
 
+/// Tangential part `u - (u . S_f / |S_f|^2) S_f` of the wall velocity of every face (ADR 0072): the face flux `u . S_f` of the
+/// result vanishes to round-off. The wall flux of a fixed-velocity face is `u_b . S_f`, so a wall that is a surface of revolution
+/// moving in itself, but is represented by flat or warped facets, carries a flux through every facet whose normal is not exactly
+/// perpendicular to its velocity; the projection restores the impermeability of the true wall. Valid only for a wall that is
+/// invariant under its own motion (a surface of revolution rotating about its axis, a plane translating in itself); it is wrong
+/// for a wall whose normal motion is real. Returns the projected velocities and the largest removed normal fraction
+/// `|u . n| / |u|` (0 for a zero velocity). `u` and `sf` are given per face, in the same order.
+pub fn tangential_projection(u: &[Vec3], sf: &[Vec3]) -> (Vec<Vec3>, f64) {
+    let mut worst: f64 = 0.0;
+    let out = u
+        .iter()
+        .zip(sf)
+        .map(|(v, s)| {
+            let s2 = s[0] * s[0] + s[1] * s[1] + s[2] * s[2];
+            if s2.is_nan() || s2 <= 0.0 {
+                return *v;
+            }
+            let un = v[0] * s[0] + v[1] * s[1] + v[2] * s[2];
+            let mag = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if mag > 0.0 {
+                worst = worst.max(un.abs() / (mag * s2.sqrt()));
+            }
+            let a = un / s2;
+            [v[0] - a * s[0], v[1] - a * s[1], v[2] - a * s[2]]
+        })
+        .collect();
+    (out, worst)
+}
+
 /// Dirichlet condition.
 #[derive(Debug, Clone)]
 pub struct FixedValue(pub Profile);
