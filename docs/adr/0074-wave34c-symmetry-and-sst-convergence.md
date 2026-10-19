@@ -138,3 +138,20 @@ directly); this is stated. Output: `docs/component-diagonal-default.md`. Hashes 
 ADR first; tests are new files; a miss becomes `*_known_miss` (ignored) with the limit unchanged; a defective set-up gets a NEW test. Files touched:
 this ADR, the new test files, `validation-data/reference/w34c_*.csv` and its manifest entry, one line in `crates/rcfd-api/src/sim.rs` (W1, own hunk only, opt-in),
 `docs/case-schema.md` (W1 wording, if needed), `docs/component-diagonal-default.md`. Not touched: `baseline_hashes.rs`, any default.
+
+## Amendment 1 (registered after the stage-1 runs and before any further run; no limit changed)
+
+Stage 1 results so far (details go to the addendum): H1 -0.0001 / +0.0000 percent (falsified by the screen); H2 not converged on the coarse mesh (14000
+iterations, du 6.7e-2), -0.09 percent on the medium mesh (no finest run, as registered); H3a +5.23 / +2.46 percent (survives); H3b -0.83 / -0.42 percent (survives);
+H4 not converged on either mesh (du 1.1e-5 and 1.6e-5 after 14000 iterations, Cf -12.8 and -11.7 percent); H6 (same run-up topology) was stopped after about
+28000 iterations on the two coarser TMR grids because du was still 8e-6 (it would have ended unconverged at the 30000 cap; no result is taken from it).
+Debug print (one coarse H4 run, disclosed, not a registered result): the largest changes sit in the run-up, where u falls to 0.04 to 0.05 in the cells next to the
+`Symmetry` bottom at x = -0.05 to -0.06 (y = 1.8e-5) and nu_t/nu reaches about 800 upstream of the leading edge: the run-up symmetry plane with wall-resolved cells
+(dy 5.6e-6, diffusion-dominated) acts as a no-slip wall, which is exactly the Part A defect of the averaged diagonal (A4m, A7m). The registered H4 and H6 set-ups
+therefore test the solver defect rather than the leading-edge topology. NEW corrected set-ups, registered now:
+* H4c: H4 with `component_diag_correction = true` (coarse + medium, the same screen rule).
+* H6c: H6 with `component_diag_correction = true`, all three TMR grids, cap 30000, the same decision rule (within 1.0 percent of the incompressible-code mean on
+  the 52224 grid and order in [0.8, 2.5]).
+H1 showed that the correction changes the plate without run-up by less than 1e-6 relative, so H4c and H6c differ from H4 and H6 only in the run-up treatment.
+The original H4 / H6 entries stay as measured (not converged).
+Stage 2 (finest) runs now: H3a and H3b (both survived stage 1).
