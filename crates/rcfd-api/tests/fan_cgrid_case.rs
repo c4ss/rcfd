@@ -118,7 +118,11 @@ fn run(text: &str, iterations: usize) -> Simulation {
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
     let n = sim.run(iterations);
     assert!(sim.failure().is_none(), "{:?}", sim.failure());
-    println!("  {n} iterations, converged {}, last {:?}", sim.is_converged(), sim.last());
+    println!(
+        "  {n} iterations, converged {}, last {:?}",
+        sim.is_converged(),
+        sim.last()
+    );
     sim
 }
 
@@ -130,7 +134,11 @@ fn q6d_fv_geometry_accepts_the_c_grid_mesh() {
         assert!(mesh.patch(name).is_some(), "patch {name} missing");
     }
     let geom = FvGeometry::new(Arc::new(mesh)).expect("FvGeometry::new accepts the C-grid mesh");
-    println!("Q6d {} cells, {} faces accepted", geom.mesh.n_cells(), geom.mesh.n_faces());
+    println!(
+        "Q6d {} cells, {} faces accepted",
+        geom.mesh.n_cells(),
+        geom.mesh.n_faces()
+    );
 }
 
 #[test]
@@ -169,12 +177,20 @@ fn example_case_builds_and_runs_a_few_iterations() {
 fn s1_prime_empty_passage_reproduces_uniform_flow() {
     // criterion (ADR 0068 S1'): Omega = 0, no blade, all walls moving at the inflow, outlet pressure: |u - (0,0,U)| <= 1e-8 U
     let sim = run(&uniform_flow_case(false), 400);
-    let (ux, uy, uz) = (sim.field("ux").unwrap(), sim.field("uy").unwrap(), sim.field("uz").unwrap());
+    let (ux, uy, uz) = (
+        sim.field("ux").unwrap(),
+        sim.field("uy").unwrap(),
+        sim.field("uz").unwrap(),
+    );
     let mut worst: f64 = 0.0;
     for c in 0..ux.len() {
         worst = worst.max(ux[c].abs()).max(uy[c].abs()).max((uz[c] - U).abs());
     }
-    println!("S1' worst |u - U| / U = {:.3e} (limit 1e-8), converged {}", worst / U, sim.is_converged());
+    println!(
+        "S1' worst |u - U| / U = {:.3e} (limit 1e-8), converged {}",
+        worst / U,
+        sim.is_converged()
+    );
     assert!(worst <= 1e-8 * U);
 }
 

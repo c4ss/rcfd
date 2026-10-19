@@ -249,7 +249,7 @@ shroud wall that moves tangentially (S3' above), which the 0065 corrected test d
   n_nose 4, n_side 8/10/16 gave 3.7680e-2 / 3.7710e-2 / 3.7737e-2 m^3 against the analytic 3.787e-2 (the analytic value is from the registered formula, not run as a test).
 * Several combinations produced raw mesh-validation errors ("directed edge appears twice", "normal does not point from owner to neighbour") that the fold check did not catch. They are
   now wrapped into located `mesh` errors with block, indices, layer and the controls; this changed only the error path (A'/B' numbers identical on rerun).
-* The G-level generator accepts `front_gap` up to what fits; 1 and 2 chords fold and are rejected with a located error (a known limit).
+* `front_gap` values of 1 and 2 chords fold and are rejected with a located error (a known limit).
 * Q8 front_gap beyond the inlet reports path `z_le_root` (not `front_gap`); the test accepts that path. A fold test and a tangled-family test were added.
 * The Q7 B' 1e-12 known-miss test was removed (never registered).
 * New ADR text not registered beforehand: D5 control; the S3' corrected test with the shroud flux.
