@@ -155,3 +155,102 @@ therefore test the solver defect rather than the leading-edge topology. NEW corr
 H1 showed that the correction changes the plate without run-up by less than 1e-6 relative, so H4c and H6c differ from H4 and H6 only in the run-up treatment.
 The original H4 / H6 entries stay as measured (not converged).
 Stage 2 (finest) runs now: H3a and H3b (both survived stage 1).
+
+## Addendum (measured values; limits above untouched)
+
+Outcome in one paragraph. (1) The half-channel defect is the averaged momentum diagonal of ADR 0010, not the `Symmetry` condition: every term of a
+`Symmetry` face (momentum coefficients, scalar condition, pressure-correction flux) is what it should be (A1 to A3), and with the existing opt-in
+`component_diag_correction` (`solver.component_diagonal = "corrected"`) the half channel reproduces the derived discrete Poiseuille solution to 1e-10, equals the
+mirrored full channel to 2e-11 (laminar) and to the printed digits (SST), and the plug, Couette and transient exact solutions hold to 1e-13 (A4 to A9, A11, A12b).
+With the averaged default the same set-ups are wrong by O(1). No new defect in `bc.rs`, `pressure.rs` or the SST transport. One wiring defect was found and
+fixed (opt-in, no baseline moves): the case key never reached the transient PISO/PIMPLE kernel although it was documented for it (W1). (2) The SST plate's low
+order (0.66) is a property of rcfd's own mesh family/set-up, not of the SST implementation: on the NASA TMR nested grids (H6c) rcfd converges with order
+1.07 (TMR codes about 1.0 to 1.3), lies 0.82 to 0.87 percent below the mean of the three incompressible TMR codes on every grid, its Richardson value is
+-0.44 percent from the TMR mean, and the +2 percent u+ offset falls to 0.66 percent on the 52224-cell grid (3.26, 1.51, 0.66 percent: a discretisation error
+of the near-wall region). Every single-factor change on rcfd's own meshes (H1, H2, H3a, H3b, H4c) left the order below 0.8 or the sequence non-monotone.
+Which part of the TMR family (near-wall spacing and growth, leading-edge clustering) is responsible was not separated. (3) A measured analysis of a
+`corrected` default is in `docs/component-diagonal-default.md`: exactly one registered baseline hash moves (`packed_bed`); every other shipped case is
+bit-identical.
+
+### Part A (`crates/rcfd-fv/tests/w34c_symmetry.rs`, `crates/rcfd-turb/tests/w34c_symmetry_sst.rs`, `crates/rcfd-api/tests/w34c_component_diagonal_transient.rs`)
+
+| id | measured | limit | result |
+|----|----------|-------|--------|
+| A1 | tangential matrix equals ZeroGradient, normal equals FixedValue(0) (diag, off-diagonals, b compared with `==`); zero flux through the face | equal | pass |
+| A2 | scalar `Symmetry` matrix and boundary values equal ZeroGradient | equal | pass |
+| A3 | every Symmetry face `fixed_u` in every iteration; abs(phi_f)/max abs(phi) = 0 (60302 iterations) | 1e-15 | pass |
+| A4 (h_from_solution on) | profile error 9.6e-11 of u_max, tau_w/(f h) - 1 = -6.9e-11 (60302 iterations) | 1e-8 | pass |
+| A4b (h_from_solution off) | 2.3e-11, -1.7e-11 (220481 iterations) | 1e-8 | pass |
+| A4m averaged | off: 0.978, -0.495 (u_max 12.754, top cell 1.114); on: 0.920, -0.442 (u_max 15.570, top cell 4.021); exact u_max 50 | 1e-8 | expected MISS (ignored) |
+| A5 own-equation residual | corrected 2.7e-10 of f V; averaged 71.2 (top row: the sink (a_P - a_x) u_x) | 1e-8 | pass |
+| A6 mirror, graded | 2.2e-11 of u_max | 1e-8 | pass |
+| A7 plug | corrected 1.1e-13; A7m averaged 0.813 | 1e-8 | pass / expected MISS (ignored) |
+| A8 Couette, symmetry side planes | corrected 5.9e-13, cross-flow 6.1e-14; averaged 8.1e-2 and 7.0e-4 (no limit) | 1e-8, 1e-10 | pass |
+| A9 transient plug at the exact solution | corrected 2.2e-16; averaged 0.789 | 1e-10 | pass |
+| A10 pair mean unrelated | 1.19e-4 relative | 1e-12 | MISS of the registered prediction (ignored `a10_..._known_miss`), see below |
+| A11 SST half vs mirrored full | U_b 18.166921 both, max profile difference 0.0000 percent, force balance 1.000000035 both (5947 / 5968 iterations) | 0.5 %, 1 %, 1e-6 | pass |
+| A11m SST averaged | U_b 4.8648 vs 18.1669 (-73.2 %), centre 2.459 vs 20.409, force balance 0.243 | 0.5 %, 1 % | expected MISS (ignored) |
+| A12 ADR 0070 P3, corrected, 40000 cap | KM -0.0098, -0.0067, -0.0057, -0.0054, -0.0054 against TMR; slopes 2.7627 (+2.6 %), 2.4759 (+1.3 %); du 9.97e-8 at the cap | P3 limits, du < 1e-8 | MISS of convergence only (ignored `a12_..._known_miss`) |
+| A12b same, 250000 cap (added after A12; the ADR 0070 full-channel cap) | converged in 58087 iterations; KM and slopes identical to the ADR 0070 full channel to the printed digits; force balance 1.000000 | P3 limits | pass |
+| W1 transient key (packed bed, PISO, 100 steps) | default bit-identical to `averaged`; `corrected` changes u_x by 1.8e-6; max abs(u_y) 8.4e-7 (averaged), 4.2e-14 (corrected) | as registered | pass |
+
+A10 (prediction falsified): with the averaged diagonal the converged half channel is not x-invariant (max abs(u_y) 0.026, u_x varying by 0.73 along the four
+periodic cells; the first momentum solves, with a relative tolerance of 1e-3, seed x-variations that the averaged fixed point keeps), so the owner-value
+body-force term of the periodic faces (the ADR 0071 defect) leaves a continuity defect of 4.0e-5 that never converges; `coupled_body_pair_mean` removes it
+(2e-14) and moves u_max by 1.2e-4 relative. It is a second, small symptom, not the cause of the no-slip behaviour. With the corrected diagonal the state is
+x-invariant to 1e-12 and the option does not matter.
+Observation (no limit): the corrected iteration with `h_from_solution` off converges slowly (du falls by about a factor e per 10000 iterations).
+Decision rule A: A4 passes and A4m misses, so the cause is the averaged diagonal; the fix is the existing opt-in; no new solver code except W1 (one line in
+`sim.rs`, the schema doc string, `docs/case-schema.md`).
+
+### Part B (`crates/rcfd-turb/tests/w34c_sst_plate_hypotheses.rs`; control H0: the copied runner reproduces the ADR 0070 coarse value, 2.576977e-3)
+
+ADR 0070 baseline: 2.57698, 2.65138, 2.69840e-3, order 0.662, finest -0.67 % against the incompressible TMR mean 2.71647e-3, u+ offset about +2 %.
+
+| id | coarse / medium / finest Cf(x_ref) (1e-3) | screen (coarse, medium against ADR 0070) | order | finest vs TMR mean | u+ offset y+ 30..300, finest | verdict |
+|----|------------------------------------------|------------------------------------------|-------|--------------------|------------------------------|---------|
+| H1 corrected diagonal | 2.576977 / 2.65138 / not run | -0.0001 %, +0.0000 % | - | - | - | FALSIFIED (screen) |
+| H2 linear-upwind k and omega | not converged (du 6.7e-2, Cf -88 %) / 2.648934 / not run | n/a, -0.09 % | - | - | - | not testable (the coarse mesh diverges); no finest run, as registered |
+| H3a wall omega with the cell height | 2.711722 / 2.716642 / 2.730924 | +5.23 %, +2.46 % | non-monotone (differences +4.9e-6, +1.43e-5) | +0.53 % | 0.77 % | NOT CONFIRMED (no monotone convergence); influential |
+| H3b wall-cell omega fixed | 2.555507 / 2.640225 / 2.692630 | -0.83 %, -0.42 % | 0.693 | -0.88 % | 2.42 % | FALSIFIED |
+| H4 run-up, averaged | not converged (du 1.1e-5 and 1.6e-5 at 14000; Cf 2.247, 2.340) | -12.8 %, -11.7 % | - | - | - | defective set-up (the run-up symmetry plane acts as a wall), amendment 1 |
+| H4c run-up, corrected | 2.535471 / 2.604683 / 2.651336 | -1.61 %, -1.76 % | 0.569 | -2.40 % | 2.15 % | FALSIFIED |
+| H5 mesh family | local refinement ratios 1.82 to 2.20 (y, coarse/medium), 1.91 to 2.04 (y, medium/fine), 1.99 to 2.05 (x); layer stacks 0.0419 / 0.0440 / 0.0450 | - | - | - | - | not exactly nested (up to 10 percent locally); no run |
+| H6 TMR grids, averaged | stopped at about 28000 iterations, du 8e-6 | - | - | - | - | defective set-up (as H4), amendment 1 |
+| H6c TMR grids 3264 / 13056 / 52224 cells, corrected | 2.626407 / 2.667342 / 2.686801 (-0.871, -0.823, -0.823 % against the incompressible-code mean of each grid) | - | 1.073 (GCI 0.82 %, difference 0.72 %, Richardson 2.704436e-3 = -0.44 %) | -1.09 % | 0.66 % (3.26 and 1.51 on the coarser grids) | CONSISTENT WITH THE TMR CODES (registered rule) |
+
+Decision rule B: no single factor on rcfd's own mesh family is confirmed; H6c shows that on the TMR grid family rcfd converges like the TMR codes (order 1.07,
+within 1 percent of their mean on every grid, u+ offset decaying with an order of about 1.1). The ADR 0070 P2f miss is therefore a property of rcfd's own mesh
+family/set-up, not of the SST implementation. As registered, H6c becomes the NEW corrected P2f-type test (it asserts the H6 rule and the ADR 0070 P2a/P2f
+limits); the ADR 0070 known miss stays ignored with its limits. The assertions were written after the run, which was not repeated (deviation 4).
+Open: (a) the constant -0.82 percent offset against the TMR codes on identical grids (candidates, not tested: the `Symmetry` top instead of the TMR farfield,
+the fixed-velocity inlet instead of the TMR total-pressure inflow, Cf normalised with the local u at y = 0.25 instead of U = 1, the Spalding-based `Automatic`
+wall shear; the three TMR codes themselves spread by 2.2, 1.0 and 0.6 percent on these grids); (b) which part of the TMR family (wall spacing 5e-7 x 2^level with
+a near-wall growth of about 1.002, or the leading-edge clustering) restores the order: not separated; (c) H3a shows that the wall-omega distance convention
+moves Cf by 5.2, 2.5 and 1.2 percent on rcfd's meshes; the TMR page does not define Delta d_1 (rcfd uses the cell-centre distance); no default was changed.
+
+### Part C
+Measured analysis: `docs/component-diagonal-default.md` (harness `crates/rcfd-api/tests/w34c_component_diagonal_default.rs` and one workspace run of an
+uncommitted scratch copy with the schema default flipped). Results: the flipped default moves exactly one registered baseline hash (`packed_bed`: (60, 19e53df373637262) to (16, fb46cdfee5d0d781));
+every other baseline case and every other shipped case is bit-identical (C1, C2). The flipped workspace run: 1777 passed, 6 failed, 422 ignored; the failures
+are the `packed_bed` hash, three tests that assert today's default or its defect (`component_diagonal`, W1a, `duct_diagnosis` A6), and the two lumped
+heat-exchanger tests, which do NOT converge with `corrected` (p keeps changing by 3 to 26 percent per 500 iterations up to 10000 iterations, where `averaged`
+is stationary to 4e-10 from iteration 1000): a real cost of the change whose cause was not investigated. The decision is the user's; the default stays
+`averaged`.
+
+### Deviations from the registered plan
+1. A4 with `h_from_solution` off needed 220481 iterations; my first run used an unregistered 60000-iteration cap and stopped unconverged. A4 was split into
+   A4 (on) and the heavy A4b (off); the stop criterion du < 1e-13 became du < 1e-12 in the test (the limits are on the errors, which are 1e-10 or below).
+2. A10's prediction missed (kept as a known miss with the measured value).
+3. A12 missed only the convergence criterion at the registered cap; A12b with the 250000 cap was added after seeing A12.
+4. H4 and H6 were defective set-ups (the part A defect on the run-up symmetry plane); H4c and H6c were registered in amendment 1 after a disclosed debug print of
+   one coarse H4 run. I stopped H6 before its cap. The H6c assertions were added after its single run.
+5. Stage-1 coarse/medium values are combined with the stage-2 finest run of the same hypothesis made in a separate process (the runs are deterministic: H0
+   reproduces ADR 0070 exactly).
+6. Up to four runs were made in parallel; iteration counts are unaffected, wall times are not comparable with ADR 0070.
+
+### Unverified / not read
+Menter (1994) and Menter, Kuntz, Langtry (2003) were not read; the TMR SST page does not define `Delta d_1` in words. The TMR plate grid, the boundary-condition
+map and the statement that the coarser grids are every-other-point were read from the TMR pages and files; the grid images were not viewed. The remark on
+OpenFOAM's `fvMatrix::H` in the `simple.rs` doc comment predates this wave and was not checked (no source was read). All other reference values are those
+vendored in wave 33C.
