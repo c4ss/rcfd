@@ -205,6 +205,36 @@ value. **T1d** (new test, same meshes, set-up and solver as T1): unprojected arm
 error `<=` unprojected on every mesh. If that last gate misses as well, neither treatment improves T1 accuracy and the decoupled treatment is recorded
 as a bookkeeping change too. Its API exposure is decided only after T1d (it needs a hunk in `sim.rs`, a shared file).
 
+## Amendment 4 (construction frozen; written after the development runs on S, DS, DA and unregistered combinations, before any
+## registered Q1-E to R1-E check ran; no limit changed)
+
+Results that decide the construction (all recorded again in the addendum):
+* T1 (finest mesh) and T1d: the projected and the decoupled wall are both slightly LESS accurate than the leaking wall on every mesh
+  (2.7155e-3 and 2.7158e-3 against 2.7145e-3 V_i on the finest; orders 1.83/1.91 for all three), and the positive control falls below 1e-4 on the
+  finest mesh (4.7e-5: the facet tilt of this mesh falls as h^2). Per the registered rule the projection is a bookkeeping change of the wall flux,
+  not an accuracy fix; it is kept (opt-in) because it removes the leak exactly (S3''), and the decoupled flag stays an fv-level opt-in without API key.
+* **W1 falsified as registered** on DA: the remap alone brings the k-face/end-wall maximum from 87.67 to 83.53 deg and the k-face skewness from 12.7 to
+  4.0, not under 70/2.0. **W2 falsified**: one first height on the wake makes the wake-stack skewness WORSE on DA (9.6 to 20.3) and DS. A probe of
+  the remaining worst cells of DA shows a third mechanism: the thin stack cells (in-plane thickness h1) span radial layers up to 0.015 m
+  (graded_two_sided grows the radial cells from 1.8e-5 to the cap within four layers), and their wall faces are warped by about
+  `L (d phi/dr) Delta r`, comparable to h1; the face-centre and pyramid volume/centroid rules of a flat-faced cell are then off by more than the
+  thickness (cell volume 13 % off on the probe). This is the y+ = 1 floor of flat-faced hexes on a twisted blade at these counts: for B',
+  `L (d phi/dr) Delta r / h1` is about 1 to 2 at mid-span. **Prediction registered now: B' misses Q1-E (non-orthogonality and skewness).**
+* In-plane smoothing (development set-up S): non-orthogonality 79.65 to 53.8 deg (skewness 0.60, aspect 129); unregistered combinations of S counts
+  (n_chord 20/28/48 x n_nose 3/5/7 x n_side 7/12/24 x blade): 50 of 54 build against 22 of 54 for the 33A construction, but some built meshes are
+  poor (up to 85.7 deg, n_nose 3 with n_chord 48); front_gap 0.8 / 1.2 on S build with 63.4 / 79.9 deg.
+
+**Construction E (frozen)**: `CGridOptions { radial_remap: true, smoothing: true, uniform_wake_stack: false }`, i.e. the 33A algebraic grid of every
+layer, (W1) the far grid from the remapped radius with the blade, its stacks and the wake stacks from the true section and a blend over
+`max(0.05 c, 4 max |stack-edge difference|)` (at most half the line), the tip gap a radial extrusion of the tip layer; (smoothing) local untangling
+(Laplace mean of the free nodes around folded quads, up to 500 passes), then Winslow with control functions (exact controls of the algebraic grid
+fading out over a quarter of the outer cells of each C line, one-dimensional spacing controls elsewhere), seams periodic and free, the irregular
+corner at the mean of its six neighbours, Picard iteration line-implicit along the C j-lines, cap 4000 iterations or a move below 1e-12 chord; if any
+C or F quad of any layer has non-positive area or the mesh assembly fails, the fixed chain (one-dimensional controls), (first quarter of the outer
+rows kept algebraic), (displacement x 0.5), (x 0.25), (x 0) is tried, the same in every layer, and the first success is the mesh. Case key
+`mesh.fan.c_grid_construction = "smoothed"` (default `"pursuit"`, the 33A construction, unchanged). The registered Q1-E to R1-E checks run once
+each with this construction; nothing is changed after they run (a change would be disclosed and its numbers reported as unregistered).
+
 ## Not claimed
 
 Fan performance; any comparison with a published fan; turbulence quantities; the accuracy of the absolute `mrf` formulation next to a stationary faceted
