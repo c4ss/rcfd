@@ -274,3 +274,99 @@ in time (the fractional path extrapolates it, ADR 0043 D1; the iterative path do
 **Y3 (diagnostic, scratch tree only, prints).** On the first outer iteration of a BDF2 step, the boundary coefficients of the coupled faces (convection, Laplacian
 and the periodic links) are those of the extrapolated velocity, as in the fractional path. Run: TG-S PISO with F-G, fine pair. Reading rule: H-SEAM-CONV stands if the
 fine-pair order is in [1.9, 2.3]; otherwise it is falsified. No fix follows in this wave either way (amendment 1: no third fix); the result is reported.
+
+## Final addendum (measured values, misses and deviations; nothing above was changed)
+
+Y3 was run once after amendment 3: TG-S PISO with F-G and the extrapolated seam partner values, fine pair 4.322e-5 / 9.197e-6, order **2.232** (in band; the
+errors equal the TG PISO F-G ones to three digits). By the registered rule **H-SEAM-CONV stands**: the remaining TG-S PISO floor is the first-order lag of the periodic
+partner value in the convection (and Laplacian link) terms on the first BDF2 outer iteration. No fix is made for it in this wave (amendment 1); the remedy measured by
+Y3 (take the coupled-face coefficients and the link lag values from the extrapolated velocity on that outer iteration, as the fractional path already does) is the
+next item.
+
+### Part A: the order floor (TG, BDF2, N = 32 unless stated; band [1.9, 2.3])
+
+| check | measured | verdict |
+|---|---|---|
+| A0 reference adequacy (1/2560 vs 1/1280) | change 2.8 to 3.6 % | adequate |
+| A1 PISO, fine-pair orders N = 16, 24, 32, 48, 64 | 1.036, 1.137, 1.624, 2.305, 2.356; fit M share 42.6 % (s 2.90, r 0.54) | floor present |
+| A1 PIMPLE-4 | 1.005, 0.961, 1.031, 1.719, 2.010; share 79.4 % (s 2.65, r 0.82) | floor present |
+| A1 FRAC | 1.021, 0.989, 0.965, 1.201, 1.777; share 83.5 % (s 2.50, r 0.84) | floor present, identified O(dt h^2) |
+| A1 spatial error exponent of the references | PISO and PIMPLE-4 3.74 (16 to 64, pre-asymptotic at N = 16), FRAC 2.00 | reported |
+| Y1 uniform-rate split (falsifier of H-COMM) | PIMPLE-4 2.012, 2.007, 2.007 (N = 16, 32, 64); PISO 2.113, 2.233, 2.326; share 1.4 % / 0.5 % | H-COMM stands |
+| Y2 commutator flux, dt 0.025 / 0.0125 / 1/1280 | 1.85e-4 / 1.11e-4 / 8.4e-6 (O(dt)) against gamma R(p) 2.13e-4 / 1.18e-4 / 8.2e-6 | reported |
+| F-C C-O1 / C-O2 / C-O3 / C-O7 / C-S1 / C-S2 | 0.930 and 1.370 / 0.938 / 0.917 / 0.938 / 0.984 / 0.916 | all MISS, F-C rejected (amendment 1) |
+| F-C N1 | TG ratio 1.16 to 1.24, TG-S 1.14 to 1.28 | MISS |
+| F-G C-O1 fine, coarse | 2.232, 2.260 (errors 4.32e-5 / 9.19e-6, default 4.38e-5 / 1.42e-5) | met |
+| F-G C-O2 (PIMPLE-C, n_outer 2, alpha 0.9) | 1.237 (default 1.223) | MISS |
+| F-G C-O3 (PIMPLE-4) | 2.011 (default 1.031) | met |
+| F-G C-O7 (variable step) | 2.194 (default 1.832) | met |
+| F-G C-S1 (TG-S PISO) | 0.995 (default 0.975); Y3 shows the seam-convection lag | MISS |
+| F-G C-S2 (TG-S PIMPLE-4) | 2.011 (default 0.823) | met |
+| F-G C-O9 joint refinement vs exact | 3.816, 3.237 | met |
+| F-G N1 (24 comparisons, limit 1.05) | TG velocity 0.987 to 0.996, TG-S 1.035, 1.047, **1.0504**, MMS <= 1.002, MODE 1.000; pressures 0.961 to 1.003 | MISS (one comparison) |
+| F-G N2 default fingerprints | 5 of 5 identical | met |
+| F-G N3 decomposition (N = 16, 32, 64) | PISO share 0.6 %, PIMPLE-4 2.2 %, fine-pair orders PIMPLE-4 1.955, 2.011, 2.007 | floor not present |
+| F-G C-O6r (reported only) | MMS PISO 1.954 / 1.602; MMS PIMPLE-C 1.712 / 2.835; TG PIMPLE-C coarse 1.573 | reported |
+| F-K C-O4 fine, coarse; C-O4S | 2.002, 1.997; 1.997 (default FRAC TG-S 0.974) | met; H-K not falsified |
+| F-K N4 | velocity ratio 1.17 to 1.21 (TG, TG-S); cavity velocity difference 0.036 > 0.02; checkerboard 0.298 vs default 0.823 | MISS, F-K rejected |
+| A5 cylinder | not run (conditional on F-G acceptance) | not run |
+
+Verdicts. (1) The iterative-path BDF2 floor is identified: it is the commutator `C(G p - b)` of the spatially variable `rAU = dt/(c0 + a dt)` with the face
+interpolation (the deferred-correction convection makes the diagonal vary on any flow), an O(dt) dependence of the converged spatial operator (H-COMM; falsifier Y1
+passed, F-G removes it: N3 floor not present, the TG PISO and PIMPLE-4 rows reach 2.0 to 2.3, the error against the exact solution is unchanged or better on TG and
+MMS). (2) On translationally periodic seams two further first-order terms exist: the missing transient carry-over (R3, corrected by F-G; ADR 0069's "F1 falsified"
+was an artefact of the Taylor-Green symmetry, `u.n = 0` and `R(p) = 0` on its seams) and the lagged partner value in the convection term (H-SEAM-CONV, Y3; not fixed).
+TG-S PISO default has a temporal error 15 times that of TG at the same dt. (3) PIMPLE-C's floor is not the momentum interpolation (it stays with F-G); it is the
+incompletely converged, under-relaxed two-outer iteration (not diagnosed further). (4) The fractional floor is the total-pressure face term (H-K); its
+pressure-correction form gives order 2 but a 17 to 21 % larger error against the exact solution at the tested steps on N = 32 (its dt -> 0 limit differs by 1.3 %
+from the default's; the default profits from a cancellation of its O(dt h^2) error against the spatial error), so it is rejected by the registered no-harm rule.
+
+F-G is kept in the code as the opt-in `PimpleSettings::rhie_chow_consistent` (default false, no schema key) although it is NOT accepted by the registered rule (misses
+C-O2, C-S1, N1 by 0.04 %); whether to expose it is the user's decision. F-C, F-K, Y1, Y2 and Y3 were scratch-tree code only and are not in the repository.
+
+### Part B: the PIMPLE one-corrector instability
+
+| check | measured | verdict |
+|---|---|---|
+| B1 model thresholds (postdiction of ADR 0069 data) | 14 of 14 Re = 100 uniform outcomes agree | consistent (not a test) |
+| B2a (`|G| >= 1.15`: growth within 10 %) | Euler n_outer 2: D = 4: g 1.196 vs 1.250; D = 6: 2.682 vs 2.780; BDF2 the same to 4 digits | met |
+| B2b (`|G| <= 0.85`: no growth) | all 16 rows g < 1 (0.12 to 0.69) | met |
+| B3 seven new cavity predictions | 7 of 7 correct (PIMPLE-2 Euler 2.3 stable / 3.0 unstable; BDF2 3.4 / 4.6; PIMPLE-4 Euler 5.0 unstable; BDF2 6.0 stable / 7.5 unstable) | met |
+| B4a registered (step-1 estimate) | Euler rows met; BDF2 rows compare an Euler-step estimate (e.g. rho 2.702 vs g 1.196) | MISS (set-up defect, amendment 2) |
+| B4a corrected (estimate at step 6) | all 20 rows within limits (D = 4: rho 1.209 vs g 1.196; D = 6: 2.702 vs 2.682) | met |
+| B4b (96 cavity runs, Warn, every 20) | all 19 unstable Re = 100 runs warned at step 1, before the first violation (steps 2 to 17); the 2 unstable uniform Re = 1000 PIMPLE-2 Co_t = 16 runs NOT warned (rho <= 0.33: a different, convective instability developing after t = 4); 1 stable run warned (graded Re = 100 PIMPLE-4 BDF2 Co_t = 8, rho 1.75 from the Euler first step) | MISS (2 unwarned; false positives 1 <= 4) |
+| B4c two correctors | rho 0.133 (uniform), 0.206 (graded), both schemes (one corrector: 2.251, 2.062) | met |
+| B4d Raise | stops at step 1: "PIMPLE pressure-lag check: the lagged pressure error is amplified by 2.251 per step (>= 1) at step 1, pressure-lag check, cell 797 at (0.922, 0.766, 0.016); with one pressure corrector the run will diverge: use solver.n_correctors >= 2 or a smaller solver.dt"; state finite, max|u| <= 1.5 | met |
+| B4e fingerprints | identical | met |
+
+Mechanism of the pressure growth (answer to ADR 0069's open item): with one pressure corrector the pressure of an outer iteration carries the lag error of the
+pressure that drove its momentum predictor multiplied by `kappa = (lambda - lambda_d)/(c0/dt + lambda)`, about `-D` for smooth modes, `D` the diagonal diffusion
+number `dt sum|a_nb|/(c0 V)`; the under-relaxed non-final outer iterations multiply it by `(1 - alpha_p) + alpha_p kappa_r` only. The model's per-step factor matches
+the solver's measured growth within 4 % and predicted seven new runs correctly; the run-time estimate of the same map (power iteration on the solver's own matrices)
+flags every low-Reynolds blow-up of the harness at step 1. Settings rule (documented on `LagCheck`): with `n_correctors = 1`, keep `D` below `D*` (1, 3.33, 4.65, 5.65
+for n_outer 1 to 4 at alpha_u 0.8, alpha_p 0.5), or use `n_correctors >= 2`. The check does not cover the convective high-Courant instability at Re = 1000 (B4b miss).
+
+### Tests (in `crates/rcfd-fv/tests/`)
+
+`w34b_floor.rs`: `c_o9_fg_joint_refinement` (default); ignored: `a0_reference_adequacy`, `a1_decomposition_{piso,pimple4,frac}`, `c_fg_met_rows` (passes),
+`n3_fg_decomposition`, known misses `c_fg_orders_known_miss` and `n1_fg_no_harm_known_miss` (limits unchanged). `w34b_lag.rs`: default `b2_b4a_step6_corrected`,
+`b4c_two_correctors_recognised`, `b4d_raise_stops_before_divergence`; ignored `b3_new_cavity_predictions` (passes), known misses
+`b2_b4a_periodic_stokes_box_known_miss` and `b4b_cavity_warnings_known_miss`. `w33b_default_bits` unchanged and passing.
+
+### Deviations from the plan (candid)
+
+* Amendment 1 overrode the registered sentence "no second fix is tried in this wave" to register F-G after F-C failed; F-G's orders were not known, Y1's were.
+* R2's derivation (the basis of F-C) was wrong: it tracked the flux instead of the face defect; corrected in amendment 1. F-C cost one acceptance run.
+* B4a was mis-specified for BDF2 (step 1 is an Euler step); the registered test is kept as a known miss, a corrected test was registered (amendment 2) before it ran.
+* Y3 was added after the F-G runs (amendment 3, registered before it ran).
+* The B2 runs use linear-solver tolerances `tol_rel` 1e-10, `tol_abs` 1e-30 (not stated in the registration; chosen so that the 1e-6 perturbation is not
+  truncated by the default absolute tolerance).
+* In the scratch logs the F-G rows carry the label `fc=true` / `N3-FC` (the harness switched the `fc` flag to F-G by a constant); the repository harness names them F-G.
+* The A5 cylinder run was not made (F-G not accepted); the cylinder test file written for it was not committed.
+* B4b uses `PimpleSettings::pimple(nu, n)` exactly as the ADR 0069 harness; its outcomes reproduced every ADR 0069 verdict (all 96 runs, same first violations).
+
+### Unverified references
+
+Choi (1999), Tukovic, Peric, Jasak (2018), Rhie and Chow (1983), Issa (1986), Van Doormaal and Raithby (1984): recalled, not read. Komen et al. (2021): read through
+an HTML rendering of arXiv:2010.03931 (first 100 000 characters; the statements used are the O(dt h^2) / O(dt^2 h^2) results and the order drop for the
+total-pressure form). Every numerical limit and model of this ADR is derived here or measured; none is taken from a reference.
