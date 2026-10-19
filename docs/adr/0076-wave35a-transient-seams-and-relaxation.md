@@ -170,3 +170,20 @@ By the registered rule **H-RELAX stands** (Y4a in band) and Y4b is outside the b
 does not), so F-R (velocity anchor only) was written as specified. Observation recorded before the F-R runs: with the `u^n` anchor the error against the
 exact solution is 0.7 % / 0.4 % SMALLER than without relaxation (the O(dt) term partly cancels the spatial error), so N5 (F-R against the default PIMPLE-C, limit
 1.05) is not a foregone conclusion.
+
+## Amendment 2 (after the Part A, N5 and Part R runs; BEFORE the diagnostic Y5 below is written or run; nothing above was changed)
+
+Measured with K = F-G + F-S + F-R (numbers in the final addendum): C-O1, C-O3, C-O7, C-S1, C-S2, C-O9, N2, N5, R1, R1b met; **C-O2 1.332** (F-R moved it from
+1.237 only), **N1** (TG-S pressure ratio 1.0952 and 1.0521 at dt 0.05 and 0.025), **R2 1.717**, **R2b 0.593**, **R3** (SWIRL 1.912 / 1.856, SECT-M 1.773 / 1.773)
+and **R4** (SECT-M velocity ratio 1.0651 at dt 0.05) missed. K is therefore not accepted and, by the registered per-fix rule, F-G (N1, R2b, R4), F-S (R2, R3,
+N1 TG-S, R4) and F-R (C-O2) all have missed rows. The cylinder is not run.
+
+The SECT-M PIMPLE-4 floor (R2b 0.593 with K, default 0.538) survives F-G on the rotational seams. A reading of the code made after these runs: the
+balanced-force term of the body force is added as `gamma_p[f] * bf.face[f]` on every face, and on a coupled face `gamma_p[f]` is the OWNER's `rAU`
+(`face_interpolate`), while the pressure term of the same face uses the coupled mean `w rAU_o + (1 - w) rAU_q` (`coupled_gamma`). With the variable
+`rAU = dt/(c0 + a dt)` the mismatch is O(dt) on every seam face that carries a body force (SECT-M has one; TG, TG-S and SWIRL have none; the box MMS has no
+seams). The two faces of a pair then also get body-force fluxes of different magnitude. Hypothesis **H-SEAM-BF**.
+
+**Y5 (diagnostic, scratch tree only, prints; no fix follows in this wave, amendment rule "no fourth fix").** With K on, the body-force face term of the coupled
+faces uses the coupled mean `rAU` (the same weights as `coupled_gamma`). Run once: SECT-M 16 x 16 fine pair, PIMPLE-4 (R2b) and PISO (R2). Reading rule:
+H-SEAM-BF stands if the R2b order is in [1.9, 2.3]; otherwise it is falsified. The result is reported; it changes no verdict above.
