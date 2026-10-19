@@ -298,6 +298,14 @@ fn arms() -> Vec<Arm> {
             n_side: 16,
             ..e0()
         },
+        // amendment 3: both numerics changes together (minmod and the N2 in-plane counts)
+        Arm {
+            label: "KN",
+            convection: "tvd_minmod",
+            n_chord: 20,
+            n_side: 16,
+            ..e0()
+        },
         Arm {
             label: "X2d",
             include_blade: false,
@@ -1161,6 +1169,11 @@ fn smoke_x2e_stability() {
         "W35C X2e smoke: continuity at 10 {c10:.3e}, max over 200-300 {cmax:.3e}, stable {}",
         finite && sim.failure().is_none() && cmax <= c10
     );
+}
+#[test]
+#[ignore = "ADR 0078 amendment 3 KN (about 35 min)"]
+fn w35c_kn_minmod_refined() {
+    registered("KN");
 }
 #[test]
 #[ignore = "ADR 0078 K (about 25 min)"]
