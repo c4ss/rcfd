@@ -188,3 +188,74 @@ assertions are unchanged. Acceptance: the test passes 100 consecutive runs, also
 ## Not claimed
 
 Fan performance, a comparison with a published fan, y+ of a converged solution, quality of sections with a sharp leading edge, anything about sharp-edge turbulence.
+
+## Addendum: measured values, misses and deviations
+
+All values from release builds, `cargo test --release`, on the commits of this wave. Limits are the registered ones, unchanged. Reference values: Q4/Q5 use
+the analytic annulus sector and the quadratures of ADR 0065 (no external reference); the circular Couette solution u_theta = A r + B / r is textbook
+(UNVERIFIED against a cited page; it follows from the Navier-Stokes equations in polar form). No published fan data was used.
+
+### Development iterations after Amendment 2 (disclosure)
+
+A' and B' were built and measured several times while the construction changed; the registered limits were not touched. Sequence: first A' build failure
+then an angle-weighted pursuit fix; `capped_cells` with an axial cap in the wake; wake first height d1w = max(h1, dz/300); the trailing-edge wedge merged into
+one polyhedral cell per layer; a pitchwise stack on the outlet lines; `graded_two_sided` radial grading; CAP_FACTOR changed from 2.0 to 1.5 AFTER a B'
+measurement (a post-measurement change); a smoothing attempt (aspect worsened to 396) that was removed. The sizing arithmetic for the ray cells and for
+the radial cells in this ADR was wrong (the geometric fit gives much larger cells than assumed), which is why the capped constructions were added.
+
+### Results
+
+| Check | Registered limit | Measured | Status |
+|---|---|---|---|
+| Q1 A' non-orthogonality | <= 70 deg | 81.57 deg (mean 12.16, p99 64.66, 5177 faces above 60) | MISS (`q1_quality_gates_known_miss`) |
+| Q1 A' skewness / aspect | <= 2.0 / <= 300 | 0.863 / 176.6 | met |
+| Q1 B' non-orthogonality | <= 70 deg | 83.73 deg | MISS |
+| Q1 B' skewness | <= 2.0 | 4.846 | MISS |
+| Q1 B' aspect | <= 3000 | 2651 | met |
+| Q2 closure, S / A' | <= 1e-13 | 5.4e-16 / 8.2e-16; owner < neighbour, incidence counts, volumes > 0 | met |
+| Q3 volume conservation, as registered (flat root polygon) | <= 1e-11 | 1.6e-5 | MISS: set-up defect (`q3_volume_conservation_flat_closure`, ignored) |
+| Q3 corrected (hub boundary = the core quads of the empty mesh) | <= 1e-11 | 1.8e-16 (C nodes of the bladed and empty builds identical) | met |
+| Q4a envelope refinement (4,8), (8,16), (16,32) | see above | cannot be built (fold; third level also has n_nose = n_chord = 16) | MISS (`q4a_..._known_miss`) |
+| Q4b/Q5 solid volume and lateral area refinement | finest <= 2e-3, order >= 1.5 | level 1 built (volume error 1.2e-2, area 5.4e-3); level 2 folds | MISS (`q4b_q5_..._known_miss`) |
+| Q6 periodicity | 1e-12 | node rotation 1.1e-16; face centres 3.4e-16; area vectors 3.9e-13 (S, A', changed lean/sweep); `FvGeometry::new` accepts | met |
+| Q7 stacks A' | 1e-12 | radial 3.2e-13, wall distance 1.3e-13, transverse 1.4e-13; h1 formula within 1e-14 | met |
+| Q7 stacks B' | 4 eps 0.4 / h1 = 4.9e-11 | radial 1.7e-11, wall 4.1e-12 / 4.6e-12 | met |
+| Q8 located errors | no panic | all cases return located errors (see deviations) | met |
+| R1 rules on `cases/axial_fan_cgrid` | no error-level finding | 11 536 cells, 79.65 deg; one finding, SV101 (warning) | met |
+| S1' empty passage | <= 1e-8 U | 4.1e-12 U (the residual target 1e-11 was not reached in 400 iterations; the velocity error is) | met |
+| S3' m_in + m_out | <= 1e-6 \|m_in\| | 6.0e-5 (m_shroud = -3.2e-6 of m_in 5.37e-2) | MISS (`s3_prime_rotating_passage_known_miss`) |
+| S3' corrected (shroud included) | 1e-6 | 1.0e-14; pair \|m_lo + m_hi\| / \|m_lo\| 1.4e-15; converged in 406 iterations | met |
+| Service test hardening | 100 consecutive passes, also under load | 100 / 100 (other agents were building concurrently) | met |
+
+The S mesh quality of Amendment 2 (78.8 deg from `quality_summary`) and the example-case value (79.65 deg from `check_mesh`) come from two different
+code paths that define the angle slightly differently; not reconciled.
+
+### Seam-flux diagnosis (b)
+
+e_pair (limit "clean" 1e-12): D1 translational Couette 3.5e-18; D2 circular Couette, empty C-grid sector 7.0e-17 (converged, 856 iterations); D3 the same in the
+rotating frame 1.6e-17 (NOT converged: res_u 0.22 after 4000 iterations; the pair metric is a structural property, but this is a deviation from "converged
+solution"); D4 S3' fan passage 7.8e-17 (converged, 358 iterations; the solver default is already no non-orthogonal corrector, so the "correction replaced by none"
+variant is the same run). D5 (not registered, control): the 0065 H-slit example case, 644 pairs, e_pair 8.4e-17, patch level 5.9e-16, converged.
+Outcome: all registered tests are clean, so rules (i) to (iv) do not fire, and the 0065 mismatch of 3.5e-6 to 2.7e-5 is NOT reproduced on the current HEAD, not even
+on the H-slit mesh. I did not run the 0065 commit, so I cannot say what changed; the commit log of this tree contains wave 33D's "periodic-pair body-force flux fix",
+which is a candidate (hypothesis, not tested). No solver change was made. What does remain in `m_in + m_out` of a rotating passage is the flux of the faceted
+shroud wall that moves tangentially (S3' above), which the 0065 corrected test did not include either.
+
+### Deviations from the registered plan
+
+* Q3 as registered used a flat polygon on the hub; the empty mesh's hub there consists of the core quads, so the identity cannot hold to 1e-11 (set-up defect, corrected test added).
+* Q4a/Q4b/Q5: the generator folds at the registered refinement levels. An unregistered scan of 144 combinations (n_chord 16/24/32, n_nose 2-8, n_side 6-32, with and without
+  blade) built 44; I did not pick replacement levels from it (that would be choosing after seeing results). Its envelope volumes are non-gating observations: for example n_chord 16,
+  n_nose 4, n_side 8/10/16 gave 3.7680e-2 / 3.7710e-2 / 3.7737e-2 m^3 against the analytic 3.787e-2 (the analytic value is from the registered formula, not run as a test).
+* Several combinations produced raw mesh-validation errors ("directed edge appears twice", "normal does not point from owner to neighbour") that the fold check did not catch. They are
+  now wrapped into located `mesh` errors with block, indices, layer and the controls; this changed only the error path (A'/B' numbers identical on rerun).
+* The G-level generator accepts `front_gap` up to what fits; 1 and 2 chords fold and are rejected with a located error (a known limit).
+* Q8 front_gap beyond the inlet reports path `z_le_root` (not `front_gap`); the test accepts that path. A fold test and a tangled-family test were added.
+* The Q7 B' 1e-12 known-miss test was removed (never registered).
+* New ADR text not registered beforehand: D5 control; the S3' corrected test with the shroud flux.
+* The mesh construction is not robust (see docs/meshing.md); no performance claim of any kind is made.
+
+### Not committed / unchanged
+
+The pre-existing dirty files (`rcfd-fv/src/lib.rs`, `rcfd-api/src/sim.rs`, ADR 0061, `w30c_*.csv`) were not touched. `baseline_hashes.rs` was not re-recorded; no baseline moves
+(the new topology is opt-in, the default stays `h_slit`).
