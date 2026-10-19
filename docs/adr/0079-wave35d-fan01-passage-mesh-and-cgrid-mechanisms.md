@@ -210,3 +210,52 @@ the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to 
   measure as registered for M4 (A' maximum aspect, 395.1); also reported: B' aspect.
 
 Each is accepted or removed by the registered decision rule, applied in this order on top of the changes accepted before it.
+
+## Amendment 2 (written after the registered Part 2 runs and the Part 1 development, before any registered FAN-01 build; no limit changed)
+
+### Part 2: the registered sequence (test `part2_sequence`, run once; 38 min)
+
+The harness smoke on construction E (rule (d)) found a defect of its own Q7 measure before the registered run: it measured the wall stacks with
+3-D chords, whose sagitta against the cylinder is 8e-3 of the stack on A'. Corrected before the run to the unrolled-plane measure of ADR 0068/0072
+(E then reproduces the 0072 values exactly: A' 3.21e-13 / 1.35e-13, B' 1.66e-11 / 4.56e-12); under C5 the in-plane distance is multiplied by
+`cos(lambda)` (the component along the 3-D surface normal), as registered in Amendment 1. Baseline E: Q2 1.25e-15, Q6 3.3e-13, R-E 107 of 117.
+
+| Change | Target measure (B' unless stated) | Other Q1-E maxima that moved by more than 1 % | Q2/Q6/Q7 | R-E | Decision |
+|---|---|---|---|---|---|
+| C2 `wake_aspect_50` | wake skewness 4.847 -> 1.387 (predicted below 1.5) | A' skewness 0.863 -> 1.041 | pass | 105 | REJECTED (ii, iv) |
+| C5 `lean_stack` | blade-stack skewness 2.057 -> 1.098 (the 78.17 deg trailing-edge faces fall to 77.38) | B' non-orthogonality 78.17 -> 85.89 | pass (3-D normal form 5.0e-12; in-plane form 0.24 by design) | 102 | REJECTED (ii, iv) |
+| C6 `nose_rows_algebraic` | nose/outer skewness 7.084 -> 1.311 (B' skewness maximum 7.08 -> 4.88, now the wake) | B' non-orthogonality 78.17 -> 81.69 | pass | 89 | REJECTED (ii, iv) |
+| C4 `front_edge_held` | A' aspect 395.1 -> 288.2 (below the 300 gate) | A' non-orthogonality 61.38 -> 71.16 | pass | 105 | REJECTED (ii, iv) |
+
+Each change removed the defect it was aimed at (the mechanisms of Amendment 1 are confirmed by their own target measures), and each one moved
+another maximum up by more than 1 % and lost builds in the R-E scan, so by the registered rule none is kept. The code of the four options is
+committed once as measured (a record commit) and removed in the next commit. Construction G is therefore construction F with the checked control range
+(no Part 2 change); on blade B the A'/B' numbers of G are measured once at the end (registered: "G itself").
+
+### Part 1: development on FD and S (what was tried, before freezing F)
+
+* The registered upstream extension (`lambda = 0.2 c`) folds FD at layer 7 (r = 0.208, stagger 64 deg): the seam leaves the leading edge at the camber
+  slope (about tan 70 deg) and runs nearly parallel to the front edge at the corner. Changed to `lambda_u = front_gap c / 3`, so the seam meets the front
+  edge within atan(sigma_le e^-3) of the axial direction. With it FD builds: 80.88 deg, skewness 3.57, aspect 1414, construction step 0.
+* The smallest angle between a C line and the seam where it meets it is 13.6 deg (FD). This is a property of the periodic pairing, not of the target
+  rule: the seam pair is a pure s-translation with index-matched nodes, so the suction line of station x and the pressure line of station x end at one
+  seam node; the wall-normal feet of the two lines on a camber-parallel seam lie `P sin(g)` apart along it (162 mm at the FAN-01 tip, three chords), so any
+  shared node leaves both lines about `90 - g` deg off the seam. A target-rule change cannot remove it and none was made.
+* A blended seam (`s_centre + alpha (C - s_centre)`, alpha the least departure from straight seams that keeps a margin from the seams) was tried so
+  that blade B would stay identical to E: FD then builds only at fallback step 1 with 87.35-88.0 deg (upper seam corner of the tip and gap layers, and a
+  jump of 11 layer thicknesses of a wake node between two tip layers); construction E itself on a tip-only FAN-01 (sections from r = 0.19 m) gives
+  87.4 deg. Dropped: the pure camber seam (alpha = 1, as registered) is the better one for FAN-01. The Part 2 candidates added to the blended F on FD
+  gave 84.4-87.4 deg (information only; they are rejected by the Part 2 rule anyway).
+* DH (FD, frozen F): hub first-layer maximum 64.33 deg (the nose line, in-plane), k-faces 48.18 deg, first-layer skewness 0.65: **no hub change**.
+* Blade B, S counts, frozen F: 72.36 deg, skewness 1.063, aspect 128.8 (E: 53.82 / 0.596 / 129): the camber seam is worse than straight seams for
+  blade B; F is meant for blades that straight seams cannot hold. B1 (hashes of `pursuit` and E) reproduced after every change.
+* The P1-P8 harness was smoke-tested on FD: closure 1.9e-15, periodicity 7.9e-14, stacks 4.2e-14 / 6.0e-14, Q3 identity 1.3e-16, wall nodes on the
+  exact surface to 0 m, solid volume 1.5e-3 from the section-area quadrature.
+
+### Construction F, frozen
+
+E + `camber_seam` (alpha = 1: camber line inside the chord, the wake curve downstream, `lambda_u = front_gap c / 3` upstream; the wake lies mid-passage
+by construction) + `gap_fit`. G = F + `checked_range` (Part 3; no change of the geometry). Prediction: FAN-01-C misses P2 (FD: 80.9 deg, 3.57, 1414)
+and passes P1 and P3-P10 if its non-orthogonality stays below the 85 deg error threshold of `check_mesh`. Because no Part 2 change is accepted and the
+range check does not move a node, measurement (b) of FAN-01-C with G is the measurement (a) with F if the registered counts are inside the range of
+Part 3 (stated here before either runs).
