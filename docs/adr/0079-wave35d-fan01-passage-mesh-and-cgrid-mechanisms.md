@@ -304,3 +304,34 @@ the pair stays an exact rotation image. G = F3 + `checked_range`.
 **What I already knew when writing this:** FD with F3: 78.36 deg, skewness 3.46, aspect 149, step 0, P1-P8 harness passes; S on blade B: 58.28 deg,
 0.756, 128.1; B1 holds; and the registered counts with F3 built once as a diagnosis: 83.26 deg, skewness 3.98, aspect 227, step 0 (so (a3) is not blind for
 P1 and P2; P3-P10 have not been run with F3). **(a3)**: P1-P10 on the registered counts with F3, run once; (a) and (a2) stay recorded as misses.
+
+## Amendment 5 (written after (a3), the Part 3 development scan and a Part 3 development change, before the range is coded and before R-G runs)
+
+**(a3) results** (F3, registered counts, run once): P1 built (11 536 cells, step 0). P2 non-orthogonality 83.26 deg (MISS), skewness 3.978 (MISS), aspect
+227.2 (met). P3 closure 7.9e-16, topology ok. P4 periodicity 1.8e-13. P5 stacks 5.6e-14 / 9.7e-14. P6 C nodes identical, identity 4.0e-16. P7 0 m.
+P8 2.5e-3. P9 **met**: `FvGeometry::new` accepts, `check_mesh` ok, one rule finding SV101 (warning, above 70 deg), no error. P10 **MISS**: continuity
+7.92e-4 at iteration 10, 6.62e-3 at most over 200-300 (finite throughout, no solver failure, `|m_in + m_out|` 7.2e-5 of `m_in`, largest relative speed
+63.0 m/s in the seam-row cells next to the lower seam corner in the near-tip and gap layers, cells of non-orthogonality up to 71 deg). The (a2) mesh met
+P10 and missed P9, the (a3) mesh meets P9 and misses P10: no FAN-01 mesh of this wave meets both. No further attempt is made.
+
+**Part 3 development scan** (`part3_development_scan`, construction G = F3, combinations n_chord {12, 20, 28, 40} x n_nose {2, 3, 5, 7, 10} x n_side
+{5, 8, 12, 20, 28} with n_nose + 2 <= n_chord, and front_gap {0.15, 0.25, 0.4, 0.7, 1.2, 2.5}; blade B on the S counts, FAN-01 on the FD counts):
+blade B 87 of 106 build, 34 meet the A' gates; FAN-01 8 of 106 build, none meets them (folds in the leading-edge fan, located on `front_gap`).
+**Development change (G)**: for the camber-seam construction only, two last fallback steps start the smoothing from a Laplace-smoothed grid (400
+Jacobi passes, every free node at the mean of its four neighbours) instead of the algebraic grid, with the exact and with the one-dimensional controls.
+A mesh that builds at an earlier step is unchanged (the registered FAN-01-C builds at step 0, so (a3) stands; `pursuit` and E are untouched). FAN-01 dev
+scan with it: 50 of 106 build (42 at the new step 7), median 84.6 deg, 27 below 85 deg, none meets the A' gates.
+
+**Registered control range of G** (located errors before any construction, only with `checked_range`, i.e. `c_grid_construction = "camber_seam"`),
+chosen from the blade B development data (all 42 in-range blade B combinations built, 32 met the A' gates; FAN-01: 22 of 42 built, 11 below 85 deg):
+* `0.15 <= n_nose / n_chord <= 0.375` (error on `n_nose`);
+* `max(8, n_bl + 6) <= n_side <= 2 n_chord` (error on `n_side`);
+* `0.15 <= front_gap <= 1.0` (error on `front_gap`).
+S, A', B', FD and FAN-01-C lie inside. The range does not make FAN-01 robust; it states where blade-B-like geometry builds.
+
+**R-G (registered scan, run once)**: n_chord {14, 18, 24, 36} x n_nose {3, 4, 6, 9} x n_side {9, 14, 24, 40} with n_nose + 2 <= n_chord, on blade B (S
+counts otherwise) and on FAN-01 (FAN-01-C counts otherwise), plus front_gap {0.1, 0.18, 0.35, 0.6, 0.9, 1.5} on both. Gates: (a) every in-range
+combination builds and validates: 100 %, per fan; (b) every out-of-range combination is refused with a located error naming `n_nose`, `n_side` or
+`front_gap`: 100 %. Reported: the fraction of in-range combinations that build AND meet 70 deg / 2.0 / 300, the median non-orthogonality, the
+`construction_step` distribution, and the count below the 85 deg error threshold. **Prediction (from the development data): (a) is met on blade B and
+MISSED on FAN-01.**
