@@ -83,7 +83,8 @@ station_radius = {}\nstation_chord = {}\nstation_stagger = {}\nstation_camber = 
     )
 }
 
-/// The registered FAN-01 case at volume flow `q` (attempt 2: H-slit, first cell 2e-4 m).
+/// The registered FAN-01 case at volume flow `q`: attempt 2 (H-slit, first cell 2e-4 m, `linear_upwind`, diverged) with the attempt 3 change
+/// of ADR 0075 amendment 3 (`upwind` momentum convection, the first configuration of the diagnostic round that stayed stable).
 fn fan01_case(q: f64) -> String {
     let w = omega();
     let u_in = q / annulus_area();
@@ -128,7 +129,7 @@ angular_velocity = {w:?}
 centrifugal = true
 [solver]
 algorithm = "simplec"
-convection = "linear_upwind"
+convection = "upwind"
 max_iterations = 8000
 tolerance_u = 1e-5
 tolerance_p = 1e-5
@@ -308,7 +309,17 @@ fn run_point(q: f64) -> PointResult {
     let text = fan01_case(q);
     let case = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}"));
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
-    let n = sim.run(8000);
+    // harness stop of amendment 3 (no physics change): a non-finite or exploding continuity ends the run at once
+    let mut n = 0;
+    let mut exploded = None;
+    while n < 8000 && !sim.is_done() {
+        let st = sim.step();
+        n += 1;
+        if !(st.continuity.is_finite() && st.res_u.is_finite() && st.res_p.is_finite()) || st.continuity > 1e6 {
+            exploded = Some((n, st.continuity));
+            break;
+        }
+    }
     let failure = sim.failure();
     let w = omega();
     let u_in = q / annulus_area();
@@ -354,6 +365,8 @@ fn run_point(q: f64) -> PointResult {
     if failure.is_none() && sim.is_converged() {
         converged = true;
         how = format!("residual tolerance reached in {n} iterations");
+    } else if let Some((it, c)) = exploded {
+        how = format!("diverged: continuity {c:.3e} at iteration {it}");
     } else if failure.is_none() {
         // registered steady-monitor criterion at the cap: torque and Delta p_ts change < 0.5 % over the last 1000 iterations, mass balance 1e-3
         let ct = match (series("m_blade"), series("m_hub")) {
@@ -439,9 +452,12 @@ fn f126_outcome() -> (Vec<String>, Vec<PointResult>) {
     (bad, out)
 }
 
+/// F-126 attempt 3 (ADR 0075 amendment 3), measured once per operating point (about 16 min each): both runs converge by the steady-monitor
+/// criterion; design point Delta p_ts -3.8 Pa (measured 126.5), torque 1.320 N m (2.142, -38 %), eta_ts -0.03 (0.532); off-design
+/// -84.4 Pa (63.9), 1.010 N m (1.882, -46 %), eta_ts -0.97 (0.394). MISSED; the limits are unchanged.
 #[test]
-#[ignore = "F-126 acceptance attempt on FAN-01 (two SST sector runs); run on demand, outcome recorded in ADR 0075"]
-fn f126_fan01_rotor_against_the_measured_characteristic() {
+#[ignore = "known miss: F-126 on FAN-01 (attempt 3) misses every limit: torque -38 % / -46 %, Delta p_ts -3.8 / -84.4 Pa against 126.5 / 63.9 Pa; two 16-minute SST sector runs"]
+fn f126_fan01_rotor_against_the_measured_characteristic_known_miss() {
     let (bad, res) = f126_outcome();
     for r in &res {
         println!(
