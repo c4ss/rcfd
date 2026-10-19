@@ -151,3 +151,62 @@ are reported for the final construction (G restricted to blade B, i.e. E plus th
 ## Not claimed
 
 Fan performance; any comparison with measured FAN-01 data; turbulence; accuracy of the smoke solve (bounded only).
+
+## Amendment 1 (written after D1 and two probes ran, before any Part 2 change was written or run; no limit changed)
+
+### D1 results (construction E; test `d1_attribution_of_construction_e`)
+
+* A': 61.38 deg (seam_hi faces of the pressure/outer cells at mid-span, in-plane), skewness 0.863 (core), aspect 395.1; no face above 70 deg or 2.0.
+  Aspect top 10: the seam-corner cells C (h_c - 1, n_side - 1) and F (n_up - 1, 0) in layers 47 (shroud), 30 and 29 (tip).
+* B': 78.17 deg, skewness 7.084, aspect 8531.6. Faces above 70 deg: 84 blade boundary faces of the suction/pressure stack next to the trailing edge
+  (i = 40-44 and 133-135, k = 17, r = 0.115) and 90 nose-stack j-faces (line i = 88, the leading edge, between the last stack row and the first outer row,
+  layers 52-63 around the tip). Faces above skewness 2: wake-stack j-faces 6477, wake-cut faces 768, nose/outer j-faces 270, suction/stack j-faces 4.
+  The skewness maximum (7.084) is a nose/outer j-face (line 88, rows 8/9, mid-span); the wake-cut maximum is 4.847 (k = 60), the blade-stack maximum
+  2.057 (the trailing-edge cells above). Largest non-orthogonality of an end-wall face (hub/shroud boundary or k-face in the first or last `n_bl` layers):
+  64.15 deg (the shroud face of the seam-corner cell). Aspect: the seam-corner cells of layers 89, 60, 59.
+* Decomposition of the worst faces: blade trailing-edge cells (78.17 deg): node-line tilt 34.5 deg, face warp 0.02-0.05 of the thickness, in-plane wedge
+  0.04, shear of the thin pair 0.65, corner-Jacobian variation 2.7 %. Wake-cut faces: in-plane Jacobian variation 21.6 %, no tilt, no warp. Nose/outer:
+  in-plane wedge 2.9 (the first outer row 6.6e-6 m thick against 3.1e-5 m in the algebraic grid), Jacobian variation 108 %.
+
+Probes (scratch, not committed): (1) the 78.17 deg cell integrated as a trilinear hex (8-point Gauss) gives 78.74 deg and the same volume (1.9844e-11):
+the flat-face centroid rule is NOT the cause (the 0072 Amendment 4 reading does not hold for construction E). The stack is built along the in-plane
+normal, but the trailing edge leans by lambda = 34 deg out of the layer (the surface normal has a radial component of 0.54), so the wall-normal thickness
+is `h1 cos(lambda(r))`; it changes by 2.5 % between the two layers of the cell (5.9-6.2 against 6.1-6.3 micrometres), and a 2.5 % thickness change over
+a radial length 1100 times the thickness moves the centroid along the face by `L epsilon / 12` = 1.4e-5 m, 4.7 half-thicknesses: 78 deg. (2) The
+algebraic grid of E (smoothing off) has A' aspect 177 and B' 2656 (both inside their limits) and B' skewness 4.847 (the wake cut): the smoother doubles
+the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to 40 mm; B' 19 to 62 mm) and compresses the first outer row at the nose
+(B' 3.1e-5 to 9.2e-6 m), which makes the B' skewness maximum and the 90 nose-stack faces above 70 deg.
+
+### Verdicts of the registered falsifiers
+
+* M1 (hub first-layer wedge): **falsified**; no end-wall face is above 70 deg (64.15 at most), so by the registered rule M1 is **dropped** (W1's
+  remap of construction E already removed it).
+* M2 (wake): **falsified as the location of the maximum** (the B' maximum is a nose/outer face); the wake still holds 7245 faces above 2.0, and the
+  registered prediction holds: the wake skewness is set by the in-plane wedge between neighbouring wake lines (W2: `d1 = max(h1, dz/300)` grows with the
+  axial spacing, ratio epsilon = 0.2 per line), with `skew ~ (L / d1) epsilon / 12` (a trapezoid's centroid shift `L epsilon / 12` over the distance `d1`
+  between the mirror cells across the cut): 300 x 0.216 / 12 = 5.4 against 4.85 measured.
+* M3 (warp): **falsified**; warp is 2-5 % of the thickness, the maximum is the lean-induced radial thickness variation (M5 below).
+* M4 (aspect at the seam corner): **confirmed** for A' and B'; the smoother is the cause (probe 2).
+* New, found by D1: **M5** lean of the trailing edge with a stack along the in-plane normal (probe 1); **M6** compression of the first outer row at the
+  nose by the smoother (B' skewness maximum and the 90 nose-stack faces above 70 deg).
+
+### The single-factor changes (new opt-in fields of `CGridOptions`), order C2, C5, C6, C4
+
+* **C2** (`wake_aspect_50`): the wake first height `d1 = max(h1, dz / 50)` instead of `dz / 300` (one constant). Derivation: with the measured
+  epsilon <= 0.3 between neighbouring lines, `skew ~ 50 x 0.3 / 12 = 1.25`. Target measure as registered for M2 (B' maximum skewness over wake-cut and
+  wake-stack faces, 4.847). Prediction: below 1.5.
+* **C5** (`lean_stack`), replacing C3 (the named C3 families, planar triangles and twist-following placement, act on warp and shear, which D1 shows
+  are not the cause; this is a departure from the registered candidate list, disclosed here before any run): every blade wall stack (and the wake
+  stack, which continues it) is built with the in-plane offsets divided by `cos(lambda)`, lambda the angle between the in-plane wall normal and the 3-D
+  surface normal at that wall node (surface tangent along the radius by a central difference of `AxialFan::surface_point` over `1e-6 r`; the wake
+  lines take the trailing-edge value), so that the WALL-NORMAL thickness of every stack cell is exactly `h1 g^q` in every layer. Target measure as
+  registered for M3 (B' maximum skewness over blade-stack faces, 2.057); also reported: the B' maximum non-orthogonality of blade-stack faces (78.17).
+  Q7 under C5 (departure from decision-rule item (iii), registered now): the in-plane stack distance is `h1 g^q / cos(lambda)` by design; Q7-E is
+  evaluated as the distance along the 3-D surface normal (same tolerances), and the in-plane form is reported.
+* **C6** (`nose_rows_algebraic`): in the smoothing, on the C lines of the nose region (`h_c <= i <= n_i - h_c`), the first `max(1, (n_side - n_bl) / 4)`
+  rows beyond the stack keep their algebraic positions (the existing `freeze` rule of the fallback chain, restricted to the nose lines). Target
+  measure: the B' maximum skewness over nose/outer faces (7.084); also reported: the nose-stack non-orthogonality maximum (77.38).
+* **C4** (`front_edge_held`): in the smoothing, the front-edge row (the C/F interface, corner included) keeps its algebraic positions. Target
+  measure as registered for M4 (A' maximum aspect, 395.1); also reported: B' aspect.
+
+Each is accepted or removed by the registered decision rule, applied in this order on top of the changes accepted before it.
