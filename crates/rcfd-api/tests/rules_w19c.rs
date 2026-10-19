@@ -597,7 +597,10 @@ fn e2_no_error_level_false_positives_and_warnings_are_only_sv103() {
     let (evaluated, bad, warned) = e2_run();
     assert!(evaluated >= 30, "under-powered: only {evaluated} case texts evaluated");
     assert!(bad.is_empty(), "error-level false positives:\n{}", bad.join("\n"));
-    assert!(warned.iter().all(|w| w.contains("SV103") || w.contains("SV101")), "{warned:?}");
+    assert!(
+        warned.iter().all(|w| w.contains("SV103") || w.contains("SV101")),
+        "{warned:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
