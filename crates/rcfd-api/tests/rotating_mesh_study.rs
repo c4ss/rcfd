@@ -2,6 +2,8 @@
 //! rotating frame on the full annulus, the C2a corrected set-up) and R4 (spurious radial/axial speed of the five C4 frame-invariance runs)
 //! on four meshes h ... h/8. The limits are those registered in ADR 0075 before this code ran; the ADR 0071 tests stay ignored and unchanged.
 
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the limits
+
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
 

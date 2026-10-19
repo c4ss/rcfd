@@ -4,6 +4,8 @@
 //! ADR 0075 amendment 1 before the mesh was built and before any solver run. A rotor-only sector of a published fan compared with its
 //! measured installation characteristic: whatever the outcome, no fan performance claim is made beyond this one comparison.
 
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the limits
+
 use rcfd_api::case::Case;
 use rcfd_api::sim::{build_mesh, Simulation};
 use std::f64::consts::PI;
@@ -244,12 +246,9 @@ fn fan01_attempt1_registered_mesh_rule_is_not_runnable() {
     let h = mesh_of(&fan_section("h_slit", None));
     println!("FAN-01 attempt 1: c_grid {:?}", c.as_ref().map(|m| m.n_cells()));
     println!("FAN-01 attempt 1: h_slit {:?}", h.as_ref().map(|m| m.n_cells()));
-    let ce = c.expect_err("the c_grid now builds the FAN-01 blade: the recorded outcome of attempt 1 changed");
-    assert!(
-        ce.iter()
-            .any(|d| d.path == "mesh.fan.n_down" && d.message.contains("wake line")),
-        "{ce:?}"
-    );
+    // the c_grid half is informational only: the C-grid construction is being changed by wave 34A (ADR 0072); the attempt 1 outcome
+    // (refused, the wake line leaves the passage at the hub) is recorded in ADR 0075
+    let _ = c;
     let he = h.expect_err("the h_slit now builds with the y+ rule: the recorded outcome of attempt 1 changed");
     assert!(he.iter().any(|d| d.path == "mesh.fan.n_gap"), "{he:?}");
 }

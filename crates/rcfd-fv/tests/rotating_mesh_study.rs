@@ -3,6 +3,8 @@
 //! Richardson extrapolation of a functional on the triple (h/2, h/4, h/8), blind prediction of the h/8 max-norm error. The limits are those
 //! registered in ADR 0075 before this code ran; the ADR 0071 finest-mesh tests stay ignored and unchanged.
 
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the limits
+
 use rcfd_fv::bc::FixedValue;
 use rcfd_fv::simple::{BodyForce, Coupling, IterationInfo, SimpleSettings, SimpleSolver};
 use rcfd_fv::sources::RotatingFrame;

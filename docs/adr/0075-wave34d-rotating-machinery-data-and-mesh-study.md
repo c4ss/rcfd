@@ -240,7 +240,7 @@ Every run converged by its registered criterion except R4 (d) on (96, 32, 2). It
 | R1 functional Q (int u_theta dr) | 9.6663e-2, 1.03738e-1, 1.05475e-1, 1.059058e-1 against 1.0604906e-1; rho 0.2480, p 2.012 | L1 rho in (0, 1); L2 p in [1.7, 2.3] | pass |
 | R1 L3 Richardson | f_RE 1.0604793e-1, error 1.13e-6 = 0.008 x the h/8 error 1.43e-4 | <= 0.2 | pass |
 | R1 L4 GCI | GCI 1.68e-3 against the true relative error 1.35e-3 | GCI >= true | pass |
-| R1 I1 | 500 further iterations change Q and the error by 0 (bit-stationary) | 1e-2 x | pass |
+| R1 I1 | 500 further iterations change Q and the error by 0 to printed precision; a probe on (12, 4, 2) shows the cell velocities move by at most 5.6e-17 in those 500 iterations (res_u 1e-10 -> 2e-16), i.e. round-off, not a vacuous check | 1e-2 x | pass |
 | R2 sector, max-norm | 9.745e-2, 2.606e-2, 6.758e-3, 1.721e-3; orders 1.903, 1.947, 1.973; prediction 1.7525e-3 (ratio 0.982) | L5, L6, L7 | pass |
 | R2 seam flux | 2.55949e-2, 2.65596e-2, 2.68105e-2, 2.68739e-2 against 2.68951e-2; rho 0.2526, p 1.985; f_RE error 2.4e-7 = 0.011 x the h/8 error 2.12e-5; GCI 9.97e-4 against true 7.88e-4 | L1-L4 | pass |
 | R2 I1 | functional change 2.1e-10 (limit 6.3e-7), error change 8.0e-10 (limit 1.7e-5) | | pass |
@@ -302,8 +302,11 @@ manifest) was read for Rotor 37.
 
 F-126 outcome: the registered attempt was NOT RUNNABLE; attempt 2 NOT CONVERGED; attempt 3 converged and MISSED every limit by a wide margin. F-126 acceptance
 is NOT MET. The modelled rotor absorbs 38-46 % less shaft power than measured, and its static pressure at the outlet is below the inlet total pressure
-(negative total-to-static rise) while the total-to-total rise is positive (112.5 Pa at the design point): the swirl and axial kinetic energy left at the
-outlet exceed the static rise. The causes were not diagnosed (bounded round); candidates, none tested: the coarse 13 k-cell H-slit mesh with blunt,
+(negative total-to-static rise) while the total-to-total rise is positive (112.5 Pa at the design point). The gap Delta p_tt - Delta p_ts is 116.3 Pa (design)
+and 127.9 Pa (off-design); uniform axial outflow accounts for rho c_x^2/2 = 53.9 and 89.1 Pa and the swirl implied by the computed torque (Euler work
+M Omega/(rho Q) = 122.0 and 72.6 J/kg, c_theta about 4.1 and 2.5 m/s at r = 0.19 m) for about 10 and 4 Pa, leaving about 52 and 35 Pa unexplained: an
+undiagnosed lead to a strongly non-uniform outlet profile (recirculation or backflow at the uniform fixed-pressure outlet is possible; note also that
+Delta p_tt is mass-averaged and Delta p_ts area-averaged). The causes of the miss were not diagnosed (bounded round); candidates, none tested: the coarse 13 k-cell H-slit mesh with blunt,
 axially truncated edges and 79 deg non-orthogonality, first-order upwind momentum convection, the first cell in the y+ 3-20 range that the SST
 documentation calls the least accurate, a hub cylinder through the whole domain instead of the finite blunt hub and bellmouth, the uniform outlet
 pressure, the NACA 4-digit thickness instead of the CAD thickness, the assumed density, fully turbulent RANS at chord Reynolds numbers about 1.5e5.
@@ -316,6 +319,12 @@ cannot mesh a high-solidity hub whose wake leaves a straight-seam sector; the re
 steady solver has no divergence stop (a diverged SIMPLEC run continued for hours; the ADR 0067 guard covers PIMPLE/PISO only); (4) `linear_upwind` momentum
 convection diverges on this mesh both laminar and with SST, `upwind` is stable; (5) the measured FAN-01 pressure rise is an installation value, a rotor-only
 model needs either the inlet nozzle, hub and diffuser or a rig-independent quantity (torque) to compare with.
+
+Code state of the measurements: Part C was measured on 1f571fb plus the wave 34D test files; G1, the attempt 2 probe and the bit-identity checks on 1f571fb
+plus the wave 34D code; the diagnostic round and attempt 3 on 9f6e60f (which contains all wave 34D code). Between those trees and the gated HEAD other agents
+changed only opt-in paths (34A wall-velocity projection and C-grid construction, 34B consistent momentum interpolation, 34C component diagonal for PISO/PIMPLE);
+the non-ignored Part C and Part B tests are re-run by the final gate on the gated HEAD. The attempt 1 C-grid refusal is no longer asserted by the test (34A is
+changing the C-grid construction); it is recorded here.
 
 ### Deviations from the registered plan (all parts)
 
