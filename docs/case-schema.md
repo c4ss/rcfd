@@ -265,6 +265,10 @@ ahead of the leading edge, in local chords). Unfittable controls give located er
 `mesh.fan.front_gap`; a tangled cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer).
 The generator is not robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold
 (docs/meshing.md). Example: `cases/axial_fan_cgrid/axial_fan_cgrid.toml`.
+`mesh.fan.c_grid_construction` (`pursuit`, the default, the construction above, or `smoothed`, ADR 0072) selects how the `c_grid` lines
+are placed: `smoothed` relaxes every layer with an elliptic (Winslow) smoother whose seams are periodic interior lines, takes the far
+grid of the thin end-wall layers from a remapped radius so it does not rotate between them, and falls back through a fixed chain of
+weaker settings when a layer would fold; the blade stacks stay exact. Measured quality and robustness are in docs/meshing.md.
 
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
 
