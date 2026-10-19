@@ -760,6 +760,12 @@ pub struct Simulation {
     min_iterations: usize,
     stop_reason: Option<String>,
     failure: Option<String>,
+    /// Divergence guard of the steady kernels (ADR 0077), `None` for other engines.
+    steady_guard: Option<rcfd_fv::simple::SteadyGuard>,
+    /// The first trip of the steady divergence guard (the run-control driver ends the run on it).
+    steady_diverged: Option<rcfd_fv::simple::SteadyDivergence>,
+    /// Pressure-lag warnings of the transient solver already handed out (ADR 0077 part C).
+    lag_reported: usize,
     /// Solution limits (`limits.*`, ADR 0016): `(enabled, min, max)` for temperature and transported scalars.
     limit_t: (bool, f64, f64),
     limit_s: (bool, f64, f64),
@@ -1306,6 +1312,8 @@ impl Simulation {
             }
             linear_controls!(s);
             let mut solver = SimpleSolver::new(geom.clone(), u, p, s);
+            // ADR 0077 F-H0 (opt-in): the momentum gradient takes the partner cell on periodic faces
+            solver.periodic_gradient_partner = get_s(case, "solver.periodic_gradient") == "partner_cell";
             let bf = get_v(case, "physics.body_force", [0.0; 3]);
             if vec3::norm(bf) > 0.0 {
                 let b = BodyForce::uniform(&geom, bf);
@@ -1390,6 +1398,24 @@ impl Simulation {
             }
             linear_controls!(s);
             s.time_scheme = solver_time_scheme(case);
+            // ADR 0077 part C: one pressure-lag estimate per run (warn by default; read-only); amendment 3: one corrector only,
+            // the regime of the ADR 0073 model
+            let lag = get_s(case, "solver.pressure_lag_check");
+            if lag != "off" && s.n_correctors == 1 {
+                use rcfd_fv::pimple::{LagAction, LagCheck};
+                let mut c = LagCheck::new(
+                    0,
+                    if lag == "raise" {
+                        LagAction::Raise
+                    } else {
+                        LagAction::Warn
+                    },
+                );
+                if matches!(s.time_scheme, TimeScheme::Bdf2 | TimeScheme::Bdf2Bounded) {
+                    c.start = 2;
+                }
+                s.pressure_lag_check = Some(c);
+            }
             s.amg_pressure = geom.n_cells() > 2000;
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };
@@ -1577,6 +1603,9 @@ impl Simulation {
                 && catalogue.is_none();
             crate::timectl::from_case(case, transient, plain, dt, get_f(case, "solver.end_time"))?
         };
+        // ADR 0077 part A: the steady kernels are observed by the divergence guard
+        let steady_guard = matches!(engine, Engine::Steady(_) | Engine::Coupled(_))
+            .then(|| rcfd_fv::simple::SteadyGuard::new(get_s(case, "solver.steady_divergence_guard") != "off"));
         let mut sim = Simulation {
             case: case.clone(),
             geom,
@@ -1640,6 +1669,9 @@ impl Simulation {
             min_iterations: get_i(case, "solver.min_iterations").max(0) as usize,
             stop_reason: None,
             failure: None,
+            steady_guard,
+            steady_diverged: None,
+            lag_reported: 0,
             limit_t,
             limit_s,
             clipped: 0,
@@ -1955,9 +1987,90 @@ impl Simulation {
         self.failure.as_deref()
     }
 
-    /// Whether the PIMPLE/PISO divergence guard stopped the run (ADR 0067).
+    /// Whether the PIMPLE/PISO divergence guard (ADR 0067) or the steady divergence guard (ADR 0077) stopped the run.
     pub fn diverged(&self) -> bool {
-        matches!(&self.engine, Engine::Transient(s) if s.diverged.is_some())
+        self.steady_diverged.is_some() || matches!(&self.engine, Engine::Transient(s) if s.diverged.is_some())
+    }
+
+    /// Steady divergence guard state (ADR 0077), `None` for engines it does not observe.
+    pub fn steady_guard(&self) -> Option<&rcfd_fv::simple::SteadyGuard> {
+        self.steady_guard.as_ref()
+    }
+
+    /// The first trip of the steady divergence guard (ADR 0077). The simulation keeps iterating when stepped; `runctl::drive`
+    /// ends the run (state `diverged`).
+    pub fn steady_divergence(&self) -> Option<&rcfd_fv::simple::SteadyDivergence> {
+        self.steady_diverged.as_ref()
+    }
+
+    /// Located message of [`Simulation::steady_divergence`].
+    pub fn steady_divergence_message(&self) -> Option<String> {
+        let d = self.steady_diverged.as_ref()?;
+        let mut m = d.message(Some(self.geom.mesh.cell_centres()));
+        let conv = get_s(&self.case, "solver.convection");
+        if conv == "linear_upwind" || conv == "tvd_van_leer" {
+            // ADR 0077 part B (amendment 3): the safe-scheme rule
+            m.push_str(&format!(
+                "; note: solver.convection = \"{conv}\" diverged on the high-aspect, strongly non-orthogonal wall cells of the FAN-01 \
+                 sector mesh where \"upwind\" and \"tvd_minmod\" were stable (ADR 0077 part B)"
+            ));
+        }
+        Some(m)
+    }
+
+    /// Machine-readable record of the divergence that stopped the run (ADR 0077): `solver`, `kind`, `quantity`, the
+    /// iteration (steady) or step, outer iteration and stage (transient), `cell`, `position`, `value`, `limit`, `last_good`.
+    pub fn divergence_json(&self) -> Option<serde_json::Value> {
+        let num = |x: f64| serde_json::Number::from_f64(x).map_or(serde_json::Value::Null, serde_json::Value::Number);
+        let cc = self.geom.mesh.cell_centres();
+        let pos = |c: Option<usize>| c.filter(|&c| c < cc.len()).map(|c| cc[c].map(num));
+        if let Some(d) = &self.steady_diverged {
+            return Some(serde_json::json!({
+                "solver": "steady", "kind": d.kind, "quantity": d.quantity, "iteration": d.iteration,
+                "cell": d.cell, "position": pos(d.cell), "value": num(d.value), "limit": num(d.limit),
+                "last_good": d.last_good, "last_good_continuity": num(d.last_good_continuity),
+            }));
+        }
+        let Engine::Transient(s) = &self.engine else {
+            return None;
+        };
+        let d = s.diverged.as_ref()?;
+        let kind = match d.quantity {
+            "courant" => "courant",
+            "lag amplification" => "lag_amplification",
+            _ => "non_finite",
+        };
+        Some(serde_json::json!({
+            "solver": "transient", "kind": kind, "quantity": d.quantity, "step": d.step,
+            "outer": d.outer.map(|o| o + 1), "stage": d.stage, "cell": d.cell, "position": pos(d.cell),
+            "value": num(d.value), "limit": num(if kind == "lag_amplification" { 1.0 } else { d.limit }),
+            "last_good": d.step.saturating_sub(1),
+        }))
+    }
+
+    /// Pressure-lag warnings of the transient solver not handed out yet (ADR 0077 part C), as `warning` event bodies.
+    pub fn take_runtime_warnings(&mut self) -> Vec<serde_json::Value> {
+        let Engine::Transient(s) = &self.engine else {
+            return Vec::new();
+        };
+        let cc = self.geom.mesh.cell_centres();
+        let nc = s.settings.n_correctors;
+        let out: Vec<serde_json::Value> = s.lag_warnings[self.lag_reported.min(s.lag_warnings.len())..]
+            .iter()
+            .map(|w| {
+                let x = cc.get(w.cell).copied().unwrap_or([f64::NAN; 3]);
+                serde_json::json!({
+                    "message": format!(
+                        "PIMPLE pressure-lag check: the lagged pressure error is amplified by {:.3} per step (>= 1) at step {}, cell {} at ({:.4e}, {:.4e}, {:.4e}); \
+                         with solver.n_correctors = {nc} the run will diverge: use solver.n_correctors >= {} or a smaller solver.dt",
+                        w.rho, w.step, w.cell, x[0], x[1], x[2], nc + 1
+                    ),
+                    "kind": "pressure_lag", "step": w.step, "rho": w.rho, "cell": w.cell, "position": x,
+                })
+            })
+            .collect();
+        self.lag_reported = s.lag_warnings.len();
+        out
     }
 
     /// Registry key and label of the active turbulence model (`None` for laminar runs).
@@ -2271,6 +2384,13 @@ impl Simulation {
                     cat.refresh(&self.geom, &mut s.u, &mut s.p, &s.phi);
                 }
                 let i = s.iterate();
+                if self.steady_diverged.is_none() {
+                    // ADR 0077 amendment 1: recorded here, the run-control driver ends the run
+                    self.steady_diverged = self
+                        .steady_guard
+                        .as_mut()
+                        .and_then(|gd| gd.check(&self.geom, &i, &s.u, &s.p.values, &s.phi));
+                }
                 let mut chem_heat: Option<Vec<f64>> = None;
                 if let Some(ch) = &self.chem {
                     match crate::chemistry::apply_steady(
@@ -2379,6 +2499,13 @@ impl Simulation {
                     s.body_force = total;
                 }
                 let i = s.iterate();
+                if self.steady_diverged.is_none() {
+                    // ADR 0077 amendment 1: recorded here, the run-control driver ends the run
+                    self.steady_diverged = self
+                        .steady_guard
+                        .as_mut()
+                        .and_then(|gd| gd.check(&self.geom, &i, &s.u, &s.p.values, &s.phi));
+                }
                 if let Some(ch) = &self.chem {
                     if let Err(e) = crate::chemistry::apply_steady(ch, self.scalars.as_mut(), None, self.turb.as_ref())
                     {

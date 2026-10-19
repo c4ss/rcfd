@@ -20,7 +20,7 @@ use crate::diffusion::{laplacian, uniform_gamma};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
-use crate::gradient::{green_gauss, least_squares};
+use crate::gradient::{green_gauss, least_squares, least_squares_partner};
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure_parts,
     PressureBc, PressureControls,
@@ -502,6 +502,9 @@ pub struct SimpleSolver {
     /// condition keeps the prescribed wall velocity (ADR 0072, the impermeable wall of revolution whose facets are not exactly
     /// perpendicular to its velocity). `None` (default) leaves the solver unchanged.
     pub impermeable: Option<Vec<bool>>,
+    /// Momentum least-squares gradient on coupled (periodic) faces from the partner cell mapped into the owner's frame instead of the
+    /// interpolated face value (ADR 0077 F-H0; exact for linear fields where the cells are not aligned across the seam). Default `false`.
+    pub periodic_gradient_partner: bool,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -589,6 +592,7 @@ impl SimpleSolver {
             sink: None,
             face_jump: None,
             impermeable: None,
+            periodic_gradient_partner: false,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -738,6 +742,11 @@ impl SimpleSolver {
             Some(o) => self.phi.iter().zip(o).map(|(p, o)| p - o).collect(),
             None => self.phi.clone(),
         };
+        let partners = if self.periodic_gradient_partner {
+            crate::gradient::periodic_partner_points(&g, &self.u, &u_old)
+        } else {
+            Vec::new()
+        };
         for k in 0..3 {
             if !g.active[k] {
                 continue;
@@ -747,7 +756,8 @@ impl SimpleSolver {
             let bc = self.u.boundary_coeffs(&g, k);
             let bvals: Vec<f64> = ub.iter().map(|v| v[k]).collect();
             let grad = if s.convection.needs_gradient() || s.non_orth_correctors > 0 {
-                Some(least_squares(&g, &cells, &bvals))
+                let pk: Vec<(usize, Vec3, f64)> = partners.iter().map(|&(i, d, v)| (i, d, v[k])).collect();
+                Some(least_squares_partner(&g, &cells, &bvals, &pk))
             } else {
                 None
             };
@@ -1225,6 +1235,238 @@ impl SimpleSolver {
             converged: false,
             last,
         }
+    }
+}
+
+/// Continuity growth factor of the steady divergence guard (ADR 0077 K2).
+pub const STEADY_GROWTH_FACTOR: f64 = 1e6;
+/// Iterations over which K2 takes the smallest earlier continuity.
+pub const STEADY_GROWTH_WINDOW: usize = 50;
+/// Floor of the K2 reference, relative to the reference speed.
+pub const STEADY_GROWTH_FLOOR: f64 = 1e-6;
+/// Largest cell speed, relative to the reference speed, before K3 trips.
+pub const STEADY_SPEED_FACTOR: f64 = 1e6;
+/// Largest pressure range, relative to the reference pressure, before K4 trips.
+pub const STEADY_PRESSURE_FACTOR: f64 = 1e12;
+
+/// Where and why the steady divergence guard stopped a run (ADR 0077 part A).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SteadyDivergence {
+    /// Iteration that tripped.
+    pub iteration: usize,
+    /// `non_finite`, `continuity_growth`, `velocity_runaway` or `pressure_runaway`.
+    pub kind: &'static str,
+    /// `res_u`, `res_p`, `continuity`, `velocity`, `pressure` or `flux`.
+    pub quantity: &'static str,
+    /// Cell holding the offending value (owner cell of a face), if any.
+    pub cell: Option<usize>,
+    /// The offending value.
+    pub value: f64,
+    /// The threshold that was exceeded (NaN for a non-finite value).
+    pub limit: f64,
+    /// Iteration with the smallest continuity before the trip (0 when there was none).
+    pub last_good: usize,
+    /// Continuity of `last_good`.
+    pub last_good_continuity: f64,
+}
+
+impl SteadyDivergence {
+    /// One-line located message; `centres` (cell centres of the mesh) adds the position of the cell.
+    pub fn message(&self, centres: Option<&[Vec3]>) -> String {
+        let at = match (self.cell, centres) {
+            (Some(c), Some(x)) if c < x.len() => {
+                format!(", cell {c} at ({:.4e}, {:.4e}, {:.4e})", x[c][0], x[c][1], x[c][2])
+            }
+            (Some(c), _) => format!(", cell {c}"),
+            _ => String::new(),
+        };
+        let what = if self.kind == "non_finite" {
+            format!("{} is {} (not finite)", self.quantity, self.value)
+        } else {
+            format!("{} is {:.4e} (limit {:.4e})", self.quantity, self.value, self.limit)
+        };
+        let good = if self.last_good == 0 {
+            "last good iteration 0 (none)".to_string()
+        } else {
+            format!(
+                "last good iteration {} (continuity {:.3e})",
+                self.last_good, self.last_good_continuity
+            )
+        };
+        format!(
+            "steady divergence guard: {}: {what} at iteration {}{at}; {good}; lower the relaxation factors (solver.alpha_u, solver.alpha_p) or use a more dissipative convection scheme",
+            self.kind, self.iteration
+        )
+    }
+}
+
+/// Divergence guard of the steady solvers (ADR 0077 part A): a read-only monitor called after every iteration.
+///
+/// K1 stops at any non-finite residual, continuity, cell velocity, cell pressure or face flux (always). The references are taken
+/// at the first observed iteration: `U_ref` the largest cell or boundary-face speed, `P_ref = max(U_ref^2, pressure range)`. From
+/// the second iteration on, with `runaway` set: K2 the continuity exceeds [`STEADY_GROWTH_FACTOR`] times the larger of its smallest
+/// value over the last [`STEADY_GROWTH_WINDOW`] iterations and [`STEADY_GROWTH_FLOOR`] `U_ref`; K3 the largest cell speed exceeds
+/// [`STEADY_SPEED_FACTOR`] `U_ref`; K4 the pressure range exceeds [`STEADY_PRESSURE_FACTOR`] `P_ref`. A zero reference switches its
+/// criteria off.
+#[derive(Debug, Clone)]
+pub struct SteadyGuard {
+    /// K2 to K4 active.
+    pub runaway: bool,
+    /// Largest ratio to the K2, K3 and K4 reference seen so far (diagnostics; the trip ratios are the factors).
+    pub peak: [f64; 3],
+    refs: Option<(f64, f64)>,
+    recent: std::collections::VecDeque<f64>,
+    best: (usize, f64),
+}
+
+impl SteadyGuard {
+    /// A guard; `runaway = false` keeps only the non-finite check.
+    pub fn new(runaway: bool) -> Self {
+        SteadyGuard {
+            runaway,
+            peak: [0.0; 3],
+            refs: None,
+            recent: std::collections::VecDeque::new(),
+            best: (0, f64::INFINITY),
+        }
+    }
+
+    /// `(U_ref, P_ref)` once the first iteration has been observed.
+    pub fn references(&self) -> Option<(f64, f64)> {
+        self.refs
+    }
+
+    /// Check the state after an iteration; returns the record of a trip.
+    pub fn check(
+        &mut self,
+        geom: &FvGeometry,
+        info: &IterationInfo,
+        u: &VectorField,
+        p: &[f64],
+        phi: &[f64],
+    ) -> Option<SteadyDivergence> {
+        let (last_good, last_good_continuity) = if self.best.0 == 0 { (0, f64::NAN) } else { self.best };
+        let trip = |kind, quantity, cell, value, limit| {
+            Some(SteadyDivergence {
+                iteration: info.iteration,
+                kind,
+                quantity,
+                cell,
+                value,
+                limit,
+                last_good,
+                last_good_continuity,
+            })
+        };
+        for (q, v) in [
+            ("res_u", info.res_u),
+            ("res_p", info.res_p),
+            ("continuity", info.continuity),
+        ] {
+            if !v.is_finite() {
+                return trip("non_finite", q, None, v, f64::NAN);
+            }
+        }
+        if let Some(c) = u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
+            let v = u.values[c].iter().copied().find(|x| !x.is_finite()).unwrap_or(f64::NAN);
+            return trip("non_finite", "velocity", Some(c), v, f64::NAN);
+        }
+        if let Some(c) = p.iter().position(|x| !x.is_finite()) {
+            return trip("non_finite", "pressure", Some(c), p[c], f64::NAN);
+        }
+        if let Some(f) = phi.iter().position(|x| !x.is_finite()) {
+            return trip(
+                "non_finite",
+                "flux",
+                geom.mesh.owner().get(f).copied(),
+                phi[f],
+                f64::NAN,
+            );
+        }
+        let (mut umax, mut ucell) = (0.0f64, 0);
+        for (c, v) in u.values.iter().enumerate() {
+            let s = vec3::norm(*v);
+            if s > umax {
+                (umax, ucell) = (s, c);
+            }
+        }
+        let (mut lo, mut hi, mut pcell) = (f64::INFINITY, f64::NEG_INFINITY, 0);
+        for (c, &x) in p.iter().enumerate() {
+            lo = lo.min(x);
+            hi = hi.max(x);
+            if x.abs() > p[pcell].abs() {
+                pcell = c;
+            }
+        }
+        let range = if p.is_empty() { 0.0 } else { hi - lo };
+        let cont = info.continuity;
+        match self.refs {
+            None => {
+                let ub = u.boundary_values(geom);
+                let mut u_ref = umax;
+                for (i, v) in ub.iter().enumerate() {
+                    if !geom.empty[geom.n_internal + i] {
+                        u_ref = u_ref.max(vec3::norm(*v));
+                    }
+                }
+                self.refs = Some((u_ref, (u_ref * u_ref).max(range)));
+            }
+            Some((u_ref, p_ref)) if self.runaway => {
+                if u_ref > 0.0 && !self.recent.is_empty() {
+                    let floor = self
+                        .recent
+                        .iter()
+                        .copied()
+                        .fold(f64::INFINITY, f64::min)
+                        .max(STEADY_GROWTH_FLOOR * u_ref);
+                    self.peak[0] = self.peak[0].max(cont / floor);
+                    if cont > STEADY_GROWTH_FACTOR * floor {
+                        let div = crate::pressure::divergence(geom, phi);
+                        let cell = (0..div.len()).max_by(|&a, &b| div[a].abs().total_cmp(&div[b].abs()));
+                        return trip(
+                            "continuity_growth",
+                            "continuity",
+                            cell,
+                            cont,
+                            STEADY_GROWTH_FACTOR * floor,
+                        );
+                    }
+                }
+                if u_ref > 0.0 {
+                    self.peak[1] = self.peak[1].max(umax / u_ref);
+                    if umax > STEADY_SPEED_FACTOR * u_ref {
+                        return trip(
+                            "velocity_runaway",
+                            "velocity",
+                            Some(ucell),
+                            umax,
+                            STEADY_SPEED_FACTOR * u_ref,
+                        );
+                    }
+                }
+                if p_ref > 0.0 {
+                    self.peak[2] = self.peak[2].max(range / p_ref);
+                    if range > STEADY_PRESSURE_FACTOR * p_ref {
+                        return trip(
+                            "pressure_runaway",
+                            "pressure",
+                            Some(pcell),
+                            range,
+                            STEADY_PRESSURE_FACTOR * p_ref,
+                        );
+                    }
+                }
+            }
+            Some(_) => {}
+        }
+        self.recent.push_back(cont);
+        if self.recent.len() > STEADY_GROWTH_WINDOW {
+            self.recent.pop_front();
+        }
+        if cont < self.best.1 {
+            self.best = (info.iteration, cont);
+        }
+        None
     }
 }
 

@@ -328,6 +328,11 @@ pub fn drive(
             }
         };
         steps += 1;
+        // run-time warnings of the step (ADR 0077: the pressure-lag check)
+        for w in lock_sim(sim).take_runtime_warnings() {
+            sink(&event("warning", &mut seq, t0.elapsed().as_secs_f64(), w));
+        }
+        let steady_div = lock_sim(sim).steady_divergence_message();
         if let (Some(dir), true) = (&opts.out_dir, snapshot_every > 0) {
             if step.index % snapshot_every == 0 {
                 let g = lock_sim(sim);
@@ -389,6 +394,10 @@ pub fn drive(
         } else {
             pending = Some(body);
         }
+        if let Some(why) = steady_div {
+            // the steady divergence guard (ADR 0077, amendment 1: the driver ends the run)
+            break finish("diverged", exit::DIVERGED, why);
+        }
         if !step.res_u.is_finite() || !step.res_p.is_finite() {
             let why = {
                 let g = lock_sim(sim);
@@ -415,6 +424,12 @@ pub fn drive(
     }
     let mut body = outcome.to_json();
     body["ok"] = json!(outcome.exit_code == exit::OK);
+    if outcome.state == "diverged" {
+        // machine-readable record of the guard trip (ADR 0077)
+        if let Some(d) = lock_sim(sim).divergence_json() {
+            body["divergence"] = d;
+        }
+    }
     sink(&event("finish", &mut seq, outcome.elapsed_s, body));
     outcome
 }
@@ -551,6 +566,7 @@ pub fn summarize_stream(text: &str) -> Result<Value, String> {
         "state": finish.as_ref().map_or(json!("running"), |f| f["state"].clone()),
         "exit_code": finish.as_ref().map_or(Value::Null, |f| f["exit_code"].clone()),
         "reason": finish.as_ref().map_or(Value::Null, |f| f["reason"].clone()),
+        "divergence": finish.as_ref().map_or(Value::Null, |f| f["divergence"].clone()),
         "iterations": iter.as_ref().map_or(Value::Null, |f| f["index"].clone()),
         "last_iteration": iter,
         "checkpoints": events.iter().filter(|e| e["event"] == "checkpoint").count(),

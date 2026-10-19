@@ -99,6 +99,46 @@ fn solve_masked(mut m: [[f64; 3]; 3], b: Vec3, active: [bool; 3]) -> Vec3 {
 /// Inverse-distance weighted least-squares gradient (exact for linear fields
 /// on any mesh when the boundary values are exact).
 pub fn least_squares(geom: &FvGeometry, cells: &[f64], bvals: &[f64]) -> Vec<Vec3> {
+    least_squares_partner(geom, cells, bvals, &[])
+}
+
+/// The partner points of the coupled (periodic) boundary faces of `u` for [`least_squares_partner`] (ADR 0077 F-H0): per face
+/// `(f - n_internal, (x_f - x_o) + R (x_q - x_g), R values[q])` with o the owner, g the partner face, q its owner and R the rotation of the
+/// pair (identity for a translation); in boundary-face order.
+pub fn periodic_partner_points(
+    geom: &FvGeometry,
+    u: &crate::field::VectorField,
+    values: &[Vec3],
+) -> Vec<(usize, Vec3, Vec3)> {
+    let mesh = &geom.mesh;
+    let (own, cc, fc) = (mesh.owner(), mesh.cell_centres(), mesh.face_centres());
+    let mut out = Vec::new();
+    for (pi, p) in mesh.patches().iter().enumerate() {
+        let (Some(map), true) = (&geom.periodic_partner[pi], u.bc(pi).is_coupled()) else {
+            continue;
+        };
+        let rot = |v: Vec3| geom.periodic_rot[pi].as_ref().map_or(v, |r| crate::field::rotate(r, v));
+        for (local, f) in p.faces().enumerate() {
+            let (g, o) = (map[local], own[f]);
+            let q = own[g];
+            let d = vec3::add(vec3::sub(fc[f], cc[o]), rot(vec3::sub(cc[q], fc[g])));
+            out.push((f - geom.n_internal, d, rot(values[q])));
+        }
+    }
+    out.sort_by_key(|e| e.0);
+    out
+}
+
+/// [`least_squares`] that takes, on the boundary faces listed in `partner` as `(f - n_internal, displacement, value)`, the given point
+/// (the partner cell of a periodic face mapped into the owner's frame: displacement from the owner centre and its value) instead of the
+/// face centre and the boundary value (ADR 0077 F-H0: exact for linear fields also where the cells are not aligned across the seam).
+/// `partner` must be sorted by boundary face; an empty list gives [`least_squares`] bit for bit.
+pub fn least_squares_partner(
+    geom: &FvGeometry,
+    cells: &[f64],
+    bvals: &[f64],
+    partner: &[(usize, Vec3, f64)],
+) -> Vec<Vec3> {
     let mesh = &geom.mesh;
     let (own, nei) = (mesh.owner(), mesh.neighbour());
     let n = mesh.n_cells();
@@ -119,8 +159,12 @@ pub fn least_squares(geom: &FvGeometry, cells: &[f64], bvals: &[f64]) -> Vec<Vec
         add(o, d, cells[nb] - cells[o]);
         add(nb, vec3::scale(d, -1.0), cells[o] - cells[nb]);
     }
+    let mut next = partner.iter().peekable();
     for f in geom.n_internal..mesh.n_faces() {
-        if !geom.empty[f] {
+        if let Some(&&(_, d, v)) = next.peek().filter(|p| p.0 == f - geom.n_internal) {
+            next.next();
+            add(own[f], d, v - cells[own[f]]);
+        } else if !geom.empty[f] {
             add(own[f], geom.delta[f], bvals[f - geom.n_internal] - cells[own[f]]);
         }
     }
