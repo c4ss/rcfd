@@ -18,8 +18,8 @@ Claude, through the assistant tool layer, iterates on fan shape and size, sets u
 |---|---|---|
 | Parametric blade/hub geometry | blade count, hub and tip radius, chord, twist, camber, sweep, tip gap | wave 32A (ADR 0065): library `rcfd_mesh::fan`, NACA 4-digit and circular-arc sections, checked against analytic formulas only |
 | Volume mesh of a periodic blade passage | body-fitted sector mesh with boundary layers, quality gates | wave 32A: hex sector with blunt blade edges and exact boundary-layer stacks, accepted by the periodic solver machinery; the registered quality gates are MISSED (docs/meshing.md) |
-| Rotating-frame steady solve | MRF + periodic sector + SST | MRF exists; periodic sector fan case unvalidated |
-| Fan validation | published fan or compressor data compared | none (turbo is conservation-checked only) |
+| Rotating-frame steady solve | MRF + periodic sector + SST | MRF exists; rotating-frame checks second order with a registered mesh study (ADR 0075 part C); SST accepts the stationary casing as a moving wall since wave 34D (ADR 0075); the steady solver has no divergence stop |
+| Fan validation | published fan or compressor data compared | FAN-01 (FAU/EAA low-pressure fan, CC BY 4.0 CAD and characteristic) read and compared once (ADR 0075): rotor-only sector MISSES (torque -38 % at the design point, total-to-static rise negative against 126 Pa measured); F-126 not met |
 | Operating map | flow/pressure sweep with restart, efficiency, characteristic curve | none (F-254 candidate) |
 | Noise | time-domain FW-H (Farassat 1A), steady-RANS broadband proxies, tonal (Gutin) check, SPL/OASPL/octave bands | F-243 partial, nothing validated |
 | Optimiser | DOE, gradient-free optimiser, robust multi-point and Pareto objective | none (F-095 partial, F-257 candidate) |
@@ -30,7 +30,7 @@ Claude, through the assistant tool layer, iterates on fan shape and size, sets u
 
 - Broadband fan noise needs scale-resolving transient flow; steady RANS can only supply source proxies. The first noise objective is therefore a stated proxy plus tonal prediction, and its distance from measured noise must be reported, not assumed small.
 - The CFD solver does not see blade material. Material choice affects mass, stiffness and damping, which needs a structural solver and FSI (product-suites S-01, F-139); this milestone iterates geometry, size and speed only unless the user later adds structural coupling.
-- No public fan validation data has been read yet; the first task of the validation stage is to find and read some.
+- Public fan data has been read (wave 34D, docs/validation-data.md "Rotating machinery sources"): FAN-01 is the only open low-speed case found whose blade the generator can represent. Its measured pressure rise is an installation value (bellmouth, finite hub, struts, diffuser); the first rotor-only comparison missed by a wide margin and the cause is not yet diagnosed (ADR 0075).
 
 ## Wave order
 
