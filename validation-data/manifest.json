@@ -859,6 +859,29 @@
           "bytes": 2098
         }
       ]
+    },
+    {
+      "id": "w34c-tmr-flatplate-grid-axes",
+      "title": "NASA TMR 2DZP flat-plate grid, node coordinates of the 545 x 385 tensor-product grid (x axis and y axis)",
+      "case": "flat_plate",
+      "citation": "NASA Turbulence Modeling Resource, 2DZP grids (https://tmbwg.github.io/turbmodels/flatplate_grids.html), file flatplate_clust2.p2dfmt in flatplategrids-grids.zip",
+      "status": "available",
+      "licence": {
+        "spdx": "LicenseRef-published-numeric-data",
+        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
+        "url": "https://github.com/TMBWG/turbmodels/blob/main/LICENSE",
+        "attribution": "NASA TMR (TMBWG), 2DZP verification grids",
+        "notes": "The PLOT3D grid is an exact tensor product (x depends only on i to 1e-14, y only on j to 3e-12); the 545 x-node coordinates (j = 0) and the 385 y-node coordinates (i = 0) are stored. The coarser TMR grids are every-other-point of these nodes. Source file sha256 3aee0ccb708e7b73c2e8fd6e0163388df57a2db745ccae93a6cc6d640b141d7b (10211522 bytes, unzipped). Used by w34c_sst_plate_hypotheses.rs (ADR 0074 H6)."
+      },
+      "files": [
+        {
+          "local": "validation-data/reference/w34c_tmr_flatplate_545x385_axes.csv",
+          "retrieved": "2026-10-19",
+          "source_url": "https://www.nasa.gov/wp-content/uploads/2026/02/flatplategrids-grids.zip (FlatPlate/Grids/flatplate_clust2.p2dfmt.gz)",
+          "sha256": "d18a9c74af328d6f2223bfe640587bd971a815a82ce0c3c88c321ca627584934",
+          "bytes": 26869
+        }
+      ]
     }
   ]
 }
