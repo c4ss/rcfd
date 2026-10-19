@@ -1533,6 +1533,44 @@ the Courant criterion in practice; a non-finite state is always fatal). The run 
 a located message that names the quantity, step, outer iteration, stage and cell. For finite runs below the limit the checks only
 read the state, so results are bit-identical to runs without the key.
 
+## Divergence guard of the steady solvers (`solver.steady_divergence_guard`)
+
+`solver.steady_divergence_guard` (`on` default, `off`) applies to `solver.algorithm = "simple"`, `"simplec"` and `"coupled"` (ADR 0077). After every iteration
+the guard checks: any non-finite residual, continuity, cell velocity, cell pressure or face flux (always, also with `off`); with `on`, from the second
+iteration, the continuity exceeding 1e6 times the larger of its smallest value over the previous 50 iterations and 1e-6 `U_ref`, the largest cell speed
+exceeding 1e6 `U_ref`, or the pressure range exceeding 1e12 `P_ref` (`U_ref` the largest cell or boundary-face speed after the first iteration,
+`P_ref = max(U_ref^2, pressure range after the first iteration)`; a zero reference switches its criteria off). The guard records the first trip (kind
+`non_finite`, `continuity_growth`, `velocity_runaway` or `pressure_runaway`, the quantity, the cell and its position, the value, the limit, and the last
+good iteration = the one with the smallest continuity before the trip). The run-control driver (`rcfd run`, the `run.headless` service and MCP tool, the
+design loop) ends the run after that iteration with state `diverged`, exit code 6, the located message as reason and the record in the `finish` event
+(`divergence`, see `docs/run-control.md`). A simulation stepped directly (GUI, library) keeps iterating and exposes the record
+(`Simulation::steady_divergence`). The checks only read the state, so results are bit-identical with `on` and `off`.
+
+## Pressure-lag check of PIMPLE (`solver.pressure_lag_check`)
+
+`solver.pressure_lag_check` (`warn` default, `raise`, `off`) applies to `solver.algorithm = "piso"` and `"pimple"` (not the fractional step, not dynamic
+meshes; ADR 0073 B4, ADR 0077) with `solver.n_correctors = 1`, the regime of the ADR 0073 model (with more correctors no estimate is made: in two-corrector
+runs at large diffusion numbers, including a fluid at rest, the estimate exceeded 1 where nothing grew, ADR 0077 amendment 3). One estimate per run of the
+per-step amplification of the lagged pressure error (step 1; step 2 with `bdf2` and `bdf2_bounded`, whose first step is an implicit Euler step). `warn`: an
+amplification of at least 1 gives a `warning` event (`kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`, and a message with the remedy
+`solver.n_correctors >= 2` or a smaller `solver.dt`); the solution is unchanged. `raise`: the run stops (state `diverged`, exit 6). `off`: no estimate.
+The estimate costs about as much as 15 steps, once per run (measured on a 48 x 48 PISO cavity).
+
+## Least-squares velocity gradient on periodic faces (`solver.periodic_gradient`)
+
+`solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum gradient (used by gradient-based
+convection schemes and non-orthogonal correctors; ADR 0077 F-H0). `face_value` takes the interpolated face value at the face centre; where the cells on
+the two sides of a periodic seam are not aligned (a skewed blade-passage sector), the gradient of a seam cell is then wrong by O(1) of the gradient even
+for a linear field (0.17 of it on the FAN-01 sector mesh). `partner_cell` uses the partner cell mapped into the owner's frame and is exact for linear
+fields. Opt-in; not used by the transient kernel, scalars or turbulence equations.
+
+### Momentum convection on high-aspect, strongly non-orthogonal wall cells (ADR 0077 part B)
+
+With the steady solvers, `linear_upwind` and `tvd_van_leer` diverged from the first iterations on the FAN-01 H-slit sector mesh (13 332 cells, wall cells of
+aspect ratio up to 944 with face non-orthogonality up to 79 degrees), laminar and with SST; `upwind` and `tvd_minmod` were stable. The divergence starts in the
+wall cells with the largest aspect ratio times the tangent of their non-orthogonality: the unlimited extrapolation `grad(u) . (x_f - x_U)` over the long side of
+such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or `tvd_minmod` on such meshes.
+
 ## Design-loop files (not part of the case schema)
 
 Operating maps (`rcfd map`), design studies and the `design_*` tools do not add a section to the case: a map or a study is a driver
