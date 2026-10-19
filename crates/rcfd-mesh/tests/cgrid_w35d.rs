@@ -787,29 +787,9 @@ fn wall_station(m: &CGridMesh, i: usize) -> (f64, Side) {
     }
 }
 
-/// 3-D unit surface normal at wall line `i` of layer `k` (the construction of `lean_stack`) and the in-plane normal as a 3-D vector.
-fn normals_3d(fan: &AxialFan, m: &CGridMesh, i: usize, k: usize) -> (Vec3, Vec3) {
-    let r = m.radii[k];
-    let w = m.grid[m.c_node(i, 0, k)];
-    let th = w[1].atan2(w[0]);
-    let e_t = [-th.sin(), th.cos(), 0.0];
-    let n = m.normals[k][i];
-    let n_ip = [n[1] * e_t[0], n[1] * e_t[1], n[0]];
-    let t_ip = [n[0] * e_t[0], n[0] * e_t[1], -n[1]];
-    let (x, side) = wall_station(m, i);
-    let dr = 1e-6 * r;
-    let t_r = vec3::sub(fan.surface_point(r + dr, x, side), fan.surface_point(r - dr, x, side));
-    let mut nn = vec3::unit(vec3::cross(t_ip, t_r));
-    if vec3::dot(nn, n_ip) < 0.0 {
-        nn = vec3::scale(nn, -1.0);
-    }
-    (nn, n_ip)
-}
-
 /// Q7 measures (ADR 0068/0072): worst relative deviation of the radial stacks (`h1` at the hub and below the tip, `h_gap` in the gap)
-/// and of the blade wall stacks (distance and transverse). `wall_normal`: the wall-stack distance measured along the 3-D surface
-/// normal (C5), the transverse deviation always against the in-plane normal line.
-fn stack_deviation(fan: &AxialFan, m: &CGridMesh, wall_normal: bool) -> (f64, f64) {
+/// and of the blade wall stacks (distance and transverse), in the unrolled plane of each layer.
+fn stack_deviation(m: &CGridMesh) -> (f64, f64) {
     let rel = |a: f64, b: f64| (a - b).abs() / b.abs();
     let (g, nb, h1, hg) = (m.growth, m.n_bl, m.h1, m.h_gap);
     let r = &m.radii;
@@ -837,18 +817,10 @@ fn stack_deviation(fan: &AxialFan, m: &CGridMesh, wall_normal: bool) -> (f64, f6
         for i in nd..=n_i - nd {
             let w = plane(m.c_node(i, 0, k));
             let n = m.normals[k][i];
-            // C5: the in-plane offset is a vector of the cylinder's tangent plane; its component along the 3-D surface normal is
-            // the in-plane length times cos(lean)
-            let cos_l = if wall_normal {
-                let (nn, n_ip) = normals_3d(fan, m, i, k);
-                vec3::dot(nn, n_ip).abs()
-            } else {
-                1.0
-            };
             for q in 1..=nb {
                 let p = plane(m.c_node(i, q, k));
                 let d = (p.0 - w.0, p.1 - w.1);
-                let along = (d.0 * n[0] + d.1 * n[1]) * cos_l;
+                let along = d.0 * n[0] + d.1 * n[1];
                 let across = d.0 * n[1] - d.1 * n[0];
                 let want = exact(q - 1);
                 wall = wall.max(rel(along, want)).max(across.abs() / want);
@@ -946,20 +918,10 @@ fn r_e_count(opts: &CGridOptions) -> (usize, usize) {
     (even + odd, list.len())
 }
 
-/// Everything the decision rule of ADR 0079 needs, for one construction.
-struct Part2 {
-    a: QualitySummary,
-    b: QualitySummary,
-    target: [f64; 5],
-    q2: f64,
-    q2_ok: bool,
-    q6: Option<f64>,
-    q7_a: (f64, f64),
-    q7_b: (f64, f64),
-    r_e: usize,
-}
-
-fn part2_measure(tag: &str, opts: &CGridOptions) -> Result<Part2, String> {
+/// The measures of the ADR 0079 part 2 decision rule for one construction, printed: Q1-E of A' and B', the target measures, Q2 and Q6 on S
+/// and A', Q7 on A' and B', the R-E build count. Returns (Q2 topology ok, R-E count). The registered sequence C2, C5, C6, C4 ran with this
+/// harness in the record commit 5348934 (all four rejected, ADR 0079 amendment 2); the options were removed afterwards.
+fn part2_measure(tag: &str, opts: &CGridOptions) -> Result<(bool, usize), String> {
     let fan = blade_b();
     let bld = |sp: &CGridSpec| build_cgrid_mesh_with(&fan, sp, opts).map_err(|e| format!("{tag}: {e:?}"));
     let s = bld(&spec_s())?;
@@ -973,9 +935,7 @@ fn part2_measure(tag: &str, opts: &CGridOptions) -> Result<Part2, String> {
         (Some(x), Some(y)) => Some(x.max(y)),
         _ => None,
     };
-    let wn = opts.lean_stack;
-    let (q7_a, q7_b) = (stack_deviation(&fan, &a, wn), stack_deviation(&fan, &b, wn));
-    let (q7_a_ip, q7_b_ip) = (stack_deviation(&fan, &a, false), stack_deviation(&fan, &b, false));
+    let (q7_a, q7_b) = (stack_deviation(&a), stack_deviation(&b));
     let (r_e, n_re) = r_e_count(opts);
     summary(&format!("P2 {tag} A' (step {})", a.construction_step), &qa);
     summary(&format!("P2 {tag} B' (step {})", b.construction_step), &qb);
@@ -984,95 +944,24 @@ fn part2_measure(tag: &str, opts: &CGridOptions) -> Result<Part2, String> {
         target[0], target[1], target[2], target[3], target[4], qa.max_aspect_ratio, qb.max_aspect_ratio
     );
     println!(
-        "P2 {tag}: Q2 closure {:.2e} (S {c_s:.2e}, A' {c_a:.2e}) topology {}; Q6 {:?}; Q7 A' radial {:.2e} wall {:.2e}, B' radial {:.2e} wall {:.2e} ({}); in-plane form A' wall {:.2e}, B' wall {:.2e}; R-E {r_e} of {n_re}",
+        "P2 {tag}: Q2 closure {:.2e} (S {c_s:.2e}, A' {c_a:.2e}) topology {}; Q6 {:?}; Q7 A' radial {:.2e} wall {:.2e}, B' radial {:.2e} wall {:.2e}; R-E {r_e} of {n_re}",
         c_s.max(c_a),
         ok_s && ok_a,
         q6,
         q7_a.0,
         q7_a.1,
         q7_b.0,
-        q7_b.1,
-        if wn { "along the 3-D wall normal" } else { "in-plane" },
-        q7_a_ip.1,
-        q7_b_ip.1
+        q7_b.1
     );
-    Ok(Part2 {
-        a: qa,
-        b: qb,
-        target,
-        q2: c_s.max(c_a),
-        q2_ok: ok_s && ok_a,
-        q6,
-        q7_a,
-        q7_b,
-        r_e,
-    })
-}
-
-/// Decision rule of ADR 0079 part 2 for a change whose target measure is `target` (index into `Part2::target`; None: A' aspect).
-fn accepted(name: &str, base: &Part2, new: &Part2, target: Option<usize>) -> bool {
-    let (t0, t1) = match target {
-        Some(i) => (base.target[i], new.target[i]),
-        None => (base.a.max_aspect_ratio, new.a.max_aspect_ratio),
-    };
-    let i = t1 <= 0.9 * t0;
-    let worse = |x: f64, y: f64| y > 1.01 * x;
-    let ii = !(worse(base.a.max_non_orthogonality, new.a.max_non_orthogonality)
-        || worse(base.a.max_skewness, new.a.max_skewness)
-        || worse(base.a.max_aspect_ratio, new.a.max_aspect_ratio)
-        || worse(base.b.max_non_orthogonality, new.b.max_non_orthogonality)
-        || worse(base.b.max_skewness, new.b.max_skewness)
-        || worse(base.b.max_aspect_ratio, new.b.max_aspect_ratio));
-    let iii = new.q2 <= 1e-13
-        && new.q2_ok
-        && new.q6.is_some_and(|x| x <= 1e-12)
-        && new.q7_a.0.max(new.q7_a.1) <= 1e-12
-        && new.q7_b.0.max(new.q7_b.1) <= 4.9e-11;
-    let iv = new.r_e >= 107;
-    let ok = i && ii && iii && iv;
-    println!(
-        "DECISION {name}: target {t0:.4} -> {t1:.4} (i {i}); no Q1-E maximum worse by more than 1 % (ii {ii}); Q2/Q6/Q7 (iii {iii}); R-E {} >= 107 (iv {iv}) => {}",
-        new.r_e,
-        if ok { "ACCEPTED" } else { "REJECTED" }
-    );
-    ok
-}
-
-/// Part 2 of ADR 0079: the registered sequence C2, C5, C6, C4 on top of construction E, each decided by the registered rule.
-#[test]
-#[ignore = "registered part 2 runs of ADR 0079 (about 15 min): cargo test --release -p rcfd-mesh --test cgrid_w35d part2_sequence -- --ignored --nocapture"]
-fn part2_sequence() {
-    let mut cur = construction_e();
-    let mut base = part2_measure("E", &cur).unwrap();
-    type Set = fn(&mut CGridOptions);
-    let steps: [(&str, Option<usize>, Set); 4] = [
-        ("C2 wake_aspect_50", Some(0), |o| o.wake_aspect_50 = true),
-        ("C5 lean_stack", Some(1), |o| o.lean_stack = true),
-        ("C6 nose_rows_algebraic", Some(3), |o| o.nose_rows_algebraic = true),
-        ("C4 front_edge_held", None, |o| o.front_edge_held = true),
-    ];
-    for (name, target, set) in steps {
-        let mut cand = cur;
-        set(&mut cand);
-        match part2_measure(name, &cand) {
-            Ok(new) => {
-                if accepted(name, &base, &new, target) {
-                    cur = cand;
-                    base = new;
-                }
-            }
-            Err(e) => println!("DECISION {name}: build failed ({e}) => REJECTED"),
-        }
-    }
-    println!("FINAL part 2 construction: {cur:?}");
+    Ok((ok_s && ok_a, r_e))
 }
 
 /// Smoke of the part 2 harness on the baseline E alone (no change), ADR 0079 rule (d): it must reproduce the ADR 0072 numbers.
 #[test]
 #[ignore = "harness smoke of ADR 0079 part 2 on construction E: cargo test --release -p rcfd-mesh --test cgrid_w35d part2_harness_smoke -- --ignored --nocapture"]
 fn part2_harness_smoke_on_e() {
-    let p = part2_measure("E", &construction_e()).unwrap();
-    assert!(p.q2_ok && p.r_e == 107);
+    let (q2_ok, r_e) = part2_measure("E", &construction_e()).unwrap();
+    assert!(q2_ok && r_e == 107);
 }
 
 /// The Q7 part of the harness on A' and B' with construction E (ADR 0072: 3.2e-13 / 1.7e-11).
@@ -1081,7 +970,7 @@ fn part2_harness_smoke_on_e() {
 fn q7_harness_smoke_on_e() {
     for spec in [spec_a(), spec_b()] {
         let m = build_cgrid_mesh_with(&blade_b(), &spec, &construction_e()).unwrap();
-        println!("Q7 harness on E: {:?}", stack_deviation(&blade_b(), &m, false));
+        println!("Q7 harness on E: {:?}", stack_deviation(&m));
     }
 }
 
@@ -1159,7 +1048,7 @@ fn p_checks(spec: &CGridSpec) {
     println!("P4 periodicity {per:?}");
     assert!(per.is_some_and(|x| x <= 1e-12));
     // P5
-    let (radial, wall) = stack_deviation(&fan, &m, false);
+    let (radial, wall) = stack_deviation(&m);
     println!("P5 stacks: radial {radial:.2e}, wall {wall:.2e}");
     assert!(radial <= 1e-12 && wall <= 1e-12);
     // P6

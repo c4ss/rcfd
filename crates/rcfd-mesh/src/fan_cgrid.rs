@@ -426,15 +426,6 @@ pub struct CGridOptions {
     /// ADR 0079 part 1: the tip-gap first height is `min(h1, L_gap / (2 S + (n_gap - 2 n_bl) g^n_bl))` (`S` the stack sum), the largest
     /// height for which both gap stacks and a middle of continuous growth fit; the span keeps `h1`.
     pub gap_fit: bool,
-    /// ADR 0079 C2: the wake first height is `max(h1, dz / 50)` instead of `max(h1, dz / 300)`.
-    pub wake_aspect_50: bool,
-    /// ADR 0079 C5: the stack offsets are divided by the cosine of the lean angle between the in-plane wall normal and the 3-D surface
-    /// normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer (wake lines take the trailing-edge value).
-    pub lean_stack: bool,
-    /// ADR 0079 C6: in the smoothing, the nose lines keep their first `max(1, (n_side - n_bl) / 4)` rows beyond the stack algebraic.
-    pub nose_rows_algebraic: bool,
-    /// ADR 0079 C4: in the smoothing, the front-edge row (the C/F interface, corner included) keeps its algebraic positions.
-    pub front_edge_held: bool,
     /// ADR 0079 part 1 (F3): a radial filter of the far in-plane node positions across the layers ([`radial_filter`]).
     pub radial_filter: bool,
     /// ADR 0079 part 3: a specification outside the documented control range ([`control_range_problems`]) is refused with
@@ -478,8 +469,6 @@ fn smooth_layer(
     max_iter: usize,
     freeze: bool,
     exact_near_wall: bool,
-    nose_alg: bool,
-    hold_front: bool,
     laplace_passes: usize,
 ) {
     let (n_i, ns, h_c, n_fe, n_up) = (lay.n_i(), lay.n_side, lay.h_c(), lay.n_fe(), lay.n_up);
@@ -520,15 +509,7 @@ fn smooth_layer(
     let mut lines: Vec<(usize, usize)> = Vec::new();
     for i in 1..n_i {
         // the stack (and with reeze the first rows beyond it, a quarter of the outer cells) keep the algebraic wall-normal lines
-        let j0 = l.stack_cells[i]
-            + 1
-            + if freeze {
-                (ns - l.stack_cells[i]) / 4
-            } else if nose_alg && i >= h_c && i <= n_i - h_c {
-                ((ns - l.stack_cells[i]) / 4).max(1)
-            } else {
-                0
-            };
+        let j0 = l.stack_cells[i] + 1 + if freeze { (ns - l.stack_cells[i]) / 4 } else { 0 };
         if j0 < ns {
             lines.push((reg.len(), ns - j0));
         }
@@ -564,9 +545,6 @@ fn smooth_layer(
         ));
     }
     for i in (h_c + 1)..(n_i - h_c) {
-        if hold_front {
-            break;
-        }
         let b = i - h_c;
         reg.push((
             cid(i, ns),
@@ -692,14 +670,12 @@ fn smooth_layer(
             }
             pts[*id] = m;
         }
-        if !hold_front {
-            let mut c = (0.0, 0.0);
-            for r in &corner_nb {
-                let v = at(&old, *r);
-                c = (c.0 + v.0 / 6.0, c.1 + v.1 / 6.0);
-            }
-            pts[corner] = c;
+        let mut c = (0.0, 0.0);
+        for r in &corner_nb {
+            let v = at(&old, *r);
+            c = (c.0 + v.0 / 6.0, c.1 + v.1 / 6.0);
         }
+        pts[corner] = c;
     }
     // Local untangling of a folded algebraic grid: the free nodes around every quad of non-positive area are moved to the mean
     // of their four neighbours until no quad is folded (or the pass cap is reached); untouched elsewhere.
@@ -853,18 +829,16 @@ fn smooth_layer(
             moved = moved.max(norm2((x - old.0, y - old.1)));
             pts[*id] = (x, y);
         }
-        if !hold_front {
-            let mut cz = 0.0;
-            let mut cs = 0.0;
-            for r in &corner_nb {
-                let p = at(&pts, *r);
-                cz += p.0 / 6.0;
-                cs += p.1 / 6.0;
-            }
-            let old = pts[corner];
-            moved = moved.max(norm2((cz - old.0, cs - old.1)));
-            pts[corner] = (cz, cs);
+        let mut cz = 0.0;
+        let mut cs = 0.0;
+        for r in &corner_nb {
+            let p = at(&pts, *r);
+            cz += p.0 / 6.0;
+            cs += p.1 / 6.0;
         }
+        let old = pts[corner];
+        moved = moved.max(norm2((cz - old.0, cs - old.1)));
+        pts[corner] = (cz, cs);
         if moved < 1e-12 * scale {
             break;
         }
@@ -1151,46 +1125,9 @@ fn build_layer(
             let dm = (w[i].1 - s_lo_at(w[i].0)).min(s_hi_at(w[i].0) - w[i].1);
             // the first height grows with the local axial spacing (by at most the cell growth per line), so
             // that the rows stay aligned between neighbouring lines and the wake aspect stays bounded
-            let d1w = h1.max(dz / if opts.wake_aspect_50 { 50.0 } else { WAKE_ASPECT });
+            let d1w = h1.max(dz / WAKE_ASPECT);
             d1s[i] = d1w;
             stack_cells.push(if growth_sum(d1w, nb) <= 0.25 * dm { nb } else { 0 });
-        }
-    }
-    if opts.lean_stack {
-        // ADR 0079 C5: wall-normal stack thickness h1 g^q in every layer
-        let cos_lean = |i: usize| -> f64 {
-            let (x, side) = if i <= h {
-                (xs[nc - (i - nd)], Side::Suction)
-            } else {
-                (xs[i - h], Side::Pressure)
-            };
-            // in-plane normal and tangent as 3-D vectors at the wall node, radial surface tangent by a central difference
-            let th = w[i].1 / r;
-            let e_t = [-th.sin(), th.cos(), 0.0];
-            let n = normals[i];
-            let n_ip = [n[1] * e_t[0], n[1] * e_t[1], n[0]];
-            let t_ip = [n[0] * e_t[0], n[0] * e_t[1], -n[1]];
-            let dr = 1e-6 * r;
-            let (pa, pb) = (fan.surface_point(r + dr, x, side), fan.surface_point(r - dr, x, side));
-            let t_r = [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]];
-            let c = [
-                t_ip[1] * t_r[2] - t_ip[2] * t_r[1],
-                t_ip[2] * t_r[0] - t_ip[0] * t_r[2],
-                t_ip[0] * t_r[1] - t_ip[1] * t_r[0],
-            ];
-            let cn = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
-            ((c[0] * n_ip[0] + c[1] * n_ip[1] + c[2] * n_ip[2]) / cn).abs()
-        };
-        let c_te = cos_lean(nd);
-        for (i, d1) in d1s.iter_mut().enumerate() {
-            let c = if i >= nd && i <= n_i - nd { cos_lean(i) } else { c_te };
-            if !(c > 0.1) {
-                return Err(err(
-                    "stagger",
-                    format!("the blade leans by more than 84 deg out of the layer at line {i} (lean_stack)"),
-                ));
-            }
-            *d1 /= c;
         }
     }
     let stack_pt = |i: usize, q: usize| -> (f64, f64) {
@@ -1772,8 +1709,6 @@ pub fn build_cgrid_mesh_with(
                         SMOOTH_ITER,
                         freeze,
                         exact,
-                        opts.nose_rows_algebraic,
-                        opts.front_edge_held,
                         laplace,
                     );
                     if lambda < 1.0 {
