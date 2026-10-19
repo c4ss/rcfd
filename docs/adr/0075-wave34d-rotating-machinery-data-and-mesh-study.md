@@ -106,3 +106,65 @@ observed order holds. Convergence as R1. The ADR 0071 test `c4_corrected_spuriou
 
 Code policy: tests only. New files `crates/rcfd-api/tests/rotating_mesh_study.rs` (R1, R4) and `crates/rcfd-fv/tests/rotating_mesh_study.rs` (R2, R3);
 the ADR 0071 test files are not edited. A miss stays as an ignored `*_known_miss` test with the limit unchanged.
+
+## Amendment 1 (2026-10-19): Part A reading outcome, the chosen case, and the Part B registration
+
+Written after the sources were read and after the Part C runs, BEFORE any mesh of the chosen case was built and before any solver run on it.
+
+### Part A, sources and ranking (details in `docs/validation-data.md`, section "Rotating machinery")
+
+| Candidate | Read / seen | Regime | Geometry public | Representable | Rank |
+|---|---|---|---|---|---|
+| FAN-01 (FAU/EAA low-pressure axial fan; Zenodo 10.5281/zenodo.20037409, CC BY 4.0; Zenger et al. SAE 2016-01-1805) | data files read (characteristic .mat, CAD IGES, LDA .mat, rig PDF); Schoder et al. Acta Acustica 4 (2020) 22, Schoder and Czwielong arXiv:2211.12014, Junger 2019 thesis, Vourakis and Karlsson FAN 2022 read; the SAE paper NOT read | Ma_tip 0.113, incompressible | full CAD (CC BY 4.0) | rotor only, 9 blades, sections close to NACA 4-digit on cylinders, cylindrical hub r 124 mm, duct r 250 mm, tip gap 2.5 mm; NOT the bellmouth, finite blunt hub, 3 mm root fillet, struts, motor, diffuser | 1 |
+| NASA LSAC (Wasserbauer et al., NASA TM-4635, 1995) | TM read (Table I) | low speed | no section coordinates in the TM; a "publicly available" package is mentioned elsewhere, not found | 4 stages + IGV + stators | not runnable |
+| DTMB 4119 propeller (via arXiv:2104.13363, Tables 1-3 read; the DTNSRDC reports not read) | secondary read | incompressible | tables public | NACA 66 (mod) thickness, a = 0.8 mean line, open propeller, no shroud | not runnable as is |
+| NASA Rotor 37 (Reid and Moore, NASA TP-1337, read; the manifest copy) | read | inlet relative Mach 1.48 tip / 1.13 hub | Appendix C coordinates (MCA sections) | transonic | not runnable |
+| NASA Rotor 67 (Strazisar et al., NASA TP-2879, design text pp. 1-12 read) | read in part | relative tip Mach 1.38 | Table I coordinates | transonic, contoured hub | not runnable |
+| Daily and Nece 1960, ERCOFTAC rotating cases, Dring/UTRC rig | seen cited / snippets only | - | - | not fans (or a turbine stage) | not candidates |
+
+### Part B registration: FAN-01 rotor in a straight annular duct, F-126 acceptance attempt
+
+Geometry (generator terms): `n_blades = 9`, `r_hub = 0.124`, `r_tip = 0.2475`, `tip_clearance = 0.0025` (shroud r = 0.250), NACA 4-digit family, stations from the
+cylindrical sections of the CC BY 4.0 CAD (extraction by a pure-Python IGES/NURBS evaluator written for this wave; the sections are close to, not exactly, NACA
+4-digit: camber line within 0.0016 c of the NACA parabola with m = 0.0365-0.0376 at p = 0.515-0.53, maximum thickness 0.109-0.111 c at 23 % chord, which a NACA
+4-digit thickness form puts at 30 %; mean-line metal angles checked: the leading edge is more tangential than the trailing edge (58 vs 42 deg from the axis at r = 140 mm),
+i.e. positive camber in the generator convention for rotation about +z). Stations at r = 124 (linear extrapolation of 127/130), 127, 130, 140, ..., 240, 245, 247.5 mm
+(extrapolated from 245/247): chord, stagger from the axis, camber, camber position and thickness as tabulated in `docs/validation-data.md`; sweep = x_LE(r) - x_LE(124),
+lean = r (theta_LE(r) - theta_LE(124)). The published nominal design (NACA 4510, chord 103 / 58 mm) is NOT used: the as-built CAD is 4-5 % shorter in chord. Domain: inlet
+plane 100 mm ahead of the hub leading edge (`z_le_root = 0.1`), `axial_extent = 0.4`; the hub is a cylinder over the whole domain.
+
+New input needed (code, opt-in): the case hook only has a hub and a tip station with linear variation; the stagger of FAN-01 varies from 43.6 to 69.6 deg and the chord
+from 99 to 55 mm non-linearly (a two-station fit is about 4 deg / 11 mm off at mid-span). Optional lists `mesh.fan.station_radius`, `station_chord`, `station_stagger`,
+`station_camber`, `station_camber_pos`, `station_thickness`, `station_sweep`, `station_lean` are added; when `station_radius` is non-empty they replace the hub/tip values.
+Registered checks: H1 a two-station list equal to the hub/tip values gives a mesh identical (node coordinates bit-for-bit, same cells) to the hub/tip form; H2 lists of
+unequal length, or a first/last radius not at r_hub / r_tip, give a located error `mesh.fan.station_*`; H3 the existing fan examples are unchanged (no default changes).
+
+Mesh, the coarsest meaningful one by a rule fixed now: `topology = "c_grid"` with the counts of the example `cases/axial_fan_cgrid` (n_up 8, n_chord 16, n_down 8,
+n_side 10, n_nose 4, n_core 1, front_gap 0.3, n_span 14, n_gap 7, n_bl 2, growth 1.2), first cell from the generator's y+ estimate with `y_plus = 30`,
+`ref_speed = 30.46` m/s (relative speed at mid-span, r = 0.186 m, at the design point), `nu = 1.5e-5`. If the C-grid generator returns an error, the H-slit topology with the
+counts of `cases/axial_fan_sector` (n_up 8, n_chord 12, n_down 8, n_side 10, n_mid 1, n_span 16, n_gap 7, n_bl 2, growth 1.2, same first-cell rule, default truncation) is
+used instead; if both fail the outcome is NOT RUNNABLE. No other mesh is tried.
+
+Physics and solver: air `nu = 1.5e-5 m^2/s`, `rho = 1.2 kg/m^3` (ASSUMED: the data set gives no density or ambient state; UNVERIFIED), rotational speed 1486 rpm
+(`Omega = 155.62 rad/s`, from the papers; the data files carry no speed), `rotating_frame` source about +z with centrifugal terms (the `mrf` source is refused on this mesh,
+ADR 0065 S4), `k_omega_sst` with the automatic wall treatment, fully turbulent. Boundaries (velocities in the rotating frame): inlet fixed `u = (Omega y, -Omega x, U_in)`
+(uniform axial absolute inflow, no swirl), turbulence `values` with k = 1.5 (0.01 U_in)^2 and omega = sqrt(k)/(Cmu^0.25 l), l = 0.07 D_h = 0.0176 m; outlet fixed static
+pressure 0, zero-gradient velocity; hub and blade no-slip (rotating with the rotor); shroud at rest in the absolute frame, `u = (Omega y, -Omega x, 0)`,
+`turbulence = "wall"` (the automatic role would call a moving wall an inlet). SIMPLEC, `linear_upwind`, up to 8000 iterations. Converged = `tolerance_u = tolerance_p = 1e-5`
+reached, OR at the cap: torque and Delta p_ts change by less than 0.5 % over the last 1000 iterations and `|m_in + m_out| <= 1e-3 |m_in|`. Otherwise the outcome is NOT CONVERGED.
+
+Operating points (measured values read from `characteristic_n1ug.mat` of the Zenodo record; torque derived here as P/Omega): design Q = 1.4032 m^3/s (Delta p_ts 126.46 Pa,
+shaft power 333.30 W, M = 2.142 N m, eta_ts 0.532); off-design Q = 1.8039 m^3/s (63.9 Pa, 292.9 W, 1.882 N m, 0.394). U_in = Q / (pi (0.250^2 - 0.124^2)) = 9.478 and
+12.185 m/s. The stall region (Q below about 1.2 m^3/s) is excluded.
+
+Computed quantities: M = minus the moment about +z of the fluid on the `blade` and `hub` patches (pressure and viscous), times 9 (the shroud is stationary in the rig, its
+moment is not shaft torque); Delta p_ts = (area-averaged static pressure on the outlet) - (area-averaged static pressure on the inlet + rho U_in^2 / 2) (the measured quantity
+is the inlet-chamber total pressure to the ambient static pressure); eta_ts = Q Delta p_ts / (M Omega) (the definition of Schoder et al. 2020). Delta p_tt (outlet mass-averaged
+absolute total pressure minus inlet total) is reported, no limit.
+
+Limits (F-126 acceptance, "within published scatter"; the FAU uncertainty is not in anything read, the scatter used is the round robin of Vourakis and Karlsson 2022: +-3 Pa,
+inter-laboratory agreement about 3 %): at each operating point `|Delta p_ts - measured| <= 3 Pa + 0.03 measured`, `|M/M_measured - 1| <= 0.05`, `|eta_ts - measured| <= 0.03`.
+MET only if both points meet all three. Modelling differences that are part of the measured deviation, stated now: no bellmouth, no finite blunt hub, no root fillet,
+no struts/motor/diffuser and no exit loss to ambient (the measured Delta p_ts is an installation value); uniform outlet pressure (no radial equilibrium); fully turbulent RANS
+at chord Reynolds numbers 1.25e5-1.5e5; NACA 4-digit thickness form instead of the CAD thickness; assumed density; bearing friction in the measured torque (not stated
+whether subtracted). Whatever the outcome, no fan performance claim is made beyond this comparison.
