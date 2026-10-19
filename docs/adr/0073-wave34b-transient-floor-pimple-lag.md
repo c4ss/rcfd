@@ -363,7 +363,7 @@ for n_outer 1 to 4 at alpha_u 0.8, alpha_p 0.5), or use `n_correctors >= 2`. The
   truncated by the default absolute tolerance).
 * In the scratch logs the F-G rows carry the label `fc=true` / `N3-FC` (the harness switched the `fc` flag to F-G by a constant); the repository harness names them F-G.
 * The A5 cylinder run was not made (F-G not accepted); the cylinder test file written for it was not committed.
-* B4b uses `PimpleSettings::pimple(nu, n)` exactly as the ADR 0069 harness; its outcomes reproduced every ADR 0069 verdict (all 96 runs, same first violations).
+* B4b uses `PimpleSettings::pimple(nu, n)` exactly as the ADR 0069 harness; its stable/unstable outcomes agree with every ADR 0069 verdict of the same runs, and the four first violations quoted in ADR 0069 (max|u| 2.138 at t = 0.750, 1.536 at 2.125, max|p| 91.630 at 0.094, 55.487 at 0.227) are reproduced exactly (the check in Warn mode does not change the solution).
 
 ### Unverified references
 
