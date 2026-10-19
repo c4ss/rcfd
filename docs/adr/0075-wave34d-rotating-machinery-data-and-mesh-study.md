@@ -200,3 +200,26 @@ Second attempt (attempt 2), registered now; the amendment 1 physics, operating p
 * API check S1b: the FAN-01 case (attempt 2) is accepted by `Case`/`Simulation::new`; the same shroud with `k_epsilon` is still refused at `boundaries.shroud.turbulence`.
 * Then the two FAN-01 operating points are run once each and compared with the amendment 1 limits. Omega is 1486 x 2 pi / 60 = 155.614 rad/s (amendment 1 printed
   155.62, a rounding slip; the code uses 155.614).
+
+## Amendment 3 (2026-10-19): outcome of attempt 2, and one bounded diagnostic round registered before it runs
+
+Attempt 2 (amendment 2) results before this amendment: G1 passed (old wall speed 2.9e-1 / 2.0e-2 of U_cl at y+ 30 / 1, as predicted; with the fix 3.7e-10 /
+7.3e-11); the attempt-2 H-slit mesh builds (13 332 cells, non-orthogonality 79.1 deg, skewness 2.02, aspect 944); S1b passed. The registered FAN-01 run of the
+design point was started once; after about 2 h it had printed nothing. A 30-iteration probe of the same deterministic set-up (timing only, run in a scratch
+test that is not committed) showed the run diverging from the start: continuity 2.4 (iteration 5), 7.3e4 (10), 2.1e10 (15), 7.5e15 (20), 1.3e27 (30), while
+res_u and res_p stayed at 0.75-0.98. I stopped the registered run (my own process). Outcome of attempt 2: NOT CONVERGED (diverged). Second finding: a steady
+SIMPLE/SIMPLEC run whose continuity explodes is not stopped (`Simulation::failure` stays empty; the divergence guard of ADR 0067 covers PIMPLE/PISO only),
+so an automated design loop on the steady path can spend hours on a diverged run.
+
+Diagnostic round (stability indicators only; Delta p and torque are not computed or printed in these runs):
+* M1 (mandatory, it tests the committed S1 claim): `cases/axial_fan_sector` (laminar smoke case, Omega = 20, upwind) switched to `k_omega_sst` with
+  `turbulence = "wall"` on the shroud, nothing else changed, 600 iterations; the laminar original is run for the same 600 iterations as control. Stable means:
+  continuity finite and its maximum over iterations 500-600 not above its value at iteration 10. If the SST run is unstable while the laminar one is stable,
+  the documentation claim of S1 is narrowed (SST with a moving wall in a rotating frame is not shown to work) and the API refusal is kept for k-omega SST
+  walls moving in a `rotating_frame` case until a new hypothesis is registered.
+* D-b: the FAN-01 attempt-2 case run laminar (`turbulence.model = laminar`, the turbulence keys of the boundaries removed), 300 iterations.
+* D-c: the FAN-01 attempt-2 case with `convection = "upwind"` (momentum), SST, 300 iterations.
+* Same stability criterion, evaluated over iterations 200-300. Selection rule for attempt 3: the first of (D-c) that is stable; D-b is a diagnosis only
+  (a laminar run at Re_c 1.5e5 is not a comparison). If D-c is not stable, NOT CONVERGED is final for this wave and the report states the diagnosis.
+* Attempt 3 (only if D-c is stable): the attempt-2 case with `convection = "upwind"`, one run per operating point, the amendment 1 convergence criterion
+  and limits unchanged. Harness change (no physics change): `run_point` stops when the continuity is non-finite or above 1e6 and records the iteration.
