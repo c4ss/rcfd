@@ -142,6 +142,8 @@ pub struct CGridMesh {
     pub growth: f64,
     /// First cell height used.
     pub h1: f64,
+    /// First cell height of the tip-gap stacks (`h1` unless `CGridOptions::gap_fit` lowers it, ADR 0079).
+    pub h_gap: f64,
     /// Radius of each node layer.
     pub radii: Vec<f64>,
     /// Per layer: the in-plane unit normal `(n_z, n_s)` used for the stack of each C-block line `i`.
@@ -354,11 +356,17 @@ const EXACT_DIV: usize = 4;
 /// Pass cap of the local untangling that precedes the smoothing (ADR 0072).
 const UNTANGLE_PASSES: usize = 500;
 
+/// Laplace passes of the start grid of the last camber-seam fallback steps (ADR 0079 part 3).
+const LAPLACE_PASSES: usize = 400;
+
 /// Iteration cap of the in-plane smoothing (ADR 0072).
 const SMOOTH_ITER: usize = 4000;
 
 /// Target aspect ratio of the wake stack rows (axial spacing over the first height).
 const WAKE_ASPECT: f64 = 300.0;
+
+/// Chord samples of the camber line that carries the camber seam (ADR 0079).
+const CAMBER_SAMPLES: usize = 256;
 
 /// Union of faces that share edges (each shared edge is traversed in opposite directions): the outline polygon.
 fn merge_faces(faces: &[Vec<usize>]) -> Option<Vec<usize>> {
@@ -411,6 +419,44 @@ pub struct CGridOptions {
     /// weaker settings is tried (the same setting in every layer): plain spacing controls, the first quarter of the outer rows
     /// kept algebraic, the smoothing displacement scaled by 0.5, 0.25, 0.
     pub smoothing: bool,
+    /// ADR 0079 part 1: the periodic seams follow the passage centre line (the camber line inside the chord, the wake curve
+    /// downstream, a C1 extension of the leading-edge camber slope that turns axial over 0.2 chord upstream) at half a pitch on either
+    /// side, instead of two straight axial lines; the front edge is centred on the centre line and the F block follows it.
+    pub camber_seam: bool,
+    /// ADR 0079 part 1: the tip-gap first height is `min(h1, L_gap / (2 S + (n_gap - 2 n_bl) g^n_bl))` (`S` the stack sum), the largest
+    /// height for which both gap stacks and a middle of continuous growth fit; the span keeps `h1`.
+    pub gap_fit: bool,
+    /// ADR 0079 C2: the wake first height is `max(h1, dz / 50)` instead of `max(h1, dz / 300)`.
+    pub wake_aspect_50: bool,
+    /// ADR 0079 C5: the stack offsets are divided by the cosine of the lean angle between the in-plane wall normal and the 3-D surface
+    /// normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer (wake lines take the trailing-edge value).
+    pub lean_stack: bool,
+    /// ADR 0079 C6: in the smoothing, the nose lines keep their first `max(1, (n_side - n_bl) / 4)` rows beyond the stack algebraic.
+    pub nose_rows_algebraic: bool,
+    /// ADR 0079 C4: in the smoothing, the front-edge row (the C/F interface, corner included) keeps its algebraic positions.
+    pub front_edge_held: bool,
+    /// ADR 0079 part 1 (F3): a radial filter of the far in-plane node positions across the layers ([`radial_filter`]).
+    pub radial_filter: bool,
+    /// ADR 0079 part 3: a specification outside the documented control range ([`control_range_problems`]) is refused with
+    /// located errors before any construction.
+    pub checked_range: bool,
+}
+
+impl CGridOptions {
+    /// Construction G of ADR 0079 (case value `c_grid_construction = "camber_seam"`): construction E of ADR 0072 with the seams
+    /// following the blade where straight seams leave no margin, the fitted tip gap, the ADR 0079 part 2 changes accepted by its
+    /// registered rule, and the checked control range.
+    pub fn camber_seam_construction() -> Self {
+        CGridOptions {
+            radial_remap: true,
+            smoothing: true,
+            camber_seam: true,
+            gap_fit: true,
+            radial_filter: true,
+            checked_range: true,
+            ..CGridOptions::default()
+        }
+    }
 }
 
 /// Reference to a node of the smoothing graph: canonical id and the pitchwise offset of this copy.
@@ -424,7 +470,18 @@ type NodeRef = (usize, f64);
 /// controls for which the algebraic grid is an exact solution. Picard iteration: line-implicit along the C-block j-lines,
 /// pointwise elsewhere. The irregular seam corner (six cells in the periodic plane) is placed at the mean of its neighbours.
 /// `freeze` keeps the first quarter of the outer rows of every C line algebraic.
-fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, freeze: bool, exact_near_wall: bool) {
+#[allow(clippy::too_many_arguments)]
+fn smooth_layer(
+    l: &mut Layer2d,
+    lay: &Layout,
+    pitch: f64,
+    max_iter: usize,
+    freeze: bool,
+    exact_near_wall: bool,
+    nose_alg: bool,
+    hold_front: bool,
+    laplace_passes: usize,
+) {
     let (n_i, ns, h_c, n_fe, n_up) = (lay.n_i(), lay.n_side, lay.h_c(), lay.n_fe(), lay.n_up);
     let nc_nodes = (n_i + 1) * (ns + 1);
     let cid = |i: usize, j: usize| i * (ns + 1) + j;
@@ -463,7 +520,15 @@ fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, free
     let mut lines: Vec<(usize, usize)> = Vec::new();
     for i in 1..n_i {
         // the stack (and with reeze the first rows beyond it, a quarter of the outer cells) keep the algebraic wall-normal lines
-        let j0 = l.stack_cells[i] + 1 + if freeze { (ns - l.stack_cells[i]) / 4 } else { 0 };
+        let j0 = l.stack_cells[i]
+            + 1
+            + if freeze {
+                (ns - l.stack_cells[i]) / 4
+            } else if nose_alg && i >= h_c && i <= n_i - h_c {
+                ((ns - l.stack_cells[i]) / 4).max(1)
+            } else {
+                0
+            };
         if j0 < ns {
             lines.push((reg.len(), ns - j0));
         }
@@ -499,6 +564,9 @@ fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, free
         ));
     }
     for i in (h_c + 1)..(n_i - h_c) {
+        if hold_front {
+            break;
+        }
         let b = i - h_c;
         reg.push((
             cid(i, ns),
@@ -553,6 +621,86 @@ fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, free
         let p = pts[r.0];
         (p.0, p.1 + r.1)
     };
+    // Control functions of the algebraic grid. Away from the walls the one-dimensional spacing controls (the spacing along
+    // every line is kept, the angles relax); next to the stack edge they blend into the controls that make the algebraic
+    // grid an exact solution, so the near-wall rows keep their wall-normal structure and the first free rows cannot be drawn
+    // onto a convex wall (the outward growth a Winslow grid needs around a small nose radius would otherwise compress them).
+    let controls = |pts: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        reg.iter()
+            .map(|(id, nb)| {
+                let p = pts[*id];
+                let v: Vec<(f64, f64)> = nb.iter().map(|r| at(pts, *r)).collect();
+                let (e, w, n, s) = (v[0], v[1], v[2], v[3]);
+                let xi = ((e.0 - w.0) * 0.5, (e.1 - w.1) * 0.5);
+                let et = ((n.0 - s.0) * 0.5, (n.1 - s.1) * 0.5);
+                let xixi = (e.0 - 2.0 * p.0 + w.0, e.1 - 2.0 * p.1 + w.1);
+                let etet = (n.0 - 2.0 * p.0 + s.0, n.1 - 2.0 * p.1 + s.1);
+                let g11 = xi.0 * xi.0 + xi.1 * xi.1;
+                let g22 = et.0 * et.0 + et.1 * et.1;
+                let one_d = (
+                    -(xi.0 * xixi.0 + xi.1 * xixi.1) / g11.max(1e-300),
+                    -(et.0 * etet.0 + et.1 * etet.1) / g22.max(1e-300),
+                );
+                // weight of the exact controls: C-block line nodes only, 1 at the stack edge, 0 halfway out
+                let omega = if exact_near_wall && *id < nc_nodes && id % (ns + 1) < ns {
+                    let (i, j) = (id / (ns + 1), id % (ns + 1));
+                    let nb_i = l.stack_cells[i];
+                    let half = ((ns - nb_i) / EXACT_DIV).max(1) as f64;
+                    fade((j - nb_i - 1) as f64 / half)
+                } else {
+                    0.0
+                };
+                if omega == 0.0 {
+                    return one_d;
+                }
+                // exact controls: alpha phi x_xi + gamma psi x_eta = -(alpha x_xixi - 2 beta x_xieta + gamma x_etaeta)
+                let alpha = g22;
+                let gamma = g11;
+                let beta = xi.0 * et.0 + xi.1 * et.1;
+                let xe = (
+                    0.25 * (v[4].0 - v[5].0 - v[6].0 + v[7].0),
+                    0.25 * (v[4].1 - v[5].1 - v[6].1 + v[7].1),
+                );
+                let rhs = (
+                    -(alpha * xixi.0 - 2.0 * beta * xe.0 + gamma * etet.0),
+                    -(alpha * xixi.1 - 2.0 * beta * xe.1 + gamma * etet.1),
+                );
+                // columns alpha x_xi and gamma x_eta
+                let (a11, a21, a12, a22) = (alpha * xi.0, alpha * xi.1, gamma * et.0, gamma * et.1);
+                let det = a11 * a22 - a12 * a21;
+                if !(det.abs() > 1e-6 * (a11.hypot(a21) * a12.hypot(a22)).max(1e-300)) {
+                    return one_d;
+                }
+                let ex = ((rhs.0 * a22 - a12 * rhs.1) / det, (a11 * rhs.1 - a21 * rhs.0) / det);
+                (
+                    omega * ex.0 + (1.0 - omega) * one_d.0,
+                    omega * ex.1 + (1.0 - omega) * one_d.1,
+                )
+            })
+            .collect()
+    };
+    // ADR 0079 part 3: the last steps of the camber-seam fallback chain start from a Laplace-smoothed grid (every free node at the
+    // mean of its four neighbours, Jacobi) instead of the algebraic one, which folds at high stagger beyond what the local
+    // untangling below repairs
+    for _ in 0..laplace_passes {
+        let old = pts.clone();
+        for (id, nb) in &reg {
+            let mut m = (0.0, 0.0);
+            for r in &nb[..4] {
+                let v = at(&old, *r);
+                m = (m.0 + 0.25 * v.0, m.1 + 0.25 * v.1);
+            }
+            pts[*id] = m;
+        }
+        if !hold_front {
+            let mut c = (0.0, 0.0);
+            for r in &corner_nb {
+                let v = at(&old, *r);
+                c = (c.0 + v.0 / 6.0, c.1 + v.1 / 6.0);
+            }
+            pts[corner] = c;
+        }
+    }
     // Local untangling of a folded algebraic grid: the free nodes around every quad of non-positive area are moved to the mean
     // of their four neighbours until no quad is folded (or the pass cap is reached); untouched elsewhere.
     {
@@ -614,63 +762,7 @@ fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, free
             }
         }
     }
-    // Control functions of the algebraic grid. Away from the walls the one-dimensional spacing controls (the spacing along
-    // every line is kept, the angles relax); next to the stack edge they blend into the controls that make the algebraic
-    // grid an exact solution, so the near-wall rows keep their wall-normal structure and the first free rows cannot be drawn
-    // onto a convex wall (the outward growth a Winslow grid needs around a small nose radius would otherwise compress them).
-    let ctrl: Vec<(f64, f64)> = reg
-        .iter()
-        .map(|(id, nb)| {
-            let p = pts[*id];
-            let v: Vec<(f64, f64)> = nb.iter().map(|r| at(&pts, *r)).collect();
-            let (e, w, n, s) = (v[0], v[1], v[2], v[3]);
-            let xi = ((e.0 - w.0) * 0.5, (e.1 - w.1) * 0.5);
-            let et = ((n.0 - s.0) * 0.5, (n.1 - s.1) * 0.5);
-            let xixi = (e.0 - 2.0 * p.0 + w.0, e.1 - 2.0 * p.1 + w.1);
-            let etet = (n.0 - 2.0 * p.0 + s.0, n.1 - 2.0 * p.1 + s.1);
-            let g11 = xi.0 * xi.0 + xi.1 * xi.1;
-            let g22 = et.0 * et.0 + et.1 * et.1;
-            let one_d = (
-                -(xi.0 * xixi.0 + xi.1 * xixi.1) / g11.max(1e-300),
-                -(et.0 * etet.0 + et.1 * etet.1) / g22.max(1e-300),
-            );
-            // weight of the exact controls: C-block line nodes only, 1 at the stack edge, 0 halfway out
-            let omega = if exact_near_wall && *id < nc_nodes && id % (ns + 1) < ns {
-                let (i, j) = (id / (ns + 1), id % (ns + 1));
-                let nb_i = l.stack_cells[i];
-                let half = ((ns - nb_i) / EXACT_DIV).max(1) as f64;
-                fade((j - nb_i - 1) as f64 / half)
-            } else {
-                0.0
-            };
-            if omega == 0.0 {
-                return one_d;
-            }
-            // exact controls: alpha phi x_xi + gamma psi x_eta = -(alpha x_xixi - 2 beta x_xieta + gamma x_etaeta)
-            let alpha = g22;
-            let gamma = g11;
-            let beta = xi.0 * et.0 + xi.1 * et.1;
-            let xe = (
-                0.25 * (v[4].0 - v[5].0 - v[6].0 + v[7].0),
-                0.25 * (v[4].1 - v[5].1 - v[6].1 + v[7].1),
-            );
-            let rhs = (
-                -(alpha * xixi.0 - 2.0 * beta * xe.0 + gamma * etet.0),
-                -(alpha * xixi.1 - 2.0 * beta * xe.1 + gamma * etet.1),
-            );
-            // columns alpha x_xi and gamma x_eta
-            let (a11, a21, a12, a22) = (alpha * xi.0, alpha * xi.1, gamma * et.0, gamma * et.1);
-            let det = a11 * a22 - a12 * a21;
-            if !(det.abs() > 1e-6 * (a11.hypot(a21) * a12.hypot(a22)).max(1e-300)) {
-                return one_d;
-            }
-            let ex = ((rhs.0 * a22 - a12 * rhs.1) / det, (a11 * rhs.1 - a21 * rhs.0) / det);
-            (
-                omega * ex.0 + (1.0 - omega) * one_d.0,
-                omega * ex.1 + (1.0 - omega) * one_d.1,
-            )
-        })
-        .collect();
+    let ctrl = controls(&pts);
     let scale = l.chord.max(1e-300);
     let n_line_nodes: usize = lines.iter().map(|l| l.1).sum();
     let mut lower: Vec<f64> = Vec::new();
@@ -761,16 +853,18 @@ fn smooth_layer(l: &mut Layer2d, lay: &Layout, pitch: f64, max_iter: usize, free
             moved = moved.max(norm2((x - old.0, y - old.1)));
             pts[*id] = (x, y);
         }
-        let mut cz = 0.0;
-        let mut cs = 0.0;
-        for r in &corner_nb {
-            let p = at(&pts, *r);
-            cz += p.0 / 6.0;
-            cs += p.1 / 6.0;
+        if !hold_front {
+            let mut cz = 0.0;
+            let mut cs = 0.0;
+            for r in &corner_nb {
+                let p = at(&pts, *r);
+                cz += p.0 / 6.0;
+                cs += p.1 / 6.0;
+            }
+            let old = pts[corner];
+            moved = moved.max(norm2((cz - old.0, cs - old.1)));
+            pts[corner] = (cz, cs);
         }
-        let old = pts[corner];
-        moved = moved.max(norm2((cz - old.0, cs - old.1)));
-        pts[corner] = (cz, cs);
         if moved < 1e-12 * scale {
             break;
         }
@@ -867,13 +961,17 @@ fn build_layer(
         .iter()
         .chain(pp.iter())
         .fold((f64::INFINITY, f64::NEG_INFINITY), |a, p| (a.0.min(p.1), a.1.max(p.1)));
-    if !(s_wmin - s_lo > 0.0 && s_hi - s_wmax > 0.0) {
-        return Err(err(
+    let straight_misfit = || {
+        err(
             "n_side",
             format!(
                 "the blade (s from {s_wmin:.4} to {s_wmax:.4}) does not fit between its seams ({s_lo:.4}, {s_hi:.4}): pitch {pitch:.4}"
             ),
-        ));
+        )
+    };
+    // ADR 0079: with `camber_seam` the check is made below, once it is known whether the seams follow the centre line
+    if !opts.camber_seam && !(s_wmin - s_lo > 0.0 && s_hi - s_wmax > 0.0) {
+        return Err(straight_misfit());
     }
 
     // wake line: leaves along the pressure-surface tangent, bends to axial
@@ -889,7 +987,86 @@ fn build_layer(
     let lam_w = 0.2 * chord;
     let s_wake = |z: f64| s_te + sigma0 * lam_w * (1.0 - (-(z - z_te) / lam_w).exp());
     let s_inf = s_te + sigma0 * lam_w;
-    if !(s_inf - s_lo > 0.0 && s_hi - s_inf > 0.0) {
+    // passage centre line of the camber seam (ADR 0079): camber line inside the chord (sampled, linear in z), the wake curve
+    // downstream, the leading-edge camber slope turning axial over `lam_w` upstream
+    let cam: Vec<(f64, f64)> = if opts.camber_seam {
+        (0..=CAMBER_SAMPLES)
+            .map(|m| fan.camber_zs(&st, 0.5 * (1.0 - (PI * m as f64 / CAMBER_SAMPLES as f64).cos())))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if opts.camber_seam && cam.windows(2).any(|w| !(w[1].0 > w[0].0)) {
+        return Err(err(
+            "stagger",
+            "the camber line does not run downstream monotonically, so it cannot carry the seams (camber_seam)".into(),
+        ));
+    }
+    let sigma_le = if opts.camber_seam {
+        let (a, b) = (fan.camber_zs(&st, 0.0), fan.camber_zs(&st, 1e-6));
+        (b.1 - a.1) / (b.0 - a.0)
+    } else {
+        0.0
+    };
+    // upstream the centre line turns axial over a third of the front gap, so that the seams meet the front edge within
+    // atan(sigma_le e^-3) of the axial direction (a seam parallel to the front edge folds the corner at high stagger)
+    let lam_u = spec.front_gap * chord / 3.0;
+    let centre = |z: f64| -> f64 {
+        let (z_le, s_le0) = cam[0];
+        if z >= z_te {
+            s_wake(z)
+        } else if z <= z_le {
+            s_le0 - sigma_le * lam_u * (1.0 - (-(z_le - z) / lam_u).exp())
+        } else {
+            let m = cam.partition_point(|p| p.0 <= z).clamp(1, cam.len() - 1);
+            let (a, b) = (cam[m - 1], cam[m]);
+            a.1 + (b.1 - a.1) * (z - a.0) / (b.0 - a.0)
+        }
+    };
+    let follow = opts.camber_seam;
+    let centre_blend = centre;
+    let s_lo_at = |z: f64| -> f64 {
+        if follow {
+            centre_blend(z) - 0.5 * pitch
+        } else {
+            s_lo
+        }
+    };
+    let s_hi_at = |z: f64| -> f64 {
+        if follow {
+            s_lo_at(z) + pitch
+        } else {
+            s_hi
+        }
+    };
+    if opts.camber_seam && !follow && !(s_wmin - s_lo > 0.0 && s_hi - s_wmax > 0.0) {
+        return Err(straight_misfit());
+    }
+    if follow {
+        if let Some(p) = sp
+            .iter()
+            .chain(pp.iter())
+            .find(|p| !(p.1 - s_lo_at(p.0) > 0.0 && s_hi_at(p.0) - p.1 > 0.0))
+        {
+            return Err(err(
+                "n_side",
+                format!(
+                    "the blade point (z {:.4}, s {:.4}) does not fit between the camber seams ({:.4}, {:.4}): pitch {pitch:.4}",
+                    p.0,
+                    p.1,
+                    s_lo_at(p.0),
+                    s_hi_at(p.0)
+                ),
+            ));
+        }
+    }
+    let wake_out = if follow {
+        let zw = fan.axial_extent;
+        !(s_wake(zw) - s_lo_at(zw) > 0.0 && s_hi_at(zw) - s_wake(zw) > 0.0)
+    } else {
+        !(s_inf - s_lo > 0.0 && s_hi - s_inf > 0.0)
+    };
+    if wake_out {
         return Err(err(
             "n_down",
             format!("the wake line (s from {s_te:.4} to {s_inf:.4}) leaves the passage ({s_lo:.4}, {s_hi:.4})"),
@@ -955,7 +1132,7 @@ fn build_layer(
         if i >= nd && i <= n_i - nd {
             stack_cells.push(nb);
         } else if opts.uniform_wake_stack {
-            let dm = (w[i].1 - s_lo).min(s_hi - w[i].1);
+            let dm = (w[i].1 - s_lo_at(w[i].0)).min(s_hi_at(w[i].0) - w[i].1);
             if !(growth_sum(h1, nb) <= 0.25 * dm) {
                 return Err(err(
                     "n_bl",
@@ -971,12 +1148,49 @@ fn build_layer(
             let up = if p < nd { zz[p + 1] - zz[p] } else { 0.0 };
             let dn = if p > 0 { zz[p] - zz[p - 1] } else { 0.0 };
             let dz = up.max(dn);
-            let dm = (w[i].1 - s_lo).min(s_hi - w[i].1);
+            let dm = (w[i].1 - s_lo_at(w[i].0)).min(s_hi_at(w[i].0) - w[i].1);
             // the first height grows with the local axial spacing (by at most the cell growth per line), so
             // that the rows stay aligned between neighbouring lines and the wake aspect stays bounded
-            let d1w = h1.max(dz / WAKE_ASPECT);
+            let d1w = h1.max(dz / if opts.wake_aspect_50 { 50.0 } else { WAKE_ASPECT });
             d1s[i] = d1w;
             stack_cells.push(if growth_sum(d1w, nb) <= 0.25 * dm { nb } else { 0 });
+        }
+    }
+    if opts.lean_stack {
+        // ADR 0079 C5: wall-normal stack thickness h1 g^q in every layer
+        let cos_lean = |i: usize| -> f64 {
+            let (x, side) = if i <= h {
+                (xs[nc - (i - nd)], Side::Suction)
+            } else {
+                (xs[i - h], Side::Pressure)
+            };
+            // in-plane normal and tangent as 3-D vectors at the wall node, radial surface tangent by a central difference
+            let th = w[i].1 / r;
+            let e_t = [-th.sin(), th.cos(), 0.0];
+            let n = normals[i];
+            let n_ip = [n[1] * e_t[0], n[1] * e_t[1], n[0]];
+            let t_ip = [n[0] * e_t[0], n[0] * e_t[1], -n[1]];
+            let dr = 1e-6 * r;
+            let (pa, pb) = (fan.surface_point(r + dr, x, side), fan.surface_point(r - dr, x, side));
+            let t_r = [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]];
+            let c = [
+                t_ip[1] * t_r[2] - t_ip[2] * t_r[1],
+                t_ip[2] * t_r[0] - t_ip[0] * t_r[2],
+                t_ip[0] * t_r[1] - t_ip[1] * t_r[0],
+            ];
+            let cn = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
+            ((c[0] * n_ip[0] + c[1] * n_ip[1] + c[2] * n_ip[2]) / cn).abs()
+        };
+        let c_te = cos_lean(nd);
+        for (i, d1) in d1s.iter_mut().enumerate() {
+            let c = if i >= nd && i <= n_i - nd { cos_lean(i) } else { c_te };
+            if !(c > 0.1) {
+                return Err(err(
+                    "stagger",
+                    format!("the blade leans by more than 84 deg out of the layer at line {i} (lean_stack)"),
+                ));
+            }
+            *d1 /= c;
         }
     }
     let stack_pt = |i: usize, q: usize| -> (f64, f64) {
@@ -1026,16 +1240,22 @@ fn build_layer(
     let _ = d_corner;
     // front-edge cells start at the nose with a few wall cells' width and grow towards the seam corners
     let d_nose = 3.0 * norm2((sp[1].0 - sp[0].0, sp[1].1 - sp[0].1));
-    let lo_part = capped_cells(s_le - s_lo, nn, d_nose, true).unwrap_or_else(|_| uniform(s_le - s_lo, nn));
-    let hi_part = capped_cells(s_hi - s_le, nn, d_nose, false).unwrap_or_else(|_| uniform(s_hi - s_le, nn));
+    // the nose target of the front edge: straight ahead of the leading edge (straight seams) or on the centre line (camber seam)
+    let (s_n, s_lo_f, s_hi_f) = if follow {
+        (s_le, s_lo_at(z_f), s_hi_at(z_f))
+    } else {
+        (s_le, s_lo, s_hi)
+    };
+    let lo_part = capped_cells(s_n - s_lo_f, nn, d_nose, true).unwrap_or_else(|_| uniform(s_n - s_lo_f, nn));
+    let hi_part = capped_cells(s_hi_f - s_n, nn, d_nose, false).unwrap_or_else(|_| uniform(s_hi_f - s_n, nn));
     let mut s_front = vec![0.0; n_fe + 1];
     for b in 0..=nn {
-        s_front[b] = s_lo + lo_part[b];
+        s_front[b] = s_lo_f + lo_part[b];
     }
     for b in 1..=nn {
-        s_front[nn + b] = s_le + hi_part[b];
+        s_front[nn + b] = s_n + hi_part[b];
     }
-    s_front[n_fe] = s_hi;
+    s_front[n_fe] = s_hi_f;
     let z_f_nodes = graded_cells(z_f, spec.n_up, None, Some((d_corner, g, 0))).map_err(|e| err("n_up", e))?;
 
     // C block (in-plane points)
@@ -1043,13 +1263,13 @@ fn build_layer(
     for i in 0..=n_i {
         let hh = i.min(n_i - i);
         let o = if i < h_c {
-            (z_out[hh], s_lo)
+            (z_out[hh], s_lo_at(z_out[hh]))
         } else if i > n_i - h_c {
-            (z_out[hh], s_hi)
+            (z_out[hh], s_hi_at(z_out[hh]))
         } else if i == h_c {
-            (z_f, s_lo)
+            (z_f, s_lo_at(z_f))
         } else if i == n_i - h_c {
-            (z_f, s_hi)
+            (z_f, s_hi_at(z_f))
         } else {
             (z_f, s_front[i - h_c])
         };
@@ -1124,7 +1344,22 @@ fn build_layer(
     }
     // F block (rows below the front edge)
     let fp: Vec<Vec<(f64, f64)>> = (0..spec.n_up)
-        .map(|a| (0..=n_fe).map(|b| (z_f_nodes[a], s_front[b])).collect())
+        .map(|a| {
+            let shift = if follow {
+                centre_blend(z_f_nodes[a]) - centre_blend(z_f)
+            } else {
+                0.0
+            };
+            (0..=n_fe)
+                .map(|b| {
+                    if follow {
+                        (z_f_nodes[a], s_front[b] + shift)
+                    } else {
+                        (z_f_nodes[a], s_front[b])
+                    }
+                })
+                .collect()
+        })
         .collect();
     // core interior nodes
     let mut core = vec![vec![(0.0, 0.0); lay.n_core + 1]; nc + 1];
@@ -1244,6 +1479,56 @@ fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>
     }
 }
 
+/// Radial filter of the in-plane node positions (ADR 0079 part 1, F3): every layer is smoothed in the plane independently, and a
+/// discrete step of the smoothing (how many untangling passes a layer needs) can move a far node of one layer by several layer
+/// thicknesses against its neighbours. Two Jacobi passes move every interior layer's `(z, theta)` half-way towards the linear
+/// interpolation of its two neighbours in `r`. Untouched: the hub and shroud layers, the wall and stack nodes, the outlet lines and the
+/// inlet row (they stay in their planes); the weight rises from 0 at each stack edge to 1 on the seam or front edge. Both seam copies are
+/// filtered with the same weights, so the pair stays an exact rotation image.
+fn radial_filter(lay: &Layout, radii: &[f64], stacks: &[Vec<usize>], grid: &mut [Vec3]) {
+    let (n_i, ns, n_k) = (lay.n_i(), lay.n_side, radii.len() - 1);
+    // (node id per layer offset 0, weight): the C nodes j > stack and the F nodes a >= 1
+    let mut nodes: Vec<(usize, f64)> = Vec::new();
+    for i in 1..n_i {
+        let nb = stacks.iter().map(|s| s[i]).max().unwrap_or(0);
+        for j in nb + 1..=ns {
+            // 0 at the stack edge, 1 on the seam or front edge (the upper seam nodes are separate ids, filtered alike)
+            nodes.push((lay.c(i, j, 0), 1.0 - fade((j - nb) as f64 / (ns - nb) as f64)));
+        }
+    }
+    for a in 1..lay.n_up {
+        for b in 0..=lay.n_fe() {
+            nodes.push((lay.f(a, b, 0), 1.0));
+        }
+    }
+    let stride = lay.stride();
+    for _ in 0..2 {
+        let old: Vec<Vec3> = grid.to_vec();
+        for &(id0, w) in &nodes {
+            if w == 0.0 {
+                continue;
+            }
+            for k in 1..n_k {
+                let (rm, r0, rp) = (radii[k - 1], radii[k], radii[k + 1]);
+                if !(rp > rm) {
+                    continue;
+                }
+                let zt = |p: Vec3| (p[2], p[1].atan2(p[0]));
+                let (pm, p0, pp) = (
+                    zt(old[id0 + (k - 1) * stride]),
+                    zt(old[id0 + k * stride]),
+                    zt(old[id0 + (k + 1) * stride]),
+                );
+                let t = (r0 - rm) / (rp - rm);
+                let target = (pm.0 + t * (pp.0 - pm.0), pm.1 + t * (pp.1 - pm.1));
+                let f = 0.5 * w;
+                let (z, th) = (p0.0 + f * (target.0 - p0.0), p0.1 + f * (target.1 - p0.1));
+                grid[id0 + k * stride] = [r0 * th.cos(), r0 * th.sin(), z];
+            }
+        }
+    }
+}
+
 /// First quad with non-positive area in the unrolled plane of its layer: every C-block quad, and (with `check_f`) every F-block
 /// quad. `(layer, radius, block, line or row, row or column)`.
 fn folded_quad(
@@ -1298,6 +1583,48 @@ fn folded_quad(
         }
     }
     None
+}
+
+/// The documented control range of the camber-seam construction (ADR 0079 amendment 5, chosen from a development scan on test blade B
+/// of ADR 0065): `0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`. Inside
+/// it every scanned blade-B-like combination built; it does not make strongly staggered blades (FAN-01 tip, 70 deg) robust.
+pub fn control_range_problems(spec: &CGridSpec) -> Vec<FanError> {
+    let mut e = Vec::new();
+    let nc = spec.n_chord as f64;
+    let ratio = spec.n_nose as f64 / nc.max(1.0);
+    if !(0.15..=0.375).contains(&ratio) {
+        e.push(FanError::new(
+            "n_nose",
+            format!(
+                "outside the documented range of c_grid_construction camber_seam: 0.15 n_chord <= n_nose <= 0.375 n_chord ({:.1} to {:.1} for n_chord {}), has {}",
+                0.15 * nc,
+                0.375 * nc,
+                spec.n_chord,
+                spec.n_nose
+            ),
+        ));
+    }
+    let lo = 8.max(spec.n_bl + 6);
+    if !(spec.n_side >= lo && spec.n_side <= 2 * spec.n_chord) {
+        e.push(FanError::new(
+            "n_side",
+            format!(
+                "outside the documented range of c_grid_construction camber_seam: max(8, n_bl + 6) = {lo} <= n_side <= 2 n_chord = {}, has {}",
+                2 * spec.n_chord,
+                spec.n_side
+            ),
+        ));
+    }
+    if !(spec.front_gap >= 0.15 && spec.front_gap <= 1.0) {
+        e.push(FanError::new(
+            "front_gap",
+            format!(
+                "outside the documented range of c_grid_construction camber_seam: 0.15 <= front_gap <= 1.0 chords, has {}",
+                spec.front_gap
+            ),
+        ));
+    }
+    e
 }
 
 /// Build the periodic single-passage C-grid mesh with the construction of ADR 0068 (wave 33A).
@@ -1359,6 +1686,9 @@ pub fn build_cgrid_mesh_with(
     if !(h1.is_finite() && h1 > 0.0) {
         bad("first_cell", "the first cell height must be positive".into());
     }
+    if opts.checked_range {
+        errs.extend(control_range_problems(spec));
+    }
     if !errs.is_empty() {
         return Err(errs);
     }
@@ -1375,7 +1705,14 @@ pub fn build_cgrid_mesh_with(
     };
     let n_k = spec.n_span + spec.n_gap;
     let rs_span = graded_two_sided(fan.r_tip - fan.r_hub, spec.n_span, h1, g, nb).map_err(|e| one(e, "n_span"))?;
-    let rs_gap = graded_two_sided(fan.tip_clearance, spec.n_gap, h1, g, nb).map_err(|e| one(e, "n_gap"))?;
+    // ADR 0079: with `gap_fit` the gap stacks start at the largest height for which both stacks and a middle of continuous growth fit
+    let h_gap = if opts.gap_fit && spec.n_gap >= 2 * nb {
+        let stack: f64 = (0..nb).map(|q| g.powi(q as i32)).sum();
+        h1.min(fan.tip_clearance / (2.0 * stack + (spec.n_gap - 2 * nb) as f64 * g.powi(nb as i32)))
+    } else {
+        h1
+    };
+    let rs_gap = graded_two_sided(fan.tip_clearance, spec.n_gap, h_gap, g, nb).map_err(|e| one(e, "n_gap"))?;
     let mut radii: Vec<f64> = rs_span.iter().map(|x| fan.r_hub + x).collect();
     radii[spec.n_span] = fan.r_tip;
     radii.extend(rs_gap[1..].iter().map(|x| fan.r_tip + x));
@@ -1384,19 +1721,35 @@ pub fn build_cgrid_mesh_with(
     let rho = remapped_radii(&radii, spec.n_span);
     // The smoothed construction tries (blend factor of the smoothing, rows beyond the stack kept algebraic) in this order until
     // the mesh is untangled; one setting serves every layer, so neighbouring layers stay consistent.
-    let configs: &[(f64, bool, bool)] = if opts.smoothing {
+    let configs: &[(f64, bool, bool, usize)] = if opts.smoothing && opts.camber_seam {
         &[
-            (1.0, false, true),
-            (1.0, false, false),
-            (1.0, true, false),
-            (0.5, false, false),
-            (0.25, false, false),
-            (0.0, false, false),
+            (1.0, false, true, 0),
+            (1.0, false, false, 0),
+            (1.0, true, false, 0),
+            (0.5, false, false, 0),
+            (0.25, false, false, 0),
+            (0.0, false, false, 0),
+            (1.0, false, true, LAPLACE_PASSES),
+            (1.0, false, false, LAPLACE_PASSES),
+        ]
+    } else if opts.smoothing {
+        &[
+            (1.0, false, true, 0),
+            (1.0, false, false, 0),
+            (1.0, true, false, 0),
+            (0.5, false, false, 0),
+            (0.25, false, false, 0),
+            (0.0, false, false, 0),
         ]
     } else {
-        &[(0.0, false, false)]
+        &[(0.0, false, false, 0)]
     };
-    let attempt = |step: usize, lambda: f64, freeze: bool, exact: bool| -> Result<CGridMesh, Vec<FanError>> {
+    let attempt = |step: usize,
+                   lambda: f64,
+                   freeze: bool,
+                   exact: bool,
+                   laplace: usize|
+     -> Result<CGridMesh, Vec<FanError>> {
         let stride = lay.stride();
         let mut grid = vec![[0.0; 3]; stride * (n_k + 1)];
         let mut normals = Vec::with_capacity(n_k + 1);
@@ -1412,7 +1765,17 @@ pub fn build_cgrid_mesh_with(
                 let mut l = build_layer(fan, spec, &lay, k, rb, h1, opts).map_err(|e| vec![e])?;
                 if lambda > 0.0 {
                     let alg = l.clone();
-                    smooth_layer(&mut l, &lay, rb * fan.sector_angle(), SMOOTH_ITER, freeze, exact);
+                    smooth_layer(
+                        &mut l,
+                        &lay,
+                        rb * fan.sector_angle(),
+                        SMOOTH_ITER,
+                        freeze,
+                        exact,
+                        opts.nose_rows_algebraic,
+                        opts.front_edge_held,
+                        laplace,
+                    );
                     if lambda < 1.0 {
                         let mix = |p: &mut (f64, f64), q: (f64, f64)| {
                             *p = (q.0 + lambda * (p.0 - q.0), q.1 + lambda * (p.1 - q.1));
@@ -1443,6 +1806,9 @@ pub fn build_cgrid_mesh_with(
             write_layer(&lay, k, r, &a, b.as_ref(), &mut grid);
             normals.push(a.normals);
             stacks.push(a.stack_cells);
+        }
+        if opts.radial_filter {
+            radial_filter(&lay, &radii, &stacks, &mut grid);
         }
         if let Some((k, r, blk, i, j)) = folded_quad(&lay, &radii, &grid, opts.smoothing) {
             return Err(one(
@@ -1682,6 +2048,7 @@ pub fn build_cgrid_mesh_with(
             n_bl: nb,
             growth: g,
             h1,
+            h_gap,
             radii: radii.clone(),
             normals,
             stack_cells: stacks,
@@ -1690,8 +2057,8 @@ pub fn build_cgrid_mesh_with(
         })
     };
     let mut last = None;
-    for (step, &(lambda, freeze, exact)) in configs.iter().enumerate() {
-        match attempt(step, lambda, freeze, exact) {
+    for (step, &(lambda, freeze, exact, laplace)) in configs.iter().enumerate() {
+        match attempt(step, lambda, freeze, exact, laplace) {
             Ok(m) => return Ok(m),
             Err(e) => {
                 // report the failure of the first (full) construction
