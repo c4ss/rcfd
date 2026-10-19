@@ -1,8 +1,8 @@
-//! ADR 0076 (wave 35A) Part R: transient order and exact-solution error on a rotationally periodic annular sector (60 degrees, walls at
-//! r = 0.5 and 1, `theta_min`/`theta_max` a rotational pair). SWIRL: the exact unforced decay `u = U(r) e^{-nu k^2 t} e_theta` (U by RK4
-//! shooting, an independent solution). SECT-M: manufactured non-axisymmetric flow `psi = g(t) F(r) cos(6 theta)` with no-slip walls. K =
-//! `rhie_chow_consistent` + `seam_extrapolation` + `relax_extrapolated`. Heavy tests are ignored:
-//! `cargo test --release -p rcfd-fv --test w35a_seam -- --ignored --nocapture`.
+//! ADR 0076 (wave 35A): transient set-ups on a rotationally periodic annular sector (60 degrees, walls at r = 0.5 and 1, `theta_min`/`theta_max` a
+//! rotational pair). SWIRL: the exact unforced decay `u = U(r) e^{-nu k^2 t} e_theta` (U by RK4 shooting, an independent solution). SECT-M:
+//! manufactured non-axisymmetric flow `psi = g(t) F(r) cos(6 theta)` with no-slip walls. The candidate fixes measured on them (ADR 0076 K) were not
+//! accepted and were removed; this file keeps the set-ups and the default-code smoke (fine-pair orders 1.135 / 2.052 SWIRL, 1.041 / 0.538 SECT-M for
+//! PISO / PIMPLE-4). `cargo test --release -p rcfd-fv --test w35a_seam -- --ignored --nocapture`.
 
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::convection::ConvScheme;
@@ -279,8 +279,8 @@ fn p_ex(prob: Prob, x: Vec3, t: f64) -> f64 {
     }
 }
 
-/// `outer` = 1 (PISO) or 4 (PIMPLE-4, alpha 1); `k` switches on every key of the candidate K.
-fn make(prob: Prob, n: usize, outer: usize, k: bool) -> PimpleSolver {
+/// `outer` = 1 (PISO) or 4 (PIMPLE-4, alpha 1).
+fn make(prob: Prob, n: usize, outer: usize) -> PimpleSolver {
     let mesh = annulus_sector(n, n, RA, RB, std::f64::consts::FRAC_PI_3, Grading::Uniform, 0.1).unwrap();
     let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
     let mut u = VectorField::from_fn("U", &geom, |c| u_ex(prob, c, 0.0));
@@ -293,9 +293,6 @@ fn make(prob: Prob, n: usize, outer: usize, k: bool) -> PimpleSolver {
     s.convection = ConvScheme::Central;
     s.time_scheme = TimeScheme::Bdf2;
     s.n_outer = outer;
-    s.rhie_chow_consistent = k;
-    s.seam_extrapolation = k;
-    s.relax_extrapolated = k;
     let ctl = SolveControl {
         tol_abs: 1e-14,
         tol_rel: 1e-12,
@@ -306,8 +303,8 @@ fn make(prob: Prob, n: usize, outer: usize, k: bool) -> PimpleSolver {
     PimpleSolver::new(geom, u, p, s)
 }
 
-fn run(prob: Prob, n: usize, dt: f64, outer: usize, k: bool) -> PimpleSolver {
-    let mut s = make(prob, n, outer, k);
+fn run(prob: Prob, n: usize, dt: f64, outer: usize) -> PimpleSolver {
+    let mut s = make(prob, n, outer);
     for _ in 0..(1.0 / dt).round() as usize {
         if prob == Prob::SectM {
             let bf = mms_force(&s.geom, s.time + dt);
@@ -335,37 +332,16 @@ fn exact_err(prob: Prob, s: &PimpleSolver) -> f64 {
     rel_l2(&s.u.values, &ex)
 }
 
-/// Relative L2 of the cell pressure against the exact one, volume means removed from both.
-fn pressure_err(prob: Prob, s: &PimpleSolver) -> f64 {
-    let vol = s.geom.mesh.cell_volumes();
-    let tv: f64 = vol.iter().sum();
-    let ex: Vec<f64> = s
-        .geom
-        .mesh
-        .cell_centres()
-        .iter()
-        .map(|&c| p_ex(prob, c, s.time))
-        .collect();
-    let mp = s.p.values.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
-    let me = ex.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
-    let (mut num, mut den) = (0.0, 0.0);
-    for ((a, b), v) in s.p.values.iter().zip(&ex).zip(vol) {
-        num += v * ((a - mp) - (b - me)).powi(2);
-        den += v * (b - me).powi(2);
-    }
-    (num / den.max(1e-300)).sqrt()
-}
-
 const DT_REF: f64 = 1.0 / 1280.0;
 
 /// Fine-pair order (0.025, 0.0125) on 16 x 16 against the same-scheme dt = 1/1280 reference; prints the row.
-fn fine_order(id: &str, prob: Prob, outer: usize, k: bool) -> f64 {
-    let refr = run(prob, 16, DT_REF, outer, k);
-    let (a, b) = (run(prob, 16, 0.025, outer, k), run(prob, 16, 0.0125, outer, k));
+fn fine_order(id: &str, prob: Prob, outer: usize) -> f64 {
+    let refr = run(prob, 16, DT_REF, outer);
+    let (a, b) = (run(prob, 16, 0.025, outer), run(prob, 16, 0.0125, outer));
     let e = [rel_l2(&a.u.values, &refr.u.values), rel_l2(&b.u.values, &refr.u.values)];
     let o = (e[0] / e[1]).log2();
     println!(
-        "RESULT {id} {prob:?} n_outer {outer} K={k}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}; reference vs exact {:.4e}; seam norms {:?}) order {o:.3} {}",
+        "RESULT {id} {prob:?} n_outer {outer}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}; reference vs exact {:.4e}; seam norms {:?}) order {o:.3} {}",
         e[0],
         e[1],
         exact_err(prob, &a),
@@ -375,74 +351,6 @@ fn fine_order(id: &str, prob: Prob, outer: usize, k: bool) -> f64 {
         if (1.9..=2.3).contains(&o) { "MET" } else { "MISS" }
     );
     o
-}
-
-/// R1, R1b, R2, R2b (K) with the default rows printed.
-#[test]
-#[ignore = "ADR 0076 R1/R2 (heavy)"]
-fn r1_r2_sector_orders() {
-    let mut bad = Vec::new();
-    for (id, prob, outer) in [
-        ("R1", Prob::Swirl, 1),
-        ("R1b", Prob::Swirl, 4),
-        ("R2", Prob::SectM, 1),
-        ("R2b", Prob::SectM, 4),
-    ] {
-        let o = fine_order(id, prob, outer, true);
-        if !(1.9..=2.3).contains(&o) {
-            bad.push(format!("{id}: order {o:.3} outside [1.9, 2.3]"));
-        }
-        fine_order(&format!("{id}-default"), prob, outer, false);
-    }
-    assert!(bad.is_empty(), "{bad:#?}");
-}
-
-/// R3: joint refinement against the exact solution, PISO, (16, 0.05), (32, 0.025), (64, 0.0125); SWIRL >= 1.9, SECT-M >= 1.8.
-#[test]
-#[ignore = "ADR 0076 R3"]
-fn r3_sector_joint_refinement() {
-    let mut bad = Vec::new();
-    for (prob, lim) in [(Prob::Swirl, 1.9), (Prob::SectM, 1.8)] {
-        for k in [true, false] {
-            let e: Vec<f64> = [(16usize, 0.05), (32, 0.025), (64, 0.0125)]
-                .iter()
-                .map(|&(n, dt)| exact_err(prob, &run(prob, n, dt, 1, k)))
-                .collect();
-            let o = [(e[0] / e[1]).log2(), (e[1] / e[2]).log2()];
-            println!(
-                "RESULT R3 {prob:?} K={k}: errors {:.4e} {:.4e} {:.4e} orders {:.3} {:.3} (limit >= {lim})",
-                e[0], e[1], e[2], o[0], o[1]
-            );
-            if k && !(o[0] >= lim && o[1] >= lim) {
-                bad.push(format!("R3 {prob:?}: orders {o:?} (limit {lim})"));
-            }
-        }
-    }
-    assert!(bad.is_empty(), "{bad:#?}");
-}
-
-/// R4: no-harm on the sector, 16 x 16 PISO: exact velocity and pressure error with K <= 1.05 x the default.
-#[test]
-#[ignore = "ADR 0076 R4"]
-fn r4_sector_no_harm() {
-    let mut bad = Vec::new();
-    for prob in [Prob::Swirl, Prob::SectM] {
-        for dt in [0.05, 0.025, 0.0125] {
-            let (a, b) = (run(prob, 16, dt, 1, true), run(prob, 16, dt, 1, false));
-            let (ua, ub) = (exact_err(prob, &a), exact_err(prob, &b));
-            let (pa, pb) = (pressure_err(prob, &a), pressure_err(prob, &b));
-            let line = format!(
-                "R4 {prob:?} dt={dt}: velocity error {ua:.4e} vs default {ub:.4e} (ratio {:.4}); pressure error {pa:.4e} vs {pb:.4e} (ratio {:.4})",
-                ua / ub,
-                pa / pb
-            );
-            println!("RESULT {line}");
-            if !(ua <= 1.05 * ub && pa <= 1.05 * pb) {
-                bad.push(line);
-            }
-        }
-    }
-    assert!(bad.is_empty(), "{bad:#?}");
 }
 
 /// Smoke of the set-ups before registration (ADR 0076 rule d): eigenvalue accuracy, periodicity of the manufactured fields, default orders.
@@ -475,7 +383,7 @@ fn smoke_sector_setups() {
     );
     for prob in [Prob::Swirl, Prob::SectM] {
         for outer in [1usize, 4] {
-            fine_order("SMOKE", prob, outer, false);
+            fine_order("SMOKE", prob, outer);
         }
     }
 }

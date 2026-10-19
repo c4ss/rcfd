@@ -187,3 +187,101 @@ seams). The two faces of a pair then also get body-force fluxes of different mag
 **Y5 (diagnostic, scratch tree only, prints; no fix follows in this wave, amendment rule "no fourth fix").** With K on, the body-force face term of the coupled
 faces uses the coupled mean `rAU` (the same weights as `coupled_gamma`). Run once: SECT-M 16 x 16 fine pair, PIMPLE-4 (R2b) and PISO (R2). Reading rule:
 H-SEAM-BF stands if the R2b order is in [1.9, 2.3]; otherwise it is falsified. The result is reported; it changes no verdict above.
+
+## Final addendum (measured values, verdicts, removal and deviations; nothing above was changed)
+
+Order of the runs: smoke (default code), registration, F-S and rotational F-G written, N2 fingerprints, Y4 (amendment 1), F-R written, Part A + N1 + N5 (one
+process), Part R (one process), amendment 2, Y5 (scratch, once), removal. Every registered row ran exactly once with K = F-G + F-S + F-R. The code of K and
+its tests as measured is commit **79e838d** ("candidate K as measured"); the next commit removes it.
+
+### Part A with K (TG / TG-S N = 32, BDF2, band [1.9, 2.3])
+
+| check | measured (errors vs the dt = 1/1280 reference) | verdict |
+|---|---|---|
+| implementation check vs ADR 0073 F-G | C-O1 fine 4.3201e-5 / 9.1931e-6 (0073: 4.32e-5 / 9.19e-6); C-O3, C-O7, C-O9 equal to the printed digits; N1 TG velocity ratios equal | as predicted (F-S does not touch TG) |
+| consistency check vs Y3 | C-S1 4.3218e-5 / 9.1973e-6 (Y3: 4.322e-5 / 9.197e-6) | as predicted |
+| C-O1 TG PISO fine, coarse | 2.232, 2.260 | met |
+| C-O2 TG PIMPLE-C fine | 4.1161e-5 / 1.6345e-5, **1.332** (ADR 0073 F-G 1.237, default 1.223) | MISS |
+| C-O3 TG PIMPLE-4 fine | 2.011 | met |
+| C-O7 TG PISO variable step | 2.194 | met |
+| C-S1 TG-S PISO fine | 2.232 (default 6.7324e-4 / 3.4253e-4, 0.975) | met |
+| C-S2 TG-S PIMPLE-4 fine | 2.011 (default 0.823) | met |
+| C-O9 joint refinement vs exact | 2.3766e-2, 1.6872e-3, 1.7896e-4: 3.816, 3.237 | met |
+| N1 (12 velocity, 9 pressure, limit 1.05) | TG velocity 0.9874 / 0.9924 / 0.9958, pressure 1.0020 / 1.0014 / 1.0008; TG-S velocity 0.8028 / 0.9423 / 1.0077, pressure **1.0952 / 1.0521** / 1.0069; MMS velocity <= 1.0018, pressure <= 1.0029; MODE 1.0000 | MISS (two TG-S pressure rows) |
+| N2 fingerprints | 5 of 5 identical (with the keys present and off, and again after the removal) | met |
+| C-O6r (reported) | TG PIMPLE-C coarse 1.787; MMS PISO 1.954 / 1.602; MMS PIMPLE-C 2.225 / 2.969 | reported |
+| N3 | not rerun (registered) | - |
+
+Observation on N1 (no verdict changes): with K the TG-S errors equal the TG errors to four digits (velocity 1.6869e-3 vs 1.6872e-3, pressure 8.9951e-3 vs
+8.9948e-3 at dt 0.05), i.e. K restores the translation invariance of the result. The default's TG-S pressure error (8.2130e-3) is LOWER than its own TG one
+(8.9768e-3): the seam errors of the default partly cancel the spatial pressure error. This is the same pattern that rejected F-K in ADR 0073.
+
+### Part P (F-R) and Part D
+
+| check | measured | verdict |
+|---|---|---|
+| Y4a / Y4b / Y4c (amendment 1) | 2.043 / 1.239 / 2.023 | H-RELAX stands, velocity anchor |
+| N5 PIMPLE-C no-harm (9 + 9, limit 1.05) | TG velocity 0.9939 / 0.9966 / 0.9980, pressure 0.8510 / 0.9292 / 0.9662; TG-S velocity 1.0297 / 1.0381 / 1.0418, pressure 0.8381 / 0.9033 / 0.9302; MMS velocity 0.9941 / 0.9986 / 0.9996, pressure 0.4872 / 0.6592 / 0.8754 | met |
+| N5 information: K without F-R | TG-S velocity 1.0230 / 1.0338 / 1.0396; pressures 0.96 to 1.002 | reported |
+
+F-R as specified removes only part of the PIMPLE-C floor (C-O2 1.237 -> 1.332). UNTESTED hypothesis for the rest (no fourth fix in this wave): on the first
+outer iteration `HbyA` carries the relaxation source as `(1 - alpha_u) u_anchor` per cell, so the face flux of that iteration contains
+`(1 - alpha_u) interp(u_anchor).S` instead of a face-consistent `(1 - alpha_u) phi_anchor`; the outer-0 flux is the convecting flux of the final outer iteration,
+and the difference is `(1 - alpha_u)` times the face defect, which is O(dt). A falsifier would be the same run with the face-consistent relaxation term.
+
+### Part R (sector, 16 x 16 unless stated; band [1.9, 2.3])
+
+| check | measured with K | default | verdict |
+|---|---|---|---|
+| R1 SWIRL PISO fine | 7.6043e-4 / 1.7009e-4, 2.161 (vs exact 4.4688e-3 / 4.1128e-3) | 1.135 (exact 1.2656e-2 / 7.7675e-3) | met |
+| R1b SWIRL PIMPLE-4 fine | 2.021 | 2.052 | met |
+| R2 SECT-M PISO fine | 8.3488e-4 / 2.5404e-4, **1.717** | 1.041 | MISS |
+| R2b SECT-M PIMPLE-4 fine | 2.0404e-4 / 1.3530e-4, **0.593** | 0.538 | MISS |
+| R3 SWIRL joint refinement (limit 1.9) | 6.5123e-3, 1.7301e-3, 4.7806e-4: 1.912, **1.856** | 0.014, -0.072 | MISS |
+| R3 SECT-M joint refinement (limit 1.8) | 1.6430e-2, 4.8069e-3, 1.4064e-3: **1.773, 1.773** | 1.598, 0.838 | MISS |
+| R4 SWIRL (limit 1.05) | velocity 0.2660 / 0.3531 / 0.5295, pressure 0.2119 / 0.2932 / 0.4623 | - | met |
+| R4 SECT-M | velocity **1.0651** / 1.0266 / 1.0121, pressure 1.0041 / 1.0155 / 1.0082 | - | MISS (dt 0.05) |
+| Y5 (amendment 2): seam body-force term with the coupled mean rAU | R2 7.7563e-4 / 1.8884e-4, **2.038**; R2b 2.4919e-5 / 6.1413e-6, **2.021** | - | H-SEAM-BF stands |
+
+On SWIRL, K turns the first-order PISO seam lag into second order and cuts the exact-solution error 2 to 5 times; the R3 SWIRL miss is the temporal part under
+joint refinement (at (64, 0.0125) the K error 4.78e-4 is 1.9 times the spatial error 2.57e-4 of the smoke study), which the registered limit, backed only by the
+spatial study, did not allow for. On SECT-M the remaining floor is the seam body-force coefficient (Y5): the PIMPLE kernel adds `gamma_p[f] * bf.face[f]` with the
+OWNER's rAU on a coupled face while the pressure term uses the coupled mean, an O(dt) mismatch where rAU varies. The steady SIMPLE kernel has the opt-in
+`coupled_body_pair_mean` for exactly this (ADR 0071; the API switches it on with the rotating-frame wall treatment); the transient kernel has no equivalent.
+Open item for the fan milestone (any transient run of a rotationally periodic sector with a body force, e.g. rotating-frame forces). Not fixed here (no fourth fix).
+
+### Verdicts and what was done
+
+* **K is not accepted** (C-O2, N1, R2, R2b, R3, R4 missed).
+* Per fix (registered rows, all measured with K): **F-G** misses N1, R2b and R4 -> removed; **F-S** misses R2, R3, N1 (TG-S) and R4 -> removed; **F-R** misses C-O2
+  -> removed. Removed from `pimple.rs`: the fields `rhie_chow_consistent`, `seam_extrapolation`, `relax_extrapolated`, the F-G corrector block and its set-up,
+  `seam_faces`, `rc_commutator`, `seam_defects`, the F-S coefficient override and the F-R anchor. `pimple.rs` is now the code of 0cef8f5 minus F-G (the default
+  path is unchanged; N2 fingerprints identical). This supersedes the "kept opt-in" statement of ADR 0073 for F-G (ADR 0073 itself is not edited).
+* Tests removed with the fixes: `w34b_floor.rs` loses every F-G test (`c_o9_fg_joint_refinement`, which ran by default, `c_fg_orders_known_miss`,
+  `n1_fg_no_harm_known_miss`, `n3_fg_decomposition`, `c_fg_met_rows`) and its non-TG problems; A0 and A1 (default code) stay. `w35a_seam.rs` keeps the SWIRL and
+  SECT-M set-ups and the default-code smoke (`smoke_sector_setups`, ignored); the K tests are in 79e838d.
+* **Cylinder not run** (K not accepted).
+* Keys were never wired into `schema.rs` / `sim.rs`.
+
+### Which of the 34B misses are met
+
+* Measured with K: **C-S1 met** (0.995 -> 2.232). The 34B **N1** miss (TG-S velocity 1.0504) is met (1.0077), but N1 as a whole is missed again on two TG-S
+  pressure comparisons (1.0952, 1.0521) that 34B met. **C-O2 still missed** (1.237 -> 1.332).
+* In the code at hand-back: **none**. All fixes are removed by the registered rule; the default solver is unchanged and keeps the 34B floors (TG PISO/PIMPLE
+  order floor, TG-S seam lag, PIMPLE-C relaxation floor), now also measured on rotational seams (default fine-pair orders SWIRL PISO 1.135, SECT-M PISO 1.041,
+  SECT-M PIMPLE-4 0.538).
+* Not addressed in this wave: ADR 0073 Part B misses (B4a as registered, B4b) and the rejected fractional fix F-K (N4).
+
+### Deviations from the plan (candid)
+
+* F-R was added beyond the two fixes the task named; it was registered (with its falsifier Y4) before any run, after predicting that C-O2 fails without it.
+* SECT-M was added beyond the suggested swirl case, because the smoke showed that the F-G seam terms vanish by symmetry on SWIRL.
+* The R3 SECT-M limit (1.8) was set from the smoke spatial study; the R3 SWIRL limit (1.9) was backed only by the spatial study and the temporal part under joint
+  refinement failed it.
+* N3 was not rerun (registered).
+* Y5 was registered in amendment 2, after the acceptance results and before its own run.
+* The K code was committed once as a record (79e838d) and removed in the following commit, so that the measured code stays recoverable.
+
+### Unverified references
+
+None used. SWIRL is derived here and computed by shooting (1.7e-14 table accuracy); SECT-M is manufactured (source accurate to about 1e-9).
