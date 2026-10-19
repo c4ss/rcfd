@@ -254,7 +254,7 @@ re-read); no external reference value is used by any gate. No fan performance cl
 | T1 corrected: finest projected error | <= 1.5e-2 V_i | 2.7155e-3 | met |
 | T1 corrected: orders | >= 1.0 | 1.83, 1.91 (unprojected 1.83, 1.90) | met |
 | T1 corrected: `e_projected <= e_unprojected` | every mesh | 3.6187e-2 vs 3.6000e-2, 1.0171e-2 vs 1.0154e-2, 2.7155e-3 vs 2.7145e-3 | MISS: bookkeeping change, not an accuracy fix |
-| T1 corrected: positive control `tilt >= 1e-4` | every mesh | 1.375e-3, 3.315e-4, 4.70e-5 (falls as h^2) | MISS on the finest mesh (set-up weakness) |
+| T1 corrected: positive control `tilt >= 1e-4` | every mesh | 1.375e-3, 3.315e-4, 4.70e-5 (falls as h^2) | MISS on the finest mesh: a set-up defect by the registered rule (no corrected test was added) |
 | T1d decoupled: leak / finest error / orders | 1e-13 / 1.5e-2 / 1.0 | 1.9e-16 / 2.7158e-3 / 1.83, 1.91 | met |
 | T1d: `e_decoupled <= e_unprojected` | every mesh | 3.6252e-2, 1.0177e-2, 2.7158e-3 (all above) | MISS: bookkeeping change |
 | T2 empty C-grid sector: projected leak | <= 1e-13 | 1.8e-16 (unprojected 1.55e-2 of `abs(u_w) abs(S)`) | met |
@@ -265,7 +265,7 @@ re-read); no external reference value is used by any gate. No fan performance cl
 Verdict: the leak is a real per-face defect of prescribing `u_w(c_f) . S_f` on a faceted wall of revolution (L-H1 confirmed bit for bit), and the
 opt-in `wall_velocity_projection = "tangential"` removes it exactly. On the analytic faceted Couette (T1) neither the projection nor the decoupled
 treatment (zero flux, face-centre velocity) is more accurate than the leaking wall (differences 0.05 % to 0.7 %); so the projection is a mass
-bookkeeping fix, not a demonstrated accuracy fix. The decoupled flag is an fv-level opt-in only (no case key).
+bookkeeping fix, not a demonstrated accuracy fix; the verdict rests on meshes 1 and 2, where the positive control passed, and T1d and T2 agree with it. The registered S3' itself still misses; S3'' is a new set-up that meets the S3' limit only with the opt-in. The decoupled flag is an fv-level opt-in only (no case key).
 
 ### Part 2: C-grid quality
 
@@ -288,6 +288,10 @@ registered; mechanisms found: thin-layer rotation wedge, and the y+ = 1 blade-st
 | R-E quality of the built meshes (reported) | none | E: 41 of 107 at or below 70 deg, median 74.5 deg, worst 89.1, skewness <= 2 in 75, aspect up to 1456; 33A: 0 of 38 at or below 70, median 83.7 | reported |
 | R1-E example case with `c_grid_construction = "smoothed"` | no error-level finding | 0 findings, 53.82 deg, skewness 0.596, `check_mesh` ok (pursuit: 79.65 deg, SV101) | met |
 
+Construction step that built each registered mesh (recorded after the registered runs through the new field `CGridMesh::construction_step`,
+which does not change the construction; quality numbers bit-identical to the registered run): S, A', B' and all three Q4a' levels step 0 (full
+smoothing); Q4b/Q5 levels (16, 8) and (32, 16) step 0, level (64, 32) step 3 (smoothing displacement x 0.5).
+
 Unregistered observations: the A' and B' aspect maxima sit in the cells next to the irregular seam corner (C cell (h_c - 1, n_side - 1) and the last
 F row at the seam) in the first layers below the shroud and the tip cap (in-plane edge about 0.09 m against h1): the smoother stretches the corner
 cells and the end-wall first height turns that into aspect. Development runs (DS, DA, S, unregistered combinations) are summarised in Amendment 4.
@@ -295,7 +299,8 @@ cells and the end-wall first height turns that into aspect. Development runs (DS
 ### Deviations from the registered plan (candid list)
 
 * G2 (planar control) was replaced before it ran (Amendment 1); G2a folded (inconclusive).
-* T1 had a set-up defect (incompatible closed pressure equation) found before it ran; T1d was added after T1's coarse meshes ran (Amendment 3).
+* T1 had a set-up defect (incompatible closed pressure equation) found before it ran; T1d was added after T1's coarse meshes ran (Amendment 3). The
+  corrected T1 then has a second set-up defect (the positive control fails on the finest mesh); no further corrected test was added.
 * The construction was developed in several steps on the development set-ups after Amendment 2 (untangling, line-implicit relaxation, the
   kept-algebraic quarter, exact controls near the stacks with a fade length chosen on S and unregistered combinations, the fallback chain); W1 and W2
   were each falsified as registered, W1 is nevertheless part of construction E (it reduced the DA end-wall maxima), W2 is not. Everything was frozen in

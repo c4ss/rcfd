@@ -765,3 +765,44 @@ fn a_prime_aspect_location() {
         }
     }
 }
+
+/// Not registered (ADR 0072 addendum): the step of the construction chain that built each registered mesh.
+#[test]
+#[ignore = "record, not registered: cargo test --release -p rcfd-mesh --test cgrid_e_w34a construction_steps -- --ignored --nocapture"]
+fn construction_steps_of_the_registered_meshes() {
+    let fan = blade_b();
+    let mut list: Vec<(String, CGridSpec)> =
+        vec![("S".into(), spec_s()), ("A'".into(), spec_a()), ("B'".into(), spec_b())];
+    for (nu, nc, nd, ns, nn) in [(8, 16, 8, 8, 4), (16, 32, 16, 16, 8), (32, 64, 32, 32, 16)] {
+        list.push((
+            format!("Q4a' ({nu}, {nc}, {nd}, {ns}, {nn})"),
+            CGridSpec {
+                n_up: nu,
+                n_chord: nc,
+                n_down: nd,
+                n_side: ns,
+                n_nose: nn,
+                include_blade: false,
+                ..spec_s()
+            },
+        ));
+    }
+    for (nc, nsp) in [(16, 8), (32, 16), (64, 32)] {
+        list.push((
+            format!("Q4b ({nc}, {nsp})"),
+            CGridSpec {
+                n_chord: nc,
+                n_span: nsp,
+                ..spec_s()
+            },
+        ));
+    }
+    for (tag, spec) in list {
+        let m = build(&fan, &spec);
+        let q = m.quality();
+        println!(
+            "step {} for {tag}: non-orth {:.4} skew {:.4} aspect {:.2}",
+            m.construction_step, q.max_non_orthogonality, q.max_skewness, q.max_aspect_ratio
+        );
+    }
+}

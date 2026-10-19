@@ -16,9 +16,9 @@
 //! edge (a single node), the leading and trailing nodes collapse the core columns to prism cells.
 //!
 //! Measured quality and its limits (the fan around the leading edge is oblique when the front edge is close, so the
-//! non-orthogonality gate of ADR 0068 is missed; skewness is dominated by the flat facets of annular cells next to
-//! the hub and shroud when the first cell is much thinner than the sagitta of a cell) are in the ADR 0068 addendum
-//! and `docs/meshing.md`. A specification whose line family folds is rejected with a located error.
+//! non-orthogonality gate of ADR 0068 is missed; the attribution of the y+ = 1 skewness, which is not the facet sagitta but the
+//! thin wake-stack and end-wall cells, is in ADR 0072, diagnostics G and W) are in the ADR 0068 and 0072 addenda and
+//! `docs/meshing.md`. A specification whose line family folds is rejected with a located error.
 //!
 //! [`build_cgrid_mesh_with`] with [`CGridOptions`] selects the wave 34A construction (ADR 0072): in-plane elliptic smoothing with
 //! periodic seams and a radial remap of the far grid of the thin end-wall layers; [`build_cgrid_mesh`] keeps the construction above.
@@ -151,6 +151,10 @@ pub struct CGridMesh {
     /// Per mesh cell: `(block, a, b, k)` with block 0 = C block `(i, j)`, 1 = F block `(a, b)`, 2 = core block `(m, t)`, and the
     /// radial cell layer `k` (the trailing-edge wedge of the core carries the tag of its first part).
     pub cell_tags: Vec<(u8, usize, usize, usize)>,
+    /// Step of the construction chain that built the mesh (ADR 0072): 0 for the 33A construction and for the full smoothing; with
+    /// smoothing 1 = one-dimensional controls, 2 = first quarter of the outer rows kept algebraic, 3 / 4 / 5 = smoothing displacement
+    /// scaled by 0.5 / 0.25 / 0.
+    pub construction_step: usize,
 }
 
 impl CGridMesh {
@@ -1392,7 +1396,7 @@ pub fn build_cgrid_mesh_with(
     } else {
         &[(0.0, false, false)]
     };
-    let attempt = |lambda: f64, freeze: bool, exact: bool| -> Result<CGridMesh, Vec<FanError>> {
+    let attempt = |step: usize, lambda: f64, freeze: bool, exact: bool| -> Result<CGridMesh, Vec<FanError>> {
         let stride = lay.stride();
         let mut grid = vec![[0.0; 3]; stride * (n_k + 1)];
         let mut normals = Vec::with_capacity(n_k + 1);
@@ -1682,11 +1686,12 @@ pub fn build_cgrid_mesh_with(
             normals,
             stack_cells: stacks,
             cell_tags,
+            construction_step: step,
         })
     };
     let mut last = None;
-    for &(lambda, freeze, exact) in configs {
-        match attempt(lambda, freeze, exact) {
+    for (step, &(lambda, freeze, exact)) in configs.iter().enumerate() {
+        match attempt(step, lambda, freeze, exact) {
             Ok(m) => return Ok(m),
             Err(e) => {
                 // report the failure of the first (full) construction

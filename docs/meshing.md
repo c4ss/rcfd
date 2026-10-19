@@ -206,9 +206,9 @@ skewness 0.86 (gate 2.0, met), aspect 177 (gate 300, met); set-up B' (y+ 1, 593 
 
 **Limits of the generator.** It is not robust against changes of the controls: of 144 combinations of `n_chord`, `n_nose`, `n_side` scanned (unregistered), 44
 built; the others fold in the leading-edge fan (located error on `front_gap`) or tangle in a way the fold check does not see (located by the mesh validation).
-The registered refinement studies (envelope and blade volume, blade area) could not be run for that reason. The oblique leading-edge fan at
-`front_gap` 0.3 and the sagitta of flat facets against a thin first cell on annular walls are the likely causes of the non-orthogonality and skewness misses
-(not isolated by a test). Not validated for fan performance prediction.
+The registered refinement studies (envelope and blade volume, blade area) could not be run for that reason. The causes of the misses were
+isolated in ADR 0072 (next paragraph): the facet sagitta guess of wave 33A was falsified (the worst B' skewness sits on the thin wake-stack cut
+faces in every layer). Not validated for fan performance prediction.
 
 **Smoothed construction (ADR 0072, `mesh.fan.c_grid_construction = "smoothed"`, `CGridOptions { radial_remap, smoothing }`).** Attribution of the
 33A misses (ADR 0072 G1-G5): the A'/S non-orthogonality maximum is in-plane, in the oblique leading-edge fan (92 % of the A' faces above 70 deg);
@@ -217,7 +217,7 @@ the B' maximum and skewness are 3-D: thin layers whose in-plane grid rotates bet
 y+ = 1 first height (a floor of flat-faced hexes on a twisted blade at those counts). The smoothed construction relaxes each layer with Winslow's
 equations (control functions from the algebraic grid, exact near the stacks; periodic free seams; front edge interior; stacks held exactly), takes
 the far grid of the thin end-wall layers from a remapped radius, extrudes the tip gap radially, and falls back through a fixed chain of weaker
-settings if anything folds. Measured once on the registered set-ups: A' 61.4 deg, skewness 0.86, aspect 395 (gate 300 MISSED: cells at the irregular
+settings if anything folds (`CGridMesh::construction_step` records the step; A' and B' were built by the full smoothing, step 0). Measured once on the registered set-ups: A' 61.4 deg, skewness 0.86, aspect 395 (gate 300 MISSED: cells at the irregular
 seam corner in the end-wall layers); B' 78.2 deg, skewness 7.1, aspect 8532 (all three MISSED, predicted); envelope volume order 2.0 and blade volume /
 area orders 3.1 / 1.7 now measurable; 107 of 117 scan combinations build (33A: 38), but many built meshes are poor (median 74.5 deg). The default
 stays the 33A construction.
