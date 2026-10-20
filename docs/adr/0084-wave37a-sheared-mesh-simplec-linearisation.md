@@ -323,7 +323,7 @@ flow at Re 1.4e5; none was diagnosed.
 * J10 ran in the J1 invocation (a prefix match of the selection); it was registered and formed once.
 * The channel B attribution was formed at x0 only, the first start-up state with rho > 1. It was not formed at x*, whose rho is below 1; the
   registration asked for attribution only where the base rho > 1.
-* The diagnostic switches P(m), P(implicit) and S were in the solver for the attribution runs (record commit 65e5683) and were removed afterwards.
+* The diagnostic switches P(m), P(implicit) and S were in the solver for the attribution runs (record commit 93d66ab) and were removed afterwards.
 * The FAN-01 report used one 1500-iteration run for both the 300- and the 1500-iteration readings (the first 300 iterations are the same run).
 * Finding S is reported, not fixed: the SIMPLEC compensation is missing on periodic seam faces, so a converged SIMPLEC seam flux carries rAtU where
   internal faces carry rAU. Fixing it changes converged results on periodic meshes and needs its own registration.
