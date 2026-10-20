@@ -269,3 +269,11 @@ or the limiter clips a different set of cells. None of these was tested.
 
 Celik et al. (2008, J. Fluids Eng. 130, 078001) for the unequal-ratio order formula, Roache (1998) for the GCI and its factors of safety: both
 recalled, not re-read. Air density 1.2 kg/m^3 assumed (ADR 0075).
+
+### Final gate
+
+Fresh `git archive` of 759d980, which also contains the other wave-37 agents' commits up to it: `cargo fmt --all -- --check` clean, `cargo
+clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **1881 passed, 0 failed, 531 ignored**
+(no LNK1201). The test run took about 2 h 05 min, over the 60-minute run guideline, as in wave 36. This file contributes 2 passed and 6 ignored
+tests. Later commits by waves 37A, 37B and 37D (docs only, up to bf74526) and this paragraph are not re-gated; this paragraph is a docs-only
+commit.
