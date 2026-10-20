@@ -447,3 +447,25 @@ F-126 remains MISSED; no arm is an F-126 attempt; no fan performance claim is ma
 
 * EB's C_L cap 1.1 and C_D 0.02 (assumed; not from a source read in this wave). Carter's rule and Weinig's factor were not used (recalled only).
 * Air density 1.2 kg/m^3 and 1486 rpm, as in ADR 0075.
+
+## Amendment 4 (2026-10-20): can the X2 source be a code defect? Registered after the addendum above, before these runs
+
+What I knew: every result of the addendum. Reason (review): X2b's flow has no swirl, so it cannot reveal an error that needs a large tangential
+velocity (the vector rotation at the cyclic seams, convection of swirl through the camber-sheared cells, the seam gradient); the registered rule
+classified X2 as "discretisation error" through X2d, which still creates 16.8 Pa of total pressure in a duct, and the refinement leg X2c did not
+converge. So "not a code defect" is not yet shown. Three runs, on a fresh archive of the HEAD at hand-back (which contains wave 35A/B/D code, among it
+the ADR 0077 opt-in `solver.periodic_gradient = "partner_cell"`, F-H0):
+* X2a-HEAD: X2a unchanged. Reproduction rule: outlet L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit; if it reproduces, the
+  measurements of this ADR carry over to that HEAD; if not, the code-state statement is corrected and the difference reported.
+* X2f: X2a with only the `rotating_frame` source removed. Mesh, inflow expressions `(Omega y, -Omega x, U)`, hub and shroud `moving_wall` at
+  `-Omega` with the projection are kept and are now absolute: the exact solution is the solid-body swirl `c_theta = -Omega r` carried unchanged,
+  whose static pressure is not uniform, so the outlet is `radial_equilibrium_outlet` (area average 0, `radial_frame_rate` 0; exact for this
+  field, X1). Exact check: L excess (outlet minus inlet angular-momentum flux minus hub and shroud torque) = 0. Rules: X2f excess >= 0.5 x X2a's
+  2.313 N m: the error is the convection of a large swirl on this mesh and the frame terms are cleared; X2f excess <= 0.1 x 2.313 N m: the error
+  is in the rotating-frame source / coupling terms (lagged Coriolis, face body force, wall-pressure rule, pair mean), a candidate defect to be
+  located (not fixed in this wave unless located and checked); in between: inconclusive.
+* X2h = X2a + `partner_cell`; X2i = X2d + `partner_cell`. If either removes at least 5 % of X2a's excess (0.116 N m) by a resolved amount, or X2i
+  removes at least half of X2d's spurious total-pressure rise (16.8 Pa) or swirl energy (20.0 Pa), the "not a defect" classification is withdrawn
+  for that part (the F-H0 seam-gradient defect of ADR 0077 then contributes), and N1c = N1b + `partner_cell` (FAN-01, 13 332 cells) is run once to
+  measure its effect on the FAN-01 numbers. Otherwise N1c is not run.
+Order: X2a-HEAD, then X2f + X2h, then X2i (+ N1c if triggered); one cargo at a time, two test threads.
