@@ -193,3 +193,25 @@ non-finite inside that iteration (the pressure solve, `res_p` NaN). The register
 The registered test stays as the ignored `n1_registered_setup_defect` (limit unchanged). Corrected N1' (new test `n1_corrected_reports_are_nan_from_the_
 first_non_finite_state`): at the first iteration whose fields end non-finite, `max_du` and `continuity` are NaN; at the next iteration (whose starting
 state is non-finite) `max_du`, `continuity` and `res_u` are all NaN (on c89495f that iteration, 376, reported 0, 0, 0; SM-N).
+
+## Amendment 2 (2026-10-20): part X controls without shear; written after the registered scan and V9 ran once, before the runs below
+
+What I knew when writing this (the registered runs, once each; `w36b_sheared.rs` `part_x_scan`, `part_x_v9_mode_at_60_degrees`):
+* theta_c: V0 50 (the 50 and 52.5 degree runs overshoot to 6.6 and 14 times U and then converge; by the registered criterion they are UNSTABLE);
+  V1 alpha_p 0.7: 60, 0.5: 70, 0.3: > 79; V2 alpha_u 0.8, 0.7, 0.5 (alpha_p 1.0): 45 for all three; V3 SIMPLE 0.7/0.3: 45, SIMPLEC 0.7/0.3: 75;
+  V4a: 45; V4b: 70; V5: 45; V6: 45; V6': 45; V7: 60 (STABLE 45 to 57.5).
+* V9: from the SIMPLEC 0.9/0.3 state converged at 60 degrees (res 1e-8 at 537), the base iteration's increments decay from 4.1e-12 to 3.1e-15 in 400
+  iterations, rho = 0.982 (the increments never entered the registered window [1e-9, 1e-2]; rho is over all 400 iterations); increment field 90 %
+  interior, 7.5 % wall rows, 3 % inlet/outlet columns; no pressure checkerboard (index 0.001).
+* By the registered rules: H-X1 not standing (V4b 70 >= V4a 45 + 10, but SIMPLE 45 is not above SIMPLEC 75); H-X2 not standing (V4a 45 < V0 50 + 10);
+  H-X3, H-X4, H-X5 not necessary (V6, V7, V5 UNSTABLE somewhere); H-X6 stands (rho < 1).
+
+Defect found in my registration (rule (d)): a variant whose threshold is 45 (the smallest scanned angle) may be unstable WITHOUT shear, and then its
+theta_c says nothing about the non-orthogonality. No variant was run at 0 degrees. Readings that rest on such variants: H-X1 (SIMPLE 0.7/0.3), H-X3 (V6),
+H-X4 (V5, V6'), H-X5 (V5). V4a at 0 degrees is the V0 run (the correctors do nothing on an orthogonal mesh), so H-X2 is not affected; V2 enters no reading.
+
+Registered now (one run each, same classification): C0 controls at theta = 0, 15, 30 degrees for V2 (all three), V3 SIMPLE 0.7/0.3, V4a, V5, V6, V6' and,
+as a reference, V0 and V7. Reading: a variant UNSTABLE at 0 degrees is "unstable without shear" and every hypothesis reading that uses it becomes NOT TESTABLE
+(it is neither standing nor falsified); a variant STABLE at 0 degrees keeps its registered reading. V9b (confirmation, reported, no reading): V9 repeated
+with the converged state perturbed by 1e-6 (u_x of cell c multiplied by 1 + 1e-6 sin(c)), rho over the iterations where `max_du` lies in [1e-9, 1e-2].
+Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
