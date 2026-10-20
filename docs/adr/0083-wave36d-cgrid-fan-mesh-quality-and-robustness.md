@@ -196,3 +196,29 @@ So the B' measurements of H3 and H4 below are not blind (developed on B' with E;
   <= 0.3`; `max(8, n_bl + 6) <= n_side <= min(2 n_chord, 16)`; `0.15 <= front_gap <= 0.6`. Chosen from the R-G FAN-01 failures (14 of the 19 have
   n_side 24 or 40, one has n_nose / n_chord 0.375, one front_gap 0.9). It is a restriction, not a fix. Under it, the R-H list has 11 in-range
   combinations per fan (n_chord / n_nose (15, 3), (22, 5), (30, 5), (30, 8) x n_side {10, 13}, and front_gap {0.2, 0.28, 0.45}).
+
+## Amendment 2 (written after the registered Part B sequence, before any Part C run; no limit changed)
+
+### Part B: the registered sequence (test `part_b_step`, each step run once; about 12 min each)
+
+Harness check (rule (d)): the baseline step G reproduces the G hashes of the registration (S `0x59b26da9febc9b2e`, FAN-01-C `0x00b3e9673d470e52`)
+and the ADR 0079 numbers (A' 66.18 / 0.889 / 394.4, B' 80.94 / 8.897 / 8805.0, FAN-01-C 83.26 / 3.978 / 227.2); B1 of ADR 0079 (S and A' with
+`pursuit` and E) reproduced on the code with the new options. R-G in-range builds with G: blade B 36 of 39, FAN-01 20 of 39 (ADR 0079 reported blade B
+"35 of 38"; the G range admits 39 blade B combinations of the R-G list, and 36 build on this code: a counting discrepancy in the ADR 0079 summary,
+not a change of code; FAN-01 agrees).
+
+| Step | Target measure | A' / B' / FAN-01-C maxima (non-orth, skewness, aspect) | (iii) closure, periodicity, stacks | R-G builds B / FAN-01 | Decision |
+|---|---|---|---|---|---|
+| G (baseline) | - | 66.18 / 0.889 / 394.4; 80.94 / 8.897 / 8805.0; 83.26 / 3.978 / 227.2 | pass | 36 / 20 | - |
+| + H1 `post_untangle` | FAN-01 R-G builds 20 -> **22** (+10 %) | all identical (S, A', B', FAN-01-C hashes unchanged) | pass | 36 / 22 | **ACCEPTED** |
+| + H3 `lean_stack` | B' blade-stack skewness 2.057 -> **1.098** | 66.18 / 0.888 / 394.4; 80.93 / 8.894 / 8805.0; 83.26 / 3.978 / 227.2 (none up by more than 1 %) | pass (wall stacks along the 3-D normal: A' 1.5e-13, FAN-01-C 6.1e-14, B' 5.0e-12; in-plane form 0.24 by design) | 36 / 22 | **ACCEPTED** |
+| + H4 `nose_blend` | - | S does not build (3-D tangle, internal face 649, `mesh`) | **fails** (S must build) | - | **REJECTED** (iii); removed |
+
+The H3 + H4 package does not apply (H4 failed (iii), not only (ii)). Note: with G the B' non-orthogonality maximum (80.94 deg) is a blade-stack face;
+H3 moves it by 0.01 deg only (on E it had moved 78.17 -> 77.38 in development), so the trailing-edge lean is not the cause of the G maximum.
+
+### Construction H, frozen
+
+H = G + H1 `post_untangle` + H3 `lean_stack` + the H5 range (`range_h`), `CGridOptions::camber_seam_h_construction()`, case value
+`c_grid_construction = "camber_seam_h"`. `camber_seam` stays G (B1 test of the G hashes). Part C runs once on H as registered. Prediction (from the
+step table, FAN-01-C with H differs from G only in the blade stacks): C1 P2 MISSED (about 83 deg / 4.0), C5 A' aspect and B' all three MISSED.
