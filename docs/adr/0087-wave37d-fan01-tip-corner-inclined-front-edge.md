@@ -113,3 +113,64 @@ untouched and passing.
 ## Not claimed
 
 Fan performance; any comparison with measured FAN-01 data; turbulence; accuracy of the smoke solve (bounded only); quality of the non-corner faces.
+
+## Amendment 1 (written after the FT development, before any 3-D build of a candidate, the rule (d) smoke included; no limit changed)
+
+### FT development (test `ft` of a development file, not committed; each variant run once, all listed)
+
+Proxy on the smoothed layers at the 15 far-grid radii, FAN-01-C counts. H (baseline, same run): corner region 86.890438 deg (layer k 7, the upper
+corner line's j-face C (28, 9) / (28, 8)), outside the corner region 82.347818 deg (k 9, wake line 5, C (5, 2) / (5, 1)), smallest cell area 5.216e-7
+m^2. Threshold of FT (a): 0.9 x 86.890438 = 78.201394 deg. The variants of I-a (grading: the front-edge cells grow from the nose cell to a corner cell
+of `cf` times the algebraic seam cell next to the corner, two-sided, capped as `capped_cells`; inclination: the front edge `z = z_f + dz(s)` with `dz =
+u cot(phi) fade(u / ell) - v cot(phi) fade(v / ell)`, `u`, `v` the pitchwise distances from the lower and upper corner, so it leaves the lower corner
+and reaches the upper corner along `phi` from `+z`, `ell` = 0.1 pitch; the F rows follow with weight `(z_a / z_f)^4`; `kappa`: `phi = 90 deg + kappa
+atan(sigma_le)`; `hold`: the first `hold` front-edge nodes at each corner are not moved by the smoothing; `holdc`: the corner node is not moved):
+
+| # | Variant | corner max (a) | change | outside max (b) | min area | FT |
+|---|---|---|---|---|---|---|
+| 1 | grade | 79.01 | -9.07 % | 77.52 | 5.29e-7 | fails (a) |
+| 2 | grade, cf 2 | 78.93 | -9.16 % | 77.25 | 5.29e-7 | fails (a) |
+| 3 | grade, phi 40 | 80.37 | -7.5 % | 80.83 | 4.78e-7 | fails (a) |
+| 4 | grade, phi 60 | 79.91 | -8.0 % | 79.72 | 4.98e-7 | fails (a) |
+| 5 | grade, kappa 0.5 | 80.06 | -7.9 % | 80.19 | 4.90e-7 | fails (a) |
+| 6 | grade, kappa 0.67 | 80.44 | -7.4 % | 80.98 | 4.76e-7 | fails (a) |
+| 7 | grade, hold 1 | 86.68 | -0.2 % | 78.74 | 5.23e-7 | fails (a) |
+| 8 | **grade, phi 40, hold 1** | **78.006312** | **-10.2245 %** | 81.062759 (-1.56 %) | 4.91e-7 | **passes** |
+| 9 | grade, phi 40, hold 2 | 78.225028 | -9.9728 % | 82.09 | 4.71e-7 | fails (a) |
+| 10 | grade, phi 40, hold 1, holdc | 86.29 | -0.7 % | 81.10 | -1.75e-5 (fold) | fails (a), (c) |
+| 11 | grade, phi 60, hold 1 | 79.94 | -8.0 % | 80.26 | 4.96e-7 | fails (a) |
+| 12 | grade, kappa 0.67, hold 1 | 78.397167 | -9.7747 % | 81.18 | 4.89e-7 | fails (a) |
+
+Exactly one variant passes FT, #8, by 0.195 deg; HT is therefore not falsified by FT, and the registered rule freezes #8. The development budget (12)
+is used up; no further variant or family (I-b) is tried. The corner maximum of #8 is the lower corner face of ADR 0083, C (20, 9) / (19, 9), at the
+tip radius (78.01 deg against H's 80.55 there).
+
+**The pass is not evidence for HT's mechanism** (stated now, from the angle printout of the development runs): the inclination does not survive the
+smoothing. With #8 the front edge leaves the lower tip corner at 105.4 deg (H 101.5; prescribed 40), and at the upper corner the held first front-edge
+node lies at 144.5 deg from the corner node, i.e. upstream of it: the corner node, free under its mean-of-six rule, moved past the held node. Most of
+the gain is the grading (#1 alone: 79.01); inclination plus hold add about 1 deg. A pencil reading of the same printout (unverified as a rule): at the
+tip the lower side of the corner node spans from the seam going downstream (about -50 deg) to the F-side seam going upstream (about +144 deg), 194 deg;
+the C seam cell against the nearly pitchwise corner line takes about 144 of it, so a front-edge direction can only split the remaining 50 deg between
+the C front cell and the F cell. The levers are the F-side seam direction and the corner-line arrival, not the front edge; they are not tried in this
+wave.
+
+### Construction I, frozen
+
+H + one new opt-in field `CGridOptions::inclined_front` (default `false`), set only by `CGridOptions::camber_seam_i_construction()`, case value
+`c_grid_construction = "camber_seam_i"`. With the field, in every layer: (1) the front-edge cells are graded two-sided from the nose cell (as now,
+`3 |sp1 - sp0|`) to a corner cell equal to the algebraic seam cell next to the corner; (2) the front edge is `z = z_f + dz(s)` as above with `phi` =
+40 deg at both ends and `ell` = 0.1 pitch, the C lines of the front edge aim at its nodes, and the F rows are displaced by `(z_a / z_f)^4 dz`; (3) the
+first front-edge node next to each corner is not moved by the in-plane smoothing (every step of the fallback chain); the corner node keeps its
+mean-of-six rule. Constants in the code, no environment input. Without the field every expression is the existing one (part D decides).
+
+### Predictions (registered now, before the first 3-D build)
+
+* C1-Q (i) **MISS**: the tip proxy of #8 is 78.0 deg at the lower corner, and the proxy matched the 3-D tip and gap layers of H to 0.05 deg.
+* C1-Q (ii) uncertain: the wake-line-5 proxy rises at the tip (H 80.41, #8 81.06 at k 14), the 3-D H value is 80.23.
+* C1-B at risk: the fixed 40 deg end inclination also applies on blade B (stagger 20-35 deg), where the corner was balanced; S may not build, or an
+  A' / B' maximum may rise by more than 1 %.
+* C3 uncertain (the ADR 0083 P10 oscillation is away from the corner).
+* Keep clause therefore **expected to fail** and I to be removed.
+
+Rule (d) smoke (next, before the registered runs, recorded in Amendment 2): FAN-01-C with I built once (construction only), the R-I list built once
+with H, the P10 case with `camber_seam_i` for 3 iterations.
