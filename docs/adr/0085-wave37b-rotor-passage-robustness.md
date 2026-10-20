@@ -199,3 +199,92 @@ the coupled solver takes a turbulence model only together with rotor-passage sou
 `turb.rs` and `sources.rs` refuse it otherwise. B_C is therefore Y_C with `angular_velocity = 0` (`rotor_passage = true`): the frame flux, the force and
 the cross blocks are exactly zero, so it is the inertial formulation on the coupled solver. Arm C's code scope grows by the two parse-time exceptions
 (`sources::rotor_passage_only`). Everything else is unchanged.
+
+## Addendum (2026-10-20): measured values, verdicts, removal of F-RP and of every arm, misses and deviations
+
+All runs: release builds of 6f97dcb plus this wave's working copy, single thread per run, at most two of my runs at a time on a machine shared with
+the other wave-37 agents, one run per set-up, tolerance 1e-5 unless stated. Full-annulus values, `rho` = 1.2. Logs and the removed code are kept
+outside the repository (`w37b_logs`, `w37b_frp_and_arm_c_removed.patch`, `w37b_fan01_rotor_passage_w37b.rs` in the session scratchpad).
+
+### Outcome in one paragraph
+
+No arm passes. The lagged frame source is not the cause of the M0 failure (H-S falsified: Y(M0) does not converge with the source removed, and three
+other candidate mechanisms are falsified the same way). Two of the three requested remedies cure the coarse mesh: the pseudo-time step `1 / Omega`
+(arm I) and the coupled solver with the rotation implicit (arm C) both converge on M0 and M1, with outlet angular-momentum flux 3 to 7 times below
+their inertial controls and no swirl energy. Neither converges on the fine mesh M2 within the registered 60-minute cap: arm I stalls at res_u 0.41
+(its SIMPLEC inertial control also stalls, in a frozen limit cycle), arm C oscillates at res_u 1e-3 to 3e-3 for 1 007 iterations while its coupled
+inertial control converges in 326. Barth-Jespersen `linear_upwind` (arm L) fails on M0 already. By the registered rule F-RP and every arm's code are
+removed; F1 (FAN-01 with the fix) was NOT RUN, so no torque or Delta p_ts change is reported.
+
+### Checks with limits
+
+| Check | Limit | Measured | Result |
+|---|---|---|---|
+| D0 Y(M1) reproduces ADR 0082 | 567 it, -1.42e-5 N m | 567 it, -1.418e-5 N m, Delta p_tt -1.541 Pa | pass |
+| D0 Y(M0) reproduces ADR 0082 | 8000 it, res_u 0.78, 0.068 N m, +981 Pa | res_u 0.785, 0.0682 N m, +980.9 Pa | pass |
+| H-S, H-T, H-P, H-K (amendment 1) | falsified if the diagnostic does not converge | none converges | all four FALSIFIED |
+| A1 seam pairs, iteration 1 (Y_L, Y_I, Y_C on M0, M1) | 1e-12 | 2.9e-14 to 2.1e-13 | pass |
+| A1 F-RP closure (`Simulation::new`) on M0, M1, M2 | 1e-10 | built on all three | pass |
+| A0 (iii) key absent = `false` (20 iterations) | bit-identical | bit-identical | pass (code then removed) |
+| A0 (iv) coupled cavity hashes after the arm C code | 6f97dcb hashes | reproduced | pass (code then removed) |
+| Screen I: Y_I(M0) converges; A2, A3 on M0 | converged; 10 x 5.880e-4 N m; 0.2 Pa; 0 Pa | 476 it; 1.201e-4 N m; 0.0000 Pa; -1.648 Pa | pass |
+| Screen L: Y_L(M0) converges | converged | NOT CONVERGED (8000 it, res_u 0.36; B_L(M0) also not, res_u 2.5e-3) | MISS |
+| Screen C: Y_C(M0) converges; A2, A3 on M0 | converged; 10 x 5.406e-4 N m; 0.2 Pa; 0 Pa | 476 it; 7.467e-5 N m; 0.0000 Pa; -1.648 Pa | pass |
+| Arm I, A2/A3 on M1 | converged; 10 x 1.703e-4 N m | 567 it; -2.480e-5 N m; 0.0000 Pa; -1.541 Pa | pass |
+| Arm I, M1 iteration check (1e-5 against 1e-7) | 10 % / 50 % | Y 0.006 %, B 0.001 % | tolerance 1e-5 kept, floor rule not triggered |
+| Arm I, A2 on M2: Y_I(M2) converges | converged within 60 min | NOT CONVERGED (time cap, 5 715 it, res_u 0.41 stalled from about iteration 300) | MISS |
+| Arm I control B_I(M2) | (fallback rule) | NOT CONVERGED (5 976 it, res_u 6.25e-2 frozen from iteration 200) | control defect |
+| Arm I, A3 and A4 | | not evaluable (no converged M2) | MISS (follows A2) |
+| Arm C, A2/A3 on M1 | converged; 10 x 1.595e-4 N m | 567 it (7.6 min); -5.350e-5 N m; 0.0000 Pa; -1.541 Pa | pass |
+| Arm C, M1 iteration check | 10 % / 50 % | Y 0.004 %, B below 0.001 % | tolerance 1e-5 kept, floor rule not triggered |
+| Arm C, A2 on M2: Y_C(M2) converges | converged within 60 min | NOT CONVERGED (time cap, 1 007 it; res_u 2.6e-3, 1.7e-3, 2.6e-3, 0.95e-3, 1.5e-3 at iterations 100, 200, 400, 600, 800) | MISS |
+| Arm C control B_C(M2) | | converged, 326 it (20.3 min), L 7.880e-5 N m, Delta p_tt -1.526 Pa | control fine |
+| Arm C, A3 and A4 | | not evaluable (no converged M2) | MISS (follows A2) |
+| A0 (i), (ii) | gate; X2a digits | no solver code of this wave is committed | not applicable |
+| F1 | run only if acceptance passes | NOT RUN | not applicable |
+
+Values at the cap, not results (printed for completeness): Y_I(M2) L 1.42e-5 N m, Delta p_tt -1.907 Pa; Y_C(M2) L 2.17e-5 N m, Delta p_tt -1.476 Pa;
+B_I(M2) L 8.47e-5 N m.
+
+### What the runs show (observations, not acceptance)
+
+* Where it converges, the absolute-velocity rotor passage removes the spurious angular momentum with either solver: outlet L 1.2e-4 and -2.5e-5 N m
+  (arm I, M0 and M1), 7.5e-5 and -5.4e-5 N m (arm C), against 3.44 and 2.25 N m in the relative frame (ADR 0082) and 5.9e-4 to 1.6e-4 N m in the
+  inertial controls. The coupled inertial control falls with order 2.4 over M0-M2 (5.41e-4, 1.60e-4, 7.88e-5 N m); Y_C falls by a factor 1.40 from M0
+  to M1 (pairwise order 0.83).
+* The M0 failure of the SIMPLEC rotor passage is cured by damping the momentum update (`pseudo_dt = 1 / Omega`, arm I) or by the coupled solve (arm C),
+  but not by removing the frame source (DS). So the cure is not about the frame source: damping or a coupled solve stabilises something else in the
+  convection of absolute momentum by the large relative flux. The D0 record put the largest updates next to the hub downstream of the chord band and at
+  the outlet / seam corner, with outlet backflow (92 of 240 faces); the converged arm I and C runs on M0 have no backflow.
+* On M2 the largest updates of Y_C sit in hub-adjacent cells (r 0.1241-0.1245) of the chord band and just downstream; those of Y_I in two interior
+  chord-band cells (r 0.149 in 42 of 57 records, r 0.170 in 14); B_I(M2) cycles in one interior upstream cell (r 0.222, z 0.076, 58 of 59 records).
+  The SIMPLEC inertial control does not converge on M2 with or without the pseudo-time step (ADR 0082: 7 063 iterations; here 5 976): M2 is a hard
+  mesh for SIMPLEC by itself (the subject of agent 37A). The coupled inertial control converges there and the coupled rotor passage does not, so the
+  remaining M2 obstacle of arm C belongs to the rotor passage and sits against the stationary hub.
+* Cost: the coupled solver needs about 0.3 s (M0), 0.8 s (M1) and 3.6 s (M2) per iteration against 0.04, 0.12 and 0.45 s for SIMPLEC, so the 60-minute
+  cap allows about 1 000 coupled iterations on M2; Y_C needed 476 (M0) and 567 (M1). Whether Y_C(M2) would converge with more iterations is not known;
+  its residual did not decrease over its last 600 iterations.
+
+### Verdict on the fixes
+
+F-RP with arm I misses A2 (and so A3, A4) on M2; F-RP with arm C misses A2 (and so A3, A4) on M2; arm L misses its screen on M0. By the registered
+decision structure (item 4) F-RP, the arm C code (periodic faces, flux offset and implicit rotation in `coupled.rs`; the coupled turbulence and
+rotor-passage wiring in `sim.rs`, `turb.rs`, `sources.rs`) and the test file that needs them are removed; arms I and L used existing keys only.
+Nothing of this wave changes the solver. F1 was not run.
+
+### Deviations from the registered plan (candid)
+
+* B_C was redefined as Y_C at `angular_velocity = 0` (amendment 1, before any C screening run), because the coupled solver takes turbulence only with a
+  rotor-passage source.
+* The arm C code scope grew by two parse-time exceptions and by a refusal of periodic patches on the coupled solver without a rotor-passage source
+  (the extension was verified only on the rotor passage); all removed with arm C.
+* The A0 (iv) hashes were recorded on the working copy with only the F-RP patch applied, not on a clean 6f97dcb checkout (F-RP touches no code of the
+  coupled path).
+* The outlet-backflow print was added to the harness after D0, DS, DT and DP had run (it is read from DK, which is bit-identical to D0).
+* The arm runs shared the machine with each other and with other agents; the M2 runs of arm I ran two at a time for the full hour, Y_C(M2) shared the
+  machine for its first 20 minutes. The wall-clock cap was applied as registered; the iteration counts at the cap depend on the load.
+* Arm I was registered as a remedy for the frame source; after DS falsified H-S it was still run as registered (amendment 1 says so).
+
+### Unverified references
+
+None. Every limit is derived here, measured, or a decision threshold of this protocol (inherited from ADR 0082); no external value is used.
