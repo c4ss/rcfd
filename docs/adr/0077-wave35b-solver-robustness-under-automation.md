@@ -428,3 +428,8 @@ itself ((a) `axial_fan_sector` does not reproduce at Re_c about 5, (b) n_span 6 
 
 None used for a value or a limit: every limit is derived here or measured. The Barth-Jespersen limiter of D3 is the existing rcfd implementation (Barth and Jespersen 1989,
 recalled, UNVERIFIED); the "high aspect ratio times non-orthogonality" reading of the mechanism is this wave's, not a published result.
+
+### Final gate
+
+Fresh `git archive` of 97f1bc5 (the addendum commit): `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1853 passed, 0 failed, 490 ignored (no LNK1201). This line is docs only and was added after the gate.
