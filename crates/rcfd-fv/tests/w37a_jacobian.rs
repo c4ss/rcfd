@@ -211,13 +211,13 @@ fn jacobian(s: &mut SimpleSolver, l: &Layout, x: &[f64], h: f64) -> Vec<f64> {
 
 /// Output directory of the dumps.
 fn out_dir() -> std::path::PathBuf {
-    let d = std::env::var("W37A_OUT").unwrap_or_else(|_| "<scratch dir>/jac".into());
-    let p = std::path::PathBuf::from(d);
+    let p = std::env::var("W37A_OUT").map_or_else(|_| std::env::temp_dir().join("w37a_jac"), std::path::PathBuf::from);
     std::fs::create_dir_all(&p).unwrap();
     p
 }
 
 /// Write J and the layout metadata (cell (i, j) labels for the Fourier analysis, scales, the seam faces).
+#[allow(clippy::too_many_arguments)]
 fn dump(tag: &str, s: &SimpleSolver, l: &Layout, x: &[f64], j: &[f64], nx: usize, ny: usize, lx: f64, deg: f64) {
     let dir = out_dir();
     let mut f = std::fs::File::create(dir.join(format!("{tag}.bin"))).unwrap();

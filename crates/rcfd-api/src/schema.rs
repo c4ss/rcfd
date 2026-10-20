@@ -899,7 +899,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "velocity_correction",
-            Schema::enumeration("gradient", &["gradient", "face_flux"]).doc("Cell velocity correction of the steady simple/simplec solver after the pressure solve (ADR 0084): gradient (default) subtracts rAtU times the Green-Gauss gradient of the new pressure; face_flux keeps the old-pressure gradient and adds the reconstruction of the face flux correction (only the pressure change the face fluxes carry). Both give the same converged solution; face_flux removes the period-two pressure mode that makes simplec diverge on strongly non-orthogonal meshes (uniformly sheared cells from 60 degrees at alpha_p = 1). Any other algorithm is an error"),
+            Schema::enumeration("gradient", &["gradient", "face_flux"]).doc("Cell velocity correction of the steady simple/simplec solver after the pressure solve (ADR 0084): gradient (default) subtracts rAtU times the Green-Gauss gradient of the new pressure; face_flux keeps the old-pressure gradient and adds the reconstruction of the face flux correction (only the pressure change the face fluxes carry). Both give the same converged solution; face_flux removes the period-two pressure mode that makes simplec diverge on strongly non-orthogonal meshes (uniformly sheared cells from 55 to 60 degrees at alpha_p = 1). Any other algorithm is an error"),
         )
         .field(
             "pressure_lag_check",

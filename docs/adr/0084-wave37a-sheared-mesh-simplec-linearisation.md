@@ -275,8 +275,9 @@ so the ADR 0081 "start-up only" reading does not hold there. On channel B the co
 is not (1.58 at the initial state, 2.4 to 21 once the flow has overshot), so there it is a start-up instability as ADR 0081 found. Every
 fixed-point-keeping change that makes the two corrections agree removes the mode. The cheapest one reconstructs the cell correction from the face-flux
 correction; it is the opt-in key `solver.velocity_correction = "face_flux"`. It met every acceptance limit (V7, the channel and a held-out box stable to
-79 degrees at alpha_p 0.7; no threshold fell at 1.0 or 0.5; the converged solution unchanged to 2e-9) and is kept. On FAN-01 it removes the growing
-oscillation (P10 met, L / c10 0.33 against 8.36), but the run does not converge by the registered reading (the residuals stall near 1e-3).
+79 degrees at alpha_p 0.7; no threshold fell at 1.0 or 0.5; the converged solution unchanged to 2e-9) and is kept. On FAN-01 the continuity over
+iterations 200-300 stays below its value at iteration 10 (P10 met, L / c10 0.33 against 8.36), but the run does not converge by the registered reading
+(the residuals stall between 1e-3 and 7e-3).
 
 ### Diagnosis
 
@@ -311,8 +312,9 @@ The ADR 0083 A0 set-up with `solver.velocity_correction = "face_flux"`, one 1500
 * The argmax cells are not poor (f_poor 0). Largest relative speed 42.6 m/s (without the key 63-68).
 * **"Converges": not met.** `res_u` and `res_p` are never both below 1e-4 within 1500 iterations; from iteration 100 on they stall between 1e-3 and 7e-3.
 
-So the A0 oscillation (`res_u` 0.35-0.43) was this mode or a relative of it. What remains on FAN-01 is a slower non-convergence of a different size.
-Candidates are the 83-degree faces, the rotating-frame terms and the laminar flow at Re 1.4e5; none was diagnosed.
+No FAN-01 Jacobian was formed: whether the A0 oscillation (`res_u` 0.35-0.43) is the same mode was not diagnosed; the key removes the P10 growth
+and leaves a non-convergence about a hundred times smaller in `res_u`. Candidates for it are the 83-degree faces, the rotating-frame terms and the laminar
+flow at Re 1.4e5; none was diagnosed.
 
 ### Deviations from the registered plan (candid list)
 
