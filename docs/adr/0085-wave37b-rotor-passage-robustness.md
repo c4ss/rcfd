@@ -144,3 +144,58 @@ runs ignored; construction, bit-identity and refusals not ignored when fast). F-
 `crates/rcfd-fv/src/sources.rs`, the `sim.rs` and `schema.rs` hunks, `docs/case-schema.md`). Arm C: `crates/rcfd-fv/src/coupled.rs` and its `sim.rs`
 wiring. Nothing in `crates/rcfd-fv/src/simple.rs` or `pressure.rs` (the files of agent 37A). The Part D switches live only in the uncommitted working
 copy. Shared files (`sim.rs`, `schema.rs`): only this wave's hunks are committed.
+
+## Amendment 1 (2026-10-20): part D results (no hypothesis stands), smokes, A1, the timing smoke, the coupled-cavity hashes, and the definition of B_C; written before any screening run of arm C and before any acceptance run
+
+What I knew when writing this: the runs below; the screening runs Y_I(M0) and B_I(M0) had been started (as registered, unaffected by this
+amendment) and their results were not known. Code written so far: the ADR 0082 F-RP patch re-applied unchanged; the uncommitted part D switches
+(environment variable `W37B_DIAG` = `no_force`, `turb_abs`, `pair_mean`, `no_compdiag` in the working copy's `sim.rs` / `sources.rs`); arm C (periodic
+faces, flux offset and implicit rotation in `coupled.rs`; turbulence and rotor-passage sources for `algorithm = "coupled"` in `sim.rs`, `turb.rs`,
+`sources.rs`); the test file.
+
+**D0 reproduction (rule met).** Y(M1): converged in 567 iterations (1.1 min), outlet L -1.418e-5 N m, Delta p_tt -1.541 Pa (ADR 0082: 567, -1.42e-5,
+-1.541). Y(M0): not converged at 8000 iterations (5.4 min), res_u 0.785, L 0.0682 N m, Delta p_tt +980.9 Pa (ADR 0082: 0.78, 0.068, +981).
+
+**Location record of Y(M0).** res_u is 0.57 at iteration 10 and 0.73 at iteration 100 and never falls below about 0.5 afterwards (continuity 1e-5 to
+1e-3). Of the 80 records (every 100 iterations) the largest velocity change sits 30 times in cell 827 (faces on `outlet` and `seam_lo`, r 0.128 m next to
+the hub, z 0.296), 27 times in cells 285 / 555 / 556 (on `seam_lo` at r 0.124-0.125, i.e. against the hub, z 0.17-0.19 just downstream of the chord
+band), and otherwise in interior chord-band cells at r 0.18-0.24 (1754 twelve times, one change of 233 m/s in one iteration). Worst periodic-pair flux
+sum `|phi_f + phi_g| / (Omega r |S|)`: up to 6.8e-2 with the force, at most 6.2e-14 in DS (without the force the pairs are exact; the asymmetry comes
+from the body-force term of the face flux, ADR 0071 C5). At iteration 8000 the outlet has backflow on 92 of its 240 faces (reverse / forward volume flux
+0.17, measured on DK, which is bit-identical to D0), which is why the mass-weighted outlet swirl energy prints negative (-2.02 Pa).
+
+**Verdicts (each one run of Y(M0) with one change, 8000 iterations):**
+
+| Diagnostic | Converged | res_u at 8000 | L [N m] | Delta p_tt [Pa] | Hypothesis |
+|---|---|---|---|---|---|
+| DS, frame acceleration removed | no | 0.79 | 0.198 | +608.7 | H-S FALSIFIED (the lagged `-Omega x c` source is not what stops convergence) |
+| DT, k and omega on the absolute flux | no | 0.81 | 0.0464 | +199.7 | H-T FALSIFIED |
+| DP, pair mean of `rAU` on | no | 0.66 | 0.412 | +2841 | H-P FALSIFIED |
+| DK, component-diagonal correction off | no | 0.785 | 0.0682 | +980.9 | H-K FALSIFIED (bit-identical to D0: no cell has unequal component diagonals) |
+
+No hypothesis stands, so there is no arm X. The three requested arms run as registered; arm I is now known to be aimed at a term that is not the cause
+(it still damps every momentum update, which is why it is not dropped). What the record does show: the failure starts within 10 iterations, sits next
+to the hub downstream of the chord band and at the outlet / seam corner, and comes with outlet backflow; the inertial control B(M0) converges in 124
+iterations on the same mesh. The remaining difference between B and DS is the convecting flux (`phi` against `phi - F_tri`, the large tangential relative
+flux crossing the seams through the lagged partner coefficients). Not tested further by a registered diagnostic in this wave.
+
+**A1 and smokes (30 iterations, continuity at iterations 1 / 10 / 20 / 30, all finite):** seam pairs at iteration 1 (limit 1e-12): Y_L(M0) 1.3e-13,
+Y_I(M0) 1.3e-13, Y_C(M0) 2.9e-14, Y_L(M1) 2.1e-13, Y_I(M1) 2.1e-13, Y_C(M1) 4.9e-14 (pass). Y_L(M0) 1.8e-6 / 2.9e-6 / 3.5e-6 / 3.7e-6 (res_u 0.30 at
+30); B_L(M0) 1.9e-6 / 3.4e-6 / 6.3e-6 / 2.1e-6 (0.048); Y_I(M0) 3.2e-6 / 6.3e-7 / 1.8e-7 / 1.3e-7 (0.029); B_I(M0) 5.7e-6 / 1.8e-6 / 2.9e-7 / 4.7e-8 (0.0080);
+Y_C(M0) 1.2e-4 / 2.5e-5 / 2.0e-5 / 1.5e-5 (0.0052); B_C(M0) 3.8e-4 / 4.7e-6 / 1.1e-6 / 1.4e-7 (2.8e-4); Y_L(M1), Y_I(M1), Y_C(M1) res_u at 30: 0.094,
+0.028, 0.0069. The coupled solver's continuity is not driven below about 2e-5 per iteration by its relative linear tolerance 1e-3 (the default); its
+convergence criterion is res_u and res_p as for SIMPLEC. Cost: Y_C(M1) 1.0 s per iteration (SIMPLEC Y(M1) 0.12 s).
+
+**Timing smoke B(M2) alone:** 200 iterations in 89.6 s, 0.448 s per iteration, so 8000 iterations need about 60 minutes on an otherwise idle core;
+res_u was 0.13 at iteration 10 and 0.63 at iteration 200 (the inertial control itself does not converge smoothly on M2). The cap stays as registered.
+For arm C the 60-minute cap allows about 1 000 iterations on M2 (estimated from the M1 cost and the cell ratio 3.5).
+
+**A0 (iv) hashes** (coupled lid cavity 12 x 12, nu 0.01, 20 iterations; FNV-1a over the bits of u, p and phi): upwind `0xbccb8f70fa93d84d`,
+linear_upwind `0x9c4c56461eaa0365`. Recorded on the working copy with only the F-RP patch applied, before any line of `coupled.rs` was changed (F-RP
+touches no code of the coupled path); deterministic in two repeats. After the arm C code: both hashes reproduced (test `a0_coupled_cavity_unchanged`).
+
+**B_C, departure from the registered control (stated before any B_C or Y_C screening run).** The registered B_C ("coupled, no source") cannot be built:
+the coupled solver takes a turbulence model only together with rotor-passage sources (the scope registered for arm C), and the parse-time checks of
+`turb.rs` and `sources.rs` refuse it otherwise. B_C is therefore Y_C with `angular_velocity = 0` (`rotor_passage = true`): the frame flux, the force and
+the cross blocks are exactly zero, so it is the inertial formulation on the coupled solver. Arm C's code scope grows by the two parse-time exceptions
+(`sources::rotor_passage_only`). Everything else is unchanged.
