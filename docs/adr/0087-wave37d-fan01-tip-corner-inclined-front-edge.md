@@ -229,8 +229,10 @@ FAN-01 meshes built with I lies between 77.5 and 84.2 deg (none at or below 70).
 * **Keep clause failed** (C1-Q (i) and (ii), C1-B, C4 blade B). Construction I is **removed**: the `inclined_front` field, its constructor and
   constants, the two-sided corner grading, the smoothing hold, the case value `camber_seam_i` and its tests (C1, C1-P2, C1-Q, C1-B, C4, C2, C3, the
   smokes). Kept: `b1_construction_h_is_bit_identical` (part D, independent of I). `docs/case-schema.md` and `docs/meshing.md` were never changed.
-* **HT** (an inclined front edge removes the corner faces above 70 deg): not supported. FT was passed by one variant by 0.195 deg, but, as stated in
-  Amendment 1 before any 3-D build, most of that gain was the corner grading and the prescribed inclination did not survive the smoothing. In 3-D the
+* **HT** (an inclined front edge removes the corner faces above 70 deg): **falsified for the construction as frozen** (C1-Q (i): 78.07 deg against
+  70). Because the prescribed inclination did not survive the smoothing, no mesh with an actually inclined front edge was produced, so the intended
+  mechanism itself remains untested. FT was passed by one variant by 0.195 deg; as stated in Amendment 1 before any 3-D build, most of that gain was
+  the corner grading. In 3-D the
   corner region fell from 83.26 to 78.07 deg and the global non-orthogonality from 83.26 to 81.00 deg (now the wake-line-5 face), while the skewness
   (3.978 -> 4.577) and the aspect ratio (227.2 -> 261.0) rose, and on blade B the change is harmful (B' skewness 8.9 -> 153.8, not located).
 * **The topology change proper (I-b, an index offset between the two corners with a collapsed F row) was not tried.** The registered protocol
@@ -258,7 +260,18 @@ B1 met on the final code: the ADR 0079 hashes (S and A' with `pursuit` and E), t
   far grid is blended with the remapped layer and radially filtered.
 * The development hook (`dev_layer`, `dev_rho`, the environment-driven variant parameters) and the development test file were not committed.
 * I-b was not developed (above). The 12-variant budget was used up by I-a.
+* The record commit 18b083c holds the I acceptance tests un-ignored, so `c1q_fan01_i_...`, `c1b_blade_b_with_i` and `c4_r_i_...` fail on it by
+  design; it builds, but it was never gated (its fmt and clippy status is unknown). The rule that a miss becomes an ignored `*_known_miss` test could
+  not apply because the construction was removed; as with the R-H tests of ADR 0083, the tests went with it.
 
 ### Unverified references
 
 Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072 / 0079 / 0083). Nothing else.
+
+### Final gate
+
+On a fresh `git archive` of a98e531 (the removal of I; it also contains the other wave-37 agents' commits up to it, all of them ADR text at that
+point): `cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release
+--no-fail-fast`: **1874 passed, 0 failed, 519 ignored** (wave 36: 1873 / 0 / 519; the one new test is `b1_construction_h_is_bit_identical`). Later
+commits of other agents (wave 37A code from dbc28a7 on) are not in this gate. This text was added afterwards in a docs-only commit that was not
+re-gated. The B1 hashes are specific to x86_64-pc-windows-msvc.
