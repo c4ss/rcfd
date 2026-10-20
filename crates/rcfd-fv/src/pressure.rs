@@ -102,7 +102,7 @@ pub fn boundary_values_pbc(geom: &FvGeometry, bc: &PressureBc, cells: &[f64]) ->
 
 /// Face diffusivity with the two faces of every periodic pair set to the same
 /// distance-weighted mean (so the pair carries exactly opposite fluxes).
-fn coupled_gamma(geom: &FvGeometry, bc: &PressureBc, gamma: &[f64]) -> Vec<f64> {
+pub(crate) fn coupled_gamma(geom: &FvGeometry, bc: &PressureBc, gamma: &[f64]) -> Vec<f64> {
     let mut out = gamma.to_vec();
     for (i, cp) in bc.coupled.iter().enumerate() {
         if let Some(g) = *cp {

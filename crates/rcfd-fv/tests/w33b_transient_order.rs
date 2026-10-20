@@ -768,3 +768,34 @@ fn diag_s0_bdf2_bounded_weights() {
         rel_l2(&rb.u.values, &ra.u.values)
     );
 }
+
+/// ADR 0080 N2b: `coupled_body_pair_mean` is bit-inert on the MMS box (body force, no periodic faces) and on TG (periodic, no body force).
+#[test]
+fn w36a_n2b_pair_mean_inert_without_seam_body_force() {
+    for (prob, path) in [(Prob::Mms, Path::Piso), (Prob::Tg, Path::PimpleC)] {
+        let cfg = Cfg::new(prob, path, BDF2);
+        let mut out = Vec::new();
+        for on in [false, true] {
+            let mut s = make(&cfg, 16);
+            s.settings.coupled_body_pair_mean = on;
+            for _ in 0..8 {
+                let dt = 0.05;
+                if prob == Prob::Mms {
+                    let bf = mms_force(&s.geom, s.time + dt);
+                    let mut hook = move |_u: &VectorField, _phi: &[f64]| OuterUpdate {
+                        source_force: Some(bf.clone()),
+                        ..Default::default()
+                    };
+                    s.step_with(dt, Some(&mut hook as &mut OuterHook));
+                } else {
+                    s.step(dt);
+                }
+                assert!(s.diverged.is_none());
+            }
+            let u = s.u.values.iter().flatten();
+            let bits: Vec<u64> = u.chain(&s.p.values).chain(&s.phi).map(|x| x.to_bits()).collect();
+            out.push(bits);
+        }
+        assert!(out[0] == out[1], "{prob:?} {path:?}: key changed the result");
+    }
+}
