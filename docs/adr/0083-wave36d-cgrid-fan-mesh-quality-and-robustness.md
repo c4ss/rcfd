@@ -230,3 +230,75 @@ and n_nose / n_chord 0.33 > 0.3), so `c5_q1_gates_with_h` refused them with loca
 defective set-up. **Corrected C5b**: A' and B' with the mesh options of H and the range check off (`checked_range: false`), the same Q1 gates.
 What I already know: these are the meshes of the Part B step G + H1 + H3 (the G range admits A' and B'), measured there: A' 66.18 / 0.888 / 394.4,
 B' 80.93 / 8.894 / 8805.0, so C5b is not blind; prediction: A' aspect MISSED, B' all three MISSED.
+
+## Addendum: measured values, misses and deviations
+
+Release builds, scratch tree of this wave on c89495f; each registered run once. Limits are the registered ones, unchanged. No external reference
+value enters any gate. No fan performance claim. Solver physics files were not touched.
+
+### Part A: the cause of the P10 miss
+
+Verdict by the registered rule: **MIXED** (table in Amendment 1). The P10 growth on FAN-01-C is a bounded oscillation of the steady SIMPLEC iteration
+that never converges (momentum residual 0.35-0.43 throughout; continuity 1.5e-3 to 5e-3 up to iteration 1 500); its largest cell imbalance sits on
+cells that are NOT poor by the face measures (F-block cell (6, 6, 2) above the hub stack upstream of the leading edge, 34 deg, volume ratio 6.5 to a
+neighbour; wake cell (4, 6, 12), 47 deg); it persists at a tenth of the Reynolds number (L / c10 22.0), so it is not the laminar unsteadiness of the
+design Reynolds number; and it is specific to this count set: x0.75, x1.25 and x1.5 converge (L / c10 0.027, 0.41, 0.26). Refinement trend of L / c10
+(x0.75, x1, x1.25, x1.5): 0.027, 8.36, 0.41, 0.26: no monotone trend; the x1 mesh is the outlier. Not established: which property of the x1 mesh
+causes it (no quality measure tried flags those cells).
+
+### Part B
+
+H1 `post_untangle` ACCEPTED (FAN-01 R-G builds 20 -> 22, every other mesh bit-identical), H2 none registered (the corner rule tried folded the
+tip layers), H3 `lean_stack` ACCEPTED (B' blade-stack skewness 2.057 -> 1.098, no maximum up by more than 1 %), H4 `nose_blend` REJECTED (S does not
+build with it) and removed; table in Amendment 2. Development diagnostics (Amendment 1): HF and HW falsified (no wake-stack switching); the FAN-01-C
+non-orthogonality maximum is the lower seam corner of the tip layers, where the corner line arrives 7.6 deg from the front edge.
+
+### Part C: acceptance on H = G + H1 + H3 + H5 range (case value `camber_seam_h`)
+
+| Check | Limit | Measured | Status |
+|---|---|---|---|
+| C1 P1 builds, validates, volumes > 0 | - | 11 536 cells, step 0 | met |
+| C1 P2 non-orthogonality / skewness / aspect | 70 / 2.0 / 300 | **83.26** / **3.978** / 227.2 | **MISS** (`c1_p2_fan01_h_quality_gates_known_miss`), as predicted |
+| C1 P3 closure, topology | 1e-13 | 7.97e-16, ok | met |
+| C1 P4 periodicity | 1e-12 | 1.48e-13 | met |
+| C1 P5 stacks (radial; wall along the 3-D normal) | 1e-12 | 5.6e-14; 6.1e-14 (in-plane form 0.12 by design) | met |
+| C1 P6 bladed vs empty C nodes, volume identity | 0, 1e-11 | 0, 1.3e-16 | met |
+| C1 P7 wall nodes on the exact surface | 1e-12 m | 0 m | met |
+| C1 P8 solid volume against the section-area quadrature | reported | -2.5e-3 | - |
+| C2 P9 FvGeometry, check_mesh, rules | accepted, ok, no error | accepted, ok, SV101 warning only | met |
+| C3 P10 laminar smoke | max over 200-300 <= value at 10 | 7.957e-4 at 10, **7.456e-3** over 200-300; finite, no failure, 62.1 m/s | **MISS** (`c3_..._known_miss`) |
+| C4 (a) R-H in-range builds | 100 % per fan | blade B 11 of 11; FAN-01 **10 of 11** (front_gap 0.45: 3-D tangle, C cell (37, 4), layer 11) | **MISS** for FAN-01 (`r_h_in_range_combinations_build_known_miss`) |
+| C4 (b) R-H out-of-range refused, located | 100 % | 58 of 58 | met |
+| C4 reported: meet 70 / 2.0 / 300; median non-orth; steps | - | blade B 10 of 11, 61.8 deg, all step 0; FAN-01 0 of 11, 84.6 deg, 4 step 0 and 6 step 7 | - |
+| C4 reported: R-G with the H mesh options (G range) | - | blade B 36 of 39, FAN-01 22 of 39 (G: 36, 20) | - |
+| C5 A' / B' with H | - | refused (outside the H range) | **defective set-up** (Amendment 3) |
+| C5b A' with the H mesh options | 70 / 2.0 / 300 | 66.18 / 0.888 / **394.4** | aspect **MISS** (`c5b_..._known_miss`) |
+| C5b B' with the H mesh options | 70 / 2.0 / 3000 | **80.93** / **8.894** / **8805.0** | **MISS** |
+
+### Part D: default behaviour
+
+B1 met: the ADR 0079 hashes of S and A' with `pursuit` and E, and the G hashes of S (`0x59b26da9febc9b2e`) and FAN-01-C (`0x00b3e9673d470e52`), are
+reproduced on the final code (`b1_existing_constructions_are_bit_identical`, `b1_construction_g_is_bit_identical`); the default FAN-01 refusal
+message is unchanged. `baseline_hashes.rs` untouched (final gate below). The new options are off by default and only `camber_seam_h` sets them.
+
+### What this wave delivered, in short
+
+The P10 miss is diagnosed as a mesh-specific, non-converging oscillation located away from the worst faces and not caused by the Reynolds number
+(MIXED by the rule); H adds two FAN-01 control combinations and halves the y+ = 1 blade-stack skewness without moving any other maximum; the
+FAN-01 quality target, the smoke criterion and full R-H robustness on FAN-01 are still missed; the narrower H range is a restriction, stated as such.
+
+### Deviations from the registered plan (candid list)
+
+* The Part A harness smoke was run A0 itself (deterministic; no choice involved). The verdict rule was applied as registered.
+* H2 was not specified: the one corner rule tried in development folded the tip layers (Amendment 1).
+* The H3 and H4 forms were developed on B' with construction E after the DL / DN diagnostics, so their registered B' measurements were not blind
+  (A', FAN-01-C and R-G were).
+* The H5 range was chosen after seeing the R-G failures (registered before R-H ran); it made the registered C5 set-up defective (A' and B' outside
+  the range), corrected by C5b, whose result was known from Part B (Amendment 3).
+* ADR 0079 reported blade B R-G "35 of 38" in range; on this code G gives 36 of 39 (the G range admits 39 blade B combinations); FAN-01 agrees (20 of 39).
+* The H4 measurement stopped at the first failure (S did not build), so its A', B' and FAN-01-C numbers were not recorded.
+* The development hook that lists all folded quads and the C5 / C6 / corner development variants were not committed.
+
+### Unverified references
+
+Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072 / 0079). Nothing else.

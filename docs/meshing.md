@@ -237,3 +237,16 @@ about `90 - stagger` deg whatever the target rule (the periodic pair is an index
 0.89 / 394, B' 80.9 / 8.9 / 8805 (smoothed: 61.4 / 0.86 / 395 and 78.2 / 7.1 / 8532). ADR 0079 also isolated the B' mechanisms of `smoothed` (the
 trailing-edge lean against an in-plane stack, the smoother compressing the first outer row at the nose, the wake first-height wedge, the corner
 stretch); four single-factor fixes each removed their own defect but moved another maximum, and were rejected by the registered rule.
+
+**Construction H (ADR 0083, `mesh.fan.c_grid_construction = "camber_seam_h"`, `CGridOptions::camber_seam_h_construction()`).** `camber_seam`
+plus two changes accepted by a registered one-at-a-time rule: a second local untangling after the smoothing of each layer (moves nodes only around
+folded quads, so FAN-01-C, S, A' and B' are unchanged; two more FAN-01 control combinations build) and wall stacks built along the lean
+(`lean_stack`: in-plane offsets divided by the cosine of the angle between the in-plane and the 3-D wall normal, faded to 1 along the first quarter of
+the wake; B' blade-stack skewness 2.06 -> 1.10, no other maximum moved by more than 1 %). A post-smoothing blend of the nose rows back to the
+algebraic grid was rejected (set-up S tangled). Its checked range is narrower (n_side at most 16, n_nose at most 0.3 n_chord, front_gap at most 0.6).
+Measured once: FAN-01-C 83.26 deg / 3.98 / 227 (target 70 / 2.0 / 300 MISSED: the corner line reaches the lower seam corner 7.6 deg from the front edge
+at the tip, and no corner rule tried kept the tip layers unfolded); accepted by `FvGeometry::new`, `check_mesh` and the rules; the laminar smoke solve
+oscillates without converging (continuity 7.96e-4 at iteration 10, up to 7.46e-3 over 200-300). ADR 0083 located that oscillation: it sits away from
+the poor faces (an F-block cell above the hub stack and a mid-span wake cell), persists at a tenth of the Reynolds number, and does not occur on the
+x0.75, x1.25 and x1.5 count sets. Registered scan R-H in range: blade B 11 of 11 build, FAN-01 10 of 11 (front_gap 0.45 tangles); out of range 58 of
+58 refused with located errors. A' 66.2 / 0.89 / 394 and B' 80.9 / 8.9 / 8805 with the H mesh options (gates still MISSED).
