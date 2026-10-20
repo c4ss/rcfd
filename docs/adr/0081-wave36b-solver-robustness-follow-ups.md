@@ -325,8 +325,10 @@ before its first violation. This makes C4 non-vacuous for these six set-ups only
 
 * Amendment 1: N1 asked for a NaN residual of a finite starting state (defective limit); corrected N1'.
 * Amendment 2: the part X scan had no unsheared controls; controls at 0, 15, 30 degrees and V9b were registered after the scan and before they ran.
-  V9's increments never entered the registered window [1e-9, 1e-2] (they start at round-off), so its rho is over all 400 iterations, as the registered
-  text allowed.
+  V9's increments never entered the registered window [1e-9, 1e-2] (they start at round-off), so its rho is over all 400 iterations; the registered text
+  covered increments that never LEAVE the window, not ones that never enter it, so this is my interpretation of an uncovered case. Started from round-off,
+  V9 cannot detect a weakly growing mode (rho about 1.02 would grow only about 3000-fold in 400 iterations and stay below the initial transient); the H-X6
+  reading is kept as registered, but its support is V9b (a generic 1e-6 perturbation decays to 6.6e-14 by iteration 100).
 * Part X V0 classifies 50 degrees UNSTABLE (overshoot, then convergence) where ADR 0077 S3 called it converged: different criteria, both stated.
 * Part G uses the registered fallback (K1 trips); no finite runaway exists in the searched space.
 * Not registered, added: the steady-guard note names the limiter as a remedy for an unlimited `linear_upwind` run (message text only).
@@ -338,3 +340,17 @@ before its first violation. This makes C4 non-vacuous for these six set-ups only
 Barth and Jespersen (1989) for the limiter (the existing rcfd implementation; recalled, UNVERIFIED). The Kovasznay solution (Kovasznay 1948, recalled,
 UNVERIFIED; used only through its closed form). The sqrt(2) linear stability bound of Kolmogorov flow (Meshalkin and Sinai 1961, recalled, UNVERIFIED;
 only used to choose nu = 0.5 for V7). The statement that Barth-Jespersen clips smooth extrema (recalled, UNVERIFIED; not tested).
+### Further deviations and checks (added after the addendum)
+
+* The commits were landed in the main repository by a fast-forward merge from the scratch clone onto a clean working tree (main HEAD 413e09e had no dirty
+  files), not through the temporary-index procedure; only this wave's commits were added.
+* The final gate's test run took about 2 h 20 min, over the 60-minute run guideline (as the L2s sweep).
+* Checked after the code was final (review): the NaN-keeping reports change no persisted record type. Design-loop records store no residuals and write
+  non-finite metrics as null already; checkpoints hold fields only; the residual history CSV prints NaN as text.
+
+### Final gate
+
+Fresh `git archive` of 49d7354: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1875 passed, 0 failed, 520 ignored (no LNK1201). The heavy ignored tests L1a, L1b and L2c were rerun on
+that archive and reproduce every printed digit (the main-repository commits since the measured tree, 60dcb41..413e09e, changed only
+`rcfd-mesh/src/fan_cgrid.rs` among the sources, an opt-in C-grid construction). This paragraph and the corrections above are a docs-only commit, not re-gated.
