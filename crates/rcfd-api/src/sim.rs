@@ -1314,6 +1314,10 @@ impl Simulation {
             let mut solver = SimpleSolver::new(geom.clone(), u, p, s);
             // ADR 0077 F-H0 (opt-in): the momentum gradient takes the partner cell on periodic faces
             solver.periodic_gradient_partner = get_s(case, "solver.periodic_gradient") == "partner_cell";
+            // ADR 0081 part L (opt-in): Barth-Jespersen-limited linear-upwind extrapolation of the momentum equation
+            if get_s(case, "solver.linear_upwind_limiter") == "barth_jespersen" {
+                solver.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::BarthJespersen);
+            }
             let bf = get_v(case, "physics.body_force", [0.0; 3]);
             if vec3::norm(bf) > 0.0 {
                 let b = BodyForce::uniform(&geom, bf);
@@ -1419,6 +1423,14 @@ impl Simulation {
             s.amg_pressure = geom.n_cells() > 2000;
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };
+        if get_s(case, "solver.linear_upwind_limiter") != "none"
+            && !(matches!(engine, Engine::Steady(_)) && conv == ConvScheme::LinearUpwind)
+        {
+            return Err(diag(
+                "solver.linear_upwind_limiter",
+                "the limiter applies only to solver.convection = \"linear_upwind\" with solver.algorithm = \"simple\" or \"simplec\" (incompressible, constant density)",
+            ));
+        }
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
         let transient_alg = matches!(alg.as_str(), "piso" | "pimple");
         let energy = if energy_on && !vdens && (steady_alg || transient_alg || coupled_alg) {
@@ -2014,6 +2026,11 @@ impl Simulation {
                 "; note: solver.convection = \"{conv}\" diverged on the high-aspect, strongly non-orthogonal wall cells of the FAN-01 \
                  sector mesh where \"upwind\" and \"tvd_minmod\" were stable (ADR 0077 part B)"
             ));
+            if conv == "linear_upwind" && get_s(&self.case, "solver.linear_upwind_limiter") == "none" {
+                m.push_str(
+                    ", as was \"linear_upwind\" with solver.linear_upwind_limiter = \"barth_jespersen\" (ADR 0081)",
+                );
+            }
         }
         Some(m)
     }
