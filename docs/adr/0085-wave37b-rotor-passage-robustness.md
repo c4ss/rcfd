@@ -225,6 +225,7 @@ removed; F1 (FAN-01 with the fix) was NOT RUN, so no torque or Delta p_ts change
 | H-S, H-T, H-P, H-K (amendment 1) | falsified if the diagnostic does not converge | none converges | all four FALSIFIED |
 | A1 seam pairs, iteration 1 (Y_L, Y_I, Y_C on M0, M1) | 1e-12 | 2.9e-14 to 2.1e-13 | pass |
 | A1 F-RP closure (`Simulation::new`) on M0, M1, M2 | 1e-10 | built on all three | pass |
+| A1 F-RP closure on the E0 mesh | 1e-10 | not built (F1 not run); not measured in this wave (ADR 0082: 1.2e-15) | not measured |
 | A0 (iii) key absent = `false` (20 iterations) | bit-identical | bit-identical | pass (code then removed) |
 | A0 (iv) coupled cavity hashes after the arm C code | 6f97dcb hashes | reproduced | pass (code then removed) |
 | Screen I: Y_I(M0) converges; A2, A3 on M0 | converged; 10 x 5.880e-4 N m; 0.2 Pa; 0 Pa | 476 it; 1.201e-4 N m; 0.0000 Pa; -1.648 Pa | pass |
@@ -264,6 +265,10 @@ B_I(M2) L 8.47e-5 N m.
 * Cost: the coupled solver needs about 0.3 s (M0), 0.8 s (M1) and 3.6 s (M2) per iteration against 0.04, 0.12 and 0.45 s for SIMPLEC, so the 60-minute
   cap allows about 1 000 coupled iterations on M2; Y_C needed 476 (M0) and 567 (M1). Whether Y_C(M2) would converge with more iterations is not known;
   its residual did not decrease over its last 600 iterations.
+* The iteration counts of the converged runs are identical across solvers (M0: Y_I and Y_C 476; M1: Y_U, Y_I, Y_C 567, at 1e-7 772; M1 controls
+  B_I and B_C 170). At the stopping iteration res_u and res_p were between 3e-6 and 2e-12 (below 1e-7 in every Y run), well below the tolerance, so the binding criterion was the
+  turbulence change of the SST update, not the momentum or pressure residual. The counts measure the turbulence model's settling, not solver speed,
+  and must not be used to size an iteration budget for the momentum solve.
 
 ### Verdict on the fixes
 
