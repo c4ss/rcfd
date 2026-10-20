@@ -147,3 +147,43 @@ check on a short run not ignored when fast). The budget is test code only. F-RP 
 `crates/rcfd-api/src/sim.rs` (turbulence flux), `schema.rs`, `docs/case-schema.md`. `fan01_diagnosis_w35c.rs`, `fan01_validation.rs` and their tests are
 not edited. Every new set-up gets a construction check and a 30-iteration smoke (continuity finite) before its registered run; the smoke values are
 recorded in amendment 1.
+
+## Amendment 1 (2026-10-20): X2a-36 result, the verdicts of H1-H5, and the departure to write F-RP; written before any F-RP code
+
+What I knew when writing this: the X2a-36 run and its budget below (and a deterministic re-run of the same run with one extra print, the per-region
+closed form, added after I had seen the first output; it is disclosed and not scored); X2d-36 was running and its result was not known. No F-RP code
+existed and no other run of this wave had been made, apart from the not-ignored short bookkeeping test (5 iterations: reconstruction worst 1.8e-14,
+the per-cell terms add up to `E_s + S_seam` to round-off).
+
+X2a-36 (13 524 cells, 374 iterations, converged by tolerance, 0.7 min): outlet L 2.25440 N m, Delta p_ts -59.984 Pa: the reproduction rule is MET (every
+printed digit). Budget (N m, full annulus): `E_s` 2.30241 (the ADR 0078 report-based excess of the same run 2.31265), `S_seam` 2.2e-6; `G_conv`
+2.44178 (1.061 `E_s`), `G_p` 0.01106 (0.005), `G_visc` 0.00371 (0.0016), `G_frame` -0.15414 (-0.067; its Rhie-Chow part +0.13080 and the remainder
+-0.28494, which alone is 0.124 `E_s`, partly cancel), `G_res` -2.4e-8; the terms add up to `E_s + S_seam` = 2.30241; reconstruction worst 2.4e-14.
+Closed forms: `C_up` 2.62771 (`C_up / G_conv` = 1.076), `C_visc` 0.00387 (interior faces).
+
+Location (`G_conv`, its closed form `C_up` per region in brackets, from the re-run): upstream 0.731 (0.736), chord band 0.378 (0.405), downstream
+1.333 (1.487); wall-adjacent cells 0.034 (0.012; 0.3 % of the volume); seam-adjacent cells 1.566 (1.536; 1 288 cells holding 44 % of the volume,
+because the upstream and downstream blocks have few pitchwise cells); radial bins: the mesh has no cell centres between r = 0.171 and 0.203 m
+(mid-span radial cells several cm tall), and the bin 0.203-0.219 carries 1.028. The generation sits where `|phi| |d_perp|^2` is large: the large
+cells of the upstream / downstream blocks and of mid-span.
+
+Verdicts by the registered rules:
+* H1 (i) `G_conv >= 0.7 E_s`: 1.061, passes. (ii) `C_up` in [0.7, 1.3] `G_conv`: 1.076, passes. (iii) wall-adjacent plus seam-adjacent cells carry
+  at most 50 % of `G_conv`: the seam-adjacent cells alone carry 64 %: **H1 is FALSIFIED as registered** (through its location clause). The registered
+  clause did not normalise by volume; it stays as registered and the falsification stands.
+* H2: `|G_visc|` = 0.0016 `E_s` < 0.01 `E_s`: H2 falsified as a contribution (also below the predicted 1e-2 N m floor).
+* H3: `|G_frame|` = 0.067 `E_s` < 0.1: holds (the further Rhie-Chow split is not triggered: the rule is on the total; the parts are reported above).
+* H4: 0.005, holds. H5: 1e-6, holds. Closure (`|G_res|` <= 0.05 `E_s`): passes. Reconstruction (1e-10): passes.
+
+Departure from the registered plan (rule (c) of wave 35), stated before any F-RP code: the ADR registered "the fix is written only if H1 is not
+falsified". H1 is falsified through (iii) while (i) and (ii) identify the term: convection carries 106 % of the excess and the closed form of the
+upwind dissipation acting on the rigid part matches it to 8 %. The task of this wave asks to isolate the responsible term and to decide whether a fix
+is possible; the term is isolated, so F-RP is written anyway, with the acceptance A0-A4 unchanged. Added now, as a new falsifier of the mechanism and
+not as a relaxation: F-RP removes exactly the rigid part from the convected quantity, so if A2 fails on Y(M1) (`|L(Y)|` not down to 10 x the inertial
+control), then either the mechanism read from (i)/(ii) is wrong or F-RP is wrong, and in both cases F-RP is removed.
+
+Before any F-RP solver code, the registered closure check (item 2 of F-RP) is measured on M1, M2, M3 and the E0 mesh by a construction-only test
+(geometry only): worst value, its location and the distribution. If it exceeds 1e-10 on a registered mesh, F-RP is NOT RUNNABLE as registered and any
+remedy (for example a frame flux exact on the triangulated faces, which would change the A1 wall check) needs its own amendment before a run. The
+same test records the largest and median cell extents (axial, radial, pitchwise) of M1-M3; the order of A4 keeps the nominal ratio as registered and
+is reported next to the measured largest-cell ratios.
