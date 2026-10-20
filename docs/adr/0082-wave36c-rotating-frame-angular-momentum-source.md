@@ -224,3 +224,33 @@ flux of the kernel is the prescribed face-centre `(Omega x r_f).S_f`, so the rel
 `|phi_rel,f + (F_tri,f - (Omega x r_f).S_f)|` <= 1e-12 `Omega r |S|` on every `blade` and `hub` face of F1 at iteration 1 (the relative flux equals
 minus the warp term exactly: catches a sign error), and the largest `|phi_rel| / (Omega r |S|)` on those faces is reported. The seam-pair check of A1
 is unchanged. Mass stays exact (`sum_f phi_rel = sum_f phi - 0` per cell).
+
+## Amendment 3 (2026-10-20): F-RP smokes and A1, the M3 set-up defect and its replacement M0; written before any registered run of B, Y, R or F1
+
+What I knew when writing this: everything above; F-RP is written (triangle-exact frame flux on every zone face with `rotor_passage = true`, the
+interface-only revolution check, the per-cell closure check at construction, turbulence on the relative flux; default path unchanged); the not-ignored
+tests pass (A0(iii): the ADR 0008 M2 annulus with the key absent and `false`, 20 iterations, bit-identical velocity, pressure and flux; the key is
+refused at `sources.frame.rotor_passage` on a `rotating_frame` source; the budget bookkeeping test); the construction and 30-iteration smokes below
+(and two scratch looks, disclosed: F1 to 300 iterations, and the pressure-solver iteration counts of the first 5 iterations of Y(M1), F1, E0). No B, Y
+or R run beyond 30 iterations, and no F1 run beyond 300.
+
+A1 (registered checks, iteration 1): seam pairs `|phi_rel,f + phi_rel,g|` / (Omega r |S|) Y(M1) 2.1e-13, Y(M2) 3.7e-13, Y(M3) 6.6e-13, F1 2.1e-13
+(limit 1e-12: pass); F1 rotor walls (`blade`, `hub`) `|phi_rel + warp|` 2.6e-16 (limit 1e-12: pass), largest `|phi_rel|` 5.0e-3 of Omega r |S| (the
+largest face warp term, as predicted). The closure check of `Simulation::new` passed on every F-RP set-up (it builds).
+
+Smokes (continuity at iterations 1 / 10 / 20 / 30): Y(M1) 1.7e-6 / 2.7e-6 / 1.2e-7 / 1.3e-7; Y(M2) 1.6e-6 / 5.6e-7 / 3.9e-7 / 2.6e-7; Y(M3) 1.2e-6 /
+7.9e-6 / 6.3e-4 / 6.6e-2 (growing); R(M2) 5.5e-4 / 3.7e-5 / 3.6e-5 / 2.7e-5; R(M3) 2.0e-4 / 7.2e-4 / 1.1e-2 / 2.8e-1 (growing); B(M2) 4.2e-6 / 1.1e-6
+/ 5.4e-7 / 9.3e-6; **B(M3) 1.2e-6 / 1.9e-5 / 1.3e-2 / 1.2e-1 (growing; Delta p_tt 22.7 kPa and outlet L 8.2 N m at iteration 30 in the inertial empty
+duct)**; F1 0.49 / 0.38 / 0.40 / 0.38 (and 0.30 at iteration 300, res_u 0.47, torque 1.79 N m; the pressure equation is solved in 5 iterations each
+time, so the imbalance is the 1e-3 relative linear tolerance applied to a large initial imbalance next to the rotating hub and blade, not a failed
+solve; E0's continuity at iteration 1 is 1.6e-4).
+
+Set-up defect: M3 diverges within 30 iterations in all three formulations, including the inertial control B, so the registered finest mesh is a
+defective set-up (the cause, the M3 counts with 5 boundary-layer cells of growth 1.084 or the 157 248-cell H-slit at 79 deg with SIMPLEC, was not
+diagnosed). It stays recorded here; no run of it is used. Replacement, registered now, before any run: **M0**, one step coarser than M1 by 1.5
+(`n_up` 5, `n_chord` 8, `n_down` 5, `n_side` 7, `n_span` 11, `n_gap` 5, `n_mid` 1, `n_bl` 1, `first_cell_height` 3e-4 m, `growth` 1.2^1.5; 4 320
+cells; smokes finite: B(M0) 2.0e-6 / 7.4e-6 / 2.7e-6 / 7.3e-7, Y(M0) 1.8e-6 / 2.2e-6 / 2.4e-6 / 2.9e-6, R(M0) 6.0e-4 / 2.3e-4 / 2.2e-4 / 2.0e-4;
+frame-flux closure of `F_tri` 9.5e-16; extents largest / median axial 0.228 / 3.15e-3, radial 0.0707 / 1.14e-3, pitchwise 0.0543 / 7.06e-3 m:
+largest-cell ratios M0/M1 1.21, 1.83, 1.22, median ratios 1.49, 1.49, 1.45). The family of A2-A4 is **M0, M1, M2**; A4 becomes
+`p = ln(e_M0 / e_M2) / ln(2.25)` >= 0.5 with `e_M2 <= e_M1 <= e_M0`, its floor rule unchanged (iteration check on M1). The diagnosis family R is
+R(M0), R(M1) = X2a-36, R(M2), with `p_R = ln(L(R(M0)) / L(R(M2))) / ln(2.25)`. Everything else is unchanged.
