@@ -109,3 +109,48 @@ Status rule (registered): F-137 becomes `done` if A1 passes all six pairs with A
 lands but A1 misses; `todo` if nothing usable lands. The roadmap SCOPE extras (RBF morphing, more observables, topology and
 turbulence-coefficient optimisers, multi-objective support, study / service / MCP exposure of gradients) are not part of the
 acceptance text and are listed as not delivered.
+
+## Addendum: measured values (release build, scratch tree on HEAD 37c2c8b plus the wave-38D files)
+
+Delivered: `crates/rcfd-api/src/design/adjoint.rs` (FFD morph `Ffd`, the duct set-up `Duct`, objectives `pressure_drop` and
+`wall_drag`, `solve_primal`, `adjoint_gradient`, `shape_gradient`, a dense LU), `optim::projected_gradient` with `PgOptions`,
+tests `crates/rcfd-api/tests/adjoint_duct.rs` and unit tests in both modules, a section in docs/design-loop.md. No existing code
+path changed.
+
+| check | limit | measured | verdict |
+|---|---|---|---|
+| A0 primal residual at a0 and the 12 FD shapes | <= 1e-13 | asserted at every point; base 9.9e-15 (smoke 7.1e-15 at a0 + 1e-3 e2) | pass |
+| A0 step study, worst of 6 pairs | <= 5e-3 | 2.26e-6 (Fx a1) | pass |
+| A0 noise floor / D, worst of 6 pairs | <= 1e-3 | 3.5e-10 (dp a3) | pass |
+| **A1 adjoint vs D(1e-3), worst of 6 pairs** | **<= 0.05** | **1.12e-6 (dp a1)** | **pass** |
+| A2 state step 1e-6 vs 1e-5, worst of 6 pairs | <= 1e-4 | 2.4e-7 (dp a3) | pass |
+| A3 final dp / dp(a0), monotone accepted iterates | <= 0.95 | 2.2935364 / 2.6838028 = 0.855 in 3 iterations, every iterate lower, no step rejected | pass |
+| A4 guards | error | `nu_face` and `max_state` refused (unit test) | pass |
+| A5 defaults | unchanged | no existing code path edited; gate below | see gate |
+
+A1 per pair (adjoint / D(1e-3) / relative difference): dp a1 1.2885654712 / 1.2885669104 / 1.12e-6; dp a2 1.3284866030 /
+1.3284876841 / 8.1e-7; dp a3 1.1582562470 / 1.1582573656 / 9.7e-7; Fx a1 0.12925909152 / 0.12925919544 / 8.0e-7; Fx a2
+0.13320816779 / 0.13320823825 / 5.3e-7; Fx a3 0.11629478818 / 0.11629486646 / 6.7e-7. The residual difference is the same size
+as the O(h^2) truncation of the reference itself (D(1e-3) and D(2e-3) differ by 1.6e-6 to 2.3e-6), so the 5 percent limit is met
+with a margin of four orders; the test cannot tell the adjoint error from the reference's truncation below about 1e-6.
+
+Fixed point: `max |G(X*) - X*|` = 1.55e-15. State N = 2050 (800 u, 400 p, 850 phi).
+
+Cost (recorded): one adjoint gradient (both objectives, primal excluded) 6.1 s; one primal solve from rest 0.33 s; the 12 FD
+solves of the step study 4.0 s. For these 3 parameters the adjoint costs about 3 times more than one-step central differences (6
+solves); it breaks even at about 9 parameters on this mesh, because its cost does not grow with the parameter count. A3 used one
+adjoint per iteration (6.1 s < 10 s, so the test is not ignored, as registered); its whole run took about 30 s.
+
+Deviations from the registered plan: none in limits or set-ups. The test runs the noise-floor warm start from the base solution as
+registered. A3 needed no step halving, so the backtracking branch is exercised only by the unit test of `projected_gradient`.
+
+Not delivered (stated, not hidden): RBF morphing (FFD only); observables other than pressure drop and wall x-force (moments, centre
+of pressure, cumulative forces); turbulent gradients (refused, no frozen-turbulence variant); transient, energy, body-force, driver
+or pseudo-controller cases (refused); meshes above a few thousand state unknowns (dense Jacobian; a sparse or matrix-free
+transposed solve is the upgrade path); gradients inside `design::study` (the `Method` / `Evaluator` / store have no gradient
+slot), the `design.*` service methods, MCP tools and case files; topology, turbulence-coefficient and multi-objective gradient
+optimisers. Only one configuration was verified (SIMPLEC, upwind, no non-orthogonal correctors, Re 20); other schemes and options
+are accepted by the code but not tested, and a limited scheme with an active limiter switch would make the map non-smooth.
+
+Status (by the registered rule): A1 passes all six pairs with A0 holding, so F-137 is set to `done`; the SCOPE extras above are
+listed as not delivered in its note.
