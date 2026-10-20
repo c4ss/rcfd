@@ -349,3 +349,9 @@ falls with refinement, as ADR 0078 concluded, now shown on a converged three-mes
 ### Unverified references
 
 None. Every limit is derived here, measured, or a decision threshold of this protocol; no external value is used.
+
+### Final gate
+
+Fresh `git archive` of 413e09e (which contains the commits of the other wave-36 agents up to da44f0b): `cargo fmt --check` clean, `cargo clippy --workspace
+--all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1862 passed, 0 failed, 512 ignored (no LNK1201). This paragraph is
+a docs-only commit and was not re-gated.
