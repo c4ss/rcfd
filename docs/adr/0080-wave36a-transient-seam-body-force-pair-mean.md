@@ -162,3 +162,9 @@ body-force mismatch is a small part of the default error, which is dominated by 
 ### Unverified references
 
 None used.
+
+### Final gate (fresh `git archive` of 4a8f552)
+
+`cargo fmt --all --check` clean; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace --release --no-fail-fast`:
+**1856 passed, 0 failed, 499 ignored** (wave 35: 1853 / 0 / 494; this ADR adds 3 default tests, P1 and the two N2b checks, and 5 ignored ones, the smoke,
+B-R4 and the three known misses). `baseline_hashes` and `w33b_default_bits` passed unchanged. This section is docs only and was not re-gated.
