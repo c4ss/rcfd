@@ -1,6 +1,6 @@
 # ADR 0086: Wave 37C, the first solution-verification study of FAN-01 (three-mesh family, Richardson extrapolation, observed order, GCI) and the same study for the empty passage
 
-Status: registered before any registered solver run of this wave. Limits and decision rules are fixed now and are not changed after a run; a miss of a
+Status: accepted (registration, then addendum). The registration was committed before any registered solver run of this wave. Limits and decision rules are fixed now and are not changed after a run; a miss of a
 check becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
 Baseline hashes are never re-recorded; no solver, mesh or default code is changed by this wave (tests and documentation only). Clean-room: first
 principles and published literature only; references recalled from memory are marked UNVERIFIED. Parents: ADR 0075 (FAN-01 data, set-up, measured
@@ -194,11 +194,20 @@ Ratios: bladed r21 1.4098, r32 1.4044; empty r21 1.4073, r32 1.4018.
 |---|---|---|---|---|---|---|---|
 | torque [N m] | 2.038428 / 1.967401 / 1.849759 | -0.0710 / -0.1176 | +, **1.511** | **2.1428** | **VALID** | Fs 1.25: +-0.2167 (10.6 %) = [1.8218, 2.2551] | +-0.1305 |
 | Delta p_ts [Pa] | 73.988 / 64.233 / 46.778 | -9.755 / -17.455 | +, **1.738** | **85.94** | **VALID** | Fs 1.25: +-29.76 (40 %) = [44.23, 103.74] | +-14.94 |
-| empty L [N m] | 0.105977 / 0.059609 / -0.009518 | -0.0464 / -0.0691 | +, 1.210 | 0.1965 | **NOT CONVERGED** (E1); with E1's settled values it would be VALID | (+-0.1423 = [-0.0363, 0.2483]) | (+-0.1132) |
-| empty swirl energy [Pa] | 5.484 / 9.230 / 6.266 | 3.747 / -2.964 | **-**, 0.68 | - | **NOT CONVERGED** (E1); with E1's values NOT MONOTONE | - | - |
+| empty L [N m] | 0.105977 / 0.059609 / -0.009518 | -0.0464 / -0.0691 | counterfactual: (+, 1.210) | counterfactual: (0.1965) | **NOT CONVERGED** (E1); counterfactual with E1's settled values: VALID | counterfactual: (+-0.1423 = [-0.0363, 0.2483]) | counterfactual: (+-0.1132) |
+| empty swirl energy [Pa] | 5.484 / 9.230 / 6.266 | 3.747 / -2.964 | counterfactual: (**-**) | - | **NOT CONVERGED** (E1); counterfactual with E1's values: NOT MONOTONE | - | - |
+
+Numbers in parentheses marked "counterfactual" use E1's values although E1 is NOT CONVERGED by the registered rule. They are not results;
+by the rule a study that is not VALID gives no band and no order.
 
 Iteration-error check: every last-1000 change is below 0.1 min(|eps21|, |eps32|) (largest relative: B3's Delta p_ts 0.171 Pa against the limit
-0.976 Pa).
+0.976 Pa). The check compares two end points only, so a bounded oscillation could be understated. Checked from the logs (values printed every 500
+iterations): over the last 2000 iterations the largest spread (max - min) is B3's, 7.9e-4 N m in torque and 0.25 Pa in Delta p_ts (46.53 to 46.78
+Pa over iterations 1000-8000). That is below the limits 7.1e-3 N m and 0.976 Pa. All other runs spread by 3e-4 Pa / 8e-6 N m or less.
+
+Each member carries a slightly different flow: the inlet speed is fixed, the annulus is faceted, so Q is 1.401232 / 1.398776 / 1.395055 m^3/s
+(F1 / F2 / F3). This is geometric discretisation error and part of the band. With the slope of the measured characteristic it is worth about
+1 Pa of the 27 Pa Delta p_ts change and about 0.004 N m of the torque change (an estimate, not measured).
 
 ### Checks and readings
 
@@ -206,13 +215,14 @@ Iteration-error check: every last-1000 change is below 0.1 min(|eps21|, |eps32|)
 |---|---|---|---|
 | S1 family builds, `check_mesh`, empty mesh without blade faces and with more cells, r >= 1.3 | all | as registered; r 1.4044-1.4098 | pass (not ignored) |
 | G0 order solver on exact power laws | 1e-8 / 1e-10 | p and f_ext recovered (1.6, 2.0, 0.9) | pass (not ignored) |
-| E-L, E-S (R-E): empty studies VALID and the band contains 0 | VALID and contains 0 | NOT CONVERGED (E1 at the wall clock); with E1's settled values: L VALID, band contains 0 only by its width while f_ext = 0.197 N m points away from 0; swirl energy NOT MONOTONE | **MISS** (`e_l_e_s_empty_passage_band_contains_zero_known_miss`) |
+| E-L, E-S (R-E): empty studies VALID and the band contains 0 | VALID and contains 0 | NOT CONVERGED (E1 at the wall clock); counterfactual with E1's settled values (not a result): swirl energy NOT MONOTONE, L moving away from 0 with refinement | **MISS** (`e_l_e_s_empty_passage_band_contains_zero_known_miss`) |
 | B-M torque study | VALID | VALID, p 1.51 | met |
 | B-P Delta p_ts study | VALID | VALID, p 1.74 | met (`b_m_b_p_bladed_studies_are_valid`, heavy, ignored) |
 
 **R-E: not met**, so by the registered rule the bladed bands below are "not shown credible on this family". The verdict does not hang on E1's
-82 missing iterations: with its settled values the swirl-energy study is still not monotone, and the L study extrapolates to 0.197 N m, about twice
-F1's value, away from the exact zero. On the empty passage the error of the limited relative-frame scheme on these C-grid meshes does NOT
+82 missing iterations: with E1's settled values the swirl-energy study is still not monotone (eps32 = f3 - f2 = -2.96 Pa, so a monotone
+sequence would need f1 above f2 = 9.23 Pa; F1 is settled at 5.48 Pa, constant to 7e-8 Pa over its last 1000 iterations). As a counterfactual
+observation only, the L sequence moves away from the exact zero with refinement. On the empty passage the error of the limited relative-frame scheme on these C-grid meshes does NOT
 decrease with this refinement: L grows (-0.010, 0.060, 0.106 N m) and the duct still creates 4.5-9.2 Pa of total pressure. The likely reason is
 outside this study's reach. The family does not refine the wall-normal stacks, the C-grid smoother produces cells of different shape at each count,
 or the limiter clips a different set of cells. None of these was tested.

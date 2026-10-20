@@ -749,7 +749,7 @@ fn study(blade: bool) -> [(&'static str, Gci, f64); 2] {
 
 /// ADR 0086 E-L, E-S (R-E credibility): the empty-passage studies of the outlet L and swirl energy are VALID and their bands contain the exact 0.
 /// KNOWN MISS: E1 stopped at the 60-minute wall clock at iteration 7918 (NOT CONVERGED); with its settled values the swirl energy is not monotone
-/// (5.48, 9.23, 6.27 Pa) and L extrapolates to 0.197 N m, away from the exact 0 (ADR 0086 addendum).
+/// (5.48, 9.23, 6.27 Pa) and L moves away from the exact 0 with refinement (counterfactual, ADR 0086 addendum).
 #[test]
 #[ignore = "known miss, ADR 0086 E-L/E-S: part E NOT CONVERGED (E1 time cap at 7918 of 8000), swirl energy not monotone; three runs, about 1.5 h"]
 fn e_l_e_s_empty_passage_band_contains_zero_known_miss() {
