@@ -293,3 +293,10 @@ Nothing of this wave changes the solver. F1 was not run.
 ### Unverified references
 
 None. Every limit is derived here, measured, or a decision threshold of this protocol (inherited from ADR 0082); no external value is used.
+
+### Final gate
+
+Fresh `git archive` of 38e87a8 (main, which contains the wave-37A, 37C and 37D commits up to 759d980; this wave committed documentation only):
+`cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`
+1881 passed, 0 failed, 531 ignored (no LNK1201). `crates/rcfd-api/tests/baseline_hashes.rs` is untouched by this wave. This paragraph is a docs-only
+commit and was not re-gated.
