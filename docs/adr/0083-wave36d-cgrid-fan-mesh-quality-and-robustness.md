@@ -318,3 +318,10 @@ and robustness on FAN-01 are still missed; the narrower range H5 was rejected an
 ### Unverified references
 
 Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072 / 0079). Nothing else.
+
+### Final gate
+
+On a fresh `git archive` of 45fc2da (the H5 removal; it also contains the other wave-36 agents' commits up to it): `cargo fmt --all -- --check`
+clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1873 passed, 0 failed, 519
+ignored** (wave 35: 1853 / 0 / 494). An earlier gate of the record commit bd215ce (with H5) gave 1861 / 0 / 506, fmt and clippy clean. This text
+was added afterwards in a docs-only commit that was not re-gated. The B1 hashes are specific to x86_64-pc-windows-msvc.
