@@ -215,3 +215,126 @@ as a reference, V0 and V7. Reading: a variant UNSTABLE at 0 degrees is "unstable
 (it is neither standing nor falsified); a variant STABLE at 0 degrees keeps its registered reading. V9b (confirmation, reported, no reading): V9 repeated
 with the converged state perturbed by 1e-6 (u_x of cell c multiplied by 1 + 1e-6 sin(c)), rho over the iterations where `max_du` lies in [1e-9, 1e-2].
 Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
+
+## Addendum (measured values, misses, deviations)
+
+Release builds, scratch tree on top of 5ff3b7c (rebased onto 413e09e before the gate; the rebase touched no file of this wave except the two docs).
+One run per registered set-up unless stated. Limits are the registered ones (with amendments 1 and 2), unchanged.
+
+Outcome in one paragraph. (1) `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the FAN-01
+mesh, laminar and SST, keeps every converging case checked converging (also with the limiter forced on in all 542 steady `linear_upwind` simulations
+of the suite: no new guard trip), and keeps second order on the Kovasznay flow (fine-pair L2 order 2.17; fine-mesh error 0.6 % above the unlimited
+scheme): every limit met, the key is kept. (2) The sheared-mesh SIMPLEC divergence needs no wall, no open boundary and no convection (a doubly periodic
+box at cell Peclet 0.2 diverges from 60 degrees). The two defect hypotheses (SIMPLEC compact/wide compensation, omitted non-orthogonal pressure part) are
+falsified by their registered rules, and the converged state at 60 degrees is stable under the same iteration: the only standing hypothesis is "start-up
+only" (H-X6). By the registered rule no code fix; the measured thresholds and the remedy (lower `alpha_p`) are documented. The mechanism of the start-up
+growth itself is not identified. (3) The steady `max_du`, `continuity` and `res_u` reports keep NaN; `SimpleSolver::run` no longer reports a NaN state as
+converged (it did, at iteration 375 of the S2 cavity); a NaN trip of the guard names its cell. (4) Two tests make the guard trip on the coupled solver
+through the run-control driver; both are non-finite (K1) trips: no finite runaway of the coupled solver was found, so K2-K4 stay untested there. (5) The
+one-corrector lag warning was checked against six set-ups whose stability was re-measured to t_end = 10: it warned exactly on the three unstable ones and
+was silent on the three stable ones.
+
+### Part L
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| L0a key absent vs `none` (`cavity-simple`, 60 iterations) | bit-identical | bit-identical | pass |
+| L0b `baseline_hashes.rs` | all registered hashes match (targeted run and the gate) | unchanged | pass |
+| L0c `upwind`, `pimple`, `coupled`, unknown value | each a located error at `solver.linear_upwind_limiter` | located | pass |
+| L1a FAN-01 laminar + limiter | STABLE: max speed 10..300 51.0 against 3 x 40.03; continuity 2.93e-4 at 10, max 2.74e-4 over 200..300; res_u 9.7e-3 at 300 (28 s) | STABLE | pass |
+| L1b FAN-01 SST + limiter | STABLE: max speed 49.9; continuity 1.56e-4 at 10, max 5.5e-5 over 200..300; res_u 1.8e-3 (33 s) | STABLE | pass |
+| L2a cavity 32 x 32 + limiter | converged in 397 iterations (unlimited 394), no trip | converged, no trip | pass |
+| L2b MRF Taylor-Couette across the interface + limiter | converged in 223 iterations (unlimited 223), max abs(u_theta - analytic) 7.92e-3 V_i | converged; <= 2e-2 V_i | pass |
+| L2c `cases/axial_fan_sector` + `linear_upwind` + limiter | STABLE: max speed 6.37 against 3 x 6.2; continuity 1.3e-4 at 10, 6.4e-9 over 200..300 | STABLE | pass |
+| L2s suite sweep, limiter forced on | 542 steady `linear_upwind` simulations logged; 17 trips, all on the ADR 0077 diverging set-ups (`cavity-simple` and its copies in `baseline_hashes`, `gpu_case` c2/d2, `particles_case` pt14, `particles_two_way` pl8, ADR 0077 A4, this wave's L0a, all `continuity_growth` at 12 or 13; the `eval` suite at 5); zero limiter failures. Suite: 1863 passed, 6 failed, 514 ignored; the 6 failures are tests whose expected values depend on the unlimited scheme (`baseline_hashes` and `particles_case` pt14 stored hashes; `coupled` coupled-vs-SIMPLEC comparison 1.16e-2 above its tolerance with only one side limited; ADR 0077 A2a, A2b, S-d: FAN-01 `linear_upwind` no longer diverges) | zero limiter failures | pass |
+| L3 Kovasznay, limited | L2 4.201e-2, 9.999e-3, 2.217e-3 (orders 2.07, **2.17**); L-inf orders 1.83, 2.08; converged in 89, 197, 499 iterations | fine-pair order >= 1.8 | pass |
+| L3 reported | unlimited L2 4.105e-2, 9.580e-3, 2.204e-3 (orders 2.10, 2.12; L-inf 1.91, 1.98); fine-mesh ratio limited/unlimited 1.006 | - | - |
+
+Decision (registered): every limit met, the key is kept opt-in. The re-implementation reproduces the D3 measurement of ADR 0077 (max speed 51.0 on
+FAN-01 laminar). The steady-guard note for an unlimited `linear_upwind` run now also names the limiter as a remedy.
+
+### Part X (registered scan, amendment 2 controls; thresholds theta_c in degrees)
+
+| Variant | theta_c | 0 / 15 / 30 deg control |
+|---|---|---|
+| V0 base SIMPLEC 0.9/1.0 | 50 (50 and 52.5 overshoot to 6.6 and 14 U, then converge; diverges from 55) | S / S / S |
+| V1 alpha_p 0.7 / 0.5 / 0.3 | 60 / 70 / > 79 | - |
+| V2 alpha_u 0.8 / 0.7 / 0.5 (alpha_p 1.0) | 45 / 45 / 45 | all S |
+| V3 SIMPLE 0.7/0.3; SIMPLEC 0.7/0.3 | 45; 75 | SIMPLE: S / S / S |
+| V4a 2 correctors without compensation | 45 | S / **U** / U (unstable from 15 degrees) |
+| V4b 2 correctors with compensation | 70 | - |
+| V5 base at nu 0.5 (cell Peclet 0.2) | 45 | S / S / S |
+| V6 x-periodic walled channel, nu 0.01; V6' nu 0.5 | 45; 45 | S / S / S both |
+| V7 doubly periodic Kolmogorov box, nu 0.5 (no walls, no open boundary) | 60 (STABLE 45 to 57.5) | S / S / S |
+| V9 mode at 60 deg from the SIMPLEC 0.9/0.3 converged state | increments 4.1e-12 -> 3.1e-15 in 400 iterations, rho 0.982; 90 % interior, 7.5 % wall rows, 3 % inlet/outlet columns; no checkerboard | - |
+| V9b (amendment 2) the same perturbed by 1e-6 | rho 0.889 over iterations 1..60 (1.2e-6 -> 1.2e-9); 47 % interior, 43 % inlet/outlet columns, 10 % wall rows | - |
+
+Readings (registered rules; every variant used by a reading is STABLE at 0 degrees, so none becomes "not testable"):
+* H-X1 (SIMPLEC compact/wide compensation): NOT standing. V4b 70 >= V4a 45 + 10 holds, but SIMPLE 0.7/0.3 (45) is not above SIMPLEC 0.7/0.3 (75).
+* H-X2 (omitted non-orthogonal pressure part, alpha_p 1): NOT standing. V4a 45 < V0 50 + 10 (two correctors make it worse); V1 alpha_p 0.5 (70) alone
+  would have met its clause.
+* H-X3 (inlet/outlet faces): not necessary (V6 diverges without them).
+* H-X4 (walls): not necessary (V7 diverges without walls, from 60 degrees).
+* H-X5 (convection): not necessary (V5 at cell Peclet 0.2 diverges from 45 degrees).
+* H-X6 (start-up only): STANDS (rho 0.982 < 1; V9b 0.889).
+
+Decision (registered): no code fix (neither H-X1 nor H-X2 stands). Documented in `docs/case-schema.md` (SIMPLEC on uniformly sheared meshes).
+Observations, no verdict: lowering `alpha_u` at `alpha_p = 1`, or SIMPLE 0.7/0.3, makes the channel worse, not better; lowering `alpha_p` is the
+effective remedy; two correctors without the ADR 0050 compensation are unstable from 15 degrees (consistent with the ADR 0050 mode). What amplifies the
+start-up transient on these meshes is not identified: the linearised iteration at the converged state contracts, so it is a finite-amplitude or
+transient-growth effect (not tested further). A start-up procedure (an alpha_p ramp) was not tested.
+
+### Part N
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| N1 registered (res_u NaN at the first non-finite iteration) | 375: `max_du` NaN, `continuity` NaN, `res_u` 0.971 (residual of the finite starting state) | all three NaN | set-up defect (amendment 1); ignored `n1_registered_setup_defect` |
+| N1' corrected | 375: `max_du`, `continuity` NaN; 376: `max_du`, `continuity`, `res_u` NaN (c89495f reported 0, 0, 0) | as amended | pass |
+| N2 `SimpleSolver::run(3000, 1e-6)` | `converged = false` after 3000 iterations (c89495f: `true` at 375 with NaN fields) | false | pass |
+| N3 coupled, one NaN cell velocity | `max_du`, `continuity`, `res_u` NaN at iteration 1 | NaN | pass |
+| N4 K1 trip on the NaN state | `non_finite`, quantity `velocity`, cell 0, iteration 375; ADR 0077 A1a-A1c unchanged | located | pass |
+| N5 `baseline_hashes.rs`, suite | hashes match; suite: see the final gate | unchanged | pass |
+
+### Part G
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| G0 search for a finite runaway (SM-G, ten set-ups) | none; the coupled solver stays bounded at alpha_u 1 with central, QUICK, superbee and compressive down to nu 1e-6 | reported | K2-K4 untested on the coupled solver |
+| G1 non-finite initial field, `runctl::drive` | `diverged`, exit 6, iteration 1, `non_finite`, quantity `velocity`, cell 0 with position, `solver = "steady"` | as registered | pass |
+| G2 inviscid coupled cavity (nu = 0, `linear_upwind`) | `diverged`, exit 6, iteration 1, `non_finite` (`velocity`, cell 0) | as registered | pass |
+
+Not diagnosed: why nu = 0 gives NaN at the first coupled iteration (the schema accepts nu = 0; the fluid starts at rest, so the interior momentum rows
+have no convective or viscous diagonal: a plausible, unchecked cause). The guard message of G2 carries the ADR 0077 `linear_upwind` note and "lower the
+relaxation factors (solver.alpha_u, solver.alpha_p)", neither of which fits this case (the coupled solver has no `alpha_p`); not changed.
+
+### Part P
+
+| Set-up | Ground truth (t_end = 10, check off) | Earlier | Warnings (default `warn`) | P-a / P-b |
+|---|---|---|---|---|
+| P1 PIMPLE-2 Euler Co_t 1.0 | STABLE (320 steps, max abs(u) 0.903, max abs(p) 1.36, continuity <= 1.2e-8) | STABLE | none | pass / pass |
+| P2 PIMPLE-2 Euler Co_t 2.3 | STABLE (max abs(u) 0.900, max abs(p) 1.60) | STABLE | none | pass / pass |
+| P3 PIMPLE-4 BDF2 Co_t 6.0 | STABLE (max abs(u) 0.904, max abs(p) 1.16) | STABLE | none | pass / pass |
+| P4 PIMPLE-2 Euler Co_t 3.0 | UNSTABLE (first violation step 12, t = 1.125; PIMPLE guard at step 19) | UNSTABLE | one, step 1, rho 1.226 | pass / pass |
+| P5 PIMPLE-4 Euler Co_t 5.0 | UNSTABLE (first violation step 13; guard at 18) | UNSTABLE | one, step 1, rho 1.238 | pass / pass |
+| P6 PIMPLE-4 BDF2 Co_t 7.5 | UNSTABLE (first violation step 9; guard at 14) | UNSTABLE | one, step 2, rho 1.418 | pass / pass |
+
+C4'' (reported): six one-corrector API runs made an estimate; no warning on the three stable ones (no false positive), one warning on each unstable one,
+before its first violation. This makes C4 non-vacuous for these six set-ups only; the suite still has no other one-corrector validation case.
+
+### Deviations from the registered plan
+
+* Amendment 1: N1 asked for a NaN residual of a finite starting state (defective limit); corrected N1'.
+* Amendment 2: the part X scan had no unsheared controls; controls at 0, 15, 30 degrees and V9b were registered after the scan and before they ran.
+  V9's increments never entered the registered window [1e-9, 1e-2] (they start at round-off), so its rho is over all 400 iterations, as the registered
+  text allowed.
+* Part X V0 classifies 50 degrees UNSTABLE (overshoot, then convergence) where ADR 0077 S3 called it converged: different criteria, both stated.
+* Part G uses the registered fallback (K1 trips); no finite runaway exists in the searched space.
+* Not registered, added: the steady-guard note names the limiter as a remedy for an unlimited `linear_upwind` run (message text only).
+* The L2s sweep and the smoke runs were scratch-tree code (an environment variable and logging in `sim.rs`), not committed. The L2s run took 2 h 29 min
+  of wall time (the whole suite, two test threads); rule (e) of wave 35 (no single run over about 60 minutes) was exceeded by that suite run.
+
+### Unverified references
+
+Barth and Jespersen (1989) for the limiter (the existing rcfd implementation; recalled, UNVERIFIED). The Kovasznay solution (Kovasznay 1948, recalled,
+UNVERIFIED; used only through its closed form). The sqrt(2) linear stability bound of Kolmogorov flow (Meshalkin and Sinai 1961, recalled, UNVERIFIED;
+only used to choose nu = 0.5 for V7). The statement that Barth-Jespersen clips smooth extrema (recalled, UNVERIFIED; not tested).
