@@ -33,3 +33,14 @@ fluid-to-body mass ratio of 0.2). The streamwise velocity in the cell next to an
 1e-6 missed, cause not proven). Baseline limitations met: the cyclic-face lag of PISO needs 10 outer iterations for a mesh that translates along a periodic
 direction and is unstable with time-dependent walls; `Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient`
 sides).
+
+## Layering and compressible ALE (F-230, ADR 0090; library only)
+
+- **Layering.** `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the layer next to the piston deforms.
+  Below `a_min h0` it merges with its neighbour; above `a_max h0` it splits into `h0` plus the rest (`1 + a_min <= a_max` is required). Every change
+  returns a cell source map, and `remap` carries cell totals over exactly.
+- **Compressible ALE.** `CompressibleSolver::step_ale(new_geom, dt)` advances the explicit density-based solver while the points move (same topology).
+  The fluxes are computed in the frame of the moving face, and moving slip walls mirror relative to the wall. A uniform state stays uniform to round-off.
+  `replace_mesh` installs the mesh and state after a layer change.
+- **Stiffness.** `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
+- **Not available:** local remeshing, unstructured layering, case-tree keys, and characteristic boundary conditions on moving faces.

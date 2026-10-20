@@ -1695,9 +1695,9 @@
     "deps": [
       "F-063"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Piston in a closed cylinder reproduces isentropic compression p V^gamma within 2 percent; volume and mass are conserved through layer add and remove",
-    "note": "Priority P3. Size L. Area: mesh,fv. Separate from rigid-body motion so each can be scheduled alone."
+    "note": "Priority P3. Size L. Area: mesh,fv. Separate from rigid-body motion so each can be scheduled alone. WAVE 38C (ADR 0090, partial): layering for a structured planar layer stack with one moving piston plane (rcfd-mesh layering.rs: removal below 0.4 h0, split above 1.6 h0 into h0 plus the rest, cell source map and conservative remap), an opt-in ALE step for the explicit compressible solver (CompressibleSolver::step_ale: Galilean face-frame flux, moving slip-wall mirror, swept-volume mesh speed, GCL-consistent SSP-RK stage volumes) and an InverseVolume(k) displacement-diffusion stiffness. Measured: piston in a closed cylinder (compression ratio 2.5 and back, peak piston Mach 0.05, 24 layer removals and 24 additions) p_bar V^gamma within 1.5e-5 at full compression and 3.4e-5 after re-expansion (limit 2e-2); volume, mass and energy conserved through every layer event to 4.4e-16; mass drift over the run 5.4e-13; uniform flow on a moving mesh preserved to 4.5e-15 (GCL); inverse-volume stiffness cuts the smallest-cell strain to 0.18 of the Laplacian value (continuous 1-D 0.17). Not delivered: local remeshing, layering of unstructured or prism layers, case-tree or CLI wiring, layering in the incompressible PIMPLE path, ALE with characteristic boundary conditions on moving faces, mesh-speed-aware time step."
   },
   {
     "id": "F-231",
