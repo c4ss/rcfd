@@ -84,6 +84,10 @@ struct Arm {
     include_blade: bool,
     /// amendment 2 (X2): false = inertial frame (no `rotating_frame`, velocities absolute)
     rotating: bool,
+    /// amendment 4 (X2f): false = the `rotating_frame` source removed, everything else kept (velocities then read as absolute)
+    frame_source: bool,
+    /// amendment 4: `solver.periodic_gradient = "partner_cell"` (ADR 0077 F-H0)
+    partner_seam: bool,
 }
 
 fn e0() -> Arm {
@@ -101,6 +105,8 @@ fn e0() -> Arm {
         outlet: Outlet::Fixed,
         include_blade: true,
         rotating: true,
+        frame_source: true,
+        partner_seam: false,
     }
 }
 
@@ -318,6 +324,34 @@ fn arms() -> Vec<Arm> {
             convection: "linear_upwind",
             ..e0()
         },
+        // amendment 4: frame source removed (same inflow, walls and mesh as X2a; exact: solid-body swirl carried unchanged)
+        Arm {
+            label: "X2f",
+            include_blade: false,
+            frame_source: false,
+            outlet: Outlet::Radial,
+            ..e0()
+        },
+        // amendment 4: the ADR 0077 seam gradient on X2a and X2d, and (conditional) on N1b
+        Arm {
+            label: "X2h",
+            include_blade: false,
+            partner_seam: true,
+            ..e0()
+        },
+        Arm {
+            label: "X2i",
+            include_blade: false,
+            convection: "tvd_minmod",
+            partner_seam: true,
+            ..e0()
+        },
+        Arm {
+            label: "N1c",
+            convection: "tvd_minmod",
+            partner_seam: true,
+            ..e0()
+        },
     ]
 }
 
@@ -381,7 +415,7 @@ fn case_toml(a: &Arm) -> String {
     } else {
         ""
     };
-    let frame = if a.rotating {
+    let frame = if a.rotating && a.frame_source {
         format!("[sources.frame]\ntype = \"rotating_frame\"\nrotation_axis = [0.0, 0.0, 1.0]\nangular_velocity = {w:?}\ncentrifugal = true\n")
     } else {
         String::new()
@@ -390,7 +424,8 @@ fn case_toml(a: &Arm) -> String {
         Outlet::Fixed => "velocity = \"zero_gradient\"\npressure = \"fixed\"\n".to_string(),
         Outlet::NoReverse => "bc_kind = \"pressure_outlet\"\nbc_pressure = 0.0\nprevent_reverse_flow = true\n".to_string(),
         Outlet::Radial => format!(
-            "bc_kind = \"radial_equilibrium_outlet\"\nradial_reference = \"area_average\"\nbc_pressure = 0.0\nradial_frame_rate = {w:?}\n"
+            "bc_kind = \"radial_equilibrium_outlet\"\nradial_reference = \"area_average\"\nbc_pressure = 0.0\nradial_frame_rate = {:?}\n",
+            if a.rotating && a.frame_source {{ w }} else {{ 0.0 }}
         ),
     };
     format!(
@@ -416,7 +451,7 @@ omega_value = {om:?}
 algorithm = "simplec"
 convection = "{}"
 max_iterations = 8000
-tolerance_u = 1e-5
+{}tolerance_u = 1e-5
 tolerance_p = 1e-5
 [reports.m_in]
 type = "mass_flow"
@@ -442,7 +477,12 @@ patch = "shroud"
 direction = [0.0, 0.0, 1.0]
 "#,
         mesh_toml(a),
-        a.convection
+        a.convection,
+        if a.partner_seam {
+            "periodic_gradient = \"partner_cell\"\n"
+        } else {
+            ""
+        }
     )
 }
 
@@ -682,7 +722,7 @@ fn run(a: &Arm, max_iter: usize) -> Outcome {
     let w = omega();
     let u_in = Q_DESIGN / annulus_area();
     let mon = |k: &str| sim.monitors.last(k).unwrap_or(f64::NAN);
-    let om_f = if a.rotating { w } else { 0.0 };
+    let om_f = if a.rotating && a.frame_source { w } else { 0.0 };
     let m_blade = if a.include_blade { mon("m_blade") } else { 0.0 };
     let torque = -N_BLADES * (m_blade + mon("m_hub"));
     let torque_shroud = -N_BLADES * mon("m_shroud");
@@ -1169,6 +1209,26 @@ fn smoke_x2e_stability() {
         "W35C X2e smoke: continuity at 10 {c10:.3e}, max over 200-300 {cmax:.3e}, stable {}",
         finite && sim.failure().is_none() && cmax <= c10
     );
+}
+#[test]
+#[ignore = "ADR 0078 amendment 4 X2f (about 1-16 min)"]
+fn w35c_x2f_empty_passage_frame_source_removed() {
+    registered("X2f");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 4 X2h (about 1 min)"]
+fn w35c_x2h_empty_passage_partner_seam() {
+    registered("X2h");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 4 X2i (about 16 min)"]
+fn w35c_x2i_empty_passage_minmod_partner_seam() {
+    registered("X2i");
+}
+#[test]
+#[ignore = "ADR 0078 amendment 4 N1c, conditional (about 16 min)"]
+fn w35c_n1c_minmod_partner_seam() {
+    registered("N1c");
 }
 #[test]
 #[ignore = "ADR 0078 amendment 3 KN (about 35 min)"]
