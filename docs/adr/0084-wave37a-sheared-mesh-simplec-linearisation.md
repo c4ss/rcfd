@@ -332,3 +332,11 @@ flow at Re 1.4e5; none was diagnosed.
 
 As registered (Ferziger and Peric on the non-orthogonal pressure-correction terms; the Kolmogorov stability bound via ADR 0081). The sin(theta) bound
 of amendment 1 is a first-principles derivation (symbols of the orthogonal and cross-derivative parts), not taken from a reference.
+
+### Final gate
+
+On a fresh `git archive` of 5ae198a (main with this wave's commits on top of a98e531, which contains the other wave-37 agents' commits up to it):
+`cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`:
+**1879 passed, 0 failed, 525 ignored** (wave 36: 1873 / 0 / 519; this wave adds 5 running tests, A1-A3 and the two A6 tests, and 6 ignored ones: the
+harness smokes, the registered Jacobians, A4, A5 and the FAN-01 report). `baseline_hashes.rs` passed unchanged. No LNK1201. This paragraph is a
+docs-only commit, not re-gated.
