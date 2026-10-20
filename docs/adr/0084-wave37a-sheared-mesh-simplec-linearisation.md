@@ -167,3 +167,30 @@ key if kept), `docs/milestone-fan.md` (robustness row). Final gate on a fresh `g
 That neglecting the non-orthogonal terms of the pressure-correction equation leaves the converged solution unchanged but needs smaller pressure
 under-relaxation as the non-orthogonality grows (Ferziger and Peric, Computational Methods for Fluid Dynamics, the chapter on complex geometries;
 recalled, UNVERIFIED). The Kolmogorov-flow linear stability bound used by ADR 0081 for nu 0.5 (recalled there, UNVERIFIED).
+
+## Amendment 1 (written after J1, J10 and the J1 checks ran, before J2-J9 were analysed and before any attribution switch ran; no limit changed)
+
+What I knew when writing this: J1 (K40 x*): rho 0.9505 (50 deg), 0.9472 (55), 0.9919 (57.5), **1.0612 (60)**, 1.2375 (65), 1.4425 (70); from 57.5 deg
+on the leading eigenvalue is real and NEGATIVE (-0.9919, -1.0612, -1.2375, -1.4425: a period-two oscillation), its eigenvector is 99 % pressure, x-Fourier
+index m = 1 (the next, m = 2), no checkerboard; at 50-55 the leading mode is a slow positive one (m = 1, mixed u/v). Two neutral modes (both mean
+velocities) at 1 +- 3e-9 at every angle. M2 held everywhere. M3: measured growth 1.0586 / 1.2287 / 1.4343 against rho 1.0612 / 1.2375 / 1.4425 (60 / 65
+/ 70; within 0.25 / 0.7 / 0.6 %). J10: rho 0.9684 (0 deg), 0.9612 (30 deg). J10 ran in the same invocation as J1 (the selection `W37A_ONLY=J1` matched
+`J10` as a prefix); it was a registered run and was formed once.
+
+**M1, an ambiguity in my registration.** The registration says "relative Frobenius difference <= 1e-4" without saying in which variables. In the raw
+variables J(h = 1e-6) and J(1e-7) at K40 60 differ by **4.26e-4 (above the limit)**; in the scaled variables in which every eigenvalue of this ADR is
+computed (D^-1 J D) by **1.65e-5 (below)**; rho agrees to 1e-6 (1.061189 both). The difference is concentrated (65 % of it) in the columns of the
+horizontal faces, whose flux is zero at x* (-1.9e-12): there the upwind face value switches sides, F is not differentiable, and a central difference
+returns a step-dependent mix of the two one-sided derivatives. Reading (stated now, applied to every M1): M1 is evaluated in the scaled variables (the
+space of the registered eigenvalues); the raw figure is reported beside it as a miss of the literal text. M3 (the real nonlinear iteration) is the
+independent support of every rho > 1 reading.
+
+**An additional fix candidate, P(implicit)** (added to the attribution switches and to the candidates of the choice rule, same rule, same acceptance):
+the correction equation with its non-orthogonal part, (L_o + N) q = L_o q0 (q0 = the correction of the existing solve), solved by restarted GMRES (40
+vectors, relative 1e-8, at most 400 iterations) in the form (I - L_o^-1 N) q = q0, each L_o^-1 a pressure solve to 1e-8 relative; then one L_o solve
+with the final N q so that the corrected flux is exactly divergence-free. It keeps the fixed point (N q = 0 at q = 0). Why it is added: the sub-iteration
+P(m) is the Richardson iteration of the same equation; on the continuous level its contraction factor for a smooth mode is the non-orthogonal fraction of
+the operator, which for a uniform shear is at most sin(theta) (0.87 at 60 deg, 0.94 at 70; derived from the symbols of the orthogonal over-relaxed part
+and of the cross-derivative term, first principles), so P(m <= 4) can leave most of the non-orthogonal part unconverged. Choice rule, extended: of the
+qualifying candidates the one with the smallest rho at K40 70 x* alpha_p 0.7; ties to the cheaper (R, then P(m) with the smallest m, then P(implicit)).
+Cost per outer iteration (pressure solves) is reported for every candidate.
