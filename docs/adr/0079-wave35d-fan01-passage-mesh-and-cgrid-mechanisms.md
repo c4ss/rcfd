@@ -339,7 +339,8 @@ MISSED on FAN-01.**
 ## Addendum: measured values, misses and deviations
 
 Release builds; code state of the measurements: the scratch tree of this wave, committed as 5348934 (record commit, with the four Part 2 options)
-and 7b12fef (the rejected options removed; B1, P1-P8, P9, R-G (b) and the control-range test re-run there with identical numbers). Limits are the
+and 7b12fef (the rejected options removed; B1, P1-P8, R-G (b) and the control-range test re-run on that code with identical numbers; P9 runs in the
+final gate, P10 (b) by hand on the gated tree, see "Measurement (b)" below). Limits are the
 registered ones, unchanged. No external reference value enters any gate. No fan performance claim.
 
 ### Part 1: FAN-01-C (registered counts of ADR 0075 amendment 1, y+ = 30 rule: h1 = 5.654e-4 m)
@@ -358,8 +359,9 @@ registered ones, unchanged. No external reference value enters any gate. No fan 
 | P10 laminar smoke, 300 iterations | ADR 0075 amendment 3 window | - | met (7.47e-4 at 10, 2.97e-4 over 200-300) | **MISS** (7.92e-4 at 10, 6.62e-3 over 200-300; finite, no failure, 63 m/s) |
 | DH hub | decides a hub change | no hub change (FD: first layer 37.98 deg, k-faces 46.41) | | FAN-01-C first layer 38.07 deg |
 
-Verdict: FAN-01 is meshed by the existing periodic-sector machinery for the first time (C-grid, through the case), closed, periodic to 1.8e-13,
-with exact stacks and an exact blade surface, and accepted by `FvGeometry::new`, `check_mesh` and the rules; it misses the quality target and the
+Verdict: this is the first C-grid mesh of FAN-01 and the first FAN-01 mesh built with the registered y+ = 30 rule and a valid tip-gap block (the
+ADR 0075 attempt 2 H-slit mesh, 13 332 cells, 79.1 deg, needed a first cell of 2e-4 m instead); it is built through the case, closed, periodic to
+1.8e-13, with exact stacks and an exact blade surface, and accepted by `FvGeometry::new`, `check_mesh` and the rules; it misses the quality target and the
 registered laminar smoke criterion. The (a2) mesh met P10 and missed P9; no mesh of this wave meets both. The FAN-01 C-grid is not robust (Part 3).
 
 ### Part 2: the B' mechanisms (Amendment 1 and 2)
@@ -410,8 +412,24 @@ default FAN-01 refusal message is unchanged. `baseline_hashes.rs` untouched (fin
   (a2) mesh and was not judged defective, so its miss on (a3) stands.
 * G = F3 on blade B is not E (Amendment 2 had kept that possibility open for the blended seam that was dropped); the registered "G itself" run shows it.
 * `p_checks_smoke_on_fd` prints the label "FAN-01-C" for the FD counts (cosmetic).
+* The Laplace-start fallback was added after (a3) ran. It only appends steps after the registered chain, and FAN-01-C builds at step 0, so the
+  mesh of (a3) is unchanged (P1-P8 re-run on the final code, identical); P9 and P10 of measurement (b) were run on the final code (below).
+* Preamble rule (b) (an opt-in fix that fails its acceptance is removed unless the ADR registered keeping it): no keep-or-remove rule was registered
+  for the Part 1 construction. P2 was registered as a target, but P10 ("must stay bounded") is missed on (a3). `camber_seam` is KEPT as an opt-in case
+  value (it is the only construction that meshes FAN-01 and changes no default); this is a departure from that rule and a decision for the lead.
 
 ### Unverified references
 
 Thompson, Warsi & Mastin (1985) for the elliptic system (recalled, as ADR 0072). The FAN-01 sections are the wave 34D CAD derivation (ADR 0075); the
 design-point speed, flow and the assumed density 1.2 kg/m^3 of the smoke set-up are the ADR 0075 values. Nothing else.
+
+### Measurement (b) and the final gate
+
+Measurement (b), construction G on the final code (gated tree 49e8c7e): P1-P8 identical to (a3) (re-run at 7b12fef); P9 met in the final gate
+(`p9_fan01_mesh_is_accepted_by_the_solver_and_the_rules` ok); P10 run by hand on the gated tree: continuity 7.915e-4 at iteration 10, 6.619e-3 at most
+over 200-300, largest relative speed 62.95 m/s, `|m_in + m_out|` 7.2e-5 of `m_in`, no failure: **MISS**, identical to (a3).
+
+Final gate on a fresh `git archive` of 49e8c7e (which also contains the other wave-35 agents' commits up to it): `cargo fmt --all -- --check` clean,
+`cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1832 passed, 0 failed, 479
+ignored** (wave 34: 1822 / 0 / 448). This text was added afterwards in a docs-only commit that was not re-gated. The B1 hashes are specific to the
+x86_64-pc-windows-msvc target on which they were recorded.
