@@ -2,7 +2,8 @@
 //! rotational pair). SWIRL: the exact unforced decay `u = U(r) e^{-nu k^2 t} e_theta` (U by RK4 shooting, an independent solution). SECT-M:
 //! manufactured non-axisymmetric flow `psi = g(t) F(r) cos(6 theta)` with no-slip walls. The candidate fixes measured on them (ADR 0076 K) were not
 //! accepted and were removed; this file keeps the set-ups and the default-code smoke (fine-pair orders 1.135 / 2.052 SWIRL, 1.041 / 0.538 SECT-M for
-//! PISO / PIMPLE-4). `cargo test --release -p rcfd-fv --test w35a_seam -- --ignored --nocapture`.
+//! PISO / PIMPLE-4). ADR 0080 (wave 36A) adds the seam pair-conservation check of `PimpleSettings::coupled_body_pair_mean` (P1, runs by default)
+//! and its registered SECT-M rows. `cargo test --release -p rcfd-fv --test w35a_seam -- --ignored --nocapture`.
 
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::convection::ConvScheme;
@@ -303,9 +304,15 @@ fn make(prob: Prob, n: usize, outer: usize) -> PimpleSolver {
     PimpleSolver::new(geom, u, p, s)
 }
 
-fn run(prob: Prob, n: usize, dt: f64, outer: usize) -> PimpleSolver {
+/// `bp` switches on `coupled_body_pair_mean` (ADR 0080).
+fn run(prob: Prob, n: usize, dt: f64, outer: usize, bp: bool) -> PimpleSolver {
+    run_steps(prob, n, dt, outer, bp, (1.0 / dt).round() as usize)
+}
+
+fn run_steps(prob: Prob, n: usize, dt: f64, outer: usize, bp: bool, steps: usize) -> PimpleSolver {
     let mut s = make(prob, n, outer);
-    for _ in 0..(1.0 / dt).round() as usize {
+    s.settings.coupled_body_pair_mean = bp;
+    for _ in 0..steps {
         if prob == Prob::SectM {
             let bf = mms_force(&s.geom, s.time + dt);
             let mut hook = move |_u: &VectorField, _phi: &[f64]| rcfd_fv::pimple::OuterUpdate {
@@ -332,16 +339,37 @@ fn exact_err(prob: Prob, s: &PimpleSolver) -> f64 {
     rel_l2(&s.u.values, &ex)
 }
 
+/// Relative L2 of the cell pressure against the exact one, volume means removed from both.
+fn pressure_err(prob: Prob, s: &PimpleSolver) -> f64 {
+    let vol = s.geom.mesh.cell_volumes();
+    let tv: f64 = vol.iter().sum();
+    let ex: Vec<f64> = s
+        .geom
+        .mesh
+        .cell_centres()
+        .iter()
+        .map(|&c| p_ex(prob, c, s.time))
+        .collect();
+    let mp = s.p.values.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
+    let me = ex.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
+    let (mut num, mut den) = (0.0, 0.0);
+    for ((a, b), v) in s.p.values.iter().zip(&ex).zip(vol) {
+        num += v * ((a - mp) - (b - me)).powi(2);
+        den += v * (b - me).powi(2);
+    }
+    (num / den.max(1e-300)).sqrt()
+}
+
 const DT_REF: f64 = 1.0 / 1280.0;
 
 /// Fine-pair order (0.025, 0.0125) on 16 x 16 against the same-scheme dt = 1/1280 reference; prints the row.
-fn fine_order(id: &str, prob: Prob, outer: usize) -> f64 {
-    let refr = run(prob, 16, DT_REF, outer);
-    let (a, b) = (run(prob, 16, 0.025, outer), run(prob, 16, 0.0125, outer));
+fn fine_order(id: &str, prob: Prob, outer: usize, bp: bool) -> f64 {
+    let refr = run(prob, 16, DT_REF, outer, bp);
+    let (a, b) = (run(prob, 16, 0.025, outer, bp), run(prob, 16, 0.0125, outer, bp));
     let e = [rel_l2(&a.u.values, &refr.u.values), rel_l2(&b.u.values, &refr.u.values)];
     let o = (e[0] / e[1]).log2();
     println!(
-        "RESULT {id} {prob:?} n_outer {outer}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}; reference vs exact {:.4e}; seam norms {:?}) order {o:.3} {}",
+        "RESULT {id} {prob:?} n_outer {outer} pair-mean {bp}: e {:.4e} {:.4e} (vs exact {:.4e} {:.4e}; reference vs exact {:.4e}; seam norms {:?}) order {o:.3} {}",
         e[0],
         e[1],
         exact_err(prob, &a),
@@ -351,6 +379,144 @@ fn fine_order(id: &str, prob: Prob, outer: usize) -> f64 {
         if (1.9..=2.3).contains(&o) { "MET" } else { "MISS" }
     );
     o
+}
+
+/// Pair conservation on the rotational seam: (max over pairs of |phi_f + phi_g|, max over seam faces of |phi_f|), and the same for the
+/// body-force face values `bf` when given.
+fn pair_sums(geom: &FvGeometry, phi: &[f64]) -> (f64, f64) {
+    let (mut sum, mut mag) = (0.0f64, 0.0f64);
+    for (pi, patch) in geom.mesh.patches().iter().enumerate() {
+        let Some(map) = &geom.periodic_partner[pi] else {
+            continue;
+        };
+        for (local, f) in patch.faces().enumerate() {
+            sum = sum.max((phi[f] + phi[map[local]]).abs());
+            mag = mag.max(phi[f].abs());
+        }
+    }
+    (sum, mag)
+}
+
+/// Seam pair sums of the flux (and of the body-force face values) on SECT-M after 4 steps, for the 12 configurations of the ADR 0080
+/// smoke; returns the largest relative flux pair sum.
+fn pair_sum_rows(id: &str, bp: bool) -> f64 {
+    let mut worst: f64 = 0.0;
+    for n in [16usize, 32, 64] {
+        for outer in [1usize, 4] {
+            for dt in [0.05, 0.0125] {
+                let s = run_steps(Prob::SectM, n, dt, outer, bp, 4);
+                let (ps, pm) = pair_sums(&s.geom, &s.phi);
+                let bf = mms_force(&s.geom, s.time);
+                let (bs, bm) = pair_sums(&s.geom, &bf.face);
+                println!(
+                    "{id} n {n} outer {outer} dt {dt} pair-mean {bp}: flux pair sum {ps:.3e} / max {pm:.3e} = {:.3e}; bf pair sum {bs:.3e} / max {bm:.3e} = {:.3e}; exact err {:.4e}",
+                    ps / pm,
+                    bs / bm,
+                    exact_err(Prob::SectM, &s)
+                );
+                worst = worst.max(ps / pm);
+            }
+        }
+    }
+    worst
+}
+
+/// ADR 0080 smoke (default code, before registration): seam pair sums of the flux and of the body-force face values on SECT-M.
+#[test]
+#[ignore = "ADR 0080 smoke (prints)"]
+fn smoke_w36a_pair_sums() {
+    pair_sum_rows("SMOKE80", false);
+}
+
+/// ADR 0080 P1: with `coupled_body_pair_mean` the two faces of every seam pair carry opposite fluxes (relative pair sum <= 1e-8).
+#[test]
+fn w36a_p1_seam_pair_conservation() {
+    let worst = pair_sum_rows("P1", true);
+    assert!(worst <= 1e-8, "P1: worst relative pair sum {worst:.3e} > 1e-8");
+}
+
+/// ADR 0080 N2b(i): the key is bit-inert without a body force (SWIRL, rotational seams), PISO and PIMPLE-4.
+#[test]
+fn w36a_n2b_pair_mean_inert_on_swirl() {
+    for outer in [1usize, 4] {
+        let bits = |s: &PimpleSolver| -> Vec<u64> {
+            let u = s.u.values.iter().flatten();
+            u.chain(&s.p.values).chain(&s.phi).map(|x| x.to_bits()).collect()
+        };
+        let (a, b) = (
+            run_steps(Prob::Swirl, 16, 0.05, outer, false, 8),
+            run_steps(Prob::Swirl, 16, 0.05, outer, true, 8),
+        );
+        assert!(bits(&a) == bits(&b), "SWIRL n_outer {outer}: key changed the result");
+    }
+}
+
+/// ADR 0080 B-R2 / B-R2b: SECT-M fine-pair orders with the key (band [1.9, 2.3]); default rows printed.
+fn b_order(id: &str, outer: usize) {
+    let o = fine_order(id, Prob::SectM, outer, true);
+    fine_order(&format!("{id}-default"), Prob::SectM, outer, false);
+    assert!((1.9..=2.3).contains(&o), "{id}: order {o:.3} outside [1.9, 2.3]");
+}
+
+#[test]
+#[ignore = "ADR 0080 B-R2 known miss: 1.038 (seam convection lag, outside F-BP)"]
+fn w36a_b_r2_sectm_piso_order_known_miss() {
+    b_order("B-R2", 1);
+}
+
+#[test]
+#[ignore = "ADR 0080 B-R2b known miss: 0.531 (face-consistency floor of the default kernel, outside F-BP)"]
+fn w36a_b_r2b_sectm_pimple4_order_known_miss() {
+    b_order("B-R2b", 4);
+}
+
+/// ADR 0080 B-R3: SECT-M PISO joint refinement against the exact solution, (16, 0.05), (32, 0.025), (64, 0.0125), both orders >= 1.8.
+#[test]
+#[ignore = "ADR 0080 B-R3 known miss: 1.599 / 0.838"]
+fn w36a_b_r3_sectm_joint_refinement_known_miss() {
+    let mut bad = None;
+    for bp in [true, false] {
+        let e: Vec<f64> = [(16usize, 0.05), (32, 0.025), (64, 0.0125)]
+            .iter()
+            .map(|&(n, dt)| exact_err(Prob::SectM, &run(Prob::SectM, n, dt, 1, bp)))
+            .collect();
+        let o = [(e[0] / e[1]).log2(), (e[1] / e[2]).log2()];
+        println!(
+            "RESULT B-R3 SectM pair-mean {bp}: errors {:.4e} {:.4e} {:.4e} orders {:.3} {:.3} (limit >= 1.8)",
+            e[0], e[1], e[2], o[0], o[1]
+        );
+        if bp && !(o[0] >= 1.8 && o[1] >= 1.8) {
+            bad = Some(o);
+        }
+    }
+    assert!(bad.is_none(), "B-R3: orders {bad:?} (limit 1.8)");
+}
+
+/// ADR 0080 B-R4: no-harm on SECT-M 16 x 16, PISO and PIMPLE-4: exact velocity and pressure error with the key <= 1.05 x the default.
+#[test]
+#[ignore = "ADR 0080 B-R4"]
+fn w36a_b_r4_sectm_no_harm() {
+    let mut bad = Vec::new();
+    for outer in [1usize, 4] {
+        for dt in [0.05, 0.025, 0.0125] {
+            let (a, b) = (
+                run(Prob::SectM, 16, dt, outer, true),
+                run(Prob::SectM, 16, dt, outer, false),
+            );
+            let (ua, ub) = (exact_err(Prob::SectM, &a), exact_err(Prob::SectM, &b));
+            let (pa, pb) = (pressure_err(Prob::SectM, &a), pressure_err(Prob::SectM, &b));
+            let line = format!(
+                "B-R4 n_outer {outer} dt={dt}: velocity error {ua:.4e} vs default {ub:.4e} (ratio {:.4}); pressure error {pa:.4e} vs {pb:.4e} (ratio {:.4})",
+                ua / ub,
+                pa / pb
+            );
+            println!("RESULT {line}");
+            if !(ua <= 1.05 * ub && pa <= 1.05 * pb) {
+                bad.push(line);
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
 }
 
 /// Smoke of the set-ups before registration (ADR 0076 rule d): eigenvalue accuracy, periodicity of the manufactured fields, default orders.
@@ -383,7 +549,7 @@ fn smoke_sector_setups() {
     );
     for prob in [Prob::Swirl, Prob::SectM] {
         for outer in [1usize, 4] {
-            fine_order("SMOKE", prob, outer);
+            fine_order("SMOKE", prob, outer, false);
         }
     }
 }

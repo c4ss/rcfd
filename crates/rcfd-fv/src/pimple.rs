@@ -26,8 +26,8 @@ use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::lumped::FaceJump;
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, face_interpolate, pressure_bc, solve_pressure,
-    PressureControls,
+    boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence, face_interpolate, pressure_bc,
+    solve_pressure, PressureControls,
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
@@ -82,6 +82,10 @@ pub struct PimpleSettings {
     pub divergence_courant_limit: f64,
     /// Run-time check of the pressure-lag amplification of the step (ADR 0073 B4); `None` (default) = no check.
     pub pressure_lag_check: Option<LagCheck>,
+    /// Use the distance-weighted pair mean of `rAU` (the coefficient of the pressure term) for the body-force term of the face flux on
+    /// periodic faces, as the steady `SimpleSolver::coupled_body_pair_mean` (ADR 0080). The default (owner value) leaves
+    /// `(rAU_o - rAU_q) f.S` per seam pair, a seam mass source wherever `rAU` differs across the pair. Default `false` (bit-identical).
+    pub coupled_body_pair_mean: bool,
 }
 
 /// What the pressure-lag check does when the estimated amplification reaches one (ADR 0073 B4).
@@ -239,6 +243,7 @@ impl PimpleSettings {
             fractional: None,
             divergence_courant_limit: DEFAULT_DIVERGENCE_COURANT_LIMIT,
             pressure_lag_check: None,
+            coupled_body_pair_mean: false,
         }
     }
 
@@ -721,6 +726,7 @@ impl PimpleSolver {
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             let gamma_p = face_interpolate(&g, &r_au);
+            let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
 
             // ---- pressure correctors ---------------------------------------
             for corr in 0..s.n_correctors {
@@ -747,9 +753,10 @@ impl PimpleSolver {
                 }
                 if let Some(bf) = body {
                     // balanced-force face value of the body acceleration, like the pressure gradient
+                    let gbf = gamma_bf.as_deref().unwrap_or(&gamma_p);
                     for f in 0..mesh.n_faces() {
                         if !g.empty[f] {
-                            phi_hby_a[f] += gamma_p[f] * bf.face[f];
+                            phi_hby_a[f] += gbf[f] * bf.face[f];
                         }
                     }
                 }
