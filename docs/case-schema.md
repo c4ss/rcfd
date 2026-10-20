@@ -570,16 +570,23 @@ non-orthogonal secondary-gradient part of the pressure flux. Without it the corr
 keeps every existing result bit for bit; the switch is inert without correctors and changes nothing beyond round-off on an
 orthogonal mesh. Not available for the variable-density SIMPLEC (it has no non-orthogonal correctors).
 
-### SIMPLEC on uniformly sheared meshes (ADR 0081 part X)
+### SIMPLEC on uniformly sheared meshes (ADR 0081 part X, ADR 0084) and `solver.velocity_correction`
 
 On a channel whose cells are uniformly sheared by an angle theta (every face non-orthogonal by theta), SIMPLEC with `alpha_u = 0.9`, `alpha_p = 1.0` and no
-non-orthogonal correctors overshoots from 50 degrees and blows up from the impulsive start from 55 degrees, with `upwind` and `linear_upwind`, at cell
-Peclet numbers of 10 and 0.2; a doubly periodic box without walls or open boundaries becomes unstable by the same criterion from 60 degrees (some of these
-runs overshoot and then converge). It is a start-up divergence: the converged state at 60 degrees is stable under the same iteration (a 1e-6 perturbation
-decays by a factor of 0.89 per iteration). Measured thresholds on that channel:
-`alpha_p` 0.7: 60 degrees, 0.5: 70, 0.3: stable up to 79; SIMPLEC 0.7/0.3: 75; two correctors with `solver.simplec_non_orthogonal_compensation = true`: 70
-(two correctors without it: unstable from 15 degrees); a lower `alpha_u` at `alpha_p = 1.0` and SIMPLE 0.7/0.3 are unstable from 45 degrees. On strongly
-non-orthogonal meshes lower `solver.alpha_p` first. The mechanism is not identified beyond this (no boundary, wall or convection term is needed).
+non-orthogonal correctors overshoots from 50 degrees and blows up from the impulsive start from 55 degrees; a doubly periodic box without walls or open
+boundaries is unstable from 60 degrees. Measured thresholds on that channel: `alpha_p` 0.7: 60 degrees, 0.5: 70, 0.3: stable up to 79; SIMPLEC 0.7/0.3: 75;
+two correctors with `solver.simplec_non_orthogonal_compensation = true`: 70 (two correctors without it: unstable from 15 degrees).
+
+Mechanism (ADR 0084, by linearising one outer iteration): the iteration has a period-two pressure mode whose eigenvalue passes -1 between 57.5 and 60
+degrees at `alpha_p = 1.0` (between 65 and 70 at 0.7). It lives in the Stokes part of the iteration (no convection, wall or open boundary needed): the cell
+velocity is corrected with the full Green-Gauss gradient of the pressure change while the face flux is corrected with its orthogonal part only. On the
+doubly periodic box it is a linear instability of the converged state; on the channel the converged state is stable and the instability is that of the
+start-up states.
+
+`solver.velocity_correction` (`gradient` default, `face_flux`; steady `simple` / `simplec` only, a located error otherwise): `face_flux` corrects the cell
+velocity with the reconstruction of the face flux correction, `(1/V) sum_f dphi_f (x_f - x_c)`, so the cell carries only the pressure change the faces carry.
+The converged solution is the same (measured to 2e-9 in velocity on the ADR 0084 cases); with it SIMPLEC at `alpha_p` 0.7, 0.5 and 1.0 is stable up to 79
+degrees on the sheared channel and box (ADR 0084 A1-A4). Not tested with turbulence models, moving meshes or face jumps.
 
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 

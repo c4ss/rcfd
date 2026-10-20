@@ -262,3 +262,71 @@ flux carries rAtU where internal faces carry rAU) and is reported for a later wa
 
 Note for the reading of A2: the channel start-up instability (H4) also has velocity modes far from x* (J9 x5-x20, positive eigenvalues up to 20.8,
 after the flow has overshot); R was attributed at x0 only (registered), so A2 is not predicted by the diagnosis.
+
+## Addendum: measured values, misses and deviations
+
+Release builds, scratch tree on 6f97dcb (`<scratch dir>`); each registered run once. Limits are the registered ones, unchanged.
+
+Outcome in one paragraph. The SIMPLEC divergence on uniformly sheared meshes is a period-two pressure mode of the outer iteration. The cell velocity
+is corrected with `rAtU` times the full Green-Gauss gradient of the pressure change; the face flux is corrected with the over-relaxed orthogonal part
+only. On strongly non-orthogonal faces the two disagree enough for the pressure update to overshoot (eigenvalue -1.06 at 60 degrees, -1.44 at 70,
+alpha_p 1.0). The mode needs no convection, wall or open boundary. On the doubly periodic box (V7) it is a linear instability of the converged state,
+so the ADR 0081 "start-up only" reading does not hold there. On channel B the converged state is stable (0.91) and the linearisation along the start-up
+is not (1.58 at the initial state, 2.4 to 21 once the flow has overshot), so there it is a start-up instability as ADR 0081 found. Every
+fixed-point-keeping change that makes the two corrections agree removes the mode. The cheapest one reconstructs the cell correction from the face-flux
+correction; it is the opt-in key `solver.velocity_correction = "face_flux"`. It met every acceptance limit (V7, the channel and a held-out box stable to
+79 degrees at alpha_p 0.7; no threshold fell at 1.0 or 0.5; the converged solution unchanged to 2e-9) and is kept. On FAN-01 it removes the growing
+oscillation (P10 met, L / c10 0.33 against 8.36), but the run does not converge by the registered reading (the residuals stall near 1e-3).
+
+### Diagnosis
+
+Amendment 2 holds the numbers (J1-J10, M1-M4, H1-H5, attribution). Readings: H1, H2, H3, H4 (both clauses) and H5 stand; none is falsified. M1 is met
+in the scaled variables only (raw K40 60: 4.26e-4 against 1e-4; amendment 1). At the stable K40 angles the transient growth is at most 65 (k = 1) and
+decays from k = 10 on.
+
+### Acceptance of the fix R (`solver.velocity_correction = "face_flux"`)
+
+| id | measured | limit | result |
+|---|---|---|---|
+| A1 V7 K40, alpha_p 0.7 | STABLE at every angle 45-79 (max speed 1.03-1.04; continuity over 900-1000 below 2e-13) | theta_c >= 75 | met (> 79) |
+| A2 channel B, alpha_p 0.7 | STABLE 45-79, res 1e-6 in 141-420 iterations (max speed 1.17-1.40) | theta_c >= 75 | met (> 79) |
+| A3 hold-out V7 30 x 8 on 3 x 1, alpha_p 0.7 | STABLE 45-79 | theta_c >= 75 | met (> 79) |
+| A4 K40 1.0 / 0.5; B 1.0 / 0.5 | on: > 79 / > 79 / > 79 / > 79; off: 60 / **75** (measured here) / 50 / 70 | on >= off | met |
+| A5 K40 45 / 60 / 70 | max_du <= 1e-13 at 387 / 322 / 407; max abs du 1.8e-9 / 1.2e-10 / 6.0e-12; max abs dp 1.7e-12 / 3.8e-12 / 2.0e-11 (max abs p 1.4e-14, limit 1e-8); RMS error of u_x against sin(k y) 2.372937e-2 on and off, relative difference 5.2e-9 / 3.2e-10 / 4.2e-13 | 1e-8; 1e-8 max(1, p); 1e-6 | met |
+| A5 B 45 / 60 / 70 | max_du <= 1e-13 at 328 / 327 / 473; max abs du 1.1e-12 / 1.6e-12 / 1.9e-12; max abs dp 2.3e-12 / 1.2e-12 / 4.0e-12 | 1e-8 | met |
+| A6 key absent vs `gradient` (`cavity-simple`, 60 iterations) | bit-identical u, p, phi | bit-identical | met |
+| A6 `face_flux` with `pimple`, with `coupled`; an unknown value | located errors at `solver.velocity_correction` | located | met |
+| A6 `baseline_hashes.rs`, full suite | see the final gate | unchanged | see below |
+
+Decision (registered): A1-A5 met, A6 met by the tests above and the gate: the key is kept opt-in and documented (`docs/case-schema.md`). The fix-off
+threshold of K40 at alpha_p 0.5 (75 degrees) was measured for the first time here.
+
+### FAN-01 (reported, not a gate)
+
+The ADR 0083 A0 set-up with `solver.velocity_correction = "face_flux"`, one 1500-iteration run (`w37a_fan01_with_face_flux_velocity_correction` in
+`crates/rcfd-api/tests/fan01_p10_w36d.rs`; about 8 minutes):
+
+* c10 6.92e-4, L (200-300) 2.29e-4, **L / c10 0.330: P10 met** (without the key 8.36, ADR 0083).
+* `res_u` 8.3e-2 (iteration 10), 2.8e-3 (100), 1.2e-3 (300), 6.7e-3 (1000), 3.5e-3 (1500); `res_p` 4.5e-2, 7.4e-4, 6.8e-4, 1.0e-3, 7.9e-4.
+* The argmax cells are not poor (f_poor 0). Largest relative speed 42.6 m/s (without the key 63-68).
+* **"Converges": not met.** `res_u` and `res_p` are never both below 1e-4 within 1500 iterations; from iteration 100 on they stall between 1e-3 and 7e-3.
+
+So the A0 oscillation (`res_u` 0.35-0.43) was this mode or a relative of it. What remains on FAN-01 is a slower non-convergence of a different size.
+Candidates are the 83-degree faces, the rotating-frame terms and the laminar flow at Re 1.4e5; none was diagnosed.
+
+### Deviations from the registered plan (candid list)
+
+* M1's limit did not say in which variables. It is met in the scaled ones and missed in the raw ones (amendment 1, written after J1 and before the rest).
+* P(implicit) was added as a candidate in amendment 1, after J1 had shown the period-two pressure mode; it did not win the choice.
+* J10 ran in the J1 invocation (a prefix match of the selection); it was registered and formed once.
+* The channel B attribution was formed at x0 only, the first start-up state with rho > 1. It was not formed at x*, whose rho is below 1; the
+  registration asked for attribution only where the base rho > 1.
+* The diagnostic switches P(m), P(implicit) and S were in the solver for the attribution runs (record commit 65e5683) and were removed afterwards.
+* The FAN-01 report used one 1500-iteration run for both the 300- and the 1500-iteration readings (the first 300 iterations are the same run).
+* Finding S is reported, not fixed: the SIMPLEC compensation is missing on periodic seam faces, so a converged SIMPLEC seam flux carries rAtU where
+  internal faces carry rAU. Fixing it changes converged results on periodic meshes and needs its own registration.
+
+### Unverified references
+
+As registered (Ferziger and Peric on the non-orthogonal pressure-correction terms; the Kolmogorov stability bound via ADR 0081). The sin(theta) bound
+of amendment 1 is a first-principles derivation (symbols of the orthogonal and cross-derivative parts), not taken from a reference.

@@ -1318,6 +1318,8 @@ impl Simulation {
             if get_s(case, "solver.linear_upwind_limiter") == "barth_jespersen" {
                 solver.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::BarthJespersen);
             }
+            // ADR 0084 (opt-in): cell velocity correction reconstructed from the face flux correction
+            solver.reconstructed_correction = get_s(case, "solver.velocity_correction") == "face_flux";
             let bf = get_v(case, "physics.body_force", [0.0; 3]);
             if vec3::norm(bf) > 0.0 {
                 let b = BodyForce::uniform(&geom, bf);
@@ -1429,6 +1431,12 @@ impl Simulation {
             return Err(diag(
                 "solver.linear_upwind_limiter",
                 "the limiter applies only to solver.convection = \"linear_upwind\" with solver.algorithm = \"simple\" or \"simplec\" (incompressible, constant density)",
+            ));
+        }
+        if get_s(case, "solver.velocity_correction") != "gradient" && !matches!(engine, Engine::Steady(_)) {
+            return Err(diag(
+                "solver.velocity_correction",
+                "face_flux applies only to the steady incompressible solver (solver.algorithm = \"simple\" or \"simplec\", constant density)",
             ));
         }
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);

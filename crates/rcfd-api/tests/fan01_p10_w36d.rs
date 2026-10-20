@@ -150,7 +150,15 @@ struct P10Run {
 
 /// One run of ADR 0083 part A: the P10 criterion plus the argmax localisation.
 fn run(tag: &str, c: Counts, construction: &str, nu: f64, iters: usize) -> P10Run {
-    let case = Case::parse_toml(&smoke_case(c, construction, nu)).unwrap_or_else(|e| panic!("{e:?}"));
+    run_with(tag, c, construction, nu, iters, "")
+}
+
+/// [`run`] with extra lines at the top of the `[solver]` table (ADR 0084: `velocity_correction = "face_flux"`).
+fn run_with(tag: &str, c: Counts, construction: &str, nu: f64, iters: usize, solver_lines: &str) -> P10Run {
+    let text = smoke_case(c, construction, nu).replacen("[solver]
+", &format!("[solver]
+{solver_lines}"), 1);
+    let case = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}"));
     let cg = build_cgrid_mesh_with(&fan_of(&case), &cgrid_spec_of(&case), &options_of(construction)).unwrap();
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
     let mesh = sim.geom.mesh.clone();
@@ -194,8 +202,13 @@ fn run(tag: &str, c: Counts, construction: &str, nu: f64, iters: usize) -> P10Ru
     let (mut c10, mut late, mut c10_np, mut late_np, mut finite) = (f64::NAN, 0.0f64, f64::NAN, 0.0f64, true);
     let (mut in_poor, mut cnt) = (0usize, 0usize);
     let mut distinct: Vec<usize> = Vec::new();
+    let mut below = None;
     for it in 1..=iters {
         let st = sim.step();
+        if below.is_none() && st.res_u < 1e-4 && st.res_p < 1e-4 {
+            below = Some(it);
+            println!("A {tag}: res_u and res_p below 1e-4 first at iteration {it}");
+        }
         if !(st.continuity.is_finite() && st.res_u.is_finite() && st.res_p.is_finite()) {
             finite = false;
             println!("A {tag} non-finite at iteration {it}");
@@ -331,6 +344,16 @@ fn part_a_p10_cause() {
         }
         run(tag, c, "camber_seam", nu, it);
     }
+}
+
+/// ADR 0084 (reported, not a gate): the ADR 0083 A0 set-up (FAN-01-C, `camber_seam`) with `solver.velocity_correction = "face_flux"`, 300 and 1500
+/// iterations. Registered reading: P10 met iff L / c10 <= 1 over 300; "converges" iff res_u and res_p fall below 1e-4 within 1500 iterations.
+#[test]
+#[ignore = "ADR 0084 FAN-01 report, run by hand: cargo test --release -p rcfd-api --test fan01_p10_w36d w37a -- --ignored --nocapture"]
+fn w37a_fan01_with_face_flux_velocity_correction() {
+    // one 1500-iteration run: c10 and L (200-300) are read from its first 300 iterations, which a 300-iteration run repeats exactly
+    run_with("W37A x1 face_flux", X1, "camber_seam", 1.5e-5, 1500, "velocity_correction = \"face_flux\"
+");
 }
 
 /// ADR 0083 C2 (P9 of ADR 0079 with construction H): `FvGeometry::new` accepts the FAN-01-C mesh, `check_mesh` is ok and the rules raise no
