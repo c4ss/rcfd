@@ -106,3 +106,43 @@ Diagnostics reported, no limit: max over the run of `|p_bar V^gamma / (p0 V0^gam
 Decision rules: A1, A2, B1-B5, C1, C2 all met -> F-230 slice accepted, but the roadmap status is set to `partial` regardless, because local remeshing
 (in the feature title) and the case-tree wiring are not delivered (registered now). Any A or B miss -> `partial` with the miss reported, or `todo` if
 no ALE step works at all. S1-S3 are a separate registered check; their outcome does not change the F-230 status.
+
+## Addendum: measured (release build, scratch tree on 2f84f63 plus this wave's files)
+
+Files as planned in D1: `rcfd-mesh/src/layering.rs` (`LayerStack`, `LayerChange`, `LayerEvent`, `remap`, one unit test), `pub mod layering` in
+`rcfd-mesh/src/lib.rs`, `CompressibleSolver::step_ale` and `replace_mesh` in `rcfd-fv/src/compressible.rs` (the fixed-mesh residual is split
+into `flux_sum` plus the unchanged division; with no mesh speed every flux goes through the same `solver.flux` call as before),
+`SmoothingMethod::InverseVolume(k)` in `rcfd-fv/src/smoothing.rs`, tests in `rcfd-fv/tests/layering_w38c.rs`. The `rcfd-fv` compressible unit
+tests, `mesh_smoothing` and `rcfd-api` `baseline_hashes` pass unchanged.
+
+| Id | Measured | Limit | Verdict |
+|---|---|---|---|
+| A1 | `p_bar V^gamma / (p0 V0^gamma) - 1 = 1.53e-5` at `t = T` (`V/V0 = 0.400000`, 16 layers, `p_bar = 3.606805` vs isentrope `3.606750`) | `<= 2e-2` | met |
+| A2 | `3.42e-5` at `t = 2T` (40 layers again) | `<= 2e-2` | met |
+| B1 | `4.4e-16` (max over all events of V, mass, energy) | `<= 1e-13` | met |
+| B2 | `5.4e-13` | `<= 1e-12` | met |
+| B3 | `8.9e-16` | `<= 1e-13` | met |
+| B4 | 24 removals, 24 additions | each `>= 5` | met |
+| B5 | 0 | 0 | met |
+| C1 | `4.5e-15` after 200 steps | `<= 1e-12` | met |
+| C2 | `1.8e-16` | `<= 1e-13` | met |
+| S1 | `6.8e-17` | `<= 1e-12` | met |
+| S2 | smallest-cell strain Laplacian `0.1000`, `InverseVolume(1)` `0.01794`, ratio `0.179` (continuous 1-D value `0.173`); largest-cell strain `0.1000` vs `0.169` | ratio `< 1` | met |
+| S3 | `3.4e-14` | `<= 1e-9` | met |
+
+Diagnostics: the largest `|p_bar V^gamma / (p0 V0^gamma) - 1|` over all 9 192 steps is `3.43e-5`; at `t = T` the cell values of `p / rho^gamma`
+lie in `[0.999986, 1.000137]` (initially 1); the whole piston run takes 4.8 s.
+
+Reading: the 2 percent acceptance is met with a margin of about 600. At peak piston Mach 0.05 the case is nearly quasi-static, so this run shows
+that the ALE fluxes and the layer remap are consistent. It is not a sensitive test of numerical entropy production. B2 is the closest margin
+(about 2x): the mass drift is round-off that builds up over 9 192 steps of stage divisions by the volume.
+
+Deviation (disclosed): the first S2 run printed the continuous 1-D reference as `0.3465`. The test divided the cell volumes by the full
+cross-section `0.01` instead of the cell cross-section `0.005` (two cells across y). That reference value is a diagnostic with no limit. It was
+corrected to `0.1732` after the run; the registered direction check and its measured ratio are unchanged.
+
+Not delivered: local remeshing; layering of unstructured, prism or non-planar layers; more than one moving layered boundary; layering or
+compressible ALE through the `rcfd-api` case tree (`dynamic_mesh` keys) or the CLI; layering in the incompressible PIMPLE path; ALE with
+characteristic boundary conditions on moving faces (rejected with an error); mesh-speed-aware `max_dt`. The time step uses the absolute velocity
+(shortcut: fine at piston Mach 0.05, needs `|u.n - w_n| + c` for fast walls). Roadmap: F-230 is set to `partial` under the registered decision
+rule, because remeshing and case-tree wiring are missing even though every registered check is met.
