@@ -382,6 +382,8 @@ struct Entry {
     alg: Option<(Compiled, Vec<Sym>)>,
     /// Chemistry source and implicit sink per cell (steady runs with `chemistry`, ADR 0027); `None` without chemistry.
     chem: Option<(Vec<f64>, Vec<f64>)>,
+    /// User-function source per cell (`source_udf`, F-239), replaced every steady iteration.
+    udf: Option<Vec<f64>>,
 }
 
 /// Configured scalars and species.
@@ -553,6 +555,7 @@ fn make(
         base_source: src,
         alg,
         chem: None,
+        udf: None,
     }
 }
 
@@ -573,11 +576,16 @@ fn refresh(e: &mut Entry, ctx: &StepCtx) {
     let n = geom.n_cells();
     let cc = geom.mesh.cell_centres();
     let zone: Option<ZoneTerms> = ctx.zone.and_then(|z| z.terms(Some(&e.name), ctx.time));
-    if e.src_expr.is_some() || zone.is_some() || e.chem.is_some() {
+    if e.src_expr.is_some() || zone.is_some() || e.chem.is_some() || e.udf.is_some() {
         let mut s = vec![e.base_source; n];
         if let Some(c) = &e.src_expr {
             for i in 0..n {
                 s[i] += c.eval(&[cc[i][0], cc[i][1], cc[i][2], ctx.time]);
+            }
+        }
+        if let Some(u) = &e.udf {
+            for i in 0..n {
+                s[i] += u[i];
             }
         }
         let had_zone = zone.is_some();
@@ -763,6 +771,13 @@ impl ScalarState {
                 e.transport.history.old.clone_from(&values);
                 e.transport.field.values = values;
             }
+        }
+    }
+
+    /// User-function source of a passive scalar per cell (F-239), replaced every steady iteration.
+    pub fn set_udf_source(&mut self, name: &str, source: Vec<f64>) {
+        if let Some(e) = self.passive.iter_mut().find(|e| e.name == name) {
+            e.udf = Some(source);
         }
     }
 
