@@ -626,7 +626,11 @@ fn create_study(svc: &Service, p: &Value) -> Rpc {
     let (base_path, base_name, base) = if let Some(b) = opt_str(p, "base")? {
         let bp = svc.sandbox_path(b)?;
         let case = load_case(svc, &bp)?;
-        (bp.clone(), bp.to_string_lossy().to_string(), case)
+        // stored absolute: a relative name would later be read against the study directory (ADR 0089 F1)
+        let abs = std::env::current_dir()
+            .map(|d| d.join(&bp))
+            .unwrap_or_else(|_| bp.clone());
+        (bp, abs.to_string_lossy().to_string(), case)
     } else if p.get("session").is_some() {
         let case = svc.session_case(p)?;
         let bp = dir.join("base.toml");
