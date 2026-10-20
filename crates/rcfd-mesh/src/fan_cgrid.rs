@@ -438,8 +438,6 @@ pub struct CGridOptions {
     /// wall normal and the 3-D surface normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer; the wake
     /// lines take the trailing-edge factor faded to 1 over the first quarter of the wake lines.
     pub lean_stack: bool,
-    /// ADR 0083 H5: with `checked_range`, the narrower control range of [`control_range_problems_h`].
-    pub range_h: bool,
 }
 
 impl CGridOptions {
@@ -459,12 +457,11 @@ impl CGridOptions {
     }
 
     /// Construction H of ADR 0083 (case value `c_grid_construction = "camber_seam_h"`): construction G with the changes accepted by the
-    /// ADR 0083 decision rule and the narrower checked control range of [`control_range_problems_h`].
+    /// ADR 0083 decision rule; the checked control range is that of G (the narrower range H5 was rejected).
     pub fn camber_seam_h_construction() -> Self {
         CGridOptions {
             post_untangle: true,
             lean_stack: true,
-            range_h: true,
             ..CGridOptions::camber_seam_construction()
         }
     }
@@ -1593,60 +1590,37 @@ fn folded_quad(
 /// of ADR 0065): `0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`. Inside
 /// it every scanned blade-B-like combination built; it does not make strongly staggered blades (FAN-01 tip, 70 deg) robust.
 pub fn control_range_problems(spec: &CGridSpec) -> Vec<FanError> {
-    range_problems(spec, "camber_seam", "0.375", 0.375, None, "1.0", 1.0)
-}
-
-/// The control range of construction H (ADR 0083 H5, chosen from the FAN-01 failures of the ADR 0079 R-G scan; a restriction, not a fix):
-/// `0.15 <= n_nose / n_chord <= 0.3`, `max(8, n_bl + 6) <= n_side <= min(2 n_chord, 16)`, `0.15 <= front_gap <= 0.6`.
-pub fn control_range_problems_h(spec: &CGridSpec) -> Vec<FanError> {
-    range_problems(spec, "camber_seam_h", "0.3", 0.3, Some(16), "0.6", 0.6)
-}
-
-/// Located range errors; `nose_txt` / `fg_txt` print the bounds as the messages of ADR 0079 did.
-fn range_problems(
-    spec: &CGridSpec,
-    name: &str,
-    nose_txt: &str,
-    nose_max: f64,
-    side_cap: Option<usize>,
-    fg_txt: &str,
-    fg_max: f64,
-) -> Vec<FanError> {
     let mut e = Vec::new();
     let nc = spec.n_chord as f64;
     let ratio = spec.n_nose as f64 / nc.max(1.0);
-    if !(0.15..=nose_max).contains(&ratio) {
+    if !(0.15..=0.375).contains(&ratio) {
         e.push(FanError::new(
             "n_nose",
             format!(
-                "outside the documented range of c_grid_construction {name}: 0.15 n_chord <= n_nose <= {nose_txt} n_chord ({:.1} to {:.1} for n_chord {}), has {}",
+                "outside the documented range of c_grid_construction camber_seam: 0.15 n_chord <= n_nose <= 0.375 n_chord ({:.1} to {:.1} for n_chord {}), has {}",
                 0.15 * nc,
-                nose_max * nc,
+                0.375 * nc,
                 spec.n_chord,
                 spec.n_nose
             ),
         ));
     }
     let lo = 8.max(spec.n_bl + 6);
-    let hi = side_cap.map_or(2 * spec.n_chord, |c| c.min(2 * spec.n_chord));
-    if !(spec.n_side >= lo && spec.n_side <= hi) {
-        let bound = match side_cap {
-            None => format!("2 n_chord = {hi}"),
-            Some(c) => format!("min(2 n_chord, {c}) = {hi}"),
-        };
+    if !(spec.n_side >= lo && spec.n_side <= 2 * spec.n_chord) {
         e.push(FanError::new(
             "n_side",
             format!(
-                "outside the documented range of c_grid_construction {name}: max(8, n_bl + 6) = {lo} <= n_side <= {bound}, has {}",
+                "outside the documented range of c_grid_construction camber_seam: max(8, n_bl + 6) = {lo} <= n_side <= 2 n_chord = {}, has {}",
+                2 * spec.n_chord,
                 spec.n_side
             ),
         ));
     }
-    if !(spec.front_gap >= 0.15 && spec.front_gap <= fg_max) {
+    if !(spec.front_gap >= 0.15 && spec.front_gap <= 1.0) {
         e.push(FanError::new(
             "front_gap",
             format!(
-                "outside the documented range of c_grid_construction {name}: 0.15 <= front_gap <= {fg_txt} chords, has {}",
+                "outside the documented range of c_grid_construction camber_seam: 0.15 <= front_gap <= 1.0 chords, has {}",
                 spec.front_gap
             ),
         ));
@@ -1714,11 +1688,7 @@ pub fn build_cgrid_mesh_with(
         bad("first_cell", "the first cell height must be positive".into());
     }
     if opts.checked_range {
-        errs.extend(if opts.range_h {
-            control_range_problems_h(spec)
-        } else {
-            control_range_problems(spec)
-        });
+        errs.extend(control_range_problems(spec));
     }
     if !errs.is_empty() {
         return Err(errs);

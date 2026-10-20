@@ -233,7 +233,8 @@ B' 80.93 / 8.894 / 8805.0, so C5b is not blind; prediction: A' aspect MISSED, B'
 
 ## Addendum: measured values, misses and deviations
 
-Release builds, scratch tree of this wave on c89495f; each registered run once. Limits are the registered ones, unchanged. No external reference
+Release builds, scratch tree of this wave on c89495f; each registered run once. Code state of the measurements: record commit bd215ce (H with the
+H5 range); H5 was then rejected by its registered acceptance and removed in the next commit (below), which moves no node. Limits are the registered ones, unchanged. No external reference
 value enters any gate. No fan performance claim. Solver physics files were not touched.
 
 ### Part A: the cause of the P10 miss
@@ -253,7 +254,7 @@ tip layers), H3 `lean_stack` ACCEPTED (B' blade-stack skewness 2.057 -> 1.098, n
 build with it) and removed; table in Amendment 2. Development diagnostics (Amendment 1): HF and HW falsified (no wake-stack switching); the FAN-01-C
 non-orthogonality maximum is the lower seam corner of the tip layers, where the corner line arrives 7.6 deg from the front edge.
 
-### Part C: acceptance on H = G + H1 + H3 + H5 range (case value `camber_seam_h`)
+### Part C: acceptance on H = G + H1 + H3 + H5 range (case value `camber_seam_h`), as registered
 
 | Check | Limit | Measured | Status |
 |---|---|---|---|
@@ -275,6 +276,19 @@ non-orthogonality maximum is the lower seam corner of the tip layers, where the 
 | C5b A' with the H mesh options | 70 / 2.0 / 300 | 66.18 / 0.888 / **394.4** | aspect **MISS** (`c5b_..._known_miss`) |
 | C5b B' with the H mesh options | 70 / 2.0 / 3000 | **80.93** / **8.894** / **8805.0** | **MISS** |
 
+### Verdicts after Part C
+
+* **H5 (the narrower range) REJECTED and removed.** It was registered to be "decided by Part C"; C4 (a) missed for FAN-01 (10 of 11), so by preamble
+  rule (b) (no keep clause was registered for H5) it is removed: `range_h` and `control_range_problems_h` are gone, `camber_seam_h` checks the range of
+  `camber_seam`, and the R-H tests are removed with it (their numbers above stay recorded; C4 (b) 58 of 58 was met on H5). The meshes of C1-C3 and C5b
+  are unchanged by the removal (a range check moves no node; FAN-01-C, A' and B' are inside the G range), so nothing is re-measured.
+* **H is kept** (G + H1 + H3) because the Part B rule that accepted H1 and H3 was registered with the keep clause "Construction H = G + the accepted
+  changes ... gets the case value `camber_seam_h`"; it is kept although C1 P2, C3 (P10) and, with H5, C4 (a) on FAN-01 missed. What H improves is
+  limited: of the two FAN-01 combinations H1 gained in the registered run (n_chord 36 / n_nose 9 / n_side 24 at step 7, 89.07 deg / 13.19 / 2661; and
+  front_gap 0.18 at step 7, 83.36 deg / 1.50 / 224), the first is above the 85 deg error threshold of `check_mesh`, so it is a mesh the solver path
+  refuses. H3 is not inert on FAN-01-C: its hash changes (`0x21104bbbdd9b9129` against G `0x00b3e9673d470e52`), the maxima agree to four digits, and the
+  P10 ratio moves from 8.36 (G, A0) to 9.37 (H, C3).
+
 ### Part D: default behaviour
 
 B1 met: the ADR 0079 hashes of S and A' with `pursuit` and E, and the G hashes of S (`0x59b26da9febc9b2e`) and FAN-01-C (`0x00b3e9673d470e52`), are
@@ -284,8 +298,9 @@ message is unchanged. `baseline_hashes.rs` untouched (final gate below). The new
 ### What this wave delivered, in short
 
 The P10 miss is diagnosed as a mesh-specific, non-converging oscillation located away from the worst faces and not caused by the Reynolds number
-(MIXED by the rule); H adds two FAN-01 control combinations and halves the y+ = 1 blade-stack skewness without moving any other maximum; the
-FAN-01 quality target, the smoke criterion and full R-H robustness on FAN-01 are still missed; the narrower H range is a restriction, stated as such.
+(MIXED by the rule; the property of the x1 mesh that causes it is not identified); H adds two FAN-01 control combinations (one of them unusable,
+89 deg) and halves the y+ = 1 blade-stack skewness without moving any other maximum by more than 1 %; the FAN-01 quality target, the smoke criterion
+and robustness on FAN-01 are still missed; the narrower range H5 was rejected and removed.
 
 ### Deviations from the registered plan (candid list)
 
@@ -294,7 +309,8 @@ FAN-01 quality target, the smoke criterion and full R-H robustness on FAN-01 are
 * The H3 and H4 forms were developed on B' with construction E after the DL / DN diagnostics, so their registered B' measurements were not blind
   (A', FAN-01-C and R-G were).
 * The H5 range was chosen after seeing the R-G failures (registered before R-H ran); it made the registered C5 set-up defective (A' and B' outside
-  the range), corrected by C5b, whose result was known from Part B (Amendment 3).
+  the range), corrected by C5b, whose result was known from Part B (Amendment 3). H5 was then rejected and removed (above); the first draft of this
+  addendum had kept it as "a restriction", which the rules do not allow without a registered keep clause.
 * ADR 0079 reported blade B R-G "35 of 38" in range; on this code G gives 36 of 39 (the G range admits 39 blade B combinations); FAN-01 agrees (20 of 39).
 * The H4 measurement stopped at the first failure (S did not build), so its A', B' and FAN-01-C numbers were not recorded.
 * The development hook that lists all folded quads and the C5 / C6 / corner development variants were not committed.

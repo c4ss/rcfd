@@ -1405,7 +1405,7 @@ fn q1g_quality_gates_b_prime_known_miss() {
     q1_g(spec_b(), 3000.0, "B'");
 }
 
-// ---------------------------------------------------------------- wave 36D (ADR 0083): the H changes, the H range and the R-H scan
+// ---------------------------------------------------------------- wave 36D (ADR 0083): the H changes (the H5 range and its R-H scan were rejected and removed)
 
 /// 3-D unit surface normal at wall line `i` of layer `k` and the in-plane normal as a 3-D vector (ADR 0079 C5 / ADR 0083 H3).
 fn normals_3d(fan: &AxialFan, m: &CGridMesh, i: usize, k: usize) -> (Vec3, Vec3) {
@@ -1537,43 +1537,6 @@ fn part_b_step() {
     println!("PB {tag}: R-G in-range builds blade B {bb} of {nb}, FAN-01 {bf} of {nf}; (iii) {ok}");
 }
 
-/// The registered R-H list (ADR 0083 part C) on blade B (S counts otherwise) and FAN-01 (FAN-01-C counts otherwise).
-fn r_h_list() -> Vec<ScanCase> {
-    let mut list: Vec<ScanCase> = Vec::new();
-    for (fname, fan, base) in [("B", blade_b(), spec_s()), ("FAN-01", fan01(), spec_fan01())] {
-        for nc in [15, 22, 30] {
-            for nn in [3, 5, 8] {
-                for ns in [10, 13, 18, 26] {
-                    if nn + 2 > nc {
-                        continue;
-                    }
-                    list.push((
-                        format!("{fname} n_chord {nc} n_nose {nn} n_side {ns}"),
-                        fan.clone(),
-                        CGridSpec {
-                            n_chord: nc,
-                            n_nose: nn,
-                            n_side: ns,
-                            ..base.clone()
-                        },
-                    ));
-                }
-            }
-        }
-        for fg in [0.2, 0.28, 0.45, 0.75] {
-            list.push((
-                format!("{fname} front_gap {fg}"),
-                fan.clone(),
-                CGridSpec {
-                    front_gap: fg,
-                    ..base.clone()
-                },
-            ));
-        }
-    }
-    list
-}
-
 /// B1 of ADR 0083: construction G (case value `camber_seam`) is bit-identical to the HEAD of the ADR 0083 registration (c89495f).
 #[test]
 fn b1_construction_g_is_bit_identical() {
@@ -1611,98 +1574,11 @@ fn c1_p2_fan01_h_quality_gates_known_miss() {
     assert!(q.max_aspect_ratio <= 300.0, "aspect {}", q.max_aspect_ratio);
 }
 
-/// ADR 0083 H5: the range of H is checked only with `range_h`; one located error per offending control.
-#[test]
-fn control_range_h_is_checked_only_by_construction_h() {
-    let h = CGridOptions::camber_seam_h_construction();
-    for (spec, path) in [
-        (CGridSpec { n_nose: 5, ..spec_s() }, "n_nose"),
-        (CGridSpec { n_side: 17, ..spec_s() }, "n_side"),
-        (
-            CGridSpec {
-                front_gap: 0.7,
-                ..spec_s()
-            },
-            "front_gap",
-        ),
-    ] {
-        let e = build_cgrid_mesh_with(&blade_b(), &spec, &h).unwrap_err();
-        assert_eq!(e.len(), 1, "{e:?}");
-        assert_eq!(e[0].path, path);
-        assert!(e[0].message.contains("camber_seam_h"), "{}", e[0].message);
-        assert!(control_range_problems(&spec).is_empty(), "inside the G range: {spec:?}");
-    }
-    for spec in [spec_s(), spec_fan01()] {
-        assert!(control_range_problems_h(&spec).is_empty(), "{spec:?}");
-    }
-}
-
-/// ADR 0083 C4 (b): every out-of-range combination of the R-H list is refused with a located error naming a control.
-#[test]
-fn r_h_out_of_range_combinations_are_located_errors() {
-    let out: Vec<ScanCase> = r_h_list()
-        .into_iter()
-        .filter(|(_, _, sp)| !control_range_problems_h(sp).is_empty())
-        .collect();
-    let res = run_scan_g("R-H out", &out, &CGridOptions::camber_seam_h_construction());
-    let bad: Vec<String> = res
-        .iter()
-        .filter(|r| {
-            let ok = r.5.starts_with("ERROR n_nose")
-                || r.5.starts_with("ERROR n_side")
-                || r.5.starts_with("ERROR front_gap");
-            !(ok && r.5.contains("documented range"))
-        })
-        .map(|r| format!("{}: {}", r.0, r.5))
-        .collect();
-    println!(
-        "R-H out of range: {} combinations, {} located errors",
-        out.len(),
-        out.len() - bad.len()
-    );
-    assert!(bad.is_empty(), "{bad:#?}");
-}
-
-/// ADR 0083 C4 (a): every in-range combination of the R-H list builds and validates with construction H, per fan; R-G with H reported.
-/// KNOWN MISS: blade B 11 of 11, FAN-01 10 of 11 (front_gap 0.45 is a 3-D tangle at layer 11).
-#[test]
-#[ignore = "known miss: R-H in-range builds with H, FAN-01 10 of 11 (front_gap 0.45 tangled; blade B 11 of 11), ADR 0083 addendum; about 10 min"]
-fn r_h_in_range_combinations_build_known_miss() {
-    let h = CGridOptions::camber_seam_h_construction();
-    let inr: Vec<ScanCase> = r_h_list()
-        .into_iter()
-        .filter(|(_, _, sp)| control_range_problems_h(sp).is_empty())
-        .collect();
-    let res = run_scan_g("R-H in", &inr, &h);
-    let mut fails = Vec::new();
-    for fname in ["B", "FAN-01"] {
-        let mine: Vec<_> = res.iter().filter(|r| r.0.starts_with(&format!("{fname} "))).collect();
-        let built: Vec<_> = mine.iter().filter(|r| r.1).collect();
-        let mut no: Vec<f64> = built.iter().map(|r| r.4).collect();
-        no.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let mut steps = std::collections::BTreeMap::new();
-        for r in &built {
-            *steps.entry(r.2).or_insert(0) += 1;
-        }
-        println!(
-            "R-H {fname}: in range {}: built {}, built AND meeting 70 / 2.0 / 300 {}, below 85 deg {}, median non-orthogonality {:.2}, steps {steps:?}",
-            mine.len(),
-            built.len(),
-            mine.iter().filter(|r| r.3).count(),
-            built.iter().filter(|r| r.4 < 85.0).count(),
-            no.get(no.len() / 2).copied().unwrap_or(f64::NAN)
-        );
-        fails.extend(mine.iter().filter(|r| !r.1).map(|r| format!("{}: {}", r.0, r.5)));
-    }
-    let (bb, nb, bf, nf) = r_g_builds("R-G with H (reported)", &CGridOptions { range_h: false, ..h });
-    println!("R-G with H (G range, reported): blade B {bb} of {nb}, FAN-01 {bf} of {nf}");
-    assert!(fails.is_empty(), "{} in-range failures: {fails:#?}", fails.len());
-}
-
 /// ADR 0083 C5: the ADR 0072 Q1 gates of A' (70 / 2.0 / 300) and B' (70 / 2.0 / 3000) with construction H. DEFECTIVE SET-UP (ADR 0083
-/// amendment 3): A' and B' lie outside the H range and are refused; the corrected test is `c5b_q1_gates_with_h_meshes_known_miss`.
+/// amendment 3): A' and B' lay outside the H5 range and were refused; the corrected test is `c5b_q1_gates_with_h_meshes_known_miss` (H5 was
+/// rejected afterwards, ADR 0083 addendum, so this set-up now builds the same meshes as c5b).
 #[test]
-#[ignore = "defective set-up: A' and B' lie outside the H range (ADR 0083 amendment 3); corrected in c5b"]
+#[ignore = "defective set-up under the rejected H5 range (ADR 0083 amendment 3); corrected in c5b"]
 fn c5_q1_gates_with_h() {
     q1_h(&CGridOptions::camber_seam_h_construction());
 }
