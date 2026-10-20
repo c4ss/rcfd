@@ -174,3 +174,15 @@ mean-of-six rule. Constants in the code, no environment input. Without the field
 
 Rule (d) smoke (next, before the registered runs, recorded in Amendment 2): FAN-01-C with I built once (construction only), the R-I list built once
 with H, the P10 case with `camber_seam_i` for 3 iterations.
+
+## Amendment 2 (rule (d) smoke, written before the registered part C runs; no limit changed)
+
+Code: construction I as frozen in Amendment 1 (`inclined_front`, constants `FRONT_INCLINE_DEG` = 40, `FRONT_BLEND` = 0.1, the two-sided corner
+grading, the first front-edge node at each corner held in the smoothing), case value `camber_seam_i`; the development hook is not in this code.
+Part D on this code: the ADR 0079 B1 hashes (S and A' with `pursuit` and E), the G hashes and the H hashes (S `0x6f6342d53409da61`, FAN-01-C
+`0x21104bbbdd9b9129`) are reproduced (`b1_existing_constructions_are_bit_identical`, `b1_construction_g_is_bit_identical`,
+`b1_construction_h_is_bit_identical`).
+
+Smoke (`smoke_w37d_set_ups`, `smoke_w37d_p10_case`; build status and counts only, no quality printed): FAN-01-C with I builds (11 536 cells, step 0);
+the R-I list has 42 combinations, all inside the G range, 37 of which build with H (construction only); the P10 case with `camber_seam_i` parses,
+builds and runs 3 iterations with finite residuals. No set-up is defective.
