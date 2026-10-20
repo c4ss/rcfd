@@ -274,8 +274,7 @@ inside the chord and the wake downstream (for high-solidity hubs whose wake leav
 to the gap, a radial filter of the far grid between layers and two Laplace-start fallback steps; it refuses controls outside its documented
 range with a located error (`0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`).
 `camber_seam_h` is `camber_seam` with a second local untangling after the in-plane smoothing and blade wall stacks whose wall-normal (not in-plane)
-thickness is `h1 g^q` on a leaning blade; its documented range is narrower (`0.15 <= n_nose / n_chord <= 0.3`,
-`max(8, n_bl + 6) <= n_side <= min(2 n_chord, 16)`, `0.15 <= front_gap <= 0.6`), a restriction to where FAN-01 builds, not a fix.
+thickness is `h1 g^q` on a leaning blade; it checks the same range as `camber_seam`.
 Measured quality and robustness are in docs/meshing.md.
 
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
