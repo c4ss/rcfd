@@ -487,3 +487,9 @@ Note: X2a, X2b, X2f, X2h converged by residual tolerance in under 1000 iteration
 comparisons rest on tolerance convergence (1e-5), not on the 1000-iteration rule. The incidence shift quoted in the attribution section compares
 bladed E0 with the unbladed X2b 40 mm upstream, where the blade's potential field still acts; the E0 against N1b comparison (both bladed, same
 grading, pre-swirl 0.67 against 0.03 N m) gives +9.8 / +10.8 deg at the hub bin and -1.9 / -1.1 deg at the tip bin, i.e. 0.8-1.0 deg.
+
+### Final gate
+
+Fresh `git archive` of bf98a7d: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace
+--release --no-fail-fast` 1853 passed, 0 failed, 494 ignored. The HEAD at hand-back (1326b97) differs from bf98a7d only in a wave-35B ADR text; this
+paragraph is a docs-only commit and was not re-gated.
