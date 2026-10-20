@@ -239,6 +239,16 @@ pub struct IterationInfo {
     pub res_p: f64,
 }
 
+/// `a.max(b)` that keeps NaN (`f64::max` drops it, so a NaN state read as 0 in the reported maxima; ADR 0081 part N).
+/// Equal to `a.max(b)` for non-NaN arguments.
+pub fn nan_max(a: f64, b: f64) -> f64 {
+    if a.is_nan() || b.is_nan() {
+        f64::NAN
+    } else {
+        a.max(b)
+    }
+}
+
 /// Normalised residual `sum|b - A x| / normFactor` with the usual
 /// `normFactor = sum(|A x - A xbar| + |b - A xbar|)` (xbar = mean of x).
 pub fn normalised_residual(m: &FvMatrix, x: &[f64]) -> f64 {
@@ -505,6 +515,10 @@ pub struct SimpleSolver {
     /// Momentum least-squares gradient on coupled (periodic) faces from the partner cell mapped into the owner's frame instead of the
     /// interpolated face value (ADR 0077 F-H0; exact for linear fields where the cells are not aligned across the seam). Default `false`.
     pub periodic_gradient_partner: bool,
+    /// Slope limiter of the `linear_upwind` face extrapolation of the momentum equation (ADR 0081 part L): the cell gradient of each
+    /// velocity component is multiplied by its limiter factor in the convection term only (the Laplacian's non-orthogonal correction
+    /// keeps the unlimited gradient). `None` (default) leaves the solver unchanged; ignored for other schemes.
+    pub linear_upwind_limiter: Option<crate::gradient::Limiter>,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -593,6 +607,7 @@ impl SimpleSolver {
             face_jump: None,
             impermeable: None,
             periodic_gradient_partner: false,
+            linear_upwind_limiter: None,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -761,7 +776,26 @@ impl SimpleSolver {
             } else {
                 None
             };
-            let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, grad.as_deref());
+            let limited = match (self.linear_upwind_limiter, &grad) {
+                (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
+                    let psi = crate::gradient::limiter(&g, &cells, &bvals, gr, kind);
+                    Some(
+                        gr.iter()
+                            .zip(&psi)
+                            .map(|(v, k)| vec3::scale(*v, *k))
+                            .collect::<Vec<Vec3>>(),
+                    )
+                }
+                _ => None,
+            };
+            let mut m = convection(
+                &g,
+                &phi_conv,
+                &cells,
+                &bc,
+                s.convection,
+                limited.as_deref().or(grad.as_deref()),
+            );
             lag_boundary_inflow(&g, &phi_conv, &cells, &bc, &mut m);
             m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
             if let Some(sink) = &self.sink {
@@ -809,7 +843,7 @@ impl SimpleSolver {
             } else {
                 normalised_residual(&sys, &cells)
             };
-            res_u = res_u.max(r_k);
+            res_u = nan_max(res_u, r_k);
             let mut x = cells;
             sys.solve(&mut x, &s.momentum_solver);
             if s.h_from_solution && self.driver.is_none() {
@@ -829,8 +863,8 @@ impl SimpleSolver {
             }
         }
         if self.residual_norm == ResidualNorm::Scaled {
-            let s_max = scaled_parts.iter().map(|p| p.scale).fold(0.0, f64::max);
-            let n_max = scaled_parts.iter().map(|p| p.num).fold(0.0, f64::max);
+            let s_max = scaled_parts.iter().map(|p| p.scale).fold(0.0, nan_max);
+            let n_max = scaled_parts.iter().map(|p| p.num).fold(0.0, nan_max);
             res_u = n_max / (s_max + 1e-30);
         }
         for c in 0..n {
@@ -1028,7 +1062,7 @@ impl SimpleSolver {
                 if g.active[k] {
                     let un = hby_a[c][k] - r_atu[c] * grad_corr[c][k];
                     self.u.values[c][k] = un;
-                    max_du = max_du.max((un - u_old[c][k]).abs());
+                    max_du = nan_max(max_du, (un - u_old[c][k]).abs());
                 }
             }
         }
@@ -1057,7 +1091,7 @@ impl SimpleSolver {
                     -self.phi[f]
                 };
             }
-            cont = cont.max(sum.abs());
+            cont = nan_max(cont, sum.abs());
         }
         let area_scale = sf.iter().map(|s| vec3::norm(*s)).fold(0.0, f64::max);
         let info = IterationInfo {
@@ -1358,15 +1392,7 @@ impl SteadyGuard {
                 last_good_continuity,
             })
         };
-        for (q, v) in [
-            ("res_u", info.res_u),
-            ("res_p", info.res_p),
-            ("continuity", info.continuity),
-        ] {
-            if !v.is_finite() {
-                return trip("non_finite", q, None, v, f64::NAN);
-            }
-        }
+        // fields first, so that a non-finite state is reported with its cell (its reported maxima are NaN too, ADR 0081 part N)
         if let Some(c) = u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
             let v = u.values[c].iter().copied().find(|x| !x.is_finite()).unwrap_or(f64::NAN);
             return trip("non_finite", "velocity", Some(c), v, f64::NAN);
@@ -1382,6 +1408,15 @@ impl SteadyGuard {
                 phi[f],
                 f64::NAN,
             );
+        }
+        for (q, v) in [
+            ("res_u", info.res_u),
+            ("res_p", info.res_p),
+            ("continuity", info.continuity),
+        ] {
+            if !v.is_finite() {
+                return trip("non_finite", q, None, v, f64::NAN);
+            }
         }
         let (mut umax, mut ucell) = (0.0f64, 0);
         for (c, v) in u.values.iter().enumerate() {

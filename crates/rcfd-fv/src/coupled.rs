@@ -584,7 +584,7 @@ impl CoupledSolver {
             let mut gp = vec![0.0; n];
             self.g[ci].matvec(&p_old, &mut gp);
             let rhs: Vec<f64> = (0..n).map(|c| m.b[c] - gp[c]).collect();
-            res_u = res_u.max(normalised_residual_csr(&csr, &rhs, &cells));
+            res_u = crate::simple::nan_max(res_u, normalised_residual_csr(&csr, &rhs, &cells));
             m_csr.push(csr);
             b_vec.push(m.b);
         }
@@ -752,7 +752,7 @@ impl CoupledSolver {
         for (ci, &k) in self.comps.iter().enumerate() {
             for c in 0..n {
                 let un = if is_solid(c) { 0.0 } else { x[ci * n + c] };
-                max_du = max_du.max((un - u_old[c][k]).abs());
+                max_du = crate::simple::nan_max(max_du, (un - u_old[c][k]).abs());
                 self.u.values[c][k] = un;
             }
         }
@@ -829,7 +829,7 @@ impl CoupledSolver {
                 };
             }
             if !(use_ref && c == s.p_ref.0) {
-                cont = cont.max(sum.abs());
+                cont = crate::simple::nan_max(cont, sum.abs());
             }
         }
         let area_scale = sf.iter().map(|v| vec3::norm(*v)).fold(0.0, f64::max);
