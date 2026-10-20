@@ -84,3 +84,43 @@ against the current directory; for an absolute root nothing changes. R1 is the r
 
 Any GUI automation or screenshot, a real or local model run (F-150 stays as it is), a search index, themes, API docs (`cargo doc` is
 unchanged), and publishing the site anywhere.
+
+## Addendum: measured results (wave 38B)
+
+Delivered: `docs/index.md`; five tutorials in `docs/tutorials/` (`quick-start-cli`, `cavity`, `gallery`, `mcp-design-loop`,
+`desktop-assistant`); the site generator and link check `crates/rcfd-cli/tests/docs_site.rs`; the shared block parser and runner
+`crates/rcfd-cli/tests/tutorial/mod.rs`; the CLI runner `crates/rcfd-cli/tests/tutorials.rs`; the MCP runner
+`crates/rcfd-mcp/tests/tutorials.rs`; the F1 fix in `crates/rcfd-api/src/design/tools.rs` (three lines).
+
+| Id | Limit | Measured | Verdict |
+|---|---|---|---|
+| S1 | pages = Markdown files, at least 100 | 122 pages from 122 files | pass |
+| S2 | 0 broken relative links | 0 of 185 relative links | pass |
+| S3 | index links every tutorial and the five named docs | all 10 present | pass |
+| T1 | 5 of 5 tutorials | 5 | pass |
+| T2 | 0 untagged blocks | 0 | pass |
+| T3 | every tutorial has a default-suite `run` block | quick-start-cli 8, cavity 3, gallery 5, desktop-assistant 1, mcp-design-loop 7 executed blocks | pass |
+| T4 | all default blocks reach their exit code, outputs found, MCP responses error-free | all; 20 output blocks checked (CLI 14, MCP 6) | pass |
+| T5 | every `cases/*/*.toml` checked, every `cases/*/` named | 10 of 10 files, 12 of 12 directories | pass |
+| T6 | 5 of 5 defects detected | 6 fixtures covering the 5 registered defects: untagged block, wrong exit code, missing output line, missing input file (CLI); unknown tool and `check_mesh` without a session (MCP): all detected, the good fixtures pass | pass |
+| T7 | each default tutorial test under 60 s, debug | CLI test 18.4 s (4 tutorials), MCP test 7.4 s | pass |
+| T8 | run-slow blocks pass | release: CLI slow test 53.9 s (cavity 64 x 64, all gallery runs incl. both fan passages with exit 5 and `packed_bed` with exit 5), MCP slow test 13.8 s (the duct study run to `complete`) | pass |
+| R1 | design study through `rcfd-mcp --root .` | the MCP tutorial runs with `--root .`: pass. Before the fix the same session failed at `design_propose` with a relative root and with no root (smoke); after the fix both give 7 of 7 error-free tool calls | pass |
+
+Deviation (authoring, before any acceptance claim): the first MCP run failed T4 because the tutorial expected `"state":"converged"` from
+the `run` tool, which reports `"state":"finished"` and `"converged":true`; the expected lines of the tutorial were corrected. No limit
+or rule of this ADR was changed. The runner showed it is not vacuous on a real authoring error.
+
+Not delivered or not verified:
+
+* The GitHub workflow has not run (nothing is pushed); "executed in CI" is shown as "executed by `cargo test --workspace`" only. The
+  tests are written to be portable (no shell, `/`-paths in tutorials, `--root .`) but have run on Windows only.
+* Every GUI and sidebar step of `desktop-assistant.md` is `not-executed`: the page is written from the code and the roadmap notes,
+  never checked against the running app; no real or local model was used.
+* A fan design study is deliberately not shown (the fan solve is not validated, `docs/milestone-fan.md`); the fan section builds and
+  checks the sector mesh only.
+* The site is plain HTML with no search, no navigation tree beyond the index, and ADRs other than 0089 are not linked from the index
+  (they are built and link-checked).
+
+Status decision (written after the results): every registered check passes, but F-096 is set to `partial` in `docs/roadmap.json`
+because the desktop-app and sidebar part of the feature title is documented but not executed, and the CI workflow itself has not run.

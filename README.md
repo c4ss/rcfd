@@ -6,3 +6,6 @@ policy and `docs/architecture.md` for the crate layout.
 
     cargo build --workspace
     cargo test --workspace
+
+Documentation, tutorials and the example gallery start at `docs/index.md`; the
+tutorials are executed by the test suite.
