@@ -99,3 +99,66 @@ Re-introducing F-G, F-S or F-R (removed in ADR 0076; their misses C-O2 and N1 TG
 ## Sources
 
 No literature. The pair-conservation bound is analytic (antisymmetry of each flux part), the order limits and the 1.05 ratio are those of ADR 0076.
+
+## Final addendum (measured values, verdicts, deviations; nothing above was changed)
+
+Order of work: smoke (default code), registration (commit 4d99686), F-BP written (scratch tree of HEAD), P1 + N2b + `w33b_default_bits`, the B rows (B-R2,
+B-R2b, B-R3, B-R4; one process, each row once), then the scratch K tree (79e838d plus the same term, never committed): IC (the ADR 0076 R1/R2 test, once) and
+the R3/R4 information rows (once). Code and tests: commit a6229a3.
+
+### Part B (the key on HEAD)
+
+| row | measured with B | default | limit | verdict |
+|---|---|---|---|---|
+| P1 seam pair conservation (12 configurations) | worst relative pair sum 6.68e-11 (n 16 PISO dt 0.05); 7.4e-12 to 6.7e-11 | 2.35e-7 to 1.56e-4 | <= 1e-8 | met |
+| B-R4 SECT-M PISO, dt 0.05 / 0.025 / 0.0125 | velocity ratio 1.0009 / 0.9998 / 0.9997; pressure 1.0005 / 1.0002 / 1.0001 | - | <= 1.05 | met |
+| B-R4 SECT-M PIMPLE-4, same dt | velocity 0.9984 / 0.9990 / 0.9995; pressure 1.0001 / 1.0000 / 1.0000 | - | <= 1.05 | met |
+| N2 `w33b_default_bits` | 5 of 5 identical (scratch run; gate below) | - | identical | met |
+| N2b SWIRL PISO / PIMPLE-4; MMS box PISO; TG PIMPLE-C | bit-identical u, p, phi key on vs off | - | identical | met |
+| B-R2 SECT-M PISO fine | 2.0310e-3 / 9.8906e-4, **1.038** | 1.9762e-3 / 9.6010e-4, 1.041 | [1.9, 2.3] | MISS (predicted) |
+| B-R2b SECT-M PIMPLE-4 fine | 6.5763e-4 / 4.5505e-4, **0.531** | 6.5924e-4 / 4.5413e-4, 0.538 | [1.9, 2.3] | MISS (predicted) |
+| B-R3 SECT-M PISO joint refinement vs exact | 1.5438e-2, 5.0965e-3, 2.8510e-3: **1.599, 0.838** | 1.598, 0.838 | >= 1.8 | MISS (predicted) |
+
+On the default kernel the term changes the SECT-M velocity error against the exact solution by at most 0.16 %, and against the dt = 1/1280 reference by
++2.8 % / +3.0 % (PISO) and -0.2 % / +0.2 % (PIMPLE-4) on the fine pair: the seam
+body-force mismatch is a small part of the default error, which is dominated by the seam convection lag (PISO) and the face-consistency floor (PIMPLE-4).
+
+### Part K (scratch, K + term; information, K stays removed)
+
+| row | measured | ADR 0076 value | |
+|---|---|---|---|
+| IC R2 | 7.7563e-4 / 1.8884e-4, 2.038 | Y5 7.7563e-4 / 1.8884e-4, 2.038 | met (all printed digits) |
+| IC R2b | 2.4919e-5 / 6.1413e-6, 2.021 | Y5 2.4919e-5 / 6.1413e-6, 2.021 | met (all printed digits) |
+| R1 / R1b SWIRL (no body force) | 2.161 / 2.021 | K 2.161 / 2.021 | identical, as predicted |
+| R3 SECT-M | 1.6413e-2, 4.8054e-3, 1.4064e-3: 1.772, 1.773 | K 1.773, 1.773 | still below 1.8 |
+| R4 SECT-M velocity, dt 0.05 / 0.025 / 0.0125 | 1.0641 / 1.0250 / 1.0108 (pressure 1.0037 / 1.0154 / 1.0082) | K 1.0651 / 1.0266 / 1.0121 | dt 0.05 still above 1.05 |
+
+### Which wave-35A misses close
+
+* **R2 (1.717 with K) and R2b (0.593 with K): close only together with K** (2.038, 2.021; Y5 reproduced exactly). With the term alone on HEAD: 1.038 and 0.531,
+  i.e. not closed. Causes: R2, the first-outer seam convection lag (F-S, removed); R2b, the face-consistency floor of the default kernel (F-G, removed).
+* **C-O2 (1.332 with K): does not close.** TG has no body force; the term is bit-inert there (N2b). On HEAD C-O2 is the default 1.223 (ADR 0073). Cause: the
+  PIMPLE-C relaxation floor (H-RELAX, ADR 0076; F-R removed; the face-consistent relaxation hypothesis is untested).
+* **N1 TG-S pressure (1.0952 / 1.0521 with K): does not close.** TG-S has no body force (bit-inert). The miss was K's seam terms removing a cancellation of
+  seam and spatial pressure errors that the default enjoys (ADR 0076 observation); a body-force coefficient cannot change it.
+* **R3 SECT-M and R4 SECT-M (K misses, not in the task list but measured): do not close even with K + term** (1.772 / 1.773; 1.0641). Both are dominated by the
+  spatial error (16 x 16 exact error 1.52e-2) and by the loss of the default's partial cancellation of temporal and spatial error at dt 0.05, not by the seam
+  body force.
+
+### Verdict and what was done
+
+* **F-BP is kept** (opt-in `PimpleSettings::coupled_body_pair_mean`, default false, library-level, no schema key): P1, B-R4, N2, N2b and IC hold. B-R2, B-R2b and
+  B-R3 missed as predicted and are ignored `*_known_miss` tests with the registered limits; by the rule registered in advance they do not remove the key.
+* What the key does on HEAD: it makes the two faces of every periodic pair carry opposite fluxes when a body force acts on the seam (P1: from up to 1.6e-4 to
+  below 7e-11 relative), with a change of the SECT-M exact-solution error below 0.2 %. Its order benefit (Y5) needs seam terms of the F-G/F-S kind that are not in the code.
+* Not wired into `schema.rs` / `sim.rs` (the transient kernel has no rotating-frame sources yet; exposing the key is the user's decision).
+* Out of scope and unchanged: the fractional path, the VOF and variable-density transient kernels (their body-force face terms were not examined).
+
+### Deviations from the plan
+
+* None in the registered rows. The P1 and N2b(i) tests run by default (they take about 2 s in release); the heavy rows are ignored.
+* The K tree used its own target directory (`target-w36a-k`) and was not committed.
+
+### Unverified references
+
+None used.
