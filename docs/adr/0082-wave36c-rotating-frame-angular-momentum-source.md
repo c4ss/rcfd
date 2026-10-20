@@ -254,3 +254,98 @@ frame-flux closure of `F_tri` 9.5e-16; extents largest / median axial 0.228 / 3.
 largest-cell ratios M0/M1 1.21, 1.83, 1.22, median ratios 1.49, 1.49, 1.45). The family of A2-A4 is **M0, M1, M2**; A4 becomes
 `p = ln(e_M0 / e_M2) / ln(2.25)` >= 0.5 with `e_M2 <= e_M1 <= e_M0`, its floor rule unchanged (iteration check on M1). The diagnosis family R is
 R(M0), R(M1) = X2a-36, R(M2), with `p_R = ln(L(R(M0)) / L(R(M2))) / ln(2.25)`. Everything else is unchanged.
+
+## Addendum (2026-10-20): measured values, verdicts, removal of F-RP, misses and deviations
+
+All runs: release builds of c89495f plus this wave's files, single thread per run, at most two runs at a time on a shared machine, one run per
+set-up. Full annulus values, `rho` = 1.2.
+
+### Where the spurious swirl comes from (answer to the diagnosis)
+
+The term is the momentum convection. First-order upwind on the Cartesian components of the relative velocity acts as a numerical viscosity in
+Laplacian form on its rigid part `-Omega x r`. A Laplacian-form stress on a rigid rotation (zero physical strain) is a torque that drives the relative
+swirl toward zero, i.e. creates positive absolute swirl: per face `(Omega/2) |phi_f| |d_perp|^2`, sign-definite. On X2a the convection term is
+2.442 N m of the 2.302 N m solver-consistent excess (106 %), and the closed form is 2.628 N m (1.076 of it). The other terms: pressure lever arms
+0.011, the physical viscous term 0.004, seam pairs 2e-6, frame term -0.154 (Rhie-Chow part +0.131, quadrature remainder -0.285), residual 2e-8. It
+is generated where `|phi| |d_perp|^2` is large: the large cells of the upstream (0.73) and downstream (1.33) blocks and of mid-span (one radial bin
+1.03), much less in the fine chord band (0.38) and almost none in the wall layers (0.03). With minmod (X2d) the net vanishes by cancellation, not by
+absence: convection +0.86 against the frame term -0.88 (its quadrature part -0.98, Rhie-Chow +0.10), both in the large downstream cells and as a
+radial dipole (r 0.156-0.171: convection -0.42, frame +1.15; r 0.203-0.219: +1.25, -2.09). That leaves swirl of both signs and the 20 Pa. The X2d
+budget is not closed by the registered rule (`E_s` is near zero), so this is an observation, and the budget locates generation of angular momentum,
+not of swirl energy.
+
+### Checks with limits
+
+| Check | Limit | Measured | Result |
+|---|---|---|---|
+| X2a-36 reproduces ADR 0078 X2a | every printed digit | 2.25440 N m, -59.984 Pa | pass |
+| X2d-36 reproduces ADR 0078 X2d | printed digits | 0.00258 N m, 19.970 Pa | pass |
+| Reconstruction of the convection and Laplacian fluxes | 1e-10 | 2.4e-14 (X2a), 2.8e-14 (X2d), 8.5e-15 (R(M0)), 4.9e-14 (R(M2)) | pass |
+| Budget identity (terms against `E_s + S_seam`), short run | 1e-9 | round-off | pass (not-ignored test) |
+| Closure `abs(G_res)` <= 0.05 `abs(E_s)` | 0.05 | X2a 1e-8; X2d 0.198 | X2a pass; X2d NOT CLOSED |
+| H1 (i) `G_conv` >= 0.7 `E_s` (X2a) | 0.7 | 1.061 | pass |
+| H1 (ii) `C_up` in [0.7, 1.3] `G_conv` (X2a) | [0.7, 1.3] | 1.076 | pass |
+| H1 (iii) wall- plus seam-adjacent share of `G_conv` | <= 0.5 | seam-adjacent alone 0.64 (44 % of the volume) | MISS: H1 falsified as registered |
+| H2 `abs(G_visc)` significant / falsified | >= 0.1 / < 0.01 `E_s` | 0.0016 | falsified as a contribution |
+| H3 `abs(G_frame)` < 0.1 `E_s` | 0.1 | 0.067 | holds |
+| H4 `abs(G_p)` < 0.1 `E_s` | 0.1 | 0.005 | holds |
+| H5 `abs(S_seam)` < 0.01 `E_s` | 0.01 | 1e-6 | holds |
+| H1 order (diagnosis), `p_R` from R(M0), R(M2) | [0.5, 1.5] | 0.88 (all three converged: 3.4396, 2.2544, 1.6793 N m) | holds |
+| F-RP item 2, face-centre frame-flux closure | 1e-10 | worst 1.3e-3 (M0) to 1.7e-4 (M3) | MISS: NOT RUNNABLE as registered (amendment 2 remedy) |
+| F-RP item 2, triangle-exact frame flux | 1e-10 | 9.5e-16 to 2.2e-15 | pass |
+| A0 (iii) key absent = `false` (ADR 0008 annulus, 20 iterations) | bit-identical | bit-identical | pass |
+| A1 seam pairs (iteration 1) | 1e-12 | 2.1e-13 to 6.6e-13 | pass |
+| A1 rotor walls `abs(phi_rel + warp)` (F1, iteration 1) | 1e-12 | 2.6e-16 (largest `abs(phi_rel)` 5.0e-3, the warp term) | pass |
+| A2 `abs(L(Y))` <= 10 `abs(L(B))`, M1 | 1.63e-3 N m | 1.42e-5 N m (B 1.63e-4) | pass |
+| A2, M0 | 5.26e-3 N m | Y(M0) NOT CONVERGED (8000 iterations, res_u 0.78), L 0.068 N m | MISS |
+| A2, M2 | 2.2e-3 N m | Y(M2) and B(M2) NOT CONVERGED at the 60-min cap (4.4e-6 against 2.2e-4, unscored) | MISS (no converged pair) |
+| A3 swirl energy <= 0.2 Pa and Delta p_tt <= 0, M1 | 0.2 Pa, 0 Pa | 0.0000 Pa, -1.541 Pa | pass |
+| A3, M0 | as above | Y(M0) not converged; Delta p_tt +981 Pa | MISS |
+| A4 order (`e_M2 <= e_M1 <= e_M0`, p >= 0.5) | 0.5 | Y(M0), Y(M2) not converged; the floor rule did not trigger (M1: L of Y changed by 0.01 % between tolerances 1e-5 and 1e-7, B by 0.001 %) | MISS |
+| A0 (i), (ii) | gate; X2a digits | F-RP removed before the gate; no solver code of this wave is committed | not applicable |
+
+### Verdict on the fix
+
+F-RP (the opt-in absolute-velocity rotor passage, `sources.<name>.rotor_passage`) misses A2, A3 and A4 and is REMOVED (rule (b) of wave 35; the ADR
+registered removal). It was never committed; the code is not in the repository. F1 (FAN-01 E0 with F-RP) was NOT RUN, because the ADR runs it only
+if A0-A4 pass. No torque or Delta p_ts change with the fix is reported. The only bladed F-RP numbers are a disclosed 300-iteration scratch look
+(torque 1.79 N m, continuity 0.30, res_u 0.47, not converged), which is not a result.
+
+What the runs do show: a fix is possible in principle. On M1, where Y converged (567 iterations), removing the rigid part from the convected quantity
+removes the source: outlet angular-momentum flux -1.42e-5 N m against 2.254 N m in the relative formulation and 1.63e-4 N m in the inertial control,
+swirl energy 0.0000 Pa, duct Delta p_tt -1.54 Pa (inertial -1.53). This passes the mechanism falsifier registered in amendment 1 (A2 on Y(M1)), so
+the mechanism stands by that test. The fix was not delivered because this implementation does not converge on the coarser mesh M0 (the inertial
+control converges there in 124 iterations and the relative formulation in 247, so M0 is not a defective set-up) and did not converge on M2 within the
+60-minute cap (nor did the inertial control B(M2): 7 063 iterations, against 169 on M1; two runs shared the machine). The bladed F1 smoke had a
+continuity of about 0.4 for 300 iterations. Robustness of the lagged `-Omega x c` source with SIMPLEC on these meshes is the open item; it was not
+diagnosed.
+
+### Mesh dependence of the attribution (stated against the registered reading)
+
+R(M0) (4 320 cells): `E_s` 3.495, `G_conv` 2.075 (0.594 `E_s`), `G_frame` 1.353 (0.387; Rhie-Chow part 0.292), `C_up / G_conv` 1.475 (outside
+the [0.7, 1.3] window used for X2a). R(M2) (47 040 cells): `E_s` 1.710, `G_conv` 1.777 (1.039), `G_frame` -0.074, `C_up / G_conv` 1.065. The
+attribution to convection is clean on M1 and M2; on the coarsest mesh the frame-term quadrature carries a large share. The criteria were registered
+on X2a, so no verdict changes; "convection is the term" holds for M1 and M2, not for M0.
+
+Order of the relative-frame error: nominal ratio 2.25 over M0-M2 gives `p_R` = 0.88 (pairwise 1.04 and 0.73). With the measured cell-size ratios
+M0/M2 (largest: axial 1.56, radial 2.46, pitchwise 1.68; median: 2.49, 3.18, 2.28) the same two errors give 1.61 (largest axial), 1.38 (largest
+pitchwise), 0.87 (median pitchwise). `C_up` falls with the error: 3.060, 2.628, 1.893 N m. The error is a first-order discretisation error that
+falls with refinement, as ADR 0078 concluded, now shown on a converged three-mesh family.
+
+### Deviations from the registered plan (candid)
+
+* H1 was falsified through its location clause (iii), and the fix was written anyway (amendment 1, before any fix code; acceptance unchanged).
+* The registered face-centre frame flux failed its own closure check; the triangle-exact frame flux and the restated A1 wall check were registered in
+  amendment 2 before any F-RP code.
+* M3 was a defective set-up (the inertial control diverged within 30 iterations) and was replaced by the coarser M0 (amendment 3), so the family is
+  M0-M2 with a ratio of 1.5 per step, not M1-M3.
+* The per-region closed form of the location report was added after the first X2a output (deterministic re-run, disclosed, not scored).
+* Scratch, disclosed: F1 to 300 iterations; the pressure-solver iteration counts of the first 5 iterations of Y(M1), F1 and E0 (5-6 each).
+* The steady-guard record was added to the run loop as a stop rule (registered); it never tripped.
+* A0 (ii) (X2a reproduction on the final code) is moot: the final code is c89495f's solver plus a test file.
+* The ignored tests that ran the Y and F1 arms were deleted with F-RP (they need the removed key); their values are only in this ADR. The remaining
+  ignored tests run the budget (X2a, X2d), the construction measurements, the B and R arms.
+
+### Unverified references
+
+None. Every limit is derived here, measured, or a decision threshold of this protocol; no external value is used.
