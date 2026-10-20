@@ -3,7 +3,8 @@
 //! face); `SimpleSolver::iterate` is the map F (everything else it reads is fixed for these set-ups: no walls with body forces, no face jumps,
 //! no driver, no pseudo time). The Jacobian dF/dx is formed column by column with central differences (step `h` times the scale of the
 //! variable type) and written as a dense matrix for `scripts/w37a_jacobian_analysis.py` (eigenvalues, deflation of the neutral mean-velocity
-//! modes, Fourier labels, transient growth).
+//! modes, Fourier labels, transient growth). The acceptance checks A1-A5 of the fix (`SimpleSolver::reconstructed_correction`, ADR 0084
+//! amendment 2) are at the end.
 
 use rcfd_core::vec3;
 use rcfd_fv::convection::ConvScheme;
@@ -17,14 +18,16 @@ use std::sync::Arc;
 /// Settings of one map.
 #[derive(Clone, Copy, Debug)]
 struct Var {
-coupling: Coupling,
-alpha_u: f64,
-alpha_p: f64,
-correctors: usize,
-compensation: bool,
+    coupling: Coupling,
+    alpha_u: f64,
+    alpha_p: f64,
+    correctors: usize,
+    compensation: bool,
     /// Linear solves to 1e-13 relative (the linearised map); `false` keeps the default 1e-3.
-tight: bool,
-central: bool,
+    tight: bool,
+    central: bool,
+    /// ADR 0084 fix: `SimpleSolver::reconstructed_correction`.
+    face_flux: bool,
 }
 
 const BASE: Var = Var {
@@ -35,11 +38,16 @@ const BASE: Var = Var {
     compensation: false,
     tight: true,
     central: false,
+    face_flux: false,
 };
 
 fn settings(nu: f64, v: Var) -> SimpleSettings {
     let mut st = SimpleSettings::new(nu, v.coupling);
-    st.convection = if v.central { ConvScheme::Central } else { ConvScheme::Upwind };
+    st.convection = if v.central {
+        ConvScheme::Central
+    } else {
+        ConvScheme::Upwind
+    };
     st.alpha_u = v.alpha_u;
     st.alpha_p = v.alpha_p;
     st.non_orth_correctors = v.correctors;
@@ -80,6 +88,7 @@ fn kolmogorov(nx: usize, ny: usize, lx: f64, deg: f64, nu: f64, v: Var) -> Simpl
         .map(|c| [nu * k * k * (k * c[1]).sin(), 0.0, 0.0])
         .collect();
     s.body_force = Some(BodyForce::from_cells(&s.geom, cells));
+    s.reconstructed_correction = v.face_flux;
     s
 }
 
@@ -97,18 +106,20 @@ fn channel_b(deg: f64, nu: f64, v: Var) -> SimpleSolver {
     u.set_bc(&geom, "outlet", Box::new(ZeroGradient)).unwrap();
     let mut p = ScalarField::uniform("p", &geom, 0.0);
     p.set_bc(&geom, "outlet", Box::new(FixedValue::scalar(0.0))).unwrap();
-    SimpleSolver::new(geom, u, p, settings(nu, v))
+    let mut s = SimpleSolver::new(geom, u, p, settings(nu, v));
+    s.reconstructed_correction = v.face_flux;
+    s
 }
 
 /// Packing of the state vector.
 struct Layout {
-comps: Vec<usize>,
-n_cells: usize,
-faces: Vec<usize>,
+    comps: Vec<usize>,
+    n_cells: usize,
+    faces: Vec<usize>,
 }
 
 impl Layout {
-fn of(s: &SimpleSolver) -> Self {
+    fn of(s: &SimpleSolver) -> Self {
         let g = &s.geom;
         Layout {
             comps: (0..3).filter(|&k| g.active[k]).collect(),
@@ -116,10 +127,10 @@ fn of(s: &SimpleSolver) -> Self {
             faces: (0..g.mesh.n_faces()).filter(|&f| !g.empty[f]).collect(),
         }
     }
-fn len(&self) -> usize {
+    fn len(&self) -> usize {
         (self.comps.len() + 1) * self.n_cells + self.faces.len()
     }
-fn get(&self, s: &SimpleSolver) -> Vec<f64> {
+    fn get(&self, s: &SimpleSolver) -> Vec<f64> {
         let mut x = Vec::with_capacity(self.len());
         for &k in &self.comps {
             x.extend(s.u.values.iter().map(|u| u[k]));
@@ -128,7 +139,7 @@ fn get(&self, s: &SimpleSolver) -> Vec<f64> {
         x.extend(self.faces.iter().map(|&f| s.phi[f]));
         x
     }
-fn set(&self, s: &mut SimpleSolver, x: &[f64]) {
+    fn set(&self, s: &mut SimpleSolver, x: &[f64]) {
         let n = self.n_cells;
         for (b, &k) in self.comps.iter().enumerate() {
             for c in 0..n {
@@ -142,7 +153,7 @@ fn set(&self, s: &mut SimpleSolver, x: &[f64]) {
         }
     }
     /// Block of entry `i`: 0.. velocity components, then pressure, then flux.
-fn block(&self, i: usize) -> usize {
+    fn block(&self, i: usize) -> usize {
         let nb = self.comps.len();
         (i / self.n_cells).min(nb + 1)
     }
@@ -179,7 +190,13 @@ fn jacobian(s: &mut SimpleSolver, l: &Layout, x: &[f64], h: f64) -> Vec<f64> {
     let mut xp = x.to_vec();
     for col in 0..n {
         let b = l.block(col);
-        let step = h * if b < nb { sc[0] } else if b == nb { sc[1] } else { sc[2] };
+        let step = h * if b < nb {
+            sc[0]
+        } else if b == nb {
+            sc[1]
+        } else {
+            sc[2]
+        };
         xp[col] = x[col] + step;
         let fp = map(s, l, &xp);
         xp[col] = x[col] - step;
@@ -301,10 +318,17 @@ fn harness_smoke() {
     let x = l.get(&s);
     let a = map(&mut s, &l, &x);
     let b = map(&mut s, &l, &x);
-    assert!(a.iter().zip(&b).all(|(p, q)| p.to_bits() == q.to_bits()), "map not stateless");
+    assert!(
+        a.iter().zip(&b).all(|(p, q)| p.to_bits() == q.to_bits()),
+        "map not stateless"
+    );
     let j = jacobian(&mut s, &l, &x, 1e-6);
     dump("smoke", &s, &l, &x, &j, 6, 3, 2.0, 60.0);
-    println!("smoke: n = {}, |J|_max = {:e}", l.len(), j.iter().fold(0.0f64, |a, v| a.max(v.abs())));
+    println!(
+        "smoke: n = {}, |J|_max = {:e}",
+        l.len(),
+        j.iter().fold(0.0f64, |a, v| a.max(v.abs()))
+    );
 }
 
 /// Set-up smoke (rule (d)): converged states at 0.9/0.3 (tight), the base-map residual of one iteration from them, and the tight channel scan.
@@ -320,7 +344,10 @@ fn state_smoke() {
         s.settings = settings(0.5, BASE);
         let y = map(&mut s, &l, &x);
         let d = x.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
-        println!("V7 {deg}: 0.9/0.3 res 1e-12 at {it:?}; base map moves x* by {d:.2e}; umax {:.4}", max_speed(&s));
+        println!(
+            "V7 {deg}: 0.9/0.3 res 1e-12 at {it:?}; base map moves x* by {d:.2e}; umax {:.4}",
+            max_speed(&s)
+        );
         let mut s = channel_b(deg, 0.01, v03);
         let it = converge(&mut s, 1e-12, 20000);
         let l = Layout::of(&s);
@@ -328,7 +355,10 @@ fn state_smoke() {
         s.settings = settings(0.01, BASE);
         let y = map(&mut s, &l, &x);
         let d = x.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
-        println!("B {deg}: 0.9/0.3 res 1e-12 at {it:?}; base map moves x* by {d:.2e}; n = {}", l.len());
+        println!(
+            "B {deg}: 0.9/0.3 res 1e-12 at {it:?}; base map moves x* by {d:.2e}; n = {}",
+            l.len()
+        );
     }
     for deg in [45.0, 50.0, 52.5, 55.0, 57.5, 60.0] {
         let (st, why) = classify(channel_b(deg, 0.01, BASE), 1.0);
@@ -344,22 +374,27 @@ enum Setup {
     B,
 }
 
-const K40: Setup = Setup::K { nx: 40, ny: 10, lx: 4.0, nu: 0.5 };
+const K40: Setup = Setup::K {
+    nx: 40,
+    ny: 10,
+    lx: 4.0,
+    nu: 0.5,
+};
 
 impl Setup {
-fn build(self, deg: f64, v: Var) -> SimpleSolver {
+    fn build(self, deg: f64, v: Var) -> SimpleSolver {
         match self {
             Setup::K { nx, ny, lx, nu } => kolmogorov(nx, ny, lx, deg, nu, v),
             Setup::B => channel_b(deg, 0.01, v),
         }
     }
-fn dims(self) -> (usize, usize, f64) {
+    fn dims(self) -> (usize, usize, f64) {
         match self {
             Setup::K { nx, ny, lx, .. } => (nx, ny, lx),
             Setup::B => (40, 10, 4.0),
         }
     }
-fn nu(self) -> f64 {
+    fn nu(self) -> f64 {
         match self {
             Setup::K { nu, .. } => nu,
             Setup::B => 0.01,
@@ -378,7 +413,10 @@ fn fixed_point(set: Setup, deg: f64, v: Var) -> SimpleSolver {
     let y = map(&mut s, &l, &x);
     let d = x.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
     l.set(&mut s, &x);
-    println!("x* {set:?} {deg} deg: res 1e-12 at {it:?}; one map iteration moves it by {d:.2e} ({})", if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" });
+    println!(
+        "x* {set:?} {deg} deg: res 1e-12 at {it:?}; one map iteration moves it by {d:.2e} ({})",
+        if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" }
+    );
     s
 }
 
@@ -394,7 +432,11 @@ fn jac_run(tag: &str, set: Setup, deg: f64, s: &mut SimpleSolver, h: f64) {
     l.set(s, &x);
     let (nx, ny, lx) = set.dims();
     dump(tag, s, &l, &x, &j, nx, ny, lx, deg);
-    println!("J {tag}: n = {}, M2 stateless {stateless}, {:.1} s", l.len(), t0.elapsed().as_secs_f64());
+    println!(
+        "J {tag}: n = {}, M2 stateless {stateless}, {:.1} s",
+        l.len(),
+        t0.elapsed().as_secs_f64()
+    );
 }
 
 /// M3: growth of a 1e-8 perturbation of x* under the map (geometric mean over the iterations where max|x_k - x*| lies in [1e-7, 1e-3]).
@@ -476,15 +518,36 @@ fn registered_jacobians() {
     }
     if only("J5") {
         for (name, set) in [
-            ("K20", Setup::K { nx: 20, ny: 10, lx: 2.0, nu: 0.5 }),
-            ("K10", Setup::K { nx: 10, ny: 10, lx: 1.0, nu: 0.5 }),
+            (
+                "K20",
+                Setup::K {
+                    nx: 20,
+                    ny: 10,
+                    lx: 2.0,
+                    nu: 0.5,
+                },
+            ),
+            (
+                "K10",
+                Setup::K {
+                    nx: 10,
+                    ny: 10,
+                    lx: 1.0,
+                    nu: 0.5,
+                },
+            ),
         ] {
             let mut s = fixed_point(set, 60.0, BASE);
             jac_run(&format!("J5_{name}_60"), set, 60.0, &mut s, h);
         }
     }
     if only("J6") {
-        let ks = Setup::K { nx: 40, ny: 10, lx: 4.0, nu: 50.0 };
+        let ks = Setup::K {
+            nx: 40,
+            ny: 10,
+            lx: 4.0,
+            nu: 50.0,
+        };
         let mut s = fixed_point(ks, 60.0, BASE);
         jac_run("J6_KS_60", ks, 60.0, &mut s, h);
         let mut s = ks.build(60.0, BASE);
@@ -524,94 +587,156 @@ fn registered_jacobians() {
     }
 }
 
-/// Attribution switch of ADR 0084 (and amendment 1).
-#[derive(Clone, Copy, Debug)]
-enum Sw {
-    P(usize),
-    PImplicit,
-    R,
-    S,
-}
+const THETA: [f64; 10] = [45.0, 50.0, 52.5, 55.0, 57.5, 60.0, 65.0, 70.0, 75.0, 79.0];
 
-fn apply(s: &mut SimpleSolver, sw: Sw) {
-    match sw {
-        Sw::P(m) => s.correction_non_orth = m,
-        Sw::PImplicit => s.correction_non_orth_implicit = true,
-        Sw::R => s.reconstructed_correction = true,
-        Sw::S => s.simplec_seam_compensation = true,
+/// One registered scan (default linear tolerances): prints a line per angle, returns theta_c (None = "> 79").
+fn scan(name: &str, set: Setup, v: Var, u_ref: f64) -> Option<f64> {
+    let mut theta_c = None;
+    let mut row = String::new();
+    for deg in THETA {
+        let (stable, why) = classify(set.build(deg, v), u_ref);
+        row.push_str(&format!(
+            "
+    {deg:>5}: {} ({why})",
+            if stable { "S" } else { "U" }
+        ));
+        if !stable && theta_c.is_none() {
+            theta_c = Some(deg);
+        }
     }
-}
-
-/// x* of the map with a switch (S changes the fixed point; the others keep it, so their x* is the base one).
-fn fixed_point_sw(set: Setup, deg: f64, v: Var, sw: Option<Sw>) -> SimpleSolver {
-    let mut s = set.build(deg, Var { alpha_p: 0.3, ..v });
-    if let Some(Sw::S) = sw {
-        apply(&mut s, Sw::S);
-    }
-    let it = converge(&mut s, 1e-12, 20000);
-    s.settings = settings(set.nu(), v);
-    if let Some(w) = sw {
-        apply(&mut s, w);
-    }
-    let l = Layout::of(&s);
-    let x = l.get(&s);
-    let t0 = std::time::Instant::now();
-    let y = map(&mut s, &l, &x);
-    let dt = t0.elapsed().as_secs_f64();
-    let d = x.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
-    l.set(&mut s, &x);
     println!(
-        "x* {set:?} {deg} deg switch {sw:?}: res 1e-12 at {it:?}; one map iteration moves it by {d:.2e} ({}); one map evaluation {:.3} s",
-        if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" },
-        dt
+        "{name}: theta_c = {}{row}",
+        theta_c.map_or("> 79".into(), |t| format!("{t}"))
     );
-    s
+    theta_c
 }
 
-/// A solver with a fixed-point-keeping switch placed at the base x* (checked: one map iteration moves it by at most 1e-12).
-fn at_state(set: Setup, deg: f64, v: Var, sw: Sw, xs: &[f64]) -> SimpleSolver {
-    let mut s = set.build(deg, v);
-    apply(&mut s, sw);
-    let l = Layout::of(&s);
-    let t0 = std::time::Instant::now();
-    let y = map(&mut s, &l, xs);
-    let dt = t0.elapsed().as_secs_f64();
-    let d = xs.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
-    l.set(&mut s, xs);
-    println!(
-        "x* {set:?} {deg} deg with {sw:?}: one map iteration moves it by {d:.2e} ({}); one map evaluation {dt:.3} s",
-        if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" }
-    );
-    s
+const FIX07: Var = Var {
+    alpha_p: 0.7,
+    tight: false,
+    face_flux: true,
+    ..BASE
+};
+
+/// theta_c >= 75 (every angle up to 70 STABLE).
+fn at_least_75(t: Option<f64>) -> bool {
+    t.map_or(true, |t| t >= 75.0)
 }
 
-/// The registered attribution runs (ADR 0084, attribution switches and amendment 1). Select with W37A_ONLY=A-K60,A-K70,A-B.
+/// ADR 0084 A1: V7 (K40) at alpha_p 0.7 with the fix: theta_c >= 75.
 #[test]
-#[ignore = "registered attribution runs of ADR 0084"]
-fn attribution() {
-    let sws = [Sw::P(1), Sw::P(2), Sw::P(4), Sw::PImplicit, Sw::R, Sw::S];
-    for (lab, deg, ap) in [("A-K60", 60.0, 1.0), ("A-K70", 70.0, 0.7)] {
-        if !only(lab) {
-            continue;
-        }
-        let v = Var { alpha_p: ap, ..BASE };
-        let base = fixed_point(K40, deg, v);
-        let xs = Layout::of(&base).get(&base);
-        for sw in sws {
-            let mut s = if let Sw::S = sw {
-                fixed_point_sw(K40, deg, v, Some(sw))
-            } else {
-                at_state(K40, deg, v, sw, &xs)
-            };
-            jac_run(&format!("{lab}_{sw:?}"), K40, deg, &mut s, 1e-6);
+fn a1_kolmogorov_box_with_face_flux_correction_is_stable_to_70_degrees() {
+    let t = scan("A1 K40 0.9/0.7 face_flux", K40, FIX07, 1.0);
+    assert!(at_least_75(t), "A1: theta_c = {t:?}");
+}
+
+/// ADR 0084 A2: channel B at alpha_p 0.7 with the fix: theta_c >= 75.
+#[test]
+fn a2_channel_with_face_flux_correction_is_stable_to_70_degrees() {
+    let t = scan("A2 B 0.9/0.7 face_flux", Setup::B, FIX07, 1.0);
+    assert!(at_least_75(t), "A2: theta_c = {t:?}");
+}
+
+/// ADR 0084 A3 (hold-out): V7 on 30 x 8 cells on 3 x 1 at alpha_p 0.7 with the fix: theta_c >= 75.
+#[test]
+fn a3_holdout_kolmogorov_box_with_face_flux_correction_is_stable_to_70_degrees() {
+    let set = Setup::K {
+        nx: 30,
+        ny: 8,
+        lx: 3.0,
+        nu: 0.5,
+    };
+    let t = scan("A3 K30x8 0.9/0.7 face_flux", set, FIX07, 1.0);
+    assert!(at_least_75(t), "A3: theta_c = {t:?}");
+}
+
+/// ADR 0084 A4: no regression at alpha_p 1.0 and 0.5 (off: K40 1.0 = 60, B 1.0 = 50, B 0.5 = 70 from ADR 0081; K40 0.5 run here).
+#[test]
+#[ignore = "ADR 0084 A4 (five scans, about 3 minutes in release)"]
+fn a4_no_regression_at_alpha_p_1_and_0_5() {
+    let v = |ap, ff| Var {
+        alpha_p: ap,
+        tight: false,
+        face_flux: ff,
+        ..BASE
+    };
+    let key = |t: Option<f64>| t.unwrap_or(90.0);
+    let k05_off = scan("A4 K40 0.9/0.5 gradient", K40, v(0.5, false), 1.0);
+    let cases = [
+        ("A4 K40 0.9/1.0 face_flux", K40, 1.0, Some(60.0)),
+        ("A4 K40 0.9/0.5 face_flux", K40, 0.5, k05_off),
+        ("A4 B 0.9/1.0 face_flux", Setup::B, 1.0, Some(50.0)),
+        ("A4 B 0.9/0.5 face_flux", Setup::B, 0.5, Some(70.0)),
+    ];
+    let mut ok = true;
+    for (name, set, ap, off) in cases {
+        let on = scan(name, set, v(ap, true), 1.0);
+        println!("{name}: on {on:?} against off {off:?}");
+        ok &= key(on) >= key(off);
+    }
+    assert!(ok, "A4: a threshold fell");
+}
+
+/// ADR 0084 A5: the converged solution is unchanged (fix on at alpha_p 0.7, tight, to max_du <= 1e-13, against x* of the fix-off 0.9/0.3 map).
+#[test]
+#[ignore = "ADR 0084 A5 (six fixed points of up to 20 000 iterations, about 30 minutes in release)"]
+fn a5_converged_solution_is_unchanged() {
+    let k = 2.0 * std::f64::consts::PI;
+    let mut ok = true;
+    for set in [K40, Setup::B] {
+        for deg in [45.0, 60.0, 70.0] {
+            let off = fixed_point(set, deg, BASE);
+            let mut on = set.build(
+                deg,
+                Var {
+                    alpha_p: 0.7,
+                    face_flux: true,
+                    ..BASE
+                },
+            );
+            let mut conv = None;
+            for it in 1..=20000 {
+                if on.iterate().max_du <= 1e-13 {
+                    conv = Some(it);
+                    break;
+                }
+            }
+            let du =
+                on.u.values
+                    .iter()
+                    .zip(&off.u.values)
+                    .map(|(a, b)| vec3::norm(vec3::sub(*a, *b)))
+                    .fold(0.0, f64::max);
+            let pmax = off.p.values.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+            let dp =
+                on.p.values
+                    .iter()
+                    .zip(&off.p.values)
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0, f64::max);
+            let mut line = format!(
+                "A5 {set:?} {deg}: max_du <= 1e-13 at {conv:?}; max |du| {du:.3e}; max |dp| {dp:.3e} (max |p| {pmax:.3e})"
+            );
+            let mut pass = conv.is_some() && du <= 1e-8 && dp <= 1e-8 * pmax.max(1.0);
+            if let Setup::K { .. } = set {
+                let rms = |s: &SimpleSolver| {
+                    let cc = s.geom.mesh.cell_centres();
+                    (s.u.values
+                        .iter()
+                        .zip(cc)
+                        .map(|(u, c)| (u[0] - (k * c[1]).sin()).powi(2))
+                        .sum::<f64>()
+                        / cc.len() as f64)
+                        .sqrt()
+                };
+                let (e_on, e_off) = (rms(&on), rms(&off));
+                let rel = (e_on - e_off).abs() / e_off;
+                line.push_str(&format!("; RMS error of u_x against sin(k y): on {e_on:.6e}, off {e_off:.6e}, relative difference {rel:.2e}"));
+                pass &= rel <= 1e-6;
+            }
+            println!("{line} -> {}", if pass { "met" } else { "MISSED" });
+            ok &= pass;
         }
     }
-    if only("A-B") {
-        // the base rho at B x* is below 1 (J8), so only the first start-up state with rho > 1 (J9: x0) is attributed
-        for sw in sws.iter().take(5) {
-            let mut s = Setup::B.build(55.0, BASE);
-            apply(&mut s, *sw);
-            jac_run(&format!("A-B55_x0_{sw:?}"), Setup::B, 55.0, &mut s, 1e-6);
-        }
-    }
+    assert!(ok, "A5 missed (see the lines above)");
 }

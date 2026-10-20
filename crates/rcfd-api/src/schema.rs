@@ -898,6 +898,10 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("none", &["none", "barth_jespersen"]).doc("Slope limiter of the linear_upwind face extrapolation of the steady simple/simplec momentum equation (ADR 0081): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). Any other algorithm or scheme is an error"),
         )
         .field(
+            "velocity_correction",
+            Schema::enumeration("gradient", &["gradient", "face_flux"]).doc("Cell velocity correction of the steady simple/simplec solver after the pressure solve (ADR 0084): gradient (default) subtracts rAtU times the Green-Gauss gradient of the new pressure; face_flux keeps the old-pressure gradient and adds the reconstruction of the face flux correction (only the pressure change the face fluxes carry). Both give the same converged solution; face_flux removes the period-two pressure mode that makes simplec diverge on strongly non-orthogonal meshes (uniformly sheared cells from 60 degrees at alpha_p = 1). Any other algorithm is an error"),
+        )
+        .field(
             "pressure_lag_check",
             Schema::enumeration("warn", &["warn", "raise", "off"]).doc("PISO/PIMPLE pressure-lag check (ADR 0073 B4, ADR 0077), made only with n_correctors = 1: one estimate of the per-step amplification of the lagged pressure error (step 1; step 2 with bdf2/bdf2_bounded); warn emits a located warning event when it reaches 1 (the solution is unchanged), raise stops the run (state diverged, exit 6), off skips the estimate. Not used by the fractional step or dynamic meshes"),
         )
