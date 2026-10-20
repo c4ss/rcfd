@@ -1607,3 +1607,298 @@ fn q1_h(h: &CGridOptions) {
     }
     assert!(miss.is_empty(), "missed: {miss:?}");
 }
+
+// ---------------------------------------------------------------- wave 37D (ADR 0087): construction I, the inclined front edge
+
+/// B1 of ADR 0087: construction H (case value `camber_seam_h`) is bit-identical to the HEAD of the ADR 0087 registration (6f97dcb).
+#[test]
+fn b1_construction_h_is_bit_identical() {
+    let h = CGridOptions::camber_seam_h_construction();
+    for (tag, fan, spec, want) in [
+        ("S", blade_b(), spec_s(), 0x6f6342d53409da61u64),
+        ("FAN-01-C", fan01(), spec_fan01(), 0x21104bbbdd9b9129),
+    ] {
+        let got = mesh_hash(&build_cgrid_mesh_with(&fan, &spec, &h).unwrap().mesh);
+        println!("B1 H {tag}: {got:#018x}");
+        assert_eq!(got, want, "{tag}");
+    }
+}
+
+/// ADR 0087 C1-Q: the largest non-orthogonality and skewness over the faces of the corner-region cells (C cells of the last three rows within
+/// two lines of either corner line, F cells of the last two rows within two columns of either seam, every layer) and over all other faces.
+/// Returns (corner non-orth, corner skewness, location, other non-orth, other skewness, location).
+fn corner_region_maxima(m: &CGridMesh) -> (f64, f64, String, f64, f64, String) {
+    let met = compute_metrics(&m.mesh);
+    let (n_i, ns, nup) = (m.n_i(), m.n_side(), m.n_up());
+    let h_c = n_i / 2 - m.n_nose();
+    let u_c = n_i - h_c;
+    let n_fe = u_c - h_c;
+    let in_region = |t: (u8, usize, usize, usize)| -> bool {
+        match t.0 {
+            0 => t.2 + 3 >= ns && ((t.1 + 2 >= h_c && t.1 <= h_c + 2) || (t.1 + 2 >= u_c && t.1 <= u_c + 2)),
+            1 => t.1 + 2 >= nup && (t.2 <= 1 || t.2 + 2 >= n_fe),
+            _ => false,
+        }
+    };
+    let mesh = &m.mesh;
+    let mut corner = vec![false; mesh.n_faces()];
+    for c in 0..mesh.n_cells() {
+        if in_region(m.cell_tags[c]) {
+            for &f in mesh.cell_faces(c) {
+                corner[f] = true;
+            }
+        }
+    }
+    let ni = mesh.n_internal_faces();
+    let label = |f: usize| -> String {
+        let o = m.cell_tags[mesh.owner()[f]];
+        if f < ni {
+            format!("{o:?} / {:?}", m.cell_tags[mesh.neighbour()[f]])
+        } else {
+            format!("{o:?} boundary")
+        }
+    };
+    let (mut cn, mut cs, mut cf, mut on, mut os, mut of) = (0.0f64, 0.0f64, 0usize, 0.0f64, 0.0f64, 0usize);
+    for f in 0..mesh.n_faces() {
+        let (no, sk) = (met.non_orthogonality[f], met.skewness[f]);
+        if corner[f] {
+            if no > cn {
+                cn = no;
+                cf = f;
+            }
+            cs = cs.max(sk);
+        } else {
+            if no > on {
+                on = no;
+                of = f;
+            }
+            os = os.max(sk);
+        }
+    }
+    (cn, cs, label(cf), on, os, label(of))
+}
+
+/// ADR 0087 C1: P1, P3-P8 of ADR 0079 on FAN-01-C with construction I (wall stacks along the 3-D normal, as H).
+#[test]
+fn c1_fan01_i_mesh_builds_closes_is_periodic_and_exact() {
+    p_checks_with(&spec_fan01(), &CGridOptions::camber_seam_i_construction());
+}
+
+/// ADR 0087 C1-P2: the full quality target 70 deg / 2.0 / 300 on FAN-01-C with I (registered predicted miss: the wake-line-5 faces lie outside the
+/// corner region).
+#[test]
+#[ignore = "ADR 0087 C1-P2, registered predicted miss: cargo test --release -p rcfd-mesh --test cgrid_w35d c1_p2_fan01_i -- --ignored --nocapture"]
+fn c1_p2_fan01_i_quality_gates_known_miss() {
+    let m = build_fan01_with(&spec_fan01(), &CGridOptions::camber_seam_i_construction());
+    let q = quality_summary(&m.mesh);
+    summary("C1-P2 FAN-01-C I", &q);
+    assert!(q.max_non_orthogonality <= 70.0, "non-orthogonality {}", q.max_non_orthogonality);
+    assert!(q.max_skewness <= 2.0, "skewness {}", q.max_skewness);
+    assert!(q.max_aspect_ratio <= 300.0, "aspect {}", q.max_aspect_ratio);
+}
+
+/// ADR 0087 C1-Q, the registered intermediate target on FAN-01-C with I: (i) corner region at most 70 deg and skewness 2.0; (ii) the global maxima
+/// at most 1 % above H's (84.09 deg, 4.018, 229.5; H measured in the same run).
+#[test]
+fn c1q_fan01_i_corner_region_and_global_maxima() {
+    let (fan, spec) = (fan01(), spec_fan01());
+    let h = build_cgrid_mesh_with(&fan, &spec, &CGridOptions::camber_seam_h_construction()).unwrap();
+    let i = build_fan01_with(&spec, &CGridOptions::camber_seam_i_construction());
+    let (qh, qi) = (quality_summary(&h.mesh), quality_summary(&i.mesh));
+    summary("C1-Q FAN-01-C H", &qh);
+    summary(&format!("C1-Q FAN-01-C I (step {})", i.construction_step), &qi);
+    for (tag, m) in [("H", &h), ("I", &i)] {
+        let r = corner_region_maxima(m);
+        println!(
+            "C1-Q {tag}: corner region non-orth {:.2} skew {:.3} at {}; elsewhere non-orth {:.2} skew {:.3} at {}",
+            r.0, r.1, r.2, r.3, r.4, r.5
+        );
+    }
+    let r = corner_region_maxima(&i);
+    let mut miss = Vec::new();
+    if !(r.0 <= 70.0 && r.1 <= 2.0) {
+        miss.push(format!("(i) corner region {:.2} deg / {:.3}", r.0, r.1));
+    }
+    for (name, a, b) in [
+        ("non-orthogonality", qi.max_non_orthogonality, qh.max_non_orthogonality),
+        ("skewness", qi.max_skewness, qh.max_skewness),
+        ("aspect", qi.max_aspect_ratio, qh.max_aspect_ratio),
+    ] {
+        if !(a <= 1.01 * b) {
+            miss.push(format!("(ii) {name} {a:.4} > 1.01 x {b:.4}"));
+        }
+    }
+    assert!(miss.is_empty(), "C1-Q missed: {miss:?}");
+}
+
+/// ADR 0087 C1-B (blade B, the ADR 0083 rule (ii) and (iii)): S, A', B' build with I; no maximum of A' or B' above H's (same run) by more than
+/// 1 %; closure and topology on S and A', periodicity on S and A' (FAN-01-C: `c1_fan01_i_...`), stacks A' 1e-12 and B' 4.9e-11 along the 3-D
+/// normal.
+#[test]
+fn c1b_blade_b_with_i() {
+    let fb = blade_b();
+    let (h, i) = (
+        CGridOptions::camber_seam_h_construction(),
+        CGridOptions::camber_seam_i_construction(),
+    );
+    let s = build_cgrid_mesh_with(&fb, &spec_s(), &i).unwrap_or_else(|e| panic!("S with I not built: {e:?}"));
+    let mut miss = Vec::new();
+    for (tag, spec) in [("A'", spec_a()), ("B'", spec_b())] {
+        let mh = build_cgrid_mesh_with(&fb, &spec, &h).unwrap();
+        let mi = build_cgrid_mesh_with(&fb, &spec, &i).unwrap_or_else(|e| panic!("{tag} with I not built: {e:?}"));
+        let (qh, qi) = (quality_summary(&mh.mesh), quality_summary(&mi.mesh));
+        summary(&format!("C1-B {tag} H (step {})", mh.construction_step), &qh);
+        summary(&format!("C1-B {tag} I (step {})", mi.construction_step), &qi);
+        for (name, a, b) in [
+            ("non-orthogonality", qi.max_non_orthogonality, qh.max_non_orthogonality),
+            ("skewness", qi.max_skewness, qh.max_skewness),
+            ("aspect", qi.max_aspect_ratio, qh.max_aspect_ratio),
+        ] {
+            if !(a <= 1.01 * b) {
+                miss.push(format!("{tag} {name} {a:.4} > 1.01 x {b:.4}"));
+            }
+        }
+        let (radial, _) = stack_deviation(&mi);
+        let wall = wall_stack_deviation_3d(&fb, &mi);
+        let lim = if tag == "A'" { 1e-12 } else { 4.9e-11 };
+        println!("C1-B {tag} I: stacks radial {radial:.2e}, wall along the 3-D normal {wall:.2e} (limit {lim:e})");
+        if !(radial <= lim && wall <= lim) {
+            miss.push(format!("{tag} stacks {radial:e} / {wall:e}"));
+        }
+        if tag == "A'" {
+            let (cl, topo) = closure(&mi.mesh);
+            let per = periodicity(&mi, 5);
+            println!("C1-B A' I: closure {cl:.2e} topology {topo}; periodicity {per:?}");
+            if !(topo && cl <= 1e-13 && per.is_some_and(|x| x <= 1e-12)) {
+                miss.push("A' closure / periodicity".into());
+            }
+        }
+    }
+    let (cl, topo) = closure(&s.mesh);
+    let per = periodicity(&s, 5);
+    summary(&format!("C1-B S I (step {})", s.construction_step), &quality_summary(&s.mesh));
+    println!("C1-B S I: closure {cl:.2e} topology {topo}; periodicity {per:?}");
+    if !(topo && cl <= 1e-13 && per.is_some_and(|x| x <= 1e-12)) {
+        miss.push("S closure / periodicity".into());
+    }
+    assert!(miss.is_empty(), "C1-B missed: {miss:?}");
+}
+
+/// The registered R-I list of ADR 0087 (combinations not in R-E, R-G, R-H or the development scans): n_chord {17, 21, 26} x n_nose {4, 6} x
+/// n_side {11, 16, 21}, and front_gap {0.22, 0.32, 0.55}; blade B on the S counts, FAN-01 on the FAN-01-C counts otherwise.
+fn r_i_list() -> Vec<ScanCase> {
+    let mut list: Vec<ScanCase> = Vec::new();
+    for (fname, fan, base) in [("B", blade_b(), spec_s()), ("FAN-01", fan01(), spec_fan01())] {
+        for nc in [17, 21, 26] {
+            for nn in [4, 6] {
+                for ns in [11, 16, 21] {
+                    list.push((
+                        format!("{fname} n_chord {nc} n_nose {nn} n_side {ns}"),
+                        fan.clone(),
+                        CGridSpec {
+                            n_chord: nc,
+                            n_nose: nn,
+                            n_side: ns,
+                            ..base.clone()
+                        },
+                    ));
+                }
+            }
+        }
+        for fg in [0.22, 0.32, 0.55] {
+            list.push((
+                format!("{fname} front_gap {fg}"),
+                fan.clone(),
+                CGridSpec {
+                    front_gap: fg,
+                    ..base.clone()
+                },
+            ));
+        }
+    }
+    list
+}
+
+/// One scan result of `run_scan_g`.
+type ScanRow = (String, bool, usize, bool, f64, String);
+
+/// Per fan of a scan: (combinations, built, built and meeting 70 / 2.0 / 300, median non-orthogonality, steps).
+fn scan_counts(res: &[ScanRow], fname: &str) -> (usize, usize, usize, f64, String) {
+    let mine: Vec<_> = res.iter().filter(|r| r.0.starts_with(&format!("{fname} "))).collect();
+    let built: Vec<_> = mine.iter().filter(|r| r.1).collect();
+    let mut no: Vec<f64> = built.iter().map(|r| r.4).collect();
+    no.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mut steps = std::collections::BTreeMap::new();
+    for r in &built {
+        *steps.entry(r.2).or_insert(0) += 1;
+    }
+    (
+        mine.len(),
+        built.len(),
+        mine.iter().filter(|r| r.3).count(),
+        no.get(no.len() / 2).copied().unwrap_or(f64::NAN),
+        format!("{steps:?}"),
+    )
+}
+
+/// ADR 0087 C4: per fan, the R-I combinations that build and validate with I are at least as many as with H (same list, same run); the 100 %
+/// figure, the A'-gate fraction, the median non-orthogonality, the steps and the FAN-01 corner-region maxima are reported.
+#[test]
+fn c4_r_i_builds_with_i_at_least_with_h() {
+    let list = r_i_list();
+    assert!(
+        list.iter().all(|(_, _, sp)| control_range_problems(sp).is_empty()),
+        "R-I lies inside the G range"
+    );
+    let rh = run_scan_g("R-I H", &list, &CGridOptions::camber_seam_h_construction());
+    let ri = run_scan_g("R-I I", &list, &CGridOptions::camber_seam_i_construction());
+    let mut fail = Vec::new();
+    for fname in ["B", "FAN-01"] {
+        let (n, bh, mh, medh, sh) = scan_counts(&rh, fname);
+        let (_, bi, mi, medi, si) = scan_counts(&ri, fname);
+        println!(
+            "C4 R-I {fname}: {n} combinations; H builds {bh} (meet 70/2/300: {mh}, median {medh:.2}, steps {sh}); I builds {bi} (meet {mi}, median {medi:.2}, steps {si})"
+        );
+        if bi < bh {
+            fail.push(format!("{fname}: I {bi} < H {bh}"));
+        }
+    }
+    for (label, fan, spec) in list.iter().filter(|(l, _, _)| l.starts_with("FAN-01 ")) {
+        if let Ok(m) = build_cgrid_mesh_with(fan, spec, &CGridOptions::camber_seam_i_construction()) {
+            let r = corner_region_maxima(&m);
+            println!(
+                "C4 R-I corner region with I | {label} | {:.2} deg skew {:.3} | elsewhere {:.2} skew {:.3}",
+                r.0, r.1, r.3, r.4
+            );
+        }
+    }
+    assert!(fail.is_empty(), "C4 gate missed: {fail:?}");
+}
+
+/// Rule (d) smoke of the ADR 0087 set-ups (construction only, counts and build status printed, no quality): FAN-01-C with I, the R-I list with H.
+#[test]
+#[ignore = "ADR 0087 rule (d) smoke: cargo test --release -p rcfd-mesh --test cgrid_w35d smoke_w37d -- --ignored --nocapture"]
+fn smoke_w37d_set_ups() {
+    match build_cgrid_mesh_with(&fan01(), &spec_fan01(), &CGridOptions::camber_seam_i_construction()) {
+        Ok(m) => println!(
+            "SMOKE FAN-01-C with I: built, {} cells, step {}",
+            m.mesh.n_cells(),
+            m.construction_step
+        ),
+        Err(e) => println!("SMOKE FAN-01-C with I: NOT built: {e:?}"),
+    }
+    let list = r_i_list();
+    let in_range = list
+        .iter()
+        .filter(|(_, _, sp)| control_range_problems(sp).is_empty())
+        .count();
+    let h = CGridOptions::camber_seam_h_construction();
+    let built = list
+        .iter()
+        .filter(|(_, f, sp)| build_cgrid_mesh_with(f, sp, &h).is_ok())
+        .count();
+    println!(
+        "SMOKE R-I: {} combinations ({in_range} in the G range); built with H (construction only): {built}",
+        list.len()
+    );
+}

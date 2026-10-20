@@ -131,6 +131,7 @@ fn options_of(construction: &str) -> CGridOptions {
     match construction {
         "camber_seam" => CGridOptions::camber_seam_construction(),
         "camber_seam_h" => CGridOptions::camber_seam_h_construction(),
+        "camber_seam_i" => CGridOptions::camber_seam_i_construction(),
         other => panic!("construction {other} not handled by the diagnosis"),
     }
 }
@@ -378,4 +379,61 @@ fn c3_fan01_h_laminar_smoke_solve_stays_bounded_known_miss() {
         r.late,
         r.c10
     );
+}
+
+/// ADR 0087 C2 (P9 of ADR 0079 with construction I): `FvGeometry::new` accepts the FAN-01-C mesh, `check_mesh` is ok and the rules raise no
+/// error-level finding, through the case with `c_grid_construction = "camber_seam_i"`.
+#[test]
+fn c2_fan01_i_mesh_is_accepted_by_the_solver_and_the_rules() {
+    let case = Case::parse_toml(&smoke_case(X1, "camber_seam_i", 1.5e-5)).unwrap_or_else(|e| panic!("{e:?}"));
+    let mesh = build_mesh(&case).unwrap_or_else(|e| panic!("C2 FAN-01 not built with I: {e:?}"));
+    let q = check_mesh(&mesh);
+    let rules = check_case(&case, Some(&mesh_context(&q)));
+    println!(
+        "C2 FAN-01 (camber_seam_i): {} cells; check_mesh ok {} (errors {:?}); non-orthogonality {:.2}, skewness {:.3}, aspect {:.1}; {} rule findings",
+        q.n_cells,
+        q.is_ok(),
+        q.errors,
+        q.max_non_orthogonality,
+        q.max_skewness,
+        q.max_aspect_ratio,
+        rules.len()
+    );
+    for r in &rules {
+        println!("C2 finding {} {:?} {}: {}", r.id, r.severity, r.path, r.message);
+    }
+    assert!(
+        FvGeometry::new(Arc::new(mesh)).is_ok(),
+        "FvGeometry::new refuses the FAN-01 mesh"
+    );
+    assert!(q.is_ok(), "check_mesh rejects the FAN-01 mesh: {:?}", q.errors);
+    assert!(
+        !has_errors(&rules) && rules.iter().all(|r| r.severity != Severity::Error),
+        "error-level rule finding"
+    );
+}
+
+/// ADR 0087 C3 (P10 of ADR 0079 with construction I): the laminar smoke solve stays bounded by the ADR 0075 amendment 3 criterion.
+#[test]
+fn c3_fan01_i_laminar_smoke_solve_stays_bounded() {
+    let r = run("C3 I", X1, "camber_seam_i", 1.5e-5, 300);
+    assert!(!r.failure && r.finite);
+    assert!(
+        r.late <= r.c10,
+        "continuity grew: {:e} over 200-300 against {:e} at iteration 10",
+        r.late,
+        r.c10
+    );
+}
+
+/// Rule (d) smoke of ADR 0087: the P10 case with `camber_seam_i` parses, builds and runs 3 iterations (nothing else is judged).
+#[test]
+#[ignore = "ADR 0087 rule (d) smoke: cargo test --release -p rcfd-api --test fan01_p10_w36d smoke_w37d -- --ignored --nocapture"]
+fn smoke_w37d_p10_case() {
+    let case = Case::parse_toml(&smoke_case(X1, "camber_seam_i", 1.5e-5)).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
+    for it in 1..=3 {
+        let st = sim.step();
+        println!("SMOKE P10 I it {it}: finite {}", st.continuity.is_finite() && st.res_u.is_finite() && st.res_p.is_finite());
+    }
 }
