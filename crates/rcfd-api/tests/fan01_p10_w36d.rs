@@ -155,9 +155,15 @@ fn run(tag: &str, c: Counts, construction: &str, nu: f64, iters: usize) -> P10Ru
 
 /// [`run`] with extra lines at the top of the `[solver]` table (ADR 0084: `velocity_correction = "face_flux"`).
 fn run_with(tag: &str, c: Counts, construction: &str, nu: f64, iters: usize, solver_lines: &str) -> P10Run {
-    let text = smoke_case(c, construction, nu).replacen("[solver]
-", &format!("[solver]
-{solver_lines}"), 1);
+    let text = smoke_case(c, construction, nu).replacen(
+        "[solver]
+",
+        &format!(
+            "[solver]
+{solver_lines}"
+        ),
+        1,
+    );
     let case = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}"));
     let cg = build_cgrid_mesh_with(&fan_of(&case), &cgrid_spec_of(&case), &options_of(construction)).unwrap();
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
@@ -352,8 +358,15 @@ fn part_a_p10_cause() {
 #[ignore = "ADR 0084 FAN-01 report, run by hand: cargo test --release -p rcfd-api --test fan01_p10_w36d w37a -- --ignored --nocapture"]
 fn w37a_fan01_with_face_flux_velocity_correction() {
     // one 1500-iteration run: c10 and L (200-300) are read from its first 300 iterations, which a 300-iteration run repeats exactly
-    run_with("W37A x1 face_flux", X1, "camber_seam", 1.5e-5, 1500, "velocity_correction = \"face_flux\"
-");
+    run_with(
+        "W37A x1 face_flux",
+        X1,
+        "camber_seam",
+        1.5e-5,
+        1500,
+        "velocity_correction = \"face_flux\"
+",
+    );
 }
 
 /// ADR 0083 C2 (P9 of ADR 0079 with construction H): `FvGeometry::new` accepts the FAN-01-C mesh, `check_mesh` is ok and the rules raise no
