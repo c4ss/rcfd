@@ -571,6 +571,16 @@ non-orthogonal secondary-gradient part of the pressure flux. Without it the corr
 keeps every existing result bit for bit; the switch is inert without correctors and changes nothing beyond round-off on an
 orthogonal mesh. Not available for the variable-density SIMPLEC (it has no non-orthogonal correctors).
 
+### SIMPLEC on uniformly sheared meshes (ADR 0081 part X)
+
+On a channel whose cells are uniformly sheared by an angle theta (every face non-orthogonal by theta), SIMPLEC with `alpha_u = 0.9`, `alpha_p = 1.0` and no
+non-orthogonal correctors overshoots from 50 degrees and diverges from the impulsive start from 55 degrees, with `upwind` and `linear_upwind`, at cell Peclet
+numbers of 10 and 0.2, and also on a doubly periodic box without walls or open boundaries (from 60 degrees). It is a start-up divergence: the converged state
+at 60 degrees is stable under the same iteration (perturbations decay by a factor of 0.89 to 0.98 per iteration). Measured thresholds on that channel:
+`alpha_p` 0.7: 60 degrees, 0.5: 70, 0.3: stable up to 79; SIMPLEC 0.7/0.3: 75; two correctors with `solver.simplec_non_orthogonal_compensation = true`: 70
+(two correctors without it: unstable from 15 degrees); a lower `alpha_u` at `alpha_p = 1.0` and SIMPLE 0.7/0.3 are unstable from 45 degrees. On strongly
+non-orthogonal meshes lower `solver.alpha_p` first. The mechanism is not identified beyond this (no boundary, wall or convection term is needed).
+
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
 Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset
@@ -1573,7 +1583,21 @@ fields. Opt-in; not used by the transient kernel, scalars or turbulence equation
 With the steady solvers, `linear_upwind` and `tvd_van_leer` diverged from the first iterations on the FAN-01 H-slit sector mesh (13 332 cells, wall cells of
 aspect ratio up to 944 with face non-orthogonality up to 79 degrees), laminar and with SST; `upwind` and `tvd_minmod` were stable. The divergence starts in the
 wall cells with the largest aspect ratio times the tangent of their non-orthogonality: the unlimited extrapolation `grad(u) . (x_f - x_U)` over the long side of
-such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or `tvd_minmod` on such meshes.
+such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or `tvd_minmod` on such meshes, or
+`linear_upwind` with `solver.linear_upwind_limiter = "barth_jespersen"` (below; ADR 0081).
+
+## Limited linear-upwind extrapolation (`solver.linear_upwind_limiter`)
+
+`solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) applies to `solver.convection = "linear_upwind"` with `solver.algorithm = "simple"` or
+`"simplec"` (incompressible, constant density); with any other algorithm or scheme a value other than `none` is a located error (ADR 0081 part L).
+`barth_jespersen` multiplies the least-squares gradient of each velocity component by its Barth-Jespersen factor before the face extrapolation
+`u_U + grad(u)_U . (x_f - x_U)`, so the face value stays within the range of the upwind cell's own and neighbour values (boundary values included); the
+explicit non-orthogonal correction of the momentum Laplacian keeps the unlimited gradient. Turbulence, scalar and energy equations are not limited.
+Measured (ADR 0081): stable on the FAN-01 sector mesh, laminar and with SST, where the unlimited scheme diverges at iteration 7; the converging cases
+checked (a lid cavity, the MRF Taylor-Couette annulus across a non-conformal interface, the shipped fan sector) converge or stay stable as without it,
+and with the limiter forced on in all 542 steady `linear_upwind` runs of the test suite no run tripped the divergence guard that does not trip without it;
+second order is kept on the Kovasznay flow (L2 order 2.17 on the finest pair, error within 1 % of the unlimited scheme). Not checked: smooth flows with
+interior extrema of a velocity component, where the limiter clips. Opt-in because it moves every `linear_upwind` result.
 
 ## Design-loop files (not part of the case schema)
 
