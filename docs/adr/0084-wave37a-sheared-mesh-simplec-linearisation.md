@@ -194,3 +194,71 @@ the operator, which for a uniform shear is at most sin(theta) (0.87 at 60 deg, 0
 and of the cross-derivative term, first principles), so P(m <= 4) can leave most of the non-orthogonal part unconverged. Choice rule, extended: of the
 qualifying candidates the one with the smallest rho at K40 70 x* alpha_p 0.7; ties to the cheaper (R, then P(m) with the smallest m, then P(implicit)).
 Cost per outer iteration (pressure solves) is reported for every candidate.
+
+## Amendment 2 (written after all registered Jacobians and attribution runs, before any acceptance run and before the key was wired; no limit changed)
+
+### Diagnosis results (each Jacobian formed once; `crates/rcfd-fv/tests/w37a_jacobian.rs`, `scripts/w37a_jacobian_analysis.py`)
+
+| Jacobian | rho | leading eigenvalue, eigenvector |
+|---|---|---|
+| J1 K40 x*, 50 / 55 / 57.5 deg | 0.9505 / 0.9472 / 0.9919 | 50, 55: +0.95, slow mixed u/v mode, m = 1; 57.5: -0.9919, pressure, m = 1 |
+| J1 K40 x*, 60 / 65 / 70 deg | **1.0612 / 1.2375 / 1.4425** | negative real (period two), 99 % pressure, m = 1 (next m = 1, then m = 2), no checkerboard, not seam-concentrated |
+| J2 K40 x0, 60 / 70 | 1.0586 / 1.4411 | the same pressure mode (the initial state of this nearly linear problem has the same linearisation) |
+| J3 K40 x*, alpha_p 0.7: 60 / 65 / 70 | 0.9437 / 0.9528 / **1.1258** | 70: the same negative pressure mode |
+| J4 K40 x*, alpha_p 0.5: 60 / 70 | 0.9566 / 0.9563 | a positive pressure mode (m = 13) |
+| J5 K20 / K10 at 60 | **1.0471** / 0.9104 | K20: the negative pressure mode, m = 1 of its 20-cell row (= m = 2 of K40) |
+| J6 KS (nu 50) x* / x0 at 60 | 1.0587 / 1.0586 | the same mode, 100 % pressure |
+| J7 KC (`central`) at 60 | 1.0625 | the same mode |
+| J8 B x*, 50 / 55 / 60 | 0.9103 / 0.9105 / 0.9105 | complex pair 0.910 +- 0.012i |
+| J9 B x0 / x1 / x5 / x10 / x20 (55 deg; max speed 0 / 1.86 / 4.40 / 14.0 / 93.3) | **1.5836** / 0.9098 / **2.4169** / **20.84** / **11.22** | x0: negative, mean-velocity/pressure mode (m = 0); x5-x20: positive real velocity (v) modes |
+| J10 K40 x*, 0 / 30 | 0.9684 / 0.9612 | slow positive mode |
+
+Transient growth at x* (deflated, scaled): 50 deg max ||J^k|| = 59.9 (k = 1), 55: 64.8 (k = 1), decaying from k = 10 on; at 60 and above it grows
+without bound (rho > 1). Neutral modes: two (mean u_x and u_y) at 1 +- 3e-9 at every K40 x*; none excluded at the non-fixed states.
+
+Method checks: **M1** K40 60: scaled 1.65e-5 (raw 4.26e-4, see amendment 1), rho 1.061189 for both steps; B 55: scaled 4.8e-7, raw 7.0e-7, rho
+0.910535 / 0.910551: met in the scaled variables. **M2** every state: stateless. **M3** 60 / 65 / 70 (alpha_p 1.0) and 70 (0.7): measured growth
+1.0586 / 1.2287 / 1.4343 / 1.1170 against rho 1.0612 / 1.2375 / 1.4425 / 1.1258 (0.25 / 0.71 / 0.57 / 0.79 %): met. **M4** every formed K40 pair agrees
+with its measured classification (alpha_p 1.0: 50-57.5 rho < 1 STABLE, 60-70 rho > 1 UNSTABLE; 0.7: 60, 65 STABLE / rho < 1, 70 UNSTABLE / rho > 1).
+
+Readings (registered rules): **H1 stands** (V7 is a linear instability of its converged state, a period-two pressure mode; not a start-up
+transient). **H2 stands** (Stokes limit 1.0587, central 1.0625: no convection needed). **H3 stands** (m = 1; K10 0.910 <= 1 < K20 1.047: the 1 x 1 box
+cannot hold the mode). **H4 stands, both clauses** (channel B: x* stable 0.91 at 50-60; the linearisation along the start-up is unstable at x0, x5,
+x10, x20; the ADR 0081 H-X6 reading is confirmed for the channel and refuted for V7). **H5 stands** (no instability without shear).
+
+### Attribution (K40 60 x* alpha_p 1.0, base rho 1.0612; K40 70 x* alpha_p 0.7, base 1.1258; B 55 x0, base 1.5836)
+
+| switch | K40 60 / 1.0 | K40 70 / 0.7 | B 55 x0 | reading (K40) | cost of one map evaluation away from x* |
+|---|---|---|---|---|---|
+| P(1) | 0.94376 | 0.94996 | 1.3181 | drives | 2 pressure solves |
+| P(2) | 0.94375 | 0.94749 | 1.3455 | drives | 3 |
+| P(4) | 0.94375 | 0.94785 | 1.6332 | drives | 5 |
+| P(implicit) | 0.94375 | 0.94786 | 1.9409 | drives | GMRES (tens of solves) |
+| **R** | **0.94331** | **0.94282** | **0.9514** | **drives** | 1 (+ one flux evaluation) |
+| S (own x*) | 0.95207 | 1.06764 | - (no seam) | drives at 60 / contributes at 70 | 1 |
+
+With P or R the period-two pressure mode is gone at K40; what remains (0.943-0.950) is the slow velocity mode of the alpha_p 0.7 / 0 deg maps. On the channel
+start-up state x0 the P family leaves a positive mode concentrated at the boundary rows/columns (seam fraction 0.70-0.94), R does not.
+
+**Mechanism (stated with the measurements above):** the outer SIMPLEC iteration on a uniformly sheared mesh has a period-two pressure mode whose
+eigenvalue passes -1 between 57.5 and 60 degrees at alpha_p 1.0 (between 65 and 70 at 0.7); it lives in the Stokes part of the iteration (no convection,
+no wall, no open boundary needed) and is the mismatch between the cell velocity correction (`rAtU` times the full Green-Gauss gradient of the pressure
+change, tangential part included) and the face flux correction (the over-relaxed orthogonal part only): either making the face correction carry the
+non-orthogonal part of the CHANGE (P) or making the cell correction carry only what the face correction carries (R) removes the mode, and neither changes
+the fixed point. The missing SIMPLEC compensation on periodic seams (S) also moves it; it is a separate defect of periodic meshes (the converged seam
+flux carries rAtU where internal faces carry rAU) and is reported for a later wave, not fixed here.
+
+### The fix, frozen (choice rule: R and every P qualify; the smallest rho at K40 70 alpha_p 0.7 is R's, 0.94282; R is also the cheapest)
+
+* Solver: `SimpleSolver::reconstructed_correction: bool` (default `false`: the existing path, bit-identical by construction). With `true` the cell
+  velocity after the pressure solve is `HbyA - rAtU grad(p_old) + (1/V_c) sum_f s_cf (phi_f - phi_f(p_old)) (x_f - x_c)`, where `phi_f(p_old)` is
+  the corrected flux evaluated with the old pressure (the same function, so the difference is exactly the part of the flux correction that depends on
+  `p_new - p_old`; zero on fixed-velocity faces).
+* Case key `solver.velocity_correction`: `"gradient"` (default, the existing behaviour) or `"face_flux"` (R). Any other algorithm than `simple` /
+  `simplec` with the incompressible steady solver (engine `Steady`) and `face_flux` is a located error at `solver.velocity_correction`.
+* The diagnostic switches P(m), P(implicit) and S are removed from the solver after this amendment's record commit (their numbers stay here).
+* Acceptance A1-A6 as registered, with the fix = R. A6 adds: an invalid combination (`face_flux` with `pimple`, with `coupled`) is a located error.
+  FAN-01 (reported): the P10 set-up with `solver.velocity_correction = "face_flux"`.
+
+Note for the reading of A2: the channel start-up instability (H4) also has velocity modes far from x* (J9 x5-x20, positive eigenvalues up to 20.8,
+after the flow has overshot); R was attributed at x0 only (registered), so A2 is not predicted by the diagnosis.

@@ -519,6 +519,15 @@ pub struct SimpleSolver {
     /// velocity component is multiplied by its limiter factor in the convection term only (the Laplacian's non-orthogonal correction
     /// keeps the unlimited gradient). `None` (default) leaves the solver unchanged; ignored for other schemes.
     pub linear_upwind_limiter: Option<crate::gradient::Limiter>,
+    /// ADR 0084 P(m) (diagnostic): sub-iterations of the non-orthogonal part of the pressure CORRECTION `q = p_new - p_old` (zero at a fixed
+    /// point, so the fixed point is unchanged). 0 (default) leaves the solver unchanged.
+    pub correction_non_orth: usize,
+    /// ADR 0084 P(implicit) (diagnostic): the correction equation with its non-orthogonal part solved by GMRES instead of sub-iterated.
+    pub correction_non_orth_implicit: bool,
+    /// ADR 0084 R (diagnostic): cell velocity corrected by the reconstruction of the face-flux correction instead of `rAtU grad(p_new - p_old)`.
+    pub reconstructed_correction: bool,
+    /// ADR 0084 S (diagnostic): the SIMPLEC compensation `(rAtU - rAU)_f snGrad(p_old) |S|` on periodic seam faces as well (changes the fixed point).
+    pub simplec_seam_compensation: bool,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -608,6 +617,10 @@ impl SimpleSolver {
             impermeable: None,
             periodic_gradient_partner: false,
             linear_upwind_limiter: None,
+            correction_non_orth: 0,
+            correction_non_orth_implicit: false,
+            reconstructed_correction: false,
+            simplec_seam_compensation: false,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -976,6 +989,18 @@ impl SimpleSolver {
             for f in 0..n_int {
                 phi_hby_a[f] += corr[f];
             }
+            if self.simplec_seam_compensation {
+                for (i, cp) in pbc.coupled.iter().enumerate() {
+                    if let Some(gf) = *cp {
+                        let f = n_int + i;
+                        let (o, q) = (mesh.owner()[f], mesh.owner()[gf]);
+                        let (dp, dq) = (g.dn[i], g.dn[gf - n_int]);
+                        let w = dq / (dp + dq);
+                        let dr = w * (r_atu[o] - r_au[o]) + (1.0 - w) * (r_atu[q] - r_au[q]);
+                        phi_hby_a[f] += dr * vec3::norm(sf[f]) * (self.p.values[q] - self.p.values[o]) / (dp + dq);
+                    }
+                }
+            }
             if s.simplec_non_orth_compensation && s.non_orth_correctors > 0 {
                 let corr = self.simplec_non_orth_flux_correction(&r_au, &r_atu, &pbc);
                 for f in 0..n_int {
@@ -1028,6 +1053,46 @@ impl SimpleSolver {
         if self.record_parts {
             self.pressure_parts_history.push(p_parts);
         }
+        if self.correction_non_orth > 0 {
+            // ADR 0084 P(m): the non-orthogonal part of the correction q = p_new - p_old, sub-iterated (zero at a fixed point)
+            let base = phi_hby_a.clone();
+            for _ in 0..self.correction_non_orth {
+                let q: Vec<f64> = p_new.iter().zip(&p_old).map(|(a, b)| a - b).collect();
+                let nf = correction_non_orth_flux(&g, &gamma_p, &pbc, &q);
+                phi_hby_a = base.iter().zip(&nf).map(|(a, b)| a - b).collect();
+                solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, false);
+            }
+        }
+        if self.correction_non_orth_implicit {
+            // ADR 0084 P(implicit): (L_o + N) q = L_o q0 solved by GMRES in the form (I - L_o^-1 N) q = q0, then one L_o solve with the final
+            // non-orthogonal flux so that the corrected flux is exactly divergence-free
+            let q0: Vec<f64> = p_new.iter().zip(&p_old).map(|(a, b)| a - b).collect();
+            let mut inner = controls;
+            inner.solver.tol_rel = inner.solver.tol_rel.min(1e-8);
+            let op = CorrectionOp {
+                g: &g,
+                gamma_p: &gamma_p,
+                pbc: &pbc,
+                phi: &phi_hby_a,
+                p0: &p_new,
+                controls: inner,
+            };
+            let mut q = q0.clone();
+            let ctl = SolveControl {
+                tol_abs: 1e-300,
+                tol_rel: 1e-8,
+                max_iter: 400,
+            };
+            rcfd_linalg::gmres(&op, &q0, &mut q, &rcfd_linalg::Identity, 40, &ctl);
+            let nf = correction_non_orth_flux(&g, &gamma_p, &pbc, &q);
+            for (a, b) in phi_hby_a.iter_mut().zip(&nf) {
+                *a -= b;
+            }
+            for c in 0..n {
+                p_new[c] = p_old[c] + q[c];
+            }
+            solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, false);
+        }
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
         let bv_new = self.gradient_wall_values(&pbc, body.as_ref(), &p_new);
         self.phi = corrected_flux(
@@ -1039,6 +1104,27 @@ impl SimpleSolver {
             ub_mass,
             s.non_orth_correctors > 0,
         );
+        // ADR 0084 R: the cell-velocity correction reconstructed from the part of the face flux that depends on q = p_new - p_old
+        let recon: Option<Vec<Vec3>> = if self.reconstructed_correction {
+            let phi_old_p = corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, &p_old, ub_mass, s.non_orth_correctors > 0);
+            let (cf, cc) = (mesh.face_centres(), mesh.cell_centres());
+            let mut r = vec![[0.0; 3]; n];
+            for f in 0..mesh.n_faces() {
+                if g.empty[f] {
+                    continue;
+                }
+                let dphi = self.phi[f] - phi_old_p[f];
+                let o = mesh.owner()[f];
+                r[o] = vec3::add(r[o], vec3::scale(vec3::sub(cf[f], cc[o]), dphi / vol[o]));
+                if f < n_int {
+                    let nb = mesh.neighbour()[f];
+                    r[nb] = vec3::sub(r[nb], vec3::scale(vec3::sub(cf[f], cc[nb]), dphi / vol[nb]));
+                }
+            }
+            Some(r)
+        } else {
+            None
+        };
 
         // under-relax pressure, correct velocity
         for c in 0..n {
@@ -1060,7 +1146,10 @@ impl SimpleSolver {
         for c in 0..n {
             for k in 0..3 {
                 if g.active[k] {
-                    let un = hby_a[c][k] - r_atu[c] * grad_corr[c][k];
+                    let un = match &recon {
+                        Some(r) => hby_a[c][k] - r_atu[c] * grad_p[c][k] + r[c][k],
+                        None => hby_a[c][k] - r_atu[c] * grad_corr[c][k],
+                    };
                     self.u.values[c][k] = un;
                     max_du = nan_max(max_du, (un - u_old[c][k]).abs());
                 }
@@ -1268,6 +1357,53 @@ impl SimpleSolver {
             iterations: last.iteration,
             converged: false,
             last,
+        }
+    }
+}
+
+/// ADR 0084: the non-orthogonal face term `gamma_f k_f . grad(q)_f` of a pressure correction `q` (internal faces; least-squares gradient with the
+/// homogeneous boundary values of the pressure conditions).
+fn correction_non_orth_flux(g: &FvGeometry, gamma_p: &[f64], pbc: &PressureBc, q: &[f64]) -> Vec<f64> {
+    let mesh = &g.mesh;
+    let sf = mesh.face_area_vectors();
+    let b0 = boundary_values_pbc(g, pbc, &vec![0.0; q.len()]);
+    let bvq: Vec<f64> = boundary_values_pbc(g, pbc, q).iter().zip(&b0).map(|(a, b)| a - b).collect();
+    let gr = least_squares(g, q, &bvq);
+    let mut out = vec![0.0; mesh.n_faces()];
+    for f in 0..g.n_internal {
+        if g.empty[f] {
+            continue;
+        }
+        let d = g.delta[f];
+        let k = vec3::sub(sf[f], vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d)));
+        let w = g.weights[f];
+        let gf = [0, 1, 2].map(|i| w * gr[mesh.owner()[f]][i] + (1.0 - w) * gr[mesh.neighbour()[f]][i]);
+        out[f] = gamma_p[f] * vec3::dot(k, gf);
+    }
+    out
+}
+
+/// ADR 0084: `q -> q - L_o^-1 N q` (the correction equation preconditioned by the orthogonal-part pressure solve).
+struct CorrectionOp<'a> {
+    g: &'a FvGeometry,
+    gamma_p: &'a [f64],
+    pbc: &'a PressureBc,
+    phi: &'a [f64],
+    p0: &'a [f64],
+    controls: PressureControls,
+}
+
+impl rcfd_linalg::LinearOperator for CorrectionOp<'_> {
+    fn size(&self) -> usize {
+        self.p0.len()
+    }
+    fn apply(&self, x: &[f64], y: &mut [f64]) {
+        let nf = correction_non_orth_flux(self.g, self.gamma_p, self.pbc, x);
+        let rhs: Vec<f64> = self.phi.iter().zip(&nf).map(|(a, b)| a - b).collect();
+        let mut sol = self.p0.to_vec();
+        solve_pressure_parts(self.g, self.gamma_p, self.pbc, &rhs, &mut sol, &self.controls, false);
+        for i in 0..y.len() {
+            y[i] = x[i] - (sol[i] - self.p0[i]);
         }
     }
 }
