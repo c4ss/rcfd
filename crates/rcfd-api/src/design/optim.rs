@@ -1,6 +1,7 @@
-//! Gradient-free, bound-aware, seeded optimisers (ADR 0067): Nelder-Mead (Nelder and Mead 1965) with clamping into the box
+//! Bound-aware optimisers. Gradient-free and seeded (ADR 0067): Nelder-Mead (Nelder and Mead 1965) with clamping into the box
 //! and restarts, and differential evolution (Storn and Price 1997, DE/rand/1/bin). Constraints use Deb's feasibility rules
-//! (Deb 2000): feasible beats infeasible, two infeasible points compare by total violation, two feasible by objective.
+//! (Deb 2000): feasible beats infeasible, two infeasible points compare by total violation, two feasible by objective. One
+//! gradient method (ADR 0091): projected steepest descent with Armijo backtracking on a caller-supplied gradient.
 //!
 //! The optimisers are deterministic functions of (bounds, options, seed, evaluation results). They ask for evaluations in
 //! batches through a closure, so a caller can evaluate a batch concurrently, answer from a store (resume) or stop the run
@@ -407,6 +408,80 @@ pub fn differential_evolution(b: &Bounds, opts: &DeOptions, eval: &mut Eval<'_>)
     })
 }
 
+/// Options of [`projected_gradient`].
+#[derive(Debug, Clone)]
+pub struct PgOptions {
+    /// Gradient iterations (accepted steps).
+    pub max_iters: usize,
+    /// First trial step of every iteration: the parameter with the largest gradient relative to its range moves by this
+    /// fraction of its range.
+    pub step: f64,
+    /// Armijo sufficient-decrease constant.
+    pub armijo: f64,
+    /// Step halvings before an iteration gives up.
+    pub max_halvings: usize,
+    /// Start point (clamped into the box).
+    pub x0: Vec<f64>,
+}
+
+/// Value callback of [`projected_gradient`]: `(f, gradient)` at `x`; the gradient may be empty when the flag is `false`.
+pub type GradEval<'a> = dyn FnMut(&[f64], bool) -> Result<(f64, Vec<f64>), Stop> + 'a;
+
+/// Bound-constrained steepest descent (ADR 0091): the step `x - t g` is projected onto the box and accepted by Armijo
+/// backtracking along the projection arc. The gradient comes from the caller (for example the adjoint of `design::adjoint`);
+/// trial points ask for the value only. Converged when the projected step no longer decreases the linear model.
+pub fn projected_gradient(b: &Bounds, opts: &PgOptions, eval: &mut GradEval<'_>) -> Result<OptResult, Stop> {
+    let range: Vec<f64> = b.iter().map(|&(lo, hi)| hi - lo).collect();
+    let mut x = opts.x0.clone();
+    if x.len() != b.len() {
+        return Err(Stop::Error("x0 does not match the bounds".into()));
+    }
+    clamp_into(&mut x, b);
+    let (mut f, mut g) = eval(&x, true)?;
+    let mut evals = 1;
+    let mut converged = false;
+    for _ in 0..opts.max_iters {
+        if g.len() != x.len() {
+            return Err(Stop::Error("gradient size does not match the bounds".into()));
+        }
+        let gmax = g.iter().zip(&range).map(|(gi, r)| gi.abs() / r).fold(0.0, f64::max);
+        if gmax.is_nan() || gmax <= 0.0 {
+            converged = true;
+            break;
+        }
+        let mut t = opts.step / gmax;
+        let mut accepted = false;
+        for _ in 0..=opts.max_halvings {
+            let mut xt: Vec<f64> = x.iter().zip(&g).map(|(xi, gi)| xi - t * gi).collect();
+            clamp_into(&mut xt, b);
+            let dec: f64 = g.iter().zip(x.iter().zip(&xt)).map(|(gi, (a, c))| gi * (a - c)).sum();
+            if dec <= 0.0 {
+                converged = true;
+                break;
+            }
+            let (ft, _) = eval(&xt, false)?;
+            evals += 1;
+            if ft <= f - opts.armijo * dec {
+                x = xt;
+                accepted = true;
+                break;
+            }
+            t *= 0.5;
+        }
+        if !accepted {
+            break;
+        }
+        (f, g) = eval(&x, true)?;
+        evals += 1;
+    }
+    Ok(OptResult {
+        x,
+        fitness: Fitness::new(f, 0.0),
+        evaluations: evals,
+        converged,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,5 +704,32 @@ mod tests {
             nelder_mead(&bounds, &NmOptions::default(), &mut ev).unwrap_err(),
             Stop::Interrupted
         );
+    }
+
+    #[test]
+    fn projected_gradient_reaches_a_bound_constrained_minimum() {
+        // (x - 3)^2 + 2 (y + 1)^2 on [0, 2] x [-5, 5]: minimum (2, -1) with x on its bound
+        let bounds = [(0.0, 2.0), (-5.0, 5.0)];
+        let mut calls = 0;
+        let mut ev = |x: &[f64], grad: bool| -> Result<(f64, Vec<f64>), Stop> {
+            calls += 1;
+            let f = (x[0] - 3.0).powi(2) + 2.0 * (x[1] + 1.0).powi(2);
+            let g = if grad {
+                vec![2.0 * (x[0] - 3.0), 4.0 * (x[1] + 1.0)]
+            } else {
+                vec![]
+            };
+            Ok((f, g))
+        };
+        let o = PgOptions {
+            max_iters: 100,
+            step: 0.1,
+            armijo: 1e-4,
+            max_halvings: 30,
+            x0: vec![0.5, 4.0],
+        };
+        let r = projected_gradient(&bounds, &o, &mut ev).unwrap();
+        assert!((r.x[0] - 2.0).abs() < 1e-12 && (r.x[1] + 1.0).abs() < 1e-6, "{:?}", r.x);
+        assert_eq!(r.evaluations, calls);
     }
 }

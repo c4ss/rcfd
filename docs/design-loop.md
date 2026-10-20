@@ -163,8 +163,32 @@ The design loop's runs go through the run-control driver, so a diverged candidat
 (before, a finite blow-up such as SIMPLE with alpha 1/1 ran to its iteration cap as `not_converged`). PISO/PIMPLE runs with one pressure corrector also
 make one pressure-lag estimate and report a `pressure_lag` warning when the lagged pressure error will be amplified (`solver.pressure_lag_check`).
 
+## Adjoint shape sensitivities and the gradient method (library only, ADR 0091)
+
+`rcfd_api::design::adjoint` computes the derivative of objectives of a converged steady laminar SIMPLE/SIMPLEC solution with
+respect to shape parameters, and `rcfd_api::design::optim::projected_gradient` uses such gradients (bound-constrained steepest
+descent, Armijo backtracking; trial points ask for the value only). Library API only: no case-file, study, service or MCP entry.
+
+* Morph: `Ffd`, a Bernstein free-form-deformation lattice over a box in the `(x, y)` plane; each parameter moves one control
+  point in one direction, points outside the box stay; the mesh is rebuilt with `rcfd_mesh::motion::moved_mesh` (same topology).
+* `adjoint_gradient(build, a, converged, objectives, opts)`: `build(a)` returns a solver on the morphed mesh with the case's
+  conditions and settings; `converged` is the converged `SimpleState` at `a`. `shape_gradient` solves the primal from rest first.
+* Formulation: fixed-point discrete adjoint with a finite-difference-assembled dense Jacobian of one SIMPLE/SIMPLEC iteration
+  (`(I - G_X)^T lambda = J_X^T`, `dJ/da = J_a + lambda^T G_a`). At a converged fixed point this is the sensitivity of the discrete
+  residual root, independent of the relaxation. Cost: `2 N` single iterations plus a dense LU of size `N` (state unknowns), so
+  it is for small meshes only (`max_state` 4000 by default); it is independent of the number of parameters.
+* Accurate for: the discrete objective of the converged discrete solution on the given mesh and settings, interior-node motion
+  included; not the mesh-converged quantity. Needs inner linear solves converged to round-off (as `adjoint::Duct::settings`) and
+  no face flux on the upwind or limiter switch. Refused: turbulence (`nu_face`; no frozen-turbulence approximation is made),
+  body forces, the bulk-velocity driver, the pseudo-time controller and face jumps.
+* Verified (ADR 0091): 2D duct, Re 20, 40 x 10 cells, three FFD parameters: the adjoint derivatives of the pressure drop and the
+  wall drag match central finite differences of converged solutions to 1.1e-6 relative (registered limit 5 percent). One gradient
+  (N = 2050) takes about 6 s against 0.33 s per primal solve, so it pays off only beyond roughly 9 parameters (central
+  differences) on this mesh.
+
 ## Not delivered
 
-CMA-ES, multi-objective evolutionary search, Halton sequences, gradient (adjoint) optimisation, surrogate models, warm start for
+CMA-ES, multi-objective evolutionary search, Halton sequences, adjoint gradients for turbulent, transient or energy runs, adjoint
+gradients through studies, the service or MCP tools, RBF morphing, surrogate models, warm start for
 transient, energy or turbulence runs (they run cold), and any use with the real fan (the fan case belongs to the other wave 32
 work and the milestone itself).
