@@ -347,43 +347,6 @@ fn graded_two_sided(len: f64, n: usize, h1: f64, g: f64, nb: usize) -> Result<Ve
     Ok(x)
 }
 
-/// `n + 1` offsets `0 .. len` whose cells start at `d0`, end at `d1`, grow towards the middle by one constant ratio from both ends and stop
-/// growing at `CAP_FACTOR` times the mean cell (ADR 0087; the ratio is solved). Cells that do not fill `len` at ratio 1 are scaled up.
-fn two_sided_cells(len: f64, n: usize, d0: f64, d1: f64) -> Result<Vec<f64>, String> {
-    if n == 0 || !(len > 0.0) || !(d0 > 0.0) || !(d1 > 0.0) {
-        return Err(format!(
-            "needs a positive length, end cells and at least one cell (length {len:e}, ends {d0:e} / {d1:e}, {n} cells)"
-        ));
-    }
-    let cap = CAP_FACTOR * len / n as f64;
-    let sizes = |rho: f64| -> Vec<f64> {
-        (0..n)
-            .map(|m| (d0 * rho.powi(m as i32)).min(d1 * rho.powi((n - 1 - m) as i32)).min(cap))
-            .collect()
-    };
-    let h = if sizes(1.0).iter().sum::<f64>() >= len {
-        sizes(1.0)
-    } else {
-        let (mut a, mut b) = (1.0, 1e3);
-        for _ in 0..200 {
-            let c = 0.5 * (a + b);
-            if sizes(c).iter().sum::<f64>() > len {
-                b = c;
-            } else {
-                a = c;
-            }
-        }
-        sizes(0.5 * (a + b))
-    };
-    let sc = len / h.iter().sum::<f64>();
-    let mut x = vec![0.0; n + 1];
-    for m in 0..n {
-        x[m + 1] = x[m] + h[m] * sc;
-    }
-    x[n] = len;
-    Ok(x)
-}
-
 /// Largest cell as a multiple of the mean cell in the outer parts of a line (see [`capped_cells`]).
 const CAP_FACTOR: f64 = 1.5;
 
@@ -475,18 +438,7 @@ pub struct CGridOptions {
     /// wall normal and the 3-D surface normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer; the wake
     /// lines take the trailing-edge factor faded to 1 over the first quarter of the wake lines.
     pub lean_stack: bool,
-    /// ADR 0087 (I-a): the front-edge cells are graded from the nose cell to a corner cell equal to the seam cell next to the corner, the
-    /// front edge leaves the lower corner and reaches the upper corner along `FRONT_INCLINE_DEG` from the axis (inclined with the stagger,
-    /// blended back to the pitchwise line over `FRONT_BLEND` pitches), the F rows follow, and the first front-edge node next to each corner is
-    /// not moved by the in-plane smoothing.
-    pub inclined_front: bool,
 }
-
-/// End direction of the inclined front edge, degrees from `+z` (ADR 0087, frozen in its amendment 1).
-const FRONT_INCLINE_DEG: f64 = 40.0;
-
-/// Blend length of the inclined front-edge ends, in pitches (ADR 0087).
-const FRONT_BLEND: f64 = 0.1;
 
 impl CGridOptions {
     /// Construction G of ADR 0079 (case value `c_grid_construction = "camber_seam"`): construction E of ADR 0072 with the seams
@@ -513,15 +465,6 @@ impl CGridOptions {
             ..CGridOptions::camber_seam_construction()
         }
     }
-
-    /// Construction I of ADR 0087 (case value `c_grid_construction = "camber_seam_i"`): construction H with the inclined, corner-graded front
-    /// edge; the checked control range is that of G.
-    pub fn camber_seam_i_construction() -> Self {
-        CGridOptions {
-            inclined_front: true,
-            ..CGridOptions::camber_seam_h_construction()
-        }
-    }
 }
 
 /// Reference to a node of the smoothing graph: canonical id and the pitchwise offset of this copy.
@@ -545,7 +488,6 @@ fn smooth_layer(
     exact_near_wall: bool,
     laplace_passes: usize,
     post_untangle: bool,
-    hold_front_ends: bool,
 ) {
     let (n_i, ns, h_c, n_fe, n_up) = (lay.n_i(), lay.n_side, lay.h_c(), lay.n_fe(), lay.n_up);
     let nc_nodes = (n_i + 1) * (ns + 1);
@@ -622,10 +564,6 @@ fn smooth_layer(
     }
     for i in (h_c + 1)..(n_i - h_c) {
         let b = i - h_c;
-        // ADR 0087: the inclined front edge keeps its first node next to each corner
-        if hold_front_ends && (b == 1 || b + 1 == n_fe) {
-            continue;
-        }
         reg.push((
             cid(i, ns),
             [
@@ -1309,19 +1247,8 @@ fn build_layer(
     } else {
         (s_le, s_lo, s_hi)
     };
-    let (lo_part, hi_part) = if opts.inclined_front {
-        // ADR 0087: the corner front cell equal to the seam cell next to the corner
-        let dc = norm2((z_out[h_c - 1] - z_f, s_lo_at(z_out[h_c - 1]) - s_lo_at(z_f)));
-        (
-            two_sided_cells(s_n - s_lo_f, nn, dc, d_nose).unwrap_or_else(|_| uniform(s_n - s_lo_f, nn)),
-            two_sided_cells(s_hi_f - s_n, nn, d_nose, dc).unwrap_or_else(|_| uniform(s_hi_f - s_n, nn)),
-        )
-    } else {
-        (
-            capped_cells(s_n - s_lo_f, nn, d_nose, true).unwrap_or_else(|_| uniform(s_n - s_lo_f, nn)),
-            capped_cells(s_hi_f - s_n, nn, d_nose, false).unwrap_or_else(|_| uniform(s_hi_f - s_n, nn)),
-        )
-    };
+    let lo_part = capped_cells(s_n - s_lo_f, nn, d_nose, true).unwrap_or_else(|_| uniform(s_n - s_lo_f, nn));
+    let hi_part = capped_cells(s_hi_f - s_n, nn, d_nose, false).unwrap_or_else(|_| uniform(s_hi_f - s_n, nn));
     let mut s_front = vec![0.0; n_fe + 1];
     for b in 0..=nn {
         s_front[b] = s_lo_f + lo_part[b];
@@ -1331,17 +1258,6 @@ fn build_layer(
     }
     s_front[n_fe] = s_hi_f;
     let z_f_nodes = graded_cells(z_f, spec.n_up, None, Some((d_corner, g, 0))).map_err(|e| err("n_up", e))?;
-    // ADR 0087: axial offset of the front-edge node `b` (zero without `inclined_front`): the front edge leaves the lower corner and reaches
-    // the upper corner along FRONT_INCLINE_DEG from the axis and blends back to the pitchwise line over FRONT_BLEND pitches
-    let front_dz = |b: usize| -> f64 {
-        if !opts.inclined_front || !follow || b == 0 || b == n_fe {
-            return 0.0;
-        }
-        let phi = FRONT_INCLINE_DEG.to_radians();
-        let (cot, ell) = (phi.cos() / phi.sin(), FRONT_BLEND * pitch);
-        let (u, v) = (s_front[b] - s_lo_f, s_hi_f - s_front[b]);
-        u * cot * fade(u / ell) - v * cot * fade(v / ell)
-    };
 
     // C block (in-plane points)
     let mut cp: Vec<Vec<(f64, f64)>> = vec![vec![(0.0, 0.0); ns + 1]; n_i + 1];
@@ -1355,8 +1271,6 @@ fn build_layer(
             (z_f, s_lo_at(z_f))
         } else if i == n_i - h_c {
             (z_f, s_hi_at(z_f))
-        } else if opts.inclined_front {
-            (z_f + front_dz(i - h_c), s_front[i - h_c])
         } else {
             (z_f, s_front[i - h_c])
         };
@@ -1439,9 +1353,7 @@ fn build_layer(
             };
             (0..=n_fe)
                 .map(|b| {
-                    if follow && opts.inclined_front {
-                        (z_f_nodes[a] + (z_f_nodes[a] / z_f).powi(4) * front_dz(b), s_front[b] + shift)
-                    } else if follow {
+                    if follow {
                         (z_f_nodes[a], s_front[b] + shift)
                     } else {
                         (z_f_nodes[a], s_front[b])
@@ -1863,7 +1775,6 @@ pub fn build_cgrid_mesh_with(
                         exact,
                         laplace,
                         opts.post_untangle,
-                        opts.inclined_front,
                     );
                     if lambda < 1.0 {
                         let mix = |p: &mut (f64, f64), q: (f64, f64)| {

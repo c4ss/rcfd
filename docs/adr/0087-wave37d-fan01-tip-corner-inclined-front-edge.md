@@ -186,3 +186,79 @@ Part D on this code: the ADR 0079 B1 hashes (S and A' with `pursuit` and E), the
 Smoke (`smoke_w37d_set_ups`, `smoke_w37d_p10_case`; build status and counts only, no quality printed): FAN-01-C with I builds (11 536 cells, step 0);
 the R-I list has 42 combinations, all inside the G range, 37 of which build with H (construction only); the P10 case with `camber_seam_i` parses,
 builds and runs 3 iterations with finite residuals. No set-up is defective.
+
+## Addendum: measured values, misses and deviations
+
+Release builds, scratch tree of this wave; code state of the measurements: record commit 18b083c (construction I and its tests). By the keep clause
+I was then removed in the next commit; that removal moves no node of any other construction (part D re-run on the final code). Each registered run
+once. Limits are the registered ones, unchanged. No external reference value enters any gate. No fan performance claim. Solver physics files were not
+touched.
+
+### Part C: acceptance on construction I (case value `camber_seam_i`)
+
+| Check | Limit | Measured | Status |
+|---|---|---|---|
+| C1 P1 builds, validates, volumes > 0 | - | 11 536 cells, step 0 | met |
+| C1 P3 closure, topology | 1e-13 | 1.00e-15, ok | met |
+| C1 P4 periodicity | 1e-12 | 1.49e-13 | met |
+| C1 P5 stacks (radial; wall along the 3-D normal) | 1e-12 | 5.60e-14; 6.13e-14 | met |
+| C1 P6 bladed vs empty C nodes, volume identity | 0, 1e-11 | 0, 1.32e-16 | met |
+| C1 P7 wall nodes on the exact surface | 1e-12 m | 0 m | met |
+| C1 P8 solid volume against the quadrature | reported | -2.54e-3 | - |
+| C1-P2 non-orthogonality / skewness / aspect | 70 / 2.0 / 300 | **81.00** / **4.577** / 261.0 | **MISS** (predicted) |
+| C1-Q (i) corner region | 70 deg / 2.0 | **78.07 deg** (C (19, 9) / (20, 9), layer 20) / 1.091 | **MISS** (predicted) |
+| C1-Q (ii) global maxima <= 1.01 x H (H 83.26 / 3.978 / 227.2) | 84.09 / 4.018 / 229.5 | 81.00 / **4.577** / **261.0** | non-orthogonality met; skewness and aspect **MISS** |
+| C1-B S builds | - | 66.21 / 0.727 / 137.2, step 0 | met |
+| C1-B A' maxima <= 1.01 x H (66.18 / 0.888 / 394.4) | | **71.82** / **1.164** / **457.2** | **MISS** |
+| C1-B B' maxima <= 1.01 x H (80.93 / 8.894 / 8805.0) | | **89.82** / **153.8** / **12185.1** | **MISS** |
+| C1-B closure, periodicity (S, A'); stacks (A' 1e-12, B' 4.9e-11) | | S 5.0e-16 / 9.6e-14; A' 1.0e-15 / 4.3e-13; A' 3.2e-13 / 1.5e-13; B' 1.7e-11 / 5.0e-12 | met |
+| C2 P9 FvGeometry, check_mesh, rules | accepted, ok, no error | accepted, ok, SV101 and SV102 warnings (H: SV101 only) | met |
+| C3 P10 laminar smoke | max over 200-300 <= value at 10 | 2.100e-3 at 10, 1.394e-3 over 200-300 (ratio 0.664); finite, no failure | met by its criterion |
+| C4 R-I blade B: builds with I >= with H | 21 (H) | **18** (three tangles at n_nose 4, n_side 21) | **MISS** |
+| C4 R-I FAN-01: builds with I >= with H | 16 (H) | 16 | met |
+
+Reported with C3: the largest relative speed is 242.45 m/s, in a poor cell at the upper corner line in the tip gap (C (27, 9), layer 20; H: 62.1
+m/s); 89 % of the late argmax cells lie in the poor region (G in ADR 0083 A0: 42 %). The criterion is met partly because the continuity at iteration 10 is 2.6 times
+H's; this is not a healthier solve than H's. Reported with C4 (no gate): blade B meeting 70 / 2.0 / 300: H 18, I 10 of 21, median non-orthogonality
+63.17 -> 69.97 deg; FAN-01: none meets the target with either, median 85.26 -> 82.50 deg, built meshes below the 85 deg `check_mesh` threshold H 8 of
+16, I 15 of 16 (different combinations fail: I builds two that H folds and folds or tangles two that H builds); the corner-region maximum of the 16
+FAN-01 meshes built with I lies between 77.5 and 84.2 deg (none at or below 70).
+
+### Verdicts
+
+* **Keep clause failed** (C1-Q (i) and (ii), C1-B, C4 blade B). Construction I is **removed**: the `inclined_front` field, its constructor and
+  constants, the two-sided corner grading, the smoothing hold, the case value `camber_seam_i` and its tests (C1, C1-P2, C1-Q, C1-B, C4, C2, C3, the
+  smokes). Kept: `b1_construction_h_is_bit_identical` (part D, independent of I). `docs/case-schema.md` and `docs/meshing.md` were never changed.
+* **HT** (an inclined front edge removes the corner faces above 70 deg): not supported. FT was passed by one variant by 0.195 deg, but, as stated in
+  Amendment 1 before any 3-D build, most of that gain was the corner grading and the prescribed inclination did not survive the smoothing. In 3-D the
+  corner region fell from 83.26 to 78.07 deg and the global non-orthogonality from 83.26 to 81.00 deg (now the wake-line-5 face), while the skewness
+  (3.978 -> 4.577) and the aspect ratio (227.2 -> 261.0) rose, and on blade B the change is harmful (B' skewness 8.9 -> 153.8, not located).
+* **The topology change proper (I-b, an index offset between the two corners with a collapsed F row) was not tried.** The registered protocol
+  developed I-a first and allowed I-b only if no I-a variant passed FT; one did. So this wave measured an inclined front edge, not the offset
+  topology.
+* What the measurements and the pencil analysis of Amendment 1 say about the next attempt (unverified as rules, no gate): (1) with the two seams
+  paired station by station from the outlet, a straight front edge perpendicular to the seam needs an index offset of about `n_chord` at the tip and
+  none at the hub, so it does not fit one index topology; (2) at the tip the C seam cell next to the corner takes about 144 of the 194 deg on the
+  lower side of the corner node because the corner line arrives nearly pitchwise, so the front-edge direction only splits the remaining 50 deg; the
+  levers are the F-side seam direction at the corner and the arrival of the corner line, or a periodic matching with an index offset (a sheared
+  C-H topology) at low solidity and high stagger (FAN-01 tip: pitch / chord 3.1, stagger 70 deg).
+
+### Part D: default behaviour
+
+B1 met on the final code: the ADR 0079 hashes (S and A' with `pursuit` and E), the G hashes and the H hashes (S `0x6f6342d53409da61`, FAN-01-C
+`0x21104bbbdd9b9129`) are reproduced (`b1_existing_constructions_are_bit_identical`, `b1_construction_g_is_bit_identical`,
+`b1_construction_h_is_bit_identical`); the default FAN-01 refusal message is unchanged; `baseline_hashes.rs` untouched.
+
+### Deviations from the registered plan (candid list)
+
+* The registered C1 run was started with the test filter `c1_`, which also re-ran two existing ADR 0083 tests on H (`c1_fan01_h_...` and the
+  ignored `c1_p2_fan01_h_quality_gates_known_miss`); they reproduced the ADR 0083 numbers (deterministic) and choose nothing.
+* FT used a 2-D proxy (the face metrics of `compute_metrics` restated for one smoothed layer at the far-grid radius), not the 3-D mesh. It matched
+  the 3-D tip and gap layers of H to 0.05 deg but not the mid-span layers (proxy 86.89 deg at k 7 against a 3-D maximum of 83.26), because the 3-D
+  far grid is blended with the remapped layer and radially filtered.
+* The development hook (`dev_layer`, `dev_rho`, the environment-driven variant parameters) and the development test file were not committed.
+* I-b was not developed (above). The 12-variant budget was used up by I-a.
+
+### Unverified references
+
+Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072 / 0079 / 0083). Nothing else.
