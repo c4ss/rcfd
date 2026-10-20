@@ -573,9 +573,10 @@ orthogonal mesh. Not available for the variable-density SIMPLEC (it has no non-o
 ### SIMPLEC on uniformly sheared meshes (ADR 0081 part X)
 
 On a channel whose cells are uniformly sheared by an angle theta (every face non-orthogonal by theta), SIMPLEC with `alpha_u = 0.9`, `alpha_p = 1.0` and no
-non-orthogonal correctors overshoots from 50 degrees and diverges from the impulsive start from 55 degrees, with `upwind` and `linear_upwind`, at cell Peclet
-numbers of 10 and 0.2, and also on a doubly periodic box without walls or open boundaries (from 60 degrees). It is a start-up divergence: the converged state
-at 60 degrees is stable under the same iteration (perturbations decay by a factor of 0.89 to 0.98 per iteration). Measured thresholds on that channel:
+non-orthogonal correctors overshoots from 50 degrees and blows up from the impulsive start from 55 degrees, with `upwind` and `linear_upwind`, at cell
+Peclet numbers of 10 and 0.2; a doubly periodic box without walls or open boundaries becomes unstable by the same criterion from 60 degrees (some of these
+runs overshoot and then converge). It is a start-up divergence: the converged state at 60 degrees is stable under the same iteration (a 1e-6 perturbation
+decays by a factor of 0.89 per iteration). Measured thresholds on that channel:
 `alpha_p` 0.7: 60 degrees, 0.5: 70, 0.3: stable up to 79; SIMPLEC 0.7/0.3: 75; two correctors with `solver.simplec_non_orthogonal_compensation = true`: 70
 (two correctors without it: unstable from 15 degrees); a lower `alpha_u` at `alpha_p = 1.0` and SIMPLE 0.7/0.3 are unstable from 45 degrees. On strongly
 non-orthogonal meshes lower `solver.alpha_p` first. The mechanism is not identified beyond this (no boundary, wall or convection term is needed).
