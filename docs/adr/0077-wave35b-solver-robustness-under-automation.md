@@ -327,3 +327,104 @@ Consequences, registered now:
   unstable cavity ends `failed` with an error containing `steady divergence guard` within 30 s.
 * Guard hint (from the threshold result): when the steady guard trips on a run with `linear_upwind` or `tvd_van_leer`, the message adds that these schemes diverged on the
   high-aspect, strongly non-orthogonal wall cells of the FAN-01 sector mesh where `upwind` and `tvd_minmod` were stable (ADR 0077 part B). S-d: the A2a reason contains it.
+
+## Addendum (measured values, misses, deviations)
+
+Release builds; one run per registered set-up unless stated. Limits are the registered ones (with amendments 1 to 3), unchanged.
+
+Outcome in one paragraph. (1) A steady SIMPLE/SIMPLEC/coupled run that diverges is now stopped: the guard records the first trip (non-finite state, continuity growth,
+velocity or pressure runaway) with a located record and the run-control driver (`rcfd run`, `run.headless`/MCP, the design loop) and the service background loop end the run
+`diverged` (exit 6) with the reason and a machine-readable `divergence` object; the 34D FAN-01 run that ran for 2 h stops at iteration 7 to 8 in about a second, and a diverged
+design candidate is a failed evaluation carrying the kind and the last good iteration. On the suite it never tripped on a converging run (22 trips, all on diverging set-ups;
+headroom at least a factor 2 000 below every trip factor). The guard only reads; it does not stop direct `Simulation::step` callers, so every baseline hash is unchanged
+(the `cavity-simple` baseline is itself a diverging run). (2) `linear_upwind` on the FAN-01 mesh: the unlimited linear-upwind extrapolation in high-aspect, strongly
+non-orthogonal wall cells (H2, a limited gradient removes the divergence); the rotating frame, the start-up, the pressure equation and the viscous non-orthogonal correction
+are not needed (falsified). A seam-gradient defect was found on the way (H0: 0.17 of the gradient on non-aligned periodic seams) and fixed opt-in (exact to 1.7e-13); it
+is not the cause. No mesh metric separated the diverging FAN-01 mesh from the converging test meshes, so no set-up check was written; the rule (use `upwind` or
+`tvd_minmod` there) is documented and carried by the guard message. (3) The pressure-lag check is wired to the API as a default warning and an opt-in raise, bit-identical
+in results; as registered it warned on 10 runs of 3 existing tests (C4 MISSED), all with two correctors, so it was restricted to one corrector (the regime of its model);
+that makes the no-false-positive check on the existing suite vacuous, stated. (4) The `corrected` component diagonal is not non-convergent on the heat-exchanger channel:
+it reaches the exact plug flow to 2.5e-13 and stays there; the "26 percent changes" are a relative criterion on a round-off pressure field.
+
+### Part A: steady divergence guard
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| A1a cavity 12 x 12, nu 0.01, SIMPLE upwind 1.0/1.0 (finite runaway) | trip at iteration 6, `continuity_growth` (2.52e3 against 1.38e2), cell 27 located; 0.004 s | <= 10, not `non_finite`, < 5 s | pass |
+| A1b the same, nu 1e-3 | guard at iteration 5; the unguarded twin first non-finite at 375 | guard < twin | pass |
+| A1c sheared channel 79 deg | trip at 26 (`continuity_growth`) | <= 60 | pass |
+| A2a FAN-01 laminar `linear_upwind` via `runctl::drive` | `diverged`, exit 6, iteration 7, `velocity_runaway` (4.20e8 against 2.62e8 = 1e6 U_ref, U_ref 262 m/s), cell 97 located, last good iteration 1; 0.7 to 0.9 s | <= 15, < 60 s | pass |
+| A2b FAN-01 SST `linear_upwind` (the 34D run that ran 2 h) | `diverged`, exit 6, iteration 8, `continuity_growth` (1.28e3 against 4.71e2), cell 4632 located; 1.2 s | <= 15, < 60 s | pass |
+| A3a never a false positive (instrumented suite, amendment 1 rule) | run 1 (amendment 3): 1181 steady simulations, 22 trips, all on diverging set-ups (final speed 5.5e5 to 8.4e80 U_ref); run 2 (final tree): 1181 steady simulations, 21 trips, all on diverging set-ups (12 distinct; final speed 1.0e6 to 2.3e25 U_ref; the suite 1853 passed, 0 failed, 490 ignored) | 0 false positives | pass |
+| A3b headroom (simulations without a trip) | run 1: K2 4 980, K3 234, K4 396; run 2: the same three maxima | <= 1e4, 1e4, 1e10 | pass |
+| A3c `baseline_hashes.rs` | all registered hashes match (both instrumented runs and the gate) | unchanged | pass |
+| A3d FAN-01 attempt 3 (SST, upwind), 1000 iterations | no trip; peak ratios K2 7.6, K3 0.98, K4 0.16 | no trip | pass |
+| A4 `cavity-simple` set-up on/off, 60 iterations | bit-identical; with `on` the guard records a trip at iteration 14 (`continuity_growth`) | bit-identical | pass |
+| A5 registered set-up | set-up defect (alpha_p 1.0000000000000002 refused by the schema; amendment 1) | - | ignored `a5_registered_setup_defect` |
+| A5 corrected | x = 1: `diverged`, not ok, 6 iterations, message with the guard kind and the last good iteration, `Fitness::FAILED`; x = 0: converged in 60 iterations; best = x = 0; both candidates in 0.06 s | as registered | pass |
+| A6 `off` | the finite runaway runs to the cap 3000 (`not_converged`); an invalid value is located at `solver.steady_divergence_guard` | as registered | pass |
+| SV-1 service background run (amendment 3) | `failed` after 0.01 s, error "steady divergence guard: continuity_growth ... iteration 6 ..." | `failed` with the message within 30 s | pass |
+| S-d guard note (amendment 3) | the A2a reason ends with the `upwind` / `tvd_minmod` note | contained | pass |
+
+### Part B: `linear_upwind` on the FAN-01 mesh
+
+Diagnostics D0 to D9 and the smallest-case runs: amendment 2 (table). H0 and H2 stand; H1, H2b, H2p, H3, H4 and H5 are falsified; the smallest reproducing case is FAN-01
+itself ((a) `axial_fan_sector` does not reproduce at Re_c about 5, (b) n_span 6 is refused by the generator).
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| H0-a seam gradient with `partner_cell` | interior 2.1e-13, seam 1.7e-13 Omega (from 0.173); inlet 1.1e-13; outlet 2.6e-2 (zero-gradient outlet values), wall 2.2e3 (no-slip jump) | interior and seam <= 1e-10 | pass |
+| H0-b `face_value` = key absent | bit-identical (FAN-01 upwind, 20 iterations); suite unchanged | bit-identical | pass |
+| H0-c FAN-01 `linear_upwind` with `partner_cell` | UNSTABLE (guard trip at 7) | reported | the seam gradient is not the cause |
+| SV106 threshold study | 514 converging steady `linear_upwind` simulations; largest M 18 725 (rotor-interface / MRF annulus meshes), then 4 998, 3 705; FAN-01 2 759 | T < 2 759 | the metric does not separate: no check written (registered consequence) |
+| S-a to S-c | not applicable (no check) | - | - |
+
+### Part C: pressure-lag check in the API
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| C1a `baseline_hashes.rs` | unchanged (run 1, with the unrestricted estimate on the PISO/PIMPLE baselines; run 2 and the gate with the final rule) | unchanged | pass |
+| C1b PISO 48 x 48 (2 304 cells, AMG), 20 steps, warn vs off | bit-identical (with the final rule PISO with 2 correctors makes no estimate; in run 1 the estimate was made and the fields were also bit-identical) | bit-identical | pass |
+| C1c B4d set-up, 3 steps, warn vs off | bit-identical | bit-identical | pass |
+| C2 B4d through the tree, default | one `pressure_lag` warning at step 1, rho 2.251 (the fv-level B4d value to the printed digits); the message names `solver.n_correctors >= 2`; run not stopped | one warning, rho within 10 % of 2.251 | pass |
+| C3 `raise` | `diverged`, exit 6, 1 step, reason "PIMPLE pressure-lag check ...", `divergence.kind = "lag_amplification"`, fields finite | as registered | pass |
+| C4 no false positive (as registered) | 233 transient simulations estimated; 10 warnings outside C2/C3/C6, in `user_scalars` u3 (8, a fluid at rest, rho 1.46 to 8.14), `rheology` (1, rho 4.17), `transient_sources` t5 (1, rho 5.37), all with 2 correctors | 0 | MISS (amendment 3: restriction to one corrector) |
+| C4' (final rule) | 5 simulations made an estimate, all in this wave's tests; warnings only in C1c, C2, C6 | 0 | met (vacuous on the existing suite: no existing API test uses one corrector) |
+| C5 cost | step 1 with the estimate 0.111 s, without 0.0070 s (about 15 steps); step 2 0.0074 / 0.0069 s (48 x 48 PISO, measured before the restriction) | reported | - |
+| C6 BDF2 | Co_t 3.4: no warning; Co_t 4.6: one warning at step 2, rho 1.451 (model G 1.49) | as registered | pass |
+
+### Part D: `corrected` diagonal on the z4 channel
+
+| Check | Measured | Limit | Result |
+|---|---|---|---|
+| H-D1 falsifier, three z4 set-ups, 10 000 iterations | worst over errors and 500-iteration changes 2.5e-13 (max abs(ux - 2)/U 1.2e-13 to 1.9e-13, max abs(uy)/U 3.1e-14 to 5.8e-14, max abs(p)/(U^2/2) 3.2e-14 to 7.5e-14) | <= 1e-10 | H-D1 stands (not falsified) |
+| ADR 0012 limits with `corrected` | fixed duty: enthalpy change 1.7e-12, reported duty 0; effectiveness C_sec 0: rise vs duty 5.6e-13, duty vs eps C_min (T_sec - T_in) 1.1e-15; C_sec 20: 1.3e-12, 0 | 1e-6, 1e-9, 1e-6, 1e-9 | pass |
+| `averaged` (reported) | max abs(ux - 2)/U 9.4e-6, max abs(p)/(U^2/2) 3.6e-4 at iteration 1 500 | - | - |
+| the 34C reading | p change over 300 iterations after 1 500 = 1.8e-13 against max abs(p) 5.8e-14: change / max(max abs(p), 1e-12) = 0.177 | - | reproduced |
+
+### Findings reported, not acted on
+
+* B-X: SIMPLEC (0.9/1.0) on a uniformly sheared 2-D channel diverges from 55 degrees on, with `upwind` and `linear_upwind` alike and also with one non-orthogonal corrector
+  (S3). Not diagnosed.
+* `IterationInfo::continuity` (and `max_du`) of the steady kernel are folded with `f64::max`, which drops NaN: with NaN fields they read 0 (S2). The guard scans the fields
+  directly; the reported values were not changed.
+* The SST/upwind FAN-01 state (A3d) is far from any trip (K3 0.98).
+
+### Deviations from the registered plan
+
+* Amendment 1: the guard does not end the run inside `Simulation::step` (the registered design would have moved the `cavity-simple` baseline, itself a diverging run); the
+  driver ends it. The registered "stale step after a trip" was dropped for the steady path.
+* Amendment 1: A5 set-up defect, corrected test.
+* Amendment 2: two hypotheses stood, so by the registered rule no linear-upwind fix was made; the H0 defect was fixed opt-in (not tested for a default: conservative choice).
+* Amendment 3: after the C4 miss the lag check was restricted to one corrector (a design change after a registered miss; C4 stays MISSED as registered; C4' on the existing
+  suite is vacuous). The service background loop, which amendment 1 wrongly counted among the driver paths, was added. The set-up of two existing tests of another wave
+  (`particle_run` w2/w3, a diverging SIMPLE set-up driven through `runctl::drive`) got `steady_divergence_guard = "off"`; no limit was touched.
+* The SV106 check was not written (the registered study showed the metric does not separate); S-a to S-c are not applicable, and the guard note is scheme-based, not
+  metric-based.
+* The D2 to D5 switches, the A3a/C4 instrumentation and the smoke files were scratch-tree code, not committed. The first instrumented run had the w35b smoke test files in the
+  tree (ignored tests only).
+
+### Unverified references
+
+None used for a value or a limit: every limit is derived here or measured. The Barth-Jespersen limiter of D3 is the existing rcfd implementation (Barth and Jespersen 1989,
+recalled, UNVERIFIED); the "high aspect ratio times non-orthogonality" reading of the mechanism is this wave's, not a published result.
