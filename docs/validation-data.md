@@ -65,7 +65,8 @@ licence): 1. FAN-01; all others not runnable as they are.
   anything read; the round robin quotes +-3 Pa and 1.5 % flow and agrees with the FAU curve within about 3 %. LDA profiles 20 mm and 90 (or 110) mm from
   a datum that the sources read do not settle.
 - Representable: the rotor, hub cylinder and duct are; the bellmouth, the finite blunt hub, the 3 mm root fillet, struts, motor and diffuser are not;
-  the measured pressure rise includes them. Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE).
+  the measured pressure rise includes them. Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE). Diagnosis of
+  the attempt-3 miss: ADR 0078 (mainly numerical, spurious swirl of the upwind relative-frame discretisation; Delta p_ts is not a rotor-only quantity).
 
 **2. NASA Low-Speed Axial Compressor (LSAC)**: Wasserbauer, Weaver, Senyitko, NASA TM-4635 (1995), NTRS 19950016775, READ (summary, facility,
 Table I: 61 m/s tip speed, 980 rpm, 39 rotor blades, tip radius 61.0 cm, hub 48.8 cm, tip clearance 0.17 cm, pressure ratio 1.042). No blade
