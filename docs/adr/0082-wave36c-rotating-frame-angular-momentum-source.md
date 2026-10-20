@@ -187,3 +187,40 @@ Before any F-RP solver code, the registered closure check (item 2 of F-RP) is me
 remedy (for example a frame flux exact on the triangulated faces, which would change the A1 wall check) needs its own amendment before a run. The
 same test records the largest and median cell extents (axial, radial, pitchwise) of M1-M3; the order of A4 keeps the nominal ratio as registered and
 is reported next to the measured largest-cell ratios.
+
+## Amendment 2 (2026-10-20): X2d-36, the construction measurements, F-RP NOT RUNNABLE as registered, and its remedy; written before any F-RP code
+
+What I knew when writing this: everything of amendment 1, the X2d-36 run and budget, and the construction-only measurements below (geometry only, no
+solver run of F-RP; no F-RP code existed).
+
+X2d-36 (minmod, 8000 iterations, 14.9 min, not converged by tolerance, res_u 5.3e-4 at the cap; ADR 0078 accepted X2d by its 1000-iteration rule):
+outlet L 0.00258 N m and outlet `rho<c_theta^2/2>` 19.970 Pa reproduce ADR 0078 (0.0026, 19.97). Budget: `E_s` -0.00327, `S_seam` -3.3e-6, `G_conv`
++0.86140, `G_frame` -0.88300 (Rhie-Chow part +0.09790, remainder -0.98090), `G_p` 0.01226, `G_visc` 0.00671, `G_res` -6.5e-4; reconstruction worst
+2.8e-14 (the minmod face values, the least-squares gradient and the non-orthogonal Laplacian term are rebuilt exactly). Closure by the registered rule
+(`|G_res|` <= 0.05 `|E_s|`) is NOT met (0.198) because `E_s` is near zero; `|G_res|` is 7.5e-4 of `G_conv`. By the rule the X2d attribution is NOT
+CLOSED and no term is called responsible for it. Reported as observations: the near-zero net is a cancellation of convection (+0.86) and the frame
+term (-0.88, its quadrature part: the cell Coriolis torque against the flux of `Omega r^2`), both concentrated in the large downstream cells
+(downstream: conv +0.834, frame -0.888; `sum |.|` 1.87 and 3.60) and of opposite sign in neighbouring radial bins (r 0.156-0.171: conv -0.425, frame
++1.155; r 0.203-0.219: conv +1.251, frame -2.090): a radial dipole of angular-momentum generation with zero net, which leaves swirl of both signs. The
+budget locates generation of angular momentum, not of swirl energy; the 20 Pa are the energy of that two-signed swirl, not attributed by a rule.
+
+Construction (amendment 1 test `w36c_construction_closure_and_extents`): the registered per-cell closure of the face-centre frame flux
+`|sum_f (Omega x r_f).S_f| / (|Omega| sum_f r_perp,f |S_f|)` is far above the registered 1e-10: worst 5.3e-4 (M1), 2.1e-4 (M2), 1.7e-4 (M3), 3.6e-4
+(E0 mesh); median 4.7e-9 / 1.5e-9 / 4.2e-10 / 4.3e-9; 77 % of the cells exceed 1e-10 (the faces of the camber-sheared cells are warped). **F-RP as
+registered is NOT RUNNABLE on every registered mesh.** Measured with the same test: the frame flux integrated exactly over the mesh's own triangle fan of
+each face (`F_tri = sum_t (Omega x c_t).S_t`, the decomposition of `polygon_geometry`, exact for the linear field `Omega x r` on each planar
+triangle) closes to 1.2e-15 / 1.4e-15 / 2.2e-15 / 1.2e-15 (an identity: the cells' closed triangulated surfaces). The largest face difference
+`|F_tri - (Omega x r_f).S_f| / (|Omega| r |S|)` is 5.0e-3 (M1, E0), 3.2e-3 (M2, M3).
+
+Cell extents, largest / median (axial, radial, pitchwise r dtheta, m): M1 0.188/2.11e-3, 0.0386/7.66e-4, 0.0445/4.87e-3; M2 0.146/1.26e-3,
+0.0287/3.59e-4, 0.0323/3.09e-3; M3 0.111/8.89e-4, 0.0213/2.22e-4, 0.0227/2.00e-3. Largest-cell ratios M1/M2 and M2/M3: axial 1.29, 1.31; radial
+1.35, 1.35; pitchwise 1.38, 1.42 (nominal 1.5): the generator's core cells (where H1 generation lives) refine by about 1.3-1.4 per step, not 1.5. A4
+keeps the nominal ratio as registered; the order with the measured largest-cell ratio is reported next to it.
+
+Remedy (changes F-RP before any of its code or runs; acceptance otherwise unchanged): with `rotor_passage = true` the frame flux of EVERY face of the zone
+(internal, interface, boundary) is `F_tri`, not `(Omega x r_f).S_f` (the default `mrf` path keeps the face-centre form). Item 2 becomes: the per-cell
+closure of `F_tri` must not exceed 1e-10 (measured 2.2e-15 at most). Consequence for A1, restated now: on a wall rotating with the zone the absolute
+flux of the kernel is the prescribed face-centre `(Omega x r_f).S_f`, so the relative flux there is the face's warp term, not zero. A1 (wall) becomes:
+`|phi_rel,f + (F_tri,f - (Omega x r_f).S_f)|` <= 1e-12 `Omega r |S|` on every `blade` and `hub` face of F1 at iteration 1 (the relative flux equals
+minus the warp term exactly: catches a sign error), and the largest `|phi_rel| / (Omega r |S|)` on those faces is reported. The seam-pair check of A1
+is unchanged. Mass stays exact (`sum_f phi_rel = sum_f phi - 0` per cell).
