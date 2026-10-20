@@ -77,8 +77,8 @@ pub fn schema() -> Schema {
         .field("include_blade", Schema::boolean(true).doc("false leaves the blade footprint filled: an empty passage with the same nodes (verification)"))
         .field(
             "c_grid_construction",
-            Schema::enumeration("pursuit", &["pursuit", "smoothed", "camber_seam"])
-                .doc("c_grid only: pursuit (ADR 0068, the default), smoothed (ADR 0072: elliptic in-plane smoothing with periodic seams and the radial remap of the far grid; better orthogonality, more robust against the controls) or camber_seam (ADR 0079: smoothed, plus seams that follow the blade where straight seams leave no margin, a fitted tip-gap block, the accepted ADR 0079 quality changes and a checked control range)"),
+            Schema::enumeration("pursuit", &["pursuit", "smoothed", "camber_seam", "camber_seam_h"])
+                .doc("c_grid only: pursuit (ADR 0068, the default), smoothed (ADR 0072: elliptic in-plane smoothing with periodic seams and the radial remap of the far grid; better orthogonality, more robust against the controls) or camber_seam (ADR 0079: smoothed, plus seams that follow the blade where straight seams leave no margin, a fitted tip-gap block, the accepted ADR 0079 quality changes and a checked control range) or camber_seam_h (ADR 0083: camber_seam with the changes accepted by ADR 0083 and its narrower checked control range)"),
         )
         .field("station_radius", flist("Optional radial stations [m] of the blade (ADR 0075): when this list is not empty, the station_* lists (all of the same length, first radius r_hub, last radius r_tip, strictly increasing) replace the hub_* / tip_* values and the blade varies linearly between neighbouring stations"))
         .field("station_chord", flist("Chord [m] at each station_radius"))
@@ -295,6 +295,7 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
                 ..CGridOptions::default()
             },
             "camber_seam" => CGridOptions::camber_seam_construction(),
+            "camber_seam_h" => CGridOptions::camber_seam_h_construction(),
             _ => CGridOptions::default(),
         };
         return build_cgrid_mesh_with(&fan, &cgrid_spec_of(case), &opts)

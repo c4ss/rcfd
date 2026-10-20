@@ -431,6 +431,15 @@ pub struct CGridOptions {
     /// ADR 0079 part 3: a specification outside the documented control range ([`control_range_problems`]) is refused with
     /// located errors before any construction.
     pub checked_range: bool,
+    /// ADR 0083 H1: the local untangling that precedes the in-plane smoothing of a layer is applied once more to the smoothed layer (it
+    /// moves nodes only around folded quads, so a layer without a fold is unchanged).
+    pub post_untangle: bool,
+    /// ADR 0083 H3: the blade wall stacks are built with the in-plane offsets divided by the cosine of the lean angle between the in-plane
+    /// wall normal and the 3-D surface normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer; the wake
+    /// lines take the trailing-edge factor faded to 1 over the first quarter of the wake lines.
+    pub lean_stack: bool,
+    /// ADR 0083 H5: with `checked_range`, the narrower control range of [`control_range_problems_h`].
+    pub range_h: bool,
 }
 
 impl CGridOptions {
@@ -446,6 +455,17 @@ impl CGridOptions {
             radial_filter: true,
             checked_range: true,
             ..CGridOptions::default()
+        }
+    }
+
+    /// Construction H of ADR 0083 (case value `c_grid_construction = "camber_seam_h"`): construction G with the changes accepted by the
+    /// ADR 0083 decision rule and the narrower checked control range of [`control_range_problems_h`].
+    pub fn camber_seam_h_construction() -> Self {
+        CGridOptions {
+            post_untangle: true,
+            lean_stack: true,
+            range_h: true,
+            ..CGridOptions::camber_seam_construction()
         }
     }
 }
@@ -470,6 +490,7 @@ fn smooth_layer(
     freeze: bool,
     exact_near_wall: bool,
     laplace_passes: usize,
+    post_untangle: bool,
 ) {
     let (n_i, ns, h_c, n_fe, n_up) = (lay.n_i(), lay.n_side, lay.h_c(), lay.n_fe(), lay.n_up);
     let nc_nodes = (n_i + 1) * (ns + 1);
@@ -679,7 +700,7 @@ fn smooth_layer(
     }
     // Local untangling of a folded algebraic grid: the free nodes around every quad of non-positive area are moved to the mean
     // of their four neighbours until no quad is folded (or the pass cap is reached); untouched elsewhere.
-    {
+    let untangle = |pts: &mut Vec<(f64, f64)>| {
         let mut reg_of = vec![usize::MAX; pts.len()];
         for (q, (id, _)) in reg.iter().enumerate() {
             reg_of[*id] = q;
@@ -699,7 +720,7 @@ fn smooth_layer(
             let mut marked = vec![false; pts.len()];
             let mut any = false;
             for q in &quads {
-                let p: Vec<(f64, f64)> = q.iter().map(|r| at(&pts, *r)).collect();
+                let p: Vec<(f64, f64)> = q.iter().map(|r| at(pts, *r)).collect();
                 let mut ar = 0.0;
                 for m in 0..4 {
                     ar += p[m].0 * p[(m + 1) % 4].1 - p[(m + 1) % 4].0 * p[m].1;
@@ -731,13 +752,14 @@ fn smooth_layer(
                 let nb = &reg[q].1;
                 let mut m = (0.0, 0.0);
                 for r in &nb[..4] {
-                    let v = at(&pts, *r);
+                    let v = at(pts, *r);
                     m = (m.0 + 0.25 * v.0, m.1 + 0.25 * v.1);
                 }
                 pts[id] = m;
             }
         }
-    }
+    };
+    untangle(&mut pts);
     let ctrl = controls(&pts);
     let scale = l.chord.max(1e-300);
     let n_line_nodes: usize = lines.iter().map(|l| l.1).sum();
@@ -842,6 +864,9 @@ fn smooth_layer(
         if moved < 1e-12 * scale {
             break;
         }
+    }
+    if post_untangle {
+        untangle(&mut pts);
     }
     for i in 0..=n_i {
         for j in 0..=ns {
@@ -1128,6 +1153,48 @@ fn build_layer(
             let d1w = h1.max(dz / WAKE_ASPECT);
             d1s[i] = d1w;
             stack_cells.push(if growth_sum(d1w, nb) <= 0.25 * dm { nb } else { 0 });
+        }
+    }
+    if opts.lean_stack {
+        // ADR 0083 H3: wall-normal stack thickness h1 g^q in every layer (C5 of ADR 0079 with the wake factor faded)
+        let cos_lean = |i: usize| -> f64 {
+            let (x, side) = if i <= h {
+                (xs[nc - (i - nd)], Side::Suction)
+            } else {
+                (xs[i - h], Side::Pressure)
+            };
+            // in-plane normal and tangent as 3-D vectors at the wall node, radial surface tangent by a central difference
+            let th = w[i].1 / r;
+            let e_t = [-th.sin(), th.cos(), 0.0];
+            let n = normals[i];
+            let n_ip = [n[1] * e_t[0], n[1] * e_t[1], n[0]];
+            let t_ip = [n[0] * e_t[0], n[0] * e_t[1], -n[1]];
+            let dr = 1e-6 * r;
+            let (pa, pb) = (fan.surface_point(r + dr, x, side), fan.surface_point(r - dr, x, side));
+            let t_r = [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]];
+            let c = [
+                t_ip[1] * t_r[2] - t_ip[2] * t_r[1],
+                t_ip[2] * t_r[0] - t_ip[0] * t_r[2],
+                t_ip[0] * t_r[1] - t_ip[1] * t_r[0],
+            ];
+            let cn = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
+            ((c[0] * n_ip[0] + c[1] * n_ip[1] + c[2] * n_ip[2]) / cn).abs()
+        };
+        let c_te = cos_lean(nd);
+        for (i, d1) in d1s.iter_mut().enumerate() {
+            let c = if i >= nd && i <= n_i - nd {
+                cos_lean(i)
+            } else {
+                let p = if i < nd { nd - i } else { i - (n_i - nd) };
+                c_te + (1.0 - c_te) * (1.0 - fade(p as f64 / (nd / 4).max(1) as f64))
+            };
+            if !(c > 0.1) {
+                return Err(err(
+                    "stagger",
+                    format!("the blade leans by more than 84 deg out of the layer at line {i} (lean_stack)"),
+                ));
+            }
+            *d1 /= c;
         }
     }
     let stack_pt = |i: usize, q: usize| -> (f64, f64) {
@@ -1526,37 +1593,60 @@ fn folded_quad(
 /// of ADR 0065): `0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`. Inside
 /// it every scanned blade-B-like combination built; it does not make strongly staggered blades (FAN-01 tip, 70 deg) robust.
 pub fn control_range_problems(spec: &CGridSpec) -> Vec<FanError> {
+    range_problems(spec, "camber_seam", "0.375", 0.375, None, "1.0", 1.0)
+}
+
+/// The control range of construction H (ADR 0083 H5, chosen from the FAN-01 failures of the ADR 0079 R-G scan; a restriction, not a fix):
+/// `0.15 <= n_nose / n_chord <= 0.3`, `max(8, n_bl + 6) <= n_side <= min(2 n_chord, 16)`, `0.15 <= front_gap <= 0.6`.
+pub fn control_range_problems_h(spec: &CGridSpec) -> Vec<FanError> {
+    range_problems(spec, "camber_seam_h", "0.3", 0.3, Some(16), "0.6", 0.6)
+}
+
+/// Located range errors; `nose_txt` / `fg_txt` print the bounds as the messages of ADR 0079 did.
+fn range_problems(
+    spec: &CGridSpec,
+    name: &str,
+    nose_txt: &str,
+    nose_max: f64,
+    side_cap: Option<usize>,
+    fg_txt: &str,
+    fg_max: f64,
+) -> Vec<FanError> {
     let mut e = Vec::new();
     let nc = spec.n_chord as f64;
     let ratio = spec.n_nose as f64 / nc.max(1.0);
-    if !(0.15..=0.375).contains(&ratio) {
+    if !(0.15..=nose_max).contains(&ratio) {
         e.push(FanError::new(
             "n_nose",
             format!(
-                "outside the documented range of c_grid_construction camber_seam: 0.15 n_chord <= n_nose <= 0.375 n_chord ({:.1} to {:.1} for n_chord {}), has {}",
+                "outside the documented range of c_grid_construction {name}: 0.15 n_chord <= n_nose <= {nose_txt} n_chord ({:.1} to {:.1} for n_chord {}), has {}",
                 0.15 * nc,
-                0.375 * nc,
+                nose_max * nc,
                 spec.n_chord,
                 spec.n_nose
             ),
         ));
     }
     let lo = 8.max(spec.n_bl + 6);
-    if !(spec.n_side >= lo && spec.n_side <= 2 * spec.n_chord) {
+    let hi = side_cap.map_or(2 * spec.n_chord, |c| c.min(2 * spec.n_chord));
+    if !(spec.n_side >= lo && spec.n_side <= hi) {
+        let bound = match side_cap {
+            None => format!("2 n_chord = {hi}"),
+            Some(c) => format!("min(2 n_chord, {c}) = {hi}"),
+        };
         e.push(FanError::new(
             "n_side",
             format!(
-                "outside the documented range of c_grid_construction camber_seam: max(8, n_bl + 6) = {lo} <= n_side <= 2 n_chord = {}, has {}",
-                2 * spec.n_chord,
+                "outside the documented range of c_grid_construction {name}: max(8, n_bl + 6) = {lo} <= n_side <= {bound}, has {}",
                 spec.n_side
             ),
         ));
     }
-    if !(spec.front_gap >= 0.15 && spec.front_gap <= 1.0) {
+    if !(spec.front_gap >= 0.15 && spec.front_gap <= fg_max) {
         e.push(FanError::new(
             "front_gap",
             format!(
-                "outside the documented range of c_grid_construction camber_seam: 0.15 <= front_gap <= 1.0 chords, has {}",
+                "outside the documented range of c_grid_construction {name}: 0.15 <= front_gap <= {fg_txt} chords, has {}",
                 spec.front_gap
             ),
         ));
@@ -1624,7 +1714,11 @@ pub fn build_cgrid_mesh_with(
         bad("first_cell", "the first cell height must be positive".into());
     }
     if opts.checked_range {
-        errs.extend(control_range_problems(spec));
+        errs.extend(if opts.range_h {
+            control_range_problems_h(spec)
+        } else {
+            control_range_problems(spec)
+        });
     }
     if !errs.is_empty() {
         return Err(errs);
@@ -1710,6 +1804,7 @@ pub fn build_cgrid_mesh_with(
                         freeze,
                         exact,
                         laplace,
+                        opts.post_untangle,
                     );
                     if lambda < 1.0 {
                         let mix = |p: &mut (f64, f64), q: (f64, f64)| {
