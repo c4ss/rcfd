@@ -222,3 +222,11 @@ H3 moves it by 0.01 deg only (on E it had moved 78.17 -> 77.38 in development), 
 H = G + H1 `post_untangle` + H3 `lean_stack` + the H5 range (`range_h`), `CGridOptions::camber_seam_h_construction()`, case value
 `c_grid_construction = "camber_seam_h"`. `camber_seam` stays G (B1 test of the G hashes). Part C runs once on H as registered. Prediction (from the
 step table, FAN-01-C with H differs from G only in the blade stacks): C1 P2 MISSED (about 83 deg / 4.0), C5 A' aspect and B' all three MISSED.
+
+## Amendment 3 (written after the Part C runs, before the corrected C5 run; no limit changed)
+
+C5 as registered ("A' and B' with H") is a defective set-up created by Amendment 1: the H5 range excludes both (A' n_side 20 > 16; B' n_side 30 > 16
+and n_nose / n_chord 0.33 > 0.3), so `c5_q1_gates_with_h` refused them with located range errors and measured nothing. It stays ignored as a
+defective set-up. **Corrected C5b**: A' and B' with the mesh options of H and the range check off (`checked_range: false`), the same Q1 gates.
+What I already know: these are the meshes of the Part B step G + H1 + H3 (the G range admits A' and B'), measured there: A' 66.18 / 0.888 / 394.4,
+B' 80.93 / 8.894 / 8805.0, so C5b is not blind; prediction: A' aspect MISSED, B' all three MISSED.
