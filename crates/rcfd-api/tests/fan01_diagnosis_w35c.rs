@@ -425,7 +425,7 @@ fn case_toml(a: &Arm) -> String {
         Outlet::NoReverse => "bc_kind = \"pressure_outlet\"\nbc_pressure = 0.0\nprevent_reverse_flow = true\n".to_string(),
         Outlet::Radial => format!(
             "bc_kind = \"radial_equilibrium_outlet\"\nradial_reference = \"area_average\"\nbc_pressure = 0.0\nradial_frame_rate = {:?}\n",
-            if a.rotating && a.frame_source {{ w }} else {{ 0.0 }}
+            if a.rotating && a.frame_source { w } else { 0.0 }
         ),
     };
     format!(
