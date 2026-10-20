@@ -15,6 +15,7 @@ pub mod fan_cgrid;
 pub mod fan_mesh;
 pub mod gen;
 pub mod inflate;
+pub mod layering;
 pub mod layers;
 pub mod measures;
 pub mod mesh;
