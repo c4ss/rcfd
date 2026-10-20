@@ -24,7 +24,7 @@ Claude, through the assistant tool layer, iterates on fan shape and size, sets u
 | Noise | time-domain FW-H (Farassat 1A), steady-RANS broadband proxies, tonal (Gutin) check, SPL/OASPL/octave bands | F-243 partial, nothing validated |
 | Optimiser | DOE, gradient-free optimiser, robust multi-point and Pareto objective | none (F-095 partial, F-257 candidate) |
 | Assistant tools | create variant, run sweep, fetch metrics, compare, propose next | MCP/assistant layer done; design-loop tools none |
-| Solver robustness under automation | diverged runs must stop, not loop | PIMPLE/PISO guard (ADR 0067) and steady guard (ADR 0077) end diverged runs in the run-control driver and the design loop with a located, machine-readable reason (FAN-01 `linear_upwind`: stopped at iteration 7 to 8 instead of running for hours); one-corrector PIMPLE lag warning on by default (ADR 0077 part C) |
+| Solver robustness under automation | diverged runs must stop, not loop | PIMPLE/PISO guard (ADR 0067) and steady guard (ADR 0077) end diverged runs in the run-control driver and the design loop with a located, machine-readable reason (FAN-01 `linear_upwind`: stopped at iteration 7 to 8 instead of running for hours); one-corrector PIMPLE lag warning on by default (ADR 0077 part C), checked against three known-stable and three known-unstable one-corrector set-ups (ADR 0081 part P); opt-in `solver.linear_upwind_limiter = "barth_jespersen"` makes `linear_upwind` stable on the FAN-01 sector mesh, laminar and SST, and keeps second order on a smooth case (ADR 0081 part L); NaN states are no longer reported as zero residuals (ADR 0081 part N) |
 
 ## Known limits that shape the plan
 
