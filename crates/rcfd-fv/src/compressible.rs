@@ -13,6 +13,7 @@ use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
+use rcfd_mesh::motion::{cell_swept_sum, swept_volumes};
 use rcfd_mesh::PatchKind;
 
 /// Boundary treatment of a patch.
@@ -244,6 +245,39 @@ impl CompressibleSolver {
 
     /// Residual `-(1/V) sum_f F_f S_f` for the state `u`.
     fn residual(&self, u: &[Cons]) -> Result<Vec<Cons>> {
+        let mut res = self.flux_sum(u, None)?;
+        let vol = self.geom.mesh.cell_volumes();
+        for (r, v) in res.iter_mut().zip(vol) {
+            for x in r.iter_mut() {
+                *x /= v;
+            }
+        }
+        Ok(res)
+    }
+
+    /// Numerical flux through face normal `n`; with a face normal mesh speed `vn != 0` the ALE flux `F.n - vn U`, computed
+    /// in the frame moving with the face (ADR 0090 D2).
+    fn face_flux(&self, l: &Prim, r: &Prim, n: Vec3, vn: f64) -> Cons {
+        if vn == 0.0 {
+            return self.settings.solver.flux(self.gas, l, r, n);
+        }
+        let v = vec3::scale(n, vn);
+        let rel = |p: &Prim| Prim {
+            u: vec3::sub(p.u, v),
+            ..*p
+        };
+        let f = self.settings.solver.flux(self.gas, &rel(l), &rel(r), n);
+        [
+            f[0],
+            f[1] + v[0] * f[0],
+            f[2] + v[1] * f[0],
+            f[3] + v[2] * f[0],
+            f[4] + v[0] * f[1] + v[1] * f[2] + v[2] * f[3] + 0.5 * vec3::dot(v, v) * f[0],
+        ]
+    }
+
+    /// Undivided residual `-sum_f F_f |S_f|`; `wn` (per face, ALE only) is the normal mesh speed.
+    fn flux_sum(&self, u: &[Cons], wn: Option<&[f64]>) -> Result<Vec<Cons>> {
         let mesh = &self.geom.mesh;
         let n_cells = mesh.n_cells();
         let (own, nei) = (mesh.owner(), mesh.neighbour());
@@ -277,9 +311,28 @@ impl CompressibleSolver {
             }
             let n = vec3::unit(sf[f]);
             let pi = patch_of[f];
-            let g = self.ghost(pi, &prim[own[f]], n);
+            let vn = wn.map_or(0.0, |w| w[f]);
+            let g = if vn != 0.0 && self.bcs[pi] == CompBc::Slip {
+                // moving slip wall: mirror relative to the wall velocity
+                let v = vec3::scale(n, vn);
+                let mut g = Prim {
+                    u: vec3::sub(prim[own[f]].u, v),
+                    ..prim[own[f]]
+                }
+                .mirrored(n);
+                g.u = vec3::add(g.u, v);
+                g
+            } else {
+                self.ghost(pi, &prim[own[f]], n)
+            };
             ghost[f - n_int] = g;
             let pr = &prim[own[f]];
+            if vn != 0.0 && self.face_state(pi, pr, n).is_some() {
+                return Err(Error::Numerical(format!(
+                    "compressible ALE: patch {} moves but its characteristic boundary condition does not support mesh motion",
+                    mesh.patches()[pi].name
+                )));
+            }
             if let Some(fs) = self.face_state(pi, pr, n) {
                 ghost[f - n_int] = fs;
                 bface[f - n_int] = fs;
@@ -296,6 +349,9 @@ impl CompressibleSolver {
                 CompBc::Fixed(p) => p,
                 _ => *pr,
             };
+            if vn != 0.0 && self.bcs[pi] == CompBc::Slip {
+                bface[f - n_int].u = vec3::add(bface[f - n_int].u, vec3::scale(n, vn));
+            }
         }
         // reconstruction gradients of the 5 primitive variables
         let var = |p: &Prim, k: usize| -> f64 {
@@ -316,6 +372,7 @@ impl CompressibleSolver {
             let a = vec3::norm(sf[f]);
             let n = vec3::scale(sf[f], 1.0 / a);
             let o = own[f];
+            let vn = wn.map_or(0.0, |w| w[f]);
             let flux = if f < n_int {
                 let nb = nei[f];
                 let (mut pl, mut pr) = (prim[o], prim[nb]);
@@ -347,11 +404,11 @@ impl CompressibleSolver {
                         pr = r;
                     }
                 }
-                self.settings.solver.flux(gas, &pl, &pr, n)
+                self.face_flux(&pl, &pr, n, vn)
             } else if direct[f - n_int] {
                 ghost[f - n_int].flux(gas, n)
             } else {
-                self.settings.solver.flux(gas, &prim[o], &ghost[f - n_int], n)
+                self.face_flux(&prim[o], &ghost[f - n_int], n, vn)
             };
             for k in 0..5 {
                 res[o][k] -= flux[k] * a;
@@ -360,13 +417,69 @@ impl CompressibleSolver {
                 }
             }
         }
-        let vol = mesh.cell_volumes();
-        for (r, v) in res.iter_mut().zip(vol) {
-            for x in r.iter_mut() {
-                *x /= v;
-            }
-        }
         Ok(res)
+    }
+
+    /// One step of size `dt` while the mesh moves from the current geometry to `new_geom` (same topology), ALE form of
+    /// ADR 0090 D2: `d(V U)/dt = -sum_f (F.n - w_n U)|S_f|` with `w_n = W_f / (dt |S_f|)` from the swept volumes, so a uniform
+    /// state stays uniform to round-off (discrete GCL) and the moving slip walls carry no mass.
+    pub fn step_ale(&mut self, new_geom: FvGeometry, dt: f64) -> Result<()> {
+        let old = &self.geom.mesh;
+        if new_geom.mesh.n_points() != old.n_points() || new_geom.mesh.n_cells() != old.n_cells() {
+            return Err(Error::Numerical(
+                "step_ale: the moved mesh must keep the topology".into(),
+            ));
+        }
+        let w = swept_volumes(old, new_geom.mesh.points());
+        let v0 = old.cell_volumes().to_vec();
+        let dv = cell_swept_sum(old, &w);
+        self.geom = new_geom;
+        self.ls_inv = ls_inverse(&self.geom);
+        let sf = self.geom.mesh.face_area_vectors();
+        let wn: Vec<f64> = (0..w.len())
+            .map(|f| w[f] / (dt * vec3::norm(sf[f]).max(1e-300)))
+            .collect();
+        let n = self.u.len();
+        let vu0: Vec<Cons> = (0..n).map(|i| self.u[i].map(|x| x * v0[i])).collect();
+        // SSP-RK stage (V U)_s = a (V U)^n + b ((V U)_prev + dt R(U_prev)); the same combination applied to dV/dt = dv/dt
+        // gives the stage volume V^n + c dv
+        let stage = |vu_prev: &[Cons], u_prev: &[Cons], a: f64, b: f64, c: f64| -> Result<(Vec<Cons>, Vec<Cons>)> {
+            let r = self.flux_sum(u_prev, Some(&wn))?;
+            let vu: Vec<Cons> = (0..n)
+                .map(|i| std::array::from_fn(|k| a * vu0[i][k] + b * (vu_prev[i][k] + dt * r[i][k])))
+                .collect();
+            let u = (0..n).map(|i| vu[i].map(|x| x / (v0[i] + c * dv[i]))).collect();
+            Ok((vu, u))
+        };
+        let u0 = self.u.clone();
+        self.u = match self.settings.rk {
+            RkScheme::Euler => stage(&vu0, &u0, 0.0, 1.0, 1.0)?.1,
+            RkScheme::Rk2 => {
+                let (vu1, u1) = stage(&vu0, &u0, 0.0, 1.0, 1.0)?;
+                stage(&vu1, &u1, 0.5, 0.5, 1.0)?.1
+            }
+            RkScheme::Rk3 => {
+                let (vu1, u1) = stage(&vu0, &u0, 0.0, 1.0, 1.0)?;
+                let (vu2, u2) = stage(&vu1, &u1, 0.75, 0.25, 0.5)?;
+                stage(&vu2, &u2, 1.0 / 3.0, 2.0 / 3.0, 1.0)?.1
+            }
+        };
+        self.time += dt;
+        self.steps += 1;
+        Ok(())
+    }
+
+    /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3).
+    pub fn replace_mesh(&mut self, geom: FvGeometry, u: Vec<Cons>) -> Result<()> {
+        if u.len() != geom.n_cells() || geom.mesh.patches().len() != self.bcs.len() {
+            return Err(Error::Numerical(
+                "replace_mesh: one state per cell and the same patches are required".into(),
+            ));
+        }
+        self.geom = geom;
+        self.ls_inv = ls_inverse(&self.geom);
+        self.u = u;
+        Ok(())
     }
 
     /// Advance one step of size `dt`.

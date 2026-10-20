@@ -41,6 +41,9 @@ pub enum SmoothingMethod {
     Laplacian,
     /// `gamma = 1/l^k`, `l` the distance to the nearest prescribed face (brute-force search).
     InverseDistance(f64),
+    /// `gamma_f = 1/V_f^k`, `V_f` the mean volume of the two cells of the face (the owner's on boundary faces): small cells
+    /// are stiffer and deform less (F-230, ADR 0090 D4).
+    InverseVolume(f64),
 }
 
 /// Result of a smoothing call.
@@ -125,6 +128,19 @@ pub fn smooth_displacement(
                     })
                     .collect()
             }
+        }
+        SmoothingMethod::InverseVolume(k) => {
+            let (vol, own, nei) = (mesh.cell_volumes(), mesh.owner(), mesh.neighbour());
+            (0..nf)
+                .map(|f| {
+                    let v = if f < n_int {
+                        0.5 * (vol[own[f]] + vol[nei[f]])
+                    } else {
+                        vol[own[f]]
+                    };
+                    v.powf(-k)
+                })
+                .collect()
         }
     };
     // solve each active component (non-orthogonal passes re-using the least-squares gradient)
