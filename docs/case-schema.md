@@ -843,8 +843,13 @@ transient and ideal-gas runs.
 
 `udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,
 `viscosity` and `monitor` select the roles it plays; `boundaries.<patch>.velocity_udf` names a module whose
-`velocity_profile` export supplies a fixed velocity. The module may import nothing. The ABI, limits and failure
-behaviour are in `docs/udf-abi.md`.
+`velocity_profile` export supplies a fixed velocity. Hook catalogue v2 (F-239): `conductivity` (thermal conductivity
+per face), `energy_source` (W/m^3 per cell), `initialise` (initial velocity, pressure, temperature per cell) and
+`at_end` (an integrand evaluated once when the run ends, monitor `udf_end_<name>`) are further roles;
+`boundaries.<patch>.temperature_udf` (with `temperature = "fixed"`) and `boundaries.<patch>.heat_flux_udf` (with
+`temperature = "heat_flux"`) supply boundary temperatures and wall heat fluxes per face, and
+`scalars.<name>.source_udf` a passive-scalar source. Source and property roles act in steady SIMPLE/SIMPLEC runs
+only. The module may import nothing. The ABI, limits, scope and failure behaviour are in `docs/udf-abi.md`.
 
 ## Caveats
 

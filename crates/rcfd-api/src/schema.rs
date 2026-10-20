@@ -542,6 +542,14 @@ pub fn case_schema() -> Schema {
             Schema::string("").doc("Name of a user function (udf.<name>, WebAssembly module with a velocity_profile export) that supplies the velocity of a fixed condition per face; an explicit velocity_expression_* component takes precedence"),
         )
         .field(
+            "temperature_udf",
+            Schema::string("").doc("Name of a user function (udf.<name>) whose temperature_profile export supplies the temperature [K] of a fixed condition per face, evaluated once at t = 0 (F-239); temperature_expression takes precedence"),
+        )
+        .field(
+            "heat_flux_udf",
+            Schema::string("").doc("Name of a user function (udf.<name>) whose wall_heat_flux export supplies the heat flux into the domain [W/m^2] of a heat_flux condition per face, evaluated once at t = 0 (F-239); heat_flux_expression takes precedence"),
+        )
+        .field(
             "temperature_expression",
             Schema::string("").doc("Expression [K] for a fixed wall/inlet temperature (energy equation)"),
         )
@@ -1885,6 +1893,22 @@ pub fn case_schema() -> Schema {
                     .field(
                         "monitor",
                         Schema::boolean(false).doc("Record the module's monitor export as the monitor udf_<name> (sum of value times cell volume)"),
+                    )
+                    .field(
+                        "conductivity",
+                        Schema::boolean(false).doc("Use the module's thermal_conductivity export [W/(m K)] at every face instead of physics.conductivity (steady SIMPLE/SIMPLEC with energy, not with properties laws, CHT, radiation or heat_flux boundaries; at most one module)"),
+                    )
+                    .field(
+                        "energy_source",
+                        Schema::boolean(false).doc("Add the module's energy_source export [W/m^3] per cell to the energy equation (steady SIMPLE/SIMPLEC with energy, not with CHT or radiation; at most one module)"),
+                    )
+                    .field(
+                        "initialise",
+                        Schema::boolean(false).doc("Set the initial velocity, kinematic pressure and temperature per cell from the module's initial_value export (after initial.velocity_expression_*, before register patches; initial.method = uniform; at most one module)"),
+                    )
+                    .field(
+                        "at_end",
+                        Schema::boolean(false).doc("Evaluate the module's execute_at_end export once when the run ends (converged, iteration limit or end time) and record the sum of value times cell volume as the monitor udf_end_<name>"),
                     ),
             )
             .doc("Sandboxed user functions (WebAssembly)"),
@@ -2195,6 +2219,10 @@ fn scalar_schema(species: bool) -> Schema {
             .field(
                 "initial_expression",
                 Schema::string("").doc("Dimensionless initial field as an expression of x, y, z; replaces initial"),
+            )
+            .field(
+                "source_udf",
+                Schema::string("").doc("Name of a user function (udf.<name>) whose scalar_source export (value per second, from x, y, z, t and the cell value) is added to the source every iteration (steady SIMPLE/SIMPLEC runs; F-239)"),
             )
             .field(
                 "expression",

@@ -228,6 +228,22 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             }
         }
     }
+    if law(case, "conductivity").is_some() || law(case, "specific_heat").is_some() {
+        for n in case.tree.names("udf").unwrap_or_default() {
+            if case
+                .tree
+                .get(&format!("udf.{n}.conductivity"))
+                .ok()
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                bad(
+                    format!("udf.{n}.conductivity"),
+                    "a user-function conductivity cannot be combined with properties.conductivity / properties.specific_heat".into(),
+                );
+            }
+        }
+    }
     for n in ["conductivity", "specific_heat"] {
         if law(case, n).is_some() && (gf(case, "physics.rho") <= 0.0) {
             bad(
@@ -252,7 +268,7 @@ pub struct Properties {
 }
 
 /// Linear face interpolation of a cell field, boundary values on boundary faces.
-fn face_values(geom: &FvGeometry, t: &ScalarField) -> Vec<f64> {
+pub(crate) fn face_values(geom: &FvGeometry, t: &ScalarField) -> Vec<f64> {
     let mesh = &geom.mesh;
     let bv = t.boundary_values(geom);
     (0..mesh.n_faces())

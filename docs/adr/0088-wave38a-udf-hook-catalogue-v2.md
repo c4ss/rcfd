@@ -81,3 +81,50 @@ Scratch file `crates/rcfd-api/tests/w38a_smoke.rs` (not committed), release buil
 * S4 (C5 set-up): the passive-scalar slab with `source = 5` meets the identity to 9.9e-15 of the maximum rise.
 * S5 (C6 set-up): the expression-initialised channel builds (ux at the first cell centre 0.285 = 6 * 0.05 * 0.95, p 0.25, T 310) and runs 50
   iterations without failure.
+
+## Addendum: measured values (release build, `crates/rcfd-api/tests/udf_hooks_w38a.rs`)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| C1 `temperature_profile` vs `temperature_expression`, rel diff of T | < 1e-9 | 0 (bit-identical) | pass |
+| C1 sanity, hook run vs uniform-300 K run | > 1e-3 | 1.01 (corrected test, see deviation 1) | pass |
+| C2 `wall_heat_flux` vs `heat_flux_value`, rel diff of T | < 1e-9 | 0 | pass |
+| C2 hook run vs T = 300 + q (L - x) / k | < 1e-9 | 3.5e-13 | pass |
+| C3 `thermal_conductivity` (physics.conductivity 5, hook 2) vs k = 2 run | < 1e-9 | 0 | pass |
+| C3 sanity, k = 5 run vs k = 2 run | > 1e-3 | 0.64 | pass |
+| C4a `energy_source` 1e4 vs zone source 1e4 | < 1e-9 | 0 | pass |
+| C4b slab identity, fraction of q L^2 / (8 k) | <= 1e-6 | 1.08e-10 | pass |
+| C4c linear source vs closed form, nx 64 | <= 6e-4 | 4.72e-4 | pass |
+| C5 `scalar_source` 5 vs `source = 5`, rel diff of c | < 1e-9 | 0 | pass |
+| C5 scalar slab identity | <= 1e-6 | 9.9e-15 | pass |
+| C6 `initial_value` vs initial expressions, at build | < 1e-12 | 0 | pass |
+| C6 after 50 SIMPLEC iterations | < 1e-9 | 0 | pass |
+| C7 `execute_at_end`: one value, at the last step (300), vs independent sum | 1 value, < 1e-12 | 1 value at x = 300, 0 | pass |
+| C8 diagnostics and refusals (17 cases) and two run-time stops | all refused / stopped with the named message | all | pass |
+| Defaults: `baseline_hashes.rs`, F-122 `udf.rs` (8 tests), `zone_sources.rs`, `scalars.rs`, `properties.rs`, `rules_w19c.rs`, `init_methods.rs` | unchanged | all pass, hashes not re-recorded | pass |
+
+The equivalence results are exactly 0 because the hook and the built-in feed the same numbers into the same assembly
+(for example k / (rho cp) = 2 / 1000 on every face either way); the limit 1e-9 was not needed.
+
+Deviations from the registered plan, disclosed:
+
+1. **C1 sanity metric was a defective set-up.** As written, the sanity part scaled the difference by the range of the
+   uniform-300 K run, which is 0, so it printed 1.4e301; the check "passed" without meaning anything. The test stays
+   as `c1_temperature_profile_equals_the_expression`, ignored with that reason, and the NEW test
+   `c1_corrected_sanity_scale` scales by the range of the hook run (measured 1.01). The equivalence part (0) is the
+   same in both.
+2. **C6 module text did not parse on the first run** (one closing parenthesis too many in the WAT of the test module),
+   so C6 measured nothing on that run. The parenthesis was removed; no limit or set-up changed. The second run is the
+   one reported.
+3. C8 grew beyond the list in the registration only by splitting it into individual cases (four role flags, three
+   references, one undefined module, two wrong-condition cases, two providers, three transient refusals, the property
+   law, the heat-flux boundary, the initial method, and the two run-time stops).
+
+Not delivered, as registered: turbulence source, species (multicomponent) source, adjust, a separate exit hook,
+reaction rate, dynamic-zone motion, specific heat and density hooks, transient/coupled/frozen-flow use of the
+source and property hooks, and particle hooks (gated: F-056 and F-128 are partial). F-239 is therefore `partial`:
+every hook delivered meets its registered check, but the acceptance names the whole catalogue.
+
+No reference values beyond first principles were used: the closed forms are the 1D conduction solutions with
+uniform and linear sources and with a fixed flux, and the discrete identity of the uniform-source slab follows from
+the three-point scheme (as in ADR 0019 E1).

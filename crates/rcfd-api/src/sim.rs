@@ -640,6 +640,24 @@ fn joule_source(
     }
 }
 
+/// Per-face values of the boundary hook (`temperature_profile` or `wall_heat_flux`, F-239) of the module named at
+/// `path` on `patch` (t = 0, like the boundary expressions); `None` when the path names no loaded module.
+fn udf_patch_values(
+    case: &Case,
+    udfs: &mut BTreeMap<String, Udf>,
+    geom: &FvGeometry,
+    patch: &rcfd_mesh::Patch,
+    path: &str,
+) -> Option<std::result::Result<Vec<f64>, String>> {
+    let m = udfs.get_mut(&get_s(case, path))?;
+    let fc = geom.mesh.face_centres();
+    Some(if path.ends_with("heat_flux_udf") {
+        patch.faces().map(|f| m.wall_heat_flux(fc[f], 0.0)).collect()
+    } else {
+        patch.faces().map(|f| m.temperature_profile(fc[f], 0.0)).collect()
+    })
+}
+
 /// Energy equation state of a steady buoyant simulation.
 struct EnergyState {
     solver: EnergySolver,
@@ -649,6 +667,8 @@ struct EnergyState {
     buoyancy: bool,
     /// Thermal conductivity (W/m/K).
     k: f64,
+    /// rho cp (J/m^3/K), converts user-function conductivities and heat sources (F-239).
+    rho_cp: f64,
     res_t: f64,
 }
 
@@ -705,6 +725,12 @@ pub struct Simulation {
     udf_momentum: Option<String>,
     udf_viscosity: Option<String>,
     udf_monitors: Vec<String>,
+    /// Hook catalogue v2 (F-239, ADR 0088): conductivity and energy-source modules, (scalar, module) source pairs,
+    /// execute-at-end modules.
+    udf_conductivity: Option<String>,
+    udf_energy: Option<String>,
+    udf_scalar: Vec<(String, String)>,
+    udf_at_end: Vec<String>,
     /// Generalised-Newtonian viscosity law (F-110).
     rheology: Option<Rheology>,
     /// Porous, rotating-frame and acceleration sources (F-031).
@@ -830,6 +856,52 @@ impl Simulation {
                 Err(e) => errs.extend(e),
             }
         }
+        let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
+        errs.extend(udf_diags);
+        let flagged = |flag: &str| udfs.keys().find(|n| get_b(case, &format!("udf.{n}.{flag}"))).cloned();
+        let (udf_momentum, udf_viscosity) = (flagged("momentum_source"), flagged("viscosity"));
+        let (udf_conductivity, udf_energy, udf_init) =
+            (flagged("conductivity"), flagged("energy_source"), flagged("initialise"));
+        let all_flagged = |flag: &str| -> Vec<String> {
+            udfs.keys()
+                .filter(|n| get_b(case, &format!("udf.{n}.{flag}")))
+                .cloned()
+                .collect()
+        };
+        let (udf_monitors, udf_at_end) = (all_flagged("monitor"), all_flagged("at_end"));
+        let udf_scalar: Vec<(String, String)> = case
+            .tree
+            .names("scalars")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|n| {
+                let m = get_s(case, &format!("scalars.{n}.source_udf"));
+                (n, m)
+            })
+            .filter(|(_, m)| udfs.contains_key(m))
+            .collect();
+        if let Some(n) = &udf_init {
+            // initialise hook (F-239): after the uniform values and velocity expressions, before register patches
+            let m = udfs.get_mut(n).expect("loaded");
+            let cc = geom.mesh.cell_centres();
+            let r = (0..cc.len()).try_for_each(|c| -> std::result::Result<(), String> {
+                for k in 0..3 {
+                    u.values[c][k] = m.initial_value(cc[c], k as i32)?;
+                }
+                p.values[c] = m.initial_value(cc[c], 3)?;
+                if energy_on {
+                    temp.values[c] = m.initial_value(cc[c], 4)?;
+                }
+                Ok(())
+            });
+            if let Err(e) = r {
+                errs.push(Diagnostic {
+                    path: format!("udf.{n}.initialise"),
+                    line: None,
+                    message: e,
+                });
+            }
+        }
         errs.extend(crate::registers::apply_initial_patches(
             case,
             &geom.mesh,
@@ -844,15 +916,6 @@ impl Simulation {
         };
         let mut expr_bcs: Vec<ExprBc> = Vec::new();
         let mut marangoni: Vec<(String, f64)> = Vec::new();
-        let (mut udfs, udf_diags) = crate::udf::load_case_udfs(case);
-        errs.extend(udf_diags);
-        let flagged = |flag: &str| udfs.keys().find(|n| get_b(case, &format!("udf.{n}.{flag}"))).cloned();
-        let (udf_momentum, udf_viscosity) = (flagged("momentum_source"), flagged("viscosity"));
-        let udf_monitors: Vec<String> = udfs
-            .keys()
-            .filter(|n| get_b(case, &format!("udf.{n}.monitor")))
-            .cloned()
-            .collect();
         for patch in geom.mesh.patches() {
             if compressible || matches!(patch.kind, PatchKind::Empty | PatchKind::Cyclic) {
                 continue;
@@ -988,7 +1051,22 @@ impl Simulation {
                             &sctx,
                         ) {
                             Ok(Some(c)) => Box::new(FixedValue(per_face(&c, 1.0))),
-                            Ok(None) => Box::new(FixedValue::scalar(tval)),
+                            Ok(None) => {
+                                match udf_patch_values(case, &mut udfs, &geom, patch, &format!("{b}.temperature_udf")) {
+                                    Some(Ok(v)) => Box::new(FixedValue(Profile::PerFace(
+                                        v.iter().map(|x| [*x, 0.0, 0.0]).collect(),
+                                    ))),
+                                    Some(Err(e)) => {
+                                        errs.push(Diagnostic {
+                                            path: format!("{b}.temperature_udf"),
+                                            line: None,
+                                            message: e,
+                                        });
+                                        Box::new(ZeroGradient)
+                                    }
+                                    None => Box::new(FixedValue::scalar(tval)),
+                                }
+                            }
                             Err(e) => {
                                 errs.extend(e);
                                 Box::new(ZeroGradient)
@@ -1020,13 +1098,36 @@ impl Simulation {
                                 }
                                 None => Box::new(FixedGradient(per_face(&c, inv_k))),
                             },
-                            Ok(None) => match &cht {
-                                Some(m) => {
-                                    let q = vec![qval; patch.faces().count()];
-                                    crate::cht::heat_flux_bc(m, &geom, &patch.name, &q)
+                            Ok(None) => {
+                                let q_udf = match udf_patch_values(
+                                    case,
+                                    &mut udfs,
+                                    &geom,
+                                    patch,
+                                    &format!("{b}.heat_flux_udf"),
+                                ) {
+                                    Some(Ok(v)) => Some(v),
+                                    Some(Err(e)) => {
+                                        errs.push(Diagnostic {
+                                            path: format!("{b}.heat_flux_udf"),
+                                            line: None,
+                                            message: e,
+                                        });
+                                        None
+                                    }
+                                    None => None,
+                                };
+                                match (&cht, q_udf) {
+                                    (Some(m), q) => {
+                                        let q = q.unwrap_or_else(|| vec![qval; patch.faces().count()]);
+                                        crate::cht::heat_flux_bc(m, &geom, &patch.name, &q)
+                                    }
+                                    (None, Some(q)) => Box::new(FixedGradient(Profile::PerFace(
+                                        q.iter().map(|x| [x * inv_k, 0.0, 0.0]).collect(),
+                                    ))),
+                                    (None, None) => Box::new(FixedGradient(Profile::scalar(qval * inv_k))),
                                 }
-                                None => Box::new(FixedGradient(Profile::scalar(qval * inv_k))),
-                            },
+                            }
                             Err(e) => {
                                 errs.extend(e);
                                 Box::new(ZeroGradient)
@@ -1463,6 +1564,7 @@ impl Simulation {
                 t_ref: get_f(case, "physics.reference_temperature"),
                 buoyancy: get_b(case, "energy.buoyancy"),
                 k: kth,
+                rho_cp: rho * cp,
                 res_t: 1.0,
             })
         } else {
@@ -1481,6 +1583,8 @@ impl Simulation {
         for (name, role, flag) in [
             (&udf_momentum, "a momentum source", "momentum_source"),
             (&udf_viscosity, "a viscosity", "viscosity"),
+            (&udf_conductivity, "a conductivity", "conductivity"),
+            (&udf_energy, "an energy source", "energy_source"),
         ] {
             if let Some(n) = name {
                 if !steady_alg {
@@ -1490,6 +1594,46 @@ impl Simulation {
                     ));
                 }
             }
+        }
+        if let (Some((sc, _)), false) = (udf_scalar.first(), steady_alg) {
+            return Err(diag(
+                &format!("scalars.{sc}.source_udf"),
+                "a user function can supply a scalar source only in steady SIMPLE/SIMPLEC runs",
+            ));
+        }
+        for (name, flag) in [(&udf_conductivity, "conductivity"), (&udf_energy, "energy_source")] {
+            if let Some(n) = name {
+                let path = format!("udf.{n}.{flag}");
+                if !energy_on {
+                    return Err(diag(&path, "needs energy.enabled = true"));
+                }
+                if cht.is_some() || crate::radiation::enabled(case) {
+                    return Err(diag(
+                        &path,
+                        "cannot be combined with conjugate heat transfer or radiation in this version",
+                    ));
+                }
+            }
+        }
+        if let Some(n) = &udf_conductivity {
+            if let Some(b) = case
+                .tree
+                .names("boundaries")
+                .unwrap_or_default()
+                .into_iter()
+                .find(|b| get_s(case, &format!("boundaries.{b}.temperature")) == "heat_flux")
+            {
+                return Err(diag(
+                    &format!("udf.{n}.conductivity"),
+                    format!("cannot be combined with the heat_flux boundary '{b}' (it uses physics.conductivity)"),
+                ));
+            }
+        }
+        if let (Some(n), false) = (&udf_init, crate::init::method(case) == "uniform") {
+            return Err(diag(
+                &format!("udf.{n}.initialise"),
+                "an initialise user function needs initial.method = \"uniform\"",
+            ));
         }
         if let (Some(n), true) = (&udf_viscosity, turb.is_some()) {
             return Err(diag(
@@ -1643,6 +1787,10 @@ impl Simulation {
             udf_momentum,
             udf_viscosity,
             udf_monitors,
+            udf_conductivity,
+            udf_energy,
+            udf_scalar,
+            udf_at_end,
             rheology,
             sources,
             components,
@@ -2147,11 +2295,14 @@ impl Simulation {
         Ok(())
     }
 
-    /// Evaluate the user-function monitors on the current fields; returns an error text on failure.
-    fn udf_monitor_step(&mut self, x: f64) -> Option<String> {
-        if self.udf_monitors.is_empty() || matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
+    /// Evaluate the user-function monitors (or, with `at_end`, the execute-at-end hooks) on the current fields;
+    /// returns an error text on failure.
+    fn udf_monitor_step(&mut self, x: f64, at_end: bool) -> Option<String> {
+        let names = if at_end { &self.udf_at_end } else { &self.udf_monitors };
+        if names.is_empty() || matches!(self.engine, Engine::Compressible(_) | Engine::VarDensity(_)) {
             return None;
         }
+        let names = names.clone();
         let mut udfs = std::mem::take(&mut self.udfs);
         let mut sums = Vec::new();
         let mut error = None;
@@ -2160,11 +2311,17 @@ impl Simulation {
             let (cc, vol) = (geom.mesh.cell_centres(), geom.mesh.cell_volumes());
             let (u, p) = (&self.velocity().values, &self.pressure().values);
             let tc = self.energy.as_ref().map(|e| &e.solver.t.values);
-            'outer: for name in &self.udf_monitors {
+            'outer: for name in &names {
                 let m = udfs.get_mut(name).expect("checked at build time");
                 let mut sum = 0.0;
                 for c in 0..cc.len() {
-                    match m.monitor(cc[c], vol[c], u[c], p[c], tc.map_or(0.0, |t| t[c])) {
+                    let tcell = tc.map_or(0.0, |t| t[c]);
+                    let v = if at_end {
+                        m.execute_at_end(cc[c], vol[c], u[c], p[c], tcell)
+                    } else {
+                        m.monitor(cc[c], vol[c], u[c], p[c], tcell)
+                    };
+                    match v {
                         Ok(v) => sum += v * vol[c],
                         Err(e) => {
                             error = Some(e);
@@ -2172,7 +2329,7 @@ impl Simulation {
                         }
                     }
                 }
-                sums.push((format!("udf_{name}"), sum));
+                sums.push((format!("{}{name}", if at_end { "udf_end_" } else { "udf_" }), sum));
             }
         }
         self.udfs = udfs;
@@ -2437,6 +2594,18 @@ impl Simulation {
                             en.solver.alpha_face = Some(a);
                         }
                     }
+                    if let Some(name) = &self.udf_conductivity {
+                        let fc = self.geom.mesh.face_centres();
+                        let tf = crate::properties::face_values(&self.geom, &en.solver.t);
+                        let m = self.udfs.get_mut(name).expect("checked at build time");
+                        let a: std::result::Result<Vec<f64>, String> = (0..fc.len())
+                            .map(|f| m.thermal_conductivity(fc[f], 0.0, tf[f]).map(|k| k / en.rho_cp))
+                            .collect();
+                        match a {
+                            Ok(a) => en.solver.alpha_face = Some(a),
+                            Err(e) => udf_error = Some(e),
+                        }
+                    }
                     if let Some(cm) = &mut self.components {
                         en.solver.source = cm.heat_sources(&self.geom, &s.phi, &en.solver.t);
                     }
@@ -2471,6 +2640,29 @@ impl Simulation {
                         }
                         en.solver.source = Some(h);
                     }
+                    if let Some(name) = &self.udf_energy {
+                        // W/m^3 -> K/s, added to the sources assigned above in this iteration (if any)
+                        let fresh = self.components.is_some()
+                            || self.zone_sources.is_some()
+                            || chem_on
+                            || self.two_way.as_ref().is_some_and(|t| t.heat_source().is_some());
+                        let (cc, t) = (self.geom.mesh.cell_centres(), &en.solver.t.values);
+                        let m = self.udfs.get_mut(name).expect("checked at build time");
+                        let h: std::result::Result<Vec<f64>, String> = (0..cc.len())
+                            .map(|c| m.energy_source(cc[c], 0.0, t[c]).map(|q| q / en.rho_cp))
+                            .collect();
+                        match h {
+                            Ok(mut h) => {
+                                if let (true, Some(b)) = (fresh, &en.solver.source) {
+                                    for (x, y) in h.iter_mut().zip(b) {
+                                        *x += y;
+                                    }
+                                }
+                                en.solver.source = Some(h);
+                            }
+                            Err(e) => udf_error = Some(e),
+                        }
+                    }
                     en.res_t = match &mut self.radiation {
                         Some(r) => r.iterate_energy(&mut en.solver, &s.phi, base_alpha),
                         None => en.solver.iterate(&s.phi),
@@ -2479,6 +2671,19 @@ impl Simulation {
                 if let Some(cm) = &self.components {
                     for (name, v) in cm.values() {
                         self.monitors.push(&name, "", i.iteration as f64, v);
+                    }
+                }
+                if let Some(sc) = self.scalars.as_mut() {
+                    let cc = self.geom.mesh.cell_centres();
+                    for (name, module) in &self.udf_scalar {
+                        let vals = sc.field(name).unwrap_or_default();
+                        let m = self.udfs.get_mut(module).expect("checked at build time");
+                        let v: std::result::Result<Vec<f64>, String> =
+                            (0..vals.len()).map(|c| m.scalar_source(cc[c], 0.0, vals[c])).collect();
+                        match v {
+                            Ok(v) => sc.set_udf_source(name, v),
+                            Err(e) => udf_error = Some(e),
+                        }
                     }
                 }
                 let sctx = StepCtx {
@@ -2967,7 +3172,10 @@ impl Simulation {
         self.apply_solution_limits();
         let mut summary = summary;
         if udf_error.is_none() {
-            udf_error = self.udf_monitor_step(x);
+            udf_error = self.udf_monitor_step(x, false);
+        }
+        if udf_error.is_none() && summary.done {
+            udf_error = self.udf_monitor_step(x, true);
         }
         if let Some(e) = udf_error {
             summary.done = true;
