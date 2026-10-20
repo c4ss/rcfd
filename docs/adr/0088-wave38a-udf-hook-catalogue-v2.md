@@ -128,3 +128,24 @@ every hook delivered meets its registered check, but the acceptance names the wh
 No reference values beyond first principles were used: the closed forms are the 1D conduction solutions with
 uniform and linear sources and with a fixed flux, and the discrete identity of the uniform-source slab follows from
 the three-point scheme (as in ADR 0019 E1).
+
+## Amendment 1 (written after the addendum above and before the run it governs)
+
+Review of the delivered slice found claims in the docs that no registered check ran. What I knew when writing this: C1-C8 as
+measured above; no run so far had an energy-source hook together with another heat source, no run used `heat_flux_udf`
+with conjugate heat transfer, and no run used `initialise` or the boundary hooks with an algorithm other than SIMPLEC.
+
+* **C9 (new, registered here, not yet run)**: SLAB nx 64, `energy_source` returning 5e3 W/m^3 together with a uniform
+  zone source of 5e3 W/m^3, against the zone source of 1e4 W/m^3 alone: rel diff of T < 1e-9 (the same limit and the
+  same reason as C4a: the hook adds its value to the zone source assigned in the same iteration). This exercises the
+  add-to-the-other-sources branch, where an accumulation over iterations would show as a large difference.
+* Docs are reworded, not tested: the CHT heat-flux path of `heat_flux_udf` is wired but untested; H1, H2 and H6 are
+  tested in steady SIMPLEC only; the sentence that a restart overwrites the initialise hook is removed (not tested);
+  the combination of `energy_source` with components, chemistry and particle heat sources is wired but only the zone
+  source combination is tested (C9).
+
+Rule (c) disclosure for deviations 1 and 2 of the addendum: the corrected test `c1_corrected_sanity_scale` was
+written and run before any amendment text existed. At that point I already knew the C1 equivalence (0) and that the
+original sanity value (1.4e301) was degenerate; the corrected scale (range of the hook run) was chosen because it is
+the non-zero field of the pair, not from its value. The C6 module text was fixed and C6 rerun the same way, before
+writing it down; the first run had measured nothing (the module did not parse).
