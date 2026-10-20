@@ -182,3 +182,14 @@ Checks (`crates/rcfd-api/tests/w36b_lag_known.rs`):
 Own scratch clone and target (`<target dir>`), commits of own hunks only (temporary index), one cargo at a time, two test threads.
 Documentation: `docs/case-schema.md` (the new key, the part X outcome), `docs/milestone-fan.md` (robustness row). Final gate on a fresh `git archive`
 of the HEAD at hand-back: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --release --no-fail-fast`.
+
+## Amendment 1 (2026-10-20): N1 set-up defect; written after the first run of N1-N4, before the corrected N1 test ran
+
+Run on the scratch tree with the part N code (NaN-propagating folds, K1 fields first): N2, N3, N4 met (N2 `converged = false` after 3000 iterations; N3
+`max_du`, `continuity`, `res_u` NaN; N4 trip `non_finite`, quantity `velocity`, cell 0, iteration 375). N1 as registered failed: at iteration 375 (the
+first iteration that ends with non-finite fields) `max_du` and `continuity` are NaN, but `res_u = 0.971` is finite. That is not a reporting defect:
+`res_u` is the normalised momentum residual of the iteration's STARTING state (assembled before the solve), which is still finite at 375; the fields become
+non-finite inside that iteration (the pressure solve, `res_p` NaN). The registered N1 limit asked for a NaN residual of a finite state: a defective limit.
+The registered test stays as the ignored `n1_registered_setup_defect` (limit unchanged). Corrected N1' (new test `n1_corrected_reports_are_nan_from_the_
+first_non_finite_state`): at the first iteration whose fields end non-finite, `max_du` and `continuity` are NaN; at the next iteration (whose starting
+state is non-finite) `max_du`, `continuity` and `res_u` are all NaN (on c89495f that iteration, 376, reported 0, 0, 0; SM-N).
