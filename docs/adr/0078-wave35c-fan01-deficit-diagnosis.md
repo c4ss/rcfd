@@ -469,3 +469,21 @@ the ADR 0077 opt-in `solver.periodic_gradient = "partner_cell"`, F-H0):
   for that part (the F-H0 seam-gradient defect of ADR 0077 then contributes), and N1c = N1b + `partner_cell` (FAN-01, 13 332 cells) is run once to
   measure its effect on the FAN-01 numbers. Otherwise N1c is not run.
 Order: X2a-HEAD, then X2f + X2h, then X2i (+ N1c if triggered); one cargo at a time, two test threads.
+
+### Amendment 4 results (runs on a fresh archive of d88f816, the HEAD at hand-back)
+
+| Run | Measured | Rule | Result |
+|---|---|---|---|
+| X2a-HEAD | outlet L 2.25440 N m, Delta p_ts -59.984 Pa, 374 iterations, every printed digit equal to X2a | reproduce | reproduced: the measurements of this ADR carry over to d88f816 |
+| X2f (frame source removed, solid-body swirl in the absolute frame) | L excess 2.052 N m (inlet L -10.129, outlet -8.142 N m: the solid-body swirl is not carried unchanged; total pressure -200.6 Pa) | >= 0.5 x 2.313: convection; <= 0.1 x: frame terms | >= 0.5 x: the error is the convection of a large swirl on this mesh; the rotating-frame source and coupling terms are cleared |
+| X2h (X2a + `partner_cell`) | identical to X2a in every printed digit (upwind uses no momentum gradient) | 0.116 N m | no effect |
+| X2i (X2d + `partner_cell`) | Delta p_tt 16.71 Pa (X2d 16.77), swirl energy 19.96 Pa (19.97), outlet L -0.0016 N m | half of 16.8 / 20.0 Pa | no effect; N1c not run |
+
+Conclusion of the defect question: the spurious angular momentum and swirl energy come from convecting a large swirl (the solid-body part of the
+relative velocity) on this H-slit mesh; they appear without any frame term (X2f) and do not involve the seam gradient (X2h, X2i). By the registered
+rule it is discretisation error, and the bladed runs show it falls with in-plane refinement (L excess 2.06 -> 1.20 N m, N2) and with minmod (0.19,
+N1b; 0.12 with both, KN). Not shown: convergence with h on the empty passage (X2c did not converge), and the cell-level location of the error.
+Note: X2a, X2b, X2f, X2h converged by residual tolerance in under 1000 iterations, so their printed last-1000-iteration change is "inf"; their
+comparisons rest on tolerance convergence (1e-5), not on the 1000-iteration rule. The incidence shift quoted in the attribution section compares
+bladed E0 with the unbladed X2b 40 mm upstream, where the blade's potential field still acts; the E0 against N1b comparison (both bladed, same
+grading, pre-swirl 0.67 against 0.03 N m) gives +9.8 / +10.8 deg at the hub bin and -1.9 / -1.1 deg at the tip bin, i.e. 0.8-1.0 deg.
