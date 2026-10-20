@@ -523,3 +523,95 @@ fn registered_jacobians() {
         }
     }
 }
+
+/// Attribution switch of ADR 0084 (and amendment 1).
+#[derive(Clone, Copy, Debug)]
+enum Sw {
+    P(usize),
+    PImplicit,
+    R,
+    S,
+}
+
+fn apply(s: &mut SimpleSolver, sw: Sw) {
+    match sw {
+        Sw::P(m) => s.correction_non_orth = m,
+        Sw::PImplicit => s.correction_non_orth_implicit = true,
+        Sw::R => s.reconstructed_correction = true,
+        Sw::S => s.simplec_seam_compensation = true,
+    }
+}
+
+/// x* of the map with a switch (S changes the fixed point; the others keep it, so their x* is the base one).
+fn fixed_point_sw(set: Setup, deg: f64, v: Var, sw: Option<Sw>) -> SimpleSolver {
+    let mut s = set.build(deg, Var { alpha_p: 0.3, ..v });
+    if let Some(Sw::S) = sw {
+        apply(&mut s, Sw::S);
+    }
+    let it = converge(&mut s, 1e-12, 20000);
+    s.settings = settings(set.nu(), v);
+    if let Some(w) = sw {
+        apply(&mut s, w);
+    }
+    let l = Layout::of(&s);
+    let x = l.get(&s);
+    let t0 = std::time::Instant::now();
+    let y = map(&mut s, &l, &x);
+    let dt = t0.elapsed().as_secs_f64();
+    let d = x.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    l.set(&mut s, &x);
+    println!(
+        "x* {set:?} {deg} deg switch {sw:?}: res 1e-12 at {it:?}; one map iteration moves it by {d:.2e} ({}); one map evaluation {:.3} s",
+        if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" },
+        dt
+    );
+    s
+}
+
+/// A solver with a fixed-point-keeping switch placed at the base x* (checked: one map iteration moves it by at most 1e-12).
+fn at_state(set: Setup, deg: f64, v: Var, sw: Sw, xs: &[f64]) -> SimpleSolver {
+    let mut s = set.build(deg, v);
+    apply(&mut s, sw);
+    let l = Layout::of(&s);
+    let t0 = std::time::Instant::now();
+    let y = map(&mut s, &l, xs);
+    let dt = t0.elapsed().as_secs_f64();
+    let d = xs.iter().zip(&y).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    l.set(&mut s, xs);
+    println!(
+        "x* {set:?} {deg} deg with {sw:?}: one map iteration moves it by {d:.2e} ({}); one map evaluation {dt:.3} s",
+        if d <= 1e-12 { "accepted" } else { "NOT A FIXED POINT" }
+    );
+    s
+}
+
+/// The registered attribution runs (ADR 0084, attribution switches and amendment 1). Select with W37A_ONLY=A-K60,A-K70,A-B.
+#[test]
+#[ignore = "registered attribution runs of ADR 0084"]
+fn attribution() {
+    let sws = [Sw::P(1), Sw::P(2), Sw::P(4), Sw::PImplicit, Sw::R, Sw::S];
+    for (lab, deg, ap) in [("A-K60", 60.0, 1.0), ("A-K70", 70.0, 0.7)] {
+        if !only(lab) {
+            continue;
+        }
+        let v = Var { alpha_p: ap, ..BASE };
+        let base = fixed_point(K40, deg, v);
+        let xs = Layout::of(&base).get(&base);
+        for sw in sws {
+            let mut s = if let Sw::S = sw {
+                fixed_point_sw(K40, deg, v, Some(sw))
+            } else {
+                at_state(K40, deg, v, sw, &xs)
+            };
+            jac_run(&format!("{lab}_{sw:?}"), K40, deg, &mut s, 1e-6);
+        }
+    }
+    if only("A-B") {
+        // the base rho at B x* is below 1 (J8), so only the first start-up state with rho > 1 (J9: x0) is attributed
+        for sw in sws.iter().take(5) {
+            let mut s = Setup::B.build(55.0, BASE);
+            apply(&mut s, *sw);
+            jac_run(&format!("A-B55_x0_{sw:?}"), Setup::B, 55.0, &mut s, 1e-6);
+        }
+    }
+}
