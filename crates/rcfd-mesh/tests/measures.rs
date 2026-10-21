@@ -98,6 +98,16 @@ fn all_finite_or_inf(m: &Measures) {
     }
 }
 
+/// ADR 0093: the four pre-existing `check_mesh` measures on a single-cell (or equal-cube) mesh: skewness 0, volume ratio 1.
+fn existing_measures(m: &Mesh, non_orth_max: f64, non_orth_mean: f64, aspect: f64, aspect_tol: f64) {
+    let r = check_mesh(m);
+    near(r.max_non_orthogonality, non_orth_max, ATOL, "max non-orthogonality");
+    near(r.mean_non_orthogonality, non_orth_mean, ATOL, "mean non-orthogonality");
+    near(r.max_skewness, 0.0, TOL, "max skewness");
+    near(r.max_aspect_ratio, aspect, aspect_tol, "max aspect ratio");
+    near(r.max_volume_ratio, 1.0, TOL, "max volume ratio");
+}
+
 fn cell_measures(m: &Mesh) -> Measures {
     let r = compute_measures(m);
     all_finite_or_inf(&r);
@@ -118,6 +128,7 @@ fn q1a_unit_cube() {
             near(r.cell_size_change[c], 1.0, TOL, "size change");
             near(r.cell_edge_length_ratio[c], 1.0, TOL, "edge ratio");
         }
+        existing_measures(&m, 0.0, 0.0, 1.0, TOL);
     }
 }
 
@@ -133,6 +144,8 @@ fn q1b_right_corner_tetrahedron() {
     near(r.cell_edge_length_ratio[0], 2f64.sqrt(), TOL, "edge ratio");
     near(r.cell_warp[0], 0.0, TOL, "warp");
     near(r.cell_size_change[0], 1.0, TOL, "size change");
+    let a = (2f64.sqrt() / 3.0).atan().to_degrees();
+    existing_measures(&m, a, 0.75 * a, 2f64.sqrt(), TOL);
     println!("Q1b ortho skew {} (exact {v})", r.cell_ortho_skew[0]);
 }
 
@@ -146,6 +159,8 @@ fn q1c_regular_tetrahedron() {
     near(r.cell_ortho_skew[0], 0.0, TOL, "ortho skew");
     near(r.cell_edge_length_ratio[0], 1.0, TOL, "edge ratio");
     near(r.cell_warp[0], 0.0, TOL, "warp");
+    near(r.cell_size_change[0], 1.0, TOL, "size change");
+    existing_measures(&m, 0.0, 0.0, 1.0, TOL);
 }
 
 #[test]
@@ -331,6 +346,16 @@ fn q2a_sliver_hexahedron() {
     near(r.cell_inverse_orthogonal[0], 0.0, TOL, "inverse OQ");
     let sides = r.face_edge_ratio.iter().filter(|&&e| e > 10.0).count();
     assert_eq!(sides, 4);
+    // ADR 0093: the remaining ADR 0018 measures and the four pre-existing ones on the degenerate cell.
+    near(r.cell_warp[0], 0.0, TOL, "warp");
+    assert!(
+        r.face_warp.iter().all(|&w| w.abs() <= TOL),
+        "face warp {:?}",
+        r.face_warp
+    );
+    near(r.cell_ortho_skew[0], 0.0, TOL, "ortho skew");
+    near(r.cell_size_change[0], 1.0, TOL, "size change");
+    existing_measures(&m, 0.0, 0.0, 1000.0, 1e-9 * 1000.0);
 }
 
 #[test]
