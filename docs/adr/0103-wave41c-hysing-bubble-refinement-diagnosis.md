@@ -160,3 +160,41 @@ check yet: the response of the discrete pressure-velocity coupling to the densit
   (R/L)^2 order, under 1 % (estimate, UNVERIFIED), and the smeared interface changes it at O(h/R). Reading: a defect of the
   density-jump coupling is confirmed if a on h = 1/80 is outside [0.76, 0.82] and does not approach 0.80 under refinement; rejected
   if a on h = 1/80 is within [0.78, 0.81].
+
+## Amendment C (written after B1, before any C run)
+
+What I knew: all D, A and B results. B1 rejects the density-jump coupling (acceleration 0.8208, 0.8122, 0.8047 on h = 1/20, 1/40,
+1/80 against 0.8018). Then a code read, prompted by the observation that no experiment so far exercised the free-slip side walls
+(D1 has no-slip walls, B1 measures t = 0+ where wall friction plays no part), found candidate C7:
+
+* C7 (C4, pressure-velocity coupling at the free-slip walls): `VofSolver::step` builds `HbyA = H / a_p` with `a_p` the mean of
+  the component diagonals. On a `Symmetry` face the normal component is fixed (its diagonal gets the wall coefficient) and the
+  tangential one has zero gradient (no wall coefficient). In the wall-adjacent cells the corrected tangential velocity then obeys
+  `a_p u_t = H_t - V dp/dt` instead of `a_kk u_t = H_t - V dp/dt`: an extra friction `(a_p - a_kk) u_t`, half the normal
+  component's wall coefficient, which does not vanish under refinement. ADR 0049 already names this ("the known
+  `component_diagonal = averaged` defect", which is why its dam break uses no-slip walls), and ADR 0074 part A found that with the
+  averaged diagonal a symmetry plane acts like a no-slip wall in the single-phase PISO kernel; the single-phase kernels have the
+  opt-in `component_diagonal` correction `HbyA_k = (H_k + (a_p - a_kk) u_k) / a_p` (ADR 0010), the VOF kernel has none. Hysing's
+  side walls are free slip and 0.25 from the bubble, so this is a limit-level drag on exactly the benchmark's walls.
+
+Code (opt-in, default bit-identical): `VofSettings::component_diagonal: bool` (default false) applies the same correction in the
+VOF corrector, with `a_kk` the diagonal of component k's momentum matrix and `u_k` the current iterate. Kept off by default in
+every outcome (it would move every VOF result with a symmetry or component-specific condition; the user decides on a default).
+
+* C1 (exact solution, single fluid): rho 1000 / 1000, mu 10 / 10, sigma 0, g 0, 1 x 2 box on 40 x 80, symmetry on xmin / xmax,
+  `FixedValue (0, 0.2)` on ymin, p_rgh fixed 0 on ymax (velocity zero gradient there), from u = (0, 0.2) everywhere, dt 2.5e-3 to
+  t = 2. Exact: uniform u = (0, 0.2). Measured: max over the wall-adjacent cells of |u_y - 0.2|, option off and on. C7 is confirmed
+  as a wall defect if, with the option off, this exceeds 0.002 (1 %), and the option brings it below 0.0002; rejected if it is
+  below 0.0002 with the option off.
+* C2 (rising bubble, option on, 40 x 80 and 80 x 160, everything else default): confirm C7 as the primary cause if on 80 x 160
+  e_v <= 0.0115 and e_y <= 0.0318 and e(80) <= e(40) for both metrics; reject if V_c,max and y_c(3) on 80 x 160 move by less than
+  0.0046 and 0.0127 from the defaults (0.2187, 1.0178); otherwise contributing.
+* C2b (information only, never selected for the 160 run): option on together with `full_viscous_stress`, 40 x 80 and 80 x 160.
+* C3 (information): the bubble on 40 x 80 with no-slip side walls (FixedValue 0) instead of symmetry, defaults otherwise. If its
+  V_c,max is within 0.0043 of D0's 0.2204, the averaged-diagonal symmetry plane is acting much like a no-slip wall.
+* The single 160 x 320 run (fixed now): if C2 confirms, the ADR 0100 B1-B4 series (40, 80, 160; limits unchanged) with
+  `component_diagonal = true` alone, as test `b1c_hysing_bubble_error_decreases_under_refinement_component_diagonal` in
+  `vof_bubble_refinement_w40d.rs`. If it passes all of B1-B4 it is kept non-ignored (about 30 min more in the release gate) and
+  F-055 meets the rising-bubble clause with this option on; the note says the default still misses. If it misses, it becomes an
+  ignored known miss with the limits intact. If C2 does not confirm, no 160 x 320 run is made. After C no further amendment is
+  opened in this wave.
