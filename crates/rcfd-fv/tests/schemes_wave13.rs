@@ -28,8 +28,19 @@ fn steady(scheme: ConvScheme, n: usize) -> (f64, bool, Vec<f64>) {
     steady_with(scheme, n, false, 600)
 }
 
-/// `outlet_zero_gradient = true` is the corrected set-up: phi = 1 + sin(pi x / 2) has zero slope at the outlet.
 fn steady_with(scheme: ConvScheme, n: usize, outlet_zero_gradient: bool, max_sweeps: usize) -> (f64, bool, Vec<f64>) {
+    steady_traced(scheme, n, outlet_zero_gradient, max_sweeps, None)
+}
+
+/// `outlet_zero_gradient = true` is the corrected set-up: phi = 1 + sin(pi x / 2) has zero slope at the outlet.
+/// `trace` receives the L2 error after every sweep (ADR 0093 O1d).
+fn steady_traced(
+    scheme: ConvScheme,
+    n: usize,
+    outlet_zero_gradient: bool,
+    max_sweeps: usize,
+    mut trace: Option<&mut Vec<f64>>,
+) -> (f64, bool, Vec<f64>) {
     let ex = |x: f64| {
         if outlet_zero_gradient {
             1.0 + (0.5 * std::f64::consts::PI * x).sin()
@@ -75,11 +86,23 @@ fn steady_with(scheme: ConvScheme, n: usize, outlet_zero_gradient: bool, max_swe
     tr.convection = scheme;
     tr.source = Some(src);
     let phi = unit_flux(&geom);
+    let vol = geom.mesh.cell_volumes();
+    let l2 = |vals: &[f64]| {
+        let (mut e2, mut tot) = (0.0, 0.0);
+        for ((c, v), p) in cc.iter().zip(vol).zip(vals) {
+            e2 += (p - ex(c[0])).powi(2) * v;
+            tot += v;
+        }
+        (e2 / tot).sqrt()
+    };
     let mut converged = false;
     let mut last_change = 0.0;
     for _ in 0..max_sweeps {
         let before = tr.field.values.clone();
         tr.iterate(&phi);
+        if let Some(t) = trace.as_deref_mut() {
+            t.push(l2(&tr.field.values));
+        }
         let change = tr
             .field
             .values
@@ -98,13 +121,7 @@ fn steady_with(scheme: ConvScheme, n: usize, outlet_zero_gradient: bool, max_swe
     if !converged {
         println!("  unconverged n={n}: last relative change {last_change:e}");
     }
-    let vol = geom.mesh.cell_volumes();
-    let (mut e2, mut tot) = (0.0, 0.0);
-    for ((c, v), p) in cc.iter().zip(vol).zip(&tr.field.values) {
-        e2 += (p - ex(c[0])).powi(2) * v;
-        tot += v;
-    }
-    ((e2 / tot).sqrt(), converged, tr.field.values.clone())
+    (l2(&tr.field.values), converged, tr.field.values.clone())
 }
 
 fn orders(scheme: ConvScheme, corrected: bool, max_sweeps: usize) -> (Vec<f64>, bool) {
@@ -153,6 +170,82 @@ fn o1c_order_of_accuracy() {
 #[ignore = "known miss: compressive(1.5)/(2) deferred correction stalls in a limit cycle"]
 fn o1c_known_miss_compressive_convergence() {
     o1_body(true, 60000, Some(true));
+}
+
+/// Error envelope (min, max) of the last `w` entries ending at `end` (exclusive).
+fn envelope(t: &[f64], end: usize, w: usize) -> (f64, f64) {
+    t[end - w..end]
+        .iter()
+        .fold((f64::INFINITY, 0.0f64), |(lo, hi), &e| (lo.min(e), hi.max(e)))
+}
+
+/// ADR 0093 O1d: order of compressive(1.5) and compressive(2) measured on the limit cycle of the deferred correction.
+/// Returns per scheme the envelopes at the two windows for each n, and prints them.
+type Envelopes = Vec<[(f64, f64); 2]>;
+
+fn o1d_run(ns: &[usize], sweeps: usize, w: usize) -> Vec<(&'static str, Envelopes)> {
+    let mut out = Vec::new();
+    for (name, s) in [
+        ("compressive(1.5)", ConvScheme::Tvd(TvdLimiter::Compressive(1.5))),
+        ("compressive(2)", ConvScheme::Tvd(TvdLimiter::Compressive(2.0))),
+    ] {
+        let mut env = Vec::new();
+        for &n in ns {
+            let t0 = std::time::Instant::now();
+            let mut tr = Vec::new();
+            steady_traced(s, n, true, sweeps, Some(&mut tr));
+            assert_eq!(
+                tr.len(),
+                sweeps,
+                "{name} n={n}: stopped early (converged), the limit cycle rule does not apply"
+            );
+            let e = [envelope(&tr, sweeps / 2, w), envelope(&tr, sweeps, w)];
+            println!(
+                "O1d {name} n={n}: window at {} {:?}, window at {sweeps} {:?}, {:.1} s",
+                sweeps / 2,
+                e[0],
+                e[1],
+                t0.elapsed().as_secs_f64()
+            );
+            env.push(e);
+        }
+        out.push((name, env));
+    }
+    out
+}
+
+/// Set-up smoke of O1d (ADR 0093, run before the limits were registered): short budget, prints only.
+#[test]
+#[ignore = "set-up smoke for ADR 0093 O1d; prints only"]
+fn o1d_smoke() {
+    o1d_run(&[64, 128], 2000, 200);
+}
+
+/// ADR 0093 O1d (F-211): the "nominal order" clause for compressive(1.5) and compressive(2), whose deferred correction ends
+/// in a limit cycle (see `o1c_known_miss_compressive_convergence`). Rules registered in ADR 0093 before this test was run:
+/// with a 20000-sweep budget and 200-sweep windows ending at sweep 10000 and 20000, (i) the windows overlap at every n
+/// (stationary cycle, no drift), (ii) the worst-case orders log2(max e_n / min e_2n) and log2(min e_n / max e_2n) over the
+/// final windows lie in the registered O1 band [1.85, 2.3].
+#[test]
+fn o1d_compressive_order_on_limit_cycle() {
+    let mut bad = Vec::new();
+    for (name, env) in o1d_run(&[64, 128, 256], 20000, 200) {
+        for (k, e) in env.iter().enumerate() {
+            let ((a0, a1), (b0, b1)) = (e[0], e[1]);
+            if a0 > b1 || b0 > a1 {
+                bad.push(format!("{name} level {k}: windows do not overlap {e:?}"));
+            }
+        }
+        for k in 0..env.len() - 1 {
+            let (c, f) = (env[k][1], env[k + 1][1]);
+            let (o_lo, o_hi) = ((c.0 / f.1).log2(), (c.1 / f.0).log2());
+            println!("O1d {name} pair {k}: worst-case orders {o_lo:.4} .. {o_hi:.4}");
+            if o_lo < 1.85 || o_hi > 2.3 {
+                bad.push(format!("{name} pair {k}: orders {o_lo} .. {o_hi}"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:?}");
 }
 
 fn o1_body(corrected: bool, max_sweeps: usize, only_compressive_second: Option<bool>) {

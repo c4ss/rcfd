@@ -83,3 +83,45 @@ item does not attempt.
 
 Smoke (ignored `s0_smoke`, construction and read-back only): 148 points, 288 triangles, Euler 4, 2 components, no free,
 non-manifold or misoriented edges, enclosed volume 31.23463313526981 vs 31.23463313526989 in code (2.6e-15 relative).
+
+## Amendment (written after the registered F-131 run, before the run it governs)
+
+S2 missed on its last assertion (minimum dihedral 1.84 deg vs 3.0); every S2 assertion before it passed in that run. S2 becomes
+the ignored `s2_known_miss_pipeline_watertight_and_quality` with its limit unchanged. I add `s2b_pipeline_watertight_and_check_mesh`,
+which repeats the S2 assertions without the dihedral limit, so the watertightness and `check_mesh` results stay a running
+check. It is not a registered test of its own and does not change the F-131 verdict. What I knew when writing this: the full
+registered results below.
+
+## Results (release build, HEAD da21c92 plus the test files)
+
+### F-233: pass
+
+`measures`: 17 passed, 1 ignored (the old q2d record). q1a, q1b, q1c and q2a pass with the added assertions at the registered
+tolerances: unit cube non-orthogonality 0, skewness 0, aspect ratio 1, volume ratio 1; right-corner tetrahedron maximum
+non-orthogonality atan(sqrt(2)/3) = 25.2394 deg and mean 0.75 of it, aspect ratio sqrt(2); regular tetrahedron size change 1
+and the four pre-existing measures; sliver hexahedron warp 0 on the cell and every face, ortho-skew 0, size change 1,
+non-orthogonality 0, skewness 0, aspect ratio 1000, volume ratio 1. Every ADR 0018 measure and every pre-existing measure is
+now asserted on a tetrahedron, a hexahedron and the degenerate cell.
+
+### F-211: pass
+
+`o1d_compressive_order_on_limit_cycle` passes (37 s for both schemes). The runs did not converge in the O1c sense (20000-entry
+traces). The windows at sweeps 10000 and 20000 are identical apart from the last digits (compressive(1.5) n = 256: lower bound
+9.922224969034015e-6 vs 9.922224969033713e-6), so the cycle is stationary. Error intervals: compressive(1.5) 1.55737e-4..
+1.55789e-4, 3.94408e-5..3.94440e-5, 9.92222e-6..9.92243e-6; compressive(2) 1.55762e-4..1.55772e-4, 3.94424e-5..3.94430e-5,
+9.92232e-6..9.92236e-6. Worst-case orders: compressive(1.5) 1.9812..1.9818 (64/128) and 1.9909..1.9911 (128/256);
+compressive(2) 1.9815..1.9816 and 1.9910..1.9910. Limit band [1.85, 2.3]: met.
+
+### F-131: S1 pass, S2 miss, S3 miss
+
+* S1 passes (closed manifold, Euler 4, 2 components, area and volume within 1e-12).
+* S2: closed manifold remeshed surface (372 triangles), 1115 cells, volume error within 1e-10, 2 patches, positive volumes,
+  `check_mesh` without errors: all pass. Minimum dihedral 1.84 deg vs the registered 3.0: MISS. The p1 run on the in-code
+  surface gave 3.34 deg. The STL surface has the same coordinates (bit exact ASCII round trip) but a different vertex
+  numbering from the welding, and the remesh and the tetrahedral refinement depend on it. I did not try other numberings: that
+  would be picking a favourable set-up.
+* S3: radius-edge fraction 0.936 vs 0.99: MISS (as expected; p1 gave 0.927). Maximum dihedral 176.8 deg, maximum radius-edge
+  27.9, 68 bad tetrahedra left after 3 refinement rounds.
+
+F-131 stays partial: the STL clause and watertightness are met; the tetrahedral quality is not. Closing it needs sliver removal
+and quality refinement in the tetrahedral mesher (F-132 scope), not more test work.
