@@ -134,3 +134,22 @@ Only the three entries' `status` and `note` change in docs/roadmap.json; the acc
   The margin under a fully loaded gate is about 0.45 s. F-073 set to done.
 
 No deviation from the registered plan. No miss.
+
+## Amendment 1 (written after the registered runs above, before the run it governs)
+
+Two statements of the F-240 reading were wrong, found on review after the addendum was committed:
+
+* "The Graetz test ... the case tree has no input for that flux" is false: `solver.frozen_flow` prescribes the face flux from
+  `initial.velocity` and `initial.velocity_expression_*` and solves the energy equation only. Under the registered reading
+  (validation cases the case tree can express) the Graetz case is therefore in scope and was not covered. Added: check V2,
+  `v2_graetz_setup_passes_check_with_no_error_level_rule` in the same test file, a parallel-plate set-up (`box_2d` 100 x 20
+  over 10 x 1, parabolic u with mean 1, `frozen_flow`, inlet temperature 0, walls 1, conductivity 0.01). Limits as V1: exit 0
+  and 0 error-level rule diagnostics. V1 stays as registered.
+* fan01 is not "out of scope" for a technical reason: its case text is built by a `format!` template in
+  `fan01_validation.rs` (E2 skips templates), so it is expressible but not measured here. It is a rotor-sector comparison
+  against a measured installation characteristic under F-126, not a registry benchmark; it stays uncovered and the hand-back
+  says so.
+
+What I knew when writing this: the V1, F1 to F3 and R4 results above. V2 has not been run. Decision rule: if V2 passes, F-240
+stays done and its note names the fan01 exception; if V2 fails, it becomes an ignored `*_known_miss` test and F-240 goes back
+to partial.
