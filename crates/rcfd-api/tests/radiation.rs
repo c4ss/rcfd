@@ -3,7 +3,7 @@
 //! R1 P1 radiative equilibrium flux vs the analytic P1/Marshak solution 1e-3 (tau 0.1, 1, 10, emissivities 0.8/0.5,
 //! scattering), R2 P1 vs the Milne transport asymptote 1 % at tau = 20, R3 Rosseland Kirchhoff variable linear 1e-3 and
 //! wall flux 1e-3, R4 P1 energy balance 1e-4 / absorbed power 1e-6 / P1 vs Rosseland at tau = 50 within 5 %,
-//! R5 located diagnostics.
+//! R5 located diagnostics. R6 (ADR 0096) optically thin limit tau = 1e-4 against the exact two-plate exchange, 1e-3.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
@@ -237,6 +237,23 @@ fn r4_p1_with_conduction_conserves_energy_and_approaches_rosseland() {
         q_p1 / q_ros
     );
     assert!((q_p1 / q_ros - 1.0).abs() < 0.05);
+}
+
+/// ADR 0096 T1 (F-052): at tau = 1e-4 the slab must give the exact two-plate grey exchange of a non-participating medium.
+#[test]
+fn r6_p1_optically_thin_limit_matches_two_plate_exchange() {
+    let tau = 1e-4;
+    for (e1, e2) in [(1.0, 1.0), (0.8, 0.5)] {
+        let sim = run_converged(&slab(L, tau / L, 0.0, 1e-9, "p1", e1, e2, 100));
+        let q_hot = -sim.radiative_heat_flow("inlet").unwrap() / area();
+        let q_cold = sim.radiative_heat_flow("outlet").unwrap() / area();
+        let thin = SIGMA * (T1.powi(4) - T2.powi(4)) / (1.0 / e1 + 1.0 / e2 - 1.0);
+        let err = (q_hot / thin - 1.0).abs().max((q_cold / thin - 1.0).abs());
+        eprintln!(
+            "R6 tau {tau} eps {e1}/{e2}: q {q_hot:.4} / {q_cold:.4} vs two-plate {thin:.4} ({err:.3e}, limit 1e-3)"
+        );
+        assert!(err <= 1e-3, "eps {e1}/{e2}: q {q_hot} {q_cold} vs {thin}");
+    }
 }
 
 #[test]

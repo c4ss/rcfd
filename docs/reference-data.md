@@ -978,7 +978,7 @@ from memory. HDF5 and CGNS layouts were not read or used.
 | CSF surface tension (Brackbill, Kothe, Zemach 1992) | unverified | the method is standard; the formula is validated by the Laplace-jump test |
 | Capillary time-step constant `dt_cap = sqrt((rho_1 + rho_2) dx^3 / (8 pi sigma))` | unverified | from memory; the most restrictive reading is used |
 | LeVeque (1996) single-vortex deformation field | unverified | recalled; used with the registered period T = 2 |
-| Hysing et al. (2009) rising bubble case 1: `y_c(3)` = 1.0813, `v_max` = 0.2417 at t about 0.9317 | unverified | finest-grid reference values quoted from memory; the registered limits are loose (0.12 in height, 25 percent in velocity) because the 40 x 80 algebraic scheme is far from the references |
+| Hysing et al. (2009) rising bubble case 1: `y_c(3)` = 1.0813, `v_max` = 0.2417 at t = 0.9213 | verified (wave 39E, ADR 0096: Int. J. Numer. Meth. Fluids 60 (2009) 1259-1288, Table V, TP2D 1/h = 320; Table XI MooNMD 0.2417 / 1.0817; the earlier time 0.9317 was a misrecall) | originally quoted from memory; the registered limits are loose (0.12 in height, 25 percent in velocity) because the 40 x 80 algebraic scheme is far from the references |
 
 ## Wave 28C adaptation and turbomachinery post-processing (F-102, F-123, ADR 0054)
 
