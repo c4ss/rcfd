@@ -96,3 +96,47 @@ Pipelines: STL path = ADR 0093 `from_stl_file` then the curvature remesh; in-cod
 Verdict rules: F-131 becomes done only if Q1, Q2 and Q5 (STL path) pass as non-ignored tests and W0 passes. F-132 cannot become done
 here whatever the result: its acceptance names boundary layers, which nothing in this ADR tests; its note is extended.
 Each limit is reported separately; a partial result (for example Q1 met, Q2 missed) is reported as such.
+
+## Diagnosis results (D0 to D3, default options, run after the registration above)
+
+* **D0**: the welded STL surface equals the in-code surface as geometry, and their tetrahedralizations are equal as geometry (1137
+  cells each). The input numbering does not reach the tetrahedral mesh.
+* **D1**: the two remeshed surfaces both have 372 triangles and 190 points but are NOT equal as geometry: 272 of 372 triangles are
+  common. H1 holds: the remesher depends on the vertex numbering. Mechanism (read from the code after the run, not isolated further):
+  `surface_remesh` sorts the long edges to split by length and breaks ties by the vertex ids `(a, b)`; the box and cylinder grids have
+  many edges of exactly equal length, so the tie-breaking, and from there the splits, collapses, flips and the Gauss-Seidel smoothing
+  in vertex-id order, follow the numbering.
+* **D2**: on the fixed in-code remeshed surface, reversing the vertex ids, the triangle order or both gives a tetrahedral mesh equal as
+  geometry to the base (1061 cells, minimum dihedral 3.3395 deg, fraction 0.9274 in all four). H2 is falsified on this input. So the
+  1.84 vs 3.34 deg difference of ADR 0093 comes entirely from the two different remeshed surfaces.
+* **D3** (cells failing a T5 limit): in-code 77 of 1061, STL 71 of 1115. Every in-code failure and all but one STL failure is a
+  radius-edge failure (ratio over 2 but dihedral at least 3 deg), not a sliver. They sit next to the surface: near box faces 18 / 28
+  (the STL count includes the sliver), near the cylinder side 40 / 28, at the cylinder rim 17 / 9, cylinder cap 0 / 1, interior 2 / 5
+  (in-code / STL). Most have one surface face and one interior Steiner vertex (49 / 35) or two surface vertices and two interior Steiner vertices. The single STL sliver (1.84 deg, ratio
+  27.9) is a cell on a box-face triangle whose fourth vertex is an interior Steiner point 0.003 from that face. Every failing cell has
+  at least one interior (movable) vertex. The cause of the radius-edge failures: their circumcentres lie close to the surface, the
+  unconstrained Bowyer-Watson cavity of such a point crosses a surface face into outside tetrahedra, and the default refinement
+  (`split_boundary` off) then skips them.
+
+## Amendment 1 (written after the development runs, before the registered Q runs)
+
+Development runs (ignored `x_dev`, target cases only, disclosed):
+
+* `split_boundary = true` alone: in-code path fails (Steiner budget exhausted, the known runaway); STL path 1128 cells, 1.84 deg,
+  fraction 0.935. Ingredient 1 is dropped.
+* smoothing (volume-quality objective) plus flips below volume quality 0.06, 10 sweeps: in-code 16.4 deg / 0.987, STL 6.1 deg / 0.979;
+  30 sweeps or flip thresholds 0.08 and 0.1 stay at 0.979 to 0.988. The remaining failures have their shortest edge on the surface
+  and ratios 2.0 to 3.4; no remeshed surface triangle has a circumradius over shortest edge above 2.
+* smoothing objective changed to the smaller of the normalised volume quality and the normalised radius-edge quality: 14.2 deg /
+  0.989 and 10.5 deg / 0.980.
+* plus constrained circumcentre insertion (cavity limited to inside tetrahedra, never crossing a surface face, inserted only if the
+  cavity is star-shaped and contains the bad tetrahedron), 10 sweeps: in-code 1142 cells, 16.33 deg, fraction 0.9974; STL 1223
+  cells, 17.66 deg, fraction 1.0000. 30 sweeps: the same fractions.
+
+Frozen pass (what the registered tests run): `TetOptions { quality_sweeps: 10, ..Default::default() }`. Each sweep: (i) constrained
+circumcentre insertion for every inside tetrahedron with circumradius over shortest edge above `max_radius_edge` (2.0); (ii) one
+smoothing sweep over interior vertices in id order, candidates the neighbour centroid and the volume-weighted circumcentre mean, steps
+1, 1/2, 1/4, 1/8, kept only if exact `orient3d` keeps every incident cell positive and the smallest incident objective grows by more
+than 1e-6 relative; (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06. Stops early when a
+sweep changes nothing. Ingredients 2 (dihedral-objective flips) and 4 (flat-cell split at a dihedral threshold) were not needed and
+are not implemented. What I knew when writing this: the development numbers above; Q7 (held-out) has not been run with the pass.
