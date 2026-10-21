@@ -68,3 +68,28 @@ Smoke (rule d, before registering): 6 x 6 cavity after 3 iterations, checkpoint,
 `pressure_parts_history` entry is `Some`. So the flag survives `interpolate_from`. The registered 12 to 24 pair was not run.
 
 Decision rule: if F1 passes for both modes, F-115 is set `done`.
+
+## Addendum: measured values
+
+Run once each, after this ADR was committed (commit 16d0952), release build.
+
+F-095:
+* P1 passes (`p1_five_velocity_sweep_parallel_equals_sequential_and_resumes`): `--parallel 2` exit 0, run 5 / skipped 0,
+  5 rows all `ok` with finite dp; `table.csv` and `table.json` byte-identical to the `--parallel 1` run; `--resume` exit 0,
+  run 0 / skipped 5, table files unchanged. The acceptance as written is met by this non-ignored test, so F-095 is set `done`.
+* P2 passes (`p2_poiseuille_map_ny20_within_one_percent`), limit 1 %: relative dp error at ny 20 is 0.309 % (u 0.02),
+  0.294 % (0.04), 0.280 % (0.06), 0.265 % (0.08), 0.251 % (0.1), all below the exact value. S7 at ny 10 stays an ignored
+  known miss (1.9 %).
+* Remaining F-095 scope (no multi-objective optimiser, no CMA-ES, no real-fan study, warm start only for steady SIMPLE/SIMPLEC,
+  T3 Nelder-Mead known miss) should be split into a new item; this wave does not create it.
+
+F-115:
+* F1 MISSES. Denominators from the converged uniform run: D_ux 0.07650, D_uy 0.03710, D_p 0.03765. Uniform start:
+  R_u 0.2614, R_p 0.1259. Non-conservative: R_u 0.1547 (ratio 0.592, passes), R_p 0.1488 (ratio 1.181, fails).
+  Conservative: R_u 0.1546 (ratio 0.591, passes), R_p 0.1480 (ratio 1.175, fails). The test is kept as the ignored
+  `f1_fixed_normalisation_initial_residual_known_miss` with the limit unchanged (it now evaluates both modes before asserting,
+  so both are recorded; the first run stopped at the non-conservative pressure failure).
+* Reading, not a fix: on a common scale the interpolated start has a lower momentum residual but a higher pressure-equation
+  residual than the uniform start. A likely cause is the face flux rebuilt from the interpolated velocity, which is not
+  divergence-free on the fine mesh (flux imbalance 0.18 after a 12 to 24 transfer, ADR 0031); this was not tested here.
+  F-115 stays `partial`.
