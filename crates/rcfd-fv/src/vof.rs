@@ -511,6 +511,16 @@ pub struct VofSettings {
     pub cavitation: Option<Cavitation>,
     /// Wave inlet and relaxation zones (`None` = none).
     pub waves: Option<WaveSettings>,
+    /// Add the transposed part `div(mu (grad u)^T)` of the viscous stress as an explicit source from the previous iterate
+    /// (ADR 0103); it is non-zero at a viscosity jump. Default `false`: Laplacian form only, bit-identical to earlier versions.
+    pub full_viscous_stress: bool,
+    /// Cell mixture viscosity harmonic in alpha, `1/mu = alpha/mu_1 + (1 - alpha)/mu_2` (ADR 0103 diagnostic). Default `false`:
+    /// linear in alpha.
+    pub harmonic_viscosity: bool,
+    /// Make `HbyA` consistent with the component-averaged diagonal, `HbyA_k = (H_k + (a_p - a_kk) u_k) / a_p` (ADR 0010 in the
+    /// single-phase kernels, ADR 0103 here): with the averaged diagonal a symmetry plane acts partly like a no-slip wall. Default
+    /// `false`: averaged, bit-identical to earlier versions.
+    pub component_diagonal: bool,
 }
 
 impl VofSettings {
@@ -549,6 +559,9 @@ impl VofSettings {
             mixture: None,
             cavitation: None,
             waves: None,
+            full_viscous_stress: false,
+            harmonic_viscosity: false,
+            component_diagonal: false,
         }
     }
 }
@@ -1421,7 +1434,11 @@ impl VofSolver {
             }
         });
         let a = self.transport.alpha.values.clone();
-        let mu_c: Vec<f64> = a.iter().map(|x| s.mu[1] + (s.mu[0] - s.mu[1]) * x).collect();
+        let mu_c: Vec<f64> = if s.harmonic_viscosity {
+            a.iter().map(|x| 1.0 / (x / s.mu[0] + (1.0 - x) / s.mu[1])).collect()
+        } else {
+            a.iter().map(|x| s.mu[1] + (s.mu[0] - s.mu[1]) * x).collect()
+        };
         let mu_f = face_interpolate(&g, &mu_c);
         let rho_phi: Vec<f64> = (0..nf)
             .map(|f| {
@@ -1478,6 +1495,9 @@ impl VofSolver {
                 }
             }
             let src = self.reconstruct(&q_pred);
+            let transposed = s
+                .full_viscous_stress
+                .then(|| crate::pimple::transposed_stress_source(&g, &self.u, &mu_f));
 
             let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
             let mut a_p = vec![0.0; n];
@@ -1499,6 +1519,11 @@ impl VofSolver {
                 for c in 0..n {
                     m.a.diag[c] += rho[c] * vol[c] / dt;
                     m.b[c] += rho_old[c] * vol[c] / dt * u_old[c][k];
+                }
+                if let Some(ts) = &transposed {
+                    for c in 0..n {
+                        m.b[c] += vol[c] * ts[c][k];
+                    }
                 }
                 if alpha_u < 1.0 {
                     m.relax(alpha_u, &cells);
@@ -1535,7 +1560,11 @@ impl VofSolver {
                         let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
                         let h = m.a.h_operator(&cells, &m.b);
                         for c in 0..n {
-                            hby_a[c][k] = h[c] / a_p[c];
+                            hby_a[c][k] = if s.component_diagonal {
+                                (h[c] + (a_p[c] - m.a.diag[c]) * cells[c]) / a_p[c]
+                            } else {
+                                h[c] / a_p[c]
+                            };
                         }
                     }
                 }
