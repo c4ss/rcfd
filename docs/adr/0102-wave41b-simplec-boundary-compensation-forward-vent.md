@@ -178,6 +178,17 @@ Corrected diagnostic **D1v** (plain SIMPLEC, u = 1, K = 2.5, D1 switch on, 30 it
 Amended choice rule: **B** if D1v stands (both runs) and D3 stands (it does); otherwise no fix. F is out either way (D2b falsified). The
 original D1 verdict stays recorded as falsified by its threshold. The acceptance checks A1 to A4 and their limits are unchanged.
 
+## Amendment 2 (step 3 diagnosis; written after D1v, A1-A4, R1 and R2 had run, before the run it governs)
+
+What I knew when writing it: the D1v, A1-A4, R1 and R2 results (in the addendum below). No FAN-01 run has been made in this wave.
+
+R3 (diagnosis only, no fix): ADR 0084 reports that FAN-01 (the ADR 0083 A0 set-up, FAN-01-C `camber_seam`, laminar, SIMPLEC with
+`velocity_correction = "face_flux"`) stalls with `res_u`, `res_p` between 1e-3 and 7e-3 from iteration 100 on. That mesh has periodic seams
+and a pressure outlet, so the missing boundary compensation is a candidate. Hypothesis H-R3: the stall is caused by the missing SIMPLEC
+compensation on the seam and outlet faces. Diagnostic: the same 1500-iteration run (`w37a_fan01_with_face_flux_velocity_correction` with
+the one added line `simplec_boundary_compensation = true`, as a new ignored report test), run once. H-R3 stands iff `res_u` and `res_p`
+are both below 1e-4 at some iteration up to 1500; otherwise it is falsified (the stall has another cause). Reported only.
+
 ## Amendments
 
-Amendment 1 above.
+Amendments 1 and 2 above.
