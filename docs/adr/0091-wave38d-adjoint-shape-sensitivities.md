@@ -154,3 +154,13 @@ are accepted by the code but not tested, and a limited scheme with an active lim
 
 Status (by the registered rule): A1 passes all six pairs with A0 holding, so F-137 is set to `done`; the SCOPE extras above are
 listed as not delivered in its note.
+
+## Final gate (docs only, not re-gated)
+
+Fresh `git archive` of c674f9d (the wave-38D implementation commit on top of the 38A to 38C commits present then): `cargo fmt
+--all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release
+--no-fail-fast` **1902 passed, 0 failed, 535 ignored**; `baseline_hashes` passes unchanged. Wave-38D share: 6 new passing tests
+(3 adjoint unit tests, the `projected_gradient` unit test, A1 `duct_adjoint_matches_fd`, A3 `duct_gradient_descent`) and 2 new
+ignored tests (`duct_setup_smoke`, A2 `duct_adjoint_state_step_diagnostic`); the rest of the change from 1881 / 0 / 531 belongs to
+the other wave-38 agents. A1 re-run in the gate tree: one adjoint gradient 5.7 s (below the registered 10 s, so A3 stays not
+ignored), worst relative difference 1.117e-6. Later commits of other agents were not gated with this change.
