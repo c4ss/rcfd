@@ -154,3 +154,38 @@ form for grey walls is used. Limit: `|Psi/Psi_Milne - 1| <= 0.01` for the hot an
 
 Verdict: if R7 passes, F-052's reworded acceptance is met by R1, R6 and R2/R7 (non-ignored) and it is set `done`; S2S and
 discrete ordinates stay in F-130. The note's "still partial until the thick Milne asymptote is shown" was stale: R2 showed it.
+
+## Results
+
+Addendum written after the runs: release build, HEAD 4a94ca6 (this ADR) plus the test files. Each registered test was run once,
+except E1, see the deviation below.
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| C1 oscillating cylinder, continuity (max over 80 steps) | 2.32e-14 | 1e-9 | met |
+| C1 GCL residual (max over steps and cells) | 6.23e-16 mean(V) | 1e-12 mean(V) | met |
+| C1 total fluid volume | 7.94e-15 V0 | 1e-12 V0 | met |
+| C1 smallest V_new/V_old (reported) | 0.9787 | - | - |
+| G6 continuity, max over 50 steps (last step) | 3.25e-13 (4.12e-14) | 1e-9 | met |
+| G6 GCL residual | 6.63e-16 mean(V) | 1e-12 mean(V) | met |
+| G6 velocity / pressure (ADR 0033 limits, unchanged) | 3.33e-3 W r_o / 4.97e-3 of range | 2e-2 / 5e-2 | met |
+| E1 tol 1e-2: controlled steps vs smallest uniform count at equal error | 1913 (10 rejected), E 7.836e-3, against 64 (error 7.750e-3) | controlled < uniform | MISS |
+| E1 tol 2.5e-3 | 3149 (10 rejected), E 2.080e-3, against 240 (error 2.076e-3) | controlled < uniform | MISS |
+| P1 primary-vortex minimum (lowest of 2 strict minima) | (0.6125, 0.7375), speed 0.0048; other minimum (0.3375, 0.8375), 0.178 | y in [0.5922, 0.7594] | met |
+| P1 run (v11 C1 printed again) | 0.00277 at y = 0.8516, 203 iterations, finished | 0.02 | met |
+| R7 tau = 50, hot and cold wall | Psi 0.025974 against Milne 0.025930: 0.170 % (P1 analytic 0.025974) | 1 % | met |
+
+E1 matches the model prediction to all printed digits (1913 / 64, E 7.8361e-3; 3149 / 240, E 2.0800e-3), so the miss is the
+controller behaviour derived above, not a defect of the set-up. It is kept as
+`e1_error_control_beats_the_smallest_uniform_count_on_a_two_timescale_decay_known_miss` (ignored, limit unchanged). R7's 0.170 %
+equals the predicted P1 gap 0.2624/154.
+
+Deviation: the first E1 run asserted inside the tolerance loop and stopped at tol 1e-2. I restructured the test to measure both
+tolerances before asserting and ran it a second time (ignored, as the known miss) to obtain the tol 2.5e-3 values; the tol 1e-2
+values were identical in both runs. No limit or set-up changed. The smoke tests `e1_shear_wave_setup_smoke` and
+`c1_oscillating_cylinder_setup_smoke` stay as cheap non-ignored set-up checks; `r7_thick_slab_setup_smoke` is ignored.
+
+Statuses: F-063 `done` (C1 and G6 met; open scope beyond the acceptance stays in its note); F-143 `done` (all clauses met by
+non-ignored tests); F-052 `done` (R1, R6, R2 and R7); F-209 `partial` (E1 missed as predicted; the flat-plate clause is open). For
+the user: the reworded F-209 clause asks local error control to beat uniform implicit Euler on the final error of a decaying
+linear system, which the derivation above shows it cannot do unless the slow mode has decayed by about e^-(rate ratio).

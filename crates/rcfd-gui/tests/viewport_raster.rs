@@ -586,6 +586,23 @@ fn v11_cavity_raster_has_one_vortex_speed_minimum_known_miss() {
     );
 }
 
+/// ADR 0101 P1 (F-143): the primary-vortex minimum, the lowest-speed strict 3 x 3 speed minimum of the v11 window, lies in
+/// the Ghia Re 100 u sign-change bracket widened by one pixel (the bracket logic of v11 C2); other minima are allowed.
+#[test]
+fn v11b_cavity_raster_primary_vortex_minimum_lies_in_the_ghia_bracket() {
+    let (_, _, minima) = v11_cavity_raster();
+    let primary = minima
+        .iter()
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .expect("no strict speed minimum in the window");
+    eprintln!("v11b: primary-vortex minimum {primary:?} of {minima:?} (y in [0.5922, 0.7594])");
+    assert!(
+        (0.6172 - 0.025..=0.7344 + 0.025).contains(&primary.1),
+        "primary minimum at y {}",
+        primary.1
+    );
+}
+
 fn lid_speed(settings: &serde_json::Value) -> f64 {
     fn find(v: &serde_json::Value) -> Option<f64> {
         match v {

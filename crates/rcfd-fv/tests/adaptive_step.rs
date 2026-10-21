@@ -179,6 +179,120 @@ fn t1_courant_control_needs_fewer_steps_than_the_smallest_uniform_count_meeting_
     assert!(n_adapt < n_target, "adaptive {n_adapt} vs uniform {n_target}");
 }
 
+/// ADR 0101 E1 (F-209): wavenumbers of the two-timescale shear wave `u_x = sin(y) + sin(12 y)` on a periodic 4 x 64 box
+/// of height 2 pi. The convective term vanishes (u_x does not depend on x, u_y = 0), so each mode decays on its own.
+const E1_K: [f64; 2] = [1.0, 12.0];
+const E1_NY: usize = 64;
+
+fn shear_wave(nu: f64) -> PimpleSolver {
+    let h = 2.0 * PI / E1_NY as f64;
+    let mesh = Arc::new(box_2d(4, E1_NY, 4.0 * h, 2.0 * PI, true, true).unwrap());
+    let geom = Arc::new(FvGeometry::new(mesh).unwrap());
+    let u = VectorField::from_fn("U", &geom, |c| [E1_K.iter().map(|k| (k * c[1]).sin()).sum(), 0.0, 0.0]);
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let mut s = PimpleSettings::piso(nu);
+    s.convection = ConvScheme::Central;
+    s.time_scheme = TimeScheme::ImplicitEuler;
+    let tight = SolveControl {
+        tol_abs: 1e-16,
+        tol_rel: 1e-14,
+        max_iter: 5000,
+    };
+    s.momentum_solver = tight;
+    s.pressure_solver = tight;
+    PimpleSolver::new(geom, u, p, s)
+}
+
+/// Eigenvalue of the 3-point periodic Laplacian for wavenumber `k` on the E1 mesh.
+fn e1_lambda(k: f64) -> f64 {
+    let h = 2.0 * PI / E1_NY as f64;
+    4.0 / (h * h) * (0.5 * k * h).sin().powi(2)
+}
+
+/// Relative L2 difference of the velocity of `s` to the field whose mode amplitudes are `amp` (u_y, u_z exact zero).
+fn e1_error(s: &PimpleSolver, amp: [f64; 2]) -> f64 {
+    let (mut num, mut den) = (0.0, 0.0);
+    for (v, c) in s.u.values.iter().zip(s.geom.mesh.cell_centres()) {
+        let ex: f64 = (0..2).map(|i| amp[i] * (E1_K[i] * c[1]).sin()).sum();
+        num += (v[0] - ex).powi(2) + v[1] * v[1] + v[2] * v[2];
+        den += ex * ex;
+    }
+    (num / den).sqrt()
+}
+
+/// Exact semi-discrete amplitudes at time `t`: `exp(-nu lambda_k t)`.
+fn e1_exact(nu: f64, t: f64) -> [f64; 2] {
+    [
+        (-nu * e1_lambda(E1_K[0]) * t).exp(),
+        (-nu * e1_lambda(E1_K[1]) * t).exp(),
+    ]
+}
+
+/// ADR 0101 E1 smoke (set-up check, run before the limits were registered): one PISO step reproduces the implicit-Euler
+/// factor `1/(1 + nu lambda_k dt)` of each mode, so the solver is the linear two-mode decay the model of the ADR assumes.
+#[test]
+fn e1_shear_wave_setup_smoke() {
+    let (nu, dt) = (1.0, 0.01);
+    let mut s = shear_wave(nu);
+    s.step(dt);
+    let amp = [0, 1].map(|i| 1.0 / (1.0 + nu * e1_lambda(E1_K[i]) * dt));
+    let e = e1_error(&s, amp);
+    println!(
+        "E1 smoke: rates {:.6} and {:.4} (ratio {:.2}); one step dt {dt}: relative L2 difference to the implicit-Euler factors {e:.3e}",
+        nu * e1_lambda(E1_K[0]),
+        nu * e1_lambda(E1_K[1]),
+        e1_lambda(E1_K[1]) / e1_lambda(E1_K[0])
+    );
+    assert!(e1_lambda(E1_K[1]) / e1_lambda(E1_K[0]) >= 100.0);
+    assert!(e <= 1e-10, "{e}");
+}
+
+/// ADR 0101 E1 (F-209): error control by step doubling (`solver.error_tolerance`, the S4 controller settings) on the
+/// two-timescale decay to `T = 1`, against the smallest uniform implicit-Euler step count with final error <= the
+/// controlled run's error (N = 1, 2, ... in order, no monotonicity assumed). Registered for tol 1e-2 and 2.5e-3.
+/// KNOWN MISS (ADR 0101 results, predicted there): tol 1e-2: 1913 controlled steps (E 7.84e-3) against 64 uniform steps;
+/// tol 2.5e-3: 3149 against 240. The first run stopped at the first assert, so both tolerances are now measured before
+/// asserting. Limit kept.
+#[test]
+#[ignore = "KNOWN MISS (ADR 0101): error control 1913 steps vs 64 uniform steps at equal final error (tol 1e-2)"]
+fn e1_error_control_beats_the_smallest_uniform_count_on_a_two_timescale_decay_known_miss() {
+    let (nu, t_end) = (1.0, 1.0);
+    let mut results = Vec::new();
+    for tol in [1e-2, 2.5e-3] {
+        let mut s = shear_wave(nu);
+        let st = StepSettings {
+            error_tol: tol,
+            min_dt: 1e-5,
+            max_dt: 1.0,
+            ..Default::default()
+        };
+        let mut run = ControlledRun::new(StepController::new(st, 0.01), false);
+        let n_adapt = run.run(&mut s, t_end).len();
+        let e_adapt = e1_error(&s, e1_exact(nu, t_end));
+        let mut n_uniform = None;
+        for n in 1..=5000 {
+            let mut u = shear_wave(nu);
+            for _ in 0..n {
+                u.step(t_end / n as f64);
+            }
+            let e = e1_error(&u, e1_exact(nu, t_end));
+            if e <= e_adapt {
+                n_uniform = Some((n, e));
+                break;
+            }
+        }
+        let (n_u, e_u) = n_uniform.expect("no uniform count up to 5000 meets the controlled error");
+        println!(
+            "E1 tol {tol:.1e}: controlled {n_adapt} steps ({} rejected), E = {e_adapt:.4e}; smallest uniform count with error <= E: {n_u} (error {e_u:.4e})",
+            run.ctl.rejected
+        );
+        results.push((tol, n_adapt, n_u));
+    }
+    for (tol, n_adapt, n_u) in results {
+        assert!(n_adapt < n_u, "tol {tol}: controlled {n_adapt} vs uniform {n_u}");
+    }
+}
+
 #[test]
 fn s2_courant_rms_band_and_combination() {
     let (target, t_end) = (0.2, 10.0);
