@@ -319,3 +319,80 @@ fn v1_registry_and_validation_setups_pass_check_with_no_error_level_rule() {
     let _ = std::fs::remove_dir_all(&dir);
     assert!(fails.is_empty(), "{fails:#?}");
 }
+
+/// Graetz problem, parallel plates (the validation_graetz case): energy only on a prescribed fully developed flow
+/// (`solver.frozen_flow`), parabolic u with mean 1 between plates at y = 0 and 1, inlet temperature 0, walls 1.
+const GRAETZ: &str = r#"
+title = "Graetz parallel plates, prescribed flow"
+[mesh]
+generator = "box_2d"
+nx = 100
+ny = 20
+lx = 10.0
+ly = 1.0
+[physics]
+nu = 0.01
+rho = 1.0
+cp = 1.0
+conductivity = 0.01
+[energy]
+enabled = true
+[initial]
+velocity_expression_x = "6 [m/s] * (y / 1 [m]) * (1 - y / 1 [m])"
+temperature = 0.0
+[boundaries.xmin]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 0.0
+[boundaries.xmax]
+velocity = "zero_gradient"
+pressure = "fixed"
+[boundaries.ymin]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 1.0
+[boundaries.ymax]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 1.0
+[solver]
+algorithm = "simple"
+convection = "upwind"
+frozen_flow = true
+max_iterations = 500
+"#;
+
+/// Exit code and error-level rule count of `rcfd check` on `text`, printed.
+fn check_text(label: &str, text: &str) -> (u8, usize) {
+    let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
+    let (code, ev) = check_only(&case);
+    let rules = ev["rules"].as_array().cloned().unwrap_or_default();
+    let errors = rules.iter().filter(|r| r["severity"] == "error").count();
+    println!(
+        "{label}: exit {code}, cells {}, errors {errors}, rules {}, diagnostics {}",
+        ev["cells"], ev["rules"], ev["diagnostics"]
+    );
+    (code, errors)
+}
+
+/// V2 (ADR 0092 amendment 1): the Graetz set-up, same limits as V1. DEFECTIVE SET-UP (amendment 2): the inlet face keeps the
+/// fixed velocity 0, so the prescribed flux is not divergence free and the semantic check refuses the case (exit 3); kept
+/// unchanged and ignored, corrected in V2b.
+#[test]
+#[ignore = "known miss: defective set-up (inlet velocity 0 under a parabolic prescribed flux, ADR 0092 amendment 2); see V2b"]
+fn v2_graetz_setup_passes_check_with_no_error_level_rule_known_miss() {
+    let (code, errors) = check_text("V2 graetz", GRAETZ);
+    assert!(code == 0 && errors == 0, "exit {code}, {errors} errors");
+}
+
+/// V2b (ADR 0092 amendment 2): V2 with the parabolic profile also on the inlet boundary; same limits.
+#[test]
+fn v2b_graetz_setup_with_inlet_profile_passes_check_with_no_error_level_rule() {
+    let text = GRAETZ.replace(
+        "[boundaries.xmin]\nvelocity = \"fixed\"\n",
+        "[boundaries.xmin]\nvelocity = \"fixed\"\nvelocity_expression_x = \"6 [m/s] * (y / 1 [m]) * (1 - y / 1 [m])\"\n",
+    );
+    assert_ne!(text, GRAETZ);
+    let (code, errors) = check_text("V2b graetz", &text);
+    assert!(code == 0 && errors == 0, "exit {code}, {errors} errors");
+}
