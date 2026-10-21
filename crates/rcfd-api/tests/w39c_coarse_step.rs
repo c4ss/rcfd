@@ -6,7 +6,6 @@
 //! and `<` those of the zero start, all three converged. Coarse iterations are not counted (as in I3); the equivalent work
 //! with a coarse iteration at 1/4 of a fine one is reported only.
 
-use rcfd_core::vec3;
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::simple::{Coupling, SimpleSettings, SimpleSolver};
 use rcfd_fv::{FixedValue, FvGeometry, Profile, ScalarField, VectorField, ZeroGradient};
