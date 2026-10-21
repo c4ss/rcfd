@@ -59,7 +59,7 @@ fn run_all(slow: bool) {
             continue;
         }
         let name = p.file_stem().unwrap().to_string_lossy().to_string();
-        let dir = tutorial::workdir(&format!("mcp_{name}"));
+        let dir = tutorial::workdir(&format!("mcp_{name}_{slow}"));
         let r = tutorial::run(&md, &dir, slow, &mut exec).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
         println!(
             "{name}: {} blocks executed, {} slow skipped, {} not executed, {} outputs checked",

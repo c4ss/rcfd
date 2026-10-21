@@ -170,8 +170,9 @@ next call continues from the store. Then it reads the best feasible record and c
 "feasible":true
 ```
 
-Running the method to its budget (80 evaluations plus one restart; in ADR 0067 E1 this reduced `dp` from 9.94 to 5.07 at an angle
-of 4.46 degrees and a start of 1.77 with 77 evaluations) takes longer and runs only in the slow test:
+Running the method to its budget (80 evaluations plus one restart) takes longer and runs only in the slow test, which checks only
+that the study completes. For reference, ADR 0067 E1 ran the same study through the library API and measured `dp` falling from 9.94
+to 5.07 at an angle of 4.46 degrees and a start of 1.77 after 77 evaluations; this tutorial does not re-check those numbers.
 
 ```jsonl run-slow
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"design_run_study","arguments":{"dir":"contraction","max_evaluations":200}}}

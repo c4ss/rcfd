@@ -89,9 +89,11 @@ Pick a provider in the sidebar's provider selector and fill in the model name; t
 | `openai` | OpenAI-compatible | `https://api.openai.com/v1` |
 | `anthropic` | Anthropic Messages | the Anthropic API |
 
-A hosted API needs a key: an environment variable named in the provider entry, or the key field of the sidebar (stored in the OS
-keychain on Windows and macOS, otherwise in `keys.json` in the per-user config directory). The key is never written to transcripts or
-logs. Whether a given small local model calls the tools well has not been measured.
+A hosted API needs a key: an environment variable named in the provider entry, or the key field of the sidebar. The code stores a key
+from the sidebar in the OS keychain on Windows and macOS and falls back to `keys.json` in the per-user config directory; a round trip
+against a real keychain has not been verified (the tests use an in-memory keychain, and the macOS code has not been built; roadmap
+F-149). That the key stays out of transcripts, logs and error texts is shown by a planted-key scan with a mock provider (F-094 C5,
+F-149), not with a real provider. Whether a given small local model calls the tools well has not been measured.
 
 ## 6. Ask, approve, deny (not executed)
 

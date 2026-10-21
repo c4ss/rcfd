@@ -49,7 +49,7 @@ fn run_all(slow: bool) {
             continue;
         }
         let name = p.file_stem().unwrap().to_string_lossy().to_string();
-        let dir = tutorial::workdir(&name);
+        let dir = tutorial::workdir(&format!("{name}_{slow}"));
         let r = tutorial::run(&md, &dir, slow, &mut exec).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
         println!(
             "{name}: {} blocks executed, {} slow skipped, {} not executed, {} outputs checked",
@@ -114,13 +114,16 @@ fn gallery_covers_every_case() {
         let name = d.file_name().unwrap().to_string_lossy().to_string();
         assert!(
             md.contains(&format!("`{name}`")),
-            "gallery does not name case directory {name}"
+            "docs/tutorials/gallery.md does not name the case directory `{name}`: add an entry for it (ADR 0089 T5)"
         );
         for f in std::fs::read_dir(&d).unwrap() {
             let f = f.unwrap().path();
             if f.extension().is_some_and(|x| x == "toml") {
                 let rel = format!("cases/{name}/{}", f.file_name().unwrap().to_string_lossy());
-                assert!(checked.contains(&rel), "gallery does not check {rel}");
+                assert!(
+                    checked.contains(&rel),
+                    "add `$ rcfd check {rel}` to a `console run` block of docs/tutorials/gallery.md (ADR 0089 T5)"
+                );
             }
         }
     }

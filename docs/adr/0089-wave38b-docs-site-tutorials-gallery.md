@@ -122,5 +122,16 @@ Not delivered or not verified:
 * The site is plain HTML with no search, no navigation tree beyond the index, and ADRs other than 0089 are not linked from the index
   (they are built and link-checked).
 
-Status decision (written after the results): every registered check passes, but F-096 is set to `partial` in `docs/roadmap.json`
-because the desktop-app and sidebar part of the feature title is documented but not executed, and the CI workflow itself has not run.
+Status decision (written after the results): the registered acceptance is met in full (every check above passes). F-096 is
+nevertheless set to `partial` in `docs/roadmap.json` as a conservative choice, not as a consequence of the checks: the desktop-app and
+sidebar part of the feature title is documented but not executed (registered as not executed), the GitHub workflow has not run
+(registered as "CI = the cargo test gate"), and its dependencies F-094 and F-150 are partial. The lead may set it to `done` on the
+registered acceptance.
+
+Post-review corrections (same wave, no limit changed): the desktop page no longer states the keychain storage as verified (F-149: a
+real keychain round trip is unverified) and cites the mock-provider canary scan for key hygiene; the MCP page states that the E1
+numbers it quotes come from ADR 0067 and are not re-checked by the slow test; the failure messages of T5 and S2 say what to edit;
+the default and slow tutorial tests use separate working directories so that `--include-ignored` cannot make them collide.
+
+Coupling to note: T5 fails when a new `cases/*/` directory or `cases/*/*.toml` is added without a gallery entry, and S2 fails on a
+broken relative `.md` link anywhere under `docs/`; both messages name the fix.

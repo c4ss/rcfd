@@ -249,7 +249,11 @@ fn docs_site_builds_with_no_broken_links() {
         .iter()
         .filter(|(p, h)| resolve(p, h).map_or(true, |t| !pages.contains(&t)))
         .collect();
-    assert!(broken.is_empty(), "S2: broken links {broken:?}");
+    assert!(
+        broken.is_empty(),
+        "relative links in docs/ that do not resolve to a docs page (page, link); fix the link, or write a path outside docs/ \
+         as `code` instead of a link (ADR 0089 S2): {broken:?}"
+    );
     let index: BTreeSet<String> = links
         .iter()
         .filter(|(p, _)| p == "index.html")
