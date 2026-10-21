@@ -305,3 +305,46 @@ fn c6_static_checks_are_located() {
         .unwrap();
     println!("C6: located diagnostics: {line:?}");
 }
+
+/// ADR 0097 T1: two transient stages split at t = 0.5 (ten full steps of 0.05, no clipped step) against one transient
+/// run from rest to 1.0.
+#[test]
+fn c7_chained_transient_segments_equal_the_single_transient_run_bit_for_bit() {
+    let dir = tmp("c7");
+    let transient = BASE.replace("algorithm = \"simplec\"", TRANSIENT_SOLVER.trim());
+    let text = transient.clone()
+        + "[chain]\nsequence = [\"first\", \"second\"]\n[chain.stages.first]\nset = [\"solver.end_time=0.5\"]\n[chain.stages.second]\nset = [\"solver.end_time=1.0\"]\n";
+    let case = Case::parse_toml(&text).unwrap();
+    let (o, events) = run(&case, &dir.join("out"));
+    assert_eq!(o.exit_code, 0);
+    assert_eq!(o.stages.len(), 2);
+    let rep = events
+        .iter()
+        .find(|e| e["event"] == "restart" && e["stage"] == "second")
+        .expect("restart report of the second stage");
+    assert_eq!(rep["report"]["restart"], "exact", "{rep}");
+    let steps = |stage: &str| {
+        events
+            .iter()
+            .rev()
+            .find(|e| e["event"] == "finish" && e["stage"] == stage)
+            .unwrap()["iterations"]
+            .clone()
+    };
+    assert_eq!(steps("first"), 10);
+    assert_eq!(steps("second"), 20);
+    let chained = load_final(&case, &dir.join("out/second/restart.rcfd"));
+    let (single, so) = drive_to_end(Simulation::new(&Case::parse_toml(&transient).unwrap()).unwrap(), None);
+    assert_eq!(so.exit_code, 0, "{}", so.reason);
+    assert_eq!(single.iteration(), 20);
+    let (a, b) = (fields(&chained), fields(&single));
+    assert!(a.0 == b.0, "ux differs");
+    assert!(a.1 == b.1, "uy differs");
+    assert!(a.2 == b.2, "p differs");
+    assert!(a.3 == b.3, "flux differs");
+    assert_eq!(a.4, b.4, "time differs");
+    println!(
+        "C7: chained transient (0 to 0.5, restart, 0.5 to 1.0) bit-identical to the single transient run: ux, uy, p, flux, time {}",
+        single.time()
+    );
+}
