@@ -104,6 +104,81 @@ fn s1_s3_courant_max_band_overshoot_economy_and_agreement() {
     assert!(e <= 0.02, "{e}");
 }
 
+/// ADR 0094 T1 (F-209): L2 difference to the reference of a run with `n` uniform implicit-Euler steps to `t_end`.
+fn uniform_step_error(n: usize, nu: f64, t_end: f64, r: &PimpleSolver) -> f64 {
+    let mut s = tg(32, nu, TimeScheme::ImplicitEuler);
+    let dt = t_end / n as f64;
+    for _ in 0..n {
+        s.step(dt);
+    }
+    let e = l2_diff(&s, r);
+    if e.is_finite() {
+        e
+    } else {
+        f64::INFINITY
+    }
+}
+
+/// ADR 0094 smoke of the T1 set-up: one 1-step run (dt = t_end) and 10 steps at the aimed step must be finite.
+#[test]
+#[ignore = "ADR 0094 set-up smoke, run once before the limits were registered"]
+fn t1_uniform_step_setup_smoke() {
+    let (nu, t_end) = (0.05, 10.0);
+    let r = tg(32, nu, TimeScheme::Bdf2);
+    let t0 = std::time::Instant::now();
+    let e1 = uniform_step_error(1, nu, t_end, &r);
+    let t1 = t0.elapsed().as_secs_f64();
+    let mut s = tg(32, nu, TimeScheme::ImplicitEuler);
+    let dt = aimed_dt(&s, 0.45);
+    let t0 = std::time::Instant::now();
+    for _ in 0..10 {
+        s.step(dt);
+    }
+    let t10 = t0.elapsed().as_secs_f64();
+    let finite = s.u.values.iter().flatten().all(|x| x.is_finite());
+    println!(
+        "T1 smoke: 1-step run finite error {} ({t1:.3} s); 10 steps at dt {dt:.4}: finite {finite} ({t10:.3} s)",
+        e1.is_finite()
+    );
+    assert!(finite);
+}
+
+/// ADR 0094 T1 (F-209): the Courant-controlled run of S1/S3 against the smallest uniform step count whose error meets the
+/// same 0.02 target, found by trying N = 1, 2, 3, ... (no monotonicity assumed).
+/// KNOWN MISS (ADR 0094 results): adaptive 74 steps (error 1.69e-2) against 64 uniform steps (error 1.97e-2); limit kept.
+#[test]
+#[ignore = "KNOWN MISS (ADR 0094): Courant control 74 steps vs 64 uniform steps meeting the 0.02 error"]
+fn t1_courant_control_needs_fewer_steps_than_the_smallest_uniform_count_meeting_the_target_known_miss() {
+    let (nu, target, t_end, e_target) = (0.05, 0.5, 10.0, 0.02);
+    let mut s = tg(32, nu, TimeScheme::ImplicitEuler);
+    let dt_aim = aimed_dt(&s, 0.9 * target);
+    let mut run = ControlledRun::new(StepController::new(courant_settings(target, 0.0), 0.4 * dt_aim), false);
+    let n_adapt = run.run(&mut s, t_end).len();
+    let r = reference(nu, t_end, 1.0 / 80.0);
+    let e_adapt = l2_diff(&s, &r);
+    let (mut n_target, mut n_equal, mut e_at_target) = (None, None, f64::NAN);
+    for n in 1..=1000 {
+        let e = uniform_step_error(n, nu, t_end, &r);
+        if n_target.is_none() && e <= e_target {
+            n_target = Some(n);
+            e_at_target = e;
+        }
+        if n_equal.is_none() && e <= e_adapt {
+            n_equal = Some(n);
+        }
+        if n_target.is_some() && n_equal.is_some() {
+            break;
+        }
+    }
+    let n_target = n_target.expect("no uniform step count up to 1000 meets the target");
+    println!(
+        "T1: adaptive {n_adapt} steps, error {e_adapt:.4e}; smallest uniform count with error <= 0.02: {n_target} (error {e_at_target:.4e}); \
+         smallest with error <= the adaptive error (reported only): {n_equal:?}"
+    );
+    assert!(e_adapt <= e_target, "adaptive error {e_adapt}");
+    assert!(n_adapt < n_target, "adaptive {n_adapt} vs uniform {n_target}");
+}
+
 #[test]
 fn s2_courant_rms_band_and_combination() {
     let (target, t_end) = (0.2, 10.0);
