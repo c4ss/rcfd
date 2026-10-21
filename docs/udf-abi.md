@@ -51,11 +51,11 @@ other exports are optional (a role set in the case needs its export).
 | `kinematic_viscosity` | `(x, y, z, t, temperature, speed: f64) -> f64` | per face and iteration; m^2/s, must be positive; `temperature` is 0 without an energy equation, `speed` is the interpolated velocity magnitude |
 | `monitor` | `(x, y, z, volume, ux, uy, uz, p, temperature: f64) -> f64` | per cell and iteration; the monitor is the sum of `value * volume` (kinematic pressure `p`) |
 | `temperature_profile` | `(x, y, z, t: f64) -> f64` | per face of a `temperature_udf` patch, once at build; boundary temperature in K |
-| `wall_heat_flux` | `(x, y, z, t: f64) -> f64` | per face of a `heat_flux_udf` patch, once at build; heat flux into the domain in W/m^2 (also through the conjugate heat transfer heat-flux path) |
+| `wall_heat_flux` | `(x, y, z, t: f64) -> f64` | per face of a `heat_flux_udf` patch, once at build; heat flux into the domain in W/m^2 (also wired into the conjugate heat transfer heat-flux path, which is not tested) |
 | `thermal_conductivity` | `(x, y, z, t, temperature: f64) -> f64` | per face and iteration; W/(m K), must be positive; `temperature` is the face-interpolated value (boundary value on boundary faces); the face diffusivity is `k / (rho cp)` |
-| `energy_source` | `(x, y, z, t, temperature: f64) -> f64` | per cell and iteration; W/m^3, divided by `rho cp` and added to the other heat sources of the iteration (zone sources, components, chemistry, particles) |
+| `energy_source` | `(x, y, z, t, temperature: f64) -> f64` | per cell and iteration; W/m^3, divided by `rho cp` and added to the other heat sources of the iteration (zone sources, components, chemistry, particles; only the zone-source combination is tested) |
 | `scalar_source` | `(x, y, z, t, value: f64) -> f64` | per cell and iteration for each passive scalar whose `source_udf` names the module; value per second, added to `source`, `source_expression` and zone sources; `value` is the current cell value |
-| `initial_value` | `(x, y, z: f64, comp: i32) -> f64` | per cell, once at build: velocity components (`comp` 0, 1, 2) in m/s, kinematic pressure (3), temperature (4, only with the energy equation); applied after `initial.velocity` and `initial.velocity_expression_*`, before register patches, which still win; a restart overwrites it |
+| `initial_value` | `(x, y, z: f64, comp: i32) -> f64` | per cell, once at build: velocity components (`comp` 0, 1, 2) in m/s, kinematic pressure (3), temperature (4, only with the energy equation); applied after `initial.velocity` and `initial.velocity_expression_*`, before register patches, which still win |
 | `execute_at_end` | same as `monitor` | per cell, once, in the step that ends the run (converged, iteration limit or end time); the sum of `value * volume` is the monitor `udf_end_<name>` |
 
 The momentum source is interpolated to the faces like the Boussinesq force and enters the face flux and the
@@ -98,11 +98,12 @@ laws, conjugate heat transfer, radiation and `heat_flux` boundaries (which conve
 ## Tests
 
 `crates/rcfd-api/tests/udf_hooks_w38a.rs` (F-239, ADR 0088): each new hook set to a constant or analytic function
-reproduces the matching built-in setting (relative difference below 1e-9, measured 0 in every case):
+reproduces the matching built-in setting (relative difference below 1e-9, measured 0 in every case; all runs steady
+SIMPLEC):
 `temperature_profile` = `temperature_expression`; `wall_heat_flux` = `heat_flux_value` and the linear closed form
 (3.5e-13); `thermal_conductivity` = the constant-property run (`physics.conductivity` set differently in the hook
 run); `energy_source` = the uniform zone source, the slab profile identity (1.1e-10 of the rise) and, for the linear
-source 2e4 x / L, the closed form (4.7e-4 at 64 cells); `scalar_source` = the uniform scalar `source` and its slab
+source 2e4 x / L, the closed form (4.7e-4 at 64 cells); hook 5e3 plus zone source 5e3 = zone source 1e4; `scalar_source` = the uniform scalar `source` and its slab
 identity (9.9e-15); `initial_value` = `initial.velocity_expression_x` plus uniform pressure and temperature (at build
 and after 50 iterations); `execute_at_end` runs once on the final fields (the independent sum to 1e-12). Missing
 exports, undefined modules, wrong boundary conditions, two providers, transient algorithms, property-law, heat-flux

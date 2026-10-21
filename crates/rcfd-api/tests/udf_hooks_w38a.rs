@@ -250,6 +250,30 @@ fn c4_energy_source_equals_the_zone_source_and_the_slab_profile() {
     assert!(err <= 6e-4, "C4c {err:e}");
 }
 
+/// ADR 0088 amendment 1: the hook added to a zone source assigned in the same iteration.
+#[test]
+fn c9_energy_source_adds_to_a_zone_source() {
+    let d = tmp("c9");
+    put(
+        &d,
+        "h",
+        &format!("(func (export \"energy_source\") {P5} f64.const 5e3)"),
+    );
+    let half = ZONE_Q.replace("value = 1e4", "value = 5e3");
+    let hook = run(
+        &d,
+        &slab(
+            64,
+            T300,
+            &format!("{half}[udf.h]\nfile = \"h.wasm\"\nenergy_source = true\n"),
+        ),
+    );
+    let plain = run(&d, &slab(64, T300, ZONE_Q));
+    let diff = rel(&hook, &plain, "T");
+    println!("C9 rel diff {diff:e} (limit 1e-9)");
+    assert!(diff < 1e-9, "C9 {diff:e}");
+}
+
 #[test]
 fn c5_scalar_source_equals_the_built_in_source_and_the_identity() {
     let d = tmp("c5");
