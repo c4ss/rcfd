@@ -85,16 +85,38 @@ fn run_floor(text: &str, n: usize, p_floor: f64) -> Simulation {
     }
     assert!(sim.failure().is_none(), "{:?}", sim.failure());
     for (f, old) in fields.iter().zip(&before) {
-        let new = sim.field(f).unwrap();
-        let scale = new.iter().map(|v| v.abs()).fold(1e-12, f64::max);
-        let scale = if *f == "p" { scale.max(p_floor) } else { scale };
-        let change = new.iter().zip(old).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max) / scale;
-        assert!(
-            change < 1e-8,
-            "{f} is not stationary after {n} iterations: change {change:.3e}"
-        );
+        assert_stationary(f, &sim.field(f).unwrap(), old, n, p_floor);
     }
     sim
+}
+
+/// Stationarity check of one field of `run_floor`. The max-folds drop NaN, so a non-finite field is rejected first (ADR 0100 part H).
+fn assert_stationary(f: &str, new: &[f64], old: &[f64], n: usize, p_floor: f64) {
+    assert!(
+        new.iter().all(|v| v.is_finite()),
+        "{f} is not finite after {n} iterations"
+    );
+    let scale = new.iter().map(|v| v.abs()).fold(1e-12, f64::max);
+    let scale = if f == "p" { scale.max(p_floor) } else { scale };
+    let change = new.iter().zip(old).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max) / scale;
+    assert!(
+        change < 1e-8,
+        "{f} is not stationary after {n} iterations: change {change:.3e}"
+    );
+}
+
+/// H1 (ADR 0100): a NaN field that the max-folds would read as unchanged is rejected.
+#[test]
+#[should_panic(expected = "is not finite")]
+fn h1_stationarity_rejects_nan_field() {
+    assert_stationary("T", &[300.0, f64::NAN], &[300.0, f64::NAN], 10, 1.0);
+}
+
+/// H2 (ADR 0100): an infinite value equal before and after (inf - inf = NaN, dropped by the fold) is rejected.
+#[test]
+#[should_panic(expected = "is not finite")]
+fn h2_stationarity_rejects_stationary_infinity() {
+    assert_stationary("p", &[1.0, f64::INFINITY], &[1.0, f64::INFINITY], 10, 1.0);
 }
 
 /// Mean of a field over the cells of column `x_target` with `y` in `[y0, y1]`.
@@ -408,7 +430,7 @@ fn x7_sweep(dt_of: impl Fn(f64) -> f64) {
             dt_of(u),
             0.5 * k * u
         );
-        // the `run` helper's max-fold skips NaN, so finiteness is checked here
+        // finiteness is also checked by the `run` helper since ADR 0100 part H
         assert!(p.is_finite() && e <= 1e-6, "u {u}: p {p} vs {want}");
         worst = worst.max(e);
     }
