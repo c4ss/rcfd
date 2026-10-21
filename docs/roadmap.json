@@ -1696,9 +1696,9 @@
     "deps": [
       "F-063"
     ],
-    "status": "partial",
+    "status": "done",
     "acceptance": "Piston in a closed cylinder reproduces isentropic compression p V^gamma within 2 percent; volume and mass are conserved through layer add and remove",
-    "note": "Priority P3. Size L. Area: mesh,fv. Separate from rigid-body motion so each can be scheduled alone. WAVE 38C (ADR 0090, partial): layering for a structured planar layer stack with one moving piston plane (rcfd-mesh layering.rs: removal below 0.4 h0, split above 1.6 h0 into h0 plus the rest, cell source map and conservative remap), an opt-in ALE step for the explicit compressible solver (CompressibleSolver::step_ale: Galilean face-frame flux, moving slip-wall mirror, swept-volume mesh speed, GCL-consistent SSP-RK stage volumes) and an InverseVolume(k) displacement-diffusion stiffness. Measured: piston in a closed cylinder (compression ratio 2.5 and back, peak piston Mach 0.05, 24 layer removals and 24 additions) p_bar V^gamma within 1.5e-5 at full compression and 3.4e-5 after re-expansion (limit 2e-2); volume, mass and energy conserved through every layer event to 4.4e-16; mass drift over the run 5.4e-13; uniform flow on a moving mesh preserved to 4.5e-15 (GCL); inverse-volume stiffness cuts the smallest-cell strain to 0.18 of the Laplacian value (continuous 1-D 0.17). Not delivered: local remeshing, layering of unstructured or prism layers, case-tree or CLI wiring, layering in the incompressible PIMPLE path, ALE with characteristic boundary conditions on moving faces, mesh-speed-aware time step."
+    "note": "Priority P3. Size L. Area: mesh,fv. Separate from rigid-body motion so each can be scheduled alone. WAVE 38C (ADR 0090, partial): layering for a structured planar layer stack with one moving piston plane (rcfd-mesh layering.rs: removal below 0.4 h0, split above 1.6 h0 into h0 plus the rest, cell source map and conservative remap), an opt-in ALE step for the explicit compressible solver (CompressibleSolver::step_ale: Galilean face-frame flux, moving slip-wall mirror, swept-volume mesh speed, GCL-consistent SSP-RK stage volumes) and an InverseVolume(k) displacement-diffusion stiffness. Measured: piston in a closed cylinder (compression ratio 2.5 and back, peak piston Mach 0.05, 24 layer removals and 24 additions) p_bar V^gamma within 1.5e-5 at full compression and 3.4e-5 after re-expansion (limit 2e-2); volume, mass and energy conserved through every layer event to 4.4e-16; mass drift over the run 5.4e-13; uniform flow on a moving mesh preserved to 4.5e-15 (GCL); inverse-volume stiffness cuts the smallest-cell strain to 0.18 of the Laplacian value (continuous 1-D 0.17). Not delivered: local remeshing, layering of unstructured or prism layers, case-tree or CLI wiring, layering in the incompressible PIMPLE path, ALE with characteristic boundary conditions on moving faces, mesh-speed-aware time step. DONE (decision 2026-10-21): acceptance met as written (p V^gamma 1.5e-5 / 3.4e-5 vs 2e-2; per-event volume, mass and energy change 4.4e-16 vs 1e-13; mass drift 5.4e-13 vs 1e-12) at peak piston Mach 0.05, i.e. near quasi-static. Unmet scope above (local remeshing, unstructured/prism layering, case-tree/CLI wiring, incompressible layering, moving-face characteristic BCs, mesh-speed time step) moved to F-247."
   },
   {
     "id": "F-231",
@@ -1893,5 +1893,17 @@
     "status": "todo",
     "acceptance": "Each implemented pressure-interpolation variant and the separate warped-face correction recovers the design order on the skewed, warped and stretched manufactured-solution meshes without degrading it on good meshes; gradient options are selectable from the case tree with located errors",
     "note": "Split from F-208 on 2026-10-21 (partials audit). F-208 stays partial until a third refinement level on the stretched mesh is added (its 16-to-32 order is 1.744 against the 1.7 limit; coarse pair 1.594); it flips to done when that check passes. Size M. Acceptance text proposed by the lead; refine when scheduled."
+  },
+  {
+    "id": "F-247",
+    "title": "Dynamic mesh, remaining scope: local remeshing, unstructured and prism layering, case-tree wiring, incompressible layering, moving-face boundary conditions, mesh-speed time step",
+    "phase": 9,
+    "deps": [
+      "F-230",
+      "F-063"
+    ],
+    "status": "todo",
+    "acceptance": "A moving-boundary case on an unstructured mesh with local remeshing keeps volume and mass conserved through remeshing events and reproduces a closed-form or benchmark result within a limit registered in an ADR; the dynamic-mesh options are selectable from the case tree for the incompressible PIMPLE path",
+    "note": "Split from F-230 on 2026-10-21 (partials audit). Size L. Depends on F-063 (partial). Acceptance text proposed by the lead; refine when scheduled."
   }
 ]
