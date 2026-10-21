@@ -104,3 +104,42 @@ clause with the option on only, and the note says so; whether `full` becomes the
 every VOF result, so it is not done here). If b1f misses, it stays as an ignored known miss with the limits intact. The option is kept
 in every outcome (registered now under wave-35 rule b): it is the physically complete viscous stress, it is off by default, and the
 D2 / D2c diagnostics need it to stay reproducible. If D2 is "reject", no 160 x 320 run is made.
+
+## Amendment A (written after the D runs, before any A run)
+
+What I knew when writing this: every D result (they are in the addendum below, unchanged since). In short: the transposed stress
+makes the bubble slower (40 x 80: V_c,max 0.2111 against 0.2204; 80 x 160: 0.2095), with zero effect at viscosity ratio 1; sigma
+x 0.9 / x 1.1 move V_c,max by -0.0006 / +0.0007; dt / 2, PIMPLE 3 and the transient Rhie-Chow term change nothing significant on
+40 x 80; c_alpha 0.5 nothing; n_smooth 0 moves y_c(3) by -0.0086 and V_c,max by -0.0038, n_smooth 4 by +0.0055 and +0.0006; the
+initial-circle curvature error grows under refinement with fixed n_smooth = 2 (rms 0.13 on 40 x 80, 0.24, 0.39, 0.77 on 320 x
+640); the translation is exact to 4e-5; linear-upwind momentum moves V_c,max by +0.0020 (40) and +0.0010 (80); viscosity ratio 1
+gives V_c,max 0.1977.
+
+Deviation from the registered plan (b1f): D2 is "contributing" by the letter of its rule (|dV_c,max| on 80 x 160 = 0.0092 >=
+0.0046) but in the wrong direction (it widens the gap). The registered b1f series would run the same code path and set-up as D2
+on 40 and 80 (D0 shows the diagnostic harness equals the w40d one), and D2 already gives e_y 0.0594 -> 0.0668 and e_v 0.0306 ->
+0.0322 on those two grids, so b1f's B1 fails without the 160 x 320 grid. b1f is therefore kept as an ignored known miss
+(`b1f_..._full_viscous_stress_known_miss`, limits unchanged) without the 160 x 320 run, and the single 160 x 320 run is
+reassigned by the rule below.
+
+The gap has two parts and no single test below may claim both: a drift (errors grow under refinement) and an offset of about 9 %
+of V_c,max already present on 40 x 80 (about 13 % with the physically complete stress). A curvature-only cause is expected to
+explain the drift at most; B2 (e(160) <= 0.5 e(40)) needs half the offset removed.
+
+* A1 (C1, construction only): D1b with n_smooth = 2 (n/40)^2 (2, 8, 32 on 40, 80, 160; 0 and 128 skipped), i.e. the same
+  diffusive smoothing width in physical units. A1 is a precondition for A2: if the rms relative error does not stay within 0.20 on
+  80 and 160, A2 does not isolate curvature noise, and A2 is reported but not read as confirming.
+* A2 (C1 drift): 80 x 160 with n_smooth 8. Confirm curvature noise as the cause of the drift if e_v(80, ns 8) < e_v(40, ns 2) =
+  0.0213 and e_y(80, ns 8) < e_y(40, ns 2) = 0.0531. Reject if V_c,max and y_c(3) both move by less than 0.0046 and 0.0127 from
+  the 80 x 160 default (0.2187, 1.0178).
+* A3 (C5 at the finer capillary ratio): 80 x 160 with dt = 0.05/80 (dt / dt_cap 0.33 instead of 0.67). Rejected as a cause if the
+  shift from the 80 x 160 default is below 0.0046 (V) and 0.0127 (y).
+* A4 (C3, viscosity mixing): opt-in `VofSettings::harmonic_viscosity` (default false): cell mixture viscosity
+  `1 / mu = alpha / mu_1 + (1 - alpha) / mu_2` instead of linear in alpha (a cell of alpha 0.5 gets 1.82 instead of 5.5), face
+  value still the linear interpolation of the cell values. Run on 40 x 80 and 80 x 160 (defaults otherwise). Reading: a
+  significant shift on 40 that roughly halves on 80 is an O(h) contributor to the finite-grid offset; a shift that does not shrink is
+  a limit-level cause. The option is kept off by default in every outcome (registered now) so the diagnostic stays reproducible.
+* The single 160 x 320 run (fixed now, before any A result): it goes to the A2 series (n_smooth 2 (n/40)^2: 40 ns 2 = D0, 80 ns 8
+  = A2, 160 ns 32), printing the B1-B4 quantities of ADR 0100, only if A2 confirms (e(80) < e(40) on both metrics). Otherwise no
+  160 x 320 run is made. No combination of variants is chosen after seeing the 80 x 160 numbers. Scaled smoothing is a diagnosis,
+  not a fix: it is not proposed as a default.
