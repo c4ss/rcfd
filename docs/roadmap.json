@@ -1882,5 +1882,16 @@
     "status": "todo",
     "acceptance": "A constant-volume vaporising spray has liquid and vapour penetration within 10 percent of public data; falling-film thickness is within 5 percent of the Nusselt solution",
     "note": "Split from F-128 on 2026-10-21 (partials audit). Scope: injection with first-stage and secondary breakup, evaporation and heat/mass transfer, wall film, erosion, rough-wall interaction, track-file output. Needs public spray and film data (not yet identified or verified) and depends on F-056 (partial: no cyclone case). Size L. Acceptance text proposed by the lead; refine when scheduled."
+  },
+  {
+    "id": "F-246",
+    "title": "Poor-mesh numerics options, remaining scope: pressure-interpolation variants, separate warped-face correction, case-tree wiring of gradient options",
+    "phase": 2,
+    "deps": [
+      "F-208"
+    ],
+    "status": "todo",
+    "acceptance": "Each implemented pressure-interpolation variant and the separate warped-face correction recovers the design order on the skewed, warped and stretched manufactured-solution meshes without degrading it on good meshes; gradient options are selectable from the case tree with located errors",
+    "note": "Split from F-208 on 2026-10-21 (partials audit). F-208 stays partial until a third refinement level on the stretched mesh is added (its 16-to-32 order is 1.744 against the 1.7 limit; coarse pair 1.594); it flips to done when that check passes. Size M. Acceptance text proposed by the lead; refine when scheduled."
   }
 ]
