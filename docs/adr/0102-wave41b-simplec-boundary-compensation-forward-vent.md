@@ -192,3 +192,83 @@ are both below 1e-4 at some iteration up to 1500; otherwise it is falsified (the
 ## Amendments
 
 Amendments 1 and 2 above.
+
+## Addendum: measured values, verdicts, deviations
+
+Release builds of the scratch copy at a2e0bfd plus this wave's files. Each registered run was made once unless stated.
+
+### Diagnosis (amendment 1)
+
+| Id | Measured | Prediction | Verdict |
+| --- | --- | --- | --- |
+| D1v nu 1.5e-9 | kick 1.59e-8 (x 1.97), last 2.5e-9 | <= 1e-6 | stands |
+| D1v nu 1.5e-4 | kick 1.534e-3 (x 1.97), last 2.1e-4 | 5e-4 to 5e-3, settles | stands |
+
+The kick left by the compensation is exactly proportional to the viscosity (1.59e-8, 1.553e-4, 1.534e-3 for nu 1.5e-9, 1.5e-5, 1.5e-4): it is
+the viscous coupling of the momentum predictor, not the boundary defect. By the amended choice rule the fix is **B**, the opt-in key
+`solver.simplec_boundary_compensation` (`crates/rcfd-fv/src/simple.rs` `simplec_boundary_flux_correction`; schema and located error in
+`crates/rcfd-api/src/schema.rs` and `sim.rs`; documented in `docs/case-schema.md`).
+
+Root cause in one sentence: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only, so when the vent pressure changes the
+vent-cell velocity takes the uncompensated `(rAtU - rAU)` times the jump (5.06 m/s in the first plain iteration at u = 1), and the vent law,
+which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|; the run diverges when G > 1 (10.1 plain at u = 1,
+1.125 with pseudo-time 0.02 at u = 2), whatever the Courant number (G1, G2).
+
+### Acceptance
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| A1 `x7_vent_at_fixed_pseudo_dt` (key on, pseudo 0.02) | u 0.5: 2.93e-12, 1: 1.27e-13, 2: 1.91e-14, -0.5: 2.2e-16, -1: 2.49e-13, -2: 6.42e-14; all finite and stationary | 1e-6, finite | **pass** |
+| A1 default (`x7_vent_at_fixed_pseudo_dt_known_miss`, run once) | u 0.5: 2.85e-12, u 1: 1.36e-13 (the ADR 0095 values, equal in the printed digits), u 2: "p is not finite" | stays a miss | as expected; stays ignored |
+| A2 B1 walled duct | key vs simple: u 3.48e-12, p 2.74e-12; default simplec vs simple: u 4.80e-3, p 3.74e-3; settled in 400 / 400 / 500 iterations | <= 1e-9; > 1e-6; settle | **pass** |
+| A2 B2 periodic duct | key vs simple: u 4.69e-13, p 4.30e-13; default: u 2.62e-3, p 4.05e-3; settled in 300 / 400 / 400 | <= 1e-9; > 1e-6; settle | **pass** |
+| A3 default bit-identity | see the final gate (`baseline_hashes.rs` not re-recorded) | unchanged | see below |
+| A4 key with `piso` | located error at `solver.simplec_boundary_compensation` | located | **pass** |
+
+### Reported checks
+
+* R1 X7 with the key and no pseudo-time (plain SIMPLEC, alpha_u 0.9), 2300 iterations each, scratch harness: outlet pressure relative error
+  7.4e-14 (u 0.5), 4.1e-13 (1), 9.0e-14 (2), 6.4e-13 (-0.5), 9.6e-14 (-1), 4.0e-15 (-2); max |ux - u| at most 5.7e-12. Without the key the
+  same runs diverge from the first iteration (smoke).
+* R2 F-200 C3 forward vent as registered (plain SIMPLEC from rest, mass-flow inlet) with the key and the C3 settled-field criterion:
+  K = 2.5 settles after 310 iterations, outlet-column error 4.38e-12 (C3 limit 1.25e-6), imbalance 4.7e-13; **K = 10 is non-finite at
+  iteration 2767**. Run twice (the second run only to print the panic message cut off by my output filter; deterministic, same failure).
+  F-200's entry is not touched.
+* Observation (not registered, X7 duct, plain SIMPLEC with the key, K = 10, u = 1, 3000 iterations): the vent-column rows separate from the
+  first iteration (largest difference within a column 8.8e-4, 2.6e-3, 1.3e-2, 6.7e-2 at iterations 1, 4, 7, 10) and the run does not settle
+  (max |ux - u| between 0.9 and 230 over iterations 150-2850). This is a second, transverse mode of the vent faces, seen also with the
+  face-velocity law in D2b. Not diagnosed further; with pseudo-time 0.02 the F-200 C3 K = 10 case settles on the default code (existing test).
+* R3 (amendment 2, FAN-01 stall, one run of `w41b_fan01_with_boundary_compensation`, 209 s): `res_u` / `res_p` 8.4e-2 / 4.5e-2
+  (iteration 10), 7.1e-3 / 1.2e-3 (100), 4.4e-3 / 1.6e-3 (300), 5.5e-3 / 1.6e-3 (1000), 4.7e-3 / 1.0e-3 (1500); never both below 1e-4.
+  c10 6.94e-4, L 2.50e-4, L / c10 0.360 (ADR 0084 without the key: 0.330; residuals 3.5e-3 / 7.9e-4 at 1500). **H-R3 is falsified**: the
+  FAN-01 stall is not caused by the missing boundary compensation. The compensation changes the stalled level only slightly. Its cause stays
+  undiagnosed (the ADR 0084 candidates remain: the 83-degree faces, the rotating-frame terms, laminar flow at Re 1.4e5).
+
+### Step 3 (other open foundations defects), diagnosis only
+
+* SIMPLEC seam compensation (ADR 0084 finding S): diagnosed and covered by the same opt-in key. B2 shows the converged seam flux now
+  carries `rAU` (compensated SIMPLEC equals SIMPLE to 4.7e-13 on a periodic duct whose seam faces carry pressure differences; default
+  SIMPLEC differs by 2.6e-3). Not made the default: it changes every converged SIMPLEC result on periodic meshes and pressure boundaries.
+* Stalled residual: the ADR 0022 uniform-duct residual floor is the reference normalisation of a (nearly) uniform exact solution, already
+  explained by ADR 0023 (`solver.residual_norm = "backward"`); not re-run. The E2 stall (res_u 4.4e-12 with the fields stationary) was not
+  examined. The FAN-01 stall: H-R3 falsified (above).
+
+### Deviations from the registered plan
+
+* D1 missed its registered threshold at plain u = 1 (1.553e-4 against 1e-4). Amendment 1 was written after the diagnostic table, it added
+  D1v and changed the choice rule; without it the registered rule gives "no fix". D1v stood as predicted (proportional to the viscosity).
+* R2 was run twice (the second time only to read the panic message; the code is deterministic and the failure was the same).
+* The observation of the K = 10 transverse mode on the X7 duct was not registered.
+* The scratch diagnostic switches (D1s, D2a, D2b, D3 and the harness) were never committed; the committed solver code is the D1 switch
+  without its environment hook.
+
+### Unverified references
+
+Van Doormaal and Raithby (1984) for the SIMPLEC velocity correction, cited from memory (UNVERIFIED); nothing here depends on it, the
+derivations above are first principles.
+
+### Status
+
+F-248: A1 passes as a non-ignored test with the opt-in key; defaults unchanged (A3, final gate). Set to done with the note that the
+acceptance is met with the opt-in key `solver.simplec_boundary_compensation = true` (the only change to the registered X7 set-up) and that
+the default-code X7 at pseudo-time 0.02 remains a known miss.
