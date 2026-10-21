@@ -120,3 +120,17 @@ No rewording is proposed.
 ## Roadmap
 
 Only the three entries' `status` and `note` change in docs/roadmap.json; the acceptance texts are untouched.
+
+## Addendum: measured values (registered runs after this ADR was committed)
+
+* F-240 V1: met. All nine set-ups exit 0 with 0 error-level rule diagnostics. One warning: SV101 on naca0012 (max
+  non-orthogonality 80.27 deg, skewness 2.25, aspect ratio 164). No other warning or info. F-240 set to done under the reading
+  registered above.
+* F-118 F1/F2: met; every compared quantity equal to the source bit for bit (relative differences 0, non-orthogonality
+  30.099397 deg both), content hashes of the ASCII and 3010/3013 imports equal, `is_ok`, no warnings. F3: met; volume 3.3e-10,
+  minimum volume 9.3e-7, skewness 2.6e-6, aspect ratio 6.4e-7 relative, non-orthogonality +9e-6 deg. F-118 set to done.
+* F-073 R4: met; `rcfd call render.png` 1.555 s (limit 2 s), run.initialize 18.8 s, session.create 0.054 s, image 1024 x 954,
+  speed 3e-7 .. 0.9995. The smoke run gave 1.253 s; the difference is load from other agents' builds on the same machine.
+  The margin under a fully loaded gate is about 0.45 s. F-073 set to done.
+
+No deviation from the registered plan. No miss.
