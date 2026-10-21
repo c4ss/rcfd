@@ -164,3 +164,12 @@ interior faces carry the parabolic profile. V2 stays in the file unchanged as th
 `velocity_expression_x` (the same parabola) also on `[boundaries.xmin]`, so the inlet faces carry the interior profile. Limits
 unchanged: exit 0 and 0 error-level rule diagnostics. What I knew: the V2 output above; V2b not yet run. Decision rule as in
 amendment 1 (V2b plays the role of V2).
+
+## Addendum 2: measured values after the amendments
+
+* V2: exit 3 (set-up defect, above); ignored as `*_known_miss`, limit unchanged.
+* V2b: met; exit 0, 2000 cells, 0 rule diagnostics of any severity.
+* E2 (not ignored) still passes with the Graetz literal in the corpus: 90 texts evaluated, warnings SV101 (two) and SV103 (one).
+* F-240 stays done under the reading registered above, with one stated exception: the FAN-01 case of `fan01_validation.rs`
+  (template, F-126) is not covered.
+* Gate before the amendments, fresh archive of fefd7f9: fmt clean, clippy clean, 1922 passed / 0 failed / 543 ignored.
