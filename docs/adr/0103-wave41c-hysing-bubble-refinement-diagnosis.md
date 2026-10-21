@@ -198,3 +198,80 @@ every outcome (it would move every VOF result with a symmetry or component-speci
   F-055 meets the rising-bubble clause with this option on; the note says the default still misses. If it misses, it becomes an
   ignored known miss with the limits intact. If C2 does not confirm, no 160 x 320 run is made. After C no further amendment is
   opened in this wave.
+
+## Addendum: measured values (after the runs)
+
+All runs once, in the scratch tree (archive of a2e0bfd plus this wave's files), release build. Rising-bubble metrics are
+y_c(3) / V_c,max / time of V_c,max; errors are to 1.0813 / 0.2417. Defaults on 40 x 80: 1.0282 / 0.2204 / 0.850; on 80 x 160:
+1.0178 / 0.2187 / 0.829 (ADR 0100). `vof_bubble_diagnosis_w41c.rs` prints exactly the quantities below.
+
+### Result: primary cause found (C7), with a residual drift left
+
+The free-slip side walls of the benchmark were not free slip. With the component-averaged diagonal of the VOF corrector a
+`Symmetry` plane acts mostly like a no-slip wall (C1: the wall column of an exact uniform flow runs 84 % slow). The opt-in
+`component_diagonal` correction removes about 80 % of the gap on 80 x 160, but the remaining errors still grow from 40 to 80, so
+the registered confirm rule (which also asks for e(80) <= e(40)) is not met and C7 is "contributing" by the letter. No
+160 x 320 run was made (the amendment C rule), all b1 variants stay ignored known misses, and F-055 stays partial.
+
+| Exp. | Candidate | Measured | Rule | Reading |
+|------|-----------|----------|------|---------|
+| D0 | control | 40 x 80: 1.0282 / 0.2204 / 0.850 | equal to ADR 0100 | met |
+| D1 | C1, C4 static bubble, ratio 10 | Laplace error -0.0481, -0.0513, -0.0521 (40, 80, 160); max U at t = 1: 5.2e-3, 3.8e-3, 4.7e-3 | see the next rows | |
+| D1 | static bubble, ratio 1 | Laplace error -0.0478, -0.0513 (40, 80); max U 4.3e-3, 4.8e-3 | ratio 10 and 1 differ by < 0.01 | density-jump balance rejected (differences 0.0003, 0.0000) |
+| D1 + D3 | curvature magnitude | S = 0.0065 per unit relative sigma; S e_L(160) = 3.4e-4 in size | < 0.0046 rejects | rejected |
+| D1 | parasitic currents | 4.7e-3 on 160 (1.9 % of V_ref), above 3.8e-3 on 80 | <= 0.024 and not growing rejects | "contributing" flag by the letter (it grows); small |
+| D1b | curvature of the initial circle, n_smooth 2 | rms relative error 0.122, 0.130, 0.243, 0.392, 0.770 (20 ... 320); mean -kappa 3.913, 3.955, 3.908, 3.848, 3.548 (exact 4) | not falling = non-convergent | non-convergent |
+| D2 | C3 transposed stress | 40: 1.0219 / 0.2111 / 0.900; 80: 1.0145 / 0.2095 / 0.895 | confirm / reject / contributing | "contributing" by size (dV -0.0092 on 80) but it widens the gap |
+| D2c | control, viscosity ratio 1 | off 0.9956 / 0.1977, on 0.9957 / 0.1977 | dV <= 0.1 x 0.0093 | met (dV below 1e-4): the term acts at the jump only |
+| D3 | C1 sigma x 0.9 / x 1.1 | 1.0267 / 0.2198; 1.0307 / 0.2211 | significant shift | not significant |
+| D4 | C5, C4: dt/2; PIMPLE 3; no ddt correction | 1.0285 / 0.2204; 1.0282 / 0.2204; 1.0278 / 0.2200 | significant shift | all rejected |
+| D5 | C2: c_alpha 0.5; n_smooth 0; n_smooth 4 | 1.0286 / 0.2197; 1.0196 / 0.2166; 1.0337 / 0.2210 | significant shift | none significant (n_smooth 0 closest: -0.0086 / -0.0038) |
+| D6 | C2 translation | y_c error -4.1e-5 (40), -1.2e-6 (80); L1 shape error 0.0152, 0.0081 | <= 1e-3 rejects | rejected |
+| D7 | C6 linear upwind | 40: 1.0229 / 0.2224; 80: 1.0137 / 0.2197 | shifts reported | not significant; the series still moves away |
+| A1 | curvature with n_smooth 2 (n/40)^2 | rms 0.130, 0.050, 0.015 (40, 80, 160) | <= 0.20, precondition of A2 | met |
+| A2 | 80 x 160, n_smooth 8 | 1.0253 / 0.2198 / 0.831 | confirm needs e(80) < e(40) | "reject" by the letter (shifts +0.0075 / +0.0011), but it cuts the 40 -> 80 y_c drift from -0.0104 to -0.0029 |
+| A3 | 80 x 160, dt/2 | 1.0178 / 0.2186 | significant shift | rejected |
+| A4 | harmonic mixture viscosity | 40: 1.0280 / 0.2219; 80: 1.0169 / 0.2193 | significant shift | rejected |
+| B1 | added mass, impulsive start | a = 0.8208, 0.8122, 0.8047 (h 1/20, 1/40, 1/80) against 0.8018 | in [0.78, 0.81] rejects | rejected (converges towards the potential-flow value) |
+| C1 | C7 uniform channel, symmetry sides | wall-column deviation from 0.2: 0.168 (averaged), 2.5e-16 (corrected) | > 0.002 off and < 0.0002 on confirms | confirmed (wall defect) |
+| C2 | C7 bubble with `component_diagonal` | 40: 1.0767 / 0.2460 / 0.893 (errors 0.0046 / 0.0043); 80: 1.0712 / 0.2469 / 0.870 (errors 0.0101 / 0.0052) | confirm: e(80) at most half the default gap AND e(80) <= e(40) | first part met (0.0101 <= 0.0318, 0.0052 <= 0.0115), second missed: "contributing" |
+| C2b | with the transposed stress as well (information) | 40: 1.0745 / 0.2379 / 0.935 (errors 0.0068 / 0.0038); 80: 1.0726 / 0.2388 / 0.923 (errors 0.0087 / 0.0029) | none | V_c,max error falls, y_c error grows |
+| C3 | no-slip side walls (information) | 40 x 80: 1.0161 / 0.2148 | within 0.0043 of D0 | 0.0056 away: the averaged-diagonal plane sits about 82 % of the way from free slip (C2, 0.2460) to no slip |
+
+### Ranked findings and remaining suspects
+
+1. Cause of most of the offset (confirmed by C1, size measured by C2): the averaged component diagonal at the `Symmetry` side
+   walls. A wall-adjacent tangential velocity obeys `a_p u_t = H_t - ...` with `a_p` carrying half the normal component's wall
+   coefficient, an extra friction that does not vanish under refinement. With the opt-in correction, on 80 x 160 the V_c,max
+   error falls from 0.0230 to 0.0052 and the y_c(3) error from 0.0635 to 0.0101, and the peak time moves from 0.829 to 0.870
+   (reference 0.9213). The 40 x 80 agreement of ADR 0049 / 0096 was this wall drag partly offset by coarse-grid errors.
+2. Remaining drift (errors growing from 40 to 80 also with the correction): the CSF curvature with a fixed number of smoothing
+   passes is non-convergent (D1b: rms error 0.13 -> 0.77 from 40 to 320), and A2 shows that a constant physical smoothing width
+   removes most of the default series' y_c drift. This was not tested together with the correction (no further amendment, as
+   registered). The usual remedy is a convergent curvature estimator such as height functions on Cartesian grids (UNVERIFIED as a
+   reference; not attempted).
+3. The physically complete stress (C2b) lowers V_c,max by about 0.008 and belongs in the model; with it and the correction the
+   V_c,max error falls under refinement (0.0038 -> 0.0029) while the y_c error grows (0.0068 -> 0.0087).
+4. A separate finding, not a lever here: the static-bubble Laplace jump is about 5 % low on every grid (-0.048 to -0.052), another
+   non-convergent property of the fixed-smoothing CSF.
+
+Rejected on 40 x 80 / 80 x 160 by the registered rules: curvature magnitude, the density-jump force balance, interface advection
+and compression, the time step (at both capillary ratios), PIMPLE outer iterations, the transient Rhie-Chow term, momentum
+upwinding, viscosity mixing, and the added-mass response to the density jump.
+
+### Deviations
+
+* b1f was not run on 160 x 320 (amendment A, written before the reassignment); b1c was not run on 160 x 320 (amendment C rule: C2
+  did not confirm). Both are ignored known misses whose 40 and 80 points are the D2 and C2 runs; their limits are unchanged.
+* The amendment C set-ups were not smoke-tested separately before registration; C1 costs about 10 s per run, so its run is its
+  smoke. No limit was changed after a run.
+* The registered "contributing" category of D2 did not say "in the right direction"; D2 met it by size while widening the gap.
+
+### Code delivered (all opt-in, default false, defaults bit-identical, baseline hashes untouched)
+
+`VofSettings::full_viscous_stress`, `VofSettings::harmonic_viscosity` and `VofSettings::component_diagonal`
+(crates/rcfd-fv/src/vof.rs). These are library settings only: the case tree still refuses `symmetry` walls and
+`solver.viscous_stress = "full"` with multiphase, so no case-tree key changes. Making `component_diagonal` the VOF default would
+move every VOF result with a symmetry plane (only library tests use one); that is the user's decision. Tests:
+`crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs` (ignored diagnostics, plus the non-ignored `c1_uniform_channel_symmetry_walls`
+asserting the C1 rule) and the b1f / b1c known misses in `crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs`.

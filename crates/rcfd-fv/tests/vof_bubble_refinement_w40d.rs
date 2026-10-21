@@ -11,7 +11,7 @@ const V_REF: f64 = 0.2417;
 const T_REF: f64 = 0.9213;
 
 /// The `vof_bubble.rs` set-up on `n` x `2n` cells.
-fn bubble(n: usize) -> VofSolver {
+fn bubble(n: usize, full: bool, cd: bool) -> VofSolver {
     let mesh = Arc::new(box_2d(n, 2 * n, 1.0, 2.0, false, false).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
@@ -28,14 +28,16 @@ fn bubble(n: usize) -> VofSolver {
     s.gravity = [0.0, -0.98, 0.0];
     s.sigma = 24.5;
     s.n_correctors = 3;
+    s.full_viscous_stress = full; // ADR 0103 (b1f only)
+    s.component_diagonal = cd; // ADR 0103 (b1c only)
     s.amg_pressure = true; // CG would take about 2.1 h on 160 x 320 (ADR 0100 smoke); the tree uses AMG above 2000 cells
     VofSolver::new(geom, u, p_rgh, alpha, s).unwrap()
 }
 
 /// Runs `n` x `2n` to `t_end` with `dt = 0.1 / n` (2.5e-3 on 40 x 80, as `vof_bubble.rs`):
 /// (y_c(t_end), V_c,max, time of V_c,max, phase-volume drift, bound violation).
-fn run(n: usize, t_end: f64) -> (f64, f64, f64, f64, f64) {
-    let mut s = bubble(n);
+fn run(n: usize, t_end: f64, full: bool, cd: bool) -> (f64, f64, f64, f64, f64) {
+    let mut s = bubble(n, full, cd);
     let dt = 0.1 / n as f64;
     assert!(dt <= s.capillary_dt(), "capillary limit {}", s.capillary_dt());
     let vol = s.geom.mesh.cell_volumes().to_vec();
@@ -79,14 +81,36 @@ fn run(n: usize, t_end: f64) -> (f64, f64, f64, f64, f64) {
 #[test]
 #[ignore = "smoke of ADR 0100 part B"]
 fn b0_smoke() {
-    run(160, 0.4);
+    run(160, 0.4, false, false);
 }
 
 /// B1-B4 of ADR 0100: errors to the Hysing values on 40 x 80, 80 x 160, 160 x 320; all grids are printed before any assert.
 #[test]
 #[ignore = "KNOWN MISS (ADR 0100 addendum): errors to Hysing grow under refinement (y_c 0.053, 0.064, 0.069); heavy, about 30 min"]
 fn b1_hysing_bubble_error_decreases_under_refinement_known_miss() {
-    let r: Vec<_> = [40, 80, 160].into_iter().map(|n| run(n, 3.0)).collect();
+    b1(false, false);
+}
+
+/// ADR 0103: B1-B4 of ADR 0100 (limits unchanged) with the transposed viscous stress on (`full_viscous_stress`). Not run on
+/// 160 x 320: its 40 and 80 points are the ADR 0103 D2 runs, whose errors already grow (y_c 0.0594 -> 0.0668, V_c,max 0.0306 ->
+/// 0.0322), so B1 fails (ADR 0103 amendment A).
+#[test]
+#[ignore = "KNOWN MISS (ADR 0103 amendment A): B1 fails on the 40 and 80 points (D2); heavy, about 30 min"]
+fn b1f_hysing_bubble_error_decreases_under_refinement_full_viscous_stress_known_miss() {
+    b1(true, false);
+}
+
+/// ADR 0103 amendment C: B1-B4 of ADR 0100 (limits unchanged) with the component-diagonal correction (`component_diagonal`). Not
+/// run on 160 x 320: its 40 and 80 points are the ADR 0103 C2 runs, whose errors still grow (y_c 0.0046 -> 0.0101, V_c,max 0.0043
+/// -> 0.0052), so B1 fails.
+#[test]
+#[ignore = "KNOWN MISS (ADR 0103 amendment C): B1 fails on the 40 and 80 points (C2); heavy, about 30 min"]
+fn b1c_hysing_bubble_error_decreases_under_refinement_component_diagonal_known_miss() {
+    b1(false, true);
+}
+
+fn b1(full: bool, cd: bool) {
+    let r: Vec<_> = [40, 80, 160].into_iter().map(|n| run(n, 3.0, full, cd)).collect();
     let ey: Vec<f64> = r.iter().map(|x| (x.0 - YC_REF).abs()).collect();
     let ev: Vec<f64> = r.iter().map(|x| (x.1 - V_REF).abs()).collect();
     let et: Vec<f64> = r.iter().map(|x| (x.2 - T_REF).abs()).collect();
