@@ -146,3 +146,11 @@ compressible ALE through the `rcfd-api` case tree (`dynamic_mesh` keys) or the C
 characteristic boundary conditions on moving faces (rejected with an error); mesh-speed-aware `max_dt`. The time step uses the absolute velocity
 (shortcut: fine at piston Mach 0.05, needs `|u.n - w_n| + c` for fast walls). Roadmap: F-230 is set to `partial` under the registered decision
 rule, because remeshing and case-tree wiring are missing even though every registered check is met.
+
+Defaults bit-identical, verified: a scratch test ran the fixed-mesh `CompressibleSolver` with default settings and each of Euler, RK2 and
+RK3 (300 steps, Sod data with a y shear, `box_2d(100, 3)`). The FNV hash of every conserved value's bits is identical between `compressible.rs`
+at 2f84f63 and at 7de9a54 (`cea94485dbaa04c4`, `c78a1c90bc62d177`, `b798be9366eedace`). `baseline_hashes.rs` hashes no compressible case.
+
+Final gate (fresh `git archive 0763acf`, `CARGO_TARGET_DIR=target-w38c`): `cargo fmt --all -- --check` clean, `cargo clippy --workspace
+--all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1887 passed / 0 failed / 531 ignored. Wave 37 closed at
+1881 / 0 / 531; the difference is this wave's 6 new tests. No LNK1201. This gate-totals paragraph is docs only and was not re-gated.
