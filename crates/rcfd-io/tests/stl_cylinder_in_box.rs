@@ -105,7 +105,9 @@ fn s1_stl_file_is_closed() {
 /// positive and the minimum dihedral angle at least 3.0 degrees (the ADR 0030 T5 limit).
 /// Known miss: every check passed except the last one: minimum dihedral 1.84 degrees (the in-code surface of `p1` gives
 /// 3.34; the STL surface has the same coordinates but another vertex numbering; that the remesh depends on it is likely
-/// but not isolated).
+/// but not isolated). ADR 0104 D1 isolated it: the remesh depends on the numbering, the tetrahedral mesher does not. This
+/// record keeps the default mesher; the same limits with the opt-in quality pass pass in
+/// crates/rcfd-io/tests/w41d_tet_quality.rs (`q1_stl_watertight_and_min_dihedral_with_pass`).
 #[test]
 #[ignore = "known miss (ADR 0093 S2): minimum dihedral 1.84 deg vs registered 3.0 deg"]
 fn s2_known_miss_pipeline_watertight_and_quality() {
@@ -122,7 +124,8 @@ fn s2_known_miss_pipeline_watertight_and_quality() {
 
 /// S3: the ADR 0030 T5 radius-edge limit: at least 99 percent of the cells with circumradius over shortest edge at most 2.
 /// Wave 19B measured 0.927 on the in-code surface, so a miss was expected; no quality refinement is added here.
-/// Known miss: measured 0.936.
+/// Known miss: measured 0.936 (default mesher). With the ADR 0104 quality pass the same limit passes:
+/// `q2_stl_radius_edge_fraction_with_pass` in crates/rcfd-io/tests/w41d_tet_quality.rs.
 #[test]
 #[ignore = "known miss (ADR 0093 S3): radius-edge fraction 0.936 vs registered 0.99"]
 fn s3_known_miss_radius_edge_fraction() {

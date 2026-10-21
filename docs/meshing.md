@@ -50,10 +50,19 @@ TriSurface (soup or generator)  ->  diagnose / repair   (surface.rs, F-232)
   volume.
 * Measured: sphere and cube meshes have all tetrahedra within radius-edge 2.0; the coarse anisotropic torus does not (0.634 of
   tetrahedra, known miss); after surface remeshing it does. Cylinder in a box: 0.927, min dihedral 3.3 degrees (slivers remain).
+* Opt-in quality pass (ADR 0104): `TetOptions::quality_sweeps` (default 0, output unchanged) runs, per sweep, circumcentre
+  insertion for tetrahedra over the radius-edge bound with a cavity kept inside the domain and never crossing a surface face,
+  smoothing of interior vertices (moves kept only if every incident cell stays positive under exact `orient3d` and the worst
+  incident quality improves; surface vertices never move) and flips of interior cells below volume quality 0.06. The surface
+  and the volume are unchanged. With `quality_sweeps: 10` the curvature-remeshed cylinder in a box gives minimum dihedral
+  17.7 degrees and radius-edge fraction 1.0 from the STL file, 16.3 degrees and 0.997 from the in-code surface.
+* The remesher depends on the input vertex numbering (equal-length edges are split in vertex-id order), so the same geometry
+  welded from an STL file and built in code remeshes to different surfaces; the tetrahedral mesher does not depend on the
+  numbering (ADR 0104 D0 to D2).
 * Solver smoke (T10): a Laplace problem with Dirichlet data on a 1277-cell unit-sphere tetrahedral mesh gives relative L2 error
   1.1e-2; a linear field on a cube mesh is reproduced to 5e-14.
-* Not done: polyhedral dual conversion (F-102), sliver
-  optimisation beyond flips, size fields inside the volume beyond a uniform `size`.
+* Not done: sliver exudation or optimisation with guarantees (the quality pass is heuristic), boundary layers on the
+  tetrahedral mesh, size fields inside the volume beyond a uniform `size`. Polyhedral dual conversion is in `polydual` (F-102).
 
 ## Sweep, thin-volume and multizone hex meshing (F-235, ADR 0047)
 

@@ -2,7 +2,9 @@
 //!
 //! Incremental Delaunay tetrahedralisation (Bowyer-Watson insertion with exact predicates), boundary recovery by
 //! conforming Steiner insertion on missing surface edges and faces, flood-fill classification of the inside, and
-//! Delaunay refinement (circumcentre insertion) for radius-edge ratio and size. No sliver removal. Deterministic.
+//! Delaunay refinement (circumcentre insertion) for radius-edge ratio and size, bistellar flips. Opt-in quality pass
+//! (`TetOptions::quality_sweeps`, ADR 0104): constrained circumcentre insertion, interior-vertex smoothing and flips,
+//! which removes the slivers and most radius-edge failures left next to the surface. Deterministic.
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::predicates::{insphere, orient3d};
@@ -35,6 +37,10 @@ pub struct TetOptions {
     pub sliver_q: f64,
     /// Cap on Steiner points added by recovery and refinement, as a multiple of the input vertex count plus 10000.
     pub max_steiner_factor: usize,
+    /// Opt-in quality pass (ADR 0104), run last: at most this many sweeps of constrained circumcentre insertion for
+    /// tetrahedra over the radius-edge bound, interior-vertex smoothing and flips of interior tetrahedra with volume
+    /// quality below 0.06. 0 (the default) leaves the output unchanged.
+    pub quality_sweeps: usize,
 }
 
 impl Default for TetOptions {
@@ -46,6 +52,7 @@ impl Default for TetOptions {
             split_boundary: false,
             sliver_q: 0.03,
             max_steiner_factor: 100,
+            quality_sweeps: 0,
         }
     }
 }
@@ -67,6 +74,8 @@ pub struct TetReport {
     pub flips: usize,
     /// Surface edges split to remove flat tetrahedra lying against the surface.
     pub flat_split: usize,
+    /// Interior vertices moved by the quality pass.
+    pub moves: usize,
 }
 
 /// A tetrahedral mesh with its conforming boundary surface.
@@ -193,6 +202,21 @@ impl Del {
     }
 
     fn cavity(&mut self, p: Vec3, t0: usize) -> Result<Cavity> {
+        self.cavity_in(p, t0, None)
+    }
+
+    /// Bowyer-Watson cavity of `p` from `t0`. With `walls`, the cavity is constrained to inside tetrahedra and never
+    /// crosses a face in `walls`; it fails if it cannot be made star-shaped from `p` under that constraint.
+    fn cavity_in(&mut self, p: Vec3, t0: usize, walls: Option<&HashSet<[usize; 3]>>) -> Result<Cavity> {
+        let blocked = |me: &Del, t: usize, i: usize, n: usize| -> bool {
+            match walls {
+                None => false,
+                Some(w) => {
+                    let (v, f) = (me.tets[t], FACE[i]);
+                    me.inside[n] != 1 || w.contains(&sorted3(v[f[0]], v[f[1]], v[f[2]]))
+                }
+            }
+        };
         let q = self.tp(t0);
         if q.contains(&p) {
             return merr("duplicate point in tetrahedralisation");
@@ -205,7 +229,7 @@ impl Del {
         while let Some(t) = stack.pop() {
             for i in 0..4 {
                 let n = self.nb[t][i];
-                if n == NONE || self.mark[n] != 0 {
+                if n == NONE || self.mark[n] != 0 || blocked(self, t, i, n) {
                     continue;
                 }
                 touched.push(n);
@@ -231,7 +255,7 @@ impl Del {
                 }
                 let [a, b, c] = self.face_pts(t, i);
                 if orient3d(a, b, c, p) >= 0 {
-                    if n == NONE {
+                    if n == NONE || blocked(self, t, i, n) {
                         failed = true;
                         continue;
                     }
@@ -330,17 +354,7 @@ impl Del {
     }
 
     fn vol_q(&self, v: [usize; 4]) -> f64 {
-        let p = [self.pts[v[0]], self.pts[v[1]], self.pts[v[2]], self.pts[v[3]]];
-        let vol = dot(cross(sub(p[1], p[0]), sub(p[2], p[0])), sub(p[3], p[0])) / 6.0;
-        let mut s2 = 0.0;
-        for i in 0..4 {
-            for j in i + 1..4 {
-                let d = sub(p[i], p[j]);
-                s2 += dot(d, d);
-            }
-        }
-        let l = (s2 / 6.0).sqrt();
-        vol / (l * l * l)
+        vol_q_pts(&[self.pts[v[0]], self.pts[v[1]], self.pts[v[2]], self.pts[v[3]]])
     }
 
     /// Replace the tetrahedra `old` by `new` (positively oriented, same boundary faces) and reconnect.
@@ -572,6 +586,28 @@ impl Del {
     }
 }
 
+/// Volume over rms-edge cubed (`1 / (6 sqrt 2)` for the regular tetrahedron, 0 for any degenerate shape).
+fn vol_q_pts(p: &[Vec3; 4]) -> f64 {
+    let vol = dot(cross(sub(p[1], p[0]), sub(p[2], p[0])), sub(p[3], p[0])) / 6.0;
+    let mut s2 = 0.0;
+    for i in 0..4 {
+        for j in i + 1..4 {
+            let d = sub(p[i], p[j]);
+            s2 += dot(d, d);
+        }
+    }
+    let l = (s2 / 6.0).sqrt();
+    vol / (l * l * l)
+}
+
+/// Quality-pass objective: the smaller of the volume quality and the radius-edge quality, each normalised to 1 on the
+/// regular tetrahedron (volume quality `1 / (6 sqrt 2)`, circumradius over shortest edge `sqrt(6) / 4`).
+fn shape_q(p: &[Vec3; 4]) -> f64 {
+    let vq = vol_q_pts(p) * 6.0 * std::f64::consts::SQRT_2;
+    let re = circumsphere(*p).1 / shortest_edge(p);
+    vq.min(6f64.sqrt() / 4.0 / re)
+}
+
 fn sorted3(a: usize, b: usize, c: usize) -> [usize; 3] {
     let mut k = [a, b, c];
     k.sort_unstable();
@@ -752,6 +788,118 @@ impl Ctx {
             }
         }
         total
+    }
+
+    /// Quality-pass smoothing (ADR 0104): each interior vertex (not on the surface, every incident tetrahedron inside) is
+    /// moved towards the centroid of its neighbours or the volume-weighted mean of its tetrahedra's circumcentres, with
+    /// steps 1, 1/2, 1/4, 1/8. A move is kept only if every incident tetrahedron stays positively oriented (exact
+    /// `orient3d`) and the smallest incident volume quality grows. Surface vertices never move. Returns the moves made.
+    fn smooth(&mut self) -> usize {
+        let d = &mut self.d;
+        let mut on_surf = vec![false; d.pts.len()];
+        for (id, t) in self.s.tris.iter().enumerate() {
+            if self.s.alive[id] {
+                for &v in t {
+                    on_surf[v] = true;
+                }
+            }
+        }
+        let mut moves = 0;
+        for v in 4..d.pts.len() {
+            let t0 = d.vtet[v];
+            if on_surf[v] || t0 == NONE || !d.alive[t0] || !d.tets[t0].contains(&v) {
+                continue;
+            }
+            let star = d.tets_around(v);
+            if star.iter().any(|&t| d.inside[t] != 1) {
+                continue;
+            }
+            let q_at = |d: &Del, p: Vec3| -> Option<f64> {
+                let mut q = f64::INFINITY;
+                for &t in &star {
+                    let mut x = d.tp(t);
+                    x[d.tets[t].iter().position(|&w| w == v)?] = p;
+                    if orient3d(x[0], x[1], x[2], x[3]) <= 0 {
+                        return None;
+                    }
+                    q = q.min(shape_q(&x));
+                }
+                Some(q)
+            };
+            let p0 = d.pts[v];
+            let q0 = match q_at(d, p0) {
+                Some(q) => q,
+                None => continue,
+            };
+            let mut nbrs: Vec<usize> = star.iter().flat_map(|&t| d.tets[t]).filter(|&w| w != v).collect();
+            nbrs.sort_unstable();
+            nbrs.dedup();
+            let mut cen = [0.0; 3];
+            for &w in &nbrs {
+                cen = add(cen, d.pts[w]);
+            }
+            cen = scale(cen, 1.0 / nbrs.len() as f64);
+            let (mut odt, mut wsum) = ([0.0; 3], 0.0);
+            for &t in &star {
+                let x = d.tp(t);
+                let w = dot(cross(sub(x[1], x[0]), sub(x[2], x[0])), sub(x[3], x[0])).abs();
+                odt = add(odt, scale(circumsphere(x).0, w));
+                wsum += w;
+            }
+            let mut best = (q0 * (1.0 + 1e-6), None);
+            for target in [cen, scale(odt, 1.0 / wsum)] {
+                if !target.iter().all(|x| x.is_finite()) {
+                    continue;
+                }
+                for a in [1.0, 0.5, 0.25, 0.125] {
+                    let p = add(p0, scale(sub(target, p0), a));
+                    if let Some(q) = q_at(d, p) {
+                        if q > best.0 {
+                            best = (q, Some(p));
+                        }
+                    }
+                }
+            }
+            if let (_, Some(p)) = best {
+                d.pts[v] = p;
+                moves += 1;
+            }
+        }
+        moves
+    }
+
+    /// Quality-pass refinement (ADR 0104): insert the circumcentre of each inside tetrahedron that [`is_bad`] with a
+    /// cavity constrained to the inside that never crosses a surface face. Skipped when the circumcentre is not inside,
+    /// the constrained cavity cannot be made star-shaped or does not contain the tetrahedron. Returns the points inserted.
+    fn refine_constrained(&mut self, opt: &TetOptions) -> Result<usize> {
+        let bad: Vec<usize> = (0..self.d.tets.len())
+            .filter(|&t| self.d.alive[t] && self.d.inside[t] == 1 && is_bad(&self.d.tp(t), opt))
+            .collect();
+        let mut n = 0;
+        for t in bad {
+            if !self.d.alive[t] || self.d.inside[t] != 1 || !is_bad(&self.d.tp(t), opt) {
+                continue;
+            }
+            let (c, _) = circumsphere(self.d.tp(t));
+            if !c.iter().all(|x| x.is_finite()) {
+                continue;
+            }
+            let loc = match self.d.locate(c) {
+                Some(l) if self.d.inside[l] == 1 => l,
+                _ => continue,
+            };
+            let cav = match self.d.cavity_in(c, loc, Some(&self.s.faces)) {
+                Ok(cv) if cv.tets.contains(&t) => cv,
+                _ => continue,
+            };
+            if self.rep.steiner_surface + self.rep.steiner_interior >= self.budget {
+                return merr("Steiner point budget exhausted during the quality pass");
+            }
+            self.d.commit(c, &cav, 1);
+            self.rep.steiner_interior += 1;
+            n += 1;
+        }
+        Ok(n)
     }
 
     /// Flat tetrahedra lying against the surface (two surface faces sharing an edge, volume quality below
@@ -972,6 +1120,15 @@ pub fn tetrahedralize(surface: &TriSurface, opt: &TetOptions) -> Result<TetMesh>
     }
     if ctx.dirty {
         ctx.classify()?;
+    }
+    for _ in 0..opt.quality_sweeps {
+        let r = ctx.refine_constrained(opt)?;
+        let (m, f) = (ctx.smooth(), ctx.improve(0.06));
+        ctx.rep.moves += m;
+        ctx.rep.flips += f;
+        if r + m + f == 0 {
+            break;
+        }
     }
     // compact
     let d = &ctx.d;
