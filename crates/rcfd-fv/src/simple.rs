@@ -524,6 +524,11 @@ pub struct SimpleSolver {
     /// fixed point; the reconstruction carries only the pressure change the face fluxes carry, which removes the period-two pressure mode of the
     /// outer iteration on strongly non-orthogonal meshes. `false` (default) leaves the solver unchanged.
     pub reconstructed_correction: bool,
+    /// SIMPLEC flux compensation `(rAtU - rAU) snGrad(p_old) |S|` on the boundary faces whose flux the pressure sets (fixed or
+    /// mixed pressure, and periodic seams; ADR 0102), as internal faces get it. Without it a converged boundary flux carries `rAtU`
+    /// where internal faces carry `rAU`, and the first iteration after a boundary pressure change puts `(rAtU - rAU) grad(p_old)`
+    /// into the cell velocity next to the boundary uncompensated. `false` (default) leaves the solver unchanged.
+    pub simplec_boundary_compensation: bool,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -614,6 +619,7 @@ impl SimpleSolver {
             periodic_gradient_partner: false,
             linear_upwind_limiter: None,
             reconstructed_correction: false,
+            simplec_boundary_compensation: false,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -988,6 +994,12 @@ impl SimpleSolver {
                     phi_hby_a[f] += corr[f];
                 }
             }
+            if self.simplec_boundary_compensation {
+                let corr = self.simplec_boundary_flux_correction(&r_au, &r_atu, &pbc);
+                for f in n_int..mesh.n_faces() {
+                    phi_hby_a[f] += corr[f];
+                }
+            }
         }
         if let Some(j) = &self.face_jump {
             // jump faces: phi (1 + G K) = phiHbyA + G R_explicit - G snGrad(p) with G = gamma_p lap, the same face
@@ -1228,6 +1240,32 @@ impl SimpleSolver {
                 0.0
             };
             out[f] = dr * g.lap_coeff[f] * (p[nb] - p[o] - jump);
+        }
+        out
+    }
+
+    /// Boundary part of the SIMPLEC flux compensation (ADR 0102): `(rAtU - rAU)_f snGrad(p_old) |S|` with the boundary forms of
+    /// [`corrected_flux`] (owner value and the pressure condition's gradient; the distance-weighted pair mean and the partner-cell
+    /// difference on periodic faces), so that `rAtU_f - (rAtU - rAU)_f = rAU_f` on every face whose flux the pressure sets. Zero on
+    /// fixed-velocity faces.
+    fn simplec_boundary_flux_correction(&self, r_au: &[f64], r_atu: &[f64], pbc: &PressureBc) -> Vec<f64> {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let (own, sf, n_int) = (mesh.owner(), mesh.face_area_vectors(), g.n_internal);
+        let dr: Vec<f64> = r_atu.iter().zip(r_au).map(|(a, b)| a - b).collect();
+        let dr_f = crate::pressure::coupled_gamma(g, pbc, &face_interpolate(g, &dr));
+        let p = &self.p.values;
+        let mut out = vec![0.0; mesh.n_faces()];
+        for f in n_int..mesh.n_faces() {
+            let i = f - n_int;
+            if g.empty[f] || pbc.fixed_u[i] {
+                continue;
+            }
+            let sn = match pbc.coupled[i] {
+                Some(q) => (p[own[q]] - p[own[f]]) / (g.dn[i] + g.dn[q - n_int]),
+                None => pbc.coeffs[i].gradient(p[own[f]]),
+            };
+            out[f] = dr_f[f] * vec3::norm(sf[f]) * sn;
         }
         out
     }

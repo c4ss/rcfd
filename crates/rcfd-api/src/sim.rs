@@ -1428,6 +1428,8 @@ impl Simulation {
             }
             // ADR 0084 (opt-in): cell velocity correction reconstructed from the face flux correction
             solver.reconstructed_correction = get_s(case, "solver.velocity_correction") == "face_flux";
+            // ADR 0102 (opt-in): SIMPLEC flux compensation on fixed-pressure and periodic boundary faces
+            solver.simplec_boundary_compensation = get_b(case, "solver.simplec_boundary_compensation");
             let bf = get_v(case, "physics.body_force", [0.0; 3]);
             if vec3::norm(bf) > 0.0 {
                 let b = BodyForce::uniform(&geom, bf);
@@ -1545,6 +1547,12 @@ impl Simulation {
             return Err(diag(
                 "solver.velocity_correction",
                 "face_flux applies only to the steady incompressible solver (solver.algorithm = \"simple\" or \"simplec\", constant density)",
+            ));
+        }
+        if get_b(case, "solver.simplec_boundary_compensation") && !matches!(engine, Engine::Steady(_)) {
+            return Err(diag(
+                "solver.simplec_boundary_compensation",
+                "the boundary compensation applies only to the steady incompressible solver (solver.algorithm = \"simplec\", constant density)",
             ));
         }
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
