@@ -868,9 +868,10 @@ only. The module may import nothing. The ABI, limits, scope and failure behaviou
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `type` | `box` | `box`, `expression`, `boundary_adjacent`, `cell_zone` or `combine` |
+| `type` | `box` | `box`, `expression`, `field`, `boundary_adjacent`, `cell_zone` or `combine` |
 | `box_min`, `box_max` | none | corners of the box (`box_max` above `box_min` in every component) |
 | `expression`, `above`, `below` | none, -1e300, 1e300 | expression of the cell centre x, y, z (lengths with units); selects `above <= value <= below` (SI, inclusive) |
+| `field`, `above`, `below` | `velocity_magnitude`, -1e300, 1e300 | `field` (ADR 0095): selects `above <= value <= below` of the initial `velocity_magnitude`, `ux`, `uy`, `uz`, `pressure` (kinematic) or `temperature`, taken after the uniform values, velocity expressions and the user-function initialise hook and before `initial.patches`; evaluated once, not during the run; needs `initial.method = "uniform"`; usable only by `sources.<n>` and `initial.patches` of velocity, pressure or temperature (other uses give a located error at `registers.<n>.type`) |
 | `patches`, `layers` | none, 1 | `boundary_adjacent`: patches and number of cell layers |
 | `cell_zone` | none | mesh cell zone name |
 | `operation`, `operands` | `union`, none | `combine`: union, intersection, difference or complement of the named registers |

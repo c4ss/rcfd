@@ -1,7 +1,8 @@
 //! Cell registers in the settings tree (F-124, ADR 0011 section 3): `registers.<name>` defines a named set of cells
 //! (box, expression of the cell centre, boundary adjacency, mesh cell zone, or a combination of other registers);
 //! `sources.<n>.zone = "register"` restricts a source to a register and `initial.patches.<n>` overwrites an initial
-//! field inside one. The set operations are in `rcfd_post::registers`.
+//! field inside one. A `field` register thresholds an initial field (see [`InitialFields`]). The set operations are in
+//! `rcfd_post::registers`.
 
 use crate::case::{Case, Diagnostic};
 use crate::exprs;
@@ -15,7 +16,34 @@ use std::collections::BTreeMap;
 /// Value of `above` / `below` meaning "unbounded".
 pub const UNBOUNDED: f64 = 1e300;
 
-const TYPES: [&str; 5] = ["box", "expression", "boundary_adjacent", "cell_zone", "combine"];
+const TYPES: [&str; 6] = [
+    "box",
+    "expression",
+    "field",
+    "boundary_adjacent",
+    "cell_zone",
+    "combine",
+];
+const FIELDS: [&str; 6] = ["velocity_magnitude", "ux", "uy", "uz", "pressure", "temperature"];
+
+/// The initial fields a `field` register thresholds: taken in `Simulation::new` after the uniform values, the velocity
+/// expressions and the user-function initialise hook, before `initial.patches` (ADR 0095). Pressure is kinematic.
+#[derive(Clone, Debug)]
+pub struct InitialFields {
+    /// Cell velocity.
+    pub u: Vec<Vec3>,
+    /// Cell kinematic pressure.
+    pub p: Vec<f64>,
+    /// Cell temperature.
+    pub t: Vec<f64>,
+}
+
+/// True when some register of the case is a `field` register (the initial fields are then kept for them).
+pub fn uses_fields(case: &Case) -> bool {
+    names(case)
+        .iter()
+        .any(|n| gs(case, &format!("registers.{n}.type")) == "field")
+}
 const OPS: [&str; 4] = ["union", "intersection", "difference", "complement"];
 
 /// Schema of the `registers` collection.
@@ -25,7 +53,7 @@ pub fn schema() -> Schema {
             .doc("A named set of cells (a register) for source restriction, initial patches and post-processing")
             .field(
                 "type",
-                Schema::enumeration("box", &TYPES).doc("box: cells whose centres lie in [box_min, box_max] (inclusive); expression: cells where above <= expression(x, y, z) <= below at the cell centre; boundary_adjacent: cells that own a face on the listed patches, grown to `layers` face-neighbour layers; cell_zone: a named mesh cell zone; combine: set algebra on other registers"),
+                Schema::enumeration("box", &TYPES).doc("box: cells whose centres lie in [box_min, box_max] (inclusive); expression: cells where above <= expression(x, y, z) <= below at the cell centre; field: cells where above <= the initial value of `field` <= below (initial fields after uniform values, velocity expressions and the initialise hook, before initial patches; evaluated once, not during the run; usable by sources and initial patches of velocity, pressure, temperature only); boundary_adjacent: cells that own a face on the listed patches, grown to `layers` face-neighbour layers; cell_zone: a named mesh cell zone; combine: set algebra on other registers"),
             )
             .field("box_min", Schema::list(Schema::float(0.0)).doc("Lower corner [m] of the box"))
             .field("box_max", Schema::list(Schema::float(0.0)).doc("Upper corner [m] of the box (every component must exceed box_min)"))
@@ -34,12 +62,16 @@ pub fn schema() -> Schema {
                 Schema::string("").doc("Expression of the cell centre x, y, z (and the physical constants / named expressions of the case); lengths need units, for example (x - 0.5 [m])^2; the SI value is compared with above and below"),
             )
             .field(
+                "field",
+                Schema::enumeration("velocity_magnitude", &FIELDS).doc("field: the initial field to threshold (pressure is the kinematic pressure)"),
+            )
+            .field(
                 "above",
-                Schema::float(-UNBOUNDED).doc("Lower limit (inclusive) of the expression value; -1e300 or below means unbounded"),
+                Schema::float(-UNBOUNDED).doc("Lower limit (inclusive) of the expression or field value; -1e300 or below means unbounded"),
             )
             .field(
                 "below",
-                Schema::float(UNBOUNDED).doc("Upper limit (inclusive) of the expression value; 1e300 or above means unbounded"),
+                Schema::float(UNBOUNDED).doc("Upper limit (inclusive) of the expression or field value; 1e300 or above means unbounded"),
             )
             .field(
                 "patches",
@@ -71,7 +103,7 @@ pub fn schema() -> Schema {
                 Schema::enumeration("faces", &["faces", "points"]).doc("Adjacency used by grow and shrink: faces (cells sharing a face) or points (cells sharing a vertex)"),
             ),
     )
-    .doc("Cell registers: named regions defined by a box, an expression, boundary adjacency, a cell zone or set algebra (ADR 0011)")
+    .doc("Cell registers: named regions defined by a box, an expression, an initial-field threshold, boundary adjacency, a cell zone or set algebra (ADR 0011)")
 }
 
 /// Schema of `initial.patches`.
@@ -193,6 +225,22 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                     ));
                 }
             }
+            "field" => {
+                let (lo, hi) = (gf(case, &p("above")), gf(case, &p("below")));
+                if lo > hi {
+                    out.push(d(
+                        p("above"),
+                        format!("above ({lo}) exceeds below ({hi}): the register is always empty"),
+                    ));
+                }
+                let method = gs(case, "initial.method");
+                if !method.is_empty() && method != "uniform" {
+                    out.push(d(
+                        p("type"),
+                        format!("a field register thresholds the initial fields, which initial.method = \"{method}\" computes only after the registers are built; use initial.method = \"uniform\""),
+                    ));
+                }
+            }
             "boundary_adjacent" => {
                 if strings(case, &p("patches")).is_empty() {
                     out.push(d(p("patches"), "boundary_adjacent needs at least one patch".into()));
@@ -305,12 +353,19 @@ fn compile_expression(case: &Case, src: &str) -> Result<rcfd_core::expr::Compile
     ex.compile(&ctx).map_err(|e| format!("{e}\n{}", e.render(src)))
 }
 
-/// Build the register `name` on `mesh`. Errors are located at the setting that is wrong.
-pub fn build(case: &Case, name: &str, mesh: &Mesh) -> Result<Register, Diagnostic> {
-    build_rec(case, name, mesh, &mut Vec::new())
+/// Build the register `name` on `mesh`. `fields` are the initial fields for `field` registers (`None` where the caller has
+/// none: a `field` register then gives a located error). Errors are located at the setting that is wrong.
+pub fn build(case: &Case, name: &str, mesh: &Mesh, fields: Option<&InitialFields>) -> Result<Register, Diagnostic> {
+    build_rec(case, name, mesh, fields, &mut Vec::new())
 }
 
-fn build_rec(case: &Case, name: &str, mesh: &Mesh, stack: &mut Vec<String>) -> Result<Register, Diagnostic> {
+fn build_rec(
+    case: &Case,
+    name: &str,
+    mesh: &Mesh,
+    fields: Option<&InitialFields>,
+    stack: &mut Vec<String>,
+) -> Result<Register, Diagnostic> {
     let p = |f: &str| format!("registers.{name}.{f}");
     if stack.iter().any(|s| s == name) {
         return Err(d(
@@ -363,6 +418,28 @@ fn build_rec(case: &Case, name: &str, mesh: &Mesh, stack: &mut Vec<String>) -> R
             }
             Register::threshold(mesh, &values, lo, hi).map_err(loc)?
         }
+        "field" => {
+            let Some(f) = fields else {
+                return Err(d(
+                    p("type"),
+                    "a field register is evaluated on the initial fields and can only be used by sources.<n> (zone = \"register\") and initial.patches of velocity, pressure or temperature".into(),
+                ));
+            };
+            let values: Vec<f64> = match gs(case, &p("field")).as_str() {
+                "ux" => f.u.iter().map(|v| v[0]).collect(),
+                "uy" => f.u.iter().map(|v| v[1]).collect(),
+                "uz" => f.u.iter().map(|v| v[2]).collect(),
+                "pressure" => f.p.clone(),
+                "temperature" => f.t.clone(),
+                _ => f.u.iter().map(|v| rcfd_core::vec3::norm(*v)).collect(),
+            };
+            let (lo, hi) = (gf(case, &p("above")), gf(case, &p("below")));
+            let (lo, hi) = (
+                if lo <= -UNBOUNDED { f64::NEG_INFINITY } else { lo },
+                if hi >= UNBOUNDED { f64::INFINITY } else { hi },
+            );
+            Register::threshold(mesh, &values, lo, hi).map_err(loc)?
+        }
         "boundary_adjacent" => {
             let patches = strings(case, &p("patches"));
             let refs: Vec<&str> = patches.iter().map(String::as_str).collect();
@@ -385,7 +462,7 @@ fn build_rec(case: &Case, name: &str, mesh: &Mesh, stack: &mut Vec<String>) -> R
                         format!("unknown register '{o}' (registers: {})", known.join(", ")),
                     ));
                 }
-                regs.push(build_rec(case, o, mesh, stack)?);
+                regs.push(build_rec(case, o, mesh, fields, stack)?);
             }
             stack.pop();
             let Some(first) = regs.first() else {
@@ -437,11 +514,15 @@ fn build_rec(case: &Case, name: &str, mesh: &Mesh, stack: &mut Vec<String>) -> R
 }
 
 /// Every register of the case.
-pub fn build_all(case: &Case, mesh: &Mesh) -> Result<BTreeMap<String, Register>, Vec<Diagnostic>> {
+pub fn build_all(
+    case: &Case,
+    mesh: &Mesh,
+    fields: Option<&InitialFields>,
+) -> Result<BTreeMap<String, Register>, Vec<Diagnostic>> {
     let mut out = BTreeMap::new();
     let mut errs = Vec::new();
     for n in names(case) {
-        match build(case, &n, mesh) {
+        match build(case, &n, mesh, fields) {
             Ok(r) => {
                 out.insert(n, r);
             }
@@ -457,7 +538,12 @@ pub fn build_all(case: &Case, mesh: &Mesh) -> Result<BTreeMap<String, Register>,
 
 /// Cell flags of the register named by the setting `register_path` (used for `sources.<n>.zone = "register"`);
 /// the diagnostic is located at that setting.
-pub fn zone_from_setting(case: &Case, register_path: &str, mesh: &Mesh) -> Result<Vec<bool>, Diagnostic> {
+pub fn zone_from_setting(
+    case: &Case,
+    register_path: &str,
+    mesh: &Mesh,
+    fields: Option<&InitialFields>,
+) -> Result<Vec<bool>, Diagnostic> {
     let name = gs(case, register_path);
     let known = names(case);
     if !known.contains(&name) {
@@ -466,23 +552,25 @@ pub fn zone_from_setting(case: &Case, register_path: &str, mesh: &Mesh) -> Resul
             format!("unknown register '{name}' (registers: {})", known.join(", ")),
         ));
     }
-    build(case, &name, mesh).map(|r| r.mask().to_vec())
+    build(case, &name, mesh, fields).map(|r| r.mask().to_vec())
 }
 
-/// Check every register against the mesh and apply `initial.patches.<n>` (in name order) to the initial velocity, pressure and temperature arrays.
+/// Check every register against the mesh and apply `initial.patches.<n>` (in name order) to the initial velocity, pressure and
+/// temperature arrays; `fields` are the unpatched initial fields for `field` registers.
 pub fn apply_initial_patches(
     case: &Case,
     mesh: &Mesh,
+    fields: Option<&InitialFields>,
     u: &mut [Vec3],
     p: &mut [f64],
     t: &mut [f64],
 ) -> Vec<Diagnostic> {
     // every register is built once so that errors in unused ones are reported too
-    let mut errs = build_all(case, mesh).err().unwrap_or_default();
+    let mut errs = build_all(case, mesh, fields).err().unwrap_or_default();
     for n in case.tree.names("initial.patches").unwrap_or_default() {
         let path = |f: &str| format!("initial.patches.{n}.{f}");
         let rname = gs(case, &path("register"));
-        let reg = match zone_from_setting(case, &path("register"), mesh) {
+        let reg = match zone_from_setting(case, &path("register"), mesh, fields) {
             Ok(m) => Register::from_mask(m),
             Err(e) => {
                 errs.push(e);

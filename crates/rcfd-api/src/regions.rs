@@ -97,7 +97,7 @@ pub fn laminar_cells(case: &Case, geom: &FvGeometry) -> Result<Option<Vec<bool>>
         if gs(case, &format!("regions.{n}.turbulence")) != "laminar" {
             continue;
         }
-        let zone = crate::sources::zone_cells(case, &format!("regions.{n}"), geom)?;
+        let zone = crate::sources::zone_cells(case, &format!("regions.{n}"), geom, None)?;
         let m = mask.get_or_insert_with(|| vec![false; zone.len()]);
         for (a, b) in m.iter_mut().zip(&zone) {
             *a |= *b;

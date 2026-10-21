@@ -1,4 +1,5 @@
-//! ADR 0025 checks M1-M6 (F-144): log mapping, decimation, stream ingest, polling without blocking, large frames.
+//! ADR 0025 checks M1-M6 (F-144): log mapping, decimation, stream ingest, polling without blocking, large frames. M7 (ADR 0095):
+//! the plot series grows and frames draw while a cavity run is in progress.
 
 use rcfd_gui::assistant_setup::AssistantSetup;
 use rcfd_gui::controller::Controller;
@@ -211,6 +212,70 @@ fn m5_polling_a_running_case_does_not_block_and_loses_no_iteration() {
     let s = &c.monitors.series["res_u"];
     assert_eq!(s.x.len() as u64, c.status.iteration);
     assert!(s.x.windows(2).all(|w| w[1] > w[0]));
+}
+
+/// M7 (ADR 0095, F-144): a long cavity run driven only by headless egui frames of the app with the Monitors panel open (the
+/// frame's own 250 ms poll); while the state is `running` the res_u series must grow strictly over at least three polls and every
+/// frame must finish within 1 s. The run is stopped once the evidence is collected.
+#[test]
+fn m7_plot_series_grows_and_frames_draw_while_running() {
+    let dir = std::env::temp_dir().join("rcfd-gui-w39d-m7");
+    let mut c = Controller::new(None, dir);
+    c.new_from_template().unwrap();
+    assert!(c.edit_text("solver.max_iterations", "200000"));
+    assert!(c.edit_text("solver.tolerance_u", "1e-14"));
+    assert!(c.edit_text("solver.tolerance_p", "1e-14"));
+    assert!(c.run_start());
+    let mut app = RcfdApp::new(AppState::new(c, AssistantSetup::in_memory(), Theme::Light));
+    layout::float(&mut app.dock, Panel::Monitors);
+    let ctx = egui::Context::default();
+    let mut lens: Vec<usize> = Vec::new();
+    let (mut frames_running, mut worst, mut shapes_min) = (0usize, Duration::ZERO, usize::MAX);
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(60) {
+        std::thread::sleep(Duration::from_millis(20));
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
+            ..Default::default()
+        };
+        let t = Instant::now();
+        let out = ctx.run(input, |ctx| app.ui(ctx));
+        let dt = t.elapsed();
+        let ctrl = &app.st.ctrl;
+        if !ctrl.status.is_running() {
+            continue;
+        }
+        frames_running += 1;
+        worst = worst.max(dt);
+        shapes_min = shapes_min.min(out.shapes.len());
+        let n = ctrl.monitors.series.get("res_u").map_or(0, |s| s.x.len());
+        if lens.last() != Some(&n) {
+            lens.push(n);
+        }
+        if lens.len() >= 5 {
+            break;
+        }
+    }
+    let final_state = app.st.ctrl.status.state.clone();
+    app.st.ctrl.run_stop();
+    app.st.ctrl.wait_idle(60_000);
+    eprintln!(
+        "m7: series lengths while running {lens:?}, frames in running state {frames_running}, worst frame {worst:?}, min shapes {shapes_min}, state at end of loop {final_state}"
+    );
+    // the length before the first poll is 0 and does not count
+    let grown: Vec<usize> = lens.into_iter().filter(|&n| n > 0).collect();
+    assert!(
+        grown.len() >= 4,
+        "fewer than four distinct series lengths while running: {grown:?}"
+    );
+    assert!(
+        grown.windows(2).all(|w| w[1] > w[0]),
+        "series did not grow strictly: {grown:?}"
+    );
+    assert!(*grown.last().unwrap() < 200_000, "the run was not mid-way");
+    assert!(frames_running >= 3, "{frames_running} frames in state running");
+    assert!(worst < Duration::from_secs(1), "frame took {worst:?}");
+    assert!(shapes_min > 0, "a running frame drew nothing");
 }
 
 #[test]

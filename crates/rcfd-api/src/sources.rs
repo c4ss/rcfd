@@ -317,8 +317,14 @@ pub(crate) fn check_zone(case: &Case, prefix: &str) -> Vec<Diagnostic> {
     out
 }
 
-/// Cells of the zone under `prefix` (`all`, `box`, `cell_zone`); a located diagnostic when it is empty or unknown.
-pub(crate) fn zone_cells(case: &Case, prefix: &str, geom: &FvGeometry) -> Result<Vec<bool>, Diagnostic> {
+/// Cells of the zone under `prefix` (`all`, `box`, `cell_zone`, `register`); a located diagnostic when it is empty or unknown.
+/// `fields` are the initial fields for `field` registers (`None`: such a register gives a located error).
+pub(crate) fn zone_cells(
+    case: &Case,
+    prefix: &str,
+    geom: &FvGeometry,
+    fields: Option<&crate::registers::InitialFields>,
+) -> Result<Vec<bool>, Diagnostic> {
     let p = |f: &str| format!("{prefix}.{f}");
     let n_cells = geom.n_cells();
     let cc = geom.mesh.cell_centres();
@@ -330,7 +336,7 @@ pub(crate) fn zone_cells(case: &Case, prefix: &str, geom: &FvGeometry) -> Result
                 .map(|c| (0..3).all(|k| c[k] >= lo[k] && c[k] <= hi[k]))
                 .collect()
         }
-        "register" => crate::registers::zone_from_setting(case, &p("register"), &geom.mesh)?,
+        "register" => crate::registers::zone_from_setting(case, &p("register"), &geom.mesh, fields)?,
         "cell_zone" => {
             let name = gs(case, &p("cell_zone"));
             match geom.mesh.cell_zone(&name) {
@@ -399,8 +405,12 @@ pub struct Sources {
 }
 
 impl Sources {
-    /// Build from the case; `None` when no source is configured.
-    pub fn from_case(case: &Case, geom: &FvGeometry) -> Result<Option<Sources>, Vec<Diagnostic>> {
+    /// Build from the case; `None` when no source is configured. `fields` are the initial fields for `field` registers.
+    pub fn from_case(
+        case: &Case,
+        geom: &FvGeometry,
+        fields: Option<&crate::registers::InitialFields>,
+    ) -> Result<Option<Sources>, Vec<Diagnostic>> {
         if !enabled(case) {
             return Ok(None);
         }
@@ -408,7 +418,7 @@ impl Sources {
         let mut errs = Vec::new();
         for n in names(case) {
             let p = |f: &str| format!("sources.{n}.{f}");
-            let zone = match zone_cells(case, &format!("sources.{n}"), geom) {
+            let zone = match zone_cells(case, &format!("sources.{n}"), geom, fields) {
                 Ok(z) => z,
                 Err(d) => {
                     errs.push(d);

@@ -902,9 +902,16 @@ impl Simulation {
                 });
             }
         }
+        // unpatched initial fields for `field` registers (ADR 0095), kept only when a case has one
+        let init_fields = crate::registers::uses_fields(case).then(|| crate::registers::InitialFields {
+            u: u.values.clone(),
+            p: p.values.clone(),
+            t: temp.values.clone(),
+        });
         errs.extend(crate::registers::apply_initial_patches(
             case,
             &geom.mesh,
+            init_fields.as_ref(),
             &mut u.values,
             &mut p.values,
             &mut temp.values,
@@ -1710,7 +1717,7 @@ impl Simulation {
         let sources = if compressible || vdens {
             None
         } else {
-            Sources::from_case(case, &geom)?
+            Sources::from_case(case, &geom, init_fields.as_ref())?
         };
         let components = if compressible || vdens {
             None
@@ -1930,7 +1937,7 @@ impl Simulation {
                 );
                 continue;
             };
-            let mask = match crate::registers::zone_from_setting(case, &path("register"), &self.geom.mesh) {
+            let mask = match crate::registers::zone_from_setting(case, &path("register"), &self.geom.mesh, None) {
                 Ok(m) => m,
                 Err(e) => {
                     errs.push(e);
