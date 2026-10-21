@@ -120,3 +120,17 @@ relation, which is outside the acceptance.
 ## Proposals
 
 None. No acceptance text needs rewording for these three items.
+
+## Amendment 1 (written after the first registered X7 run, before any further vent run)
+
+What happened: the registered X7 run passed at u = 0.5 (relative error 2.85e-12) and u = 1 (1.36e-13), then gave NaN at u = 2 and stopped,
+so the reversed flows did not run. The smoke runs had tried pseudo-time only at u = 1. That registered test stays, ignored, as
+`x7_vent_at_fixed_pseudo_dt_known_miss` with its limit unchanged.
+
+Hypothesis: the pseudo-time step 0.02 is a Courant number u dt / dx of 1 at u = 1 (dx = 0.02) but 2 at u = 2, which is too large for the
+forward vent. In the frictionless plug flow, the case at speed u with step dt/|u| is the u = 1 case rescaled (pressure scales with u^2, time
+with 1/|u|), so a fixed Courant number of 1 is the same set-up at every flow rate.
+
+Corrected set-up (new test `x7_vent_reproduces_its_quadratic_loss_law`): `pseudo_dt = 0.02 / |u|`, so the Courant number is 1 for all six
+flows. Everything else is unchanged: geometry, inlet, K = 2.5, the run helper and the 1e-6 limit with the finite check. If u = 2 still gives
+NaN at Courant 1, the hypothesis is falsified, the corrected test also becomes a known miss, and F-217 stays partial.
