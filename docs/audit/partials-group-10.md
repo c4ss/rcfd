@@ -26,7 +26,7 @@ three-mesh flat plate `validation_w33c_sst_plate.rs` (about 30 minutes for the f
 | F-130 | Radiation extensions | PARTIAL (1 of 2 clauses) | ran rcfd-api `radiation` 5/5 (R1 worst 2.6e-9, R2 0.410 %, R3, R4, R5) | non-grey band model and tabulated emissivity: nothing built; clause 1 is met only in the P1 sense (see below) | M-L | missing reference data (a verifiable WSGG coefficient set or emissivity table) | no | yes (which emissivity table) |
 | F-200 | Boundary-condition catalogue | PARTIAL | ran rcfd-fv `bc_catalogue` 6/6, rcfd-api `bc_catalogue` 22 pass, 8 known misses fail as recorded (388 s) | "Hagen-Poiseuille pipe" and "swirling pipe" are annular ducts (A3 0.398 %, E2 within 3 %); no solid circular pipe with a mass-flow inlet; E2 and C2/C3/D1/D2 pass only under the post-hoc settled-field criterion | S-M | none (a solid pipe mesh `pipe_mesh` / `pipe_sweep` now exists; its own Poiseuille check needs non-orthogonal correctors) | yes | yes (accept the annulus as the pipe, or require a solid pipe) |
 | F-210 | Fractional-step time advancement | DONE | ran rcfd-fv `fractional_step` 14 pass, 2 known misses fail as recorded; rcfd-api `fractional_tree` 4/4 | none as written (Taylor-Green KE error 2.30e-3 vs 0.02; Ghia u 3.0e-3, v 9.0e-3 vs 0.02) | - | - | - | no (a stale ignore to lift, below) |
-| F-222 | Pollutant post-processing (NOx, soot) | PARTIAL (0 of 2 clauses) | ran rcfd-reactor `slices` k10: closed form and corrected quasi-steady check pass (6.8e-7), registered set-up known miss fails as recorded; read ADR 0027 | no flame, no comparison with published Zeldovich data, no piloted-jet NO trend | L | F-054 (no variable-density flame); missing reference data (flame NO data, TNF piloted flame); UNVERIFIED rate constants | no | yes (choose the flame datasets) |
+| F-222 | Pollutant post-processing (NOx, soot) | PARTIAL (0 of 2 clauses) | ran rcfd-reactor `slices` k10: closed form and corrected quasi-steady check pass (6.8e-7), registered set-up known miss fails as recorded; read ADR 0027 | no flame, no comparison with published Zeldovich data, no piloted-jet NO trend | L | F-054 (no variable-density flame); missing reference data (flame NO data; a TNF-workshop piloted flame, named from memory, UNVERIFIED); UNVERIFIED rate constants | no | yes (choose the flame datasets) |
 | F-232 | Surface diagnostics, repair, wrapping | PARTIAL (1 of 3 clauses) | ran rcfd-mesh `surface_diag` 6 pass, the superseded `s3_repair_outcomes` fails as recorded | no public defective surface set; no self-intersection or spike detection; no shrink-wrap | L | missing reference data (public defective and leaky models) | no | yes (choose the public set) |
 | F-243 | Acoustic boundaries and sources | PARTIAL (0 of 2 clauses) | read ADR 0066 and the source; grep for impedance or quiet boundaries (none in the acoustics scope); F-062's `b_no_spurious_reflection` re-run (above) | impedance tube not built; no quiet-boundary test with the 1 % limit | M (impedance); S (quiet boundary via the F-062 sigma = 0 outlet) | F-062 boundary exists; none for the S part | yes for the quiet boundary, no for both | no |
 
@@ -56,15 +56,20 @@ passes in 136934 steps: Mach 5.38e-3, p/p0 5.73e-4, T/T0 1.81e-4, mass -4.94e-3,
 "no spurious reflection test" clause is met as written. Caveat: the same test prints 0.0000 for the legacy `Fixed` (ambient state) and
 `Extrapolate` conditions too. A 1-D normal-incidence pulse through a Riemann-solver boundary does not separate a good non-reflecting
 treatment from plain extrapolation. An oblique-wave or 2-D vortex test would. The NACA0012 transonic clause is open. The vendored TMR
-NACA0012 data is low-speed only, and no transonic reference with a scatter band is chosen (AGARD AR-138 or AR-211, or the
-Vassberg-Jameson Euler values). The acceptance needs a named reference before it is measurable.
+NACA0012 data is low-speed only, and no transonic reference with a scatter band is chosen (candidates named from memory, UNVERIFIED:
+AGARD AR-138 or AR-211, or the Vassberg-Jameson Euler values). The acceptance needs a named reference before it is measurable.
 
 **F-101 (DONE, see the numbers).** The acceptance holds on the one machine with the device: the re-run at 5000211 unknowns (171^3, CG-Jacobi, tol 1e-6,
 median of 5 after a warm-up) gives 11.4x one-shot, including matrix upload and download, and 30.4x resident, against one CPU thread. The
 recorded runs gave 9.7x and 15.2x. Caveats. (1) The test's numeric limit is "GPU faster than one CPU thread", not 3x, so the roadmap
 figure is measured but not asserted. Raising the assertion to 3x is S. (2) The CPU single-thread time varies with machine load (1.82 s
 here, 1.94 s and 2.84 s recorded), so the speedup is noisy, though always well above 3x. (3) The test skips without a device, so default
-CI never checks it. (4) The CG needs only 37 iterations at this tolerance, so the ratio mostly reflects SpMV and vector bandwidth. The
+CI never checks it. (4) The matrix is the pure 7-point Dirichlet Poisson operator (no diagonal shift), but the right-hand side is
+b = A x_e with a period-17 pattern for x_e, which is mostly high-frequency. That is why CG-Jacobi stops after 37 iterations, where a smooth
+pressure right-hand side would need hundreds. With more iterations the per-iteration ratio dominates (52558 us CPU against 1315 us GPU in
+docs/gpu.md, about 40x) and the matrix upload is spread over more work, so the speedup should rise, not fall (inferred, not measured).
+(5) The CPU's best path is AMG. In the recorded docs/gpu.md table the one-shot GPU CG-Jacobi is 90x faster than one-thread AMG-CG
+including set-up (18.1 s, not re-run), so the 3x holds against that baseline too. The
 title's flux assembly on the device, the multi-GPU and other-vendor work, and the SCOPE list (energy, free surface, species, turbulence,
 radiation on the device) are scope beyond the acceptance. They should become their own item if wanted.
 
@@ -79,7 +84,7 @@ scope beyond the acceptance.
 **F-130 (PARTIAL).** Clause 1 is met in a narrow sense. R1 compares P1 with the analytic P1 solution (worst 2.6e-9, limit 1e-3), which is
 a self-consistency check of the P1 discretisation. Only R2 compares with radiative transport, at one optical thickness (tau = 20, 0.410 %
 from the Milne asymptote). The Milne-to-slab mapping was re-derived in the repo, not taken from a source (docs/reference-data.md). A
-transport comparison at tau of order 1, for example the tabulated exact slab Psi of Heaslet and Warming, would need a non-P1 method such
+transport comparison at tau of order 1, for example the tabulated exact slab Psi of Heaslet and Warming (source named from memory, UNVERIFIED), would need a non-P1 method such
 as discrete ordinates (F-052), and its table is not on disk. Clause 2 (non-grey band model reproducing tabulated emissivity) has nothing
 built. It needs a verifiable WSGG or band coefficient set and the emissivity table it should reproduce, and choosing them is the user's
 call. Monte Carlo, solar load and six-flux are scope beyond the acceptance.
