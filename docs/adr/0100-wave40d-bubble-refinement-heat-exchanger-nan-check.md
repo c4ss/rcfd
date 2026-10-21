@@ -62,3 +62,47 @@ Registered checks:
 * H2 `h2_stationarity_rejects_stationary_infinity`: same with +inf in the same cell before and after.
 * H3: every non-ignored test of `heat_exchanger.rs` gives the same result as at f0168d0 (all pass), and every ignored known miss still
   fails. A test that passed before and fails now was passing on a non-finite field; that would be reported as a finding with its limit kept.
+
+## Addendum: measured values (after the runs)
+
+### Part B (one registered run, 1750 s in total, scratch tree at 56fa84c)
+
+| Grid | dt / dt_cap | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound violation | run time |
+|------|-------------|--------------|---------------|--------------------|-------|-----------------|----------|
+| 40 x 80 | 0.473 | 1.0282 (0.0531) | 0.2204 (0.0213) | 0.8500 (0.0713) | 5.5e-15 | 9.8e-14 | 30 s |
+| 80 x 160 | 0.669 | 1.0178 (0.0635) | 0.2187 (0.0230) | 0.8287 (0.0926) | 3.6e-14 | 1.3e-13 | 207 s |
+| 160 x 320 | 0.946 | 1.0124 (0.0689) | 0.2180 (0.0237) | 0.8200 (0.1013) | 1.1e-13 | 6.4e-13 | 1513 s |
+
+The 40 x 80 AMG values equal the CG values of `vof_bubble.rs` to the printed digits. The 160 x 320 grid ran (25 min); the fallback series was
+not needed.
+
+| Check | Measured | Limit | Result |
+|-------|----------|-------|--------|
+| B1 y_c(3) monotone | errors 0.0531, 0.0635, 0.0689 (growing) | decreasing | **miss** |
+| B1 V_c,max monotone | errors 0.0213, 0.0230, 0.0237 (growing) | decreasing | **miss** |
+| B2 order | e(160) / e(40) = 1.30 (y_c), 1.11 (V_c,max) | <= 0.5 | **miss** (printed values; the test stops at B1) |
+| B3 peak time | 0.1013 vs 0.0713 | e_t(160) < e_t(40) | **miss** (printed values) |
+| B4 Z1 on every grid | drift <= 1.1e-13, bound <= 6.4e-13 | 1e-12, 1e-9 | met (printed values) |
+
+The test is kept, limits unchanged, as the ignored `b1_hysing_bubble_error_decreases_under_refinement_known_miss`. It is not a set-up
+defect: the set-up is the registered one, all three grids are finite and bounded, and the solution converges, but not to the reference.
+Successive differences of y_c(3) are 0.0105 and 0.0054 (observed order 0.96); a Richardson extrapolation from these three grids gives
+y_c(3) about 1.007, against 1.0813. For V_c,max the differences are 0.0017 and 0.0007 (order 1.3) and the extrapolated value is about
+0.2175, 10 % below 0.2417. The peak also comes earlier on finer grids (0.850, 0.829, 0.820 against 0.9213). So the algebraic VOF discretisation
+converges to a bubble that rises about 10 % too slowly. The 40 x 80 pass of ADR 0049 / 0096 is the coarse-grid point of that error, not a
+grid-converged agreement. The cause is not investigated in this wave. Candidates for a later wave, not tested here: the linear-in-alpha
+mixture viscosity and density at the interface, the CSF curvature from the smoothed alpha, the interface-compression smearing, and the
+missing transposed viscous stress at the viscosity jump (listed as not delivered in the F-055 note). F-055 stays done, as the user decided.
+
+### Part H
+
+| Check | Measured | Result |
+|-------|----------|--------|
+| H1 NaN field | panics "T is not finite after 10 iterations" | pass |
+| H2 stationary +inf | panics "p is not finite after 10 iterations" | pass |
+| H3 non-ignored tests | the 7 tests x1-x7 pass, as at f0168d0; with H1 and H2, 9 of 9 | pass |
+| H3 known misses still fail | x1 registered stationarity: p change 0.423 (as before); x4 registered lossless: ux change 4.06e-8 > 1e-8 with finite fields; x7 fixed pseudo-dt: now stops at the new finiteness assert in `run` (it stopped at the finiteness assert of `x7_sweep` before) | pass |
+
+No test that passed before fails now, so no existing pass came from a non-finite field. One stale comment found: the ignore reason and the doc
+comment of `x4_registered_lossless_setup_known_miss` say "flow NaN", but at this HEAD the registered lossless X4 duct ends with finite
+fields and fails on the ux change (4.06e-8). The text is left as written (not this item); the finiteness check would have caught a NaN.
