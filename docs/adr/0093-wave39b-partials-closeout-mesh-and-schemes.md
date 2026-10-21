@@ -116,12 +116,19 @@ compressive(2) 1.9815..1.9816 and 1.9910..1.9910. Limit band [1.85, 2.3]: met.
 
 * S1 passes (closed manifold, Euler 4, 2 components, area and volume within 1e-12).
 * S2: closed manifold remeshed surface (372 triangles), 1115 cells, volume error within 1e-10, 2 patches, positive volumes,
-  `check_mesh` without errors: all pass. Minimum dihedral 1.84 deg vs the registered 3.0: MISS. The p1 run on the in-code
-  surface gave 3.34 deg. The STL surface has the same coordinates (bit exact ASCII round trip) but a different vertex
-  numbering from the welding, and the remesh and the tetrahedral refinement depend on it. I did not try other numberings: that
-  would be picking a favourable set-up.
+  `check_mesh` without errors: all pass. Minimum dihedral 1.84 deg vs the registered 3.0: MISS. I re-ran
+  `p1_pipeline_cylinder_in_box` (in-code surface, same options) after the gate: 1061 cells, minimum dihedral 3.3395 deg,
+  maximum 174.02 deg, radius-edge fraction 0.9274, 83 bad left after 4 rounds, so the wave 19B record still holds. The STL
+  surface has the same coordinates (bit exact ASCII round trip) but a different vertex numbering from the welding. The
+  difference is consistent with the remesh and the refinement depending on the numbering, but I did not isolate that cause
+  and did not try other numberings: that would be picking a favourable set-up. Note that even p1's 3.34 deg passes the
+  3.0 limit only narrowly.
 * S3: radius-edge fraction 0.936 vs 0.99: MISS (as expected; p1 gave 0.927). Maximum dihedral 176.8 deg, maximum radius-edge
   27.9, 68 bad tetrahedra left after 3 refinement rounds.
+
+`s2b` is a post-hoc subset of S2 (see the amendment) and does not count toward the verdict. Test-count delta of this ADR:
++3 passed (O1d, S1, S2b), +4 ignored (O1d smoke, S0 smoke, S2 and S3 known misses). Gate on a fresh archive of ed422fb:
+fmt and clippy clean, 1914 passed / 0 failed / 540 ignored.
 
 F-131 stays partial: the STL clause and watertightness are met; the tetrahedral quality is not. Closing it needs sliver removal
 and quality refinement in the tetrahedral mesher (F-132 scope), not more test work.
