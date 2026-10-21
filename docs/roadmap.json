@@ -485,14 +485,14 @@
   },
   {
     "id": "F-063",
-    "title": "Dynamic mesh: rigid-body motion, smoothing deformation, sliding interface (AMI)",
+    "title": "Dynamic mesh: rigid-body motion, smoothing deformation",
     "phase": 9,
     "deps": [
       "F-029"
     ],
     "status": "partial",
     "acceptance": "Oscillating cylinder and rotating toy case conserve mass; geometric conservation satisfied",
-    "note": "SCOPE (merged review): add displacement-diffusion stiffness variants and an elastic analogy, plus periodic and surface-of-revolution motion specifications; six-DoF in F-229, layering and remeshing in F-230. WAVE 20B (ADR 0033, partial): ALE foundations in the incompressible laminar PISO/PIMPLE transient path (implicit Euler): swept-volume mesh flux satisfying the geometric conservation law to round-off (1e-15), moving-wall velocity and a fixed-flux pressure condition for accelerating walls, prescribed rigid motion by expressions of time (translation plus rotation about an axis), mesh smoothing (Laplacian and inverse-distance diffusivity, tilted-wall and compression validity checks, located run-time failure on a non-positive volume), `dynamic_mesh` case section (docs/dynamic-mesh.md). Measured: uniform flow 2e-15, Galilean 7e-16, Stokes second problem on a translating mesh 2.0e-2 (limit 4e-2, ratio 3.6), rotating annulus 3.3e-3 (2e-2), piston channel flux level to 1e-14 and pressure 9.8e-3 (4e-2). MISS, reported not tuned: streamwise velocity in the piston-adjacent cell lags 2.9e-4 vs the registered 1e-6 (ignored known-miss tests); several registered set-ups contradicted their expectations or hit baseline-solver limits (cyclic-face lag, Symmetry with the scalar diagonal) and were replaced by new corrected tests with the old ones kept ignored. Not done: sliding interfaces / AMI, elastic-analogy and stiffness-variant smoothing, periodic and surface-of-revolution motion specifications, BDF2/CN or adaptive stepping on moving meshes, turbulence/energy/scalars/restart with a moving mesh, oscillating-cylinder and rotating toy cases of the acceptance text as resolved cases, compressible solvers. Layering and remeshing remain F-230."
+    "note": "PARTIAL. Delivered (ADR 0033, 0090, 0098): swept-volume ALE with the GCL to 1e-12, prescribed rigid translation and rotation, Laplacian, inverse-distance and inverse-volume smoothing (inverse-volume in the library only; the case tree maps only Laplacian and inverse-distance), incompressible PIMPLE and explicit compressible ALE steps, and mass asserted on smoothed meshes (g5b, c2 <= 1e-9). Six-DOF is done (F-229) and layering is done (F-230); their remaining scope is in F-244 and F-247. USER DECISION 2026-10-21 (audit of this item): sliding interfaces (AMI) split into F-250 and removed from the title. Remaining against the acceptance: (a) an oscillating-cylinder case on a smoothed mesh with a registered, asserted mass limit (the 'oscillation' in g1 is a translating whole mesh, not a cylinder); (b) a continuity assertion in G6 (prints 4.1e-14, never asserts), size S. Also not done: elastic analogy, periodic and surface-of-revolution motion specifications, BDF2 or adaptive stepping, turbulence, energy, scalars or restart on moving meshes. Known misses: piston-cell velocity 2.86e-4 (limit 1e-6) and the Symmetry anisotropy (g5c, pressure 0.989 vs 4e-2). The earlier cyclic-face lag no longer reproduces (g4b passes, 1.84e-14). Dependents F-134, F-139, F-244, F-247 are only nominally blocked by the remaining scope."
   },
   {
     "id": "F-070",
@@ -1927,5 +1927,17 @@
     "status": "todo",
     "acceptance": "A multi-objective study over at least two design parameters returns a Pareto set verified against a known analytic front within a limit registered in an ADR; the Nelder-Mead optimiser reaches the registered T3 target; a warm-started sweep point reproduces its cold-started result within a registered tolerance",
     "note": "Split from F-095 on 2026-10-21 (wave 40C, ADR 0099). Acceptance text proposed by the lead; refine when scheduled. Size L."
+  },
+  {
+    "id": "F-250",
+    "title": "Sliding interface (AMI): arbitrary mesh interface between non-conforming moving or rotating zones",
+    "phase": 9,
+    "deps": [
+      "F-063",
+      "F-114"
+    ],
+    "status": "todo",
+    "acceptance": "A rotating-disc or rotor-stator case with a sliding interface conserves mass across the interface to a limit registered in an ADR, and reproduces a closed-form or benchmark result (rigid rotation of a fluid across the interface to the same limit as the conforming mesh) within a registered tolerance",
+    "note": "Split from F-063 on 2026-10-21 (user decision after the F-063 audit). Acceptance text proposed by the lead; refine when scheduled. F-114 handles planar interfaces only; F-126 covers frozen-rotor and mixing-plane. Size L."
   }
 ]

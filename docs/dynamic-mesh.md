@@ -27,11 +27,11 @@ at `dynamic_mesh.enabled`.
 
 ## Limits and gaps
 
-Euler time scheme only; no turbulence, energy, scalars, particles, sources, rheology, statistics or restart. No sliding interfaces, layering or remeshing (F-230),
+Euler time scheme only; no turbulence, energy, scalars, particles, sources, rheology, statistics or restart. No sliding interfaces (AMI, F-250); layering is in F-230 and remeshing in F-247,
 no strong coupling or added-mass stabilisation (the explicit coupling needs a body that is not much lighter than the displaced fluid; the checks use a
 fluid-to-body mass ratio of 0.2). The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
-1e-6 missed, cause not proven). Baseline limitations met: the cyclic-face lag of PISO needs 10 outer iterations for a mesh that translates along a periodic
-direction and is unstable with time-dependent walls; `Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient`
+1e-6 missed, cause not proven). The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed
+mesh difference 1.84e-14, re-run 2026-10-21). Baseline limitation met: `Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient`
 sides).
 
 ## Layering and compressible ALE (F-230, ADR 0090; library only)
