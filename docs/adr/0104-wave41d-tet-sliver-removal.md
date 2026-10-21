@@ -120,7 +120,7 @@ Each limit is reported separately; a partial result (for example Q1 met, Q2 miss
 
 ## Amendment 1 (written after the development runs, before the registered Q runs)
 
-Development runs (ignored `x_dev`, target cases only, disclosed):
+Development runs (an ignored `x_dev` print test on the target cases only, disclosed; removed after the freeze):
 
 * `split_boundary = true` alone: in-code path fails (Steiner budget exhausted, the known runaway); STL path 1128 cells, 1.84 deg,
   fraction 0.935. Ingredient 1 is dropped.
@@ -140,3 +140,39 @@ smoothing sweep over interior vertices in id order, candidates the neighbour cen
 than 1e-6 relative; (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06. Stops early when a
 sweep changes nothing. Ingredients 2 (dihedral-objective flips) and 4 (flat-cell split at a dihedral threshold) were not needed and
 are not implemented. What I knew when writing this: the development numbers above; Q7 (held-out) has not been run with the pass.
+
+## Results (release build, registered run after amendment 1)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| W0 default bit-identity | 9 fingerprints equal | all 9 equal | pass |
+| Q1 STL path, watertight checks | closed, volume 1e-10, 2 patches, positive volumes, `check_mesh` ok | all hold (1223 cells) | pass |
+| Q1 STL path, minimum dihedral | >= 3.0 deg | 17.66 deg (max 145.1 deg) | pass |
+| Q2 STL path, radius-edge fraction | >= 0.99 | 1.0000 (max ratio 1.90) | pass |
+| Q3 in-code path, watertight checks | as Q1 | all hold (1142 cells) | pass |
+| Q3 in-code path, minimum dihedral | >= 3.0 deg | 16.33 deg (max 151.7 deg) | pass |
+| Q4 in-code path, radius-edge fraction | >= 0.99 | 0.9974 (3 cells above 2; max ratio 2.19) | pass |
+| Q5 patches, both paths | areas 1e-10, centroids on same-tag triangles 1e-9, Euler 2 | all hold | pass |
+| Q6 determinism | bit equal | equal | pass |
+| Q7a cube(2, 2) | T5 limits, volume, `check_mesh` | 108 cells, 29.5 deg, 1.0, volume error 0 | pass |
+| Q7b icosphere(1, 2) | same | 320 cells, 55.05 deg, 1.0, 8.8e-16 | pass |
+| Q7c remeshed torus (t5b) | same | 1265 cells, 16.73 deg, 1.0, 1.3e-15 | pass |
+
+On the cube and sphere the pass inserted no point and moved no vertex (cell counts 108 and 320 as with the defaults); on the torus
+it moved 52 vertices (defaults: 1297 cells, 5.26 deg, fraction 1.0).
+
+Pass counters: STL 99 interior Steiner points (default 74), 530 moves, 501 flips in all; in-code 87 (default 67), 442 moves, 416
+flips. Run time of each pipeline with the pass about 0.3 s (release).
+
+The ADR 0093 records `s2_known_miss_pipeline_watertight_and_quality` and `s3_known_miss_radius_edge_fraction` stay ignored: they run
+the default mesher, which is unchanged (W0), and still miss as recorded. Their doc comments now point to Q1 and Q2.
+
+Verdicts: F-131 is done: Q1, Q2 and Q5 on the STL path pass as non-ignored tests with the ADR 0030 T5 limits and W0 passes, which
+meets "a closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks"
+when the quality pass is on. The default options still miss; a user must set `quality_sweeps`. F-132 stays partial: no test covers
+boundary layers on a tetrahedral mesh of STL geometry.
+
+Deviations: the pass was developed on the target cases (disclosed in amendment 1); the held-out cases were run only in the
+registered run. Ingredients 1, 2 and 4 of Part 2 were not kept or not built. The pass has no termination or quality guarantee (no
+sliver exudation); it is a bounded heuristic (10 sweeps). No literature value enters a gate; the method names (Delaunay refinement,
+constrained cavities, optimisation-based smoothing, bistellar flips) are from memory and UNVERIFIED.
