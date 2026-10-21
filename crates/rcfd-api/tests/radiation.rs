@@ -256,6 +256,42 @@ fn r6_p1_optically_thin_limit_matches_two_plate_exchange() {
     }
 }
 
+/// ADR 0101 R7 smoke (set-up check, run before the limit was registered): 200 iterations, finite wall flux.
+#[test]
+#[ignore = "ADR 0101 set-up smoke, run once before the limit was registered"]
+fn r7_thick_slab_setup_smoke() {
+    let sim = run(&slab(L, 50.0 / L, 0.0, 1e-9, "p1", 1.0, 1.0, 200), 200);
+    let q = sim.radiative_heat_flow("outlet").unwrap();
+    eprintln!(
+        "R7 smoke: 200 iterations, outlet radiative flow finite {}",
+        q.is_finite()
+    );
+    assert!(q.is_finite());
+}
+
+/// ADR 0101 R7 (F-052): thick black-walled slab, tau = 50, against the Milne asymptote Psi = 4 / (3 tau + 6 q_inf) of
+/// exact transport (q_inf = 0.7104, the Hopf constant), limit 1 %. Predicted P1 gap (6 q_inf - 4)/(3 tau + 4) = 0.171 %.
+#[test]
+fn r7_p1_thick_slab_matches_the_milne_asymptote() {
+    let tau = 50.0;
+    let sim = run_converged(&slab(L, tau / L, 0.0, 1e-9, "p1", 1.0, 1.0, 200));
+    let q_hot = -sim.radiative_heat_flow("inlet").unwrap() / area();
+    let q_cold = sim.radiative_heat_flow("outlet").unwrap() / area();
+    let d = SIGMA * (T1.powi(4) - T2.powi(4));
+    let psi_milne = 4.0 / (3.0 * tau + 6.0 * 0.7104);
+    let err = (q_hot / d / psi_milne - 1.0)
+        .abs()
+        .max((q_cold / d / psi_milne - 1.0).abs());
+    eprintln!(
+        "R7 tau {tau}: Psi {:.6} / {:.6} vs Milne {psi_milne:.6} ({:.3}%, limit 1 %); P1 analytic {:.6}",
+        q_hot / d,
+        q_cold / d,
+        100.0 * err,
+        1.0 / (1.0 + 0.75 * tau)
+    );
+    assert!(err <= 0.01, "Psi {} {} vs {psi_milne}", q_hot / d, q_cold / d);
+}
+
 #[test]
 fn r5_invalid_radiation_settings_get_located_errors() {
     let diags = |text: &str| -> Vec<String> {

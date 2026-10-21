@@ -3,15 +3,15 @@
 //! registered in the ADR before the code ran.
 
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_fv::ale::{move_mesh, set_follow_conditions};
+use rcfd_fv::ale::{move_mesh, set_follow_conditions, MeshStep};
 use rcfd_fv::bc::{FixedValue, Symmetry, ZeroGradient};
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::pimple::{PimpleSettings, PimpleSolver};
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
-use rcfd_mesh::gen::{annulus_3d, box_2d, box_mesh, Grading};
-use rcfd_mesh::motion::Pose;
+use rcfd_mesh::gen::{annulus_3d, box_2d, box_mesh, cylinder_ogrid, Grading};
+use rcfd_mesh::motion::{cell_swept_sum, Pose};
 use rcfd_mesh::Mesh;
 use std::sync::Arc;
 
@@ -386,6 +386,8 @@ fn g6_rigidly_rotating_mesh_with_the_fluid() {
         .iter()
         .map(|s| s.to_string())
         .collect();
+    let mean_v = mesh.total_volume() / mesh.n_cells() as f64;
+    let (mut worst_cont, mut worst_gcl): (f64, f64) = (0.0, 0.0);
     for n in 1..=50 {
         let pose = Pose {
             origin: vec3::ZERO,
@@ -397,7 +399,9 @@ fn g6_rigidly_rotating_mesh_with_the_fluid() {
         let st = move_mesh(&s.geom, pts, dt).unwrap();
         let old = s.geom.mesh.clone();
         let walls = set_follow_conditions(&mut s.u, &st, &old, &names, dt).unwrap();
-        s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls).unwrap();
+        worst_gcl = worst_gcl.max(gcl_residual(&old, &st, dt) / mean_v);
+        let info = s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls).unwrap();
+        worst_cont = worst_cont.max(info.continuity);
     }
     let cc = s.geom.mesh.cell_centres();
     let u_err =
@@ -416,11 +420,106 @@ fn g6_rigidly_rotating_mesh_with_the_fluid() {
             .fold(0.0, f64::max);
     let range = p_ex.iter().cloned().fold(f64::MIN, f64::max) - p_ex.iter().cloned().fold(f64::MAX, f64::min);
     println!(
-        "G6: velocity error {:.3e} W r_o (limit 2e-2), pressure error {:.3e} of the range (limit 5e-2), continuity {:.2e}",
+        "G6: velocity error {:.3e} W r_o (limit 2e-2), pressure error {:.3e} of the range (limit 5e-2), continuity last step {:.2e}, \
+         max over the steps {worst_cont:.2e} (limit 1e-9, ADR 0101), GCL {worst_gcl:.2e} mean(V) (limit 1e-12, ADR 0101)",
         u_err / (w * r_out),
         p_err / range,
         s.history.last().unwrap().continuity
     );
     assert!(u_err <= 2e-2 * w * r_out, "velocity {}", u_err / (w * r_out));
     assert!(p_err <= 5e-2 * range, "pressure {}", p_err / range);
+    assert!(worst_cont <= 1e-9, "continuity {worst_cont}");
+    assert!(worst_gcl <= 1e-12, "GCL {worst_gcl}");
+}
+
+/// Discrete GCL residual of one mesh step: `max_c |sum_f sigma_f W_f - (V^{n+1} - V^n)|` (ADR 0033 G1).
+fn gcl_residual(old: &Mesh, st: &MeshStep, dt: f64) -> f64 {
+    let w: Vec<f64> = st.mesh_flux.iter().map(|m| m * dt).collect();
+    cell_swept_sum(old, &w)
+        .iter()
+        .zip(old.cell_volumes().iter().zip(st.geom.mesh.cell_volumes()))
+        .map(|(s, (v0, v1))| (s - (v1 - v0)).abs())
+        .fold(0.0, f64::max)
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// ADR 0101 C1 oscillating cylinder on a smoothed mesh (F-063)
+// ---------------------------------------------------------------------------------------------------------------
+
+/// Cylinder of radius 0.5 in a fixed, no-slip circular wall of radius 2 (O-grid 48 x 16, one cell in z), oscillating
+/// along x with `x_c = A sin(2 pi t)`; the points follow Laplacian smoothing of the cylinder displacement from the
+/// initial mesh each step. Returns (max continuity, max GCL residual / mean V, max |V_total - V0| / V0, min volume ratio).
+fn oscillating_cylinder(amp: f64, steps_per_period: usize, periods: usize) -> (f64, f64, f64, f64) {
+    let mesh0 = cylinder_ogrid(48, 16, 0.5, 2.0, Grading::Uniform, 0.1).unwrap();
+    let g0 = FvGeometry::new(Arc::new(mesh0.clone())).unwrap();
+    let geom = Arc::new(g0.clone());
+    let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
+    for name in ["cylinder", "farfield"] {
+        u.set_bc(&geom, name, Box::new(FixedValue::vector(vec3::ZERO))).unwrap();
+    }
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let mut s = PimpleSolver::new(geom, u, p, settings(0.01));
+    let classes: Vec<PatchClass> = mesh0
+        .patches()
+        .iter()
+        .map(|pt| match pt.name.as_str() {
+            "cylinder" => PatchClass::Prescribed,
+            "farfield" => PatchClass::Fixed,
+            _ => PatchClass::Slip,
+        })
+        .collect();
+    let cyl_points = rcfd_mesh::motion::patch_points(&mesh0, "cylinder").unwrap();
+    let v0 = mesh0.total_volume();
+    let mean_v = v0 / mesh0.n_cells() as f64;
+    let dt = 1.0 / steps_per_period as f64;
+    let names = vec!["cylinder".to_string()];
+    let (mut cont, mut gcl, mut vol, mut ratio): (f64, f64, f64, f64) = (0.0, 0.0, 0.0, f64::INFINITY);
+    for n in 1..=steps_per_period * periods {
+        let xc = amp * (std::f64::consts::TAU * n as f64 * dt).sin();
+        let mut presc = vec![vec3::ZERO; mesh0.n_points()];
+        for &q in &cyl_points {
+            presc[q] = [xc, 0.0, 0.0];
+        }
+        let sm = smooth_displacement(&g0, &classes, &presc, SmoothingMethod::Laplacian, &TIGHT).unwrap();
+        let pts: Vec<Vec3> = mesh0
+            .points()
+            .iter()
+            .zip(&sm.displacement)
+            .map(|(p, d)| vec3::add(*p, *d))
+            .collect();
+        let st = move_mesh(&s.geom, pts, dt).unwrap();
+        let old = s.geom.mesh.clone();
+        ratio = ratio.min(st.min_volume_ratio);
+        gcl = gcl.max(gcl_residual(&old, &st, dt) / mean_v);
+        vol = vol.max((st.geom.mesh.total_volume() - v0).abs() / v0);
+        let walls = set_follow_conditions(&mut s.u, &st, &old, &names, dt).unwrap();
+        let info = s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls).unwrap();
+        cont = cont.max(info.continuity);
+        assert!(
+            s.u.values.iter().flatten().all(|x| x.is_finite()),
+            "non-finite velocity at step {n}"
+        );
+    }
+    (cont, gcl, vol, ratio)
+}
+
+/// ADR 0101 C1 smoke (set-up check, run before the limits were registered): one period, finite fields, valid mesh.
+#[test]
+fn c1_oscillating_cylinder_setup_smoke() {
+    let (.., ratio) = oscillating_cylinder(0.1, 40, 1);
+    println!("C1 smoke: one period finite, min V_new/V_old {ratio:.4}");
+    assert!(ratio > 0.0);
+}
+
+/// ADR 0101 C1 (F-063): oscillating cylinder (A = 0.1 = 0.2 r, 40 steps per period, 2 periods) on a Laplacian-smoothed
+/// O-grid in a closed no-slip wall: mass and geometric conservation in every step.
+#[test]
+fn c1_oscillating_cylinder_on_a_smoothed_mesh_conserves_mass_and_volume() {
+    let (cont, gcl, vol, ratio) = oscillating_cylinder(0.1, 40, 2);
+    println!(
+        "C1: continuity {cont:.2e} (limit 1e-9), GCL {gcl:.2e} mean(V) (limit 1e-12), total volume {vol:.2e} V0 (limit 1e-12), min V_new/V_old {ratio:.4}"
+    );
+    assert!(cont <= 1e-9, "continuity {cont}");
+    assert!(gcl <= 1e-12, "GCL {gcl}");
+    assert!(vol <= 1e-12, "volume {vol}");
 }
