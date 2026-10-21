@@ -149,3 +149,12 @@ written and run before any amendment text existed. At that point I already knew 
 original sanity value (1.4e301) was degenerate; the corrected scale (range of the hook run) was chosen because it is
 the non-zero field of the pair, not from its value. The C6 module text was fixed and C6 rerun the same way, before
 writing it down; the first run had measured nothing (the module did not parse).
+
+### Amendment 1 results
+
+* C9 (hook 5e3 plus zone source 5e3 against zone source 1e4): rel diff of T = 0 (limit 1e-9). Pass.
+* Gate of the first code commit 904d056 (fresh `git archive`, `<scratch dir>`): `cargo fmt --check` clean,
+  `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`
+  1910 passed / 0 failed / 536 ignored. This HEAD includes waves 38B, 38C and 38D, so the totals are not comparable
+  with the wave-37 close (1881 / 531); the 38A delta at 904d056 was +8 passed, +1 ignored (`udf_hooks_w38a.rs`), and
+  C9 adds one more passed test.
