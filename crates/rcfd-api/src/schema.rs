@@ -860,6 +860,10 @@ pub fn case_schema() -> Schema {
             Schema::boolean(false).doc("SIMPLEC with non_orthogonal_correctors > 0: add the non-orthogonal secondary-gradient part to the SIMPLEC flux compensation (ADR 0050). Without it the corrected flux weights the deferred non-orthogonal pressure part with rAtU instead of rAU and, for alpha_u near 1 on strongly non-orthogonal meshes (about 35 degrees tested), an axial mode of the outer iteration grows until the run diverges. Default false keeps every earlier result bit-identical; no effect for SIMPLE or without correctors"),
         )
         .field(
+            "simplec_boundary_compensation",
+            Schema::boolean(false).doc("Steady simplec: add the SIMPLEC flux compensation (rAtU - rAU) snGrad(p_old) |S| on the boundary faces whose flux the pressure sets (fixed-pressure and lagged-pressure conditions such as vent, and periodic seams) as internal faces get it (ADR 0102). Without it a converged boundary flux carries rAtU where internal faces carry rAU (default simplec differs from simple with the same alpha_u by about 5e-3 on a duct with a pressure outlet), and a change of a boundary pressure kicks the cell velocity next to the boundary by (rAtU - rAU) grad(p_old); with a velocity inlet and a vent outlet (K > 0) the vent law feeds that kick back and the run diverges unless 0.5 (rAtU - rAU) (A/V) K |u| < 1. With true the fixed point equals that of simple with the same alpha_u. Default false keeps every earlier result bit-identical; no effect with simple; any non-steady algorithm is an error"),
+        )
+        .field(
             "max_iterations",
             Schema::int(2000).range(1.0, 1e7).doc("Iteration cap for steady runs"),
         )

@@ -399,11 +399,11 @@ fn x6_fan_boundary_at_three_operating_points() {
 
 /// X7 (ADR 0095) vent on its own set-up, independent of the F-200 channel: the X1 periodic duct (no side walls, plug flow) with a
 /// fixed inlet velocity `u` at xmin (negative: the flow enters through the vent), a vent with loss coefficient `k` and external
-/// pressure 0 at xmax, physical pseudo-time step `dt` (plain SIMPLEC diverges for forward flow, see the ADR). Returns the mean
-/// kinematic pressure of the outlet column.
-fn vent_run(u: f64, k: f64, dt: f64) -> f64 {
+/// pressure 0 at xmax, physical pseudo-time step `dt` (plain SIMPLEC diverges for forward flow, see the ADR) and the extra solver
+/// lines `extra`. Returns the mean kinematic pressure of the outlet column.
+fn vent_run(u: f64, k: f64, dt: f64, extra: &str) -> f64 {
     let inlet = format!("[boundaries.xmin]\nvelocity = \"fixed\"\nvelocity_value = [{u:?}, 0.0, 0.0]\n");
-    let pseudo = format!("pseudo_mode = \"physical\"\npseudo_dt = {dt:?}\n");
+    let pseudo = format!("pseudo_mode = \"physical\"\npseudo_dt = {dt:?}\n{extra}");
     let vent = format!("[boundaries.xmax]\nbc_kind = \"vent\"\nloss_coefficient = {k:?}\nbc_pressure = 0.0\n");
     let text = case_text(0.2, &inlet, &pseudo, false)
         .replace(
@@ -417,12 +417,12 @@ fn vent_run(u: f64, k: f64, dt: f64) -> f64 {
 }
 
 /// X7: the outlet pressure follows 0.5 K u |u| at six flows (limit 1e-6 relative, ADR 0022 C3); `dt_of(u)` is the pseudo step. At
-/// |u| = 0.5 and 2 the linear law 0.5 K u is off by a factor 2 and 0.5, so the quadratic law is distinguished.
-fn x7_sweep(dt_of: impl Fn(f64) -> f64) {
+/// |u| = 0.5 and 2 the linear law 0.5 K u is off by a factor 2 and 0.5, so the quadratic law is distinguished. `extra`: solver lines.
+fn x7_sweep(dt_of: impl Fn(f64) -> f64, extra: &str) {
     let k = 2.5;
     let mut worst = 0.0_f64;
     for u in [0.5, 1.0, 2.0, -0.5, -1.0, -2.0] {
-        let p = vent_run(u, k, dt_of(u));
+        let p = vent_run(u, k, dt_of(u), extra);
         let want = 0.5 * k * u * u.abs();
         let e = (p / want - 1.0).abs();
         eprintln!(
@@ -440,15 +440,24 @@ fn x7_sweep(dt_of: impl Fn(f64) -> f64) {
 /// Corrected set-up (ADR 0095 amendment 1): pseudo step 0.02/|u|, a Courant number of 1 at every flow.
 #[test]
 fn x7_vent_reproduces_its_quadratic_loss_law() {
-    x7_sweep(|u| 0.02 / u.abs());
+    x7_sweep(|u| 0.02 / u.abs(), "");
 }
 
 /// KNOWN MISS (ADR 0095 amendment 1): the registered fixed pseudo step 0.02 passes at u = 0.5 (2.85e-12) and 1 (1.36e-13) and gives
-/// NaN at u = 2 (Courant number 2).
+/// NaN at u = 2 (Courant number 2). Cause (ADR 0102): the SIMPLEC term (rAtU - rAU) grad(p_old) is not compensated at the vent face, so
+/// each vent-pressure change kicks the vent-cell velocity, and the vent law feeds the kick back with the gain 0.5 (rAtU - rAU) (A/V) K |u|
+/// (1.125 here at u = 2). Default code; `x7_vent_at_fixed_pseudo_dt` is the same sweep with the opt-in compensation.
 #[test]
 #[ignore = "KNOWN MISS: the forward vent at u = 2 with pseudo_dt 0.02 (Courant 2) gives NaN"]
 fn x7_vent_at_fixed_pseudo_dt_known_miss() {
-    x7_sweep(|_| 0.02);
+    x7_sweep(|_| 0.02, "");
+}
+
+/// F-248 (ADR 0102 A1): the X7 sweep as registered in ADR 0095 (pseudo step 0.02 at every flow) with the one added line
+/// `simplec_boundary_compensation = true`.
+#[test]
+fn x7_vent_at_fixed_pseudo_dt() {
+    x7_sweep(|_| 0.02, "simplec_boundary_compensation = true\n");
 }
 
 fn diags(text: &str) -> Vec<String> {

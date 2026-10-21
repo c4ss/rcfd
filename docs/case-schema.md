@@ -588,6 +588,25 @@ velocity with the reconstruction of the face flux correction, `(1/V) sum_f dphi_
 The converged solution is the same (measured to 2e-9 in velocity on the ADR 0084 cases); with it SIMPLEC at `alpha_p` 0.7, 0.5 and 1.0 is stable up to 79
 degrees on the sheared channel and box (ADR 0084 A1-A4). Not tested with turbulence models, moving meshes or face jumps.
 
+### SIMPLEC boundary compensation (ADR 0102) and `solver.simplec_boundary_compensation`
+
+`solver.simplec_boundary_compensation` (bool, default `false`; steady incompressible solver only, a located error with any non-steady algorithm,
+no effect with `simple`): SIMPLEC adds the flux compensation `(rAtU - rAU)_f snGrad(p_old) |S|` on internal faces only. With the key it is also
+added on every boundary face whose flux the pressure sets (fixed-pressure faces, lagged-pressure catalogue conditions such as `vent`, and
+periodic seam faces), with the same boundary forms the corrected flux uses. Effects:
+
+* At a fixed point every face carries `rAU`, so the converged SIMPLEC solution equals the SIMPLE solution with the same `alpha_u` (measured
+  to 3.5e-12 with a pressure outlet and 4.7e-13 with periodic seams; without the key the default SIMPLEC differs from it by 2.6e-3 to 4.8e-3
+  of the velocity on those ducts, ADR 0102 B1/B2).
+* A change of a boundary pressure no longer kicks the cell velocity next to it by `(rAtU - rAU) grad(p_old)`. Without the key, a velocity
+  inlet with a forward `vent` (K > 0) diverges unless the loop gain `0.5 (rAtU - rAU) (A/V) K |u|` of the vent cell is below 1 (A the vent
+  face area, V the cell volume): plain SIMPLEC diverges from the first iteration, pseudo-time 0.02 diverges at u = 2 m/s on the X7 duct.
+  With the key that duct settles at every flow, with and without pseudo-time.
+
+Remaining limit (ADR 0102): with the key, plain SIMPLEC with a strong vent (K = 10) still fails through a transverse mode of the vent faces
+that grows from the first iteration (the X7 duct does not settle in 3000 iterations, the F-200 C3 channel is non-finite at iteration 2767);
+use pseudo-time there. `false` keeps every earlier result bit for bit.
+
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
 Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset

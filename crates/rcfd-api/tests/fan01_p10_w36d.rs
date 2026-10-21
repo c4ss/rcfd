@@ -369,6 +369,23 @@ fn w37a_fan01_with_face_flux_velocity_correction() {
     );
 }
 
+/// ADR 0102 R3 (diagnosis, reported, not a gate): the ADR 0084 run above with the SIMPLEC boundary compensation added. H-R3 (the stall is the
+/// missing compensation on the seam and outlet faces) stands iff res_u and res_p both fall below 1e-4 within the 1500 iterations.
+#[test]
+#[ignore = "ADR 0102 FAN-01 diagnosis, run by hand: cargo test --release -p rcfd-api --test fan01_p10_w36d w41b -- --ignored --nocapture"]
+fn w41b_fan01_with_boundary_compensation() {
+    run_with(
+        "W41B x1 face_flux + boundary compensation",
+        X1,
+        "camber_seam",
+        1.5e-5,
+        1500,
+        "velocity_correction = \"face_flux\"
+simplec_boundary_compensation = true
+",
+    );
+}
+
 /// ADR 0083 C2 (P9 of ADR 0079 with construction H): `FvGeometry::new` accepts the FAN-01-C mesh, `check_mesh` is ok and the rules raise no
 /// error-level finding, through the case with `c_grid_construction = "camber_seam_h"`.
 #[test]
