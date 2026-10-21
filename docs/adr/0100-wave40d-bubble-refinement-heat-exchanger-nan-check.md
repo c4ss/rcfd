@@ -65,7 +65,7 @@ Registered checks:
 
 ## Addendum: measured values (after the runs)
 
-### Part B (one registered run, 1750 s in total, scratch tree at 56fa84c)
+### Part B (one registered run, 1750 s in total; scratch tree: archive of f0168d0 plus the 40D test files; no library source changed from f0168d0 to dbaf20d)
 
 | Grid | dt / dt_cap | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound violation | run time |
 |------|-------------|--------------|---------------|--------------------|-------|-----------------|----------|
