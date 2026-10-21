@@ -131,4 +131,36 @@ registered test. The flat-plate clause is unchanged.
 
 ## Results
 
-(Addendum written after the runs.)
+Addendum written after the runs: release build, HEAD d89cc9a plus the test files. Each registered test was run once.
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| C1 fidelity: A and B reproduce I2 | uniform (1,0,0) 253, zero 258 | 253, 258 | reproduced |
+| C1 coarse start, fine iterations | 220 (coarse run: 137 iterations, converged to 1e-6) | < 253 and < 258, all converged | met |
+| C1 equivalent work `220 + 137/4` | 254 against 253 | reported only | - |
+| Y1 first-cell y+ at x = 0.4, 0.6, 1.0, 1.4, 1.99 | 0.5442, 0.5275, 0.5078, 0.4956, 0.4833 (worst +8.8 %) | within 10 % of 0.5 | met |
+| Y1 run convergence | 1989 iterations, du 9.95e-10, d nu_t 2.63e-8 | du < 1e-9, d nu_t < 1e-6 | met |
+| `sst_flat_plate_cf` (F-043 limits, now in the release gate) | Cf(0.97) 0.002663: -0.7 % TMR page, -1.0 % TMR file; power law -3.8 .. +0.6 % for x <= 1 | 5 % | met, stays un-ignored in release |
+| T1 adaptive error | 1.6926e-2 | <= 0.02 | met |
+| T1 `n_adapt < N_min(0.02)` | 74 against N_min = 64 (error 1.9675e-2) | 74 < 64 | MISS |
+| T1 equal-error count | N = 72 meets the adaptive error 1.69e-2 | reported only | - |
+
+Wall time: C1 2.4 s, T1 18.5 s, the plate pair 143 s (one shared run).
+
+C1 passes, so F-205 is `done` under the verdict rule. The gain in fine iterations is real: 33 fewer than uniform, 13 %. Counted
+as total work it is break-even: 254 against 253. I3 on the cavity has the same character (187 against 165 in work, 112 against
+165 in fine iterations). The acceptance counts the iterations of the case, and that is what is limited.
+
+The T1 miss is kept as `t1_courant_control_needs_fewer_steps_than_the_smallest_uniform_count_meeting_the_target_known_miss`
+(ignored, limit unchanged). The prediction was wrong in size but right in direction. I predicted N_min of about 25 from the
+amplitude factor of implicit Euler on one viscous mode; the measured N_min is 64. So the uniform-step error at a given N is
+about 2.6 times what amplitude decay alone gives. This was not diagnosed. Likely sources, untested, are the PISO splitting
+error and a phase or shape error that the L2 difference counts and the amplitude estimate does not. Even at equal error, the
+Courant-controlled run needs more steps than uniform stepping (74 against 72). So the miss does not come from the 0.02 target
+sitting between the two errors.
+
+Statuses: F-205 `done`; F-108 `partial` (the unstructured-wall-patch clause waits on F-234); F-209 `partial` (T1 missed, plus
+the open clauses listed above, and the rewording proposal is with the user).
+
+Deviation from the plan: none in set-up or limits. The T1 test carries `#[cfg_attr(debug_assertions, ignore)]` as registered
+until the miss, and a plain `#[ignore]` with the known-miss reason after it.

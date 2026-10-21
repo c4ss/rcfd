@@ -17,6 +17,8 @@
 //! * Cf(0.97) within 5 % of the TMR file `cf_plate_sstv.dat` value 0.0026909 at x = 0.9701 (the "about 2.691e-3" of
 //!   docs/reference-data.md): ASSERTED (`sst_flat_plate_cf`).
 //! * Cf within 5 % of the power law for Re_x <= 5e6: ASSERTED (`sst_flat_plate_cf`).
+//! * F-108 (ADR 0094 Y1): first-cell y+ at x = 0.4, 0.6, 1.0, 1.4, 1.99 within 10 % of the target 0.5: ASSERTED
+//!   (`sst_flat_plate_first_cell_y_plus_meets_the_target`). Both tests run in release builds, ignored in debug builds.
 //! * Cf(0.97) within 5 % of White's formula `0.455 / ln^2(0.06 Re_x)`: KNOWN MISS, recorded in
 //!   `sst_flat_plate_cf_within_5pct_of_white_known_miss` (ignored, fails by design; earlier measurement -7.3 % at
 //!   Re_x = 5e6, -6.6 .. -8.5 % over the plate). The 5 % is not widened.
@@ -157,7 +159,7 @@ fn plate() -> &'static Plate {
 }
 
 #[test]
-#[ignore = "heavy: wall-resolved flat plate, run in release"]
+#[cfg_attr(debug_assertions, ignore = "heavy: wall-resolved flat plate, run in release")]
 fn sst_flat_plate_cf() {
     let o = plate();
     let (cf97, _) = at(o, 0.97);
@@ -192,6 +194,34 @@ fn sst_flat_plate_cf() {
     assert!(
         worst < 0.05,
         "Cf deviates {worst} from the power-law correlation for Re_x <= 5e6"
+    );
+}
+
+/// F-108 (ADR 0094 Y1): the mesh is built for first-cell y+ 0.5 at x = 2 (the smallest u_tau); the solved first-cell y+ at
+/// x = 0.4, 0.6, 1.0, 1.4, 1.99 must lie within 10 % of 0.5 (upstream of 0.4 y+ rises toward the leading edge and is not
+/// checked). Shares the converged run of `sst_flat_plate_cf`.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: wall-resolved flat plate, run in release")]
+fn sst_flat_plate_first_cell_y_plus_meets_the_target() {
+    let o = plate();
+    assert!(
+        o.change < 1e-6 && o.du < 1e-9,
+        "not converged: du {:.2e} dnut {:.2e}",
+        o.du,
+        o.change
+    );
+    let mut worst: f64 = 0.0;
+    for &x in &[0.4, 0.6, 1.0, 1.4, 2.0 - 0.01] {
+        let (_, yp) = at(o, x);
+        println!(
+            "Y1: x {x:.2} first-cell y+ {yp:.4} ({:+.1} % of 0.5)",
+            100.0 * (yp / 0.5 - 1.0)
+        );
+        worst = worst.max((yp / 0.5 - 1.0).abs());
+    }
+    assert!(
+        worst <= 0.10,
+        "first-cell y+ deviates {worst} from the target 0.5 (limit 0.10)"
     );
 }
 
