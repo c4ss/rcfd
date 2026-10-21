@@ -131,6 +131,53 @@ F-248 note.
 * R3 (diagnosis only, last priority, step 3 of the task): the stalled residual of ADR 0022 E2 and the FAN-01 laminar stall named in the
   wave 36-38 ADRs. Only if time remains; no fix.
 
+## Diagnostic results (registered runs, as registered)
+
+"Kick" = max |ux - u| after iteration 1 (where); "last" = max |ux - u| after the last iteration (30 plain, 300 pseudo).
+
+| Id | Plain SIMPLEC u = 1, K 2.5 | Pseudo 0.02, u = 2, K 2.5 | Verdict |
+| --- | --- | --- | --- |
+| default | kick 5.057 (x 1.99), NaN path (1.8e5 at iteration 3) | kick 1.125 (x 1.99), NaN at iteration 194 | (smoke) |
+| D1 | kick **1.553e-4** (x 1.97), last 2.24e-5 | kick 5.70e-5 (x 1.97), last 9.5e-13, p 5.000000 | **falsified by its threshold at plain u = 1** (1.553e-4 > 1e-4); stands at pseudo u = 2 |
+| D1s | kick 1.553e-4, last 2.24e-5 (equal to D1 to the printed 7 digits) | kick 5.70e-5, last 1.7e-12 | stands (seams play no role in X7) |
+| D2a | kick 10.11 (x 1.99), last 5.7e-4 | kick 2.250, last 1.1e-12 | stands |
+| D2b | kick 5.057, then **diverges** (8.0e7 at 30, rows differ by 3e14) | kick 1.125, **does not settle** (0.85 at 300, rows differ by 3.1) | **falsified** |
+| D3 | kick 9.93e-5 (x 1.95) (then diverges: SIMPLE coefficients with alpha_p 1, not part of the prediction) | kick 4.91e-5, last 6.1e-10 | stands |
+| G1 | - | K = 1: kick 0.450, last 2.75e-12 (settles at Courant 2) | stands: the Courant hypothesis of ADR 0095 is falsified |
+| G2 | - | u = 1, K = 10: kick 0.921, NaN at iteration 100 (diverges at Courant 1) | stands |
+
+Readings:
+
+* Inlet: out (smoke, the kick is in the vent column). Seam: out (D1s = D1; the X7 flow is one-dimensional).
+* The vent law is the amplifier (D2a: a frozen vent pressure takes the full kick, 10.1, and settles). Evaluating the law with the face
+  velocity (candidate F) is **not** a cure: it diverges through a transverse mode. My reading, not tested: the per-face flux of a
+  fixed-pressure face responds to its own face pressure with the gain rAtU |S| / d, so a per-face law `p_b(phi_b)` closes a face-by-face loop
+  of gain about rAtU K |u| / d (45 at plain u = 1); the cell-velocity law averages over the cell and does not have this loop.
+* The trigger is the SIMPLEC term `(rAtU - rAU) grad(p_old)` (D3 removes the kick) left uncompensated at the boundary face (D1 removes it to
+  1.6e-4 of its size at plain u = 1 and to 5e-5 of it at pseudo u = 2, and both runs settle).
+* G1 and G2: the stability limit is the loop gain G = 0.5 (rAtU - rAU) (A/V) K |u| < 1, not the Courant number.
+
+The choice rule as registered ("B if D1 and D3 stand; else F if D2b stands; else no fix") gives **no fix**, because D1 missed its
+threshold at plain u = 1 by a factor 1.55 and D2b is falsified.
+
+## Amendment 1 (written after the diagnostic runs above, before any further run and before any acceptance run)
+
+What I knew when writing it: every result in the table above. Nothing else has been run with the switches or the fix.
+
+The D1 threshold 1e-4 |u| assumed that the only thing left after the compensation is solver tolerance. Reading the code after the run, a
+second term exists: the momentum predictor decelerates the vent cell with `rAU grad(p_old)` (0.56 at plain u = 1), which is correct
+SIMPLEC behaviour, and with `h_operator = "from_solution"` the neighbour cell's `HbyA` takes `a_E` times that deceleration (`a_E` is the
+viscous coefficient only, upwind), so cell N-1 is off by about `(nu A / dx) / a_P x 0.56` = 7.5e-7 / 1.11e-3 x 0.56 = 3.8e-4 before the
+pressure step. The measured 1.553e-4 is in cell N-1 (x = 1.97), not in the vent cell. If this is right, the residual kick is proportional to
+the viscosity and is not the boundary defect.
+
+Corrected diagnostic **D1v** (plain SIMPLEC, u = 1, K = 2.5, D1 switch on, 30 iterations), two runs:
+* nu = 1.5e-9 (10^-4 of X7's): prediction kick <= 1e-6 (falsified if larger);
+* nu = 1.5e-4 (10 x X7's): prediction kick between 5e-4 and 5e-3, i.e. about 10 x 1.553e-4 (falsified if outside), and settles.
+
+Amended choice rule: **B** if D1v stands (both runs) and D3 stands (it does); otherwise no fix. F is out either way (D2b falsified). The
+original D1 verdict stays recorded as falsified by its threshold. The acceptance checks A1 to A4 and their limits are unchanged.
+
 ## Amendments
 
-None yet.
+Amendment 1 above.
