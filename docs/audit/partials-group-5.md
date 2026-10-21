@@ -59,11 +59,13 @@ Re-run: IAPWS-IF97 regions 1 and 2, B23, saturation, and the viscosity and condu
 (300 to 500 K). Air viscosity: Sutherland gives 18.459, 22.852, 26.704 uPa s against 18.5, 23.1, 27.1 (-0.22, -1.08, -1.46 %), so the
 1 % clause fails at 400 and 500 K (known-miss test reproduced). The cubic fit passes, but it was fitted to the same three-digit rows,
 so that pass is circular. The passing test asserts Sutherland viscosity at 1.5 %, a guard set after the measurement. Gap: an air
-viscosity law that is not fitted to the check table and meets 1 % from 300 to 500 K. Example: a published air correlation (Lemmon and
-Jacobsen 2004 type), coded from the paper and checked against Huber. Alternatively, register a held-out check of the fit against a
+viscosity law that is not fitted to the check table and meets 1 % from 300 to 500 K. Example: a published air correlation, coded
+from the paper and checked against Huber. The auditor suggests Lemmon and Jacobsen (2004) for air, but recalled that citation from
+memory (UNVERIFIED). Alternatively, register a held-out check of the fit against a
 second, independent table. Size S. Unverified: mixture-rule formulas, PR/RK constants and atomic weights are recalled from memory
 (docs/reference-data.md says so). The Huber rows were read from a rendered NIST page. The auditor recalls (UNVERIFIED) other textbook
 tables giving about 23.0 uPa s at 400 K, so the 400 K miss is sensitive to the table chosen; the 500 K miss (over 1 %) is not.
+Licensed-data clause: `git ls-files` finds no file matching refprop, .fld, .hmx or .mix (checked at 04716a7). That clause is met.
 
 ## F-125 public-data validation pack
 
@@ -71,8 +73,10 @@ Re-run: manifest validation, in-repo checksums, tamper and proprietary-source re
 are in the manifest. Every one has a licence record and SHA-256 sums except `hannover-compressor` (status unresolved, no files, no
 licence; the reason recorded is that the only located upstream is CC-BY-NC). The acceptance is "each dataset has a fetch script,
 checksum and licence record". That holds for every dataset except Hannover. The note's other gaps (Rotor 37 numbers not transcribed,
-NACA 0012 not compared) are beyond the acceptance as written. The datapack host allow-list (three hosts) still passes with the newer
-Zenodo fan entry, so that entry carries no download URL that the test checks. Gap: Hannover only. User decision: (a) drop Hannover
+NACA 0012 not compared) are beyond the acceptance as written. The Zenodo fan entry `w34d-fan01-fau-eaa-axial-fan` stores two
+in-repo derived CSV files. Each has a SHA-256 checksum and a `source_url` (a DOI), but no `url` field that fetch.py downloads. That is
+why the three-host allow-list still passes. It has a licence and checksums; whether in-repo derived tables count as "a fetch script"
+is the same convention as the other transcribed-table entries. Gap: Hannover only. User decision: (a) drop Hannover
 from the item, (b) replace it with an open compressor or fan dataset (the CC-BY 4.0 FAU axial fan entry `w34d-fan01-fau-eaa-axial-fan`
 is a candidate), or (c) accept a CC-BY-NC fetch-only entry. Any of these is S with network access.
 
@@ -123,7 +127,8 @@ on its own and closable in one wave. Unverified: the deck card layouts other tha
   gaps. Every "missing" item in the note (segregated solved-flow CHT, orthotropic or temperature-dependent solids, shell capacity,
   radiation) is scope beyond the acceptance.
 - F-136: monopole 4.1e-6 to 4.5e-6, rotating monopole 4.6e-6, and the rotating point force against an in-repo Gutin-type
-  far-field formula, 1.1e-7 to 1.4e-6 relative (limit 1e-2; ADR 0066 W3). The sampled-file path is the JSON round trip (A7) plus
+  far-field formula, 1.2e-7 to 4.0e-5 relative, the largest at theta = 135 degrees where thrust and torque terms partly cancel
+  (limit 1e-2; ADR 0066 W3). The sampled-file path is the JSON round trip (A7) plus
   the CLI equal to the library to 0 (S3). W3 itself runs through the library, not a file, so the file clause holds by these two steps
   combined. The Gutin formula was derived in ADR 0066, not checked against Gutin (1936) or Lowson (1965): UNVERIFIED citation. The
   W5 convective misses belong to F-243. The note is stale: it still says the rotating dipole is only a monopole pair.
