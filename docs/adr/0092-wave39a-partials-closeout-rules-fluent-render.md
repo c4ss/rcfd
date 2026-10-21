@@ -153,3 +153,14 @@ Two statements of the F-240 reading were wrong, found on review after the addend
 What I knew when writing this: the V1, F1 to F3 and R4 results above. V2 has not been run. Decision rule: if V2 passes, F-240
 stays done and its note names the fan01 exception; if V2 fails, it becomes an ignored `*_known_miss` test and F-240 goes back
 to partial.
+
+## Amendment 2 (after the V2 run, before the V2b run)
+
+V2 failed in its set-up, not in the rules: exit 3 from the semantic check, "the prescribed flux is not divergence free: the
+largest cell imbalance is 7.481e-3 against a largest face flux 7.481e-3", no rule diagnostics at all (the mesh was not built).
+Cause: the inlet boundary `xmin` keeps `velocity = "fixed"` with the default value 0, so the inlet face flux is 0 while the
+interior faces carry the parabolic profile. V2 stays in the file unchanged as the ignored
+`v2_graetz_setup_passes_check_with_no_error_level_rule_known_miss`. New check V2b: the same text with
+`velocity_expression_x` (the same parabola) also on `[boundaries.xmin]`, so the inlet faces carry the interior profile. Limits
+unchanged: exit 0 and 0 error-level rule diagnostics. What I knew: the V2 output above; V2b not yet run. Decision rule as in
+amendment 1 (V2b plays the role of V2).
