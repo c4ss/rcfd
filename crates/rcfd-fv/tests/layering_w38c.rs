@@ -37,12 +37,26 @@ fn mean_pressure(s: &CompressibleSolver) -> (f64, f64) {
     (pv / vol, vol)
 }
 
-fn piston_x(t: f64) -> f64 {
-    1.0 - 0.3 * (1.0 - (PI * t / T).cos())
+fn piston_x(t: f64, period: f64) -> f64 {
+    1.0 - 0.3 * (1.0 - (PI * t / period).cos())
 }
+
+/// Registered results of one piston run: A1/A2, B1, B2, B3, removals, additions, B5 violations.
+type PistonResult = ([f64; 2], f64, f64, f64, usize, usize, usize);
 
 #[test]
 fn piston_layering_isentrope_and_conservation() {
+    let (a, b1, b2, b3, removed, added, b5_violations) = piston_run(T, 2.0);
+    assert!(a[0].abs() <= 0.02 && a[1].abs() <= 0.02, "A1/A2 {a:?}");
+    assert!(b1 <= 1e-13, "B1 {b1}");
+    assert!(b2 <= 1e-12, "B2 {b2}");
+    assert!(b3 <= 1e-13, "B3 {b3}");
+    assert!(removed >= 5 && added >= 5, "B4 {removed} {added}");
+    assert_eq!(b5_violations, 0, "B5");
+}
+
+/// The ADR 0090 piston case with stroke period `period`, run to `strokes * period` (2 for the full registered run).
+fn piston_run(period: f64, strokes: f64) -> PistonResult {
     let clock = std::time::Instant::now();
     let gamma = Gas::AIR.gamma;
     let mut stack = LayerStack::uniform(40, 1.0, [2, 2], [0.1, 0.1], 0.4, 1.6).unwrap();
@@ -56,7 +70,8 @@ fn piston_layering_isentrope_and_conservation() {
     let mut b5_violations = 0usize;
     let mut prev_event: Option<LayerEvent> = None;
     let mut a = [f64::NAN; 2];
-    for (stroke, target) in [T, 2.0 * T].into_iter().enumerate() {
+    let targets = [period.min(strokes * period), strokes * period];
+    for (stroke, target) in targets.into_iter().enumerate() {
         while t < target {
             let mut dt = s.max_dt();
             let last = t + dt >= target - 1e-9;
@@ -64,13 +79,13 @@ fn piston_layering_isentrope_and_conservation() {
                 dt = target - t;
             }
             let t_new = if last { target } else { t + dt };
-            stack.set_piston(piston_x(t_new)).unwrap();
+            stack.set_piston(piston_x(t_new, period)).unwrap();
             s.step_ale(geom(&stack), dt).unwrap();
             t = t_new;
             steps += 1;
             b2 = b2.max((s.totals()[0] / m0 - 1.0).abs());
             let vol: f64 = s.geom.mesh.cell_volumes().iter().sum();
-            b3 = b3.max((vol / (0.01 * piston_x(t)) - 1.0).abs());
+            b3 = b3.max((vol / (0.01 * piston_x(t, period)) - 1.0).abs());
             let (pm, vm) = mean_pressure(&s);
             diag = diag.max((pm * vm.powf(gamma) / inv0 - 1.0).abs());
             let event = match stack.adjust() {
@@ -129,12 +144,16 @@ fn piston_layering_isentrope_and_conservation() {
         stack.n_layers(),
         clock.elapsed().as_secs_f64()
     );
-    assert!(a[0].abs() <= 0.02 && a[1].abs() <= 0.02, "A1/A2 {a:?}");
-    assert!(b1 <= 1e-13, "B1 {b1}");
-    assert!(b2 <= 1e-12, "B2 {b2}");
-    assert!(b3 <= 1e-13, "B3 {b3}");
-    assert!(removed >= 5 && added >= 5, "B4 {removed} {added}");
-    assert_eq!(b5_violations, 0, "B5");
+    (a, b1, b2, b3, removed, added, b5_violations)
+}
+
+/// ADR 0098 (wave 40B) smoke: the Mach 0.2 piston (period `0.3 pi / (0.2 c0)`) for 0.25 of a stroke; set-up only.
+#[test]
+#[ignore = "smoke"]
+fn piston_mach02_smoke() {
+    let period = 0.3 * PI / (0.2 * Gas::AIR.gamma.sqrt());
+    let r = piston_run(period, 0.25);
+    println!("smoke period {period:.4}: {r:?}");
 }
 
 #[test]
@@ -298,4 +317,17 @@ mod stiffness {
         assert!(ratio < 1.0, "S2 {ratio}");
         assert!(s3 <= 1e-9, "S3 {s3}");
     }
+}
+
+/// ADR 0098 (wave 40B): the ADR 0090 piston at peak piston Mach 0.2 (period `0.3 pi / (0.2 c0)`), ADR 0090 limits.
+#[test]
+fn piston_mach02_layering() {
+    let period = 0.3 * PI / (0.2 * Gas::AIR.gamma.sqrt());
+    let (a, b1, b2, b3, removed, added, b5_violations) = piston_run(period, 2.0);
+    assert!(a[0].abs() <= 0.02 && a[1].abs() <= 0.02, "A1/A2 {a:?}");
+    assert!(b1 <= 1e-13, "B1 {b1}");
+    assert!(b2 <= 1e-12, "B2 {b2}");
+    assert!(b3 <= 1e-13, "B3 {b3}");
+    assert!(removed >= 5 && added >= 5, "B4 {removed} {added}");
+    assert_eq!(b5_violations, 0, "B5");
 }
