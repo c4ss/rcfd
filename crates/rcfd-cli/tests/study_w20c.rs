@@ -1,4 +1,4 @@
-//! ADR 0034 registered checks S1-S7 for `rcfd study` (parametric studies, F-095).
+//! ADR 0034 registered checks S1-S7 and ADR 0099 P1-P2 for `rcfd study` (parametric studies, F-095).
 
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -704,11 +704,14 @@ path = "boundaries.inlet.velocity_value"
 json = [JSON]
 "#;
 
+fn pois_case(d: &Path, ny: &str, us: &[f64]) -> String {
+    let js: Vec<String> = us.iter().map(|u| format!("\"[{u},0,0]\"")).collect();
+    write(d, "p.toml", &POIS.replace("NY", ny).replace("JSON", &js.join(", ")))
+}
+
 fn poiseuille(ny: &str, us: &[f64], tag: &str) -> Vec<(f64, f64)> {
     let d = tmp(tag);
-    let js: Vec<String> = us.iter().map(|u| format!("\"[{u},0,0]\"")).collect();
-    let text = POIS.replace("NY", ny).replace("JSON", &js.join(", "));
-    let case = write(&d, "p.toml", &text);
+    let case = pois_case(&d, ny, us);
     let out = d.join("o");
     let o = rcfd(&[
         "study",
@@ -743,6 +746,73 @@ fn s7_poiseuille_map_known_miss() {
     let us = [0.02, 0.04, 0.06, 0.08, 0.1];
     for (u, dp) in poiseuille("10", &us, "s7") {
         let e = (dp / dp_exact(u) - 1.0).abs();
+        assert!(e <= 0.01, "u = {u}: dp {dp} vs {} (relative {e})", dp_exact(u));
+    }
+}
+
+const FIVE_U: [f64; 5] = [0.02, 0.04, 0.06, 0.08, 0.1];
+
+/// ADR 0099 P1 (F-095 acceptance): the 5-velocity sweep in parallel returns a 5-row table equal to the sequential one,
+/// and resume skips all 5 points.
+#[test]
+fn p1_five_velocity_sweep_parallel_equals_sequential_and_resumes() {
+    let d = tmp("p1");
+    let case = pois_case(&d, "10", &FIVE_U);
+    let (a, b) = (d.join("a"), d.join("b"));
+    let go = |out: &Path, extra: &[&str]| {
+        let mut args = vec![
+            "study",
+            &case,
+            "--out",
+            out.to_str().unwrap(),
+            "--quiet",
+            "--no-fields",
+            "--json",
+        ];
+        args.extend_from_slice(extra);
+        rcfd(&args)
+    };
+    let oa = go(&a, &["--parallel", "2"]);
+    assert_eq!(code(&oa), 0, "{}", stderr(&oa));
+    let s = summary(&oa);
+    assert_eq!((s["run"].as_u64(), s["skipped"].as_u64()), (Some(5), Some(0)), "{s}");
+    let t = table(&a);
+    let rows = t["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 5);
+    for r in rows {
+        assert_eq!(r["status"], "ok", "{r}");
+        assert!(f(&r["reports"]["dp"]).is_finite(), "{r}");
+    }
+    let ob = go(&b, &["--parallel", "1"]);
+    assert_eq!(code(&ob), 0, "{}", stderr(&ob));
+    let files = ["table.csv", "table.json"];
+    let before: Vec<Vec<u8>> = files.iter().map(|x| std::fs::read(a.join(x)).unwrap()).collect();
+    for (file, bytes) in files.iter().zip(&before) {
+        assert!(
+            *bytes == std::fs::read(b.join(file)).unwrap(),
+            "{file} differs between parallel 2 and 1"
+        );
+    }
+    let oc = go(&a, &["--resume"]);
+    assert_eq!(code(&oc), 0, "{}", stderr(&oc));
+    let s = summary(&oc);
+    assert_eq!((s["run"].as_u64(), s["skipped"].as_u64()), (Some(0), Some(5)), "{s}");
+    for (file, bytes) in files.iter().zip(&before) {
+        assert!(
+            *bytes == std::fs::read(a.join(file)).unwrap(),
+            "{file} changed on resume"
+        );
+    }
+}
+
+/// ADR 0099 P2: the S7 map re-registered at ny 20 (S7 at ny 10 stays an ignored known miss).
+#[test]
+fn p2_poiseuille_map_ny20_within_one_percent() {
+    let m = poiseuille("20", &FIVE_U, "p2");
+    assert_eq!(m.len(), 5);
+    for (u, dp) in m {
+        let e = (dp / dp_exact(u) - 1.0).abs();
+        eprintln!("P2 u = {u}: dp {dp} vs {} (relative {e:e})", dp_exact(u));
         assert!(e <= 0.01, "u = {u}: dp {dp} vs {} (relative {e})", dp_exact(u));
     }
 }

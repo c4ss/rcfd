@@ -119,6 +119,62 @@ fn coarse_solution_gives_lower_initial_residual_on_fine_mesh() {
     }
 }
 
+/// First-iteration (momentum, pressure) residual numerators `sum|b - A x|`; needs `record_parts`.
+fn first_nums(s: &mut Simulation) -> (Vec<f64>, f64) {
+    let sv = s.simple_solver_mut().unwrap();
+    let u = sv.parts_history[0].iter().map(|p| p.num).collect();
+    (u, sv.pressure_parts_history[0].unwrap().num)
+}
+
+/// ADR 0099 F1: the initial residuals of both starts divided by the same denominators, the reference norms of the
+/// converged uniform-start solution (the default normalisation divides by each run's own variation instead).
+#[test]
+#[ignore = "known miss: ADR 0099 F1; R_u passes (ratio 0.59) but R_p of the interpolated start is 1.18 (non-conservative) and 1.18 (conservative) times the uniform one, see the ADR 0099 addendum"]
+fn f1_fixed_normalisation_initial_residual_known_miss() {
+    let dir = tmp("f1");
+    let (c_coarse, mut coarse) = sim(12, 1e-7);
+    converge(&mut coarse);
+    let ck = dir.join("coarse.ckpt");
+    coarse.save_checkpoint(&ck).unwrap();
+
+    let (_, mut uni) = sim(24, 1e-6);
+    uni.simple_solver_mut().unwrap().record_parts = true;
+    uni.step();
+    converge(&mut uni);
+    let (nu_uni, np_uni) = first_nums(&mut uni);
+    let sv = uni.simple_solver_mut().unwrap();
+    let d_u: Vec<f64> = sv.parts_history.last().unwrap().iter().map(|p| p.norm_ref).collect();
+    let d_p = sv.pressure_parts_history.last().unwrap().unwrap().norm_ref;
+    let r = |nu: &[f64], np: f64| -> (f64, f64) {
+        let ru = nu.iter().zip(&d_u).map(|(n, d)| n / d).fold(0.0, f64::max);
+        (ru, np / d_p)
+    };
+    let (ru_uni, rp_uni) = r(&nu_uni, np_uni);
+    println!("F1 denominators D_u {d_u:?} D_p {d_p:.4e}; uniform R_u {ru_uni:.4e} R_p {rp_uni:.4e}");
+
+    let mut bad = Vec::new();
+    for mode in [InterpMode::NonConservative, InterpMode::Conservative] {
+        let (_, mut fine) = sim(24, 1e-6);
+        fine.interpolate_from(&c_coarse, &ck, mode).unwrap();
+        fine.simple_solver_mut().unwrap().record_parts = true;
+        fine.step();
+        let (nu, np) = first_nums(&mut fine);
+        let (ru, rp) = r(&nu, np);
+        println!(
+            "F1 {mode:?}: R_u {ru:.4e} R_p {rp:.4e} (ratio to uniform {:.4} {:.4})",
+            ru / ru_uni,
+            rp / rp_uni
+        );
+        if ru >= ru_uni {
+            bad.push(format!("{mode:?} R_u {ru} vs uniform {ru_uni}"));
+        }
+        if rp >= rp_uni {
+            bad.push(format!("{mode:?} R_p {rp} vs uniform {rp_uni}"));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:?}");
+}
+
 #[test]
 fn conservative_mode_matches_source_integrals() {
     let dir = tmp("cons");
