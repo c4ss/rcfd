@@ -18,7 +18,7 @@ less than exists): F-132 and F-121.
 | F-072 | Derived fields and sampling | DONE | run: rcfd-post derived 7/7, rcfd-api postprocessing 10/10 | title-only: wall shear and y+ laminar only, no lambda2, `rcfd sample` re-runs the case (F-238 holds the rest) | - | - | - | no |
 | F-103 | CGNS/EnSight/HDF5 | PARTIAL | run: rcfd-io w26c_ensight 7/7; checked locally: no ParaView, VisIt, h5dump, Python vtk, h5py, pyvista or meshio | acceptance ("open in third-party viewers") untested; CGNS and HDF5 not delivered | S (EnSight check) + L (CGNS/HDF5) | external third-party reader not installed; no HDF5 library | EnSight yes once a reader exists; CGNS no | yes (install a reader, HDF5 route) |
 | F-121 | Headless run control | DONE | run: rcfd-cli run_control 5/5, w19c_run_control 7/7, rcfd-api runctl 6/6, rcfd-mcp lib `workflow_and_headless_tools_run_a_case_and_read_the_status_stream`; read: docs/run-control.md exit codes 0-8. Note stale: R1 now reproduces exit 6 ("diverged") through the binary; exit 4 is still not reproduced through the binary, and both R1 tests pass either way | title-only: hostfile (F-100), single precision, control socket, signal handlers, affinity, scheduled commands, checkpoints for compressible and turbulence runs | - | F-100 for hostfile | - | no |
-| F-132 | Tet/poly volume meshing | PARTIAL | run: rcfd-mesh tetmesh 10/10 (+torus known miss fails), polydual 3/3, rcfd-fv w19b_meshing_solve 2/2 | boundary layers absent; no STL-file input test; quality limits met on cube and sphere only | M | none hard (overlaps F-108) | yes, with risk | no (thresholds need numbers) |
+| F-132 | Tet/poly volume meshing | PARTIAL | run: rcfd-mesh tetmesh 10/10 (+torus known miss fails), polydual 3/3, rcfd-fv w19b_meshing_solve 2/2 | boundary layers absent; no STL-file input test; quality limits met on cube and sphere only | M-L (L if F-108 inflation cannot be reused) | none hard (overlaps F-108) | yes, with risk | no (thresholds need numbers) |
 | F-202 | User-defined transport equations | DONE | run: rcfd-api user_scalars 6/6 | title-only: vector variant, coupling of user variables into properties and other equations | - | - | - | no |
 | F-212 | Enthalpy-porosity solidification | PARTIAL | run: rcfd-fv solidification 15/15 (+8 known misses fail as recorded), rcfd-api phase_change_case 3/3 | gallium-cavity clause: no melt-flow coupling in the case tree, no reference data; pull velocity absent | L | reference data (gallium experiment) not obtained; melt-flow coupling | no | yes (obtain data, reword "trend") |
 | F-224 | Chemistry input formats | PARTIAL | run: rcfd-reactor slices k12a/k12b, reactor `gri` filter (r3_gri_reads 53 species / 325 reactions; r3 NASA continuity known miss fails as recorded); counted gri30.yaml: 53 species, 325 reactions | no second-format reader (YAML); no three-condition hydrogen-air equilibrium comparison | M | none (data present locally) | yes | yes (YAML crate vs subset parser) |
@@ -50,8 +50,8 @@ a 3D box can be built from `gen::box_mesh` plus `Mesh::set_periodic` on three pa
 not the mesher. Channel LES: verified mean-profile data for Re_tau 178 (Moser, Kim and Mansour, chan180, "verified (file read)")
 is already in docs/reference-data.md, so reference data is not the blocker; the blockers are a 3D periodic channel with a driving
 pressure gradient in PIMPLE (not checked whether PIMPLE supports one) and hours of run time; the full viscous-stress option also
-lacks boundary-face contributions at walls (ADR 0032). The note's "DES/SAS not delivered" is partly stale: rcfd-turb des.rs and
-rcfd-api des_tree.rs exist under F-207. Unverified: Cs 0.17, Cw 0.325, A+ 25 (from memory). Proposed rewording: "Taylor-Green
+lacks boundary-face contributions at walls (ADR 0032). DES lives under F-207 (rcfd-turb des.rs and rcfd-api des_tree.rs exist; not run for
+this audit). Unverified: Cs 0.17, Cw 0.325, A+ 25 (from memory). Proposed rewording: "Taylor-Green
 (2D) dissipation checks; channel LES at Re_tau 180 on a coarse mesh gives U_b+ within 10 percent of the DNS and a log-layer slope
 within 15 percent; decaying-turbulence clause replaced by a 3D Taylor-Green or decaying box with a numeric spectrum-slope limit
 over a stated wavenumber band, or dropped".
@@ -75,8 +75,8 @@ known miss still fails (fraction 0.634 against 0.99); the remeshed torus reaches
 0.927 and minimum dihedral 3.34 degrees but asserts no quality limit. The note says polyhedral dual conversion is not done and
 F-102 stays todo; that is stale: rcfd_mesh::polydual (F-102, ADR 0054) exists and `a5_dual_of_tetrahedralised_sphere` checks
 that the dual of a generated tet mesh preserves volume to 1e-13 relative, so the "polyhedral conversion preserves volume" clause
-is met. Unmet: boundary layers (no test applies prism layers to a tet mesh; F-108 inflation works on patches outward, not inward
-around a body), and "closed STL geometry" (all inputs are procedural surfaces; the STL reader in rcfd-io is never fed to
+is met. Unmet: boundary layers (no test applies prism layers to a tet mesh; whether F-108 inflation can be applied to the tetmesh body
+patch was not checked), and "closed STL geometry" (all inputs are procedural surfaces; the STL reader in rcfd-io is never fed to
 `tetrahedralize`). The acceptance gives no numeric quality thresholds; propose naming them (radius-edge fraction, minimum
 dihedral, non-orthogonality) and the STL file.
 
