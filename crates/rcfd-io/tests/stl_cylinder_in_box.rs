@@ -104,7 +104,8 @@ fn s1_stl_file_is_closed() {
 /// mesh volume equal to the remeshed surface volume to 1e-10, two patches, `check_mesh` without errors, every cell volume
 /// positive and the minimum dihedral angle at least 3.0 degrees (the ADR 0030 T5 limit).
 /// Known miss: every check passed except the last one: minimum dihedral 1.84 degrees (the in-code surface of `p1` gives
-/// 3.34; the STL surface has the same coordinates but another vertex numbering, and the remesh result depends on it).
+/// 3.34; the STL surface has the same coordinates but another vertex numbering; that the remesh depends on it is likely
+/// but not isolated).
 #[test]
 #[ignore = "known miss (ADR 0093 S2): minimum dihedral 1.84 deg vs registered 3.0 deg"]
 fn s2_known_miss_pipeline_watertight_and_quality() {
