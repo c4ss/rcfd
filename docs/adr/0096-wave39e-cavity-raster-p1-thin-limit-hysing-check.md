@@ -88,3 +88,34 @@ PDF, copy at karlin.mff.cuni.cz/~hron/NMMO403/1934_ftp.pdf; the MOX preprint 23/
   1.0813, V_c,max within 25 % of 0.2417; dam break front speed band 1.44 to 1.94). If both pass, F-055 is set to done: its
   acceptance ("Dam break front position vs experiment; rising bubble benchmark") is then met by passing non-ignored tests with
   numeric limits against references that are now read (Hysing) or secondary-source (Martin-Moyce 1.69, still marked so).
+
+## Addendum: measured values (after the runs)
+
+| Check | Measured | Limit | Result |
+|-------|----------|-------|--------|
+| F-143 C1, raster centreline vs Ghia Re 100 | max \|u - u_Ghia\| 0.00277 at y = 0.8516; run stopped at iteration 203 of the 3000 cap, state `finished` | 0.02 | pass |
+| F-143 C2, one strict speed minimum in the upper-half window, y in [0.5922, 0.7594] | two minima: (0.6125, 0.7375) speed 0.0048 and (0.3375, 0.8375) speed 0.178 | exactly one | **miss** |
+| F-052 T1, tau = 1e-4, eps 1/1 | 7.50e-5 (hot and cold wall; 800 iterations) | 1e-3 | pass |
+| F-052 T1, tau = 1e-4, eps 0.8/0.5 | 3.33e-5 (1400 iterations) | 1e-3 | pass |
+| F-055 bubble, free-slip sides | y_c(3) 1.0282 (ref 1.0813), V_c,max 0.2204 at t 0.850 (ref 0.2417) | +-0.12, 25 % | pass |
+| F-055 dam break | v/sqrt(gH) 1.504 | 1.44 to 1.94 | pass |
+
+F-052: the deviation equals the P1 term 0.75 tau / (1/eps1 + 1/eps2 - 1) to the printed digits (7.5e-5 and 3.33e-5), so the
+discretisation adds nothing visible at this tau.
+
+F-143 C2 miss: the primary-vortex minimum is where C2 expects it (inside the Ghia u sign-change bracket, speed 0.0048, the lowest
+pixel in the window). The window also contains a second strict 3 x 3 minimum at (0.3375, 0.8375), speed 0.178, in the shear layer
+below the lid on the upstream side. I did not anticipate a local speed minimum outside the vortex core when I chose the window.
+Whether it is a property of the exact flow or of the 40 x 40 discretisation was not investigated. Narrowing the window now would
+be tuning, so there is no corrected C2.
+
+Deviation from the registered plan: C1 and C2 were registered as one test. After the run I split them into
+`v11_cavity_raster_centreline_matches_ghia_re100` (passes) and the ignored `v11_cavity_raster_has_one_vortex_speed_minimum_known_miss`,
+which share one run helper. Neither limit changed.
+
+Look at the picture: the test writes `f143_cavity_speed.png` (320 x 320) under the test target's `CARGO_TARGET_TMPDIR/viewport`.
+The agent opened it. It shows the lid band at the top, a dark core at about (0.6, 0.74), the faster down-flow along the right
+wall, and dark bottom corners. This is an agent's look, not the human look that clause 1 asks for.
+
+Status: F-055 done (acceptance met; the reference values are now read). F-143 and F-052 stay partial under their current
+acceptance text; the rewordings proposed above are the user's decision.

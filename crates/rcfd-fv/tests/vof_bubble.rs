@@ -1,5 +1,5 @@
 //! ADR 0049 check E (rising bubble, Hysing et al. 2009 case 1, coarse 40 x 80 algebraic VOF). The limits are those registered in
-//! the ADR before any run; none was changed afterwards. Reference values are UNVERIFIED (docs/reference-data.md).
+//! the ADR before any run; none was changed afterwards. Reference values read in Hysing et al. 2009 Table V (ADR 0096).
 
 use rcfd_fv::vof::{indicator_fraction, VofSettings, VofSolver};
 use rcfd_fv::{FixedValue, FvGeometry, ScalarField, Symmetry, VectorField};
@@ -59,7 +59,7 @@ fn run(free_slip_sides: bool) -> (f64, f64, f64, f64) {
     let m: f64 = (0..a.len()).map(|c| (1.0 - a[c]) * vol[c]).sum();
     let yc: f64 = (0..a.len()).map(|c| (1.0 - a[c]) * vol[c] * cc[c][1]).sum::<f64>() / m;
     println!(
-        "E free_slip_sides={free_slip_sides}: y_c(3) = {yc:.4} (ref 1.0813, limit +-0.12), v_max = {vmax:.4} at t = {tmax:.3} (ref 0.2417 at 0.9317, limit 25 percent), dV {dv:.2e}, bound violation {worst_bound:.2e}, {:.1} s",
+        "E free_slip_sides={free_slip_sides}: y_c(3) = {yc:.4} (ref 1.0813, limit +-0.12), v_max = {vmax:.4} at t = {tmax:.3} (ref 0.2417 at 0.9213, limit 25 percent), dV {dv:.2e}, bound violation {worst_bound:.2e}, {:.1} s",
         t0.elapsed().as_secs_f64()
     );
     (yc, vmax, dv, worst_bound)
