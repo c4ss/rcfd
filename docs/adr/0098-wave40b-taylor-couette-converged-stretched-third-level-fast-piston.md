@@ -86,3 +86,32 @@ most `0.24 / 1.18`, so the effective CFL stays below 0.49.
 Smoke (ignored `piston_mach02_smoke`, kept): `piston_run(P, 0.25)`, a quarter stroke (285 steps, 0.4 s): V/V0
 0.912, 3 removals, p_bar V^gamma - 1 = 2.28e-4, B1 3.3e-16, B2 1.3e-14, B3 6.7e-16, p/rho^gamma spread [0.999994, 1.000063]. What I
 knew when registering: those numbers and the ADR 0090 results at Mach 0.05.
+
+## Addendum: measured (registered runs on the work tree of d4c9e2f, release)
+
+| Item | Check | Measured | Limit | Verdict |
+|---|---|---|---|---|
+| F-204 | D5d converged flag, n_r = 128, cap 20000 | `true` after 6206 iterations (res_u 9.965e-12, res_p 9.971e-12) | `true`, tolerance 1e-11 | met |
+| F-204 | D5d torque | -2.5024501, relative error -4.307e-3 | `|.| <= 0.01` | met |
+| F-208 | M5 converged under the `solve` rule, S, n = 16, 32, 64, C0 / C1 / C2 | all nine runs converged | all | met |
+| F-208 | M5 L2 order 32 -> 64 on S | 1.908 for C0, C1 and C2 (errors 2.0911e-4 -> 5.5711e-5) | `>= 1.7` | met |
+| F-230 | Mach 0.2 piston A1 / A2 | 2.935e-4 / 4.345e-4 (max over all steps 4.372e-4) | `|.| <= 2e-2` | met |
+| F-230 | B1 / B2 / B3 | 4.44e-16 / 1.35e-13 / 8.88e-16 | 1e-13 / 1e-12 / 1e-13 | met |
+| F-230 | B4 / B5 | 24 removals, 24 additions / 0 | each >= 5 / 0 | met |
+
+Repeat check: the D5d torque and final residuals equal the smoke digits (the smoke printed every 1000 iterations and stopped at
+the first chunk boundary after convergence, so it printed "7000"; the run converged at iteration 6206). On S the three option
+sets give the same errors to 1e-14 relative, as expected on an orthogonal mesh where the secondary-gradient terms vanish; the
+16 -> 32 order is 1.744 as in ADR 0016, and the new pair shows the asymptotic range is reached (1.908). The M5 n = 64 error
+equals the smoke value after 8 sweeps to 2e-6 relative.
+
+F-230: the refactor into `piston_run` changed nothing in the registered Mach 0.05 run (1.528e-5 / 3.415e-5, B2 5.37e-13, 24 / 24
+events, 9192 steps, as in ADR 0090). At Mach 0.2 the isentrope deviation grows by a factor 19 (A1) and 13 (A2), and the
+p/rho^gamma spread at t = P grows to [0.999990, 1.000922] from [0.999986, 1.000137]; both stay far inside the limit. The run
+takes 2394 steps, 1.8 s. F-230 status unchanged (done).
+
+Roadmap: F-204 and F-208 set to done under the registered decision rules. Gaps that stay outside the acceptance (to be split
+into new items by the lead, not created here to avoid id clashes): F-204 turbulence with the new wall kinds, MRF
+Taylor-Couette, the D5b rigid-rotation velocity known miss, D2 specified shear still reporting `converged false`; F-208
+pressure-interpolation variants, a warped-face correction separate from the face correction, case-tree wiring of
+`GradientOptions`. No deviations from the registered plan.

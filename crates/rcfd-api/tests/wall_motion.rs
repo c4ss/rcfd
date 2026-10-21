@@ -456,3 +456,27 @@ fn d5_finest_grid_convergence_diagnostic() {
         s.stop_reason()
     );
 }
+
+/// ADR 0098 (wave 40B) D5d: the finest D5 grid run to convergence. Registered set-up change only: the iteration cap
+/// 6000 -> 20000 (residual tolerances 1e-11 unchanged). Limits: `converged == true` and `|M / M_exact - 1| <= 0.01`.
+#[test]
+fn d5d_taylor_couette_torque_converged() {
+    let exact = 4.0 * std::f64::consts::PI * 0.1 * 2.0;
+    let text = taylor_couette(128, 1.0, -0.5, Some(1.0)).replace("max_iterations = 6000", "max_iterations = 20000");
+    let c = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut s = Simulation::new(&c).unwrap_or_else(|e| panic!("{e:?}"));
+    s.run(20000);
+    assert!(s.failure().is_none(), "{:?}", s.failure());
+    let m = s.monitors.last("torque").unwrap();
+    let rel = m.abs() / exact - 1.0;
+    let l = s.last().unwrap();
+    println!(
+        "D5d n_r = 128: torque {m:.7} (exact magnitude {exact:.6}), relative error {rel:.3e}, {} iterations, res_u {:.3e}, res_p {:.3e}, converged {}",
+        s.iteration(),
+        l.res_u,
+        l.res_p,
+        s.is_converged()
+    );
+    assert!(s.is_converged(), "not converged: {:?}", s.stop_reason());
+    assert!(rel.abs() <= 0.01, "{rel}");
+}

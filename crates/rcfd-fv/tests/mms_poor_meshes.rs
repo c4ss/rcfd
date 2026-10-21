@@ -281,3 +281,30 @@ fn m1_m4_order_and_option_effects() {
     println!("M4 Dropped boundary on K: err/err(C0) = {:.4}", ed / e0);
     assert!(misses.is_empty(), "{misses:#?}");
 }
+
+/// ADR 0098 (wave 40B) M5: a third refinement level on the stretched mesh S. Registered: every run converges under the
+/// unchanged `solve` rule (change <= 1e-13 of the range within 600 sweeps) and the L2 order of the pair n = 32 -> 64 is
+/// `>= 1.7` for C0, C1 and C2.
+#[test]
+fn m5_stretched_mesh_third_level_order() {
+    let mut misses = Vec::new();
+    for (name, o) in sets() {
+        let mut e = Vec::new();
+        for n in [16usize, 32, 64] {
+            let (err, conv) = solve(MeshKind::S, n, o);
+            if !conv {
+                misses.push(format!("S {name} n={n}: not converged"));
+            }
+            e.push(err);
+        }
+        let order = (e[1] / e[2]).log2();
+        println!(
+            "M5 S {name}: errors {e:?} orders (16->32) {:.3} (32->64) {order:.3}",
+            (e[0] / e[1]).log2()
+        );
+        if order < 1.7 {
+            misses.push(format!("S {name}: order (32->64) {order:.3} < 1.7"));
+        }
+    }
+    assert!(misses.is_empty(), "{misses:#?}");
+}
