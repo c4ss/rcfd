@@ -143,3 +143,20 @@ explain the drift at most; B2 (e(160) <= 0.5 e(40)) needs half the offset remove
   = A2, 160 ns 32), printing the B1-B4 quantities of ADR 0100, only if A2 confirms (e(80) < e(40) on both metrics). Otherwise no
   160 x 320 run is made. No combination of variants is chosen after seeing the 80 x 160 numbers. Scaled smoothing is a diagnosis,
   not a fix: it is not proposed as a default.
+
+## Amendment B (written after the A runs, before any B run)
+
+What I knew: all D and A results (addendum). A1 meets its precondition (rms 0.13, 0.050, 0.015 with scaled smoothing); A2 does not
+confirm and is a "reject" by the letter (80 x 160 with n_smooth 8: y_c(3) 1.0253, V_c,max 0.2198, shifts +0.0075 and +0.0011);
+A3 and A4 change nothing significant. So no 160 x 320 run is made (amendment A rule). Nothing tested so far moves the offset; the
+levers found are the viscosity of the bubble (D2c) and, weakly, the curvature smoothing. One candidate has had no first-principles
+check yet: the response of the discrete pressure-velocity coupling to the density jump (C3 density, C4). It has one:
+
+* B1 (C3 density, C4) impulsive start, added mass: the Hysing fluids and bubble (R = 0.25, rho 1000 / 100, mu 10 / 1, g = 0.98),
+  sigma = 0, centred in an 8 x 8 box with free-slip (symmetry) walls on all sides, starting from rest, ONE step of dt = 1e-4
+  (viscous diffusion length sqrt(nu dt) = 1e-3, below h), on h = 1/20, 1/40, 1/80 (160^2, 320^2, 640^2 cells). Measured: the
+  bubble acceleration a = V_c(dt) / dt. Reference (first principles, potential flow at t = 0+): a 2-D circular cylinder has added
+  mass coefficient 1, so a0 = (rho_1 - rho_2) g / (rho_2 + rho_1) = 0.8018; the walls at 16 R raise the added mass by about
+  (R/L)^2 order, under 1 % (estimate, UNVERIFIED), and the smeared interface changes it at O(h/R). Reading: a defect of the
+  density-jump coupling is confirmed if a on h = 1/80 is outside [0.76, 0.82] and does not approach 0.80 under refinement; rejected
+  if a on h = 1/80 is within [0.78, 0.81].
