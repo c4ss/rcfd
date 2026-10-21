@@ -91,3 +91,27 @@ manual procedure) and C2 (close to the steady run). T1 adds the reading the user
 the same final state as one uninterrupted transient run.
 
 Decision rule: T1 passing sets F-241 done; a miss becomes `c7_..._known_miss` and the item stays partial.
+
+## Addendum 1: measured values (first and only run of the registered tests)
+
+All registered checks pass; no amendment, no deviation from the registered set-ups.
+
+F-136 (crates/rcfd-post/tests/fwh_impermeable.rs):
+* R0: stationary dipole 1.07e-13 of the amplitude (limit 1e-9); h against 2h 5.8e-12 to 4.2e-10 (limit 1e-8).
+* R1: FW-H series against the direct retarded-time solution, e = 1.87e-8 to 2.03e-8 for B = 1 and 3.0e-8 to 3.4e-8 for
+  B = 3, at r = 2000 m (45, 90, 135 degrees) and r = 15 m (60 degrees) (limit 1e-3). Harmonic amplitudes 1.6e-8 to
+  2.3e-7, the largest for B = 3, m = 3 at r = 15 m, whose amplitude is 3e-3 of m = 1 (limit 1e-3).
+* R2: the in-repo Gutin-type formula against the direct solution at r = 2000 m, 8.5e-8 to 3.98e-5, the largest at
+  135 degrees, B = 1, m = 1 (limit 1e-2). The same 135-degree pattern W3 showed (4.0e-5) appears here, so it belongs to the
+  far-field formula, not to the FW-H code. The formula is now checked against an independent solution; its attribution
+  to Gutin (1936) and Lowson (1965) is still UNVERIFIED (the papers were not read).
+
+F-136 is set done: R1 reproduces the rotating-dipole (rotating point force) field from an independent first-principles
+solution in near and far field, the monopole checks of ADR 0013 stand, and the sampled-file path is covered by A7 and S3.
+
+F-241 (crates/rcfd-api/tests/chain_w19c.rs):
+* T1 `c7_...`: the chained transient (0 to 0.5, exact restart, 0.5 to 1.0; 10 and 20 steps) equals the single transient
+  run from rest in ux, uy, p, face flux and time bit for bit (tolerance 0). Stage `second` reported `exact`.
+
+F-241 is set done under the reading the user chose. The limitation stated above holds: a split whose stage end clips a
+step by a few ulp is not bitwise equal and is not tested.

@@ -728,3 +728,191 @@ fn w5d_permeable_flow_off_axis_against_lienard_wiechert() {
     println!("W5d off axis e = {e:.3e}");
     assert!(e <= 1e-3, "W5d e = {e:.3e}");
 }
+
+// ---------------- ADR 0097: independent direct retarded-time reference for a moving point force ----------------
+
+/// Pressure of a point force F(tau) (force on the fluid) moving on y(tau) with velocity v(tau), straight from the wave
+/// equation: p' = -d/dx_i [F_i(tau) / (4 pi r (1 - M_r))] at the retarded time tau = t - r/c0 (the Lienard-Wiechert
+/// potential of each force component). The x derivative is the 8th-order central difference `d8` with step `h` in the
+/// observer position; the retarded time is a Newton solve here. Nothing of rcfd_post::fwh is used.
+fn point_force_p(x: V3, t: f64, h: f64, path: &dyn Fn(f64) -> (V3, V3), force: &dyn Fn(f64) -> V3) -> f64 {
+    let pot = |xq: V3, i: usize| -> f64 {
+        let sep = |tau: f64| {
+            let (y, v) = path(tau);
+            let r = [xq[0] - y[0], xq[1] - y[1], xq[2] - y[2]];
+            ((r[0] * r[0] + r[1] * r[1] + r[2] * r[2]).sqrt(), r, v)
+        };
+        let mut tau = t - sep(t).0 / C0;
+        for _ in 0..100 {
+            let (rn, r, v) = sep(tau);
+            let g = tau + rn / C0 - t;
+            let gp = 1.0 - (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (C0 * rn);
+            tau -= g / gp;
+            if (g / gp).abs() <= 1e-15 * tau.abs().max(1.0) {
+                break;
+            }
+        }
+        let (rn, r, v) = sep(tau);
+        let mr = (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (C0 * rn);
+        force(tau)[i] / (4.0 * PI * rn * (1.0 - mr))
+    };
+    -(0..3)
+        .map(|i| {
+            d8(h, &|d| {
+                let mut xq = x;
+                xq[i] += d;
+                pot(xq, i)
+            })
+        })
+        .sum::<f64>()
+}
+
+/// Path and force of blade `blade` of the `rotor_surface` rotor (same angle convention, analytic, not sampled).
+fn blade_path(omega: f64, phi_b: f64) -> impl Fn(f64) -> (V3, V3) {
+    move |tau: f64| {
+        let (s, c) = (omega * tau + phi_b).sin_cos();
+        ([RT * c, RT * s, 0.0], [-omega * RT * s, omega * RT * c, 0.0])
+    }
+}
+fn blade_force(omega: f64, phi_b: f64, tb: f64, db: f64) -> impl Fn(f64) -> V3 {
+    move |tau: f64| {
+        let (s, c) = (omega * tau + phi_b).sin_cos();
+        [-db * s, db * c, tb]
+    }
+}
+
+fn rotor_direct_p(b: usize, tb: f64, db: f64, omega: f64, x: V3, t: f64, h: f64) -> f64 {
+    (0..b)
+        .map(|k| {
+            let phi_b = 2.0 * PI * k as f64 / b as f64;
+            point_force_p(x, t, h, &blade_path(omega, phi_b), &blade_force(omega, phi_b, tb, db))
+        })
+        .sum()
+}
+
+/// Observers of R0-R2 (ADR 0097): (theta degrees, r).
+const R_OBS: [(f64, f64); 4] = [(45.0, 2000.0), (90.0, 2000.0), (135.0, 2000.0), (60.0, 15.0)];
+
+fn r_obs(deg: f64, r: f64) -> V3 {
+    let th = deg.to_radians();
+    [r * th.sin(), 0.0, r * th.cos()]
+}
+
+#[test]
+fn r0_direct_reference_self_check() {
+    // stationary oscillating force against the W2 closed form
+    let (f0, w) = (5.0, PI / 2.0 * C0);
+    let x = [100.0 * 0.6, 100.0 * 0.8, 0.0];
+    let r = 100.0;
+    let mut worst: f64 = 0.0;
+    for i in 0..64 {
+        let t = 0.3 + i as f64 / 64.0 * 2.0 * PI / w;
+        let got = point_force_p(x, t, 0.05, &|_| ([0.0; 3], [0.0; 3]), &|tau| {
+            [f0 * (w * tau).sin(), 0.0, 0.0]
+        });
+        let tau = t - r / C0;
+        let ex = x[0] / (4.0 * PI * r * r) * (f0 * (w * tau).sin() / r + f0 * w * (w * tau).cos() / C0);
+        worst = worst.max((got - ex).abs() / (f0 * w / (4.0 * PI * r * C0)));
+    }
+    println!("R0 stationary dipole: max error / amplitude {worst:.3e} (limit 1e-9)");
+    assert!(worst <= 1e-9, "R0 stationary dipole {worst:.3e}");
+    // step study h = 0.05 against 0.1 on the rotor
+    let omega = MT * C0 / RT;
+    let rev = 2.0 * PI / omega;
+    for b in [1usize, 3] {
+        let (tb, db) = (30.0 / b as f64, 9.0 / b as f64);
+        for (deg, r) in R_OBS {
+            let obs = r_obs(deg, r);
+            let ts: Vec<f64> = (0..256).map(|i| r / C0 + rev * i as f64 / 256.0).collect();
+            let a: Vec<f64> = ts
+                .iter()
+                .map(|&t| rotor_direct_p(b, tb, db, omega, obs, t, 0.05))
+                .collect();
+            let c: Vec<f64> = ts
+                .iter()
+                .map(|&t| rotor_direct_p(b, tb, db, omega, obs, t, 0.1))
+                .collect();
+            let d: Vec<f64> = a.iter().zip(&c).map(|(x, y)| x - y).collect();
+            let e = rms(&d) / rms(&a);
+            println!("R0 B={b} theta={deg} r={r}: h vs 2h {e:.3e} (limit 1e-8)");
+            assert!(e <= 1e-8, "R0 B={b} theta={deg} r={r}: {e:.3e}");
+        }
+    }
+}
+
+/// Observer times of R1/R2 (one revolution, one revolution inside the valid window, as W3) and the reference series.
+fn r_series(s: &Surface, b: usize, omega: f64, obs: V3) -> (Vec<f64>, Vec<f64>) {
+    let rev = 2.0 * PI / omega;
+    let (lo, _) = s.valid_window(obs).unwrap();
+    let ts: Vec<f64> = (0..256).map(|i| lo + rev + rev * i as f64 / 256.0).collect();
+    let (tb, db) = (30.0 / b as f64, 9.0 / b as f64);
+    let reference = ts
+        .iter()
+        .map(|&t| rotor_direct_p(b, tb, db, omega, obs, t, 0.05))
+        .collect();
+    (ts, reference)
+}
+
+#[test]
+fn r1_rotating_force_fwh_matches_direct_retarded_time_solution() {
+    for b in [1usize, 3] {
+        let (s, omega) = rotor_surface(b, 30.0 / b as f64, 9.0 / b as f64, 256, 4);
+        for (deg, r) in R_OBS {
+            let obs = r_obs(deg, r);
+            let (ts, reference) = r_series(&s, b, omega, obs);
+            let fwh: Vec<f64> = s.signal(obs, &ts).unwrap().iter().map(|g| g.p_loading).collect();
+            let mean = reference.iter().sum::<f64>() / reference.len() as f64;
+            let ac: Vec<f64> = reference.iter().map(|x| x - mean).collect();
+            let diff: Vec<f64> = fwh.iter().zip(&reference).map(|(a, b)| a - b).collect();
+            let e = rms(&diff) / rms(&ac);
+            println!("R1 B={b} theta={deg} r={r}: series e = {e:.3e} (limit 1e-3)");
+            assert!(e <= 1e-3, "R1 B={b} theta={deg} r={r}: e = {e:.3e}");
+            let amp = |v: &[f64], m: usize| fundamental(&ts, v, (m * b) as f64 * omega).0;
+            let refs: Vec<f64> = (1..=3).map(|m| amp(&reference, m)).collect();
+            let top = refs.iter().cloned().fold(0.0, f64::max);
+            for m in 1..=3 {
+                if refs[m - 1] >= 1e-3 * top {
+                    let ea = (amp(&fwh, m) / refs[m - 1] - 1.0).abs();
+                    println!(
+                        "R1 B={b} theta={deg} r={r} m={m}: amplitude {:.5e} rel {ea:.3e}",
+                        refs[m - 1]
+                    );
+                    assert!(ea <= 1e-3, "R1 B={b} theta={deg} r={r} m={m}: {ea:.3e}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn r2_gutin_type_formula_matches_direct_retarded_time_solution() {
+    for b in [1usize, 3] {
+        let (s, omega) = rotor_surface(b, 30.0 / b as f64, 9.0 / b as f64, 256, 4);
+        let rotor = Rotor {
+            blades: b,
+            omega,
+            r_tip: RT,
+            thrust: 30.0,
+            torque: 9.0 * RT,
+            c0: C0,
+        };
+        for (deg, r) in R_OBS.into_iter().filter(|o| o.1 == 2000.0) {
+            let (ts, reference) = r_series(&s, b, omega, r_obs(deg, r));
+            let refs: Vec<f64> = (1..=3)
+                .map(|m| fundamental(&ts, &reference, (m * b) as f64 * omega).0)
+                .collect();
+            let top = refs.iter().cloned().fold(0.0, f64::max);
+            for m in 1..=3 {
+                if refs[m - 1] >= 1e-3 * top {
+                    let g = rotor.harmonic_amplitude(m, r, deg.to_radians()).unwrap();
+                    let e = (g / refs[m - 1] - 1.0).abs();
+                    println!(
+                        "R2 B={b} theta={deg} m={m}: formula {g:.5e} direct {:.5e} rel {e:.3e} (limit 1e-2)",
+                        refs[m - 1]
+                    );
+                    assert!(e <= 1e-2, "R2 B={b} theta={deg} m={m}: {e:.3e}");
+                }
+            }
+        }
+    }
+}
