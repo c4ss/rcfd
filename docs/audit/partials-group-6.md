@@ -21,6 +21,8 @@ set-up-defect tests fail, as their notes say. Runs made:
   defects).
 * rcfd-reactor: reactor 10 pass + r3_gri_nasa_continuity_known_miss FAIL (h 5.12e-3, limit 1e-3). The GRI-Mech 3.0 files were
   present in validation-data/data/gri-mech-30, so the heavy R7 tests ran (no "skipped" line).
+* Re-run with `--nocapture` to print values: rcfd-api sources, radiation, mixing_length_tree (the numbers quoted below come
+  from that output, not from the notes, unless marked otherwise).
 * F-093: a Python driver of `rcfd serve --stdio` (release build) timed 30 `panel.snapshot` calls on a running 40 x 40 cavity.
 
 Not re-run: the FAN-01 sector runs of rcfd-api tests/fan01_validation.rs and the later fan studies (16 to 60 minutes each; the
@@ -35,7 +37,7 @@ Code mod test runner); any GUI run with a window; any Linux run.
 | F-052 | Radiation: P1, S2S, DO | PARTIAL | ran rcfd-api `radiation` 5/5; read ADR 0012, docs/reference-data.md | only a 1D grey slab: P1 is compared with its own analytic solution (verification), and with the exact transport solution only at tau = 20 (Milne asymptote, 0.41 %). No multi-dimensional grey enclosure, no exact-RTE comparison at intermediate tau | S (reword) / M (2D enclosure) | none for P1; a 2D exact solution needs a verified source | yes | yes (reword to the P1 slab and close, S2S/DO stay in F-130) |
 | F-093 | Claude Code mod live monitors | PARTIAL | ran a stdio timing of `panel.snapshot` (release: 5.8 / 12.8 / 30.2 ms min/median/max, monitor sample current to the iteration); read register.tsx | update within 1 s is shown only on the service side (500 ms poll plus at most 30 ms); never observed in a host UI | S | needs a Claude Code host to run the mod | no | yes (retire as superseded by F-144, or accept the service-side timing) |
 | F-112 | 0D reactor toolkit | PARTIAL | ran rcfd-reactor `reactor` with the GRI data, 10 pass + 1 known miss | no comparison with PUBLISHED GRI-Mech 3.0 ignition delays (none verified); no CH4/air ignition delay at all (only H2/air); the PSR check is a blowout residence-time trend for H2/air, not a temperature trend against literature; 1D flame speed (title) not implemented | M (reference) / L (flame speed) | missing verified reference data | yes for the ignition comparison if a source is found | yes (which published source counts) |
-| F-126 | Turbomachinery rotating interfaces | PARTIAL (note stale) | ran rcfd-api `rotor_interface` 2 pass + known miss, `mixing_plane_run` 8 pass + known miss, `mrf` M5; read ADR 0075, 0078, 0086 and docs/milestone-fan.md | pressure ratio and efficiency not reproduced: the FAN-01 attempt (ADR 0075) missed every limit (torque -38 % / -46 %), the later studies did not close it. Mass across the interface is met (M5 5e-12, mixing plane 2.5e-14 per band) | L | fan milestone work; Delta p_ts is an installation value a rotor-only model cannot match | no | yes (reword: which case and quantity) |
+| F-126 | Turbomachinery rotating interfaces | PARTIAL (note stale) | ran rcfd-api `rotor_interface` 2 pass + known miss, `mixing_plane_run` 8 pass + known miss, `mrf` M5; read the ADR 0075 addendum and the ADR 0086 tables; ADR 0078 via docs/milestone-fan.md | pressure ratio and efficiency not reproduced: the FAN-01 attempt (ADR 0075) missed every limit (torque -38 % / -46 %), the later studies did not close it. Mass across the interface is met (M5 5e-12, mixing plane 2.5e-14 per band) | L | fan milestone work; Delta p_ts is an installation value a rotor-only model cannot match | no | yes (reword: which case and quantity) |
 | F-143 | 2D mesh and field viewport | PARTIAL | ran rcfd-gui `viewport_raster` 13 pass + 3 ignored records | "shows the lid-driven vortex" has only a data proxy (v10: top-row mean ux 0.573, return flow min ux -0.182, speed maximum in the top rows); nobody has looked at the picture | S | none | yes | yes (human look, or a measurable rewording) |
 | F-206 | Additional RANS closures | PARTIAL | ran rcfd-turb `mixing_length` 2/2 and rcfd-api `mixing_length_tree` 4/4 (Re_tau 395 channel within the 10 % limit) | pipe profile against Nikuradse data (no pipe case, no Nikuradse data); v2-f not implemented; curvature correction and its rotating-channel and U-duct cases not implemented | L | missing reference data (Nikuradse, Re_tau 395 DNS, curvature cases) | no | no |
 | F-216 | Per-region model sets | PARTIAL | ran rcfd-api `regions` 5/5; read coupled_cht.rs and ADR 0029 | only turbulence = laminar per region for momentum; no per-region energy, radiation or species model; no published finite-conductivity CHT benchmark; turbulence next to solids is rejected (coupled_cht `e2_turbulence_and_property_laws_are_rejected`) | L | F-051 (turbulent CHT), missing reference data | no | no |
@@ -48,7 +50,7 @@ still says the acceptance was "NOT ATTEMPTED", but ADR 0075 attempted it on FAN-
 ## Items that are not DONE
 
 **F-052.** The acceptance asks for "a gray enclosure benchmark" against "the analytic solution", without naming either. The tested
-slice is the grey slab between two grey plates (R1 2.6e-9 against the analytic P1/Marshak flux for tau 0.1 to 10, unequal
+slice is the grey slab between two grey plates (re-run with output: R1 2.63e-9 against the analytic P1/Marshak flux for tau 0.1 to 10, unequal
 emissivities, scattering; R2 0.41 % against the Milne transport asymptote at tau = 20; R3 Rosseland; R4 energy balance). R1 checks
 P1 against its own solution, not against the radiative transfer equation, so it is code verification. The note also understates
 the delivery: Rosseland is tested as well. Proposed rewording: "P1 grey slab matches the analytic P1 solution (1e-3) and the exact
@@ -96,7 +98,8 @@ committed) plus a test that the vortex-centre pixel is a speed minimum. Known mi
 quantisation (v1, registered).
 
 **F-206.** None of the three clauses is met as written. (1) The mixing length is validated on a periodic Re_tau 395 channel
-(worst 4.0 % linear, 3.1 % Nikuradse profile, limit 10 %), not a pipe against Nikuradse data. There is no pipe generator and no
+(re-run with output: worst 3.99 % linear, 3.12 % Nikuradse profile, limit 10 %; at y+ 10 to 20, which is info only, the
+linear profile is 1.6 to 4.1 % low), not a pipe against Nikuradse data. There is no pipe generator and no
 Nikuradse data in the tree. (2) v2-f does not exist. The Re_tau 395 DNS values in mixing_length_tree.rs are typed in from memory
 (Moser, Kim and Mansour; unverified); the only DNS file committed is mkm_chan180_sampled.csv at Re_tau 180. (3) Curvature
 correction and its rotating-channel and U-duct cases do not exist. The title adds EARSM, a generalised two-equation model,
@@ -115,8 +118,9 @@ reference data. The de Vahl Davis values are confirmed only through secondary so
 ## DONE items: scope beyond the acceptance
 
 **F-031.** The acceptance ("packed-bed Ergun pressure drop and rotating channel tests pass") is met by rcfd-api tests/sources.rs
-(packed bed +0.001 %, porous box +0.02 %, rotating channel profile 0.062 % and pressure +0.20 %, all with a 1 % limit; rest
-state at round-off). The MRF work of ADR 0008 adds more passes and eight registered misses (torque -3.41 / -4.12 % against 3 %,
+(re-run with output: packed bed dp/dx 149.7666 against Ergun 149.7656, +0.001 %; porous box inside 149.7666, outside -0.041,
+where the note still says 149.7965 / +0.02 % inside; rotating channel profile 0.062 % and pressure +0.203 %, all with a 1 %
+limit; rest state 5.3e-12 Omega R and 4.8e-9 % pressure). The MRF work of ADR 0008 adds more passes and eight registered misses (torque -3.41 / -4.12 % against 3 %,
 spurious speed 1.41e-3 against 1e-3, M1 pressure 7.55e-2 against 5e-2), re-measured here unchanged. Unverified: Ergun 150 / 1.75
 constants are checked only against a secondary web source (Ergun 1952 was not read).
 
