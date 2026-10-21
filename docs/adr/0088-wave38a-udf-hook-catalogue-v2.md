@@ -158,3 +158,7 @@ writing it down; the first run had measured nothing (the module did not parse).
   1910 passed / 0 failed / 536 ignored. This HEAD includes waves 38B, 38C and 38D, so the totals are not comparable
   with the wave-37 close (1881 / 531); the 38A delta at 904d056 was +8 passed, +1 ignored (`udf_hooks_w38a.rs`), and
   C9 adds one more passed test.
+* Re-gate of 0ca0499 (adds C9 and doc rewording only): `cargo fmt --check` and `cargo clippy ... -D warnings` clean;
+  `cargo test --workspace --release --no-fail-fast` was stopped by the host for low memory after 218 test binaries
+  (1160 passed, 0 failed, 297 ignored at that point) and was not restarted. C9 itself passed in the scratch build
+  (9 passed, 1 ignored in `udf_hooks_w38a.rs`). The last complete gate is the one of 904d056 above.
