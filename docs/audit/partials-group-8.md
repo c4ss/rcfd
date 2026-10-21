@@ -32,7 +32,9 @@ GUI key test on Linux.
 | F-230 | Dynamic mesh layering and remeshing | DONE | ran rcfd-fv `layering_w38c` 5/5, `ale_gcl` 4/4, `ale_flows` (4 pass; 4 F-063 known misses fail as recorded); read ADR 0090 | none against the text (p V^gamma 1.53e-5 and 3.42e-5 against 2e-2; layer-event conservation 4.4e-16). Scope-only: local remeshing, unstructured layering, case-tree wiring, PIMPLE layering | L (scope) | none | no (scope) | yes (split the scope) |
 | F-240 | Declarative setup-validation rule engine | PARTIAL | ran rcfd-api `rules_w19c` (5 pass; E2 zero-warning known miss fails on SV103); read crates/rcfd-api/rules/setup_rules.json, ADR 0031 | "published validation cases raise no error-level diagnostic" was never measured: the validation tests build their solvers through the library or from templates, which E2 skips; the five registry descriptors (case.json) have no loadable setup | S | none | yes | no |
 
-Counts: DONE 7 (F-055, F-095, F-115, F-128, F-149, F-208, F-230), PARTIAL 3 (F-041, F-218, F-240), TODO 0, OVERSTATED 0.
+Counts: DONE 7, PARTIAL 3 (F-041, F-218, F-240), TODO 0, OVERSTATED 0. Of the seven DONE items, only F-149 can flip now. The
+other six are DONE pending a reference check (F-055, Hysing values) or a user decision on wording or scope split (F-095,
+F-115, F-128, F-208, F-230).
 
 ## F-041 Spalart-Allmaras one-equation model (PARTIAL)
 
@@ -44,10 +46,12 @@ gives +5.81 % against TMR SA (limit 10 %), and resolved mode is identical to aut
 The miss is S2 (power law at x = 1.0). ADR 0014 registered that the acceptance is met only when S1, S2 and S3 all pass.
 That rule is the problem. At Re_x = 5e6 the power law gives about 2.64e-3 and White's correlation about 2.86e-3, which are
 8.5 % apart. To sit within 5 % of both, Cf must fall in a band about 2 % wide (2.72e-3 to 2.77e-3), and the TMR SA reference itself sits
-about +2.4 % above the power law at x = 0.97. The acceptance "within 5 percent of correlation" never names a correlation.
+about +2.4 % above the power law at x = 0.97. The acceptance "within 5 percent of correlation" never names a correlation,
+so it is ill-posed as written.
 
 Proposed rewording, for the user to decide: "flat plate Cf within 5 % of the TMR SA reference and of White's correlation
-for 0.4 <= x <= 1.0 (Re_x 2e6 to 5e6)". That is met now. If the user wants it, a mesh-convergence slice would make the
+for 0.4 <= x <= 1.0 (Re_x 2e6 to 5e6)". Any new reading must be registered in a new ADR before the item is re-graded, so
+that the limit is not chosen to fit the result. If the user wants it, a mesh-convergence slice would make the
 item stronger (size M).
 
 Unverified: the grid behind the TMR CFL3D file value. The 0.0576 power law is verified only against a CFD-Online wiki
@@ -83,8 +87,12 @@ The literal acceptance is met:
 - The study runner is exposed as the `design_run_study` MCP tool (T4 passes).
 
 The specific "5 inlet velocities" study exists only in the ignored S7 test. That test runs `--parallel 2`, exits 0 and
-returns 5 rows. It fails only on the merged-review 1 % clause (u = 0.02: dp 0.9417 against 0.96, -1.9 %). The non-ignored
+returns 5 rows (table.json left by this run: 5 rows, all `ok`, u = 0.02 to 0.1). It fails only on the merged-review 1 % clause (u = 0.02: dp 0.9417 against 0.96, -1.9 %). The non-ignored
 refinement diagnostic gives 1.90 % at ny 10 and 0.29 % at ny 20, and dp/U is constant to 1e-3.
+
+No non-ignored test runs the five-velocity sweep. The DONE grade combines three passing tests: s2 (thread independence),
+s3 (resume on the slab study), and the 3-velocity `--parallel 2` run inside `poiseuille_error_decreases_with_refinement`.
+The ignored S7 run supplies the 5-row table.
 
 Misquote in the note: it says "the acceptance text asks for" assistant/MCP exposure. Only the title does. The exposure now
 exists in any case (ten `design_*` tools).
