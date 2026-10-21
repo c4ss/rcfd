@@ -1,6 +1,7 @@
 //! Heat-exchanger macro cells (F-217, ADR 0039 D3). Limits are those registered in
 //! docs/adr/0039-wave23a-mhd-heat-exchanger.md before the first run: X1 counterflow ntu mode, X2 loss closure,
-//! X3 dual cell, X4 fan boundary against a porous jump, X5 located diagnostics.
+//! X3 dual cell, X4 fan boundary against a porous jump, X5 located diagnostics. X6 (fan at three operating points) and X7 (vent
+//! at six flows) are registered in docs/adr/0095-wave39d-field-registers-monitor-frames-fan-vent-curves.md.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
@@ -277,7 +278,7 @@ fn x3_dual_cell_exchanges_equal_and_opposite_heat() {
 
 #[test]
 fn x4_fan_boundary_reproduces_its_pressure_flow_curve() {
-    x4_run(true);
+    x4_run(true, 1e-6);
 }
 
 /// Diagnosis (wave 24, ADR 0042): the set-up is well-posed (fan curve against the jump has an operating point); the divergence
@@ -288,7 +289,7 @@ fn x4_fan_boundary_reproduces_its_pressure_flow_curve() {
 #[test]
 #[ignore = "KNOWN MISS: the registered lossless pressure-pressure duct of X4 diverges in the segregated iteration (flow NaN)"]
 fn x4_registered_lossless_setup_known_miss() {
-    x4_run(false);
+    x4_run(false, 1e-6);
 }
 
 /// Originally registered stationarity helper (pressure scale floor 1e-12): the pressure of a lossless periodic duct is zero to round-off,
@@ -302,7 +303,8 @@ fn x1_registered_stationarity_known_miss() {
     run_floor(&case_text(0.2, HOT_INLET, &block, true), 3000, 1e-12);
 }
 
-fn x4_run(with_bed: bool) {
+/// X4 duct with bed permeability `k_bed` (the bed resistance sets the operating point); returns (Q, patch pressure).
+fn x4_run(with_bed: bool, k_bed: f64) -> (f64, f64) {
     let (ly, depth) = (1.0, 0.02);
     let area = ly * depth;
     let (fq, fp) = ([0.0, 0.03, 0.06], [200.0, 140.0, 0.0]);
@@ -311,7 +313,7 @@ fn x4_run(with_bed: bool) {
     // A lossless duct between a pressure inlet and a pressure outlet is unstable in the segregated iteration (measured: divergence
     // within 2 iterations with the jump alone), so the whole duct carries a linear Darcy bed `dp = mu/K v L` (L = 2 m); it enters the
     // analytic operating point.
-    let (k_bed, length) = (1e-6, 2.0);
+    let length = 2.0;
     let bed_on = if with_bed { 1.0 } else { 0.0 };
     let q_op = bisect(
         |q| {
@@ -353,6 +355,78 @@ temperature",
     );
     assert!(q > 0.0 && eq <= 5e-3, "Q {q} vs {q_op}");
     assert!(ec <= 2e-3, "patch pressure {dp} vs curve {}", fan.eval(q));
+    (q, dp)
+}
+
+/// X6 (ADR 0095): the fan boundary at three operating points, one on each linear segment of the curve and one near the knee,
+/// set by the bed permeability on the X4 set-up; each point must meet the X4 limits and the three flows must be distinct.
+#[test]
+fn x6_fan_boundary_at_three_operating_points() {
+    let mut qs = Vec::new();
+    for k_bed in [3e-7, 1e-6, 1e-5] {
+        let (q, dp) = x4_run(true, k_bed);
+        eprintln!("X6 k_bed {k_bed:e}: Q {q:.6e}, patch pressure {dp:.4}");
+        qs.push(q);
+    }
+    assert!(qs[0] < 0.03 && qs[2] > 0.03, "points not on both segments: {qs:?}");
+    assert!(
+        qs.windows(2).all(|w| w[1] > w[0] * 1.05),
+        "operating points not distinct: {qs:?}"
+    );
+}
+
+/// X7 (ADR 0095) vent on its own set-up, independent of the F-200 channel: the X1 periodic duct (no side walls, plug flow) with a
+/// fixed inlet velocity `u` at xmin (negative: the flow enters through the vent), a vent with loss coefficient `k` and external
+/// pressure 0 at xmax, physical pseudo-time step `dt` (plain SIMPLEC diverges for forward flow, see the ADR). Returns the mean
+/// kinematic pressure of the outlet column.
+fn vent_run(u: f64, k: f64, dt: f64) -> f64 {
+    let inlet = format!("[boundaries.xmin]\nvelocity = \"fixed\"\nvelocity_value = [{u:?}, 0.0, 0.0]\n");
+    let pseudo = format!("pseudo_mode = \"physical\"\npseudo_dt = {dt:?}\n");
+    let vent = format!("[boundaries.xmax]\nbc_kind = \"vent\"\nloss_coefficient = {k:?}\nbc_pressure = 0.0\n");
+    let text = case_text(0.2, &inlet, &pseudo, false)
+        .replace(
+            "[boundaries.xmax]\nvelocity = \"zero_gradient\"\npressure = \"fixed\"\n",
+            &vent,
+        )
+        .replace("velocity = [2.0, 0.0, 0.0]", &format!("velocity = [{u:?}, 0.0, 0.0]"));
+    assert!(text.contains("bc_kind = \"vent\""), "vent block not substituted");
+    let sim = run(&text, 2000);
+    column(&sim, "p", 1.99, -1.0, 1.0)
+}
+
+/// X7: the outlet pressure follows 0.5 K u |u| at six flows (limit 1e-6 relative, ADR 0022 C3); `dt_of(u)` is the pseudo step. At
+/// |u| = 0.5 and 2 the linear law 0.5 K u is off by a factor 2 and 0.5, so the quadratic law is distinguished.
+fn x7_sweep(dt_of: impl Fn(f64) -> f64) {
+    let k = 2.5;
+    let mut worst = 0.0_f64;
+    for u in [0.5, 1.0, 2.0, -0.5, -1.0, -2.0] {
+        let p = vent_run(u, k, dt_of(u));
+        let want = 0.5 * k * u * u.abs();
+        let e = (p / want - 1.0).abs();
+        eprintln!(
+            "X7 u {u} dt {}: outlet p {p:.12e} vs 0.5 K u|u| = {want:.6e} (rel {e:.2e}, limit 1e-6); linear law 0.5 K u = {:.4e}",
+            dt_of(u),
+            0.5 * k * u
+        );
+        // the `run` helper's max-fold skips NaN, so finiteness is checked here
+        assert!(p.is_finite() && e <= 1e-6, "u {u}: p {p} vs {want}");
+        worst = worst.max(e);
+    }
+    eprintln!("X7 worst relative error {worst:.2e}");
+}
+
+/// Corrected set-up (ADR 0095 amendment 1): pseudo step 0.02/|u|, a Courant number of 1 at every flow.
+#[test]
+fn x7_vent_reproduces_its_quadratic_loss_law() {
+    x7_sweep(|u| 0.02 / u.abs());
+}
+
+/// KNOWN MISS (ADR 0095 amendment 1): the registered fixed pseudo step 0.02 passes at u = 0.5 (2.85e-12) and 1 (1.36e-13) and gives
+/// NaN at u = 2 (Courant number 2).
+#[test]
+#[ignore = "KNOWN MISS: the forward vent at u = 2 with pseudo_dt 0.02 (Courant 2) gives NaN"]
+fn x7_vent_at_fixed_pseudo_dt_known_miss() {
+    x7_sweep(|_| 0.02);
 }
 
 fn diags(text: &str) -> Vec<String> {

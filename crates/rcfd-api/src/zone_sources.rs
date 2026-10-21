@@ -254,7 +254,7 @@ impl ZoneSources {
             let target = gs(case, &p("target"));
             let scalar = (target != "temperature").then_some(target);
             let fixed = gs(case, &p("kind")) == "fixed_value";
-            let mask = match crate::sources::zone_cells(case, &format!("zone_sources.{n}"), geom) {
+            let mask = match crate::sources::zone_cells(case, &format!("zone_sources.{n}"), geom, None) {
                 Ok(m) => m,
                 Err(e) => {
                     errs.push(e);

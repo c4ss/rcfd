@@ -493,7 +493,7 @@ impl ChtModel {
         let mut init_t = Vec::new();
         for (i, name) in names.iter().enumerate() {
             let p = |f: &str| format!("solids.{name}.{f}");
-            let mask = match zone_cells(case, &format!("solids.{name}"), geom) {
+            let mask = match zone_cells(case, &format!("solids.{name}"), geom, None) {
                 Ok(m) => m,
                 Err(e) => {
                     errs.push(e);

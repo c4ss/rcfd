@@ -134,3 +134,38 @@ with 1/|u|), so a fixed Courant number of 1 is the same set-up at every flow rat
 Corrected set-up (new test `x7_vent_reproduces_its_quadratic_loss_law`): `pseudo_dt = 0.02 / |u|`, so the Courant number is 1 for all six
 flows. Everything else is unchanged: geometry, inlet, K = 2.5, the run helper and the 1e-6 limit with the finite check. If u = 2 still gives
 NaN at Courant 1, the hypothesis is falsified, the corrected test also becomes a known miss, and F-217 stays partial.
+
+## Addendum: measured values
+
+All runs are release builds in the scratch copy at the HEAD named above, plus this wave's files.
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| G1a field register count | 200 | exactly 200 | pass |
+| G1b mask equals the library threshold of \|u\| | equal | equal | pass |
+| G1c cells changed by the pressure patch | 200, all 7.5; the rest bit-identical | exactly the register | pass |
+| G1d non-zero porous sink cells | 200; the rest bit-zero | exactly the register | pass |
+| G1e field register against box register after 5 iterations | 0 differing cells in ux, uy, p; the source changes ux by up to 0.164 | 0, and > 1e-6 | pass |
+| G2 located errors (zone_sources consumer, `initial.method = "potential"`, above > below) | at `registers.fast.type`, `registers.fast.type`, `registers.fast.above` | located | pass |
+| M7a res_u lengths while running | 186, 367, 540, 729 (a second run: 205, 426, 675, 914) | at least 4, strictly increasing | pass |
+| M7b last length while running | 729 | below 200000 | pass |
+| M7c frames in state running | 48 | at least 3 | pass |
+| M7d worst frame | 9.1 ms | below 1 s | pass |
+| M7e shapes per running frame | at least 569 | more than 0 | pass |
+| X6 Q against the operating point (k_bed 3e-7, 1e-6, 1e-5) | 1.13e-3, 6.35e-4, 8.6e-5 (Q = 1.9293e-2, 3.0515e-2, 3.6212e-2) | 5e-3 each | pass |
+| X6 patch pressure against the curve | at most 1.8e-13 | 2e-3 | pass (by construction) |
+| X6 segments and spacing | 0.0193 < 0.03 < 0.0362; each step above 5 percent | as registered | pass |
+| X7 as registered (pseudo_dt 0.02) | u 0.5: 2.85e-12, u 1: 1.36e-13, u 2: NaN; reversed flows not reached | 1e-6 and finite | **miss**, ignored `x7_vent_at_fixed_pseudo_dt_known_miss` |
+| X7 corrected (amendment 1, Courant 1) | u 0.5, 1, 2, -0.5, -1, -2: 1.44e-14, 1.36e-13, 3.65e-13, 3.94e-13, 9.74e-14, 1.33e-13 | 1e-6 and finite | pass |
+
+Deviations: one, X7 amendment 1. It was written after the failed registered run and before the corrected run. When I wrote it I knew that
+u = 0.5 and u = 1 pass at pseudo_dt 0.02, and that plain SIMPLEC reversed flow settles. The Courant-1 hypothesis was not falsified: u = 2 at
+pseudo_dt 0.01 settles at 3.65e-13.
+
+Findings reported but not fixed:
+- Plain SIMPLEC with a velocity inlet and a forward vent outlet diverges from the first iteration when K > 0. This is the same class as the
+  F-200 C3 registered miss.
+- The `run` helper in `heat_exchanger.rs` takes the maximum change with a max-fold, which skips NaN, so a NaN field passes its stationarity
+  check. X7 checks finiteness itself. The helper is unchanged, so the other tests behave exactly as before.
+
+Statuses: F-124, F-144 and F-217 meet their acceptance text as written and are set to `done`. No acceptance text was reworded.

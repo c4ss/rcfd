@@ -383,7 +383,7 @@ impl Components {
                 });
                 continue;
             }
-            let zone = match zone_cells(case, &format!("components.{n}"), geom) {
+            let zone = match zone_cells(case, &format!("components.{n}"), geom, None) {
                 Ok(z) => z,
                 Err(d) => {
                     errs.push(d);
@@ -449,7 +449,7 @@ impl Components {
                         let mut secondary = None;
                         if getb(case, &p("dual_cell")) {
                             let sp = format!("components.{n}.secondary");
-                            let sz = match zone_cells(case, &sp, geom) {
+                            let sz = match zone_cells(case, &sp, geom, None) {
                                 Ok(z) => z,
                                 Err(d) => {
                                     errs.push(d);
