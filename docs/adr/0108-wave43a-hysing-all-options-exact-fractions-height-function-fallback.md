@@ -104,3 +104,14 @@ Z-T table was not obtained and the original time normalisation was not resolved.
 
 This clause was judged met by the ADR 0096 status decision (the user set F-055 back to partial for the bubble refinement only). This
 wave does not change it; it checks that `d_dam_break_front` still passes.
+
+## Smoke results (S1, S2; written before any t = 3 run)
+
+* S1 construction of X: the phase-volume assert passes on 40 x 80, 80 x 160, 160 x 320. Height-function curvature error of the
+  exact initial field: rms 5.01e-3 / 1.22e-3 / 3.19e-4, max 6.85e-3 / 1.75e-3 / 4.78e-4, no fallback on any grid (order 2; the
+  indicator field of ADR 0106 S2 gives rms 0.209 / 0.126 / 0.740).
+* S2 X on 40 x 80 to t = 0.05: finite, max|U| 0.038, drift 3.1e-16, bound 4.9e-15. X on 160 x 320 to t = 0.1 (35 s): finite,
+  max|U| 0.063, drift 4.9e-15, bound 1.5e-13. XC on 160 x 320 to t = 0.1 (41 s): finite, max|U| 0.063, drift 4.5e-15, bound
+  1.4e-13. Every set-up constructs and runs; by the smoke rule no amendment. Measured rate about 0.22 to 0.26 s per step on
+  160 x 320, so a 160 x 320 run to t = 3 is about 20 min.
+* Part 2 tests F1-F4 were written and pass (4 of 4, 0.04 s); they are equality tests, so no limit was set after a run.
