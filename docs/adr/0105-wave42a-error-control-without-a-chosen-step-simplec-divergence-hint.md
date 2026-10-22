@@ -119,3 +119,7 @@ of E1; this clause asks only that the requested error is reached, which it is.
 No deviation from the registered plan. Statuses: F-209 `partial` (first clause met by e2, Taylor-Green clause by S4, flat-plate
 clause open; the case-key path still takes its first, largest and smallest step from `solver.dt`). F-248 stays `done` with the
 diagnostic added.
+
+Final gate on a fresh `git archive` of d6a82ed (which also holds the wave 42B/42C commits made up to then): `cargo fmt --check` clean,
+`cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1965 passed /
+0 failed / 580 ignored.
