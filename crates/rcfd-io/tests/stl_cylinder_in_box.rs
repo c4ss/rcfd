@@ -35,7 +35,10 @@ fn solid(name: &str, s: &TriSurface) -> StlSolid {
 fn from_stl_file() -> TriSurface {
     let (b, c) = parts();
     let text = stl::write_ascii(&solid("box", &b)).unwrap() + &stl::write_ascii(&solid("cylinder", &c)).unwrap();
-    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("w39b_cylinder_in_box.stl");
+    // one file per call: tests run in parallel and a shared name races (a reader can see another writer's truncated file)
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("w39b_cylinder_in_box_{n}.stl"));
     std::fs::write(&path, text).unwrap();
     let back = stl::read_file(&path).unwrap();
     assert_eq!(back.len(), 2, "two solids in the file");
