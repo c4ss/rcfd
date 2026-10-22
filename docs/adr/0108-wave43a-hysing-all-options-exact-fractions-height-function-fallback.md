@@ -154,20 +154,19 @@ and 80 points equal ADR 0106 H5 to the printed digits (reproducibility of the co
 
 ### Reading
 
-* Effect of the initial field (X minus XC): y_c(3) -0.0002, 0.0000, +0.0001; V_c,max below 1e-4 on every grid; peak time -0.0025,
-  0, 0 on 40, 80, 160. The initial field has no measurable effect on the bubble with these options, although it changes the
-  initial curvature error by a factor 40 to 2300 (S1 against ADR 0106 S2). By the registered rule the initial field does not
-  explain anything (X does not meet B1).
-* With all three options the bubble agrees with Hysing to 0.2 percent on every grid. V_c,max converges to the reference (error
-  0.0015, 0.0008, 0.0001) and the peak time is within 0.004 on 80 and 160. y_c(3) stays in 1.0792 to 1.0800 on all three grids
-  (successive differences +0.0008, -0.0005): it is converged to about 1.0796 +- 0.0004, 0.0017 below Hysing's TP2D 1.0813 and
-  0.0021 below the MooNMD value 1.0817 read in ADR 0096 (the two reference codes differ by 0.0004). An error that has reached a
-  plateau cannot decrease strictly, so the ADR 0100 B1 limit (monotone decrease) is missed by an error of 0.17 percent. The limit
-  stays as written; whether this plateau is acceptable is the user's decision, not taken here.
-* Against ADR 0106 H4 (component diagonal and height function without the transposed stress): the transposed viscous stress
-  removes the 3 percent over-speed (V_c,max 0.2486 -> 0.2416 on 160 x 320) and the y_c(3) drift (1.0737 -> 1.0795 on 160 x 320).
-  So the remaining offset of the defaults (ADR 0100) is accounted for by three opt-ins: the wall defect (ADR 0103), the
-  non-convergent CSF curvature (ADR 0106) and the missing transposed stress.
+* Effect of the initial field (X minus XC): y_c(3) -0.0002, 0.0000, +0.0001 and V_c,max below 1e-4 on 40, 80, 160; peak time
+  -0.0025 on 40 and 0 on 80 and 160. The initial field has no measurable effect on the bubble with these options, although it
+  changes the initial curvature error by a factor 40 to 2300 (S1 against ADR 0106 S2). By the registered rule the initial field
+  does not explain anything (X does not meet B1).
+* Errors of X per metric: y_c(3) 0.19, 0.12, 0.17 percent; V_c,max 0.62, 0.32, 0.04 percent; peak time 1.8, 0.13, 0.41 percent
+  (40, 80, 160). V_c,max falls on every refinement. y_c(3) varies by at most 0.0008 across the three grids (differences +0.0008,
+  -0.0005, which change sign, so no order is read from them) and sits 0.0013 to 0.0021 below Hysing's TP2D 1.0813, which is 3 to
+  5 times the 0.0004 difference between the TP2D and MooNMD (1.0817) values read in ADR 0096. B1 and B2 on y_c(3) miss; the
+  limits stay as written. Whether this result is acceptable is the user's decision, not taken here.
+* Against ADR 0106 H4 (component diagonal and height function without the transposed stress, same indicator field as XC): on
+  160 x 320 the transposed viscous stress moves V_c,max from 0.2486 to 0.2416 (the 3 percent over-speed is gone) and y_c(3) from
+  1.0737 to 1.0794. So the offset of the defaults (ADR 0100) is accounted for, to the size above, by three opt-ins: the wall defect
+  (ADR 0103), the non-convergent CSF curvature (ADR 0106) and the missing transposed stress.
 
 ### Part 2, fallback
 
@@ -194,3 +193,11 @@ test is not feasible with the data in the file.
   output); it was relaunched with the full name. No series was run twice.
 * `vof_bubble.rs` `e_rising_bubble_free_slip_sides` and `vof_dambreak.rs` `d_dam_break_front` were not re-run separately: they are
   unchanged (defaults bit-identical) and are part of the final gate.
+
+### Final gate
+
+Fresh `git archive` of 66f5922 (which includes the wave 43B / 43C commits before it): `cargo fmt --check` clean, `cargo clippy
+--workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1983 passed / 0 failed / 619
+ignored. This wave adds F1-F4 (not ignored) and three ignored tests (b1x and b1xc known misses, the smoke); the rest of the change
+from 1967 / 585 belongs to the other wave-43 agents. `d_dam_break_front` and `e_rising_bubble_free_slip_sides` pass. The wording
+corrections of the Reading section and of the F-055 note were made after the gate (documentation only).
