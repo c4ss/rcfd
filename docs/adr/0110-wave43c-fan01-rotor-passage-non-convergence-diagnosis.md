@@ -154,3 +154,43 @@ window would contain the start-up transient (res_u 1 at iteration 1, 1.3e-4 at 1
 **500** (the smoke shows E3 in its exact cycle from 250 on), 250 iterations after the switch, both windows of length `w = min(500, n1 / 2)`
 = 125 (reference: iterations 376-500; arm: the last 125). The same `w` rule applies to every arm (it gives 500 for every 1000 + 2000 arm and
 set-up arm, as registered). The E3 test stays non-ignored (750 iterations, about 35 s in release). Nothing else changes.
+
+## Amendment 2 (written after S1-S7, S1v and L1-L3 had run, before any run it governs)
+
+What I knew when writing it (all registered runs so far, one each; numbers go to the addendum): S1 on E3 STANDS (the frozen psi converges
+to `res_u` 1.9e-12 in 250 iterations; tolerance at iteration 510). S1 on B3 is FALSIFIED: with psi frozen the oscillation at the blade-root
+leading edge GROWS (`max_du` 2.2 -> 17.8 m/s in cell c17, which touches the hub and the blade; period ratio 0.24-0.72) and the five largest
+cells each flip the flux sign on two faces every iteration, so S2 stands by its record rule on B3. S3 (face_flux), S4 (laminar), S5
+(partner_cell), S6 (tight solves) and S7 (outlet) are FALSIFIED on B3 (`rho_med` 0.90, 3.84, 1.09, 1.09, 1.02). S1v (Venkatakrishnan(5))
+gives `rho_med` 0.94. L1 is FALSIFIED (`C_psi` 0.114, 0.046, 0.028 N m on E3, E2, E1 while L rises), L2 FALSIFIED (partner_cell |L| 0.0104,
+0.0595, 0.1069 N m), L3 NOT EVALUABLE (the laminar empty passage does not settle: `|du|_2` 22-33 m/s). By the registered fix rule F-Z is not
+eligible (S1 did not stand on B3) and F-A is not eligible (L1 falsified).
+
+New candidate for the bladed passage (not in the registration; found from the S1 B3 location): **S8, the explicit rotating-frame source in
+cells with a small momentum diagonal**. The `rotating_frame` acceleration (Coriolis `-2 Omega x w`) enters SIMPLEC from the previous iterate.
+ADR 0085's single-cell model gives the error amplification `|lambda|^2 = (1 - alpha)^2 + (alpha x)^2` with `x = 2 Omega V / a` (Coriolis
+rate 2 Omega, `a` the unrelaxed momentum diagonal), unstable for `x > 1.1` at `alpha = 0.9`. At the leading-edge stagnation corner the
+through-flux and so `a` are small, so `x` can exceed 1 there; the limiter's switching would then be what bounds the growth on the default run
+(consistent with the frozen-psi growth). Registered now:
+
+* **R-x record** (no new solve beyond the reference): on the B3 state at iteration 1000, `x_c = 2 Omega V_c / a_c` for every cell, `a_c` the
+  diagonal of the x-momentum convection (the kernel's `convection` with the limited gradient) plus Laplacian (the current `nu_face`) matrix
+  before relaxation. Reported: the distribution of `x_c` (largest values and their cells) and `x_c` of the five largest-`du` cells of the S1
+  B3 final record (c17, c665, c701, c341, c53). S8 is supported by the record iff at least 3 of those 5 have `x_c > 1.1`; contradicted iff
+  none has.
+* **S8 switch arm**: pseudo time `pseudo_mode = "physical"`, `pseudo_dt = 1 / Omega` (6.426e-3 s; `V Omega` on the diagonal, fixed point
+  unchanged, `x` falls below 1 in every cell for `a` >= 0) from iteration 1000 on B3. **S9**: the same plus psi frozen at the switch.
+  Prediction if S8 is the bladed mechanism and S1 the empty-passage one: S9 STANDS; S8 alone at least CONTRIBUTES. FALSIFIED by the
+  registered rule (`rho_med >= 1/3`) for S9. The verdict rule of part S applies unchanged.
+
+New reading for the empty passage, **L5**: the stalled state is a limit cycle whose amplitude grows with refinement (`max_du` 0.065, 0.30,
+0.44-0.59 m/s on E3, E2, E1, the latter two at the hub cells of the C-grid nose region, z 0.094-0.098), so the stalled L might be a property
+of the cycle rather than of a discrete solution. Experiment: the **freeze family** (E3, E2, E1; psi frozen at iteration 300, 300 more
+iterations). L5 STANDS iff the frozen runs converge (tolerance reached) and |L| then decreases monotonically E3 -> E2 -> E1 with observed
+order >= 0.5; FALSIFIED iff the frozen runs converge and |L(E1)| >= |L(E2)|; NOT EVALUABLE if any member does not reach the tolerance.
+
+**Fix F-ZP** (replaces F-Z; eligible iff S9 stands): the case key `solver.linear_upwind_limiter_freeze = N` (as registered for F-Z) together
+with the existing keys `pseudo_mode = "physical"`, `pseudo_dt = 1 / Omega`, N = 1000. Acceptance as registered for F-Z, with the combined
+settings in every run: **Z1** empty passage first (E3, E2 converge by tolerance within 8000 iterations; L and swirl energy within the ADR 0086
+cap-rule tolerances of the stalled values), then **Z2** bladed (B3, B2 converge by tolerance; torque and Delta p_ts within 0.5 % of ADR 0086;
+iteration counts reported with the F1 prediction), **Z3** defaults. F-ZP is a convergence fix; it cannot remove the spurious swirl.
