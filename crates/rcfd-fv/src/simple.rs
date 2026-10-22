@@ -529,6 +529,10 @@ pub struct SimpleSolver {
     /// where internal faces carry `rAU`, and the first iteration after a boundary pressure change puts `(rAtU - rAU) grad(p_old)`
     /// into the cell velocity next to the boundary uncompensated. `false` (default) leaves the solver unchanged.
     pub simplec_boundary_compensation: bool,
+    /// Frozen slope-limiter factors of the `linear_upwind` momentum convection, one vector per Cartesian component (ADR 0110): with `Some`
+    /// the kernel uses these factors instead of recomputing `linear_upwind_limiter` from the iterate, which removes the limiter's switching
+    /// between branches from the outer iteration. `None` (default) leaves the solver unchanged.
+    pub frozen_limiter: Option<[Vec<f64>; 3]>,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -620,6 +624,7 @@ impl SimpleSolver {
             linear_upwind_limiter: None,
             reconstructed_correction: false,
             simplec_boundary_compensation: false,
+            frozen_limiter: None,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -790,7 +795,10 @@ impl SimpleSolver {
             };
             let limited = match (self.linear_upwind_limiter, &grad) {
                 (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
-                    let psi = crate::gradient::limiter(&g, &cells, &bvals, gr, kind);
+                    let psi = match &self.frozen_limiter {
+                        Some(f) => f[k].clone(),
+                        None => crate::gradient::limiter(&g, &cells, &bvals, gr, kind),
+                    };
                     Some(
                         gr.iter()
                             .zip(&psi)
