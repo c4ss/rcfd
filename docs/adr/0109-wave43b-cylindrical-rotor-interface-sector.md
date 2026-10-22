@@ -236,3 +236,9 @@ interface layer accordingly; (b) MRF zones cannot have cyclic seams (frame flux 
 with an MRF zone and a cylindrical interface is not yet possible; (c) the first-order absolute interface flux; (d) no case-tree
 generator or key yet (library function plus mesh file); (e) conical surfaces, partial cover, transient sliding, the mixing plane on a
 cylinder; (f) the FAN-01 numerics of docs/milestone-fan.md for the acceptance case.
+
+## Final gate
+
+Fresh `git archive` of HEAD 894c277: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1977 passed, 0 failed, 595 ignored (this HEAD includes the wave-43A commits made
+meanwhile).
