@@ -129,6 +129,16 @@ interior vertices and only if exact `orient3d` keeps every incident cell positiv
 the Steiner budget (`Err`, the whole call fails, not a partial mesh). There is no quality guarantee (no sliver exudation): a sweep
 may leave bad cells.
 
+## Amendment 1 (written after the first L1/L2 run, before the second)
+
+The registered run of `l12_cost_factor_and_scaling` (main tree, default 0, release, one test thread, other agents' builds running
+on the machine) measured on M1: default median 0.0909 s, pass median 0.2772 s, factor 3.051 > 3.0: L1 MISSED on M1. The test
+asserted per mesh and stopped there, so M10 and L2 were not measured: a defect of the harness, not of the set-up. Correction:
+the test is renamed `l12_known_miss_cost_factor_and_scaling` (ignored, limits 3.0 and 2.0 unchanged) and now measures M1 and M10
+before asserting. It is run once more to get M10 and L2. The L1 verdict on M1 stays the first run's 3.051 (miss) whatever the
+second run gives on M1; the second run's M1 value is reported but not used. What I knew when writing this: only the M1 numbers
+above.
+
 ## Separate fix (done before this ADR, commit 579be92)
 
 `crates/rcfd-io/tests/stl_cylinder_in_box.rs` wrote one fixed temp STL name from parallel tests (the same race that commit 9f05d6b
