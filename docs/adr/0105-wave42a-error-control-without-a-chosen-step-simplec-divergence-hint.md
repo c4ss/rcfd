@@ -97,3 +97,25 @@ Tests (rcfd-api tests/heat_exchanger.rs, non-ignored):
 Also re-run after the `vent_text` extraction (a pure refactor of `vent_run`): the three X7 tests.
 
 Verdict: F-248 stays `done`; its note is extended.
+
+## Results
+
+Addendum written after the runs: release build on top of b7a077d (this ADR) plus the test files and the `sim.rs` hunk. Each
+registered test was run once.
+
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| E2 tol 1e-2 | 2502 steps (18 rejected), E 7.917e-3, E / (tol T) 0.792 | [0.3, 3] | met |
+| E2 tol 2.5e-3 | 9989 steps (20 rejected), E 2.080e-3, E / (tol T) 0.832 | [0.3, 3] | met |
+| D1 X7 vent u = 2, pseudo 0.02, no key | `diverged` at iteration 9 (`continuity_growth`); reason contains the key | key named, iteration <= 15 | met |
+| D1n S2 cavity, SIMPLE, alpha 1 / 1 | `diverged` at iteration 6; no hint | no key in the reason | met |
+| D2 X7 vent u = 0.5, 600 iterations, message queried every iteration vs never | ux, uy, p, flux bit-identical; no trip; message `None` | bit-identical | met |
+| X7 tests after the `vent_text` refactor | `x7_vent_reproduces_its_quadratic_loss_law` 3.94e-13, `x7_vent_at_fixed_pseudo_dt` 2.93e-12 | 1e-6 (unchanged) | met |
+
+E2 takes 61 s in release (both tolerances). The step counts equal the unclamped model of ADR 0101 (2502, 9989). The controller
+resolves the fast transient (about lambda_f / (4 tol) steps, ADR 0101), so the step counts stay far above the uniform 63 and 240
+of E1; this clause asks only that the requested error is reached, which it is.
+
+No deviation from the registered plan. Statuses: F-209 `partial` (first clause met by e2, Taylor-Green clause by S4, flat-plate
+clause open; the case-key path still takes its first, largest and smallest step from `solver.dt`). F-248 stays `done` with the
+diagnostic added.
