@@ -253,3 +253,121 @@ Registered now:
     residual of the converged state with psi recomputed (one probe iteration), and the iteration counts with the F1 prediction.
   * **Z3 defaults**: key absent and 0 bit-identical (u, p, phi `to_bits`, B3, 30 iterations, non-ignored test); `baseline_hashes.rs`
     passes unchanged; located errors for the invalid combinations.
+
+## Addendum: measured values, verdicts, deviations
+
+Release builds of the scratch clone at 739244a plus this wave's files. On main at hand-back, `crates/rcfd-fv/src/simple.rs` is identical
+apart from this wave's hunk, and the wave-43A/43B commits made in the meantime touch no file on the path of these runs. Each registered run
+was made once, at most two at a time, all on F3 except L1-L5. Verdicts follow the registered rule (`rho_med`, `rho_du`). The reference
+window ("ref") gives median `res_u` / `res_p` of 1.09e-3 / 4.87e-4 for B3 (iterations 500-1000) and 3.03e-5 / 6.88e-6 for E3.
+
+### Part S (the stall)
+
+| Arm | Change | `rho_med` | `rho_du` | Verdict | What else was measured |
+|---|---|---|---|---|---|
+| S1 E3 | psi frozen at 500 | 5.8e-6 | 2.9e-9 | **STANDS** | `res_u` 1.9e-12 at 750; tolerance 1e-5 at iteration 510; L -0.009518 -> -0.009508 N m, swirl energy 6.2663 -> 6.2680 Pa; probe (psi recomputed, one iteration from the converged state): 3.2e-5 / 1.4e-5, the stall level |
+| S1 B3 | psi frozen at 1000 | 1.36 | 5.47 | **FALSIFIED** | `max_du` 2.2 -> 16.8 m/s, argmax c17 (hub and blade, leading-edge root), then c665, c701, c341, c53; period ratio 0.24-0.72 |
+| S1v B3 | Venkatakrishnan(5) | 0.94 | 1.29 | (reported) | own discretisation, torque 1.774 N m |
+| S2 B3 | record of the S1 B3 arm | - | - | rule met; **not a cause** (below) | each of the five top cells flips the flux sign on two faces every iteration (43-70 flips in total; 14-15 in the default run, none on a top cell) |
+| S3 B3 | `face_flux` | 0.90 | 0.84 | **FALSIFIED** | |
+| S4 B3 | laminar (from the start) | 3.84 | 3.63 | **FALSIFIED** | laminar `res_u` 4.2e-3 |
+| S5 B3 | `partner_cell` | 1.09 | 1.24 | **FALSIFIED** | |
+| S6 B3 | linear solves to 1e-10 | 1.09 | 1.04 | **FALSIFIED** | continuity 3e-12, 17 pressure iterations |
+| S7 B3 | `pressure_outlet`, reverse flow closed | 1.02 | 0.91 | **FALSIFIED** | no inflow face left |
+| R-x | single-cell Coriolis gain | - | - | **CONTRADICTED** | no cell with `x_c > 1.1` (largest 0.71 at the hub outlet corner); the five leading-edge cells 0.027-0.043 |
+| S8 B3 | pseudo dt 1/Omega | 0.44 | 0.70 | **FALSIFIED** | |
+| S9 B3 | pseudo 1/Omega + frozen psi | 0.36 | 4.11 | **FALSIFIED** | exact period-two cycle (ratio 0.000), 12.6 m/s at c17 |
+| S9' B3 | pseudo 0.1/Omega + frozen psi | 1.82 | 1.46 | **FALSIFIED** | exact period-two cycle, 4.0 m/s |
+| S10 B3 | `upwind` | 4.3e-3 | 7.4e-3 | **STANDS** | `res_u`, `res_p` below 1e-5 from iteration 1114; a 0.015 m/s period-two cycle stays at the outlet-hub corner; `is_converged()` is false at 3000 although both residuals are below 1e-5, which by the conjunction in `sim.rs` means the SST change criterion is not met; first-order solution: torque 1.335 N m, Delta p_ts -4.0 Pa |
+| S11 B3 | frozen psi + `face_flux` | 0.91 | 4.57 | **FALSIFIED** | 10.7 m/s at the leading-edge cells |
+| S12 B3 | psi frozen at its minimum over 1001-1010 | 1.02 | 0.92 | **FALSIFIED** | the leading-edge cells calm down; the oscillation moves to hub seam cells at z 0.16-0.17 (45-58 deg; `max_du` 0.43, 3.4, 1.2 m/s at 1250, 2000, 3000) |
+| R-U E3 | unlimited `linear_upwind` (record) | - | - | - | grows about x10 per iteration from c4971 (tip layer at the shroud next to the seam, z 0.104, 77 deg), then c4935, c4970 (69-77 deg); guard trip at 7 |
+
+**Reading of part S.**
+* What converges: the frozen-limiter map on E3 (S1) and first-order `upwind` on B3 (S10). What does not: every other change, including
+  freezing the limiter on B3 and (L5 below) on E2 and E1.
+* Supported mechanism: the high-order (deferred, explicit) part of the limited `linear_upwind` makes the outer iteration locally
+  unstable at a few hub-region cells. These are the leading-edge root cells on B3 and the hub cells of the C-grid nose region on E2 and E1.
+  The Barth-Jespersen switching bounds that instability into a cycle (period about three on B3, two on E3). With psi frozen, the map's only
+  kinks are the upwind directions; on B3, E2 and E1 the instability then grows until those flips bound it. E3 is the one mesh tried where the
+  frozen operator is stable, so there the stall is purely the limiter cycle and freezing removes it.
+* That the frozen operator has an eigenvalue at or beyond -1 at those cells is inferred from the exact period-two cycles of S9 / S9'. It was
+  NOT measured: no Jacobian was formed.
+* S2 meets its record rule, but S10 contradicts it as a cause. First-order `upwind` keeps every flux-direction kink and still converges, so
+  the flips are a symptom of the large frozen-psi oscillation.
+* Falsified as causes of the bladed stall, with the numbers above:
+  * the ADR 0084 pressure-velocity mode (S3, S11);
+  * SST (S4);
+  * the seam gradient (S5);
+  * the linear-solver tolerance (S6);
+  * outlet backflow (S7);
+  * the explicit Coriolis source (R-x, S8, S9, S9');
+  * a slow swirl mode (the smoke: localised cycles).
+* The probe of S1 E3 shows that the frozen fixed point is not a Barth-Jespersen fixed point: recomputing psi there returns the residual to
+  the stall level. So the ADR 0086 functionals are values taken on a cycle.
+  * On B3 the arms without pseudo time (S3, S5, S6, S7, S11, S12) moved the torque by at most 0.2 % (1.848-1.853 N m against 1.849).
+  * The larger moves (S9: 1.888 N m, S9': 2.095 N m) come only from arms with pseudo time and frozen psi in exact period-two cycles. There
+    the term `V/dt (u^n - u^(n-1))` does not vanish, so those numbers are cycle artefacts, not solutions. The 2.095 N m is unrelated to the
+    measured shaft torque and nothing is read into the closeness.
+  * Amendment 4's "up to 13 %" is qualified accordingly.
+
+### Part L (L grows with refinement)
+
+| Id | E3 / E2 / E1 | Verdict |
+|---|---|---|
+| L1 | L -0.009518 / 0.059612 / 0.105977 N m; `C_psi` 0.1137 / 0.0459 / 0.0278 N m (`C_up` 2.444 / 1.901 / 1.375, clipped share 0.46 / 0.35 / 0.30) | **FALSIFIED** (`C_psi` falls while L rises; ratio of differences -0.74) |
+| L2 `partner_cell` | abs(L) 0.01037 / 0.05954 / 0.10689 N m; swirl energy 6.09 / 9.21 / 5.48 Pa | **FALSIFIED** |
+| L3 laminar | L2 norm of `du` 31 / 22 / 33 m/s at 600; L changes 0.03-0.04 N m per 100 iterations | NOT EVALUABLE (the laminar empty passage does not settle) |
+| L5 freeze at 300 | E3 converges at 310 (abs(L) 0.009508); E2 and E1 grow after the freeze (L2 norm of `du` 40 and 14 m/s) | NOT EVALUABLE |
+
+The growth of L with refinement remains **undiagnosed**. Two candidates are falsified and two are not evaluable, so L4 (a family that is not
+geometrically similar) cannot be claimed by elimination. A correlation only: the stalled cycle's amplitude grows with refinement (0.065,
+0.30, 0.44-0.59 m/s), and on E2 and E1 it sits at the hub cells of the C-grid nose region.
+
+### Fixes
+
+None is eligible by the registered rules, and none was added:
+* F-Z needed S1 on B3;
+* F-A needed L1;
+* F-ZP needed S9 or S9';
+* F-ZM needed S12.
+
+The one solver change kept is the diagnostic hook `SimpleSolver::frozen_limiter` (default `None`, registered to be kept). Two tests cover it:
+* `frozen_limiter_hook_is_bit_identical_at_the_freeze` (non-ignored, about 3 s): one iteration with the factors frozen at the current
+  iterate is bit-identical in u, p and phi to an unfrozen one.
+* `s1_e3_frozen_limiter_converges` (non-ignored, 31-32 s alone in release; longer under gate load).
+
+The windowed-minimum hook written for S12 was removed under rule (b). S12 now collects the minimum in the test, and was run a second time to
+check that refactor: it gave identical numbers (medians, `|du|_2`, torque to every printed digit). No case key was added. Defaults are
+bit-identical by construction: the hook is read only when `Some`. `baseline_hashes.rs` was not touched (final gate below).
+
+### Symptom 2 (the 60-minute guard)
+
+Unresolved. Without an accepted fix there is no iteration count to tolerance from which to predict F1, and the cap rule stays the only
+stop. Even where the residuals fall below 1e-5 (S10, and the default E2 at iteration 184, which then kept cycling), `is_converged()` can stay
+false through the SST change criterion. A tolerance-based stop in a design loop would therefore not fire on these meshes either.
+
+### Next step (proposed, not started)
+
+Form the Jacobian of the frozen-psi map restricted to the five leading-edge root cells of B3 and a neighbourhood of about 50 cells, with the
+ADR 0084 harness (`crates/rcfd-fv/tests/w37a_jacobian.rs`). Use it to attribute the eigenvalue at or beyond -1 to one of two terms:
+* the explicit `linear_upwind` correction gain; or
+* the least-squares gradient of the cell with two wall faces.
+
+Then register an implicit or under-relaxed treatment of that term as its own wave, verified on the empty-passage family (E3, E2, E1) first.
+
+### Deviations (candid)
+
+* Amendments 2, 4 and 5 added mechanisms and fix candidates after earlier runs had failed. Each says what was known when it was written,
+  and each was written before the runs it governs. Amendment 3 corrected a wrong stability statement of amendment 2 before any run.
+* The first run of `s1_e3_frozen_limiter_converges` had a harness error. The probe did not clear the frozen factors, so it printed the frozen
+  operator's residual (1.8e-12). After the fix the test was run again; every verdict number was identical, and the corrected probe is the one
+  reported.
+* S12 was run twice (hook version, then the test-side version after the hook was removed), with identical numbers.
+* The harness's `reached` checks only `res_u` and `res_p`, not the full `is_converged()` conjunction. Both are reported.
+* `R-x` uses the x-momentum diagonal only, as registered.
+
+### Unverified references
+
+As registered: the role of non-differentiable limiters in stalling steady convergence and Venkatakrishnan (1995), recalled, UNVERIFIED;
+nothing depends on them. The single-cell gain model is first principles (ADR 0085).
