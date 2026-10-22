@@ -135,9 +135,9 @@ fn median(mut v: Vec<f64>) -> f64 {
 /// L1 cost factor at most 3.0 on M1 and M10; L2 added time per cell on M10 at most 2.0 times that on M1. Wall-clock, so
 /// ignored (load-sensitive); run with `--release -- --ignored --test-threads=1`.
 /// Known miss (ADR 0107): L1 on M1 measured 3.051 in the registered run (limit 3.0). Measures both meshes before asserting
-/// (amendment 1; the first version stopped at M1).
+/// (amendment 1; the first version stopped at M1); the second run measured M1 3.080, M10 4.810 and L2 ratio 2.787 (limit 2.0).
 #[test]
-#[ignore = "known miss (ADR 0107 L1): cost factor of the pass on M1 3.051 vs 3.0; wall-clock, run in release with one thread"]
+#[ignore = "known miss (ADR 0107 L1/L2): cost factor M1 3.05, M10 4.81 vs 3.0; scaling 2.79 vs 2.0; wall-clock, release, one thread"]
 fn l12_known_miss_cost_factor_and_scaling() {
     let (mut per_cell, mut factors) = (Vec::new(), Vec::new());
     for (n, s) in [("M1", m1()), ("M10", m10())] {

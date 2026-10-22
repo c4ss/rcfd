@@ -143,3 +143,67 @@ above.
 
 `crates/rcfd-io/tests/stl_cylinder_in_box.rs` wrote one fixed temp STL name from parallel tests (the same race that commit 9f05d6b
 fixed in w41d after it failed a wave-41 gate run); it now writes one file per call, as w41d does.
+
+## Results
+
+### E1: every test whose output changes with the default at 10 (BASE vs EXP, five binaries, ignored tests included)
+
+| test | BASE (default 0) | EXP (default 10) | class |
+| --- | --- | --- | --- |
+| w0_default_output_bit_identical | 9 fingerprints | 7 of 9 change: torus 899 -> 945 cells, cyl_in_box 1137 -> 1139, p1 1061 -> 1142, s2 1115 -> 1223, sphere h 0.3 823 -> 810, sphere h 0.25 1277 -> 1292, cube4 h 0.5 597 -> 711, each with a new hash; cube (108) and sphere (320) unchanged | exempt |
+| t5_torus_known_miss (ignored) | fraction 0.634, 6.81 deg, fails | fraction 1.000, 25.80 deg, passes | **B4: blocks** |
+| s2_known_miss_* (ignored) | 1115 cells, 1.84 deg, fails | 1223 cells, 17.66 deg, passes | exempt |
+| s3_known_miss_* (ignored) | fraction 0.936, fails | 1.000, passes | exempt |
+| d012_numbering_dependence, d3_bad_cells (ignored) | D0 1137 cells; D2 1061, 3.34 deg, 0.927; D3 77 / 71 failing cells | D0 1139; D2 1142, 16.33 deg, 0.997; D3 3 / 0 | exempt |
+| t3_torus | 899 cells | 945 cells (52 moves) | listed |
+| t4_cylinder_in_box | 1137 cells | 1139 cells (363 moves) | listed |
+| p1_pipeline_cylinder_in_box | 1061 cells, 3.34 deg, 0.927 | 1142 cells, 16.33 deg, 0.997 | listed |
+| t5b_torus_after_remesh | 1297 cells, 5.26 deg | 1265 cells, 16.73 deg | listed |
+| t6_size | 823 cells | 810 cells (still within 0.3 to 3 of nominal 1272) | listed |
+| t10_sphere_harmonic | 1277 cells, L2 1.098e-2 | 1292 cells, 9.70e-3 | listed |
+| t10_cube_linear | 597 cells, L2 4.9e-14 | 711 cells, 4.4e-14 | listed |
+| s2b_pipeline_watertight_and_check_mesh | 1115 cells | 1223 cells | listed |
+
+Unchanged output: t1_cube, t2_sphere, t5_quality_cube_sphere, t7_determinism, t8_located_errors, a5 polydual sphere (the pass
+inserts and moves nothing on the cube and the sphere). All non-ignored tests pass in both trees.
+
+### E2: whole workspace in EXP
+
+`cargo test --workspace --release --no-fail-fast`: 1961 passed / 0 failed / 578 ignored (the wave-41 gate was 1959 / 0 / 576; the
+difference is this ADR's file: 2 passed, 2 ignored). `rcfd-api` baseline_hashes: 3 passed, 1 ignored (the pre-existing
+rotating-channel record), unchanged. No test outside the five binaries and this ADR's file reaches `tetrahedralize`.
+
+### Cost and safety (main tree, default 0)
+
+| check | limit | measured | verdict |
+| --- | --- | --- | --- |
+| L1 M1 cost factor (registered run) | <= 3.0 | 3.051 (0.0909 s -> 0.2772 s) | MISS |
+| L1 M10 cost factor (second run, amendment 1) | <= 3.0 | 4.810 (1.156 s -> 5.560 s) | MISS |
+| L2 added time per cell, M10 / M1 (second run) | <= 2.0 | 2.787 (1.49e-4 s -> 4.15e-4 s per cell) | MISS |
+| L3 M1 and M10 safety | Ok, no orient3d <= 0, volumes > 0, check_mesh, volume 1e-10, 2 patches, surface unchanged | all hold; volume error 8.0e-16 both | pass |
+| Q8 M10 T5 limits with the pass | >= 3.0 deg, >= 0.99 | 14.19 deg, 1.000 (10614 cells) | pass |
+
+The second run gave M1 3.080; the registered L1 verdict on M1 is the first run's 3.051 (amendment 1). Both runs had other agents'
+builds on the machine; wall-clock numbers carry that caveat, but every factor is above its limit by more than the spread of the
+five repeats. Steiner budget used: M1 0.0048 with the pass (0.0039 without), M10 0.0018 (0.0017); no case came near the budget
+error. Pass counters: M1 25 extra interior points, 530 moves, 277 extra flips; M10 28 extra points, 2592 moves, 1630 extra flips;
+M10 ends with fewer cells (10614 vs 10710) because flips remove cells. The added cost per cell grows with the mesh (2.79x per cell
+at 8.7x the output cells), so the pass is superlinear on this family; the cause was not isolated (candidates read from the code: every sweep
+rescans all tetrahedra in `refine_constrained` and `improve`, whose 30-pass loop also rescans; not measured).
+
+### Decision
+
+The rule is NOT met. Blocking: B4 (`t5_torus_known_miss`: its recorded 0.634 becomes 1.000) and B5 (L1 on M1 and M10, L2).
+Not blocking: B1, B2, B3 hold (no non-ignored failure, no changed literal outside W0, baseline hashes unchanged, no new `Err`). The
+default stays `quality_sweeps = 0`; W0, S2/S3 and the diagnostics are not pinned (nothing to pin while the default is 0); no
+fingerprint and no baseline hash was re-recorded.
+
+What switching would need: (1) a user decision on `t5_torus_known_miss`: either it is declared a record of the mesher without the
+pass and pinned to `quality_sweeps: 0`, or its record is retired as met with the pass on (and ADR 0030 gets an addendum); (2) a
+cheaper pass or a user decision accepting about 3x on 1k cells and about 5x on 10k cells: the superlinear part would have to be
+found and removed first (for example by working on a list of cells changed in the previous sweep instead of rescanning); (3) then
+the pins, docs and the listed ADR addenda (ADR 0030 T5/T6/T10/P1/T5b, ADR 0093 S2b, ADR 0104 smoke and D tables).
+
+Deviation: the L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the
+second run). Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
+so `tetrahedralize` refused that surface; not pursued.
