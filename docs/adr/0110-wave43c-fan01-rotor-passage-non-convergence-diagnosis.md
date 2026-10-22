@@ -145,3 +145,12 @@ F1.
 
 That non-differentiable limiters such as Barth-Jespersen are known to stall steady convergence and that smooth limiters (Venkatakrishnan,
 J. Comput. Phys. 118, 1995) were introduced for this reason: recalled, UNVERIFIED. Nothing here depends on it.
+
+## Amendment 1 (written after the registration commit and the S1 hook code, before any registered run)
+
+What I knew when writing it: nothing beyond the registration; no registered run has been made. While writing the S1 tests I found that the
+registration fixes the windows only for the 1000 + 2000 arm. For S1 on E3 (switch at 250, 250 more iterations) a "last 500 before the switch"
+window would contain the start-up transient (res_u 1 at iteration 1, 1.3e-4 at 100). Corrected E3 set-up, fixed now: switch at iteration
+**500** (the smoke shows E3 in its exact cycle from 250 on), 250 iterations after the switch, both windows of length `w = min(500, n1 / 2)`
+= 125 (reference: iterations 376-500; arm: the last 125). The same `w` rule applies to every arm (it gives 500 for every 1000 + 2000 arm and
+set-up arm, as registered). The E3 test stays non-ignored (750 iterations, about 35 s in release). Nothing else changes.
