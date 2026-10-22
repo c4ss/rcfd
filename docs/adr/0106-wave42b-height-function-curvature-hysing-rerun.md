@@ -211,3 +211,9 @@ their printed values move (the options change the results), which is not a test 
   neighbour-fallback counts were not registered limits; they are reported above.
 * The 10-point indicator initial field gives a height-function curvature error that grows on 160 x 320 (S2). H4 kept it as
   registered; its effect on H4 was not isolated.
+
+### Final gate
+
+Fresh `git archive` of 9127771: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1967 passed / 0 failed / 585 ignored. This wave adds H1 and H2 (not ignored) and
+six ignored tests (H3, the b1h known miss, H5, two smokes).
