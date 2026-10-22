@@ -46,6 +46,8 @@ type PatchFaces = Vec<(usize, Vec<usize>)>;
 struct Registry {
     d: f64,
     bin: f64,
+    /// Chart shifts to try in coordinate 0: `[0]`, or `[0, P, -P]` for a chart of period `P` (cylinder).
+    shifts: Vec<f64>,
     coords: Vec<[f64; 2]>,
     gid: Vec<usize>,
     bins: HashMap<(i64, i64), Vec<usize>>,
@@ -53,10 +55,11 @@ struct Registry {
 }
 
 impl Registry {
-    fn new(d: f64, bin: f64) -> Self {
+    fn new(d: f64, bin: f64, period: Option<f64>) -> Self {
         Registry {
             d,
             bin: bin.max(4.0 * d),
+            shifts: period.map_or(vec![0.0], |p| vec![0.0, p, -p]),
             coords: vec![],
             gid: vec![],
             bins: HashMap::new(),
@@ -66,20 +69,26 @@ impl Registry {
     fn key(&self, p: [f64; 2]) -> (i64, i64) {
         ((p[0] / self.bin).floor() as i64, (p[1] / self.bin).floor() as i64)
     }
-    fn find(&self, p: [f64; 2]) -> Option<usize> {
-        let (kx, ky) = self.key(p);
+    fn find(&self, p0: [f64; 2]) -> Option<usize> {
         let mut best: Option<(f64, usize)> = None;
+        for &sh in &self.shifts {
+            let p = if sh == 0.0 { p0 } else { [p0[0] + sh, p0[1]] };
+            self.find_in(p, &mut best);
+        }
+        best.map(|b| b.1)
+    }
+    fn find_in(&self, p: [f64; 2], best: &mut Option<(f64, usize)>) {
+        let (kx, ky) = self.key(p);
         for i in kx - 1..=kx + 1 {
             for j in ky - 1..=ky + 1 {
                 for &k in self.bins.get(&(i, j)).map_or(&[][..], |v| v.as_slice()) {
                     let dist = (self.coords[k][0] - p[0]).hypot(self.coords[k][1] - p[1]);
                     if dist <= self.d && best.map_or(true, |(b, _)| dist < b) {
-                        best = Some((dist, k));
+                        *best = Some((dist, k));
                     }
                 }
             }
         }
-        best.map(|b| b.1)
     }
     fn insert(&mut self, p: [f64; 2], gid: usize) -> usize {
         let k = self.coords.len();
@@ -91,17 +100,29 @@ impl Registry {
     }
     /// Registry points strictly inside the segment `p0 -> p1` (further than `d` from both ends and within `d` of the
     /// line), ordered from `p0`.
-    fn on_segment(&self, p0: [f64; 2], p1: [f64; 2]) -> Vec<usize> {
+    fn on_segment(&self, q0: [f64; 2], q1: [f64; 2]) -> Vec<usize> {
+        let mut found: Vec<(f64, usize)> = vec![];
+        for &sh in &self.shifts {
+            let (p0, p1) = if sh == 0.0 {
+                (q0, q1)
+            } else {
+                ([q0[0] + sh, q0[1]], [q1[0] + sh, q1[1]])
+            };
+            self.on_segment_in(p0, p1, &mut found);
+        }
+        found.sort_by(|a, b| a.0.total_cmp(&b.0));
+        found.into_iter().map(|f| f.1).collect()
+    }
+    fn on_segment_in(&self, p0: [f64; 2], p1: [f64; 2], found: &mut Vec<(f64, usize)>) {
         let e = [p1[0] - p0[0], p1[1] - p0[1]];
         let len = e[0].hypot(e[1]);
         if len <= 2.0 * self.d {
-            return vec![];
+            return;
         }
         let (lo, hi) = (
             self.key([p0[0].min(p1[0]) - self.d, p0[1].min(p1[1]) - self.d]),
             self.key([p0[0].max(p1[0]) + self.d, p0[1].max(p1[1]) + self.d]),
         );
-        let mut found: Vec<(f64, usize)> = vec![];
         for i in lo.0..=hi.0 {
             for j in lo.1..=hi.1 {
                 for &k in self.bins.get(&(i, j)).map_or(&[][..], |v| v.as_slice()) {
@@ -114,8 +135,92 @@ impl Registry {
                 }
             }
         }
-        found.sort_by(|a, b| a.0.total_cmp(&b.0));
-        found.into_iter().map(|f| f.1).collect()
+    }
+}
+
+/// Coordinates on the interface surface: a plane (`o` a point, `e1`, `e2` in-plane, `n` normal) or a cylinder about the
+/// axis through `o` (`(s, z) = (r theta, sign * axial)`, theta measured from `e1` towards `e2 = axis x e1`; `sign` makes
+/// patch A's loops counter-clockwise).
+#[derive(Clone, Copy)]
+enum Chart {
+    Plane {
+        o: Vec3,
+        e1: Vec3,
+        e2: Vec3,
+        n: Vec3,
+    },
+    Cylinder {
+        o: Vec3,
+        axis: Vec3,
+        e1: Vec3,
+        e2: Vec3,
+        r: f64,
+        sign: f64,
+    },
+}
+
+impl Chart {
+    /// Chart coordinates of `p` and its offset from the surface.
+    fn coords(&self, p: Vec3) -> ([f64; 2], f64) {
+        match *self {
+            Chart::Plane { o, e1, e2, n } => {
+                let r = vec3::sub(p, o);
+                ([vec3::dot(r, e1), vec3::dot(r, e2)], vec3::dot(r, n))
+            }
+            Chart::Cylinder {
+                o,
+                axis,
+                e1,
+                e2,
+                r,
+                sign,
+            } => {
+                let d = vec3::sub(p, o);
+                let (x, y) = (vec3::dot(d, e1), vec3::dot(d, e2));
+                ([r * y.atan2(x), sign * vec3::dot(d, axis)], x.hypot(y) - r)
+            }
+        }
+    }
+    fn point(&self, c: [f64; 2]) -> Vec3 {
+        match *self {
+            Chart::Plane { o, e1, e2, .. } => vec3::add(o, vec3::add(vec3::scale(e1, c[0]), vec3::scale(e2, c[1]))),
+            Chart::Cylinder {
+                o,
+                axis,
+                e1,
+                e2,
+                r,
+                sign,
+            } => {
+                let th = c[0] / r;
+                let radial = vec3::add(vec3::scale(e1, r * th.cos()), vec3::scale(e2, r * th.sin()));
+                vec3::add(o, vec3::add(radial, vec3::scale(axis, sign * c[1])))
+            }
+        }
+    }
+    /// Unit normal of patch A's side of the surface at `x`.
+    fn normal(&self, x: Vec3) -> Vec3 {
+        match *self {
+            Chart::Plane { n, .. } => n,
+            Chart::Cylinder { o, axis, sign, .. } => {
+                let d = vec3::sub(x, o);
+                vec3::scale(vec3::unit(vec3::sub(d, vec3::scale(axis, vec3::dot(d, axis)))), sign)
+            }
+        }
+    }
+    fn period(&self) -> Option<f64> {
+        match *self {
+            Chart::Plane { .. } => None,
+            Chart::Cylinder { r, .. } => Some(2.0 * std::f64::consts::PI * r),
+        }
+    }
+    /// Move coordinate 0 of every point by whole periods to within half a period of `s_ref` (no-op on a plane).
+    fn unwrap(&self, v: &mut [[f64; 2]], s_ref: f64) {
+        if let Some(per) = self.period() {
+            for q in v {
+                q[0] -= per * ((q[0] - s_ref) / per).round();
+            }
+        }
     }
 }
 
@@ -172,6 +277,41 @@ fn bad<T>(msg: impl Into<String>) -> Result<T> {
 /// Boundary patches of the same name in both meshes are merged (their kinds must agree); the two interface patches
 /// disappear.
 pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol: f64) -> Result<(Mesh, JoinReport)> {
+    join_impl(a, patch_a, b, patch_b, tol, None)
+}
+
+/// Join mesh `b` to mesh `a` across interface patches that lie on one circular cylinder about the axis through `origin`
+/// along `axis` (F-126, ADR 0109), e.g. the outer surface of a rotor drum and the inner surface of the stator around it.
+///
+/// As [`join_non_conformal`], with the patches mapped to `(r theta, axial)` on the cylinder of radius `r` (the mean
+/// radius of patch A's points) instead of a plane; overlap points are placed on the cylinder. Every overlap face is a
+/// planar chord rectangle over one interval of the merged angles and axial breakpoints (for patches made of such
+/// rectangles), so its normal is radial and the frame flux `(Omega x r) . S` of a rotation about the axis vanishes on it.
+/// The interface becomes the polygon through the merged angles: cells on either side gain or lose a sliver (their faces
+/// that end on the interface receive the new points). Conical surfaces and partial cover are not supported.
+pub fn join_non_conformal_cylindrical(
+    a: &Mesh,
+    patch_a: &str,
+    b: &Mesh,
+    patch_b: &str,
+    origin: Vec3,
+    axis: Vec3,
+    tol: f64,
+) -> Result<(Mesh, JoinReport)> {
+    if vec3::norm(axis) <= 1e-300 || !vec3::norm(axis).is_finite() {
+        return bad("cylindrical interface: the axis must be a finite non-zero vector");
+    }
+    join_impl(a, patch_a, b, patch_b, tol, Some((origin, vec3::unit(axis))))
+}
+
+fn join_impl(
+    a: &Mesh,
+    patch_a: &str,
+    b: &Mesh,
+    patch_b: &str,
+    tol: f64,
+    cylinder: Option<(Vec3, Vec3)>,
+) -> Result<(Mesh, JoinReport)> {
     let pa = a
         .patch(patch_a)
         .ok_or_else(|| Error::Mesh(format!("mesh A has no patch '{patch_a}'")))?
@@ -183,24 +323,65 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
     if pa.size == 0 || pb.size == 0 {
         return bad("empty interface patch");
     }
-    // plane from patch A
-    let mut nsum = vec3::ZERO;
-    for f in pa.faces() {
-        nsum = vec3::add(nsum, a.face_area_vectors()[f]);
-    }
-    let n = vec3::unit(nsum);
-    let o = a.face_centres()[pa.start];
-    let mut e1 = if n[0].abs() < 0.9 {
-        [1.0, 0.0, 0.0]
-    } else {
-        [0.0, 1.0, 0.0]
+    // plane from patch A, or the cylinder through patch A's points
+    let basis = |n: Vec3| {
+        let mut e1 = if n[0].abs() < 0.9 {
+            [1.0, 0.0, 0.0]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+        e1 = vec3::unit(vec3::sub(e1, vec3::scale(n, vec3::dot(e1, n))));
+        (e1, vec3::cross(n, e1))
     };
-    e1 = vec3::unit(vec3::sub(e1, vec3::scale(n, vec3::dot(e1, n))));
-    let e2 = vec3::cross(n, e1);
-    let to_plane = |p: Vec3| -> ([f64; 2], f64) {
-        let r = vec3::sub(p, o);
-        ([vec3::dot(r, e1), vec3::dot(r, e2)], vec3::dot(r, n))
+    let chart = match cylinder {
+        None => {
+            let mut nsum = vec3::ZERO;
+            for f in pa.faces() {
+                nsum = vec3::add(nsum, a.face_area_vectors()[f]);
+            }
+            let n = vec3::unit(nsum);
+            let (e1, e2) = basis(n);
+            Chart::Plane {
+                o: a.face_centres()[pa.start],
+                e1,
+                e2,
+                n,
+            }
+        }
+        Some((o, axis)) => {
+            let (e1, e2) = basis(axis);
+            let unit_cyl = Chart::Cylinder {
+                o,
+                axis,
+                e1,
+                e2,
+                r: 1.0,
+                sign: 1.0,
+            };
+            let (mut rsum, mut cnt) = (0.0, 0.0);
+            for f in pa.faces() {
+                for &p in a.face_points(f) {
+                    rsum += unit_cyl.coords(a.points()[p]).1 + 1.0;
+                    cnt += 1.0;
+                }
+            }
+            let r = rsum / cnt;
+            if r <= 0.0 || !r.is_finite() {
+                return bad("cylindrical interface: patch A has no positive radius about the axis");
+            }
+            let f0 = pa.start;
+            let side = vec3::dot(a.face_area_vectors()[f0], unit_cyl.normal(a.face_centres()[f0]));
+            Chart::Cylinder {
+                o,
+                axis,
+                e1,
+                e2,
+                r,
+                sign: if side < 0.0 { -1.0 } else { 1.0 },
+            }
+        }
     };
+    let to_plane = |p: Vec3| chart.coords(p);
     // extent and planarity
     let np_a = a.n_points();
     let mut ext = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
@@ -208,10 +389,15 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
     let gather = |m: &Mesh, patch: &crate::mesh::Patch, sign: f64| -> Result<()> {
         for f in patch.faces() {
             let un = vec3::unit(m.face_area_vectors()[f]);
-            if sign * vec3::dot(un, n) < 1.0 - 1e-6 {
-                return bad(format!(
-                    "interface face {f} is not parallel to the interface plane (planar, opposed patches required)"
-                ));
+            if sign * vec3::dot(un, chart.normal(m.face_centres()[f])) < 1.0 - 1e-6 {
+                return bad(match chart {
+                    Chart::Plane { .. } => format!(
+                        "interface face {f} is not parallel to the interface plane (planar, opposed patches required)"
+                    ),
+                    Chart::Cylinder { .. } => format!(
+                        "interface face {f} is not radial (patches on one cylinder about the axis, facing each other, required)"
+                    ),
+                });
             }
         }
         Ok(())
@@ -233,12 +419,17 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
     let size = (ext[1][0] - ext[0][0]).hypot(ext[1][1] - ext[0][1]);
     let d = tol * size;
     if max_off > 1e3 * d {
-        return bad(format!(
-            "interface patches are not coplanar: max distance {max_off:.3e} from the plane (merge tolerance {d:.3e})"
-        ));
+        return bad(match chart {
+            Chart::Plane { .. } => format!(
+                "interface patches are not coplanar: max distance {max_off:.3e} from the plane (merge tolerance {d:.3e})"
+            ),
+            Chart::Cylinder { r, .. } => format!(
+                "interface patches do not lie on one cylinder: max distance {max_off:.3e} from radius {r} (merge tolerance {d:.3e})"
+            ),
+        });
     }
     let n_pts_est = (pa.size + pb.size) as f64;
-    let mut reg = Registry::new(d, size / n_pts_est.sqrt().max(1.0));
+    let mut reg = Registry::new(d, size / n_pts_est.sqrt().max(1.0), chart.period());
     // combined points
     let mut points: Vec<Vec3> = a.points().to_vec();
     points.extend_from_slice(b.points());
@@ -283,6 +474,7 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
         if rev {
             v.reverse();
         }
+        chart.unwrap(&mut v, to_plane(m.face_centres()[f]).0[0]);
         v
     };
     let b_faces: Vec<(usize, Vec<[f64; 2]>)> = pb
@@ -313,6 +505,7 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
     if area_a_face.iter().chain(&area_b_face).any(|&x| x <= 0.0) {
         return bad("an interface face has non-positive area in the interface plane (non-convex or inverted face)");
     }
+    let shifts = reg.shifts.clone();
     for (ia, fa) in pa.faces().enumerate() {
         let sa = plane_loop(a, fa, 0, false, &reg, &remap);
         let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
@@ -322,11 +515,26 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
                 hi[k] = hi[k].max(p[k]);
             }
         }
-        for (ib, (fb, cb)) in b_faces.iter().enumerate() {
-            let (blo, bhi) = b_box[ib];
+        for ((ib, (fb, cb0)), sh) in b_faces
+            .iter()
+            .enumerate()
+            .flat_map(|x| shifts.iter().map(move |&sh| (x, sh)))
+        {
+            let (mut blo, mut bhi) = b_box[ib];
+            if sh != 0.0 {
+                blo[0] += sh;
+                bhi[0] += sh;
+            }
             if blo[0] > hi[0] || bhi[0] < lo[0] || blo[1] > hi[1] || bhi[1] < lo[1] {
                 continue;
             }
+            let shifted: Vec<[f64; 2]>;
+            let cb: &[[f64; 2]] = if sh == 0.0 {
+                cb0
+            } else {
+                shifted = cb0.iter().map(|q| [q[0] + sh, q[1]]).collect();
+                &shifted
+            };
             let poly = clip_polygon(&sa, cb);
             if poly.len() < 3 {
                 continue;
@@ -342,7 +550,7 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
                     Some(k) => reg.gid[k],
                     None => {
                         let g = points.len();
-                        points.push(vec3::add(o, vec3::add(vec3::scale(e1, p[0]), vec3::scale(e2, p[1]))));
+                        points.push(chart.point(*p));
                         remap.push(g);
                         reg.insert(*p, g);
                         g
@@ -359,7 +567,10 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
                 n_dropped += 1;
                 continue;
             }
-            let area = shoelace(&ids.iter().map(|g| reg.coords[reg.by_gid[g]]).collect::<Vec<_>>());
+            let mut ring = ids.iter().map(|g| reg.coords[reg.by_gid[g]]).collect::<Vec<_>>();
+            let s0 = ring[0][0];
+            chart.unwrap(&mut ring, s0);
+            let area = shoelace(&ring);
             tiling_a[ia] += area;
             tiling_b[ib] += area;
             overlaps.push(Overlap {
@@ -391,7 +602,10 @@ pub fn join_non_conformal(a: &Mesh, patch_a: &str, b: &Mesh, patch_b: &str, tol:
             let (p, q) = (ids[i], ids[(i + 1) % n]);
             out.push(p);
             if let (Some(&kp), Some(&kq)) = (reg.by_gid.get(&p), reg.by_gid.get(&q)) {
-                let mids = reg.on_segment(reg.coords[kp], reg.coords[kq]);
+                let mut pq = [reg.coords[kp], reg.coords[kq]];
+                let s0 = pq[0][0];
+                chart.unwrap(&mut pq, s0);
+                let mids = reg.on_segment(pq[0], pq[1]);
                 if !mids.is_empty() {
                     n_split += 1;
                     out.extend(mids);
@@ -625,5 +839,123 @@ mod tests {
             worst = worst.max(vec3::norm(sum) / mag);
         }
         assert!(worst < 1e-14, "{worst}");
+    }
+
+    // ---- ADR 0109 (wave 43B): cylindrical interface, limits registered in the ADR before this code ran ----
+
+    fn worst_closure(m: &Mesh) -> f64 {
+        let mut worst: f64 = 0.0;
+        for c in 0..m.n_cells() {
+            let (mut sum, mut mag) = (vec3::ZERO, 0.0);
+            for &f in m.cell_faces(c) {
+                let sgn = if m.owner()[f] == c { 1.0 } else { -1.0 };
+                sum = vec3::add(sum, vec3::scale(m.face_area_vectors()[f], sgn));
+                mag += m.face_area(f);
+            }
+            worst = worst.max(vec3::norm(sum) / mag);
+        }
+        worst
+    }
+
+    #[test]
+    fn g0_planar_join_bit_identical_to_head_80c26e9() {
+        let mk = |n: [usize; 3], x0: f64| {
+            let m = channel(
+                n,
+                [1.0, 1.0, 1.0],
+                [Grading::Uniform, Grading::Symmetric(3.0), Grading::Expansion(2.0)],
+                false,
+            )
+            .unwrap();
+            warp(&m, |p| [p[0] + x0, p[1], p[2]]).unwrap()
+        };
+        let (m, _) = join_non_conformal(&mk([3, 4, 5], 0.0), "outlet", &mk([2, 7, 3], 1.0), "inlet", 1e-8).unwrap();
+        let a = crate::gen::annulus_3d(48, 16, 2, 0.5, 1.0, 0.2, 0.0, Grading::Uniform).unwrap();
+        let b = crate::gen::annulus_3d(48, 11, 3, 0.5, 1.0, 0.2, 0.2, Grading::Uniform).unwrap();
+        let (m2, _) = join_non_conformal(&a, "zmax", &b, "zmin", 1e-8).unwrap();
+        // recorded at HEAD 80c26e9 before the cylindrical chart was added
+        assert_eq!(m.content_hash(), 0xd055127ef92b9c59);
+        assert_eq!(m2.content_hash(), 0x7c6b5d7b77039063);
+    }
+
+    #[test]
+    fn g1_full_annulus_cylindrical_join_48_against_35() {
+        use std::f64::consts::PI;
+        let (ri, rm, ro, lz) = (0.5, 0.75, 1.0, 0.4);
+        let a = crate::gen::annulus_3d(48, 6, 2, ri, rm, lz, 0.0, Grading::Uniform).unwrap();
+        let b = crate::gen::annulus_3d(35, 6, 3, rm, ro, lz, 0.0, Grading::Uniform).unwrap();
+        let (m, rep) =
+            join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap();
+        let closure = worst_closure(&m);
+        let vol_exact =
+            lz * (0.5 * 35.0 * ro * ro * (2.0 * PI / 35.0).sin() - 0.5 * 48.0 * ri * ri * (2.0 * PI / 48.0).sin());
+        let vol_err = (m.total_volume() - vol_exact).abs() / vol_exact;
+        let mut th: Vec<f64> = (0..48).map(|k| 2.0 * PI * k as f64 / 48.0).collect();
+        th.extend((1..35).map(|j| 2.0 * PI * j as f64 / 35.0));
+        th.sort_by(f64::total_cmp);
+        th.push(2.0 * PI);
+        let area_exact: f64 = th.windows(2).map(|w| lz * 2.0 * rm * (0.5 * (w[1] - w[0])).sin()).sum();
+        let area: f64 = rep.interface_faces.iter().map(|&f| m.face_area(f)).sum();
+        let area_err = (area - area_exact).abs() / area_exact;
+        let (mut tang, mut axial): (f64, f64) = (0.0, 0.0);
+        for &f in &rep.interface_faces {
+            let (c, s) = (m.face_centres()[f], m.face_area_vectors()[f]);
+            let t = vec3::unit([-c[1], c[0], 0.0]);
+            tang = tang.max(vec3::dot(t, s).abs() / vec3::norm(s));
+            axial = axial.max(s[2].abs() / vec3::norm(s));
+        }
+        println!(
+            "G1: {} overlaps (328), tiling {:.2e} (1e-12), closure {closure:.2e} (1e-14), volume {vol_err:.2e} (1e-12), \
+             interface area {area_err:.2e} (1e-12), tangential {tang:.2e} axial {axial:.2e} (1e-12); {} merged angles",
+            rep.n_overlap_faces,
+            rep.max_tiling_error,
+            th.len() - 1
+        );
+        assert_eq!(rep.n_overlap_faces, 328);
+        assert!(rep.max_tiling_error <= 1e-12);
+        assert!(closure <= 1e-14);
+        assert!(vol_err <= 1e-12);
+        assert!(area_err <= 1e-12);
+        assert!(tang <= 1e-12 && axial <= 1e-12);
+        assert_eq!(m.n_cells(), a.n_cells() + b.n_cells());
+        let names: Vec<&str> = m.patches().iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["inner", "zmin", "zmax", "outer"]);
+    }
+
+    #[test]
+    fn g2_sixty_degree_sector_cylindrical_join_keeps_the_periodic_pair() {
+        use std::f64::consts::FRAC_PI_3;
+        let a = crate::gen::annulus_sector(8, 8, 0.5, 0.75, FRAC_PI_3, Grading::Uniform, 0.1).unwrap();
+        let b = crate::gen::annulus_sector(6, 8, 0.75, 1.0, FRAC_PI_3, Grading::Uniform, 0.1).unwrap();
+        let (mut m, rep) =
+            join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap();
+        let closure = worst_closure(&m);
+        println!(
+            "G2: {} overlaps (12), tiling {:.2e} (1e-12), closure {closure:.2e} (1e-14)",
+            rep.n_overlap_faces, rep.max_tiling_error
+        );
+        assert_eq!(rep.n_overlap_faces, 12);
+        assert!(rep.max_tiling_error <= 1e-12);
+        assert!(closure <= 1e-14);
+        m.set_periodic_rotation("theta_min", "theta_max", [0.0; 3], [0.0, 0.0, 1.0], FRAC_PI_3)
+            .unwrap();
+        assert_eq!(m.patch("theta_min").unwrap().size, 16);
+    }
+
+    #[test]
+    fn g3_cylindrical_join_located_errors() {
+        let a = crate::gen::annulus_3d(12, 2, 2, 0.5, 0.75, 0.4, 0.0, Grading::Uniform).unwrap();
+        let off = crate::gen::annulus_3d(10, 2, 2, 0.76, 1.0, 0.4, 0.0, Grading::Uniform).unwrap();
+        let e =
+            join_non_conformal_cylindrical(&a, "outer", &off, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap_err();
+        assert!(format!("{e:?}").contains("cylinder"), "{e:?}");
+        let b = crate::gen::annulus_3d(10, 2, 2, 0.75, 1.0, 0.4, 0.0, Grading::Uniform).unwrap();
+        let e = join_non_conformal_cylindrical(&a, "zmax", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap_err();
+        assert!(format!("{e:?}").contains("radial"), "{e:?}");
+        let short = crate::gen::annulus_3d(10, 2, 2, 0.75, 1.0, 0.3, 0.0, Grading::Uniform).unwrap();
+        let e =
+            join_non_conformal_cylindrical(&a, "outer", &short, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap_err();
+        assert!(format!("{e:?}").contains("cover"), "{e:?}");
+        assert!(join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0; 3], 1e-8).is_err());
     }
 }
