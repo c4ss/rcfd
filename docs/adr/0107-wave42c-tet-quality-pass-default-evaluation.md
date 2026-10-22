@@ -184,8 +184,9 @@ rotating-channel record), unchanged. No test outside the five binaries and this 
 | Q8 M10 T5 limits with the pass | >= 3.0 deg, >= 0.99 | 14.19 deg, 1.000 (10614 cells) | pass |
 
 The second run gave M1 3.080; the registered L1 verdict on M1 is the first run's 3.051 (amendment 1). Both runs had other agents'
-builds on the machine; wall-clock numbers carry that caveat, but every factor is above its limit by more than the spread of the
-five repeats. Steiner budget used: M1 0.0048 with the pass (0.0039 without), M10 0.0018 (0.0017); no case came near the budget
+builds on the machine; wall-clock numbers carry that caveat. L1 on M1 is within the repeat spread (per-repeat factors about 2.8
+to 3.2 in the first run): a marginal miss. M10 (4.81) and L2 (2.79) exceed their limits by far more than the spread; the decision
+does not depend on M1. Steiner budget used: M1 0.0048 with the pass (0.0039 without), M10 0.0018 (0.0017); no case came near the budget
 error. Pass counters: M1 25 extra interior points, 530 moves, 277 extra flips; M10 28 extra points, 2592 moves, 1630 extra flips;
 M10 ends with fewer cells (10614 vs 10710) because flips remove cells. The added cost per cell grows with the mesh (2.79x per cell
 at 8.7x the output cells), so the pass is superlinear on this family; the cause was not isolated (candidates read from the code: every sweep
@@ -204,6 +205,8 @@ cheaper pass or a user decision accepting about 3x on 1k cells and about 5x on 1
 found and removed first (for example by working on a list of cells changed in the previous sweep instead of rescanning); (3) then
 the pins, docs and the listed ADR addenda (ADR 0030 T5/T6/T10/P1/T5b, ADR 0093 S2b, ADR 0104 smoke and D tables).
 
-Deviation: the L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the
-second run). Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
+Deviations: the L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the
+second run). The first registered run of `l3`, `q8` and `l12` used a version of the file not yet committed: the "without the pass"
+side was changed from `TetOptions::default()` to an explicit `no_pass()` (`quality_sweeps: 0`) after the registration commit
+63afe0b and committed with amendment 1 (293ab05); with the default at 0 the two are the same options, so no result changes. Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
 so `tetrahedralize` refused that surface; not pursued.
