@@ -1,8 +1,10 @@
 # rcfd product suites backlog: Ansys capabilities outside CFD
 
+Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
+
 Status: first-pass backlog, 2026-10-17. This is a log, not a plan. Nothing here is scheduled, nothing is added to `docs/roadmap.json`, and the priority classes are rough sizing hints for later triage. The CFD-class inventory lives in `docs/parity-matrix.md` (F-244..F-267); this file covers the rest of the vendor catalogue, grouped by product category.
 
-Clean-room: all capability names are short paraphrases of public product pages and public documentation tables of contents. No vendor text or code was copied; no vendor binary, install directory or `unpacked` content was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
+Clean-room: all capability names are short paraphrases of public product pages and public documentation tables of contents. No vendor text or code was copied; no vendor binary or install was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
 
 ## Sources actually read
 
@@ -482,4 +484,4 @@ No ordering is proposed. The common prerequisites are FE element infrastructure 
 - Not examined at all: Aqwa, AVxcelerate, Cloud/HPC product pages, EnSight product page (snippets only), Discovery/SpaceClaim documentation, LS-DYNA keyword manual, Motion theory, Maxwell/HFSS user guides, Lumerical, Granta technical docs, Minerva product page, medini and SCADE docs, release notes. The P1 catalogue lists 16 categories with products for only 5, so the product inventory is likely incomplete.
 - The "Open route" algorithm and standard names are general knowledge from public literature, not read in this pass. Standards named (ISO 26262, IEC 61508, DO-178C, ARP4761, FMI, Modelica, JEDEC JESD51, IPC, ISO 532, IEC 61672, ASAM OpenSCENARIO) are named only; texts were not read and several are paywalled.
 - Priority and size classes are judgement, not measured effort.
-- Nothing from any vendor install, binary or the `unpacked` directory was touched.
+- Nothing from any vendor install or binary was touched.

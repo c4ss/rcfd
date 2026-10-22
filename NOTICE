@@ -1,0 +1,138 @@
+rcfd
+Copyright (c) 2026 The rcfd contributors
+
+rcfd is licensed under either of the Apache License, Version 2.0 (LICENSE-APACHE) or the MIT licence (LICENSE-MIT), at
+your option. The licences cover the rcfd source code and documentation. The third-party data listed below keep their own
+terms. The full licence record of every dataset (SPDX id, URL, attribution, notes, checksums) is in
+validation-data/manifest.json; `rcfd data provenance` prints it.
+
+Trademarks: all product and company names mentioned in this repository are trademarks or registered trademarks of their
+respective owners. rcfd is an independent project and is not affiliated with, endorsed by or sponsored by any of them.
+Names of commercial codes are used only to describe file formats or to compare capabilities.
+
+------------------------------------------------------------------------------------------------------------------------
+Data under Creative Commons Attribution 4.0 International (CC BY 4.0)
+------------------------------------------------------------------------------------------------------------------------
+FAN-01 low-pressure axial fan benchmark (manifest id w34d-fan01-fau-eaa-axial-fan)
+  Files: validation-data/reference/w34d_fan01_characteristic_n1ug.csv, validation-data/reference/w34d_fan01_cad_sections.csv
+  Source: Kroemer, Junger, Becker, Kaltenbacher, Czwielong, Schoder, 'FAN 01 Benchmark: Low Pressure Axial Fan in a Short Duct', Zenodo, doi:10.5281/zenodo.20037409 (v5, 2026); fan and rig: Zenger, Junger, Kaltenbacher, Becker, SAE Technical Paper 2016-01-1805 (2016)
+  Attribution: FAN-01 benchmark, Friedrich-Alexander-Universitaet Erlangen-Nuernberg / EAA; cite Zenger et al., SAE 2016-01-1805
+  Record: https://doi.org/10.5281/zenodo.20037409
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  Changes: the measured characteristic was transcribed from the published .mat file to CSV (the column labelled
+    P_shaft_in_Nm holds shaft power in W). The cylindrical blade sections were DERIVED by rcfd from the published CAD
+    model; they are not published by the authors, and the authors do not endorse rcfd or these derived data.
+
+------------------------------------------------------------------------------------------------------------------------
+Published numerical values transcribed from papers, reports and public pages
+------------------------------------------------------------------------------------------------------------------------
+These files hold small tables of numbers transcribed from the sources below (LicenseRef-published-numeric-data in the
+manifest: no copyright is claimed on the numbers by rcfd; credit goes to the original authors). See the manifest notes
+for the exact table, the reading method and any caveat (for example values read from a scan or quoted secondhand).
+
+cavity-ghia1982
+  Files: cases/cavity/reference/ghia1982_u_centerline.csv, cases/cavity/reference/ghia1982_v_centerline_Re100.csv
+  Source: U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411, doi:10.1016/0021-9991(82)90058-4
+  Attribution: Ghia, Ghia and Shin (1982)
+
+heated-cavity-devahldavis1983
+  Files: cases/heated_cavity/reference/devahldavis1983.csv
+  Source: G. de Vahl Davis, Int. J. Numer. Meth. Fluids 3 (1983) 249-264, doi:10.1002/fld.1650030305
+  Attribution: de Vahl Davis (1983)
+
+lidcavity-re1000-ghia-botella
+  Files: validation-data/reference/cavity_re1000_ghia_botella_u.csv
+  Source: U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411; O. Botella, R. Peyret, Comput. Fluids 27 (1998) 421-433; both as tabulated in Table A-1 of arXiv:1807.04896
+  Attribution: Ghia, Ghia and Shin (1982); Botella and Peyret (1998)
+
+bfs-er2-re800-literature
+  Files: validation-data/reference/bfs_er2_re800_xr_literature.csv
+  Source: Table 2 of arXiv:2507.16509 (values of Rogers and Kwak, Barton, Erturk Comput. Fluids 37 (2008) 633, Kim and Moin, Lee and Mateescu, Guj and Stella, Grigoriev and Dargush, Keskar and Lyn, Gartling Int. J. Numer. Methods Fluids 11 (1990) 953, Gresho et al.)
+  Attribution: as listed in the citation
+
+blasius-lal-martin-2022
+  Files: validation-data/reference/blasius_lal_martin_2022.csv
+  Source: A. Lal S., M. Martin, Accurate benchmark results of Blasius boundary layer problem using a leaping Taylor's series, arXiv:2204.02215 (2022)
+  Attribution: Lal and Martin (2022)
+
+channel-mkm-chan180-sampled
+  Files: validation-data/reference/mkm_chan180_sampled.csv
+  Source: R. D. Moser, J. Kim, N. N. Mansour, DNS of turbulent channel flow up to Re_tau=590, Phys. Fluids 11 (1999) 943-945; statistics file chan180/profiles/chan180.means
+  Attribution: Moser, Kim and Mansour
+
+cylinder-re100-literature
+  Files: validation-data/reference/cylinder_re100_literature.csv
+  Source: Table 1 of arXiv:2303.09262 (Kravchenko et al., Oliveira, Sivakumar et al., Posdziech and Grundmann, Mossaz et al., Qu et al., Constant et al., Peng et al.; Williamson, Annu. Rev. Fluid Mech. 28 (1996), St only) and Table 3 of arXiv:1401.6513 (Ding)
+  Attribution: as listed in the citation
+
+dvd1983-tablev-natural-convection
+  Files: cases/heated_cavity/reference/devahldavis1983_tableV.csv
+  Source: G. de Vahl Davis, Natural convection of air in a square cavity: a bench mark numerical solution, Int. J. Numer. Methods Fluids 3 (1983) 249-264, doi:10.1002/fld.1650030305
+  Attribution: G. de Vahl Davis, Natural convection of air in a square cavity: a bench mark numerical solution, Int. J. Numer. Methods Fluids 3 (1983) 249-264, doi:10.1002/fld.1650030305
+
+sod-exact-marzouk2020
+  Files: validation-data/reference/w30c_sod_exact_marzouk2020.csv
+  Source: A. Marzouk, Sci. Afr. 10 (2020) e00573, arXiv:2108.01709
+  Attribution: A. Marzouk, Sci. Afr. 10 (2020) e00573, arXiv:2108.01709
+
+graetz-parallel-plates-nptel
+  Files: validation-data/reference/w30c_graetz_parallel_plates_nptel.csv
+  Source: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
+  Attribution: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
+
+laminar-internal-flow-limits
+  Files: validation-data/reference/w30c_laminar_internal_flow_limits.csv
+  Source: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)
+  Attribution: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation)
+
+tmr-2dzp-coles-uplus-retheta10000
+  Files: validation-data/reference/w30c_tmr_coles_uplus_yplus_retheta10000.csv
+  Source: NASA Turbulence Modeling Resource, 2D zero pressure gradient flat plate validation (Karman-Schoenherr Cf and Coles law u+ y+ at Re_theta = 10000)
+  Attribution: NASA Turbulence Modeling Resource, 2D zero pressure gradient flat plate validation (Karman-Schoenherr Cf and Coles law u+ y+ at Re_theta = 10000)
+
+w31c-ghia1982-centerlines-read
+  Files: validation-data/reference/w31c_ghia1982_u_centerline_read.csv, validation-data/reference/w31c_ghia1982_v_centerline_read.csv
+  Source: U. Ghia, K. N. Ghia, C. T. Shin, J. Comput. Phys. 48 (1982) 387-411, Tables I and II (original not read)
+  Attribution: Ghia et al. 1982 via gists ivan-pi/3e9326d18a366ffe6a8e5bfda6353219 (u) and caa6c6737d36a9140fbcf2ea59c78b3c (v), github.com/PN-CourseWork/02689-AdvancedNumericalAlgorithmP3 data/validation/ghia, Uppsala thesis diva2:1668016 Tables 1 and 2
+
+w31c-bfs-gartling1990-re800
+  Files: validation-data/reference/w31c_bfs_gartling1990_re800_mfix.csv
+  Source: D. K. Gartling, Int. J. Numer. Methods Fluids 11 (1990) 953-967 (original not read); values quoted from https://mfix.netl.doe.gov/doc/mfix-exa/guide/latest/tutorials/fluid/steady-backward-facing-step.html
+  Attribution: MFIX-Exa documentation quoting Gartling 1990
+
+w31c-williamson1989-st-re-fit
+  Files: validation-data/reference/w31c_cylinder_williamson1989_st_re_fit.csv
+  Source: C. H. K. Williamson, J. Fluid Mech. 206 (1989) 579-627, equation (6), read in the author copy https://authors.library.caltech.edu/records/wavw6-f7k56/files/WILjfm89a.pdf
+  Attribution: C. H. K. Williamson, J. Fluid Mech. 206 (1989) 579-627
+
+w31c-dean1978-channel-friction-table
+  Files: validation-data/reference/w31c_dean1978_channel_friction_table.csv
+  Source: R. B. Dean, J. Fluids Eng. 100 (1978) 215-223 (original not read); relation and Table 1 as printed in Appendix A of arXiv:1405.1750
+  Attribution: arXiv:1405.1750 Appendix A (alpha = 0.0614, Re_tau = 0.1752 Re_b^(7/8), Table 1)
+
+w31c-graetz-tube-eigenvalues-clarkson
+  Files: validation-data/reference/w31c_graetz_tube_cwt_eigenvalues_clarkson.csv
+  Source: Clarkson University CH490 notes, Graetz Problem (R. Subramanian)
+  Attribution: Clarkson University CH490 lecture notes, Graetz Problem
+
+w31c-naca0012-tmr-subsets
+  Files: validation-data/reference/w31c_naca0012_ladson1988_80grit_cl_cd.csv, validation-data/reference/w31c_naca0012_gregory1970_cp_upper_alpha0.csv
+  Source: NASA TMR https://tmbwg.github.io/turbmodels/naca0012_val.html; files NACA0012_validation/CLCD_Ladson_expdata.dat and CP_Gregory_expdata.dat of TMBWG/turbmodels at the commit pinned in dataset naca0012-tmr
+  Attribution: NASA TMR (TMBWG); Ladson, NASA TM 4074 (1988); Gregory and O'Reilly, NASA R&M 3726 (1970)
+
+w33c-tmr-sst-flatplate-channel
+  Files: validation-data/reference/w33c_tmr_sst_uplus_yplus_x0p97008.csv, validation-data/reference/w33c_tmr_sst_cf_x_cfl3d_545x385.csv, validation-data/reference/w33c_tmr_sst_cf_convergence_x0p97008.csv, validation-data/reference/w33c_tmr_sst_channel_km_cfl3d.csv
+  Source: NASA Turbulence Modeling Resource, 2DZP SST-Vm results (https://tmbwg.github.io/turbmodels/flatplate_sst.html) and 2DFDC SSTm results (https://tmbwg.github.io/turbmodels/channelflow_val_sst.html); CFL3D, FUN3D, SC/Tetra, GHOST
+  Attribution: NASA TMR (TMBWG), CFL3D / FUN3D / SC-Tetra / GHOST results as posted on the pages above
+
+w34c-tmr-flatplate-grid-axes
+  Files: validation-data/reference/w34c_tmr_flatplate_545x385_axes.csv
+  Source: NASA Turbulence Modeling Resource, 2DZP grids (https://tmbwg.github.io/turbmodels/flatplate_grids.html), file flatplate_clust2.p2dfmt in flatplategrids-grids.zip
+  Attribution: NASA TMR (TMBWG), 2DZP verification grids
+
+------------------------------------------------------------------------------------------------------------------------
+Fetched only, never committed
+------------------------------------------------------------------------------------------------------------------------
+Other datasets in validation-data/manifest.json (for example OpenFOAM tutorial files under GPL, NASA reports, GRI-Mech) are
+downloaded on the user's machine by validation-data/fetch.py and are not part of this repository. Their licences are
+recorded in the manifest and apply to the downloaded copies.
