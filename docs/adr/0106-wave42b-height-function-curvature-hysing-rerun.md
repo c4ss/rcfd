@@ -105,3 +105,109 @@ In the scratch tree only, never committed: set `component_diagonal` and `height_
 run every VOF-related test file (rcfd-fv: vof_*.rs, mixture_drift.rs, cavitating_venturi.rs; rcfd-api: vof_tree.rs,
 vof_wiring_tree.rs, mixture_cavitation_tree.rs, baseline_hashes.rs) in release. Report per file pass / fail. Non-Cartesian VOF
 meshes would be refused by the height-function check; that is reported as a blocker of a default switch, not worked around.
+
+## Smoke results (S1, S2; written before the H3, H4 and H5 runs)
+
+* S1 construction: circle 20 x 20 rms 0.0229, max 0.0471, fallbacks [11, 0]; ball 8^3 (R/h = 2) rms 0.109, max 0.193,
+  fallbacks [0, 172] (the CSF fallback acts on this under-resolved ball, as designed); static bubble 40 x 40 to t = 0.05: Laplace
+  error +0.0050, max|U| 1.8e-4, no fallback, finite; H4 on 40 x 80 to t = 0.05: V_c 0.0257, finite, drift 4.6e-16, bound 2.2e-15;
+  H5 on 40 x 80 to t = 0.05: V_c 0.0256, finite; H4 on 160 x 320 to t = 0.1 (160 steps, 44 s): finite, max|U| 0.068, drift 4.9e-15,
+  bound 1.4e-13. Every set-up constructs and runs; all phase-volume checks pass.
+* S2 height-function curvature of the 10-point indicator field (construction only): rms 0.209 / 0.126 / 0.740, max 0.42 / 0.28 /
+  2.98 on 40 x 80 / 80 x 160 / 160 x 320, no fallbacks. The indicator noise dominates on 160 x 320 (the eps / h growth stated
+  above). By the S2 rule (160 x 320 smoke finite, max|U| 0.068 <= 1.0) H4 keeps the indicator field; no amendment.
+
+## Addendum: measured values (after the runs)
+
+All runs once, release build, scratch tree (archive of 893d87c plus this wave's files). Errors are relative errors of `-kappa`
+(H1, H2) or of the Laplace jump (H3); bubble errors are to 1.0813 / 0.2417 / 0.9213.
+
+### H1 circle (exact fractions), not ignored
+
+| n | rms | max | fallbacks [neighbour, CSF] | CSF estimator rms / max (information) |
+|---|-----|-----|----------------------------|----------------------------------------|
+| 40 | 5.18e-3 | 8.25e-3 | [0, 0] | 0.165 / 0.324 |
+| 80 | 1.22e-3 | 1.95e-3 | [0, 0] | 0.225 / 0.444 |
+| 160 | 3.12e-4 | 4.65e-4 | [0, 0] | 0.395 / 0.894 |
+| 320 | 7.65e-5 | 1.17e-4 | [0, 0] | not run |
+
+H1a strictly decreasing: met. H1b rms(320) = 7.65e-5 <= rms(80)/8 = 1.53e-4: met (observed order 2.0). H1c max(320) = 1.17e-4 <=
+max(80)/4 = 4.87e-4: met. H1d no CSF fallback: met. The CSF estimator also diverges on exact fractions, so the ADR 0103 D1b growth
+is a property of the CSF estimator, not of the indicator fractions.
+
+### H2 ball (exact fractions), not ignored
+
+| n | rms | max | fallbacks [neighbour, CSF] |
+|---|-----|-----|----------------------------|
+| 16 | 2.83e-2 | 2.87e-2 | [450, 3] |
+| 32 | 7.64e-3 | 3.26e-2 | [386, 0] |
+| 64 | 2.75e-3 | 2.51e-2 | [347, 0] |
+
+H2a decreasing: met. H2b rms(64) = 2.75e-3 <= rms(16)/4 = 7.08e-3: met. H2c no CSF fallback on 32 and 64: met. Not registered,
+reported: the 3-D maximum error does not converge (0.029, 0.033, 0.025), and a few hundred cells per grid need the neighbour
+fallback; the rms converges at about order 1.5 to 1.9. Not investigated (the benchmark is 2-D); a 3-D user should know it.
+
+### H3 static bubble Laplace jump (exact initial fractions, t = 1), ignored (215 s > 120 s)
+
+| n | height function: e, max|U| at t = 1, fallbacks | CSF (information): e, max|U| |
+|---|------------------------------------------------|------------------------------|
+| 40 | +0.00511, 2.7e-5, [12, 0] | -0.0479, 5.1e-3 |
+| 80 | +0.00128, 4.8e-6, [0, 0] | -0.0513, 3.7e-3 |
+| 160 | +0.00030, 1.2e-6, [0, 0] | not run |
+
+H3a: met (strict decrease on both steps). H3b |e(160)| = 0.00030 <= 0.5 x 0.00511: met. The Laplace error converges at about
+order 2 and the parasitic currents fall by about 200 to 1000 times against CSF. The CSF numbers with exact fractions equal the
+ADR 0103 D1 numbers with indicator fractions to 3 digits.
+
+### H5 (second variant, information): component diagonal + height function + transposed viscous stress
+
+| Grid | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound |
+|------|--------------|---------------|--------------------|-------|-------|
+| 40 x 80 | 1.0794 (0.0019) | 0.2402 (0.0015) | 0.9400 (0.0187) | 5.2e-15 | 8.5e-14 |
+| 80 x 160 | 1.0800 (0.0013) | 0.2409 (0.0008) | 0.9225 (0.0012) | 5.4e-14 | 7.8e-14 |
+
+Both errors fall from 40 to 80. By the registered plan H5 gets no 160 x 320 run, so it cannot be judged on B1-B4 in this wave.
+
+### H4 verdict: component diagonal + height function, ADR 0100 B1-B4 (the single 160 x 320 run)
+
+| Grid | dt / dt_cap | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound | run time |
+|------|-------------|--------------|---------------|--------------------|-------|-------|----------|
+| 40 x 80 | 0.473 | 1.0815 (0.0002) | 0.2486 (0.0069) | 0.8975 (0.0238) | 4.6e-15 | 8.0e-14 | 18 s |
+| 80 x 160 | 0.669 | 1.0778 (0.0035) | 0.2492 (0.0075) | 0.8437 (0.0776) | 5.3e-14 | 7.2e-14 | 145 s |
+| 160 x 320 | 0.946 | 1.0737 (0.0076) | 0.2486 (0.0069) | 0.8381 (0.0832) | 1.6e-13 | 1.7e-13 | 1234 s |
+
+| Check | Measured | Limit | Result |
+|-------|----------|-------|--------|
+| B1 y_c(3) | 0.0002, 0.0035, 0.0076 (growing) | decreasing | **miss** |
+| B1 V_c,max | 0.0069, 0.0075, 0.0069 | decreasing | **miss** |
+| B2 | e(160) / e(40) = 45 (y_c), 1.00 (V_c,max) | <= 0.5 | **miss** (printed) |
+| B3 | 0.0832 vs 0.0238 | e_t(160) < e_t(40) | **miss** (printed) |
+| B4 | drift <= 1.6e-13, bound <= 1.7e-13 | 1e-12, 1e-9 | met (printed) |
+
+H4 misses and becomes `b1h_hysing_bubble_error_decreases_under_refinement_height_function_known_miss`, ignored, limits unchanged.
+F-055 stays partial. Reading: with a convergent curvature the bubble is now about 3 % too fast on every grid (V_c,max 0.249 against
+0.2417, the peak 0.08 early), and y_c(3) moves down by about 0.004 per refinement without a sign of settling (differences
+0.0037, 0.0041). The height-function curvature itself converges (H1 to H3), so the curvature is no longer a suspect for the
+drift. The physically complete viscous stress (H5) lowers V_c,max to 0.2409 and moves the peak to 0.9225 on 80 x 160 with both
+errors falling from 40 to 80, but by the plan registered before the runs it had no 160 x 320 run, so it is not a verdict.
+Suggested next step (not done): the ADR 0100 series with all three options (component diagonal, height function, transposed
+stress) on 40, 80 and 160, registered as its own test.
+
+### Defaults question (scratch tree, both options forced to true in `VofSettings::new`, not committed)
+
+| Test file | Result |
+|-----------|--------|
+| rcfd-fv mixture_drift, vof_advection, vof_bubble, vof_bubble_diagnosis_w41c, vof_bubble_refinement_w40d (non-ignored part), vof_dambreak, vof_dambreak_amg, vof_droplet, vof_height_function_w42b, vof_masstransfer, vof_static, vof_waves | all pass |
+| rcfd-fv cavitating_venturi | both non-ignored tests fail at `VofSolver::new`: the warped mesh is refused by the height-function lattice check (the case has no surface tension) |
+| rcfd-api vof_tree, vof_wiring_tree, mixture_cavitation_tree, baseline_hashes | all pass (baseline_hashes has no VOF case) |
+
+So the defaults cannot be switched as they stand without breaking an existing test: the height-function check would have to fall
+back to CSF (or be skipped) on non-Cartesian meshes and when sigma = 0. Every other existing test passes with both options on;
+their printed values move (the options change the results), which is not a test change.
+
+### Deviations
+
+* None from the registered plan. H3 took 215 s and stays ignored by its registered rule. The H2 3-D maximum error and the 3-D
+  neighbour-fallback counts were not registered limits; they are reported above.
+* The 10-point indicator initial field gives a height-function curvature error that grows on 160 x 320 (S2). H4 kept it as
+  registered; its effect on H4 was not isolated.
