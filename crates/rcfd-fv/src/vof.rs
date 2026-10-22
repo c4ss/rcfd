@@ -524,6 +524,9 @@ pub struct VofSettings {
     /// Height-function curvature on uniform Cartesian grids instead of the CSF estimator (ADR 0106); must be set before
     /// [`VofSolver::new`], which refuses other meshes. Default `false`: CSF, bit-identical to earlier versions.
     pub height_function: bool,
+    /// With `height_function`: keep the CSF estimator instead of refusing when the mesh is not a uniform Cartesian grid, and
+    /// skip the lattice when `sigma <= 0` (ADR 0108); must be set before [`VofSolver::new`]. Default `false`: strict refusal.
+    pub height_function_csf_fallback: bool,
 }
 
 impl VofSettings {
@@ -566,6 +569,7 @@ impl VofSettings {
             harmonic_viscosity: false,
             component_diagonal: false,
             height_function: false,
+            height_function_csf_fallback: false,
         }
     }
 }
@@ -953,13 +957,19 @@ impl VofSolver {
         let phi = face_flux(&geom, &u.values, &bu);
         let transport = AlphaTransport::new(geom.clone(), alpha, settings.c_alpha, settings.alpha_courant);
         let recon = reconstruction_tensors(&geom);
-        let hf = if settings.height_function {
-            Some(HfGrid::new(&geom).ok_or_else(|| Error::InvalidValue {
-                path: "settings.height_function".into(),
-                reason: "height-function curvature needs a uniform axis-aligned Cartesian grid".into(),
-            })?)
-        } else {
+        let hf = if !settings.height_function || (settings.height_function_csf_fallback && settings.sigma <= 0.0) {
             None
+        } else {
+            match HfGrid::new(&geom) {
+                Some(grid) => Some(grid),
+                None if settings.height_function_csf_fallback => None, // `curvature()` uses CSF without a lattice
+                None => {
+                    return Err(Error::InvalidValue {
+                        path: "settings.height_function".into(),
+                        reason: "height-function curvature needs a uniform axis-aligned Cartesian grid".into(),
+                    })
+                }
+            }
         };
         let mut s = VofSolver {
             geom,

@@ -115,3 +115,82 @@ wave does not change it; it checks that `d_dam_break_front` still passes.
   1.4e-13. Every set-up constructs and runs; by the smoke rule no amendment. Measured rate about 0.22 to 0.26 s per step on
   160 x 320, so a 160 x 320 run to t = 3 is about 20 min.
 * Part 2 tests F1-F4 were written and pass (4 of 4, 0.04 s); they are equality tests, so no limit was set after a run.
+
+## Addendum: measured values (after the runs)
+
+All runs once, release build, scratch tree (archive of 80c26e9 plus this wave's files). Errors are to Hysing 1.0813 / 0.2417 /
+0.9213.
+
+### Part 1, X (verdict): all three options, exact initial fractions
+
+| Grid | dt / dt_cap | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound | run time |
+|------|-------------|--------------|---------------|--------------------|-------|-------|----------|
+| 40 x 80 | 0.473 | 1.0792 (0.0021) | 0.2402 (0.0015) | 0.9375 (0.0162) | 5.9e-15 | 9.3e-14 | 20 s |
+| 80 x 160 | 0.669 | 1.0800 (0.0013) | 0.2409 (0.0008) | 0.9225 (0.0012) | 5.1e-14 | 8.0e-14 | 139 s |
+| 160 x 320 | 0.946 | 1.0795 (0.0018) | 0.2416 (0.0001) | 0.9175 (0.0038) | 1.6e-13 | 1.7e-13 | 1194 s |
+
+| Check | Measured | Limit | Result |
+|-------|----------|-------|--------|
+| B1 y_c(3) | 0.0021, 0.0013, 0.0018 | strictly decreasing | **miss** (160 above 80) |
+| B1 V_c,max | 0.0015, 0.0008, 0.00008 | strictly decreasing | met |
+| B2 y_c(3) | e(160) / e(40) = 0.90 | <= 0.5 | **miss** (printed) |
+| B2 V_c,max | e(160) / e(40) = 0.056 | <= 0.5 | met (printed) |
+| B3 | 0.0038 vs 0.0162 | e_t(160) < e_t(40) | met (printed) |
+| B4 | drift <= 1.6e-13, bound <= 1.7e-13 | 1e-12, 1e-9 | met (printed) |
+
+X misses B1 and B2 on y_c(3). It becomes `b1x_..._all_options_exact_fraction_known_miss`, ignored, limits unchanged. F-055 stays
+partial.
+
+### Part 1, XC (control): all three options, 10-point indicator field
+
+| Grid | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound | run time |
+|------|--------------|---------------|--------------------|-------|-------|----------|
+| 40 x 80 | 1.0794 (0.0019) | 0.2402 (0.0015) | 0.9400 (0.0187) | 5.2e-15 | 8.5e-14 | 38 s |
+| 80 x 160 | 1.0800 (0.0013) | 0.2409 (0.0008) | 0.9225 (0.0012) | 5.4e-14 | 7.8e-14 | 163 s |
+| 160 x 320 | 1.0794 (0.0019) | 0.2416 (0.0001) | 0.9175 (0.0038) | 1.5e-13 | 1.7e-13 | 1212 s |
+
+XC misses B1 on y_c(3) the same way (0.0019, 0.0013, 0.0019); it is `b1xc_..._control_known_miss`, ignored as registered. Its 40
+and 80 points equal ADR 0106 H5 to the printed digits (reproducibility of the code path).
+
+### Reading
+
+* Effect of the initial field (X minus XC): y_c(3) -0.0002, 0.0000, +0.0001; V_c,max below 1e-4 on every grid; peak time -0.0025,
+  0, 0 on 40, 80, 160. The initial field has no measurable effect on the bubble with these options, although it changes the
+  initial curvature error by a factor 40 to 2300 (S1 against ADR 0106 S2). By the registered rule the initial field does not
+  explain anything (X does not meet B1).
+* With all three options the bubble agrees with Hysing to 0.2 percent on every grid. V_c,max converges to the reference (error
+  0.0015, 0.0008, 0.0001) and the peak time is within 0.004 on 80 and 160. y_c(3) stays in 1.0792 to 1.0800 on all three grids
+  (successive differences +0.0008, -0.0005): it is converged to about 1.0796 +- 0.0004, 0.0017 below Hysing's TP2D 1.0813 and
+  0.0021 below the MooNMD value 1.0817 read in ADR 0096 (the two reference codes differ by 0.0004). An error that has reached a
+  plateau cannot decrease strictly, so the ADR 0100 B1 limit (monotone decrease) is missed by an error of 0.17 percent. The limit
+  stays as written; whether this plateau is acceptable is the user's decision, not taken here.
+* Against ADR 0106 H4 (component diagonal and height function without the transposed stress): the transposed viscous stress
+  removes the 3 percent over-speed (V_c,max 0.2486 -> 0.2416 on 160 x 320) and the y_c(3) drift (1.0737 -> 1.0795 on 160 x 320).
+  So the remaining offset of the defaults (ADR 0100) is accounted for by three opt-ins: the wall defect (ADR 0103), the
+  non-convergent CSF curvature (ADR 0106) and the missing transposed stress.
+
+### Part 2, fallback
+
+F1-F4 pass (not ignored). Report-only run in a scratch copy with `component_diagonal`, `height_function`,
+`height_function_csf_fallback` and `full_viscous_stress` all forced to `true` in `VofSettings::new` (not committed), release:
+
+| Test file | Result |
+|-----------|--------|
+| rcfd-fv cavitating_venturi | 2 passed, 2 ignored (was: both non-ignored tests fail at `VofSolver::new` in ADR 0106) |
+| rcfd-fv mixture_drift, vof_advection, vof_bubble, vof_bubble_diagnosis_w41c, vof_dambreak, vof_dambreak_amg, vof_droplet, vof_height_function_fallback_w43a, vof_height_function_w42b, vof_masstransfer, vof_static, vof_waves | all pass (vof_waves took 642 s under parallel load; its time with the defaults was not measured in this run) |
+| rcfd-api vof_tree, vof_wiring_tree, mixture_cavitation_tree, baseline_hashes | all pass (baseline_hashes has no VOF case) |
+
+So with the fallback, the four options can be switched on together without breaking an existing test. No default was changed.
+
+### Part 3
+
+As registered: the dam-break clause rests on the Martin-Moyce average front velocity (1.69, secondary source), the only published
+dam-break data in `docs/reference-data.md`; `d_dam_break_front` passes not ignored in the final gate. A pointwise front-versus-time
+test is not feasible with the data in the file.
+
+### Deviations
+
+* None from the registered plan. The first launch of X used `--exact` with a partial test name and ran no test (0 tests, no
+  output); it was relaunched with the full name. No series was run twice.
+* `vof_bubble.rs` `e_rising_bubble_free_slip_sides` and `vof_dambreak.rs` `d_dam_break_front` were not re-run separately: they are
+  unchanged (defaults bit-identical) and are part of the final gate.
