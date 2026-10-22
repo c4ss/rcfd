@@ -10,8 +10,61 @@ const YC_REF: f64 = 1.0813;
 const V_REF: f64 = 0.2417;
 const T_REF: f64 = 0.9213;
 
+/// Area of the disc of radius `r` centred at the origin intersected with `[x0, x1] x [y0, y1]` (exact up to round-off). Copy of
+/// `disc_rect` in `vof_height_function_w42b.rs` (verified there by ADR 0106 H1).
+fn disc_rect(x0: f64, x1: f64, y0: f64, y1: f64, r: f64) -> f64 {
+    let f = |x: f64| {
+        let x = x.clamp(-r, r);
+        0.5 * (x * (r * r - x * x).max(0.0).sqrt() + r * r * (x / r).asin())
+    };
+    let (a, b) = (x0.max(-r), x1.min(r));
+    if a >= b || y0 >= y1 {
+        return 0.0;
+    }
+    let mut pts = vec![a, b];
+    for y in [y0, y1] {
+        if y.abs() < r {
+            let xb = (r * r - y * y).sqrt();
+            pts.extend([-xb, xb].into_iter().filter(|&x| x > a && x < b));
+        }
+    }
+    pts.sort_by(f64::total_cmp);
+    let mut area = 0.0;
+    for w in pts.windows(2) {
+        let (p, q) = (w[0], w[1]);
+        let m = 0.5 * (p + q);
+        let sm = (r * r - m * m).max(0.0).sqrt();
+        if y1.min(sm) <= y0.max(-sm) {
+            continue;
+        }
+        let up = if y1 < sm { y1 * (q - p) } else { f(q) - f(p) };
+        let lo = if y0 > -sm { y0 * (q - p) } else { -(f(q) - f(p)) };
+        area += up - lo;
+    }
+    area
+}
+
+/// ADR 0108: exact initial fractions of the bubble (R = 0.25 at (0.5, 0.5), alpha = 1 outside) on the `n` x `2n` grid (h = 1/n);
+/// asserts the bubble area pi R^2 to relative 1e-10.
+fn exact_fraction(geom: &FvGeometry, n: usize) -> Vec<f64> {
+    let h = 1.0 / n as f64;
+    let inside: Vec<f64> = geom
+        .mesh
+        .cell_centres()
+        .iter()
+        .map(|p| {
+            let (x, y) = (p[0] - 0.5, p[1] - 0.5);
+            disc_rect(x - 0.5 * h, x + 0.5 * h, y - 0.5 * h, y + 0.5 * h, 0.25)
+        })
+        .collect();
+    let exact = std::f64::consts::PI * 0.0625;
+    let total: f64 = inside.iter().sum();
+    assert!((total / exact - 1.0).abs() <= 1e-10, "bubble area {total} vs {exact}");
+    inside.iter().map(|v| (1.0 - v / (h * h)).clamp(0.0, 1.0)).collect()
+}
+
 /// The `vof_bubble.rs` set-up on `n` x `2n` cells.
-fn bubble(n: usize, full: bool, cd: bool, hf: bool) -> VofSolver {
+fn bubble(n: usize, full: bool, cd: bool, hf: bool, exact: bool) -> VofSolver {
     let mesh = Arc::new(box_2d(n, 2 * n, 1.0, 2.0, false, false).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
@@ -23,7 +76,11 @@ fn bubble(n: usize, full: bool, cd: bool, hf: bool) -> VofSolver {
     }
     let p_rgh = ScalarField::uniform("p_rgh", &geom, 0.0);
     let mut alpha = ScalarField::uniform("alpha", &geom, 1.0);
-    alpha.values = indicator_fraction(&geom, 10, |x| (x[0] - 0.5).hypot(x[1] - 0.5) > 0.25);
+    alpha.values = if exact {
+        exact_fraction(&geom, n) // ADR 0108 (b1x only)
+    } else {
+        indicator_fraction(&geom, 10, |x| (x[0] - 0.5).hypot(x[1] - 0.5) > 0.25)
+    };
     let mut s = VofSettings::new([1000.0, 100.0], [10.0, 1.0]);
     s.gravity = [0.0, -0.98, 0.0];
     s.sigma = 24.5;
@@ -37,8 +94,8 @@ fn bubble(n: usize, full: bool, cd: bool, hf: bool) -> VofSolver {
 
 /// Runs `n` x `2n` to `t_end` with `dt = 0.1 / n` (2.5e-3 on 40 x 80, as `vof_bubble.rs`):
 /// (y_c(t_end), V_c,max, time of V_c,max, phase-volume drift, bound violation).
-fn run(n: usize, t_end: f64, full: bool, cd: bool, hf: bool) -> (f64, f64, f64, f64, f64) {
-    let mut s = bubble(n, full, cd, hf);
+fn run(n: usize, t_end: f64, full: bool, cd: bool, hf: bool, exact: bool) -> (f64, f64, f64, f64, f64) {
+    let mut s = bubble(n, full, cd, hf, exact);
     let dt = 0.1 / n as f64;
     assert!(dt <= s.capillary_dt(), "capillary limit {}", s.capillary_dt());
     let vol = s.geom.mesh.cell_volumes().to_vec();
@@ -82,14 +139,14 @@ fn run(n: usize, t_end: f64, full: bool, cd: bool, hf: bool) -> (f64, f64, f64, 
 #[test]
 #[ignore = "smoke of ADR 0100 part B"]
 fn b0_smoke() {
-    run(160, 0.4, false, false, false);
+    run(160, 0.4, false, false, false, false);
 }
 
 /// B1-B4 of ADR 0100: errors to the Hysing values on 40 x 80, 80 x 160, 160 x 320; all grids are printed before any assert.
 #[test]
 #[ignore = "KNOWN MISS (ADR 0100 addendum): errors to Hysing grow under refinement (y_c 0.053, 0.064, 0.069); heavy, about 30 min"]
 fn b1_hysing_bubble_error_decreases_under_refinement_known_miss() {
-    b1(false, false, false);
+    b1(false, false, false, false);
 }
 
 /// ADR 0103: B1-B4 of ADR 0100 (limits unchanged) with the transposed viscous stress on (`full_viscous_stress`). Not run on
@@ -98,7 +155,7 @@ fn b1_hysing_bubble_error_decreases_under_refinement_known_miss() {
 #[test]
 #[ignore = "KNOWN MISS (ADR 0103 amendment A): B1 fails on the 40 and 80 points (D2); heavy, about 30 min"]
 fn b1f_hysing_bubble_error_decreases_under_refinement_full_viscous_stress_known_miss() {
-    b1(true, false, false);
+    b1(true, false, false, false);
 }
 
 /// ADR 0103 amendment C: B1-B4 of ADR 0100 (limits unchanged) with the component-diagonal correction (`component_diagonal`). Not
@@ -107,7 +164,7 @@ fn b1f_hysing_bubble_error_decreases_under_refinement_full_viscous_stress_known_
 #[test]
 #[ignore = "KNOWN MISS (ADR 0103 amendment C): B1 fails on the 40 and 80 points (C2); heavy, about 30 min"]
 fn b1c_hysing_bubble_error_decreases_under_refinement_component_diagonal_known_miss() {
-    b1(false, true, false);
+    b1(false, true, false, false);
 }
 
 /// ADR 0106 H4 (the verdict): B1-B4 of ADR 0100 (limits unchanged) with the component-diagonal correction and the
@@ -116,7 +173,7 @@ fn b1c_hysing_bubble_error_decreases_under_refinement_component_diagonal_known_m
 #[test]
 #[ignore = "KNOWN MISS (ADR 0106 H4): y_c(3) error grows 0.0002 -> 0.0035 -> 0.0076; heavy, about 25 min"]
 fn b1h_hysing_bubble_error_decreases_under_refinement_height_function_known_miss() {
-    b1(false, true, true);
+    b1(false, true, true, false);
 }
 
 /// ADR 0106 H5 (second registered variant, information): component diagonal + height function + transposed viscous stress on
@@ -124,7 +181,10 @@ fn b1h_hysing_bubble_error_decreases_under_refinement_height_function_known_miss
 #[test]
 #[ignore = "ADR 0106 H5 diagnostic, run once"]
 fn h5_height_function_full_viscous_stress_40_80() {
-    let r: Vec<_> = [40, 80].into_iter().map(|n| run(n, 3.0, true, true, true)).collect();
+    let r: Vec<_> = [40, 80]
+        .into_iter()
+        .map(|n| run(n, 3.0, true, true, true, false))
+        .collect();
     let ey: Vec<f64> = r.iter().map(|x| (x.0 - YC_REF).abs()).collect();
     let ev: Vec<f64> = r.iter().map(|x| (x.1 - V_REF).abs()).collect();
     println!(
@@ -140,7 +200,7 @@ fn h5_height_function_full_viscous_stress_40_80() {
 #[ignore = "ADR 0106 smoke"]
 fn s_height_function_smoke() {
     for n in [40, 80, 160] {
-        let s = bubble(n, false, true, true);
+        let s = bubble(n, false, true, true, false);
         let k = s.curvature();
         let a = &s.transport.alpha.values;
         let e: Vec<f64> = (0..a.len())
@@ -155,13 +215,59 @@ fn s_height_function_smoke() {
             s.curvature_fallbacks()
         );
     }
-    run(40, 0.05, false, true, true);
-    run(40, 0.05, true, true, true);
-    run(160, 0.1, false, true, true);
+    run(40, 0.05, false, true, true, false);
+    run(40, 0.05, true, true, true, false);
+    run(160, 0.1, false, true, true, false);
 }
 
-fn b1(full: bool, cd: bool, hf: bool) {
-    let r: Vec<_> = [40, 80, 160].into_iter().map(|n| run(n, 3.0, full, cd, hf)).collect();
+/// ADR 0108 X (the verdict): B1-B4 of ADR 0100 (limits unchanged) with all three options (`component_diagonal`,
+/// `height_function`, `full_viscous_stress`) and exact initial fractions. Run once: y_c(3) errors 0.0021, 0.0013, 0.0018 (not
+/// monotone), V_c,max errors 0.0015, 0.0008, 0.0001 (monotone); B1 misses on y_c(3).
+#[test]
+#[ignore = "KNOWN MISS (ADR 0108 X): y_c(3) error 0.0021 -> 0.0013 -> 0.0018 not monotone; heavy, about 25 min"]
+fn b1x_hysing_bubble_error_decreases_under_refinement_all_options_exact_fraction_known_miss() {
+    b1(true, true, true, true);
+}
+
+/// ADR 0108 XC (control, cannot change the verdict): the X series with the 10-point indicator initial field. Run once: y_c(3)
+/// errors 0.0019, 0.0013, 0.0019, V_c,max errors 0.0015, 0.0008, 0.0001 (within 2e-4 of X on every grid).
+#[test]
+#[ignore = "KNOWN MISS (ADR 0108 XC control, ignored in every outcome): y_c(3) error 0.0019 -> 0.0013 -> 0.0019; heavy, about 25 min"]
+fn b1xc_hysing_bubble_all_options_indicator_fraction_control_known_miss() {
+    b1(true, true, true, false);
+}
+
+/// ADR 0108 S1 / S2 smoke: exact-fraction construction on the three grids (curvature of the initial field), X on 40 x 80 to
+/// t = 0.05, X and XC on 160 x 320 to t = 0.1.
+#[test]
+#[ignore = "ADR 0108 smoke"]
+fn s_all_options_exact_fraction_smoke() {
+    for n in [40, 80, 160] {
+        let s = bubble(n, true, true, true, true);
+        let k = s.curvature();
+        let a = &s.transport.alpha.values;
+        let e: Vec<f64> = (0..a.len())
+            .filter(|&c| a[c] > 0.05 && a[c] < 0.95)
+            .map(|c| -k[c] / 4.0 - 1.0)
+            .collect();
+        let rms = (e.iter().map(|x| x * x).sum::<f64>() / e.len() as f64).sqrt();
+        let max = e.iter().map(|x| x.abs()).fold(0.0, f64::max);
+        println!(
+            "S1 {n} x {}: exact field, height function rms {rms:.3e}, max {max:.3e}, fallbacks {:?}",
+            2 * n,
+            s.curvature_fallbacks()
+        );
+    }
+    run(40, 0.05, true, true, true, true);
+    run(160, 0.1, true, true, true, true);
+    run(160, 0.1, true, true, true, false);
+}
+
+fn b1(full: bool, cd: bool, hf: bool, exact: bool) {
+    let r: Vec<_> = [40, 80, 160]
+        .into_iter()
+        .map(|n| run(n, 3.0, full, cd, hf, exact))
+        .collect();
     let ey: Vec<f64> = r.iter().map(|x| (x.0 - YC_REF).abs()).collect();
     let ev: Vec<f64> = r.iter().map(|x| (x.1 - V_REF).abs()).collect();
     let et: Vec<f64> = r.iter().map(|x| (x.2 - T_REF).abs()).collect();
