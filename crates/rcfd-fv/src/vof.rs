@@ -521,6 +521,9 @@ pub struct VofSettings {
     /// single-phase kernels, ADR 0103 here): with the averaged diagonal a symmetry plane acts partly like a no-slip wall. Default
     /// `false`: averaged, bit-identical to earlier versions.
     pub component_diagonal: bool,
+    /// Height-function curvature on uniform Cartesian grids instead of the CSF estimator (ADR 0106); must be set before
+    /// [`VofSolver::new`], which refuses other meshes. Default `false`: CSF, bit-identical to earlier versions.
+    pub height_function: bool,
 }
 
 impl VofSettings {
@@ -562,7 +565,141 @@ impl VofSettings {
             full_viscous_stress: false,
             harmonic_viscosity: false,
             component_diagonal: false,
+            height_function: false,
         }
+    }
+}
+
+/// Uniform axis-aligned lattice of the cells (height-function curvature, ADR 0106).
+#[derive(Debug, Clone)]
+struct HfGrid {
+    n: [usize; 3],
+    h: [f64; 3],
+    /// Lattice index of every cell.
+    ijk: Vec<[usize; 3]>,
+    /// Cell at lattice index `i + n0 (j + n1 k)`.
+    cell: Vec<usize>,
+}
+
+impl HfGrid {
+    /// The lattice of `geom`, or `None` unless the cell centres form a complete grid of constant spacing per axis with equal
+    /// cell volumes.
+    fn new(geom: &FvGeometry) -> Option<Self> {
+        let cc = geom.mesh.cell_centres();
+        let vol = geom.mesh.cell_volumes();
+        let nc = cc.len();
+        if nc == 0 || vol.iter().any(|v| (v - vol[0]).abs() > 1e-9 * vol[0]) {
+            return None;
+        }
+        let (mut n, mut h, mut lo) = ([1usize; 3], [1.0f64; 3], [0.0f64; 3]);
+        for d in 0..3 {
+            let mut x: Vec<f64> = cc.iter().map(|p| p[d]).collect();
+            x.sort_by(f64::total_cmp);
+            let tol = 1e-9 * x[0].abs().max(x[nc - 1].abs()).max(x[nc - 1] - x[0]).max(1e-300);
+            x.dedup_by(|b, a| (*b - *a).abs() <= tol);
+            n[d] = x.len();
+            lo[d] = x[0];
+            if n[d] > 1 {
+                h[d] = (x[n[d] - 1] - x[0]) / (n[d] - 1) as f64;
+                if x.windows(2).any(|w| (w[1] - w[0] - h[d]).abs() > 1e-6 * h[d]) {
+                    return None;
+                }
+            }
+        }
+        if n[0] * n[1] * n[2] != nc {
+            return None;
+        }
+        let mut cell = vec![usize::MAX; nc];
+        let mut ijk = Vec::with_capacity(nc);
+        for (c, p) in cc.iter().enumerate() {
+            let q = [0, 1, 2].map(|d| {
+                if n[d] > 1 {
+                    ((p[d] - lo[d]) / h[d]).round() as usize
+                } else {
+                    0
+                }
+            });
+            if (0..3).any(|d| n[d] > 1 && (p[d] - lo[d] - q[d] as f64 * h[d]).abs() > 1e-6 * h[d]) {
+                return None;
+            }
+            let i = q[0] + n[0] * (q[1] + n[1] * q[2]);
+            if i >= nc || cell[i] != usize::MAX {
+                return None;
+            }
+            cell[i] = c;
+            ijk.push(q);
+        }
+        Some(HfGrid { n, h, ijk, cell })
+    }
+
+    fn at(&self, q: [isize; 3]) -> Option<usize> {
+        if (0..3).any(|d| q[d] < 0 || q[d] >= self.n[d] as isize) {
+            return None;
+        }
+        let q = q.map(|x| x as usize);
+        Some(self.cell[q[0] + self.n[0] * (q[1] + self.n[1] * q[2])])
+    }
+
+    /// Height-function curvature `-div(grad alpha / |grad alpha|)` of cell `c` from the first direction (in order of decreasing
+    /// `|grad alpha|` component) and half-length K = 3, 4, 5 whose 3 (2-D) or 3 x 3 (3-D) columns all bracket the interface;
+    /// `None` if none does.
+    fn column_curvature(&self, a: &[f64], c: usize, grad: Vec3, axes: &[usize]) -> Option<f64> {
+        const PURE: f64 = 1e-3;
+        let mut dirs = axes.to_vec();
+        dirs.sort_by(|&p, &q| grad[q].abs().total_cmp(&grad[p].abs()));
+        for &d in &dirs {
+            let tr: Vec<usize> = axes.iter().copied().filter(|&t| t != d).collect();
+            if grad[d] == 0.0 || tr.is_empty() {
+                continue;
+            }
+            // s < 0: phase 1 at the -d end of the column
+            let s = grad[d].signum();
+            'k: for k in 3..=5isize {
+                let mut ht = [[0.0f64; 3]; 3];
+                for (o0, row) in ht.iter_mut().enumerate() {
+                    for (o1, hv) in row.iter_mut().enumerate() {
+                        if tr.len() == 1 && o1 != 1 {
+                            continue;
+                        }
+                        let mut q = self.ijk[c].map(|x| x as isize);
+                        q[tr[0]] += o0 as isize - 1;
+                        if tr.len() == 2 {
+                            q[tr[1]] += o1 as isize - 1;
+                        }
+                        let mut sum = 0.0;
+                        let (mut first, mut last) = (0.0, 0.0);
+                        for m in -k..=k {
+                            let mut p = q;
+                            p[d] += m;
+                            let Some(cell) = self.at(p) else { continue 'k };
+                            if m == -k {
+                                first = a[cell];
+                            }
+                            last = a[cell];
+                            sum += a[cell];
+                        }
+                        let (one, zero) = if s < 0.0 { (first, last) } else { (last, first) };
+                        if one < 1.0 - PURE || zero > PURE {
+                            continue 'k;
+                        }
+                        *hv = self.h[d] * if s < 0.0 { sum } else { (2 * k + 1) as f64 - sum };
+                    }
+                }
+                let hx = self.h[tr[0]];
+                let h_x = (ht[2][1] - ht[0][1]) / (2.0 * hx);
+                let h_xx = (ht[2][1] - 2.0 * ht[1][1] + ht[0][1]) / (hx * hx);
+                if tr.len() == 1 {
+                    return Some(s * h_xx / (1.0 + h_x * h_x).powf(1.5));
+                }
+                let hy = self.h[tr[1]];
+                let h_y = (ht[1][2] - ht[1][0]) / (2.0 * hy);
+                let h_yy = (ht[1][2] - 2.0 * ht[1][1] + ht[1][0]) / (hy * hy);
+                let h_xy = (ht[2][2] - ht[2][0] - ht[0][2] + ht[0][0]) / (4.0 * hx * hy);
+                let num = h_xx * (1.0 + h_y * h_y) + h_yy * (1.0 + h_x * h_x) - 2.0 * h_xy * h_x * h_y;
+                return Some(s * num / (1.0 + h_x * h_x + h_y * h_y).powf(1.5));
+            }
+        }
+        None
     }
 }
 
@@ -793,6 +930,8 @@ pub struct VofSolver {
     cell_y: Vec<[f64; 2]>,
     /// Inverse of `sum_f S S / |S|` per cell on the active dimensions (row-major).
     recon: Vec<[[f64; 3]; 3]>,
+    /// Cell lattice of the height-function curvature (`None` unless `settings.height_function`).
+    hf: Option<HfGrid>,
 }
 
 impl VofSolver {
@@ -814,6 +953,14 @@ impl VofSolver {
         let phi = face_flux(&geom, &u.values, &bu);
         let transport = AlphaTransport::new(geom.clone(), alpha, settings.c_alpha, settings.alpha_courant);
         let recon = reconstruction_tensors(&geom);
+        let hf = if settings.height_function {
+            Some(HfGrid::new(&geom).ok_or_else(|| Error::InvalidValue {
+                path: "settings.height_function".into(),
+                reason: "height-function curvature needs a uniform axis-aligned Cartesian grid".into(),
+            })?)
+        } else {
+            None
+        };
         let mut s = VofSolver {
             geom,
             settings,
@@ -831,6 +978,7 @@ impl VofSolver {
             u_rc: None,
             cell_y: Vec::new(),
             recon,
+            hf,
         };
         s.validate_extensions()?;
         s.update_pressure();
@@ -1288,9 +1436,92 @@ impl VofSolver {
         ((s.rho[0] + s.rho[1]) * dx.powi(3) / (8.0 * std::f64::consts::PI * s.sigma)).sqrt()
     }
 
-    /// Cell curvature `kappa = -div(n)` of the normalised gradient of the smoothed phase fraction (internal faces only,
-    /// i.e. a 90 degree contact angle at walls).
+    /// Cell curvature `kappa = -div(n)` of the interface: the height-function estimate when `settings.height_function` is on
+    /// (ADR 0106), the CSF estimate otherwise.
     pub fn curvature(&self) -> Vec<f64> {
+        match (&self.hf, self.settings.height_function) {
+            (Some(grid), true) => self.hf_curvature(grid).0,
+            _ => self.csf_curvature(),
+        }
+    }
+
+    /// Active cells (owning a face with `|d alpha| > 1e-6`) without a bracketing height-function column:
+    /// `[filled from the neighbours, given the CSF value]`; `[0, 0]` without the height-function option.
+    pub fn curvature_fallbacks(&self) -> [usize; 2] {
+        match (&self.hf, self.settings.height_function) {
+            (Some(grid), true) => self.hf_curvature(grid).1,
+            _ => [0, 0],
+        }
+    }
+
+    /// Height-function curvature (ADR 0106) of the active cells; inactive cells get 0 (their faces carry `|d alpha| <= 1e-6`).
+    /// Fallback near under-resolved interfaces: an active cell without a bracketing column takes the mean of its face
+    /// neighbours that have a value (up to 3 passes), then the CSF value.
+    fn hf_curvature(&self, grid: &HfGrid) -> (Vec<f64>, [usize; 2]) {
+        let g = &self.geom;
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let a = &self.transport.alpha.values;
+        let n = a.len();
+        let mut active = vec![false; n];
+        for f in 0..g.n_internal {
+            if (a[nei[f]] - a[own[f]]).abs() > 1e-6 {
+                active[own[f]] = true;
+                active[nei[f]] = true;
+            }
+        }
+        let bv: Vec<f64> = (0..mesh.n_boundary_faces()).map(|i| a[own[g.n_internal + i]]).collect();
+        let grad = green_gauss(g, a, &bv, 0);
+        let axes: Vec<usize> = (0..3).filter(|&d| grid.n[d] > 1).collect();
+        let mut val: Vec<Option<f64>> = (0..n)
+            .map(|c| {
+                if active[c] {
+                    grid.column_curvature(a, c, grad[c], &axes)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut fb = [0usize; 2];
+        for _ in 0..3 {
+            let (mut sum, mut cnt) = (vec![0.0; n], vec![0usize; n]);
+            for f in 0..g.n_internal {
+                for (c, o) in [(own[f], nei[f]), (nei[f], own[f])] {
+                    if let (true, None, Some(v)) = (active[c], val[c], val[o]) {
+                        sum[c] += v;
+                        cnt[c] += 1;
+                    }
+                }
+            }
+            for c in 0..n {
+                if cnt[c] > 0 {
+                    val[c] = Some(sum[c] / cnt[c] as f64);
+                    fb[0] += 1;
+                }
+            }
+        }
+        let csf = if (0..n).any(|c| active[c] && val[c].is_none()) {
+            Some(self.csf_curvature())
+        } else {
+            None
+        };
+        let kappa = (0..n)
+            .map(|c| match (active[c], val[c], &csf) {
+                (false, _, _) => 0.0,
+                (true, Some(v), _) => v,
+                (true, None, Some(k)) => {
+                    fb[1] += 1;
+                    k[c]
+                }
+                (true, None, None) => unreachable!(),
+            })
+            .collect();
+        (kappa, fb)
+    }
+
+    /// CSF curvature `kappa = -div(n)` of the normalised gradient of the smoothed phase fraction (internal faces only,
+    /// i.e. a 90 degree contact angle at walls).
+    fn csf_curvature(&self) -> Vec<f64> {
         let g = &self.geom;
         let mesh = &g.mesh;
         let n = g.n_cells();
