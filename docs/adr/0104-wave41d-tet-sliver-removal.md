@@ -137,7 +137,8 @@ Frozen pass (what the registered tests run): `TetOptions { quality_sweeps: 10, .
 circumcentre insertion for every inside tetrahedron with circumradius over shortest edge above `max_radius_edge` (2.0); (ii) one
 smoothing sweep over interior vertices in id order, candidates the neighbour centroid and the volume-weighted circumcentre mean, steps
 1, 1/2, 1/4, 1/8, kept only if exact `orient3d` keeps every incident cell positive and the smallest incident objective grows by more
-than 1e-6 relative; (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06. Stops early when a
+than 1e-6 relative, where the objective of a cell is the smaller of its volume quality times `6 sqrt 2` and `(sqrt 6 / 4)` divided by
+its circumradius over shortest edge (both 1 on the regular tetrahedron); (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06. Stops early when a
 sweep changes nothing. Ingredients 2 (dihedral-objective flips) and 4 (flat-cell split at a dihedral threshold) were not needed and
 are not implemented. What I knew when writing this: the development numbers above; Q7 (held-out) has not been run with the pass.
 
@@ -173,6 +174,13 @@ when the quality pass is on. The default options still miss; a user must set `qu
 boundary layers on a tetrahedral mesh of STL geometry.
 
 Deviations: the pass was developed on the target cases (disclosed in amendment 1); the held-out cases were run only in the
-registered run. Ingredients 1, 2 and 4 of Part 2 were not kept or not built. The pass has no termination or quality guarantee (no
+registered run. Ingredients 1, 2 and 4 of Part 2 were not kept or not built. Ingredient 3 was replaced: the insertion uses the
+radius-edge criterion, not a dihedral one, and a constrained cavity instead of the encroachment rule of ingredient 1. Part 2 said
+both quality measures would be re-measured after every stage; the pass does not do that: the measures are taken once, on the final
+mesh (the development runs measured them per variant, not per stage). The pass has no termination or quality guarantee (no
 sliver exudation); it is a bounded heuristic (10 sweeps). No literature value enters a gate; the method names (Delaunay refinement,
 constrained cavities, optimisation-based smoothing, bistellar flips) are from memory and UNVERIFIED.
+
+Gate on a fresh archive of 82a76cc: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1949 passed / 0 failed / 551 ignored (wave 40: 1939 / 0 / 549; this ADR adds 10
+passed and 2 ignored diagnostics). The commit after the gate changes this ADR's text only.
