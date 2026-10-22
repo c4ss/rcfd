@@ -204,3 +204,21 @@ this is `1 + (2 Omega V / D)^2 > 1` for every finite D, and with `D = Omega V` (
 vanishing momentum diagonal stays unstable in this model whatever dt is. Added, fixed now: **S9'** = S9 with `pseudo_dt = 0.1 / Omega`
 (stable for `a` above about `0.24 Omega V`), run after S9 whatever S9 gives, same rule. F-ZP takes the larger dt among S9 and S9' that
 STANDS (none: F-ZP not eligible).
+
+## Amendment 4 (written after R-x, S8, S9 and S9' had run, before any run it governs)
+
+What I knew: R-x CONTRADICTS S8 (no cell of B3 has `x_c > 1.1`; the largest is 0.71 at the hub outlet corner; the five oscillating
+leading-edge cells have 0.027-0.043). S8 (`rho_med` 0.44), S9 (0.36) and S9' (1.82) are FALSIFIED. With psi frozen and pseudo time on, the
+leading-edge cells c17, c665, c701, c341, c53 settle into an EXACT period-two cycle (period ratio 0.000; amplitude 12.6 m/s with dt =
+1/Omega, 4.0 m/s with 0.1/Omega), while the functionals are constant to 1e-13: the torque of those cycle states is 1.888 and 2.095 N m
+(default stalled state 1.849). So the bladed functionals of the stalled runs are values of a cycle, not of a discrete solution, and they
+depend on the iteration settings by up to 13 %. With psi frozen the remaining kinks of the map are the upwind directions; an exact period-two
+cycle of a frozen linear operator needs an eigenvalue at or beyond -1 bounded by such a switch.
+
+Registered now (same switch-arm rule; each run once):
+* **S10** `upwind` (limiter off) from iteration 1000 on B3: tests whether the high-order (deferred) part of `linear_upwind` at the
+  leading-edge corner drives the cycle. STANDS / FALSIFIED by the rule; its fixed point differs (first order), so only its own residuals count.
+* **S11** psi frozen plus `velocity_correction = "face_flux"` from iteration 1000 on B3: tests whether the period-two cycle revealed by the
+  freeze is the ADR 0084 period-two pressure mode (cell / face correction mismatch).
+* **R-U record** (no verdict, location only): unlimited `linear_upwind` on E3 from the start, the five largest-`du` cells of iterations 1-6
+  (before the guard trip at 7), to locate where the unlimited scheme fails.
