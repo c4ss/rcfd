@@ -222,3 +222,34 @@ Registered now (same switch-arm rule; each run once):
   freeze is the ADR 0084 period-two pressure mode (cell / face correction mismatch).
 * **R-U record** (no verdict, location only): unlimited `linear_upwind` on E3 from the start, the five largest-`du` cells of iterations 1-6
   (before the guard trip at 7), to locate where the unlimited scheme fails.
+
+## Amendment 5 (written after S10, S11 and R-U had run, before any run it governs)
+
+What I knew: **S10 (`upwind` from iteration 1000) STANDS** on B3: `rho_med` 4.3e-3, `rho_du` 7.4e-3, both residuals below 1e-5 at
+iteration 1114; what is left is a period-two cycle of 0.015 m/s at the outlet-hub corner (the first-order solution, torque 1.335 N m,
+Delta p_ts -4.0 Pa, is not the second-order one). **S11 (freeze + face_flux) is FALSIFIED** (`rho_med` 0.91, `max_du` 10.7 m/s at the
+leading-edge cells). R-U: unlimited `linear_upwind` fails first in the tip-layer cells at the shroud next to the seam near the leading-edge
+plane (c4971, r 0.2477, z 0.104, 77 deg; growth about x10 per iteration). Reading: on the bladed passage the cycle is driven by the
+high-order (deferred, explicit) part of `linear_upwind` in the five leading-edge root cells; the Barth-Jespersen switching bounds it (a
+cycle of about three iterations); frozen at the factors of one iteration of the cycle (c17: psi_y = psi_z = 1 at iteration 1000, while the
+other phases have 0.6 / 0.2 and 0 / 0) it is not bounded and grows into a period-two cycle.
+
+Registered now:
+* **S12** (diagnostic, B3, switch arm): psi frozen at the **minimum over a window** of iterations: from the switch at 1000 the kernel
+  computes psi as usual in iterations 1001-1010 and keeps the per-cell, per-component minimum; from iteration 1011 on it uses that minimum
+  (the most-limited value seen over at least three cycles). Prediction: STANDS (the high-order part at the leading-edge cells is then held
+  at its most-limited phase, which the cycle shows to be stable enough to fall back from). Same rule.
+* Kernel hook (written after this amendment): `SimpleSolver::limiter_freeze: Option<(usize, usize)>` = (N, W), default `None`: psi computed
+  in iterations N - W + 1 ..= N is accumulated by its minimum and, after iteration N, stored in `frozen_limiter`. `None` leaves the solver
+  bit-identical.
+* **Fix F-ZM** (eligible iff S12 STANDS; replaces F-Z / F-ZP, which are not eligible): case key `solver.linear_upwind_limiter_freeze = N`
+  (integer, 0 = off, default 0) with W = 10 fixed, only with `convection = "linear_upwind"`, `linear_upwind_limiter = "barth_jespersen"`
+  and a steady `simple` / `simplec` algorithm (located error otherwise). N = 1000 in every run below. Acceptance, in this order:
+  * **Z1 empty passage first** (E3, E2; cap 8000): both converge by tolerance (1e-5); L and swirl energy within the ADR 0086 cap-rule
+    tolerances of the stalled values (as registered for F-Z). F-ZM is a convergence fix; it does not remove the spurious swirl.
+  * **Z2 bladed** (B3, B2; cap 8000): both converge by tolerance. The torque and Delta p_ts are REPORTED against ADR 0086 without a limit:
+    amendment 4 showed that the stalled functionals are values of a cycle that move by up to 13 % with the iteration settings, so a 0.5 %
+    limit against them would test the cycle, not the fix (this replaces the F-Z 0.5 % limit; stated as a departure). Reported beside it: the
+    residual of the converged state with psi recomputed (one probe iteration), and the iteration counts with the F1 prediction.
+  * **Z3 defaults**: key absent and 0 bit-identical (u, p, phi `to_bits`, B3, 30 iterations, non-ignored test); `baseline_hashes.rs`
+    passes unchanged; located errors for the invalid combinations.
