@@ -64,6 +64,14 @@ fn pass() -> TetOptions {
     }
 }
 
+/// The mesher without the pass, stated explicitly so the comparison holds whatever the default is.
+fn no_pass() -> TetOptions {
+    TetOptions {
+        quality_sweeps: 0,
+        ..Default::default()
+    }
+}
+
 fn budget_used(tm: &TetMesh) -> f64 {
     let r = &tm.report;
     let budget = TetOptions::default().max_steiner_factor * r.input_points + 10000;
@@ -74,7 +82,7 @@ fn budget_used(tm: &TetMesh) -> f64 {
 #[test]
 fn l3_pass_safety_m1_m10() {
     for (n, s) in [("M1", m1()), ("M10", m10())] {
-        let base = tetrahedralize(&s, &TetOptions::default()).unwrap();
+        let base = tetrahedralize(&s, &no_pass()).unwrap();
         let tm = tetrahedralize(&s, &pass()).unwrap_or_else(|e| panic!("{n}: {e}"));
         let inverted = tm
             .cells
@@ -126,15 +134,17 @@ fn median(mut v: Vec<f64>) -> f64 {
 
 /// L1 cost factor at most 3.0 on M1 and M10; L2 added time per cell on M10 at most 2.0 times that on M1. Wall-clock, so
 /// ignored (load-sensitive); run with `--release -- --ignored --test-threads=1`.
+/// Known miss (ADR 0107): L1 on M1 measured 3.051 in the registered run (limit 3.0). Measures both meshes before asserting
+/// (amendment 1; the first version stopped at M1).
 #[test]
-#[ignore = "ADR 0107 L1/L2 timing: wall-clock, load-sensitive; run explicitly in release with one test thread"]
-fn l12_cost_factor_and_scaling() {
-    let mut per_cell = Vec::new();
+#[ignore = "known miss (ADR 0107 L1): cost factor of the pass on M1 3.051 vs 3.0; wall-clock, run in release with one thread"]
+fn l12_known_miss_cost_factor_and_scaling() {
+    let (mut per_cell, mut factors) = (Vec::new(), Vec::new());
     for (n, s) in [("M1", m1()), ("M10", m10())] {
         let (mut td, mut tp, mut cells) = (Vec::new(), Vec::new(), 0);
         for _ in 0..5 {
             let t = Instant::now();
-            tetrahedralize(&s, &TetOptions::default()).unwrap();
+            tetrahedralize(&s, &no_pass()).unwrap();
             td.push(t.elapsed().as_secs_f64());
             let t = Instant::now();
             cells = tetrahedralize(&s, &pass()).unwrap().cells.len();
@@ -144,13 +154,16 @@ fn l12_cost_factor_and_scaling() {
         let f = p / d;
         per_cell.push((p - d) / cells as f64);
         eprintln!("L1 {n}: default {td:?} s, pass {tp:?} s, medians {d:.4} / {p:.4} s, factor {f:.3}, {cells} cells");
-        assert!(f <= 3.0, "{n}: cost factor {f}");
+        factors.push((n, f));
     }
     let g = per_cell[1] / per_cell[0];
     eprintln!(
         "L2: added time per cell M1 {:.3e} s, M10 {:.3e} s, ratio {g:.3}",
         per_cell[0], per_cell[1]
     );
+    for (n, f) in factors {
+        assert!(f <= 3.0, "{n}: cost factor {f}");
+    }
     assert!(g <= 2.0, "added time per cell ratio {g}");
 }
 
@@ -170,7 +183,7 @@ fn s0_smoke_finer_candidates() {
         (0.15, 0.03, 0.15),
     ] {
         let r = curvature_remesh(&s, theta, h_min, h_max);
-        let tm = tetrahedralize(&r, &TetOptions::default()).map(|t| t.cells.len());
+        let tm = tetrahedralize(&r, &no_pass()).map(|t| t.cells.len());
         eprintln!(
             "S0 theta {theta} h_min {h_min} h_max {h_max}: {} surface tris, cells {tm:?}",
             r.n_tris()
