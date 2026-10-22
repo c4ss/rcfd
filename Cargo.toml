@@ -23,7 +23,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
-repository = "https://example.invalid/rcfd"
+repository = "https://github.com/c4ss/rcfd"
 rust-version = "1.75"
 
 [workspace.dependencies]

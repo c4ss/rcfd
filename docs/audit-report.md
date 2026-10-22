@@ -7,9 +7,9 @@ reviewed by a human. Nothing in the repository other than this file was changed.
 
 Method: read `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/reference-data.md`, `docs/adr/`, `docs/bfs-convergence-findings.md`;
 diffed `roadmap.json` and every test file across all 31 commits; compared the current roadmap against three pre-commit
-snapshots of the roadmap kept in the session scratch folder; read the assertions of the tests that back each done/partial
+snapshots of the roadmap kept outside the repository; read the assertions of the tests that back each done/partial
 item; ran `cargo test --workspace --release`, `cargo fmt --check`, `cargo clippy`, and the ignored heavy tests, using
-`CARGO_TARGET_DIR=<target dir>`. Nothing under vendor material or the Ansys install was read.
+`CARGO_TARGET_DIR=<target dir>`. No vendor software, install or vendor material was read.
 
 ## 1. Headline findings
 
@@ -38,10 +38,10 @@ item; ran `cargo test --workspace --release`, `cargo fmt --check`, `cargo clippy
 7. **ROADMAP.md has drifted from roadmap.json** in notes (33 items); statuses, titles, acceptance text and dependencies
    agree for all 114 items. The most misleading drift is F-006 and F-028/F-042/F-060, where ROADMAP.md still says reference
    values were "from memory / unverified" while the JSON says they were cross-checked (section 8).
-8. **Ansys-derived content:** no code, text or data from the Ansys install is in the repository. But the roadmap notes of
-   about 20 gap items quote internal setting-group and module identifiers of Fluent, CFX and Prime (for example
-   `prism boundary-layer controls`, `report definitions`, `turbo interfaces`), and
-   `ROADMAP.md` cites an inventory file that is not in the repo. These are vendor-specific feature names, not neutral format references (section 9).
+8. **Vendor-derived content:** no vendor code, text or data is in the repository. But the roadmap notes of about 20 gap
+   items used vendor-specific identifiers for settings and modules instead of generic capability names, and `ROADMAP.md`
+   cited an inventory file that is not in the repo. These should be generic capability descriptions (section 9).
+   (Later edit: those notes were reworded generically; this report no longer quotes the identifiers.)
 
 ## 2. Edited or replaced criteria, tolerances and tests
 
@@ -62,7 +62,7 @@ any before-state from git for items marked (pre-commit).
 | 9 | F-115 interpolate and restart | Hypothesis (not in the criterion): iteration count drops when starting from the coarse solution | Not an acceptance gate; recorded as a negative finding (103 interpolated vs 89 uniform iterations) | `c8ff420` (`rcfd-api/tests/interpolate.rs` header "added after the first run, recorded, not an acceptance gate") | Criterion text unchanged and the roadmap says so. But the criterion that is asserted, "first-iteration normalised residual lower than uniform", is near-vacuous: the uniform start gives 1.0 by construction because the residual is normalised by the solution's own variation. The practical benefit (fewer iterations) was measured negative. Status partial is right |
 | 10 | F-031 rest-state in a rotating frame | Criterion fixed beforehand: spurious speed < 1e-3 Omega R, pressure error < 1 % of range | Wave 9 replaced the assertion by "both errors fall with refinement at order > 0.8" (criterion missed: 5.2e-3, 1.62 %); wave 10 (`d1b43f0`) restored the original criterion and the test now asserts speed < 1e-3 and pressure error < 1 % | `e132211` (weak test), `d1b43f0` (original criterion restored, `git show d1b43f0` verified) | The restoration is genuine, but it was achieved by changing the wall-pressure construction (wall value chosen so the wall-cell normal gradient equals the body force) and the stationarity helper now uses a speed-scale floor of 1e-3 for the rest state (`run_with_floor`). The result, 5e-12, is round-off because the discretisation now imposes the balance exactly in wall cells; the roadmap note says this ("the usual fixed-flux wall treatment; only the cases above were checked") |
 | 11 | F-050 / ADR 0005 hydrostatic column | n/a | Setup uses mu = 10 Pa s and k = 100 W/m/K instead of air values, because with air properties the steady-conduction column cannot be resolved in double precision | `aaea0de` (`rcfd-fv/tests/varden_hydrostatic.rs` header; note in F-050) | Disclosed. The test therefore checks the balance of pressure, gravity and the ideal-gas EOS, not the behaviour with realistic transport properties. Limits (1e-3, 2e-3 density error) are unchanged from the ADR |
-| 12 | F-125 criterion text | A vendor-specific wording of the same rule | "CI never reads from any proprietary install" | scratch snapshots `roadmap.before.json` -> current (pre-commit; the first commit already has the new text) | Neutral, appropriate wording change |
+| 12 | F-125 criterion text | A vendor-specific wording of the same rule | "CI never reads from any proprietary install" | roadmap snapshots kept outside the repository -> current (pre-commit; the first commit already has the new text) | Neutral, appropriate wording change |
 | 13 | F-094 criterion text (status todo) | "Scripted eval: 5 canned prompts ..." | "Scripted eval with the mock provider (CI) and, optionally, a user-supplied real or local model: ..." | scratch snapshots (pre-commit) | Clarifies that CI uses the mock provider; criterion is arguably weaker. Item is todo, so no effect on counts |
 | 14 | F-027 AMG | "Poisson on 1M cells converges ... under 15 V-cycles" | Evidence uses W-cycles (`cycle_index: 2`) as the default; 14 W(1,1)-cycles to 1e-6 (limit 15, marginal); the small-size test allows up to 20 V-cycles (`amg.rs` line 605) | pre-first-commit; disclosed in the F-027 note ("plain V-cycles degrade ... hence W-cycle default") | A different cycle than the criterion names, an unspecified tolerance (1e-6 chosen), and the test is ignored. I re-ran it: 5 levels, stand-alone 14 W-cycles (rate 0.368) and AMG-CG 11 iterations, both assertions pass |
 | 15 | F-028 cavity Ghia "within 2 percent" | n/a | Interpreted as max absolute error <= 0.02 U_lid at the Ghia points, u only for Re 400 and 1000, u and v for Re 100 | `24a9802` (`rcfd-fv/tests/cavity.rs`) | An absolute-to-lid-speed reading; per-point relative error would be much larger near zero crossings. Measured errors (0.003-0.009) are well inside either lid-relative reading. The Re 400 and 1000 cases are ignored tests (run here, pass: 0.00323 and 0.00443) |
@@ -253,30 +253,28 @@ Parsed both files: 114 items in each, identical ids, titles, dependency lists, a
 - The JSON header says it is the "source of truth for automation"; no automatic check ties the two files together. I
   recommend generating the markdown from the JSON.
 
-## 9. Ansys-derived content check
+## 9. Vendor-derived content check
 
-Grep of tracked files (253) for `ansys`, `unpacked`, `Fluent`, `CFX`, `program files`, and a read of each hit:
+Grep of tracked files (253) for vendor and product names and for install-path patterns, and a read of each hit:
 
-- Neutral names and public references: `rcfd-io::fluent` module, `docs/mesh-import.md` (states "no Ansys text, tool or file was
-  used"), `validation-data/manifest.json` and `docs/validation-data.md` (the Fluent elbow mesh comes from the public
+- Neutral names and public references: `rcfd-io::fluent` module, `docs/mesh-import.md` (states that no vendor text, tool or
+  file was used), `validation-data/manifest.json` and `docs/validation-data.md` (the Fluent elbow mesh comes from the public
   OpenFOAM-11 tutorial, GPL, fetched not vendored), `docs/case-schema.md` (Fluent profile syntax not implemented),
-  `sim.rs` doc comment (counterpart of Fluent `file/interpolate` and the CFX initial-file option), `schema.rs`
+  `sim.rs` doc comment (counterpart of a vendor interpolate-file command and initial-file option), `schema.rs`
   (accepted mesh file formats). Acceptable.
-- Public Ansys documentation cited as a source of constants: `kepsilon.rs` header and `docs/reference-data.md` lines 84 and 86
-  (the ANSYS Fluent 12 theory guide mirror at (unofficial copy, not linked) for RNG constants and the wall-function constants). These are
-  textbook constants quoted from published documentation, but they are citations of a vendor manual, not of papers, and the
-  CONTRIBUTING rule is "textbooks/papers only". Low risk, worth a second source.
-- Guard code: `rcfd-io/src/datapack.rs` rejects manifest URLs containing `ansys`, `unpacked`, `program files`; its test uses a
-  fake `ANSYS` URL. Fine.
-- **Needs a decision:** the roadmap notes of 23 items mention Fluent, CFX, Prime or Ansys (F-014, 042, 104-109, 113, 118,
-  119, 124, 126, 128-132, 134, 136-139); most open with "Gap: ..." and list setting-group or module names of Fluent, CFX and Prime: `report definitions`, `cell registers`,
-  `turbo interfaces`, `acoustics`, `prism and shell boundary-layer controls`
-  (F-108), "separate coupling products exist (not studied)" (F-139), "These are common interchange formats" (F-119). These are feature and identifier names vendor-specific, not neutral format references. No code, prose or data was copied, and the features themselves are
-  generic CFD capabilities, but the identifiers are vendor-specific and `ROADMAP.md` says the roadmap is "informed by
-  an inventory file", a file that is not in the repository. Recommend rewording these as generic capability
-  descriptions and deciding whether the inventory belongs in a separate private location.
-- The session scratch folder (outside the repo) holds working notes; none of that content is in
-  the repository. `validation-data/` and `cases/` contain only small public-literature tables and the fetch manifest.
+- Vendor documentation cited as a source of constants: `kepsilon.rs` header and `docs/reference-data.md` (RNG constants and
+  the wall-function constants). These are textbook constants, but the citations were of a vendor manual, not of papers, and
+  the CONTRIBUTING rule is "textbooks/papers only". Low risk, worth a second source. (Later edit: the entries now name a
+  published source where one exists and are otherwise labelled unverified; see `docs/reference-data.md`.)
+- Guard code: `rcfd-io/src/datapack.rs` rejects manifest URLs that point at a proprietary install or a local path; its test
+  uses a fake URL. Fine.
+- **Needs a decision:** the roadmap notes of 23 items (F-014, 042, 104-109, 113, 118, 119, 124, 126, 128-132, 134, 136-139)
+  described their gaps with vendor-specific setting and module identifiers rather than generic capability names, and
+  `ROADMAP.md` cited an inventory file that is not in the repository. No code, prose or data was copied, and the features
+  themselves are generic CFD capabilities. Recommend rewording these as generic capability descriptions and keeping any
+  such inventory out of the repository. (Later edit: done; the roadmap notes now use generic wording.)
+- Material kept outside the repository during the audit is not part of the repository. `validation-data/` and `cases/`
+  contain only small public-literature tables and the fetch manifest.
 
 ## 10. What I could not check
 

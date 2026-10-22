@@ -2,5 +2,6 @@
   "name": "rcfd-panel",
   "version": "0.1.0",
   "description": "Sidebar panel for the rcfd CFD solver: schema-driven settings editor, run controls and live monitors",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "license": "AGPL-3.0-only"
 }

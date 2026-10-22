@@ -1,6 +1,8 @@
 # rcfd parity matrix: Ansys Fluent / CFX class capabilities versus the rcfd roadmap
 
-Status: first-pass inventory, 2026-10-17. Roadmap statuses are read mechanically from `docs/roadmap.json` (158 items); the matrix does not guess them. Clean-room: every capability name and description below is a short paraphrase of public feature lists; no vendor text or code was copied, no vendor binary or install directory was inspected, and nothing under `unpacked` was read.
+Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
+
+Status: first-pass inventory, 2026-10-17. Roadmap statuses are read mechanically from `docs/roadmap.json` (158 items); the matrix does not guess them. Clean-room: every capability name and description below is a short paraphrase of public feature lists; no vendor text or code was copied, no vendor binary or install was inspected or read.
 
 ## Sources actually read (legend used in the "Source read" column)
 
@@ -407,7 +409,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 
 ## Declined and not done
 
-- No vendor binary, install directory or `unpacked` content was opened. No decompilation or disassembly tools were used.
+- No vendor binary or install was opened. No decompilation or disassembly tools were used.
 - No Ansys Discovery, Icepak, Mechanical or Workbench documentation was read (only mentions on the Fluent product page).
 - No textbook or paper was read in this pass; all textbook-level statements are unverified general knowledge.
 - docs/roadmap.json was not modified; candidates above are proposals.
