@@ -371,3 +371,10 @@ Then register an implicit or under-relaxed treatment of that term as its own wav
 
 As registered: the role of non-differentiable limiters in stalling steady convergence and Venkatakrishnan (1995), recalled, UNVERIFIED;
 nothing depends on them. The single-cell gain model is first principles (ADR 0085).
+
+### Final gate
+
+Fresh `git archive` of 4965e4b (main, including the wave-43A/43B commits up to it): `cargo fmt --all -- --check` clean, `cargo clippy
+--workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **1979 passed, 0 failed, 616 ignored**
+(no LNK1201; `baseline_hashes.rs` passed unchanged). This wave adds 2 running tests (`s1_e3_frozen_limiter_converges`,
+`frozen_limiter_hook_is_bit_identical_at_the_freeze`) and 21 ignored ones. This paragraph is a docs-only commit, not re-gated.
