@@ -194,3 +194,13 @@ with the existing keys `pseudo_mode = "physical"`, `pseudo_dt = 1 / Omega`, N = 
 settings in every run: **Z1** empty passage first (E3, E2 converge by tolerance within 8000 iterations; L and swirl energy within the ADR 0086
 cap-rule tolerances of the stalled values), then **Z2** bladed (B3, B2 converge by tolerance; torque and Delta p_ts within 0.5 % of ADR 0086;
 iteration counts reported with the F1 prediction), **Z3** defaults. F-ZP is a convergence fix; it cannot remove the spurious swirl.
+
+## Amendment 3 (a correction to amendment 2, written before any run it governs)
+
+What I knew: nothing new has run since amendment 2. Its sentence "x falls below 1 in every cell for `a >= 0`" is wrong. With the pseudo
+diagonal `D = V / dt` the single-cell model is `|lambda|^2 = ((a (1 - alpha) / alpha + D)^2 + (2 Omega V)^2) / (a / alpha + D)^2`; for `a = 0`
+this is `1 + (2 Omega V / D)^2 > 1` for every finite D, and with `D = Omega V` (dt = 1/Omega) a cell is stable only for `a` above about
+`1.25 Omega V` (x below about 1.6, against 1.1 without pseudo time). A pseudo-time step therefore only shrinks the unstable set; a cell with a
+vanishing momentum diagonal stays unstable in this model whatever dt is. Added, fixed now: **S9'** = S9 with `pseudo_dt = 0.1 / Omega`
+(stable for `a` above about `0.24 Omega V`), run after S9 whatever S9 gives, same rule. F-ZP takes the larger dt among S9 and S9' that
+STANDS (none: F-ZP not eligible).
