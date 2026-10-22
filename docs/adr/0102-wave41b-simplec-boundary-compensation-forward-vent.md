@@ -222,22 +222,23 @@ which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V
 | A1 default (`x7_vent_at_fixed_pseudo_dt_known_miss`, run once) | u 0.5: 2.85e-12, u 1: 1.36e-13 (the ADR 0095 values, equal in the printed digits), u 2: "p is not finite" | stays a miss | as expected; stays ignored |
 | A2 B1 walled duct | key vs simple: u 3.48e-12, p 2.74e-12; default simplec vs simple: u 4.80e-3, p 3.74e-3; settled in 400 / 400 / 500 iterations | <= 1e-9; > 1e-6; settle | **pass** |
 | A2 B2 periodic duct | key vs simple: u 4.69e-13, p 4.30e-13; default: u 2.62e-3, p 4.05e-3; settled in 300 / 400 / 400 | <= 1e-9; > 1e-6; settle | **pass** |
-| A3 default bit-identity | see the final gate (`baseline_hashes.rs` not re-recorded) | unchanged | see below |
+| A3 default bit-identity | `baseline_hashes.rs` 3 passed (not re-recorded); gate 0 failed | unchanged | **pass** |
 | A4 key with `piso` | located error at `solver.simplec_boundary_compensation` | located | **pass** |
 
 ### Reported checks
 
 * R1 X7 with the key and no pseudo-time (plain SIMPLEC, alpha_u 0.9), 2300 iterations each, scratch harness: outlet pressure relative error
-  7.4e-14 (u 0.5), 4.1e-13 (1), 9.0e-14 (2), 6.4e-13 (-0.5), 9.6e-14 (-1), 4.0e-15 (-2); max |ux - u| at most 5.7e-12. Without the key the
-  same runs diverge from the first iteration (smoke).
+  7.4e-14 (u 0.5), 4.1e-13 (1), 9.0e-14 (2), 6.4e-13 (-0.5), 9.6e-14 (-1), 4.0e-15 (-2); max |ux - u| at most 5.7e-12. Without the key,
+  plain SIMPLEC at u = 1 diverges from iteration 1 (smoke); reversed flows settle (ADR 0095); u = 0.5 and 2 were not run on the default
+  code. Scratch-harness measurement, not a committed test.
 * R2 F-200 C3 forward vent as registered (plain SIMPLEC from rest, mass-flow inlet) with the key and the C3 settled-field criterion:
   K = 2.5 settles after 310 iterations, outlet-column error 4.38e-12 (C3 limit 1.25e-6), imbalance 4.7e-13; **K = 10 is non-finite at
-  iteration 2767**. Run twice (the second run only to print the panic message cut off by my output filter; deterministic, same failure).
+  iteration 2767**. Scratch test added to a scratch copy of `bc_catalogue.rs`, not committed. Run twice (the second run only to print the panic message cut off by my output filter; deterministic, same failure).
   F-200's entry is not touched.
 * Observation (not registered, X7 duct, plain SIMPLEC with the key, K = 10, u = 1, 3000 iterations): the vent-column rows separate from the
   first iteration (largest difference within a column 8.8e-4, 2.6e-3, 1.3e-2, 6.7e-2 at iterations 1, 4, 7, 10) and the run does not settle
   (max |ux - u| between 0.9 and 230 over iterations 150-2850). This is a second, transverse mode of the vent faces, seen also with the
-  face-velocity law in D2b. Not diagnosed further; with pseudo-time 0.02 the F-200 C3 K = 10 case settles on the default code (existing test).
+  face-velocity law in D2b. Scratch-harness measurement, not a committed test. Not diagnosed further; with pseudo-time 0.02 the F-200 C3 K = 10 case settles on the default code (existing test).
 * R3 (amendment 2, FAN-01 stall, one run of `w41b_fan01_with_boundary_compensation`, 209 s): `res_u` / `res_p` 8.4e-2 / 4.5e-2
   (iteration 10), 7.1e-3 / 1.2e-3 (100), 4.4e-3 / 1.6e-3 (300), 5.5e-3 / 1.6e-3 (1000), 4.7e-3 / 1.0e-3 (1500); never both below 1e-4.
   c10 6.94e-4, L 2.50e-4, L / c10 0.360 (ADR 0084 without the key: 0.330; residuals 3.5e-3 / 7.9e-4 at 1500). **H-R3 is falsified**: the
@@ -249,8 +250,9 @@ which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V
 * SIMPLEC seam compensation (ADR 0084 finding S): diagnosed and covered by the same opt-in key. B2 shows the converged seam flux now
   carries `rAU` (compensated SIMPLEC equals SIMPLE to 4.7e-13 on a periodic duct whose seam faces carry pressure differences; default
   SIMPLEC differs by 2.6e-3). Not made the default: it changes every converged SIMPLEC result on periodic meshes and pressure boundaries.
-* Stalled residual: the ADR 0022 uniform-duct residual floor is the reference normalisation of a (nearly) uniform exact solution, already
-  explained by ADR 0023 (`solver.residual_norm = "backward"`); not re-run. The E2 stall (res_u 4.4e-12 with the fields stationary) was not
+* Stalled residual: ADR 0022 suggested (not proven) that its uniform-duct residual floor is the reference normalisation measuring round-off
+  on a (nearly) uniform exact solution; ADR 0023 added the backward and scaled norms (`solver.residual_norm`) aimed at this class. Not re-run
+  here, so not confirmed for that duct. The E2 stall (res_u 4.4e-12 with the fields stationary) was not
   examined. The FAN-01 stall: H-R3 falsified (above).
 
 ### Deviations from the registered plan
@@ -272,3 +274,10 @@ derivations above are first principles.
 F-248: A1 passes as a non-ignored test with the opt-in key; defaults unchanged (A3, final gate). Set to done with the note that the
 acceptance is met with the opt-in key `solver.simplec_boundary_compensation = true` (the only change to the registered X7 set-up) and that
 the default-code X7 at pseudo-time 0.02 remains a known miss.
+
+### Final gate
+
+On a fresh `git archive` of 1b2367d (main with the other wave-41 agents' commits up to it): `cargo fmt --all -- --check` clean,
+`cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1958 passed, 0 failed,
+554 ignored**. This wave adds 4 running tests (A1, B1, B2, A4) and 1 ignored report (R3). The only later commit changes the text of this
+ADR, and no test reads ADR files.
