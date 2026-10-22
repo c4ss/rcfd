@@ -293,6 +293,57 @@ fn e1_error_control_beats_the_smallest_uniform_count_on_a_two_timescale_decay_kn
     }
 }
 
+/// ADR 0105 E2 (F-209) controller: no step chosen by the user. Library defaults (no `min_dt`, no `max_dt`, safety 0.9, growth
+/// 1.2, shrink 0.5), only the tolerance is set, and the first proposal is the run length `t_end` itself.
+fn e2_controller(tol: f64, t_end: f64) -> ControlledRun {
+    let st = StepSettings {
+        error_tol: tol,
+        ..Default::default()
+    };
+    ControlledRun::new(StepController::new(st, t_end), false)
+}
+
+/// ADR 0105 E2 smoke (run once before the limits were registered): the first 50 accepted steps of the E2 controller at
+/// tol 1e-2 on the E1 shear wave; reports the time reached, the rejections and the next proposal.
+#[test]
+#[ignore = "ADR 0105 set-up smoke, run once before the limits were registered"]
+fn e2_default_controller_setup_smoke() {
+    let mut s = shear_wave(1.0);
+    let mut run = e2_controller(1e-2, 1.0);
+    for _ in 0..50 {
+        run.advance(&mut s, 1.0);
+    }
+    println!(
+        "E2 smoke: 50 accepted steps reach t = {:.4e}, {} rejected, next proposal {:.4e}",
+        s.time, run.ctl.rejected, run.ctl.dt_next
+    );
+    assert!(s.u.values.iter().all(|v| v.iter().all(|x| x.is_finite())));
+}
+
+/// ADR 0105 E2 (F-209, first clause as worded on 2026-10-22): error control with no user-chosen step (`e2_controller`) on the
+/// E1 two-timescale decay to `T = 1` reaches its requested error: `E / (tol T)` in [0.3, 3] for tol 1e-2 and 2.5e-3, E the
+/// relative L2 time error against the exact semi-discrete solution. Both tolerances are measured before asserting.
+#[test]
+fn e2_error_control_reaches_the_requested_error_on_a_two_timescale_decay() {
+    let (nu, t_end) = (1.0, 1.0);
+    let mut ratios = Vec::new();
+    for tol in [1e-2, 2.5e-3] {
+        let mut s = shear_wave(nu);
+        let mut run = e2_controller(tol, t_end);
+        let n = run.run(&mut s, t_end).len();
+        let e = e1_error(&s, e1_exact(nu, t_end));
+        println!(
+            "E2 tol {tol:.1e}: {n} steps ({} rejected), E = {e:.4e}, E/(tol T) = {:.3}",
+            run.ctl.rejected,
+            e / (tol * t_end)
+        );
+        ratios.push((tol, e / (tol * t_end)));
+    }
+    for (tol, r) in ratios {
+        assert!((0.3..=3.0).contains(&r), "tol {tol}: E/(tol T) = {r}");
+    }
+}
+
 #[test]
 fn s2_courant_rms_band_and_combination() {
     let (target, t_end) = (0.2, 10.0);

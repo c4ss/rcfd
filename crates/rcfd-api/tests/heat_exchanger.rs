@@ -402,6 +402,12 @@ fn x6_fan_boundary_at_three_operating_points() {
 /// pressure 0 at xmax, physical pseudo-time step `dt` (plain SIMPLEC diverges for forward flow, see the ADR) and the extra solver
 /// lines `extra`. Returns the mean kinematic pressure of the outlet column.
 fn vent_run(u: f64, k: f64, dt: f64, extra: &str) -> f64 {
+    let sim = run(&vent_text(u, k, dt, extra), 2000);
+    column(&sim, "p", 1.99, -1.0, 1.0)
+}
+
+/// Case text of `vent_run`.
+fn vent_text(u: f64, k: f64, dt: f64, extra: &str) -> String {
     let inlet = format!("[boundaries.xmin]\nvelocity = \"fixed\"\nvelocity_value = [{u:?}, 0.0, 0.0]\n");
     let pseudo = format!("pseudo_mode = \"physical\"\npseudo_dt = {dt:?}\n{extra}");
     let vent = format!("[boundaries.xmax]\nbc_kind = \"vent\"\nloss_coefficient = {k:?}\nbc_pressure = 0.0\n");
@@ -412,8 +418,29 @@ fn vent_run(u: f64, k: f64, dt: f64, extra: &str) -> f64 {
         )
         .replace("velocity = [2.0, 0.0, 0.0]", &format!("velocity = [{u:?}, 0.0, 0.0]"));
     assert!(text.contains("bc_kind = \"vent\""), "vent block not substituted");
-    let sim = run(&text, 2000);
-    column(&sim, "p", 1.99, -1.0, 1.0)
+    text
+}
+
+/// ADR 0105 D1 smoke (run once before the limits were registered): the default-code X7 vent at u = 2, pseudo step 0.02, stepped
+/// up to 2300 iterations or the first steady-guard trip; reports the trip and the message.
+#[test]
+#[ignore = "ADR 0105 set-up smoke, run once before the limits were registered"]
+fn d1_vent_divergence_setup_smoke() {
+    let text = vent_text(2.0, 2.5, 0.02, "");
+    println!("D1 smoke case:\n{text}");
+    let mut sim = Simulation::new(&Case::parse_toml(&text).unwrap()).unwrap();
+    for _ in 0..2300 {
+        sim.step();
+        if sim.steady_divergence().is_some() {
+            break;
+        }
+    }
+    println!(
+        "D1 smoke: {} iterations, trip {:?}, message {:?}",
+        sim.iteration(),
+        sim.steady_divergence(),
+        sim.steady_divergence_message()
+    );
 }
 
 /// X7: the outlet pressure follows 0.5 K u |u| at six flows (limit 1e-6 relative, ADR 0022 C3); `dt_of(u)` is the pseudo step. At
@@ -435,6 +462,59 @@ fn x7_sweep(dt_of: impl Fn(f64) -> f64, extra: &str) {
         worst = worst.max(e);
     }
     eprintln!("X7 worst relative error {worst:.2e}");
+}
+
+/// `runctl::drive` on `text` (no step cap): (state, iterations, reason).
+fn drive(text: &str) -> (String, usize, String) {
+    let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
+    let sim = std::sync::Mutex::new(Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}")));
+    let out = rcfd_api::runctl::drive(&sim, &rcfd_api::runctl::RunOptions::default(), &|| false, &mut |_| {});
+    println!("{} after {} iterations: {}", out.state, out.iterations, out.reason);
+    (out.state.to_string(), out.iterations, out.reason)
+}
+
+/// ADR 0105 D1 (F-248): the default-code X7 vent at u = 2, pseudo step 0.02 diverges; the reason names the compensation key.
+#[test]
+fn d1_diverging_simplec_vent_names_the_compensation_key() {
+    let (state, it, reason) = drive(&vent_text(2.0, 2.5, 0.02, ""));
+    assert_eq!(state, "diverged");
+    assert!(reason.contains("steady divergence guard"), "{reason}");
+    assert!(reason.contains("solver.simplec_boundary_compensation"), "{reason}");
+    assert!(it <= 15, "tripped at iteration {it} (limit 15)");
+}
+
+/// ADR 0105 D1n: a diverging SIMPLE run (the ADR 0077 S2 cavity at alpha_u = alpha_p = 1) gets no compensation hint.
+#[test]
+fn d1n_diverging_simple_cavity_gets_no_compensation_hint() {
+    let s2 = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 12\nny = 12\n[physics]\nnu = 0.01\n[boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n[solver]\nalgorithm = \"simple\"\nconvection = \"upwind\"\nmax_iterations = 3000\ntolerance_u = 1e-6\ntolerance_p = 1e-6\nalpha_u = 1.0\nalpha_p = 1.0\n";
+    let (state, _, reason) = drive(s2);
+    assert_eq!(state, "diverged");
+    assert!(!reason.contains("simplec_boundary_compensation"), "{reason}");
+}
+
+/// ADR 0105 D2: a converging SIMPLEC run meeting the hint condition (X7 vent at u = 0.5, pseudo step 0.02, no key) is
+/// bit-identical whether or not the divergence message (with the hint code) is queried after every iteration.
+#[test]
+fn d2_converging_simplec_run_is_bit_identical_with_the_hint_path() {
+    let text = vent_text(0.5, 2.5, 0.02, "");
+    let run = |query: bool| {
+        let mut sim = Simulation::new(&Case::parse_toml(&text).unwrap()).unwrap();
+        for _ in 0..600 {
+            sim.step();
+            if query {
+                assert!(sim.steady_divergence_message().is_none());
+            }
+        }
+        assert!(sim.steady_divergence().is_none());
+        let bits = |v: Vec<f64>| v.into_iter().map(f64::to_bits).collect::<Vec<_>>();
+        [
+            bits(sim.field("ux").unwrap()),
+            bits(sim.field("uy").unwrap()),
+            bits(sim.field("p").unwrap()),
+            bits(sim.flux().to_vec()),
+        ]
+    };
+    assert!(run(true) == run(false), "D2: fields differ");
 }
 
 /// Corrected set-up (ADR 0095 amendment 1): pseudo step 0.02/|u|, a Courant number of 1 at every flow.

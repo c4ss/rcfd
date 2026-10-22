@@ -2203,6 +2203,21 @@ impl Simulation {
                 );
             }
         }
+        if let Engine::Steady(s) = &self.engine {
+            // ADR 0105 D1: SIMPLEC without the boundary compensation on a fixed-pressure or periodic boundary (ADR 0102)
+            let pbc = rcfd_fv::pressure::pressure_bc(&self.geom, &s.u, &s.p);
+            let n_int = self.geom.n_internal;
+            let acts = (0..pbc.coeffs.len()).any(|i| {
+                !self.geom.empty[n_int + i] && !pbc.fixed_u[i] && (pbc.coupled[i].is_some() || pbc.coeffs[i].c != 0.0)
+            });
+            if s.settings.coupling == Coupling::Simplec && !s.simplec_boundary_compensation && acts {
+                m.push_str(
+                    "; hint: this SIMPLEC case has a fixed-pressure or periodic boundary and solver.simplec_boundary_compensation is \
+                     false, so the SIMPLEC flux term (rAtU - rAU) grad(p) is not compensated on those faces; try \
+                     solver.simplec_boundary_compensation = true (ADR 0102)",
+                );
+            }
+        }
         Some(m)
     }
 
