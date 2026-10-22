@@ -210,3 +210,7 @@ second run). The first registered run of `l3`, `q8` and `l12` used a version of 
 side was changed from `TetOptions::default()` to an explicit `no_pass()` (`quality_sweeps: 0`) after the registration commit
 63afe0b and committed with amendment 1 (293ab05); with the default at 0 the two are the same options, so no result changes. Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
 so `tetrahedralize` refused that surface; not pursued.
+
+Gate on a fresh archive of 0f73dd5: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 1967 passed / 0 failed / 585 ignored (this ADR's file: 2 passed, 2 ignored; the
+rest of the change since wave 41's 1959 / 576 is waves 42A and 42B). The commit after the gate changes this ADR's text only.
