@@ -121,3 +121,19 @@ converged when `res_u < 1e-10` and continuity < 1e-9 within 4000 iterations.
 
 F-126 stays partial whatever the outcome (its acceptance is the published compressor case). F-114 is already done; its note is
 extended. Defaults and `crates/rcfd-api/tests/baseline_hashes.rs` unchanged (checked in the gate).
+
+## Smoke results before the registered solver runs (rule d)
+
+Written after the join was implemented and before any registered solver run. The mesh-level tests G0-G3 had already run once as
+registered (they are construction checks; their values are in the addendum). Smoke = construction plus 50 iterations, not a
+criterion (ignored tests `smoke_w43b_setups` in rcfd-api and `smoke_w43b_sector` in rcfd-fv):
+
+* Mesh M: 1608 cells (768 rotor + 840 stator), interface area 1.88410 (2 pi R lz = 1.88496; the 82-gon is inscribed), read back
+  through `mesh.source = "file"` with the cell zone `rotor`; the MRF zone check accepted the zone in every set-up (no located
+  error). C1, C2, C4 (Omega 0), C5 and both conformal controls ran 50 iterations without failure; the C5 inflow is 1.258 (the
+  `m (x, y)/r^2` expression with `[m^2/s]` parses and is evaluated); the C2 conformal controls read 6.8e-3 and 1.17e-2 V_i at
+  iteration 50.
+* Sector: FvGeometry accepts the re-applied rotational pair after the join; S1 and S2 ran 50 iterations (continuity 9e-17 and
+  4e-10).
+
+No set-up was found defective; no limit changes. The registered runs follow.
