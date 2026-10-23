@@ -219,3 +219,35 @@ Changes, registered now:
   that holds one side of a pair is bounded inside the sector by a plane through the axis, which reads 1.0 like the unpaired seam face, so
   the face that wins is a tie-break.
 * The diagnostic switches used above are not kept in the committed tests (their values are recorded here).
+
+## Amendment 3 (written after the F1 runs below, before any run it governs)
+
+What I knew when writing this, all with F1 (the registered reruns of amendment 2, one run each):
+
+* F1 falsifier: K1 sector against annulus 3.59e-9 `W r_o` (velocity) and 6.62e-9 of the range (pressure), limit 1e-8: **pass**. The
+  cause of the K1 miss is confirmed.
+* G construction: unchanged values, pass. K1: every limit passes (sector-annulus 3.6e-9 / 6.6e-9). K2: pass (sector-annulus 1.2e-10 V_i,
+  analytic 6.76e-3 V_i). K4: 1.1e-15, pass. K5: pass (1.27e-2 V_i, 0.76 of the bound; net flux and seam balance as before). D1, D4 still
+  discriminate (unchanged: F1 is off without seams).
+* K3 as registered, now run with F1 on the MRF arm: every limit passes (sector-annulus 1.8e-11 U, `max |u_theta|` 1.1e-10 U, `u_z`
+  against the reference 3.2e-3 U, in/out 4e-16, seam 6e-18). So amendment 2 was wrong to call K3 a defective set-up: the 4.6e-3 U swirl
+  of the inertial sector is the same `h1` defect of cyclic cells (the inertial sector has no F1, the MRF arm has it). Its limits are met
+  by the final code, so K3 is kept as a passing test with its registered limits.
+* K3b missed: 4.64e-3 U against 4.3e-4 U. Its sector reference (inertial, no MRF) runs without F1 and therefore carries the defect that
+  F1 removes from the MRF arm; the difference of effects measures that defect, not the band. K3b is a defective set-up and stays as an
+  ignored known miss with its limit.
+* Corrected tilt guard missed its face clause: the 2-D sector with the axis tilted by 1e-3 is refused (1.0e-4 > 1e-6) but the worst face
+  is a wall, not a seam. My prediction was wrong: the tilt's in-plane part gives the seam pair a mismatch of order `t z` too, as on the
+  walls. Any misaligned axis also breaks the walls and zone interfaces, which are surfaces of revolution about the true axis, so "worst
+  face on a seam" is not a property of the code. The registered refusal holds in every guard run (2.3e-3, 1.0e-4, 1.0).
+
+Changes, registered now:
+
+* **K3c** (replaces K3b): K3b with F1 also on both inertial sector arms (the flag set on the solver at library level), limits unchanged:
+  the band effect in the sector against the band effect in the annulus `<= L_DIFF U`, plus the other K3 limits.
+* **K3i** (reported, not a criterion): the inertial sector with F1 against the inertial annulus, to show whether F1 alone removes the
+  4.6e-3 U swirl of the inertial sector.
+* **Guards, second correction** (the amendment 2 version stays as an ignored known miss): criterion "refused" (`> 1e-6`) for the tilted
+  axis (2-D and 3-D sectors) and for the one-sided zone, plus, for the tilt, the seam pair term on its own `max |F_f + F_g| / (|Omega| r
+  |S|) > 1e-6` (it detects the misalignment by itself), against `<= 1e-12` when aligned (G).
+* Decision rule unchanged: a miss of G, K1, K2, K3, K3c, K4, K5 or the corrected guards removes F1 and the opt-in together.
