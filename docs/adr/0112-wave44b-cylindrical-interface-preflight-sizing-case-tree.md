@@ -129,3 +129,9 @@ Construction plus 100 iterations (ignored test `smoke_w44b_sized_sector`): `h` =
 `Expansion(1/69.63)` (wall-adjacent cells 1.6e-3). All six runs (8/6, 8/8, 6/6; inertial and rotating frame) reached `res_u` about 1e-10
 within 82-101 iterations, so this smoke already shows values close to the final ones (8/6 inertial error 1.353e-2 V_i, controls 9.87e-3
 and 1.307e-2). Not defective; no limit changes. The registered H2 run follows.
+
+## Smoke of the T5 set-up (rule d), before the registered T runs
+
+Construction plus 300 iterations (ignored test `smoke_w44b_t5`): 4824 cells, the pre-flight accepted the mesh; the run reached the
+residual targets at iteration 238 (continuity 9.5e-12), so it converges. T2 uses the ADR 0109 K2 set-up, which converged in 272 iterations
+there. Not defective; no limit changes.
