@@ -305,3 +305,13 @@ G1 reproduces ADR 0110 S10 (tolerance at 1114, first-order torque 1.3353 N m, De
 * F-R itself: it converged E3 and E1 to true Barth-Jespersen fixed points with unchanged functionals; a new registration (for example a
   longer arm, or E2 diagnosed first) would be needed to accept it.
 * The growth of the spurious outlet angular momentum with refinement (ADR 0110 part L).
+
+### Final gate
+
+Fresh `git archive` of 06e4747 (main with the wave-44B/44C commits up to 5998ca2 and this wave's commits): `cargo fmt --all -- --check` clean,
+`cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **2007 passed, 1 failed,
+631 ignored** (no LNK1201; `baseline_hashes.rs` passed unchanged). The one failure is `rules_w19c`
+`e2_no_error_level_false_positives_and_warnings_are_only_sv103`: it lists new mesh warnings from `cylindrical_interface_w44b.rs` (SV103) and
+`mrf_cyclic_seams_w44c.rs` (SV101, SV102), the test files of the other wave-44 agents (ADR 0112, 0113); no file of this wave is named in it.
+This wave adds 1 running test (`w44a_hooks_at_defaults_are_bit_identical`) and 4 ignored ones. This paragraph is a docs-only commit, not
+re-gated.
