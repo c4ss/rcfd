@@ -2,6 +2,10 @@
 //! SIMPLEC, Barth-Jespersen-limited `linear_upwind`, `rotating_frame`) on the coarsest family member F3 (bladed B3, empty E3), a per-iteration
 //! location record, and one switch per registered mechanism applied from the same stalled state. Everything was registered in ADR 0110 before
 //! the registered runs. No agreement with measured fan data is claimed.
+//!
+//! Wave 44A (ADR 0111, at the end): the linearisation of the frozen-limiter map on B3 (matrix-free Arnoldi, analysed by
+//! `scripts/w44a_arnoldi_analysis.py`), its attribution checks and the stop-rule record (the under-relaxed deferred correction F-R missed its acceptance and was removed
+//! under rule (b); its numbers are in the ADR).
 
 #![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the checks
 
@@ -399,6 +403,13 @@ struct Arm {
     f_ref: (f64, f64),
     f_end: (f64, f64),
     converged_flag: bool,
+    /// ADR 0111: largest |functional| over the 100-iteration samples of the reference window (the stalled cycle's worst value)
+    f_ref_max: (f64, f64),
+    /// ADR 0111 rule G: max over cells |u^n - u^(n-1)| / max over cells |u^n| at the end, and the `res_nut` monitor at the end
+    cu_end: f64,
+    res_nut_end: f64,
+    /// ADR 0111 rule G: res_u and res_p below 1e-5 in each of the last 500 iterations
+    tail_below: bool,
 }
 
 /// Run `n0` iterations of the reference set-up, apply `switch` to the solver, run `n1` more; print the location record. With `probe`, the
@@ -540,8 +551,17 @@ fn arm(
         .rev()
         .find(|h| h.0 + 100 <= n)
         .map_or((f64::NAN, f64::NAN), |h| ((f_end.0 - h.1).abs(), (f_end.1 - h.2).abs()));
-    let du_end = l2(&speed_change(&sim.velocity().values, &prev[prev.len() - 1]));
+    let d_end = speed_change(&sim.velocity().values, &prev[prev.len() - 1]);
+    let du_end = l2(&d_end);
+    let umax = sim.velocity().values.iter().map(|v| vec3::norm(*v)).fold(0.0, f64::max);
+    let cu_end = d_end.iter().cloned().fold(0.0, f64::max) / umax.max(1e-300);
+    let res_nut_end = sim.monitors.last("res_nut").unwrap_or(f64::NAN);
+    let f_ref_max = f_hist
+        .iter()
+        .filter(|h| h.0 + w > n0 && h.0 <= n0)
+        .fold((0.0f64, 0.0f64), |a, h| (a.0.max(h.1.abs()), a.1.max(h.2.abs())));
     let converged_flag = sim.is_converged();
+    let tail_below = n >= 500 && hist[n - 500..].iter().all(|h| h.0 < 1e-5 && h.1 < 1e-5);
     let probe = if probe {
         if let Some((st, lim, rc, sbc, pgp)) = saved {
             let s = sim.simple_solver_mut().unwrap();
@@ -571,6 +591,10 @@ fn arm(
         f_ref,
         f_end,
         converged_flag,
+        f_ref_max,
+        cu_end,
+        res_nut_end,
+        tail_below,
     };
     println!(
         "W43C {label} RESULT ({nc} cells, {:.1} s): {a:?}",
@@ -1175,6 +1199,10 @@ fn s12_frozen_limiter_window_minimum() {
         f_ref: r.f_end,
         f_end: functionals(&sim, true),
         converged_flag: sim.is_converged(),
+        f_ref_max: (f64::NAN, f64::NAN),
+        cu_end: f64::NAN,
+        res_nut_end: f64::NAN,
+        tail_below: false,
     };
     println!("W43C S12 B3 RESULT: {a:?}");
     assert_ne!(verdict(&a).0, "NOT EVALUABLE", "{a:?}");
@@ -1208,4 +1236,399 @@ fn frozen_limiter_hook_is_bit_identical_at_the_freeze() {
 fn smoke_record() {
     arm("smoke B3", F3, true, "", false, None, 500, &none, 0, false);
     arm("smoke E3", F3, false, "", false, None, 500, &none, 0, false);
+}
+
+// ================================================================ ADR 0111 (wave 44A)
+
+/// The five leading-edge root cells of the S1 B3 record (ADR 0110 amendment 2); c17 touches the hub and the blade (two wall faces).
+const LE5: [usize; 5] = [17, 665, 701, 341, 53];
+
+/// One outer iteration of the B3 frozen-limiter map as a function of the state alone (ADR 0111): the eddy viscosity, the lagged wall-pressure
+/// quantities and the limiter factors are those of the reference state; the rotating-frame force is evaluated from the state's velocity as
+/// `Simulation::step` does. State: u_x, u_y, u_z, p (cells), phi (non-empty faces).
+struct Lin {
+    sim: Simulation,
+    src: rcfd_api::sources::Sources,
+    nu_face: Vec<f64>,
+    lagged: (Vec<f64>, Vec<f64>),
+    faces: Vec<usize>,
+}
+
+impl Lin {
+    fn nc(&self) -> usize {
+        self.sim.geom.n_cells()
+    }
+
+    fn get(&self) -> Vec<f64> {
+        let s = self.sim.simple_solver().unwrap();
+        let mut x: Vec<f64> = Vec::new();
+        for k in 0..3 {
+            x.extend(s.u.values.iter().map(|u| u[k]));
+        }
+        x.extend_from_slice(&s.p.values);
+        x.extend(self.faces.iter().map(|&f| s.phi[f]));
+        x
+    }
+
+    fn map(&mut self, x: &[f64]) -> Vec<f64> {
+        let n = self.nc();
+        let s = self.sim.simple_solver_mut().unwrap();
+        for c in 0..n {
+            for k in 0..3 {
+                s.u.values[c][k] = x[k * n + c];
+            }
+        }
+        s.p.values.copy_from_slice(&x[3 * n..4 * n]);
+        for (i, &f) in self.faces.iter().enumerate() {
+            s.phi[f] = x[4 * n + i];
+        }
+        s.nu_face = Some(self.nu_face.clone());
+        s.set_lagged_state(self.lagged.0.clone(), self.lagged.1.clone());
+        s.body_force = self.src.evaluate(&s.geom, &s.u).0;
+        s.iterate();
+        s.history.clear();
+        self.get()
+    }
+
+    /// Scale of every state entry (ADR 0084: velocity U = max(1, max|u|), pressure max(max|p|, U^2), flux U times the largest face area).
+    fn scales(&self, x: &[f64]) -> Vec<f64> {
+        let n = self.nc();
+        let nf = self.faces.len();
+        let amax = |a: &[f64]| a.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+        let u = amax(&x[..3 * n]).max(1.0);
+        let p = amax(&x[3 * n..4 * n]).max(u * u);
+        let sf = self.sim.geom.mesh.face_area_vectors();
+        let area = self.faces.iter().map(|&f| vec3::norm(sf[f])).fold(0.0, f64::max);
+        let mut d = vec![u; 3 * n];
+        d.extend(std::iter::repeat(p).take(n));
+        d.extend(std::iter::repeat(u * area).take(nf));
+        d
+    }
+}
+
+/// The B3 reference of ADR 0111: 1000 default iterations, the factors psi of that state, one real iteration (1001) for the eddy viscosity it
+/// uses and for check M0, then the map with psi frozen and the tight linear solves of ADR 0110 S6. Returns (map, x_ref, psi).
+fn lin_reference() -> (Lin, Vec<f64>, [Vec<f64>; 3]) {
+    let (_, mut sim) = arm("W44A reference B3", F3, true, "", false, None, 1000, &none, 0, false);
+    let case = Case::parse_toml(&case_toml(F3, true, "", false)).unwrap();
+    let src = rcfd_api::sources::Sources::from_case(&case, &sim.geom, None)
+        .unwrap()
+        .unwrap();
+    let s = sim.simple_solver_mut().unwrap();
+    let lagged = s.lagged_state();
+    freeze(s);
+    let psi = s.frozen_limiter.take().unwrap();
+    let faces: Vec<usize> = (0..sim.geom.mesh.n_faces()).filter(|&f| !sim.geom.empty[f]).collect();
+    let mut lin = Lin {
+        sim,
+        src,
+        nu_face: Vec::new(),
+        lagged,
+        faces,
+    };
+    let x_ref = lin.get();
+    lin.sim.step();
+    let x1 = lin.get();
+    lin.nu_face = lin.sim.simple_solver().unwrap().nu_face.clone().unwrap();
+    lin.sim.simple_solver_mut().unwrap().frozen_limiter = Some(psi.clone());
+    let t = Instant::now();
+    let f = lin.map(&x_ref);
+    let dt_default = t.elapsed().as_secs_f64();
+    let same = f.iter().zip(&x1).filter(|(a, b)| a.to_bits() == b.to_bits()).count();
+    let dmax = f.iter().zip(&x1).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+    println!(
+        "W44A M0: F(x_ref) against the real iteration 1001: {same} of {} entries bit-identical, max abs difference {dmax:.3e} ({dt_default:.3} s)",
+        f.len()
+    );
+    tight(lin.sim.simple_solver_mut().unwrap());
+    let t = Instant::now();
+    let f1 = lin.map(&x_ref);
+    let dt = t.elapsed().as_secs_f64();
+    let f2 = lin.map(&x_ref);
+    let m2 = f1.iter().zip(&f2).all(|(a, b)| a.to_bits() == b.to_bits());
+    println!(
+        "W44A M2: tight map evaluated twice bit-identical: {m2} ({dt:.3} s per evaluation, {} state entries)",
+        f1.len()
+    );
+    (lin, x_ref, psi)
+}
+
+/// Matrix-free Arnoldi (m steps, modified Gram-Schmidt with one reorthogonalisation) on `D^-1 J D`, J by central differences of the map
+/// at `x` with step `h` times the entry scale. Writes `<tag>.h`, `<tag>.v` and `<tag>.meta` for `scripts/w44a_arnoldi_analysis.py`.
+#[allow(clippy::approx_constant)] // the registered start vector is sin(0.7071 i), not sin(i / sqrt 2)
+fn arnoldi(lin: &mut Lin, x: &[f64], m: usize, h: f64, tag: &str) {
+    let t0 = Instant::now();
+    let d = lin.scales(x);
+    let n = x.len();
+    let dot = |a: &[f64], b: &[f64]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f64>();
+    let mut v0: Vec<f64> = (0..n).map(|i| (0.7071 * i as f64).sin()).collect();
+    let n0 = dot(&v0, &v0).sqrt();
+    v0.iter_mut().for_each(|a| *a /= n0);
+    let mut basis = vec![v0];
+    let mut hm = vec![0.0; (m + 1) * m];
+    let mut steps = m;
+    for j in 0..m {
+        let v = &basis[j];
+        let xp: Vec<f64> = (0..n).map(|i| x[i] + h * d[i] * v[i]).collect();
+        let xm: Vec<f64> = (0..n).map(|i| x[i] - h * d[i] * v[i]).collect();
+        let (fp, fm) = (lin.map(&xp), lin.map(&xm));
+        let mut w: Vec<f64> = (0..n).map(|i| (fp[i] - fm[i]) / (2.0 * h * d[i])).collect();
+        for _ in 0..2 {
+            for (i, b) in basis.iter().enumerate() {
+                let c = dot(&w, b);
+                hm[i * m + j] += c;
+                w.iter_mut().zip(b).for_each(|(a, y)| *a -= c * y);
+            }
+        }
+        let nw = dot(&w, &w).sqrt();
+        hm[(j + 1) * m + j] = nw;
+        if !(nw > 1e-14) {
+            steps = j + 1;
+            break;
+        }
+        w.iter_mut().for_each(|a| *a /= nw);
+        basis.push(w);
+    }
+    let dir =
+        std::env::var("W44A_OUT").map_or_else(|_| std::env::temp_dir().join("w44a_jac"), std::path::PathBuf::from);
+    std::fs::create_dir_all(&dir).unwrap();
+    let bytes = |v: &mut dyn Iterator<Item = f64>| v.flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+    std::fs::write(dir.join(format!("{tag}.h")), bytes(&mut hm.iter().cloned())).unwrap();
+    std::fs::write(
+        dir.join(format!("{tag}.v")),
+        bytes(&mut basis.iter().flatten().cloned()),
+    )
+    .unwrap();
+    let nc = lin.nc();
+    let mesh = &lin.sim.geom.mesh;
+    let mut n5: Vec<usize> = LE5.to_vec();
+    for &c in &LE5 {
+        for &f in mesh.cell_faces(c) {
+            if f < lin.sim.geom.n_internal {
+                for o in [mesh.owner()[f], mesh.neighbour()[f]] {
+                    if !n5.contains(&o) {
+                        n5.push(o);
+                    }
+                }
+            }
+        }
+    }
+    let list = |v: &[usize]| v.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(" ");
+    std::fs::write(
+        dir.join(format!("{tag}.meta")),
+        format!(
+            "n {n}\nm {m}\nsteps {steps}\nn_cells {nc}\nn_faces {}\nh {h:e}\nle5 {}\nn5 {}\n",
+            lin.faces.len(),
+            list(&LE5),
+            list(&n5)
+        ),
+    )
+    .unwrap();
+    println!(
+        "W44A Arnoldi {tag}: {steps} steps, n {n}, h {h:e}, {:.1} s -> {}",
+        t0.elapsed().as_secs_f64(),
+        dir.display()
+    );
+}
+
+/// The limited convection gradient of every cell at the reference state (psi times the kernel's least-squares gradient).
+fn held_gradient(sim: &Simulation, psi: &[Vec<f64>; 3]) -> [Vec<Vec3>; 3] {
+    let g = &sim.geom;
+    let ub = sim.velocity().boundary_values(g);
+    let u = &sim.velocity().values;
+    [0, 1, 2].map(|k| {
+        let cells: Vec<f64> = u.iter().map(|v| v[k]).collect();
+        let b: Vec<f64> = ub.iter().map(|v| v[k]).collect();
+        let gr = rcfd_fv::gradient::least_squares(g, &cells, &b);
+        gr.iter().zip(&psi[k]).map(|(v, p)| vec3::scale(*v, *p)).collect()
+    })
+}
+
+fn hold(cells: Vec<usize>, held: [Vec<Vec3>; 3]) -> rcfd_fv::simple::ConvGradientHook {
+    Box::new(move |k, _: &[f64], _: &[f64], g: &mut [Vec3]| {
+        for &c in &cells {
+            g[c] = held[k][c];
+        }
+    })
+}
+
+/// Rule (d) smoke of the ADR 0111 linearisation: the reference, checks M0 and M2, the cost of one evaluation; no Arnoldi.
+#[test]
+#[ignore = "ADR 0111 smoke (about 1 min in release)"]
+fn w44a_lin_smoke() {
+    lin_reference();
+}
+
+/// ADR 0111 J0 and its attribution variants (H17, H5, GG17, Hall) and check M1 (J0 with h = 1e-7); m = 80 Arnoldi steps each.
+#[test]
+#[ignore = "ADR 0111 linearisation (several minutes in release); then python scripts/w44a_arnoldi_analysis.py"]
+fn w44a_lin_base_and_attribution() {
+    let (mut lin, x, psi) = lin_reference();
+    let m = 200;
+    // M1 companion record: the smallest |phi_f| / (U A_max) on the internal faces of the n5 cells
+    {
+        let d = lin.scales(&x);
+        let (u, ua) = (d[0], d[4 * lin.nc()]);
+        let mesh = &lin.sim.geom.mesh;
+        let phi = lin.sim.flux();
+        let mut fmin = f64::INFINITY;
+        for &c in &LE5 {
+            for &f in mesh.cell_faces(c) {
+                if f < lin.sim.geom.n_internal {
+                    let o = if mesh.owner()[f] == c {
+                        mesh.neighbour()[f]
+                    } else {
+                        mesh.owner()[f]
+                    };
+                    for &g in mesh.cell_faces(o).iter().chain(mesh.cell_faces(c)) {
+                        if g < lin.sim.geom.n_internal {
+                            fmin = fmin.min(phi[g].abs());
+                        }
+                    }
+                }
+            }
+        }
+        println!("W44A M1 record: smallest |phi_f| / (U A_max) on the internal faces of the n5 cells {:.3e} (U {u:.3}); largest relative step h 1e-6",
+            fmin / ua);
+    }
+    let f0 = lin.map(&x);
+    arnoldi(&mut lin, &x, m, 1e-6, "J0");
+    arnoldi(&mut lin, &x, m, 1e-7, "J0_h7");
+    // the held gradients are those of x_ref: restore its velocity before computing them
+    let n = lin.nc();
+    {
+        let s = lin.sim.simple_solver_mut().unwrap();
+        for c in 0..n {
+            for k in 0..3 {
+                s.u.values[c][k] = x[k * n + c];
+            }
+        }
+    }
+    let held = held_gradient(&lin.sim, &psi);
+    let variants: Vec<(&str, rcfd_fv::simple::ConvGradientHook)> = vec![
+        ("H17", hold(vec![17], held.clone())),
+        ("H5", hold(LE5.to_vec(), held.clone())),
+        ("Hall", hold((0..n).collect(), held.clone())),
+        ("GG17", {
+            let geom = lin.sim.geom.clone();
+            let p17 = [psi[0][17], psi[1][17], psi[2][17]];
+            Box::new(move |k, c: &[f64], b: &[f64], g: &mut [Vec3]| {
+                let gg = rcfd_fv::gradient::green_gauss(&geom, c, b, 0);
+                g[17] = vec3::scale(gg[17], p17[k]);
+            })
+        }),
+    ];
+    for (tag, hook) in variants {
+        lin.sim.simple_solver_mut().unwrap().conv_gradient_hook = Some(hook);
+        let fv = lin.map(&x);
+        let same = fv.iter().zip(&f0).all(|(a, b)| a.to_bits() == b.to_bits());
+        println!("W44A M0' {tag}: F(x_ref) bit-identical to the unhooked map: {same}");
+        arnoldi(&mut lin, &x, m, 1e-6, tag);
+    }
+}
+
+/// ADR 0111 M3: two frozen-limiter trajectories (base map, 20 iterations) from x_ref and from x_ref + 1e-6 D v, v the leading Ritz vector of
+/// J0 (`J0.lead` written by the analysis script); the geometric-mean growth of their scaled difference over k = 6..20 and its sign changes.
+#[test]
+#[ignore = "ADR 0111 M3 (about 1 min in release; needs J0.lead)"]
+fn w44a_lin_m3() {
+    let (mut lin, x, _) = lin_reference();
+    let dir =
+        std::env::var("W44A_OUT").map_or_else(|_| std::env::temp_dir().join("w44a_jac"), std::path::PathBuf::from);
+    let raw = std::fs::read(dir.join("J0.lead")).unwrap();
+    let v: Vec<f64> = raw
+        .chunks(8)
+        .map(|b| f64::from_le_bytes(b.try_into().unwrap()))
+        .collect();
+    assert_eq!(v.len(), x.len());
+    {
+        // where the leading mode lives (velocity energy per cell)
+        let nc = lin.nc();
+        let e: Vec<f64> = (0..nc)
+            .map(|c| (0..3).map(|k| v[k * nc + c] * v[k * nc + c]).sum())
+            .collect();
+        let (ang, tags) = cell_attributes(&lin.sim);
+        println!(
+            "W44A M3 leading mode: {}",
+            location(
+                &lin.sim,
+                &e.iter().map(|x| x.sqrt()).collect::<Vec<_>>(),
+                &ang,
+                &tags,
+                8
+            )
+        );
+    }
+    let d = lin.scales(&x);
+    let mut a = x.clone();
+    let mut b: Vec<f64> = (0..x.len()).map(|i| x[i] + 1e-6 * d[i] * v[i]).collect();
+    let mut prev: Option<Vec<f64>> = None;
+    let (mut logs, mut neg, mut cnt) = (0.0, 0, 0);
+    for k in 1..=20 {
+        a = lin.map(&a);
+        b = lin.map(&b);
+        let dk: Vec<f64> = (0..x.len()).map(|i| (b[i] - a[i]) / d[i]).collect();
+        let nk = l2(&dk);
+        if let Some(p) = &prev {
+            let r = nk / l2(p);
+            let dot: f64 = dk.iter().zip(p).map(|(x, y)| x * y).sum();
+            if k >= 6 {
+                logs += r.ln();
+                cnt += 1;
+                if dot < 0.0 {
+                    neg += 1;
+                }
+            }
+            println!("W44A M3 k {k}: ||d_k|| {nk:.4e}, ratio {r:.5}, d_k . d_(k-1) {dot:+.3e}");
+        }
+        prev = Some(dk);
+    }
+    println!(
+        "W44A M3: geometric-mean growth over k = 6..20: {:.5}; negative dot products {neg} of {cnt}",
+        (logs / cnt as f64).exp()
+    );
+}
+
+/// Rule G record of an arm (ADR 0111 part G).
+fn rule_g(id: &str, a: &Arm) {
+    let v = if !a.tail_below {
+        "not evaluable"
+    } else if a.cu_end < 1e-5 && a.res_nut_end >= 1e-5 {
+        "DEFECT"
+    } else if a.cu_end >= 1e-5 && !a.converged_flag {
+        "NOT A DEFECT (the state is not stationary pointwise)"
+    } else {
+        "consistent"
+    };
+    println!(
+        "W44A rule G {id}: residuals below 1e-5 over the last 500 iterations {}, c_u {:.3e}, res_nut {:.3e}, is_converged {}: {v}",
+        a.tail_below, a.cu_end, a.res_nut_end, a.converged_flag
+    );
+}
+
+/// ADR 0111 G1: the ADR 0110 S10 arm (B3, `upwind` from iteration 1000) with the rule G record.
+#[test]
+#[ignore = "ADR 0111 G1 (about 2.5 min in release)"]
+fn w44a_g1_upwind() {
+    let (a, _) = arm("G1 B3", F3, true, "", false, None, 1000, &upwind, 2000, false);
+    rule_g("G1 B3", &a);
+}
+
+/// ADR 0111: a no-op convection-gradient hook leaves the solver bit-identical (E3, 30 iterations; u, p, phi).
+#[test]
+fn w44a_hooks_at_defaults_are_bit_identical() {
+    let case = Case::parse_toml(&case_toml(F3, false, "", false)).unwrap();
+    let (mut a, mut b) = (Simulation::new(&case).unwrap(), Simulation::new(&case).unwrap());
+    b.simple_solver_mut().unwrap().conv_gradient_hook = Some(Box::new(|_, _: &[f64], _: &[f64], _: &mut [Vec3]| {}));
+    for _ in 0..30 {
+        a.step();
+        b.step();
+    }
+    let bits = |s: &Simulation| -> Vec<u64> {
+        let v = s.velocity().values.iter().flat_map(|u| u.iter().map(|x| x.to_bits()));
+        let p = s.pressure().values.iter().map(|x| x.to_bits());
+        let f = s.flux().iter().map(|x| x.to_bits());
+        v.chain(p).chain(f).collect()
+    };
+    assert_eq!(bits(&a), bits(&b));
 }

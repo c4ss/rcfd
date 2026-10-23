@@ -215,3 +215,93 @@ the registered rules and fixes beta*.
 * **beta\*** by the registered rule for the NOT TESTABLE case: F-R is run as an **unattributed candidate with beta\* = 0.25**. J(beta)
   predicts no stabilisation of the frozen map; F-R runs with the live limiter, whose switching J(beta) does not model, so the acceptance runs
   decide. Nothing else changes: the smoke of beta\* on E3, E2, E1, B3, then Z1 (E3, E2, E1), Z2 (B3) only after Z1, G1, Z3.
+
+## Addendum: measured values, verdicts, deviations
+
+Release builds of the scratch clone at 2f1a3ce plus this wave's files; each registered run made once. The commits on main in the meantime
+(ADR 0112, 0113) touch `simple.rs` only in a separate opt-in hunk (`coupled_offdiag_in_h1`, default off) and nothing else on the path of
+these runs; this wave's hunks were applied onto main's current files.
+
+### Part J (linearisation at x_ref; numbers in amendment 1)
+
+| Check / prediction | Measured | Limit | Result |
+|---|---|---|---|
+| M0 harness = kernel | 35 371 of 35 371 entries bit-identical (each run) | bit-identical | met |
+| M0' H17 / H5 / Hall | bit-identical | bit-identical | met |
+| M2 statelessness | bit-identical | bit-identical | met |
+| M1 step size | abs(rho(1e-6) - rho(1e-7)) = 2e-6 | 1e-3 | met |
+| M-A Arnoldi | leading residual < 1e-50; abs(rho_150 - rho_200) 5e-15 | 1e-2 abs(theta); 1e-3 | met |
+| Resolution | rho_0 - 1 = 0.33; 3 u0 = 6e-6 | rho_0 - 1 > 3 u0 | resolved |
+| M3 prediction of the frozen iteration | g = 1.017; 5 of 15 sign changes | abs(g - 1.3306) <= 0.02; >= 12 of 15 | **MISS** |
+| P1 oscillating unstable mode | -1.3306 (real) | rho > 1, Re < 0 | holds |
+| P2 localisation in n5 | 0.2 % (five cells 0.1 %) | >= 50 % (falsified below 20 %) | **falsified** |
+| P3 branch 3 | branch 5 by the numbers, but NOT TESTABLE (M3) | branch 3 | not met |
+
+**Attributed: nothing.** M3 failed, so by the registered rule the attribution is NOT TESTABLE by linearisation at x_ref. Observations only
+(no verdict): at x_ref, holding the convection gradient of c17, of the five leading-edge cells, or replacing c17's gradient by Green-Gauss
+changes rho by less than 1e-5; holding every convection gradient lowers it to 1.2915; the under-relaxed correction (J(beta)) does not lower it
+(1.335-1.341); the leading mode sits at hub-region mid-chord cells (c1234, c365, c401; z 0.149-0.172, 38-59 deg), not at the leading edge.
+The linear map at a cycle point did not predict the frozen nonlinear iteration, and (below) it did not predict the live-limiter F-R runs
+either. Why is not explained here.
+
+### Part F (F-R, unattributed candidate, beta* = 0.25; switch at 1000, 2000 more)
+
+| Arm | (a) rho_med / rho_du (<= 0.01 each) | (b) tolerance reached | (c) probe beta = 1 (<= 1e-5) | (d) exact swirl, one-sided | Result |
+|---|---|---|---|---|---|
+| Z1 E3 | 9.8e-9 / 2.8e-9 | iteration 1003 | 1.9e-13 / 5.4e-14 | abs(L) 0.009508 <= 0.009518 + 1e-4; E_s 6.26586 <= 6.26632 + 0.01 Pa | **met** |
+| Z1 E2 | **0.103 / 0.036** | iteration 1004 | 6.5e-7 / 1.3e-6 | abs(L) 0.059611 <= 0.059612 + 1e-4; E_s 9.23040 <= 9.23040 + 0.01 | **MISS (a)** |
+| Z1 E1 | 2.8e-8 / 3.1e-9 | iteration 1004 | 1.6e-12 / 2.7e-13 | abs(L) 0.105975 <= 0.105977 + 1e-4; E_s 5.48372 <= 5.48377 + 0.01 | **met** |
+| Z2 B3 | not run (Z1 not met; registered order) | | | | - |
+| Z3 | not applicable (no key added) | | | | - |
+
+* E3 and E1 converge to `res_u` 2e-13 / 1e-12 and the probe shows the converged states are fixed points of the default Barth-Jespersen map
+  (unlike the ADR 0110 S1 frozen state, whose probe returned to the stall level). `is_converged()` is true at the end of both arms. The
+  outlet L and swirl energy are the stalled values to 1e-5 relative: F-R stops the cycle and leaves the spurious swirl unchanged (the growth
+  of L with refinement, 0.0095 / 0.0596 / 0.1060 N m, stays undiagnosed, as in ADR 0110).
+* E2 falls 82-fold in `res_u` and 9.7-fold in `res_p` (medians 3.8e-7 / 7.3e-7, below the tolerance from iteration 1004 on) but does not
+  settle: a non-decaying drift of 1e-3 to 1e-2 m/s per iteration (period ratio about 2) remains at the shroud tip-layer cells (r 0.2495-0.2499,
+  z 0.087-0.095, c13838, c13839 and neighbours). Their psi is constant between iterations, no flux sign flips, the wall faces carry flux of
+  about 1e-16: it is not a limiter cycle.
+* **Decision (rule b, as registered):** Z1 is not met, so F-R is removed: `deferred_correction_relaxation`, its state, `w44a_lin_relaxed`,
+  the F-R smokes and the Z tests are deleted; their numbers are only here. Preamble rule 1 asks for a failed registered test to stay as an
+  ignored `*_known_miss`; the registration of this ADR (part F, "kept or removed") took precedence because the tests cannot compile without
+  the removed field. Stated as a deviation.
+* The first iteration at which `is_converged()` turned true in E3 and E1 was not recorded (only the end value).
+
+### Part G (the stop rule)
+
+| Run | evaluable | c_u | `res_nut` | `is_converged()` | reading |
+|---|---|---|---|---|---|
+| G1 (B3, `upwind` from 1000; ADR 0110 S10 again) | yes | 3.5e-4 | 3.0e-2 | false | not stationary pointwise |
+| Z1 E2 | yes | 1.9e-4 | 1.1e-4 | false | not stationary pointwise |
+| Z1 E3 | yes | 3.3e-12 | 2.5e-11 | true | consistent |
+| Z1 E1 | yes | 2.1e-11 | 1.5e-10 | true | consistent |
+
+**NOT A DEFECT.** In every evaluable run where `is_converged()` was false the velocity itself still changed by 2e-4 to 4e-4 of the largest
+speed per iteration; the SST criterion is the one test that sees a local cycle that the normalised residuals average away. Where the state
+was stationary, the flag was true. No stop-rule change was made. The 60-minute problem of ADR 0086 symptom 2 is the cycle, not the stop rule.
+G1 reproduces ADR 0110 S10 (tolerance at 1114, first-order torque 1.3353 N m, Delta p_ts -4.02 Pa).
+
+### What is kept
+
+* `SimpleSolver::conv_gradient_hook` (type `ConvGradientHook`) and `lagged_state` / `set_lagged_state`: diagnostics, default `None` /
+  unused, registered to be kept; the non-ignored `w44a_hooks_at_defaults_are_bit_identical` (E3, 30 iterations, a no-op hook, u, p, phi bit
+  for bit) covers the hook path. The registered relaxation part of that test was dropped with the field.
+* The ignored tests `w44a_lin_smoke`, `w44a_lin_base_and_attribution`, `w44a_lin_m3`, `w44a_g1_upwind`; `scripts/w44a_arnoldi_analysis.py`.
+* No case key, no schema change; defaults bit-identical by construction; `baseline_hashes.rs` not touched.
+
+### Deviations (candid)
+
+* The hooks, the harness and F-R were written before the registration commit (disclosed in "What I knew").
+* Z1 E1 ran in parallel with Z1 E2, not after it (registered "E3 then E2 then E1"); no verdict depends on the order.
+* The failed Z tests were deleted with the field instead of kept as ignored known misses (above).
+* `arnoldi` carries `#[allow(clippy::approx_constant)]` to keep the registered start vector sin(0.7071 i).
+
+### What remains
+
+* The bladed stall: no mechanism attributed; F-R was not tried on B3. A linearisation at a fixed point (not at a cycle point) would need a
+  converged frozen or relaxed state first.
+* The E2 shroud tip-layer drift under F-R.
+* F-R itself: it converged E3 and E1 to true Barth-Jespersen fixed points with unchanged functionals; a new registration (for example a
+  longer arm, or E2 diagnosed first) would be needed to accept it.
+* The growth of the spurious outlet angular momentum with refinement (ADR 0110 part L).
