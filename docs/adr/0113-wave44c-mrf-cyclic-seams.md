@@ -137,3 +137,85 @@ Construction plus a run of the controls that need no new code, done before this 
   box's cyclic pair. Controls run to convergence: K1 full annulus 277 iterations, K2 full annulus 285, K2 inertial sector 292, K3 inertial
   sector 78, K3 full annulus with the band 82 (accuracy not looked at).
 * The new arms (seams on) can only be smoked once the code exists; that smoke is recorded in an amendment before the registered runs.
+
+## Amendment 1: negative controls, smoke of the new arms, and an early run (written before any registered value was read)
+
+* Negative controls, run first as registered: D1 (K1 without seam frame flux) did not converge in 4000 iterations and differs from the
+  annulus by 2.183e-1 `W r_o` (507 x `L_DIFF`); D4 (K4 without seam frame flux) leaves the exact state by 2.556 `U` (2.6e8 x the limit).
+  Both checks discriminate.
+* Disclosed deviation: the cargo name filter used for D1/D4 (`d`) also matched G, K1, K3 and K5, so these registered tests ran once
+  before this amendment. Only their pass/fail lines were looked at (G, K1, K3 failed; K5 passed); no value was read. The code is
+  deterministic, so the registered runs below repeat that run. No limit or set-up is changed by it.
+* Smoke of the seams-on arms (construction plus 30 iterations, finiteness and continuity only): K1 9.6e-7, K2 2.9e-8, K3 9.7e-10,
+  K4 4.0e-16, K5 2.1e-8, all finite. No set-up found defective.
+
+## First pass as registered (values)
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| G pair mismatch (2-D, 3-D, 3-D band, K5) | 2.3e-15, 1.5e-15, 1.5e-15, 2.3e-15 | 1e-12 | pass |
+| G per-cell closure with seams | 2.2e-16, 1.5e-16, 1.5e-16, 4.4e-16 | 1e-12 | pass |
+| G revolution check with / without seams | 2.3e-15 (accepted) / 1.0 (refused) on every mesh | 1e-6 | pass |
+| G tilted axis (3-D sector, 1e-3 rad) | refused (2.3e-3) but the worst face is not on a seam | worst on ymin/ymax | MISS |
+| G one-sided zone | refused (1.0) but the worst face is not on a seam | worst on ymin/ymax | MISS |
+| K1 converged (sector / annulus) | 307 / 277 iterations | | pass |
+| K1 velocity, pressure against analytic | 7.9e-4 W r_o, 3.4e-3 of the range | 2e-2, 5e-2 | pass |
+| K1 sector - annulus velocity / pressure | 7.0e-5 W r_o / 5.92e-4 of the range | 4.3e-4 / 4.3e-4 | pass / MISS |
+| K1 seam balance | 6.0e-14 | 1e-8 | pass |
+| K2 converged; analytic error (annulus 6.76e-3) | 299 it; 6.77e-3 V_i | 1.5e-2 | pass |
+| K2 sector - annulus; seam balance | 7.0e-5 V_i; 1.2e-14 | 4.3e-4; 1e-8 | pass |
+| K2 inertial pair difference (reported) | 2.3e-10 V_i | none | reported |
+| K3 converged; inflow - outflow | 95 it; 6.8e-13 | 1e-9 | pass |
+| K3 max u_theta; u_z against the reference | 4.6e-3 U; 1.1e-4 U | 2e-2; 2e-2 | pass |
+| K3 sector - annulus; seam balance | 4.64e-3 U; 4.5e-13 | 4.3e-4; 1e-8 | MISS; pass |
+| K4 max u - (0,0,U); max p | 1.1e-15 U; 0 | 1e-8; 1e-8 | pass |
+| K5 converged; error (controls 6.77e-3, 1.11e-2) | 287 it; 1.27e-2 V_i (0.76 of the 1.5x bound) | 2e-2 and 1.5x | pass |
+| K5 net interface flux; seam balance; sum abs flux (reported) | 4.7e-18; 8.4e-12; 5.8e-3 V_i A | 1e-8; 1e-8 | pass |
+
+## Amendment 2 (written after the first pass and the diagnostics below, before any run it governs)
+
+What I knew when writing this: the first pass above and these unregistered diagnostics, all run once on the first-pass code (library
+level; nothing here was registered in advance):
+
+* Iteration study: the K1 / K2 sector-annulus differences are identical at 300, 1000 and 4000 fixed iterations (1.401e-4 / 8.881e-4
+  absolute for K1 velocity / pressure, 3.494e-5 / 1.477e-4 for K2; residuals down to 1e-13), so they are fixed-point differences.
+* K1 inertial pair (walls at `W`, no source): 3.7e-9 W r_o and 6.7e-9 of the range. K1 with an MRF zone at `Omega = 0` (seams on): 7.5e-9.
+  Component-diagonal correction off, pair mean on, `simplec_boundary_compensation` on: no change (1.40e-4). SIMPLE with `alpha_p = 1`
+  did not converge (not informative).
+* K1 with the MRF force removed (frame flux kept, seams on): 7.0e-9 W r_o. With the force face values zeroed on the seam faces: 1.40e-4.
+  With the force face values zeroed on the non-cyclic boundary faces (walls): 7.2e-9. Seam-face flux, offset and face force against the
+  matching annulus faces: 3.3e-9, 2.3e-17, 8.8e-7. The per-cell map puts the difference in the four cells that touch both a seam and a
+  wall (1.4e-4 and 8.6e-5 there, below 2.3e-5 elsewhere); the pressure reference cell 0 is one of them.
+* K3: the inertial sector without any source has `max |u_theta|` 4.62e-3 U, the inertial annulus 2.2e-13; MRF at `Omega = 0`, on the band
+  and on all cells: 4.62e-3, 4.63e-3, 6.99e-3. The bent-box sector with symmetry planes instead of the cyclic pair (component-diagonal
+  correction on): 5.2e-3. Its faces and area vectors equal those of `annulus_3d` to 7e-16 and 3e-17. So the K3 swirl is made by the
+  sector with side boundaries in through-flow, cyclic or symmetric, not by the MRF zone or its seams; its cause was not found.
+
+Conclusions. (1) The seam frame flux is exact: with the force removed the MRF sector equals the annulus to 7e-9, K4 holds to 1e-15. (2) The
+K1 miss comes from the fixed-velocity wall pressure condition of `SimpleSolver` (the wall-normal gradient `(rAU / rAtU) f_n` of the owner,
+`body_ratio`): `rAtU = 1 / (a_p - h1)` with `h1` the sum of the off-diagonal magnitudes of the momentum matrix, and a cyclic face puts its
+partner coefficient into the source (lagged), not into the off-diagonals, so `h1` and the ratio of a seam cell differ from those of the same
+cell of the annulus; the force has a wall-normal part only at walls, hence the seam-wall corners. Without a force the ratio is not used,
+hence the exact inertial pairs. (3) K3 as registered is a defective set-up: its sector-annulus limit is already missed by the inertial pair
+without the change (the smoke did not compare the inertial pair; that was a smoke gap).
+
+Changes, registered now:
+
+* **F1 fix attempt.** New `SimpleSolver` flag `coupled_offdiag_in_h1` (default `false`; bit-identical when off): for every cyclic boundary
+  face with owner `c` it adds the magnitude of the lagged partner coefficient to `h1[c]`, per active component, as an internal face would
+  have it in the off-diagonals: `max(-phi_conv,f, 0) - gamma_f |S_f| c_f` (`c_f = -1 / (dn_f + dn_g)`, the Laplacian partner
+  coefficient of the `Periodic` condition). The API sets it when an MRF source has `cyclic_seams = true` (one `sim.rs` line); the library
+  harness sets it with seams on. **Falsifier, run first:** K1 with F1, sector against annulus `<= 1e-8` of `W r_o` (velocity) and of the
+  range (pressure), the level of the no-force arm. If it misses, F1 and the opt-in are removed. If it passes, G (corrected guards), K1,
+  K2, K3b, K4, K5 and D1, D4 are run again with F1, limits unchanged; any miss removes F1 and the opt-in together.
+* **K3b** (replaces K3, which stays as an ignored known miss with its limits): the effect of the MRF band must be the same in the sector as
+  in the annulus: `max |(u_sector,MRF - u_sector,inertial) - (u_annulus,MRF - u_annulus,inertial)| <= L_DIFF U` over matching cells; the
+  other K3 limits unchanged. Known when writing: `max |u_theta|` moves by 8e-6 U in the sector when the band is added; the full field
+  difference has not been computed.
+* **G guards corrected** (the registered guards stay as an ignored known miss). Tilted axis: the 2-D sector instead of the 3-D one,
+  because on the 3-D sector the tilt makes the end planes non-axisymmetric too (worst face there). Prediction written now: the walls' own
+  error is about `t z / r` = 1e-3 x 0.05 / 0.5 = 1e-4, below the seam pair mismatch of order `t`, so the worst face lies on a seam;
+  criterion `> 1e-6` with the worst face on theta_min / theta_max. One-sided zone: criterion "refused" (`> 1e-6`) only, because a zone
+  that holds one side of a pair is bounded inside the sector by a plane through the axis, which reads 1.0 like the unpaired seam face, so
+  the face that wins is a tie-break.
+* The diagnostic switches used above are not kept in the committed tests (their values are recorded here).
