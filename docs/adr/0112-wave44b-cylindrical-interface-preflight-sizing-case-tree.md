@@ -170,9 +170,17 @@ can force strong radial grading when the cells around are few: for the M counts 
 Deviations from the registered plan: (1) amendment 1 (the verified-angle constant, after the first P2 run); (2) the S2 convergence
 criterion was inside the H2 S2 test in the first run and failed on it only; it was moved unchanged into its own ignored known-miss
 test and the run repeated (deterministic, identical values); (3) the smoke of H2 reached the converged state within its 100 iterations,
-so its values were known before the registered run (recorded above).
+so its values were known before the registered run (recorded above). (4) that smoke already showed the S2 miss: the 8/6 rotating-frame run stopped at
+iteration 101 with continuity 1.18e-9, above the 1e-9 convergence criterion; I did not notice it, the smoke record says "not
+defective", and no amendment was written before the registered run.
 
 Unverified references: none; every reference value is an exact solution, polygon geometry or an ADR 0109 measurement.
 
 Status: F-126 stays partial (acceptance, a published compressor/rotor case, not attempted). Its note is extended. Defaults unchanged;
 existing keys unchanged; `baseline_hashes.rs` not touched.
+
+## Final gate
+
+Fresh `git archive` of HEAD 6f441f1 (includes the wave-44C ADR commit 8c46987): `cargo fmt --check` clean, `cargo clippy --workspace
+--all-targets -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1992 passed, 0 failed, 622 ignored (wave 43: 1983 /
+0 / 619; +9 passing tests of this ADR, +3 ignored: two smokes and the S2 known miss).
