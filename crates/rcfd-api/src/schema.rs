@@ -1978,6 +1978,10 @@ pub fn case_schema() -> Schema {
                         "centrifugal",
                         Schema::boolean(true).doc("Include the centrifugal acceleration Omega^2 r_perp of the rotating frame (false keeps only the Coriolis force, which is needed for periodic domains)"),
                     )
+                    .field(
+                        "cyclic_seams",
+                        Schema::boolean(false).doc("mrf: give the frame flux (Omega x r).S also to the faces of a rotationally cyclic pair whose two sides are in the zone (a sector of a rotor; the cyclic rotation must be about the MRF axis, else a located error). false refuses a zone with cyclic seams (ADR 0113)"),
+                    )
                     .field("acceleration", vec3([0.0; 3], "Constant acceleration [m/s^2] for type = acceleration"))
                     .field(
                         "thrust",

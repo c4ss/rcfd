@@ -251,3 +251,55 @@ Changes, registered now:
   axis (2-D and 3-D sectors) and for the one-sided zone, plus, for the tilt, the seam pair term on its own `max |F_f + F_g| / (|Omega| r
   |S|) > 1e-6` (it detects the misalignment by itself), against `<= 1e-12` when aligned (G).
 * Decision rule unchanged: a miss of G, K1, K2, K3, K3c, K4, K5 or the corrected guards removes F1 and the opt-in together.
+
+## Addendum: measured values (final code, F1 included; one run each)
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| D1 K1 without seam frame flux, sector - annulus | 2.18e-1 W r_o, not converged | >= 10 x 4.3e-4 | discriminates |
+| D4 K4 without seam frame flux | 2.56 U | >= 10 x 1e-8 | discriminates |
+| F1 falsifier: K1 sector - annulus velocity / pressure | 3.59e-9 W r_o / 6.62e-9 of the range | 1e-8 | pass |
+| G pair mismatch / closure / accepted with seams / refused without | 2.3e-15 / 4.4e-16 / 2.3e-15 / 1.0 (worst of four meshes) | 1e-12 / 1e-12 / 1e-6 / > 1e-6 | pass |
+| Guards (second correction): tilted axis 2-D, 3-D (check; seam pair term) | 1.0e-4, 8.4e-5; 2.3e-3, 1.9e-3 | > 1e-6 each | pass |
+| Guards: one-sided zone | 1.0 | > 1e-6 | pass |
+| Guards as registered / as corrected in amendment 2 | refused, worst face not a seam | worst face on a seam | ignored known misses (defective set-ups) |
+| K1 analytic velocity / pressure | 7.9e-4 W r_o / 3.7e-3 of the range | 2e-2 / 5e-2 | pass |
+| K1 sector - annulus velocity / pressure; seam balance | 3.6e-9 / 6.6e-9; 0 | 4.3e-4; 1e-8 | pass |
+| K2 analytic (annulus 6.76e-3); sector - annulus; seam balance | 6.76e-3 V_i; 1.2e-10 V_i; 1.4e-16 | 1.5e-2; 4.3e-4; 1e-8 | pass |
+| K3 in/out; swirl; u_z against reference; sector - annulus; seam | 4.3e-16; 1.1e-10 U; 3.2e-3 U; 1.8e-11 U; 5.5e-18 | 1e-9; 2e-2; 2e-2; 4.3e-4; 1e-8 | pass |
+| K3b band effect (reference without F1) | 4.64e-3 U | 4.3e-4 | ignored known miss (defective set-up) |
+| K3c band effect (F1 on all sector arms) | 1.8e-11 U | 4.3e-4 | pass |
+| K3i inertial sector with F1 against the inertial annulus (reported) | 2.2e-12 U (4.6e-3 U without F1) | none | reported |
+| K4 exact state: max u - (0,0,U); max p | 1.1e-15 U; 0 | 1e-8 | pass |
+| K5 error (controls 6.76e-3, 1.107e-2); net interface flux; seam balance | 1.27e-2 V_i (0.76 of the bound); 5e-18; 8.1e-12 | 2e-2 and 1.5x; 1e-8; 1e-8 | pass |
+| K5 sum of absolute interface fluxes (reported) | 5.8e-3 V_i A | none (ADR 0109 known miss) | reported |
+| K6 fan empty passage (library level, 300 iterations) | 7.4e-4 U, worst cell on hub/shroud, not on a seam; seam pair 5.4e-14 | 1e-8 | MISS (ignored known miss, as predicted) |
+| A1 key absent / false / true on the M2 annulus, 20 iterations | bit-identical | bit-identical | pass |
+| A2 refusal: without key / with key | `patch 'seam_lo'` (1.0) / `patch 'hub'` (1.84e-2) | names a seam / hub | pass |
+| A3 `cyclic_seams` on `rotating_frame` | located error at `sources.frame.cyclic_seams` (raised when the case is parsed) | located | pass |
+| `s4_absolute_formulation_mrf_is_refused_on_the_sector` (existing) | passes | | pass |
+
+Verdict: G (corrected guards), K1, K2, K3, K3c, K4, K5 pass with F1, and D1, D4 discriminate, so by the decision rule F1 and the opt-in
+are kept. What this delivers: an MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus
+to 1e-8 or better in every check) at library level and through the case key. What it does not deliver: the fan. The `axial_fan_sector`
+hub and shroud faces are not surfaces of revolution at the face centres (1.8e-2 and 4.5e-3 of `Omega r |S|`), so the case tree still
+refuses an MRF zone on the fan passage, now at the hub; at library level the same passage leaves the exact state by 7.4e-4 U, located
+at hub/shroud cells. Curing that is the wall-frame-flux question of F-RP (ADRs 0082, 0085), or a mesher change that makes the hub and
+shroud faces chord rectangles; neither is attempted here. A sector also cannot reach the case tree through a mesh file (the OpenFOAM
+writer stores `neighbourPatch` only, not the rotation).
+
+Finding outside the task, reported: the default SIMPLEC kernel builds `rAtU` of cyclic cells without the lagged partner coefficients.
+Without a body force the converged solution does not depend on it in the 2-D swirl checks (inertial pairs match to 1e-9), but an inertial
+3-D sector through-flow carries 4.6e-3 U of spurious swirl from it (K3i: 2.2e-12 with F1). The `rotating_frame` fan passage and every
+periodic SIMPLEC case use that default path. F1 is opt-in here (switched on only by `cyclic_seams`), so every earlier result and
+`crates/rcfd-api/tests/baseline_hashes.rs` stay bit-identical; making it the default for periodic cases is a separate decision.
+
+Deviations from the registered plan, all stated in the amendments: the early run caused by an over-broad name filter (amendment 1); the
+first-pass misses and the unregistered diagnostics that located them (amendment 2); F1 added by amendment 2 with a falsifier that ran
+first; K3 wrongly called defective in amendment 2 and restored in amendment 3 because its registered limits are met with F1; K3b and the
+amendment-2 guard set-ups defective (amendment 3); A3's test first failed because the located error is raised by `Case::parse_toml`
+(the test now accepts the parse-time diagnostics; the criterion is unchanged). The diagnostic switches are not in the committed tests.
+
+Unverified references: none; every reference value is an exact solution or an earlier ADR's measured value (ADR 0008 M3 for L_DIFF).
+
+Status: F-126 stays partial (acceptance, a published compressor case, not attempted); its note is extended.
