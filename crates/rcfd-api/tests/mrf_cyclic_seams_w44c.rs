@@ -10,13 +10,24 @@ use rcfd_fv::sources::MrfZone;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use std::sync::Arc;
 
-/// The passage of `fan_sector.rs` without the blade (default blade parameters, so the C-grid is sheared).
-const FAN_MESH: &str = "[mesh]\ngenerator = \"axial_fan_sector\"\n[mesh.fan]\nn_up = 8\nn_chord = 12\nn_down = 8\nn_side = 10\nn_mid = 2\nn_span = 16\nn_gap = 7\nn_bl = 2\ngrowth = 1.2\nfirst_cell_height = 1e-3\ninclude_blade = false\n";
-
-/// The empty passage with an MRF zone on every cell (hub and shroud moving axially with the flow, the K4 set-up).
+/// The passage of `fan_sector.rs` without the blade (default blade parameters, so the C-grid is sheared), with an MRF zone on
+/// every cell (hub and shroud moving axially with the flow, the K4 set-up).
 fn fan_case(extra: &str, kind: &str) -> String {
     format!(
-        r#"{FAN_MESH}
+        r#"[mesh]
+generator = "axial_fan_sector"
+[mesh.fan]
+n_up = 8
+n_chord = 12
+n_down = 8
+n_side = 10
+n_mid = 2
+n_span = 16
+n_gap = 7
+n_bl = 2
+growth = 1.2
+first_cell_height = 1e-3
+include_blade = false
 [physics]
 nu = 0.02
 rho = 1.0
