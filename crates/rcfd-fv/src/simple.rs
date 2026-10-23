@@ -539,6 +539,9 @@ pub struct SimpleSolver {
     /// the kernel uses these factors instead of recomputing `linear_upwind_limiter` from the iterate, which removes the limiter's switching
     /// between branches from the outer iteration. `None` (default) leaves the solver unchanged.
     pub frozen_limiter: Option<[Vec<f64>; 3]>,
+    /// Diagnostic hook on the momentum convection gradient (ADR 0111): called per component with the cell values, the boundary values
+    /// and the (limited) gradient the high-order correction uses, which it may change. `None` (default) leaves the solver unchanged.
+    pub conv_gradient_hook: Option<ConvGradientHook>,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -548,6 +551,9 @@ pub struct SimpleSolver {
     /// `rAU / rAtU` of the previous iteration (wall pressure extrapolation with body forces).
     body_ratio: Vec<f64>,
 }
+
+/// Diagnostic hook of [`SimpleSolver::conv_gradient_hook`]: (component, cell values, boundary values, convection gradient).
+pub type ConvGradientHook = Box<dyn Fn(usize, &[f64], &[f64], &mut [Vec3]) + Send + Sync>;
 
 /// Restartable solver state (everything that influences later iterations).
 #[derive(Debug, Clone, PartialEq)]
@@ -631,6 +637,7 @@ impl SimpleSolver {
             reconstructed_correction: false,
             simplec_boundary_compensation: false,
             frozen_limiter: None,
+            conv_gradient_hook: None,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -800,7 +807,7 @@ impl SimpleSolver {
             } else {
                 None
             };
-            let limited = match (self.linear_upwind_limiter, &grad) {
+            let mut limited = match (self.linear_upwind_limiter, &grad) {
                 (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
                     let psi = match &self.frozen_limiter {
                         Some(f) => f[k].clone(),
@@ -815,6 +822,11 @@ impl SimpleSolver {
                 }
                 _ => None,
             };
+            if let (Some(hook), Some(gr)) = (&self.conv_gradient_hook, &grad) {
+                let mut v = limited.take().unwrap_or_else(|| gr.clone());
+                hook(k, &cells, &bvals, &mut v);
+                limited = Some(v);
+            }
             let mut m = convection(
                 &g,
                 &phi_conv,
@@ -1186,6 +1198,18 @@ impl SimpleSolver {
         }
         self.history.push(info);
         info
+    }
+
+    /// The wall-pressure quantities lagged from the previous iteration (`wall_grad`, `body_ratio`); with [`set_lagged_state`](Self::set_lagged_state)
+    /// a linearisation can evaluate one iteration as a function of `(u, p, phi)` alone (ADR 0111).
+    pub fn lagged_state(&self) -> (Vec<f64>, Vec<f64>) {
+        (self.wall_grad.clone(), self.body_ratio.clone())
+    }
+
+    /// Restore the lagged wall-pressure quantities captured with [`lagged_state`](Self::lagged_state).
+    pub fn set_lagged_state(&mut self, wall_grad: Vec<f64>, body_ratio: Vec<f64>) {
+        self.wall_grad = wall_grad;
+        self.body_ratio = body_ratio;
     }
 
     /// Capture the restartable state.
