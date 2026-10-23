@@ -113,3 +113,12 @@ matched) = 48x8x2 + 35x8x2; M_t (counts around matched) = 48x8x2 + 48x8x3; K2 = 
 
 F-126 stays partial (its acceptance is a published compressor case, not attempted). Its note is extended. Defaults, existing keys and
 `baseline_hashes.rs` unchanged.
+
+## Amendment 1 (written after the first run of the mesh-level tests, before their re-run)
+
+What I knew when writing this: the first run of P1/P2 and H1. H1 passed as registered (values in the addendum). P2 failed on one
+assertion: K2 measures 48.745 deg, so `verified` (angle <= `CYLINDRICAL_INTERFACE_VERIFIED_DEG` = 48.7) is false on K2, while P2 requires
+it true. The constant is defined above as "the largest angle with a converged solver run"; 48.7 was ADR 0109's value rounded to one
+decimal, below the angle it stands for. Correction of the constant (not of a test limit): `CYLINDRICAL_INTERFACE_VERIFIED_DEG = 48.75`
+(K2's 48.745 rounded up at the second decimal). P2 is re-run unchanged; all other values stay as registered. The failed first run is
+recorded as a deviation.
