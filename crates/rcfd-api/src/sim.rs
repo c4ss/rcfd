@@ -210,6 +210,20 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
             bad("mesh.core_fraction", "a cross-section core (pipe_sweep only)");
         }
     }
+    if generator != "annulus_3d_cylindrical_interface" {
+        if get_f(case, "mesh.r_interface") != 0.0 {
+            bad(
+                "mesh.r_interface",
+                "an interface radius (annulus_3d_cylindrical_interface only)",
+            );
+        }
+        if get_b(case, "mesh.isotropic_interface") {
+            bad(
+                "mesh.isotropic_interface",
+                "interface-layer sizing (annulus_3d_cylindrical_interface only)",
+            );
+        }
+    }
     if generator != "box_2d" {
         for p in ["mesh.periodic_x", "mesh.periodic_y"] {
             if get_b(case, p) {
@@ -222,6 +236,88 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
     } else {
         Err(out)
     }
+}
+
+/// Rotor block `r_in..r_interface` (cell zone `rotor`) and stator block `r_interface..r_out` joined on the cylinder
+/// `r = r_interface` (F-126, ADR 0112), rejected before the run when the interface faces are too non-orthogonal.
+fn cylindrical_interface_mesh(
+    case: &Case,
+    nx: usize,
+    ny: usize,
+    grading: f64,
+) -> std::result::Result<Mesh, Vec<Diagnostic>> {
+    use rcfd_mesh::non_conformal as nc;
+    let me = |e: Error| diag("mesh", e.to_string());
+    let (r_in, r_if, r_out, lz) = (
+        get_f(case, "mesh.r_in"),
+        get_f(case, "mesh.r_interface"),
+        get_f(case, "mesh.r_out"),
+        get_f(case, "mesh.lz"),
+    );
+    if !(r_in < r_if && r_if < r_out) {
+        return Err(diag(
+            "mesh.r_interface",
+            format!("r_interface = {r_if} must lie strictly between r_in = {r_in} and r_out = {r_out}"),
+        ));
+    }
+    let pick = |key: &str, same: usize| match get_i(case, key) {
+        0 => same,
+        n => n as usize,
+    };
+    let nz = get_i(case, "mesh.nz").max(1) as usize;
+    let (nxr, nyr, nzr) = (
+        pick("mesh.nx_right", nx),
+        pick("mesh.ny_right", ny),
+        pick("mesh.nz_right", nz),
+    );
+    let graded = (grading - 1.0).abs() > 1e-12;
+    let (ga, gb) = if get_b(case, "mesh.isotropic_interface") {
+        if graded {
+            return Err(diag(
+                "mesh.grading",
+                "mesh.isotropic_interface = true sets the grading of both blocks; remove mesh.grading",
+            ));
+        }
+        let h = nc::cylindrical_interface_layer_size(r_if, 2.0 * std::f64::consts::PI, [nx, nxr], lz, [nz, nzr], 45.0);
+        if h == 0.0 {
+            (Grading::Uniform, Grading::Uniform) // conformal pair: no offset to compensate
+        } else {
+            let fit = |n: usize, len: f64| {
+                gen::expansion_for_end_cell(n, len, h).map_err(|e| {
+                    diag(
+                        "mesh.isotropic_interface",
+                        format!("{e}: the near-isotropic interface cells (radial size {h:.4e}) need a thicker block, more radial cells or more cells around / axially"),
+                    )
+                })
+            };
+            (
+                Grading::Expansion(fit(ny, r_if - r_in)?),
+                Grading::Expansion(1.0 / fit(nyr, r_out - r_if)?),
+            )
+        }
+    } else if graded {
+        (Grading::Expansion(grading), Grading::Expansion(1.0 / grading))
+    } else {
+        (Grading::Uniform, Grading::Uniform)
+    };
+    let a = gen::annulus_3d(nx, ny, nz, r_in, r_if, lz, 0.0, ga).map_err(me)?;
+    let b = gen::annulus_3d(nxr, nyr, nzr, r_if, r_out, lz, 0.0, gb).map_err(me)?;
+    let (mut m, rep) =
+        nc::join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).map_err(me)?;
+    m.add_cell_zone("rotor", (0..rep.b_cell_offset).collect()).map_err(me)?;
+    let q = nc::interface_non_orthogonality(
+        &m,
+        &rep.interface_faces,
+        nc::CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG,
+    )
+    .map_err(me)?;
+    if q.exceeds {
+        return Err(diag(
+            "mesh.r_interface",
+            format!("{}; mesh.isotropic_interface = true sizes them", q.message()),
+        ));
+    }
+    Ok(m)
 }
 
 /// Build the mesh described by the case.
@@ -393,6 +489,7 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
                     .map_err(me)
             }
         }
+        "annulus_3d_cylindrical_interface" => cylindrical_interface_mesh(case, nx, ny, grading),
         "pipe_sweep" => {
             // all-hex circular pipe along z: multizone O-grid + core disc swept in nz layers (F-235, ADR 0047)
             for (path, v) in [

@@ -49,6 +49,34 @@ fn geometric(n: usize, len: f64, ratio: f64) -> Vec<f64> {
     x
 }
 
+/// The [`Grading::Expansion`] ratio (last / first) whose last cell of `n` on a length `len` has the size `h` (ADR 0112;
+/// use the reciprocal for a first cell of size `h`). With one cell the cell is the whole length, accepted when `len >= h`.
+pub fn expansion_for_end_cell(n: usize, len: f64, h: f64) -> Result<f64> {
+    let last = |ln_ratio: f64| {
+        let x = geometric(n, len, ln_ratio.exp());
+        x[n] - x[n - 1]
+    };
+    let ok = n >= 1 && len > 0.0 && h > 0.0 && if n == 1 { h <= len } else { h < len };
+    if !ok || (n > 1 && (h <= last(-50.0) || h >= last(50.0))) {
+        return Err(Error::Mesh(format!(
+            "an end cell of size {h:.4e} does not fit {n} cells on a length {len:.4e}"
+        )));
+    }
+    if n == 1 {
+        return Ok(1.0);
+    }
+    let (mut lo, mut hi) = (-50.0, 50.0);
+    for _ in 0..200 {
+        let mid = 0.5 * (lo + hi);
+        if last(mid) < h {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    Ok((0.5 * (lo + hi)).exp())
+}
+
 /// Coordinates (length `n + 1`) from 0 to `len` with the requested grading.
 pub fn axis_coords(n: usize, len: f64, g: Grading) -> Result<Vec<f64>> {
     if n == 0 || len <= 0.0 {

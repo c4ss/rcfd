@@ -197,7 +197,7 @@ The Rust function also joins general planar interfaces in 3-D (convex faces; the
 each other, otherwise the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the
 skewed interface faces.
 
-### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, F-031)
+### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, `"annulus_3d_stage"`, `"annulus_3d_cylindrical_interface"`, F-031)
 
 `annulus_3d`: a full cylindrical annulus `r_in <= r <= r_out` about the z axis, height `lz`, `nx` cells around, `ny`
 radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the case sets other conditions).
@@ -210,6 +210,22 @@ point. Patches `inner`, `outer` (both blocks), `zmin` (inlet of the lower block)
 `plane_in` (bottom of the upper block), `zmax`. The upper block has `nx_right` x `ny_right` x `nz_right` cells (0 = same as
 `nx`, `ny`, `nz`), so the numbers of cells around may differ. The plane is a pair of boundary patches coupled by the
 `mixing_plane` section (below), not by the F-114 join.
+
+`annulus_3d_cylindrical_interface` (F-126, ADR 0109 / 0112): a rotor block `r_in <= r <= r_interface` (`nx` around, `ny` radial,
+`nz` axial; cell zone `rotor`, for an `mrf` source with `zone = "cell_zone"`, `cell_zone = "rotor"`) and a stator block
+`r_interface <= r <= r_out` (`nx_right`, `ny_right`, `nz_right`; 0 = same as the rotor block), both of height `lz` from z = 0,
+joined on the cylinder `r = r_interface` by the cylindrical non-conformal join (frozen-rotor interface; the counts around and
+axially may differ). Patches `inner`, `outer`, `zmin`, `zmax`. `mesh.r_interface` must lie strictly between `r_in` and `r_out`.
+`mesh.grading` is the size of the interface-adjacent cell over the wall-adjacent cell in both blocks (1 = uniform).
+Pre-flight: after the join the worst non-orthogonality of the interface faces is measured; above 70 deg the case is rejected
+before the run with a diagnostic at `mesh.r_interface` that names the angle, the centre offsets and the factor by which the radial
+spacing of the interface cells must grow (ADR 0109 runs diverged at 72.7 deg and above; the largest angle with a converged run is
+48.75 deg). `mesh.isotropic_interface = true` (default false; conflicts with `mesh.grading`) grades both blocks so that the cells
+next to the interface have the radial size at which the geometric bound of that angle is 45 deg (near-isotropic interface cells);
+with few cells around this can need a strong radial grading, and a block too thin for that size is a located error. Known limits:
+full annulus only (no sector periodicity in the case tree), MRF on cyclic seams is not available, and the sum of absolute interface
+fluxes of a swirling flow is first order in the cell size around (ADR 0109).
+`mesh.r_interface` and `mesh.isotropic_interface` on any other generator are rejected with a located error.
 
 ### Swept pipe (`mesh.generator = "pipe_sweep"`, F-235)
 
