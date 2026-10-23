@@ -733,6 +733,124 @@ fn join_impl(
     ))
 }
 
+/// Overlap-face non-orthogonality (degrees) above which a cylindrical interface is rejected before a run (ADR 0112): the
+/// smallest angle at which a steady run diverged in ADR 0109 (72.7 deg), rounded down.
+pub const CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG: f64 = 70.0;
+/// Largest overlap-face non-orthogonality with a converged steady run in ADR 0109 (mesh K2, 48.745 deg, `face_flux`).
+pub const CYLINDRICAL_INTERFACE_VERIFIED_DEG: f64 = 48.75;
+
+/// Worst non-orthogonality of a set of interface faces and what it would take to bring it to a limit (ADR 0112).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct InterfaceOrthogonality {
+    /// Worst angle between the face area vector and the owner-to-neighbour centre vector `d`, degrees.
+    pub worst_deg: f64,
+    /// Face where it occurs.
+    pub face: usize,
+    /// Owner cell of that face.
+    pub owner: usize,
+    /// Neighbour cell of that face.
+    pub neighbour: usize,
+    /// Centre of that face.
+    pub centre: Vec3,
+    /// Part of `d` normal to the face at the worst face.
+    pub d_normal: f64,
+    /// Part of `d` along the face at the worst face.
+    pub d_tangential: f64,
+    /// The limit, degrees.
+    pub limit_deg: f64,
+    /// Normal spacing `d_tangential / tan(limit)` that would meet the limit.
+    pub needed_d_normal: f64,
+    /// `needed_d_normal / d_normal`: the factor by which the spacing across the interface must grow.
+    pub factor: f64,
+    /// `worst_deg > limit_deg`.
+    pub exceeds: bool,
+    /// `worst_deg <= CYLINDRICAL_INTERFACE_VERIFIED_DEG` (inside the range with a converged run).
+    pub verified: bool,
+}
+
+impl InterfaceOrthogonality {
+    /// Human-readable cause and remedy.
+    pub fn message(&self) -> String {
+        format!(
+            "cylindrical interface: overlap face {} is {:.1} deg non-orthogonal (limit {:.0} deg, ADR 0112; steady runs diverged at \
+             72.7 deg and above in ADR 0109): the cell centres on the two sides are {:.3e} apart along the interface but only {:.3e} \
+             across it, because the interface cells are thin radially compared with their size around and axially; the radial \
+             spacing of the interface cells must grow by a factor of at least {:.2} (to {:.3e}), or their size around and axially \
+             shrink by that factor",
+            self.face,
+            self.worst_deg,
+            self.limit_deg,
+            self.d_tangential,
+            self.d_normal,
+            self.factor,
+            self.needed_d_normal
+        )
+    }
+}
+
+/// Pre-flight of a joined interface (ADR 0112): the worst non-orthogonality of the internal faces `faces` (normally
+/// [`JoinReport::interface_faces`]), measured as in [`crate::quality`], against `limit_deg`.
+pub fn interface_non_orthogonality(mesh: &Mesh, faces: &[usize], limit_deg: f64) -> Result<InterfaceOrthogonality> {
+    if !(limit_deg > 0.0 && limit_deg < 90.0) {
+        return bad("interface pre-flight: the limit must lie between 0 and 90 degrees");
+    }
+    let (cc, sfs) = (mesh.cell_centres(), mesh.face_area_vectors());
+    let mut worst: Option<InterfaceOrthogonality> = None;
+    for &f in faces {
+        if f >= mesh.n_internal_faces() {
+            return bad(format!("interface pre-flight: face {f} is not an internal face"));
+        }
+        let (o, nb) = (mesh.owner()[f], mesh.neighbour()[f]);
+        let (d, n_hat) = (vec3::sub(cc[nb], cc[o]), vec3::unit(sfs[f]));
+        let (dt, dn) = (vec3::norm(vec3::cross(d, n_hat)), vec3::dot(d, n_hat));
+        let angle = dt.atan2(dn).to_degrees();
+        if worst.as_ref().map_or(true, |w| angle > w.worst_deg) {
+            let needed = dt / limit_deg.to_radians().tan();
+            worst = Some(InterfaceOrthogonality {
+                worst_deg: angle,
+                face: f,
+                owner: o,
+                neighbour: nb,
+                centre: mesh.face_centres()[f],
+                d_normal: dn,
+                d_tangential: dt,
+                limit_deg,
+                needed_d_normal: needed,
+                factor: needed / dn,
+                exceeds: angle > limit_deg,
+                verified: angle <= CYLINDRICAL_INTERFACE_VERIFIED_DEG,
+            });
+        }
+    }
+    worst.ok_or_else(|| Error::Mesh("interface pre-flight: no interface faces".into()))
+}
+
+/// Radial size `h` of the interface-adjacent cells on both sides of a cylindrical interface of radius `radius` for which the
+/// geometric bound of the overlap-face non-orthogonality is `max_deg` (ADR 0112). The blocks span `sector_angle` with
+/// `n_around` cells and the same axial range `axial_length` with `n_axial` uniform layers; the centre offset along the
+/// interface is below half the sum of the two pitches around (zero for equal counts) and axially (zero for equal layer
+/// counts), the centre distance across is about `h`, so `h = hypot(offset around, offset axially) / tan(max_deg)`. At 45 deg
+/// the radial size equals that in-surface size: the interface cells are near-isotropic. Returns 0 for a conformal pair.
+pub fn cylindrical_interface_layer_size(
+    radius: f64,
+    sector_angle: f64,
+    n_around: [usize; 2],
+    axial_length: f64,
+    n_axial: [usize; 2],
+    max_deg: f64,
+) -> f64 {
+    let half_sum = |len: f64, n: [usize; 2]| {
+        if n[0] == n[1] {
+            0.0
+        } else {
+            0.5 * (len / n[0] as f64 + len / n[1] as f64)
+        }
+    };
+    let t = half_sum(radius * sector_angle, n_around);
+    let z = half_sum(axial_length, n_axial);
+    t.hypot(z) / max_deg.to_radians().tan()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -957,5 +1075,129 @@ mod tests {
             join_non_conformal_cylindrical(&a, "outer", &short, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap_err();
         assert!(format!("{e:?}").contains("cover"), "{e:?}");
         assert!(join_non_conformal_cylindrical(&a, "outer", &b, "inner", [0.0; 3], [0.0; 3], 1e-8).is_err());
+    }
+
+    // ---- ADR 0112 (wave 44B): pre-flight and interface-layer sizing, limits registered in the ADR before this code ran ----
+
+    fn cyl(a: &Mesh, b: &Mesh) -> (Mesh, JoinReport) {
+        join_non_conformal_cylindrical(a, "outer", b, "inner", [0.0; 3], [0.0, 0.0, 1.0], 1e-8).unwrap()
+    }
+
+    /// Rotor `n x nr x nz` on 0.5..0.75 and stator on 0.75..1.0, height 0.4.
+    fn pair(a: (usize, usize, usize, Grading), b: (usize, usize, usize, Grading)) -> (Mesh, JoinReport) {
+        cyl(
+            &crate::gen::annulus_3d(a.0, a.1, a.2, 0.5, 0.75, 0.4, 0.0, a.3).unwrap(),
+            &crate::gen::annulus_3d(b.0, b.1, b.2, 0.75, 1.0, 0.4, 0.0, b.3).unwrap(),
+        )
+    }
+
+    fn g2_pair(ga: Grading, gb: Grading) -> (Mesh, JoinReport) {
+        use std::f64::consts::FRAC_PI_3;
+        cyl(
+            &crate::gen::annulus_sector(8, 8, 0.5, 0.75, FRAC_PI_3, ga, 0.1).unwrap(),
+            &crate::gen::annulus_sector(6, 8, 0.75, 1.0, FRAC_PI_3, gb, 0.1).unwrap(),
+        )
+    }
+
+    /// Maximum of the quality-module angle over `faces` and the faces attaining it.
+    fn quality_max(m: &Mesh, faces: &[usize]) -> (f64, Vec<usize>) {
+        let no = crate::quality::compute_metrics(m).non_orthogonality;
+        let mx = faces.iter().map(|&f| no[f]).fold(f64::NEG_INFINITY, f64::max);
+        (mx, faces.iter().copied().filter(|&f| no[f] == mx).collect())
+    }
+
+    #[test]
+    fn p1_p2_preflight_reproduces_the_adr_0109_angles() {
+        let lim = CYLINDRICAL_INTERFACE_MAX_NON_ORTHOGONALITY_DEG;
+        let u = Grading::Uniform;
+        let cases = [
+            ("M", pair((48, 8, 2, u), (35, 8, 3, u)), 79.2, true),
+            ("M_z", pair((48, 8, 2, u), (35, 8, 2, u)), 75.7, true),
+            ("M_t", pair((48, 8, 2, u), (48, 8, 3, u)), 72.7, true),
+            (
+                "K2",
+                pair(
+                    (96, 6, 4, Grading::Expansion(3.0)),
+                    (70, 6, 6, Grading::Expansion(1.0 / 3.0)),
+                ),
+                48.7,
+                false,
+            ),
+            ("I", pair((48, 8, 2, u), (48, 8, 2, u)), 0.0, false),
+        ];
+        for (name, (m, rep), adr0109, flagged) in &cases {
+            let q = interface_non_orthogonality(m, &rep.interface_faces, lim).unwrap();
+            println!(
+                "P2 {name}: worst {:.3} deg (ADR 0109 {adr0109}), face {}, d_n {:.3e} d_t {:.3e}, factor {:.3}, exceeds {}, verified {}",
+                q.worst_deg, q.face, q.d_normal, q.d_tangential, q.factor, q.exceeds, q.verified
+            );
+            assert!((q.worst_deg - adr0109).abs() <= 0.5, "{name}");
+            assert_eq!(q.exceeds, *flagged, "{name}");
+            if !flagged {
+                assert!(q.verified, "{name}");
+            }
+            if ["M", "K2"].contains(name) {
+                let (mx, at) = quality_max(m, &rep.interface_faces);
+                println!("P1 {name}: quality max {mx:.12} vs {:.12}", q.worst_deg);
+                assert!((mx - q.worst_deg).abs() <= 1e-9 && at.contains(&q.face), "{name}");
+            }
+            if *name == "M" {
+                let expect = q.worst_deg.to_radians().tan() / lim.to_radians().tan();
+                assert!((q.factor - expect).abs() <= 1e-12 * expect, "{} {expect}", q.factor);
+                let msg = q.message();
+                println!("{msg}");
+                assert!(msg.contains("non-orthogonal") && msg.contains("factor"));
+            }
+        }
+        let (m, rep) = g2_pair(u, u);
+        let q = interface_non_orthogonality(&m, &rep.interface_faces, lim).unwrap();
+        let (mx, at) = quality_max(&m, &rep.interface_faces);
+        println!("P1 G2 (reported): worst {:.3} deg, quality max {mx:.12}", q.worst_deg);
+        assert!((mx - q.worst_deg).abs() <= 1e-9 && at.contains(&q.face));
+        assert!(interface_non_orthogonality(&m, &[m.n_internal_faces()], lim).is_err());
+        assert!(interface_non_orthogonality(&m, &[], lim).is_err());
+    }
+
+    #[test]
+    fn h1_sized_interface_layer_meets_the_45_degree_bound() {
+        use std::f64::consts::{FRAC_PI_3, PI};
+        let span = 0.25;
+        // (name, around, radial, axial, sector)
+        let cases = [
+            ("G2", [8, 6], 8, [1, 1], true),
+            ("K2", [96, 70], 6, [4, 6], false),
+            ("M", [48, 35], 8, [2, 3], false),
+        ];
+        for (name, around, nr, axial, sector) in cases {
+            let angle = if sector { FRAC_PI_3 } else { 2.0 * PI };
+            let h = cylindrical_interface_layer_size(0.75, angle, around, 0.4, axial, 45.0);
+            let ratio = crate::gen::expansion_for_end_cell(nr, span, h).unwrap();
+            let (ga, gb) = (Grading::Expansion(ratio), Grading::Expansion(1.0 / ratio));
+            let ra = crate::gen::axis_coords(nr, span, ga).unwrap();
+            let rb = crate::gen::axis_coords(nr, span, gb).unwrap();
+            let (ha, hb) = (ra[nr] - ra[nr - 1], rb[1] - rb[0]);
+            let (m, rep) = if sector {
+                g2_pair(ga, gb)
+            } else {
+                pair((around[0], nr, axial[0], ga), (around[1], nr, axial[1], gb))
+            };
+            let q = interface_non_orthogonality(&m, &rep.interface_faces, 45.0).unwrap();
+            println!(
+                "H1 {name}: h {h:.5e}, ratio {ratio:.4}, interface cells {:.2e} / {:.2e} relative, wall cell {:.3e}, worst {:.3} deg (45)",
+                (ha - h).abs() / h,
+                (hb - h).abs() / h,
+                ra[1] - ra[0],
+                q.worst_deg
+            );
+            assert!((ha - h).abs() <= 1e-12 * h && (hb - h).abs() <= 1e-12 * h, "{name}");
+            assert!(q.worst_deg <= 45.0, "{name}");
+        }
+        assert!(crate::gen::expansion_for_end_cell(4, 1.0, 1.0).is_err());
+        assert!(crate::gen::expansion_for_end_cell(1, 1.0, 1.5).is_err());
+        assert_eq!(crate::gen::expansion_for_end_cell(1, 1.0, 0.5).unwrap(), 1.0);
+        assert_eq!(
+            cylindrical_interface_layer_size(0.75, 1.0, [8, 8], 0.4, [2, 2], 45.0),
+            0.0
+        );
     }
 }

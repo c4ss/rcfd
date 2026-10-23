@@ -135,3 +135,44 @@ and 1.307e-2). Not defective; no limit changes. The registered H2 run follows.
 Construction plus 300 iterations (ignored test `smoke_w44b_t5`): 4824 cells, the pre-flight accepted the mesh; the run reached the
 residual targets at iteration 238 (continuity 9.5e-12), so it converges. T2 uses the ADR 0109 K2 set-up, which converged in 272 iterations
 there. Not defective; no limit changes.
+
+## Addendum: measured values (final code)
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| P1 pre-flight = quality-module angle (M, K2, G2) | identical to all printed digits (79.189800834164, 48.744525507573, 70.501078522816); worst face attains the max | 1e-9 deg | PASS |
+| P2 M / M_z / M_t / K2 / I | 79.190 / 75.705 / 72.683 / 48.745 / 0.000 deg | within 0.5 of 79.2 / 75.7 / 72.7 / 48.7 / 0.0 | PASS |
+| P2 flags | exceeds on M, M_z, M_t; not on K2, I; verified on K2, I (after amendment 1) | as registered | PASS (first run: verified false on K2, see amendment 1) |
+| P2 M factor / message | 1.906 = tan(79.19)/tan(70); message names `non-orthogonal` and `factor` | 1e-12 relative | PASS |
+| P2 G2 (reported) | uniform 60-degree sector 70.50 deg | none | above the 70-deg limit although its rcfd-fv runs converge |
+| P3 G0 planar hashes | unchanged | exact | PASS |
+| H1 G2 / K2 / M counts: interface cell = h | h = 0.11454 / 0.10165 / 0.20329; error <= 3.6e-16 relative | 1e-12 | PASS |
+| H1 worst angle of the sized joins | 36.60 / 37.08 / 37.69 deg | 45 deg | PASS |
+| H2 S1 sized sector, inertial | converged in 89 it; error 1.353e-2 V_i (controls 9.873e-3, 1.307e-2; bound 1.960e-2); net 5.8e-18 V_i A; seam 0 | as ADR 0109 | PASS |
+| H2 S2 sized sector, rotating frame | error 1.058e-2 V_i (bound 1.917e-2); net 1.8e-10 V_i A; seam 8.2e-10 V_i A_seam | as ADR 0109 | PASS |
+| H2 S2 converged | `res_u` 1.7e-16 but continuity floor 1.18e-9 after 4000 it | continuity < 1e-9 | MISS (`h2_s2_sized_sector_convergence_known_miss`) |
+| H2 sum of absolute interface fluxes (reported) | S1 2.02e-3, S2 1.82e-2 V_i A (uniform G2 in ADR 0109: 5.79e-3, 2.06e-2) | none | reported |
+| T1 tree mesh = library join | content hash 0xea943f5d2aa3382e both, 4824 cells | exact | PASS |
+| T2 tree run = library run | 272 / 272 iterations, max difference 0.0 (error 3.788e-3 V_i, as ADR 0109 K2) | 1e-12 | PASS |
+| T3 located errors | all 7 at the registered path with the registered words | substrings | PASS |
+| T4 case without the keys | hash 0x6eca7279950f43c3 = HEAD 2f1a3ce value; `baseline_hashes.rs` untouched (gate) | exact | PASS |
+| T5 isotropic option, full annulus K2 counts | converged in 238 it, error 6.239e-3 V_i | converged, 2e-2 | PASS |
+
+Interpretation, in plain words: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success, so the case
+tree now refuses the meshes that diverged there before spending a run on them, and tells the user by how much the radial spacing of
+the interface cells must grow. The 70-deg limit is conservative for the rcfd-fv sector solver (the uniform G2 sector at 70.5 deg
+converges with central convection), which the case tree does not offer. The near-isotropic sizing brings the interface angle to
+37 deg on all three count sets; on the sector it lowers the absolute interface flux of S1 from 5.79e-3 to 2.02e-3 V_i A (still above
+the ADR 0109 1e-3 limit, which keeps its known-miss tests), while S2's absolute flux barely changes (2.06e-2 to 1.82e-2). The sizing
+can force strong radial grading when the cells around are few: for the M counts the rotor block needs an expansion ratio of 1.26e5
+(wall cell 1.6e-6); nothing limits that ratio, it is reported in this ADR only.
+
+Deviations from the registered plan: (1) amendment 1 (the verified-angle constant, after the first P2 run); (2) the S2 convergence
+criterion was inside the H2 S2 test in the first run and failed on it only; it was moved unchanged into its own ignored known-miss
+test and the run repeated (deterministic, identical values); (3) the smoke of H2 reached the converged state within its 100 iterations,
+so its values were known before the registered run (recorded above).
+
+Unverified references: none; every reference value is an exact solution, polygon geometry or an ADR 0109 measurement.
+
+Status: F-126 stays partial (acceptance, a published compressor/rotor case, not attempted). Its note is extended. Defaults unchanged;
+existing keys unchanged; `baseline_hashes.rs` not touched.
