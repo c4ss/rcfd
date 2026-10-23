@@ -122,3 +122,10 @@ it true. The constant is defined above as "the largest angle with a converged so
 decimal, below the angle it stands for. Correction of the constant (not of a test limit): `CYLINDRICAL_INTERFACE_VERIFIED_DEG = 48.75`
 (K2's 48.745 rounded up at the second decimal). P2 is re-run unchanged; all other values stay as registered. The failed first run is
 recorded as a deviation.
+
+## Smoke of the H2 set-up (rule d), before the registered H2 run
+
+Construction plus 100 iterations (ignored test `smoke_w44b_sized_sector`): `h` = 0.11454, rotor `Expansion(69.63)`, stator
+`Expansion(1/69.63)` (wall-adjacent cells 1.6e-3). All six runs (8/6, 8/8, 6/6; inertial and rotating frame) reached `res_u` about 1e-10
+within 82-101 iterations, so this smoke already shows values close to the final ones (8/6 inertial error 1.353e-2 V_i, controls 9.87e-3
+and 1.307e-2). Not defective; no limit changes. The registered H2 run follows.
