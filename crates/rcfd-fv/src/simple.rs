@@ -498,6 +498,12 @@ pub struct SimpleSolver {
     /// Per-face offset subtracted from the flux that convects momentum (`phi_conv = phi - offset`, F-031 MRF zones:
     /// the frame flux `(Omega x r) . S`); the pressure equation and `phi` itself are unaffected.
     pub conv_flux_offset: Option<Vec<f64>>,
+    /// Count the lagged partner coefficient of every cyclic face in `h1` (so in `rAtU`) as an internal face counts its
+    /// neighbour (ADR 0113 F1): without it a cell on a cyclic seam has a different `rAU / rAtU` from the same cell of the
+    /// unsplit mesh, which moves the fixed-velocity wall pressure gradient `(rAU / rAtU) f_n` in the seam-wall corner cells when
+    /// a body force acts. Off by default (every earlier case bit-identical); the API switches it on for MRF zones with
+    /// `cyclic_seams`.
+    pub coupled_offdiag_in_h1: bool,
     /// Make the H operator consistent with the component-averaged diagonal `a_p`: in cells where the component
     /// matrices have different diagonals (a symmetry plane puts a Dirichlet term on the normal component only) the
     /// H of component `k` gets `(a_p - a_k) u_k`, as OpenFOAM's `fvMatrix::H` does. Without it the converged
@@ -637,6 +643,7 @@ impl SimpleSolver {
             wall_pressure_trapezoid: false,
             coupled_body_pair_mean: false,
             conv_flux_offset: None,
+            coupled_offdiag_in_h1: false,
             component_diag_correction: false,
             iteration: 0,
             wall_grad: Vec::new(),
@@ -840,6 +847,16 @@ impl SimpleSolver {
             for c in 0..n {
                 a_p[c] += m.a.diag[c];
                 h1[c] += off[c];
+            }
+            if self.coupled_offdiag_in_h1 {
+                // ADR 0113 F1: a cyclic face keeps its partner coefficient in the lagged source; count it in h1 as an
+                // internal face counts its neighbour (upwind convection part and the Laplacian partner coefficient)
+                for (i, &cpl) in g.coupled_face.iter().enumerate() {
+                    let f = n_int + i;
+                    if cpl && !g.empty[f] {
+                        h1[mesh.owner()[f]] += (-phi_conv[f]).max(0.0) - gamma_nu[f] * vec3::norm(sf[f]) * bc[i].c;
+                    }
+                }
             }
             // solve with the pressure gradient as source
             let mut sys = m.clone();

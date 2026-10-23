@@ -122,6 +122,10 @@ pub struct MrfZone {
     pub axis: Vec3,
     /// Angular velocity (rad/s, right-handed about `axis`).
     pub omega: f64,
+    /// Give the frame flux also to the faces of a cyclic pair whose two owner cells are in the zone (ADR 0113): a seam pair is
+    /// an internal face cut in two, with `F_g = -F_f` when the cyclic rotation is about this axis. `false` (default) leaves seams
+    /// without frame flux, so the revolution check refuses them.
+    pub cyclic_seams: bool,
 }
 
 impl MrfZone {
@@ -140,14 +144,43 @@ impl MrfZone {
                 offset[f] += vec3::dot(self.frame_velocity(fc[f]), sf[f]);
             }
         }
+        for (f, _) in self.seam_pairs(geom, zone) {
+            offset[f] += vec3::dot(self.frame_velocity(fc[f]), sf[f]);
+        }
+    }
+
+    /// With `cyclic_seams`: every cyclic boundary face whose owner and whose partner face's owner are in the zone, with that
+    /// partner face.
+    fn seam_pairs(&self, geom: &FvGeometry, zone: &[bool]) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        if !self.cyclic_seams {
+            return out;
+        }
+        let own = geom.mesh.owner();
+        for (p, map) in geom.mesh.patches().iter().zip(&geom.periodic_partner) {
+            let Some(map) = map else { continue };
+            for (f, &g) in p.faces().zip(map) {
+                if !geom.empty[f] && zone[own[f]] && zone[own[g]] {
+                    out.push((f, g));
+                }
+            }
+        }
+        out
     }
 
     /// Worst relative value of `|(Omega x r) . S| / (|Omega| |r_perp| |S|)` over the faces of the zone cells that do not
-    /// receive the frame flux (zone boundary faces, interface faces): zero for a surface of revolution about the axis.
-    pub fn worst_non_axisymmetry(&self, geom: &FvGeometry, zone: &[bool]) -> f64 {
+    /// receive the frame flux (zone boundary faces, interface faces): zero for a surface of revolution about the axis. Seam
+    /// faces that receive it (`cyclic_seams`) count with the pair mismatch `|F_f + F_g|` instead (zero when the cyclic rotation
+    /// is about this axis). Also returns the face that sets the worst value.
+    pub fn worst_non_axisymmetry(&self, geom: &FvGeometry, zone: &[bool]) -> (f64, Option<usize>) {
         let mesh = &geom.mesh;
         let (fc, sf) = (mesh.face_centres(), mesh.face_area_vectors());
-        let mut worst: f64 = 0.0;
+        let mut partner = vec![None; mesh.n_faces()];
+        for (f, g) in self.seam_pairs(geom, zone) {
+            partner[f] = Some(g);
+        }
+        let flux = |f: usize| vec3::dot(self.frame_velocity(fc[f]), sf[f]);
+        let (mut worst, mut at): (f64, Option<usize>) = (0.0, None);
         for f in 0..mesh.n_faces() {
             if geom.empty[f] {
                 continue;
@@ -169,10 +202,13 @@ impl MrfZone {
             let perp = vec3::sub(rel, vec3::scale(self.axis, vec3::dot(rel, self.axis)));
             let denom = self.omega.abs() * vec3::norm(perp) * vec3::norm(sf[f]);
             if denom > 0.0 {
-                worst = worst.max(vec3::dot(self.frame_velocity(fc[f]), sf[f]).abs() / denom);
+                let v = partner[f].map_or(flux(f), |g| flux(f) + flux(g)).abs() / denom;
+                if v > worst {
+                    (worst, at) = (v, Some(f));
+                }
             }
         }
-        worst
+        (worst, at)
     }
 
     /// Add the acceleration `-Omega x u` in the zone: cell values from `u`, face values `a_f . S_f` on every face that

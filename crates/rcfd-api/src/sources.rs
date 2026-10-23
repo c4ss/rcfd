@@ -146,6 +146,15 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 if !gf(case, &p("angular_velocity")).is_finite() {
                     bad(p("angular_velocity"), "must be finite".into());
                 }
+                if kind == "rotating_frame"
+                    && case.tree.get(&p("cyclic_seams")).ok().and_then(|v| v.as_bool()) == Some(true)
+                {
+                    bad(
+                        p("cyclic_seams"),
+                        "cyclic_seams applies to type = \"mrf\" only (a rotating_frame source has no frame flux)"
+                            .into(),
+                    );
+                }
             }
             "actuator_disk" => {
                 if !gf(case, &p("thrust")).is_finite() {
@@ -402,6 +411,8 @@ pub struct Sources {
     /// relative-velocity rotating frame and by accelerations, not by MRF zones (it forces the wall-normal pressure
     /// gradient of fixed-velocity faces, inlets included, to the body force, which distorts through-flow; ADR 0008).
     pub wall_pressure_trapezoid: bool,
+    /// An MRF zone has `cyclic_seams = true`: the SIMPLE kernel then counts the cyclic partner coefficients in `h1` (ADR 0113 F1).
+    pub cyclic_seams: bool,
 }
 
 impl Sources {
@@ -451,14 +462,24 @@ impl Sources {
                         origin: gv(case, &p("rotation_origin")).flatten().unwrap_or([0.0; 3]),
                         axis: vec3::unit(gv(case, &p("rotation_axis")).flatten().unwrap_or([0.0, 0.0, 1.0])),
                         omega: gf(case, &p("angular_velocity")),
+                        cyclic_seams: case
+                            .tree
+                            .get(&p("cyclic_seams"))
+                            .ok()
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false),
                     };
-                    let worst = m.worst_non_axisymmetry(geom, &zone);
+                    let (worst, at) = m.worst_non_axisymmetry(geom, &zone);
                     if worst > 1e-6 {
+                        let place = match at.and_then(|f| geom.mesh.patch_of_face(f)) {
+                            Some(pa) => format!("patch '{}'", pa.name),
+                            None => "the interface to other cells".to_string(),
+                        };
                         errs.push(Diagnostic {
                             path: p("zone"),
                             line: None,
                             message: format!(
-                                "the boundary of an MRF zone (walls, symmetry planes and the interface to other cells) must be a surface of revolution about the rotation axis; the frame flux (Omega x r).S is {worst:.2e} of |Omega||r||S| on a zone boundary face (limit 1e-6)"
+                                "the boundary of an MRF zone (walls, symmetry planes and the interface to other cells) must be a surface of revolution about the rotation axis; the frame flux (Omega x r).S is {worst:.2e} of |Omega||r||S| on a zone boundary face of {place} (limit 1e-6; cyclic seams need cyclic_seams = true)"
                             ),
                         });
                         continue;
@@ -587,8 +608,10 @@ impl Sources {
                 Kind::Rotating(_) | Kind::Acceleration(_) | Kind::Disk(_) | Kind::Lorentz(_)
             )
         });
+        let cyclic_seams = items.iter().any(|i| matches!(i.kind, Kind::Mrf(m) if m.cyclic_seams));
         Ok(Some(Sources {
             wall_pressure_trapezoid,
+            cyclic_seams,
             items,
             nu: gf(case, "physics.nu"),
             frame_flux,
