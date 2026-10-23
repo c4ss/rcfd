@@ -271,7 +271,7 @@ Changes, registered now:
 | K3c band effect (F1 on all sector arms) | 1.8e-11 U | 4.3e-4 | pass |
 | K3i inertial sector with F1 against the inertial annulus (reported) | 2.2e-12 U (4.6e-3 U without F1) | none | reported |
 | K4 exact state: max u - (0,0,U); max p | 1.1e-15 U; 0 | 1e-8 | pass |
-| K5 error (controls 6.76e-3, 1.107e-2); net interface flux; seam balance | 1.27e-2 V_i (0.76 of the bound); 5e-18; 8.1e-12 | 2e-2 and 1.5x; 1e-8; 1e-8 | pass |
+| K5 error (controls 6.76e-3, 1.107e-2); net interface flux; seam balance | 1.27e-2 V_i (0.76 of the bound); 2.0e-17 (5e-18 on the scratch tree at 2f1a3ce); 8.1e-12 | 2e-2 and 1.5x; 1e-8; 1e-8 | pass |
 | K5 sum of absolute interface fluxes (reported) | 5.8e-3 V_i A | none (ADR 0109 known miss) | reported |
 | K6 fan empty passage (library level, 300 iterations) | 7.4e-4 U, worst cell on hub/shroud, not on a seam; seam pair 5.4e-14 | 1e-8 | MISS (ignored known miss, as predicted) |
 | A1 key absent / false / true on the M2 annulus, 20 iterations | bit-identical | bit-identical | pass |
@@ -281,7 +281,10 @@ Changes, registered now:
 
 Verdict: G (corrected guards), K1, K2, K3, K3c, K4, K5 pass with F1, and D1, D4 discriminate, so by the decision rule F1 and the opt-in
 are kept. What this delivers: an MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus
-to 1e-8 or better in every check) at library level and through the case key. What it does not deliver: the fan. The `axial_fan_sector`
+to 1e-8 or better in every check). The positive path is verified at library level only. Through the case tree the key is checked,
+its refusals are located and the default is bit-identical, but no run sends `cyclic_seams = true` through `Sources` and the one-line
+`sim.rs` wiring of F1 into the solver on a mesh with cyclic faces, because no case-tree mesh reaches it (below). The default-path
+refusal message also changed: it now names the patch of the worst face and hints at `cyclic_seams` (diagnostic text only). What it does not deliver: the fan. The `axial_fan_sector`
 hub and shroud faces are not surfaces of revolution at the face centres (1.8e-2 and 4.5e-3 of `Omega r |S|`), so the case tree still
 refuses an MRF zone on the fan passage, now at the hub; at library level the same passage leaves the exact state by 7.4e-4 U, located
 at hub/shroud cells. Curing that is the wall-frame-flux question of F-RP (ADRs 0082, 0085), or a mesher change that makes the hub and
@@ -303,3 +306,15 @@ amendment-2 guard set-ups defective (amendment 3); A3's test first failed becaus
 Unverified references: none; every reference value is an exact solution or an earlier ADR's measured value (ADR 0008 M3 for L_DIFF).
 
 Status: F-126 stays partial (acceptance, a published compressor case, not attempted); its note is extended.
+
+## Final gate
+
+Fresh `git archive` of HEAD 5998ca2 (which includes the wave-44B commits made meanwhile): `cargo fmt --check` clean, `cargo clippy
+--workspace --all-targets -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 2006 passed, 1 failed, 627 ignored. The
+failure was `rules_w19c::e2_no_error_level_false_positives_and_warnings_are_only_sv103`: it extracts case texts from test sources, and the
+fan mesh section of `crates/rcfd-api/tests/mrf_cyclic_seams_w44c.rs`, written as a standalone constant, parsed as a case whose sheared
+C-grid raises SV102 (skewness above 4). The text is now inline in the `format!` template (which E2 skips as a template); no check or
+value changed. Re-run in the gate directory with that file: `rules_w19c` 5 passed, 1 ignored; `mrf_cyclic_seams_w44c` (rcfd-api) 3
+passed, 1 ignored. Corrected totals: 2007 passed, 0 failed, 627 ignored. Every ADR 0113 value re-measured on the gated tree equals the
+scratch-tree value above except the K5 net interface flux (2.0e-17 against 5e-18, both at round-off; 44B's cylindrical-interface commit
+is in the gated tree). `crates/rcfd-api/tests/baseline_hashes.rs` untouched and passing.
