@@ -1476,10 +1476,13 @@ CSF surface tension; well-balanced `p_rgh` gravity. Everything is inert and sile
 | `multiphase.model` | "vof" | only the algebraic volume of fluid |
 | `multiphase.density_1/2` | -1 (unset) | phase densities [kg/m^3], required > 0 |
 | `multiphase.viscosity_1/2` | -1 (unset) | dynamic viscosities [Pa s], required > 0 |
-| `multiphase.surface_tension` | 0 | sigma [N/m]; CSF, 90 degree contact angle at walls |
+| `multiphase.surface_tension` | 0 | sigma [N/m]; continuum surface force with the curvature of `multiphase.curvature`, 90 degree contact angle at walls |
 | `multiphase.compression` | 1 | compression coefficient `c_alpha` (0 = none) |
 | `multiphase.alpha_courant` | 0.25 | largest Courant number of an alpha sub-step |
-| `multiphase.curvature_smoothing` | 2 | smoothing passes of alpha before the curvature |
+| `multiphase.curvature_smoothing` | 2 | smoothing passes of alpha before the CSF curvature (`curvature = "csf"` and the CSF fallback) |
+| `multiphase.curvature` | "height_function" | interface curvature: `height_function` = height functions on a uniform axis-aligned Cartesian mesh with the CSF estimator on any other mesh, without surface tension and near under-resolved interfaces (ADR 0106, 0108); `csf` = the CSF estimator everywhere (before ADR 0114) |
+| `multiphase.viscous_stress` | "full" | `full` = `div(mu (grad u + grad u^T))`, the transposed part explicit, non-zero at the viscosity jump (ADR 0103); `laplacian` = `div(mu grad u)` only (before ADR 0114) |
+| `multiphase.component_diagonal` | "corrected" | `corrected` = `HbyA` consistent with the component diagonals (ADR 0103); `averaged` = mean diagonal only (before ADR 0114) |
 | `multiphase.initial.shape` | "unset" | `box` (`box_min`, `box_max`), `sphere` (`centre`, `radius`), `half_space` (`normal`, `point`: the side `n . (x - point) <= 0`); required |
 | `multiphase.initial.inside` | "phase_1" | which phase fills the shape; the other fills the rest |
 
@@ -1490,11 +1493,16 @@ a `pressure = "fixed"` boundary value sets), `field("alpha")` and `field("rho")`
 `solution.vtu`. The time step is the fixed `solver.dt`; a time step above the capillary limit is flagged in the library
 (`capillary_dt`), not in the tree.
 
+Defaults since wave 44D (ADR 0114, user decision 2026-10-24): `curvature = "height_function"`, `viscous_stress = "full"` and
+`component_diagonal = "corrected"`, the library defaults of `VofSettings::new`. Results of a case without these keys therefore differ
+from runs before ADR 0114; set `curvature = "csf"`, `viscous_stress = "laplacian"` and `component_diagonal = "averaged"` to get the
+earlier solver. The global `solver.viscous_stress` and `solver.component_diagonal` act on the single-phase kernels only.
+
 Located errors (path in the tree) when `multiphase.enabled = true`: `solver.algorithm` not `piso`/`pimple` (steady, coupled and
 compressible are refused); `fluid.density` not `constant`; `turbulence.model`, `energy.enabled`, `rheology.model`, `properties`,
 `scalars`, `sources`, `components`, `radiation.model`, `statistics.enabled`, `dynamic_mesh.enabled`, `particles.enabled`, `chemistry`,
 `electric.enabled`, `phase_change.enabled`, `solids`, `zone_sources`; `solver.time_advance = fractional_step`; `solver.max_courant > 0`;
-`solver.time_scheme` not `euler`; `solver.viscous_stress = full`; `solver.bulk_velocity`; `solver.frozen_flow`; `physics.body_force`;
+`solver.time_scheme` not `euler`; `solver.viscous_stress = full` (use `multiphase.viscous_stress`); `solver.bulk_velocity`; `solver.frozen_flow`; `physics.body_force`;
 `mesh.periodic_x/y`; non-default `physics.rho` / `physics.nu`; a boundary velocity other than `fixed` (no-slip: value 0) or
 `zero_gradient` (so no `symmetry`, `partial_slip`, `marangoni`, `freestream`, `moving_wall`, `shear`), a pressure other than `fixed` or
 `zero_gradient`, a catalogue boundary kind; unset required keys. Reports that assume one density (force, moment, y_plus, heat_flow,

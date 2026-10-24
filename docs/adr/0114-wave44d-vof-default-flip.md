@@ -144,3 +144,25 @@ check can be met; if the gate showed otherwise the set-up is defective (amendmen
 docs/case-schema.md (multiphase table and the located-error list), the `rcfd_fv::vof` module documentation and the `VofSettings`
 field documentation, the schema doc strings of `multiphase.surface_tension` and `multiphase.curvature_smoothing`, and the VOF row of
 docs/component-diagonal-default.md.
+
+## Addendum: measured values (after the runs)
+
+All registered runs once, release, target `<target dir>`, working tree = 8487671 plus this wave's code.
+
+| Check | Measured | Limit | Result |
+|-------|----------|-------|--------|
+| (1) scan: non-ignored VOF tests under the new defaults | all pass; same pass / ignore counts as the old defaults | no asserted failure | met, nothing re-pinned |
+| (3) 40 x 80, defaults vs ADR 0108 X (`x0_..._x_40`, not ignored) | e_y 0.002053058745789871, e_v 0.0015273890756644926: difference 0 | 1e-9 | met |
+| (3) series 40 / 80 / 160 (`x0_..._x_series`, ignored) | y_c(3) 1.0792 / 1.0800 / 1.0795, V_c,max 0.2402 / 0.2409 / 0.2416, peak t 0.9375 / 0.9225 / 0.9175; differences to the 43A errors 0 on every grid (bit for bit); drift 5.9e-15 / 5.1e-14 / 1.6e-13, bound 9.3e-14 / 8.0e-14 / 1.7e-13; 160 x 320 run 1139 s | 1e-9 | met |
+| (3) `d_dam_break_front` with the new defaults | D1 1.504, D2 0.161 / 0.110, D3 dV 4.9e-15 (scan; the gate re-runs it) | ADR 0049 D1-D3 | met |
+| (4) F-055 clause, defaults, exact fractions, 160 x 320 | y_c(3) 1.079454, V_c,max 0.241615, drift 1.55e-13, bound 1.69e-13; peak t 0.9175 (reported: outside [0.9213, 0.9313]) | y_c in [1.0799, 1.0817], V in [0.2417, 0.2421], drift 1e-12, bound 1e-9 | **miss** on y_c(3) (0.0004 below) and V_c,max (0.0001 below); volume met |
+| (5) tree vs library, dam break with tension, 20 steps (`f5_...`, not ignored) | defaults 2.44e-12, opt-outs 3.30e-12; defaults vs opt-outs 2.25e-2 | 1e-9, 1e-9, > 1e-9 | met |
+| (5) opt-out keys while disabled (three new `f1` rows) | located errors at `multiphase.component_diagonal`, `.viscous_stress`, `.curvature` | located | met |
+
+The (4) test was registered ignored with the `_known_miss` suffix and stays so; nothing was tuned. F-055 stays partial (bubble clause
+missed, dam-break position clause still lacks data); its acceptance text is unchanged, its note is extended. The 160 x 320 numbers of
+(3) and (4) are the same computation and agree to every digit.
+
+Deviations: the first flipped scan ran the rcfd-api tree tests against a stale rcfd-fv build (the target directory was shared between
+the two scratch archives and cargo kept the dependency of rcfd-api fresh); they were re-run in a separate target directory before this
+ADR was written, and the table in (1) uses that re-run. Otherwise none.

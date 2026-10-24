@@ -282,6 +282,14 @@ fn f1_located_errors() {
         off("compression = 0.5"),
         "multiphase.compression",
     ));
+    // ADR 0114: the opt-out keys are inert while disabled
+    for (key, path) in [
+        ("component_diagonal = \"averaged\"", "multiphase.component_diagonal"),
+        ("viscous_stress = \"laplacian\"", "multiphase.viscous_stress"),
+        ("curvature = \"csf\"", "multiphase.curvature"),
+    ] {
+        rows.push(("option key while disabled", off(key), path));
+    }
     for (what, text, path) in rows {
         let e = errors(&text);
         let hit = e.iter().any(|d| d.path == path && !d.message.is_empty());
@@ -504,4 +512,74 @@ velocity_value = [1.0, 0.0, 0.0]
         assert!(x.iter().zip(&y).all(|(p, q)| p.to_bits() == q.to_bits()), "{n}");
     }
     assert!(a.field("alpha").is_err(), "no alpha field without multiphase");
+}
+
+/// ADR 0114 (5): the dam break with surface tension, 20 steps: the tree without the option keys equals the library defaults, the
+/// tree with the three opt-out keys equals the library with the four flags off (<= 1e-9, the F2 limit), and the two differ.
+#[test]
+fn f5_vof_option_keys_reach_the_library() {
+    let lib = |off: bool| {
+        let mesh = Arc::new(box_2d(120, 40, 12.0 * A, 4.0 * A, false, false).unwrap());
+        let geom = Arc::new(FvGeometry::new(mesh).unwrap());
+        let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
+        for p in ["xmin", "xmax", "ymin", "ymax"] {
+            u.set_bc(&geom, p, Box::new(FixedValue::vector([0.0; 3]))).unwrap();
+        }
+        let p_rgh = ScalarField::uniform("p_rgh", &geom, 0.0);
+        let mut alpha = ScalarField::uniform("alpha", &geom, 0.0);
+        alpha.values = indicator_fraction(&geom, 10, |x| x[0] <= A && x[1] <= 2.0 * A);
+        let mut st = VofSettings::new([1000.0, 1.0], [1e-3, 1.8e-5]);
+        st.gravity = [0.0, -G, 0.0];
+        st.n_correctors = 3;
+        st.sigma = 0.07;
+        if off {
+            st.component_diagonal = false;
+            st.full_viscous_stress = false;
+            st.height_function = false;
+            st.height_function_csf_fallback = false;
+        }
+        let mut s = VofSolver::new(geom, u, p_rgh, alpha, st).unwrap();
+        for _ in 0..20 {
+            s.step(1.5e-3).unwrap();
+        }
+        (s.transport.alpha.values.clone(), s.u.values.clone())
+    };
+    let tree = |keys: &str| {
+        let t = dam_text().replace(
+            "viscosity_2 = 1.8e-5
+",
+            &format!(
+                "viscosity_2 = 1.8e-5
+surface_tension = 0.07
+{keys}
+"
+            ),
+        );
+        let mut s = sim(&t);
+        for _ in 0..20 {
+            s.step();
+        }
+        (s.field("alpha").unwrap(), s.velocity().values.clone())
+    };
+    let du = |a: &[[f64; 3]], b: &[[f64; 3]]| {
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| (x[0] - y[0]).abs().max((x[1] - y[1]).abs()))
+            .fold(0.0, f64::max)
+    };
+    let (ld, lo) = (lib(false), lib(true));
+    let td = tree("");
+    let to = tree(
+        "component_diagonal = \"averaged\"
+viscous_stress = \"laplacian\"
+curvature = \"csf\"",
+    );
+    let (e_d, e_o) = (
+        max_diff(&td.0, &ld.0).max(du(&td.1, &ld.1)),
+        max_diff(&to.0, &lo.0).max(du(&to.1, &lo.1)),
+    );
+    let gap = max_diff(&ld.0, &lo.0).max(du(&ld.1, &lo.1));
+    println!("F5 tree vs library: defaults {e_d:.3e}, opt-outs {e_o:.3e} (limit 1e-9); defaults vs opt-outs {gap:.3e} (must be > 1e-9)");
+    assert!(e_d <= 1e-9 && e_o <= 1e-9, "tree differs from the library: {e_d} {e_o}");
+    assert!(gap > 1e-9, "the option keys have no effect: {gap}");
 }
