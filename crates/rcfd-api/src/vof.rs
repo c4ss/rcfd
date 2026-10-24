@@ -61,10 +61,13 @@ pub fn schema() -> Schema {
         .field("density_2", Schema::float(UNSET).doc("Density of phase 2 (alpha = 0) [kg/m^3]; must be set (> 0), -1 = unset"))
         .field("viscosity_1", Schema::float(UNSET).doc("Dynamic viscosity of phase 1 [Pa s]; must be set (> 0), -1 = unset"))
         .field("viscosity_2", Schema::float(UNSET).doc("Dynamic viscosity of phase 2 [Pa s]; must be set (> 0), -1 = unset"))
-        .field("surface_tension", Schema::float(0.0).at_least(0.0).doc("Surface tension coefficient [N/m] (continuum surface force, 90 degree contact angle at walls); 0 = none"))
+        .field("surface_tension", Schema::float(0.0).at_least(0.0).doc("Surface tension coefficient [N/m] (continuum surface force with the curvature of multiphase.curvature, 90 degree contact angle at walls); 0 = none"))
         .field("compression", Schema::float(1.0).range(0.0, 4.0).doc("Interface compression coefficient c_alpha (0 = none, 1 = standard)"))
         .field("alpha_courant", Schema::float(0.25).range(1e-3, 0.5).doc("Largest Courant number of a phase-fraction sub-step (the phase fraction is sub-cycled inside each flow step)"))
-        .field("curvature_smoothing", Schema::int(2).range(0.0, 10.0).doc("Smoothing passes of the phase fraction before the curvature is taken"))
+        .field("curvature_smoothing", Schema::int(2).range(0.0, 10.0).doc("Smoothing passes of the phase fraction before the CSF curvature is taken (curvature = csf, and the CSF fallback of height_function)"))
+        .field("curvature", Schema::enumeration("height_function", &["height_function", "csf"]).doc("Interface curvature of the surface tension: height_function = height functions on a uniform axis-aligned Cartesian mesh, the CSF estimator on any other mesh and near under-resolved interfaces (default, ADR 0106 / 0108 / 0114); csf = the CSF estimator everywhere (the behaviour before ADR 0114)"))
+        .field("viscous_stress", Schema::enumeration("full", &["full", "laplacian"]).doc("Viscous term of the two-phase momentum equation: full = div(mu (grad u + grad u^T)), the transposed part explicit, non-zero at the viscosity jump (default, ADR 0103 / 0114); laplacian = div(mu grad u) only (the behaviour before ADR 0114)"))
+        .field("component_diagonal", Schema::enumeration("corrected", &["corrected", "averaged"]).doc("Momentum-diagonal treatment of the two-phase pressure corrector: corrected = HbyA consistent with the component diagonals, so a component-specific condition does not act as extra wall friction (default, ADR 0103 / 0114); averaged = the mean diagonal only (the behaviour before ADR 0114)"))
         .field("initial", initial)
         .field("reference_point", Schema::list(Schema::float(0.0)).doc("Point [x, y, z] where p_rgh equals p (origin of the gravity potential g.(x - x_ref)); empty = the origin. For a tank with an open top set a point on the open boundary so that still water is in equilibrium with p_rgh = 0 there"))
         .field("mass_transfer", mass_transfer_schema())
@@ -159,6 +162,15 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ("multiphase.alpha_courant", 0.25),
         ] {
             if (get_f(case, p) - def).abs() > 1e-300 {
+                out.push(d(p, "only used with multiphase.enabled = true"));
+            }
+        }
+        for (p, def) in [
+            ("multiphase.curvature", "height_function"),
+            ("multiphase.viscous_stress", "full"),
+            ("multiphase.component_diagonal", "corrected"),
+        ] {
+            if get_s(case, p) != def {
                 out.push(d(p, "only used with multiphase.enabled = true"));
             }
         }
@@ -338,7 +350,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     unsupported(
         get_s(case, "solver.viscous_stress") == "full",
         "solver.viscous_stress",
-        "the full viscous stress",
+        "solver.viscous_stress = full (the two-phase viscous term is set by multiphase.viscous_stress, full by default)",
     );
     unsupported(
         get_f(case, "solver.bulk_velocity") != 0.0,
@@ -802,6 +814,11 @@ impl VofState {
         s.c_alpha = get_f(case, "multiphase.compression");
         s.alpha_courant = get_f(case, "multiphase.alpha_courant");
         s.n_smooth = get_i(case, "multiphase.curvature_smoothing").max(0) as usize;
+        // ADR 0114: the library defaults are the option-on values; the keys only opt out
+        s.component_diagonal = get_s(case, "multiphase.component_diagonal") == "corrected";
+        s.full_viscous_stress = get_s(case, "multiphase.viscous_stress") == "full";
+        s.height_function = get_s(case, "multiphase.curvature") == "height_function";
+        s.height_function_csf_fallback = s.height_function;
         s.convection = crate::sim::solver_conv_scheme(case);
         s.n_outer = if get_s(case, "solver.algorithm") == "pimple" {
             get_i(case, "solver.n_outer").max(1) as usize

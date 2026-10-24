@@ -10,6 +10,14 @@
 //!   forces that enter the pressure equation with the same face gradient and geometry coefficient as the pressure term,
 //!   and the cell velocity is reconstructed from the very same face quantities, so a still stratified pool has a velocity
 //!   of the order of the linear-solver tolerance.
+//!
+//! Defaults (ADR 0114, user decision 2026-10-24): [`VofSettings::new`] turns on the component-diagonal `HbyA`
+//! (`component_diagonal`, ADR 0103: a symmetry plane is free slip), the transposed viscous stress at the viscosity jump
+//! (`full_viscous_stress`, ADR 0103) and the height-function curvature (`height_function`, ADR 0106) with the CSF fallback
+//! (`height_function_csf_fallback`, ADR 0108): the height function is used on a uniform axis-aligned Cartesian grid with
+//! `sigma > 0`; on any other mesh and without surface tension the curvature is the CSF estimator of Brackbill et al. after
+//! `n_smooth` smoothing passes, as before. Set the four fields to `false` for the solver before ADR 0114. With these defaults
+//! the Hysing et al. (2009) case-1 bubble on 160 x 320 gives y_c(3) 1.0795 and V_c,max 0.2416 (ADR 0108).
 
 use crate::bc::{FixedValue, Profile};
 use crate::cavitation::Cavitation;
@@ -512,20 +520,23 @@ pub struct VofSettings {
     /// Wave inlet and relaxation zones (`None` = none).
     pub waves: Option<WaveSettings>,
     /// Add the transposed part `div(mu (grad u)^T)` of the viscous stress as an explicit source from the previous iterate
-    /// (ADR 0103); it is non-zero at a viscosity jump. Default `false`: Laplacian form only, bit-identical to earlier versions.
+    /// (ADR 0103); it is non-zero at a viscosity jump. Default `true` since ADR 0114; `false` = Laplacian form only (the
+    /// behaviour before ADR 0114).
     pub full_viscous_stress: bool,
     /// Cell mixture viscosity harmonic in alpha, `1/mu = alpha/mu_1 + (1 - alpha)/mu_2` (ADR 0103 diagnostic). Default `false`:
     /// linear in alpha.
     pub harmonic_viscosity: bool,
     /// Make `HbyA` consistent with the component-averaged diagonal, `HbyA_k = (H_k + (a_p - a_kk) u_k) / a_p` (ADR 0010 in the
     /// single-phase kernels, ADR 0103 here): with the averaged diagonal a symmetry plane acts partly like a no-slip wall. Default
-    /// `false`: averaged, bit-identical to earlier versions.
+    /// `true` since ADR 0114; `false` = averaged (the behaviour before ADR 0114).
     pub component_diagonal: bool,
     /// Height-function curvature on uniform Cartesian grids instead of the CSF estimator (ADR 0106); must be set before
-    /// [`VofSolver::new`], which refuses other meshes. Default `false`: CSF, bit-identical to earlier versions.
+    /// [`VofSolver::new`]. Default `true` since ADR 0114 (with `height_function_csf_fallback`); `false` = CSF everywhere (the
+    /// behaviour before ADR 0114).
     pub height_function: bool,
     /// With `height_function`: keep the CSF estimator instead of refusing when the mesh is not a uniform Cartesian grid, and
-    /// skip the lattice when `sigma <= 0` (ADR 0108); must be set before [`VofSolver::new`]. Default `false`: strict refusal.
+    /// skip the lattice when `sigma <= 0` (ADR 0108); must be set before [`VofSolver::new`]. Default `true` since ADR 0114;
+    /// `false` with `height_function` = strict mode, other meshes are refused.
     pub height_function_csf_fallback: bool,
 }
 
@@ -565,11 +576,11 @@ impl VofSettings {
             mixture: None,
             cavitation: None,
             waves: None,
-            full_viscous_stress: false,
+            full_viscous_stress: true,
             harmonic_viscosity: false,
-            component_diagonal: false,
-            height_function: false,
-            height_function_csf_fallback: false,
+            component_diagonal: true,
+            height_function: true,
+            height_function_csf_fallback: true,
         }
     }
 }

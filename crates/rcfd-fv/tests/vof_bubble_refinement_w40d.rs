@@ -63,8 +63,17 @@ fn exact_fraction(geom: &FvGeometry, n: usize) -> Vec<f64> {
     inside.iter().map(|v| (1.0 - v / (h * h)).clamp(0.0, 1.0)).collect()
 }
 
-/// The `vof_bubble.rs` set-up on `n` x `2n` cells.
+/// The `vof_bubble.rs` set-up on `n` x `2n` cells with the three option flags assigned.
 fn bubble(n: usize, full: bool, cd: bool, hf: bool, exact: bool) -> VofSolver {
+    bubble_with(n, exact, &|s| {
+        s.full_viscous_stress = full; // ADR 0103 (b1f only)
+        s.component_diagonal = cd; // ADR 0103 (b1c only)
+        s.height_function = hf; // ADR 0106 (b1h only)
+    })
+}
+
+/// The `vof_bubble.rs` set-up on `n` x `2n` cells; `edit` changes the settings (nothing: the library defaults, ADR 0114).
+fn bubble_with(n: usize, exact: bool, edit: &dyn Fn(&mut VofSettings)) -> VofSolver {
     let mesh = Arc::new(box_2d(n, 2 * n, 1.0, 2.0, false, false).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
@@ -85,9 +94,7 @@ fn bubble(n: usize, full: bool, cd: bool, hf: bool, exact: bool) -> VofSolver {
     s.gravity = [0.0, -0.98, 0.0];
     s.sigma = 24.5;
     s.n_correctors = 3;
-    s.full_viscous_stress = full; // ADR 0103 (b1f only)
-    s.component_diagonal = cd; // ADR 0103 (b1c only)
-    s.height_function = hf; // ADR 0106 (b1h only)
+    edit(&mut s);
     s.amg_pressure = true; // CG would take about 2.1 h on 160 x 320 (ADR 0100 smoke); the tree uses AMG above 2000 cells
     VofSolver::new(geom, u, p_rgh, alpha, s).unwrap()
 }
@@ -95,7 +102,11 @@ fn bubble(n: usize, full: bool, cd: bool, hf: bool, exact: bool) -> VofSolver {
 /// Runs `n` x `2n` to `t_end` with `dt = 0.1 / n` (2.5e-3 on 40 x 80, as `vof_bubble.rs`):
 /// (y_c(t_end), V_c,max, time of V_c,max, phase-volume drift, bound violation).
 fn run(n: usize, t_end: f64, full: bool, cd: bool, hf: bool, exact: bool) -> (f64, f64, f64, f64, f64) {
-    let mut s = bubble(n, full, cd, hf, exact);
+    run_solver(n, t_end, bubble(n, full, cd, hf, exact))
+}
+
+/// [`run`] of a constructed solver.
+fn run_solver(n: usize, t_end: f64, mut s: VofSolver) -> (f64, f64, f64, f64, f64) {
     let dt = 0.1 / n as f64;
     assert!(dt <= s.capillary_dt(), "capillary limit {}", s.capillary_dt());
     let vol = s.geom.mesh.cell_volumes().to_vec();
@@ -285,4 +296,68 @@ fn b1(full: bool, cd: bool, hf: bool, exact: bool) {
             x.4
         );
     }
+}
+
+/// ADR 0114 (3): the full-precision y_c(3) and V_c,max errors of the ADR 0108 X run (40, 80, 160), from its log.
+const X43A_EY: [f64; 3] = [0.002053058745789871, 0.0012840785484355965, 0.0018457966779672486];
+const X43A_EV: [f64; 3] = [0.0015273890756644926, 0.0007790117810689556, 8.49155348201236e-5];
+
+/// ADR 0114 (3): the X set-up with no option flag assigned (the library defaults) on grid `i` of 40, 80, 160; asserts the
+/// ADR 0108 X errors to 1e-9.
+fn default_matches_x43a(i: usize) -> (f64, f64, f64, f64, f64) {
+    let n = [40, 80, 160][i];
+    let r = run_solver(n, 3.0, bubble_with(n, true, &|_| {}));
+    let (ey, ev) = ((r.0 - YC_REF).abs(), (r.1 - V_REF).abs());
+    println!(
+        "X0 {n}: e_y {ey:?} (43A {:?}, diff {:.2e}), e_v {ev:?} (43A {:?}, diff {:.2e}) (limit 1e-9)",
+        X43A_EY[i],
+        (ey - X43A_EY[i]).abs(),
+        X43A_EV[i],
+        (ev - X43A_EV[i]).abs()
+    );
+    assert!(
+        (ey - X43A_EY[i]).abs() <= 1e-9,
+        "X0 {n} y_c(3) error {ey} vs {}",
+        X43A_EY[i]
+    );
+    assert!(
+        (ev - X43A_EV[i]).abs() <= 1e-9,
+        "X0 {n} V_c,max error {ev} vs {}",
+        X43A_EV[i]
+    );
+    r
+}
+
+/// ADR 0114 (3), not ignored: the 40 x 80 point of the default-settings series equals ADR 0108 X to 1e-9.
+#[test]
+fn x0_default_settings_reproduce_adr0108_x_40() {
+    default_matches_x43a(0);
+}
+
+/// ADR 0114 (3): the default-settings series on 40, 80, 160 equals ADR 0108 X to 1e-9 (B1-B4 printed, not asserted: the
+/// ADR 0108 known miss stands).
+#[test]
+#[ignore = "ADR 0114 (3), heavy (about 25 min), run once"]
+fn x0_default_settings_reproduce_adr0108_x_series() {
+    let r: Vec<_> = (0..3).map(default_matches_x43a).collect();
+    for (n, x) in [40, 80, 160].iter().zip(&r) {
+        println!("X0 {n}: drift {:.2e} (B4 1e-12), bound {:.2e} (B4 1e-9)", x.3, x.4);
+    }
+}
+
+/// ADR 0114 (4): the F-055 bubble clause (user text 2026-10-24, Hysing et al. 2009 Table XII code-to-code range) with the
+/// default settings and exact initial fractions on 160 x 320. Expected to miss (ADR 0108 X: y_c(3) 1.0795, V_c,max 0.2416).
+#[test]
+#[ignore = "KNOWN MISS (ADR 0114 (4)): y_c(3) and V_c,max below the published range; heavy, about 20 min"]
+fn f055_hysing_bubble_finest_grid_in_published_range_known_miss() {
+    let (yc, vmax, tmax, dv, wb) = run_solver(160, 3.0, bubble_with(160, true, &|_| {}));
+    println!(
+        "F055 160 x 320: y_c(3) {yc:.6} in [1.0799, 1.0817]: {}; V_c,max {vmax:.6} in [0.2417, 0.2421]: {}; peak t {tmax:.4} in [0.9213, 0.9313] (reported): {}; drift {dv:.2e} (1e-12), bound {wb:.2e} (1e-9)",
+        (1.0799..=1.0817).contains(&yc),
+        (0.2417..=0.2421).contains(&vmax),
+        (0.9213..=0.9313).contains(&tmax)
+    );
+    assert!(dv <= 1e-12 && wb <= 1e-9, "phase volume {dv:.2e}, bound {wb:.2e}");
+    assert!((1.0799..=1.0817).contains(&yc), "y_c(3) {yc}");
+    assert!((0.2417..=0.2421).contains(&vmax), "V_c,max {vmax}");
 }

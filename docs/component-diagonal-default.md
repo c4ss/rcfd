@@ -19,7 +19,8 @@ acts like a partial no-slip wall. `corrected` adds `(a_P - a_k) u_k` to `H_k` (A
 | transient PISO/PIMPLE constant density (`piso`, `pimple`) | the key reaches this kernel since ADR 0074 W1 (before: silently ignored although documented); the split is applied in every cell, without the bit-equality guard of the steady kernel | averaged |
 | variable density (`vd.rs`) | `VdSettings.component_diag_correction` | averaged |
 | MRF zones | always corrected, whatever the key | corrected |
-| VOF, coupled (block) solver, compressible density-based | not affected by the key (VOF also averages and has no correction; not examined further) | n/a |
+| VOF (`multiphase.enabled`) | not affected by this key; its own key `multiphase.component_diagonal` (library `VofSettings::component_diagonal`, ADR 0103) is `corrected` by default since ADR 0114 | corrected |
+| coupled (block) solver, compressible density-based | not affected by the key (not examined further) | n/a |
 
 ## Why it matters: exact solutions (ADR 0074 part A)
 
