@@ -166,3 +166,14 @@ missed, dam-break position clause still lacks data); its acceptance text is unch
 Deviations: the first flipped scan ran the rcfd-api tree tests against a stale rcfd-fv build (the target directory was shared between
 the two scratch archives and cargo kept the dependency of rcfd-api fresh); they were re-run in a separate target directory before this
 ADR was written, and the table in (1) uses that re-run. Otherwise none.
+
+Correction to (1) (written after the gate, documentation only): the list of ignored tests that inherit the flipped defaults also
+contains rcfd-api mixture_cavitation_tree `w2_mixture_column_tree_equals_library_bitwise_known_miss` and
+`w3_cavitation_tree_equals_library_bitwise_known_miss` (tree and library both take the defaults; not run, not edited).
+
+### Final gate
+
+Fresh `git archive` of 1bd4c3f: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+`cargo test --workspace --release --no-fail-fast` 2010 passed / 0 failed / 633 ignored (baseline 2008 / 631: this wave adds two
+non-ignored tests, `x0_default_settings_reproduce_adr0108_x_40` and `f5_vof_option_keys_reach_the_library`, and two ignored ones).
+`d_dam_break_front` and the baseline-hash tests pass (no hash re-recorded). This addendum text was committed after the gate.
