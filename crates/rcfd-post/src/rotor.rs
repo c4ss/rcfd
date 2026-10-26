@@ -113,6 +113,12 @@ impl Rotor {
     /// `|p_m| = (m B Omega/(2 pi c r)) |J_{mB}(m B M_t sin theta)| |T cos theta + Q c/(Omega R_t^2)|`.
     /// The rms value is this divided by `sqrt 2`.
     pub fn harmonic_amplitude(&self, m: usize, r: f64, theta: f64) -> Result<f64, RotorError> {
+        Ok(self.harmonic_pressure(m, r, theta)?.abs())
+    }
+
+    /// Signed form of [`Rotor::harmonic_amplitude`], `(m B Omega/(2 pi c r)) J_{mB}(...) (T cos theta + Q c/(Omega R_t^2))`:
+    /// the contributions of rings at different radii that share one blade azimuth add with these signs (ADR 0119).
+    pub fn harmonic_pressure(&self, m: usize, r: f64, theta: f64) -> Result<f64, RotorError> {
         self.check()?;
         if m == 0 {
             return Err(RotorError("m: harmonic number must be >= 1".into()));
@@ -127,7 +133,7 @@ impl Rotor {
         let z = n as f64 * self.tip_mach() * theta.sin().abs();
         let j = bessel_j(n, z)?;
         let load = self.thrust * theta.cos() + self.torque * self.c0 / (self.omega * self.r_tip * self.r_tip);
-        Ok(n as f64 * self.omega / (2.0 * std::f64::consts::PI * self.c0 * r) * j.abs() * load.abs())
+        Ok(n as f64 * self.omega / (2.0 * std::f64::consts::PI * self.c0 * r) * j * load)
     }
 
     /// Frequency of harmonic `m`, Hz.
