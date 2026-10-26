@@ -179,3 +179,34 @@ Unit tests: the civil date of day 0, 2000-02-29 and 2026-10-26; the run id forma
   100 ms.
 * Windows detached start needs `powershell.exe`, which is present on every supported Windows; without it `ensure_runner` reports the
   spawn error.
+
+## Addendum 2026-10-26: measured values (registered run, release, commit 8b83bb1)
+
+`cargo test --release -p rcfd-runner` with `RUST_TEST_THREADS=3`, on the gate host, while two other agents' release workspace test
+suites were running: 12 passed, 0 failed, 19.6 s for the process tests. All checks were met on the first registered run. There are no
+known misses, no amendments, and no deviation from the registered set-ups.
+
+| id | limit | measured |
+| --- | --- | --- |
+| S1 | at most 2 by status and by OS; saturation 2 | max 2 by status (111 samples), 2 by OS; negative control (`max_runs` 3): 3 by status, 3 by OS |
+| S2 | [2, 0, 1, 3]; control [0, 1, 2, 3] | [2, 0, 1, 3]; [0, 1, 2, 3] |
+| S3 | at most 2.0 s, located | 0.077 s; "solver process 38580 ended without a finish event (exit code 1); last step 489 ... (log: ...\log.txt)"; the short run finished |
+| S4a | adopted, one launch each, steps 1..n, 3 folders | met (solver alive after the runner kill, `adopted` event, all 3 finished) |
+| S4b | at most 2.5 s, located | 0.418 s; "... (found not running by the liveness probe); last step 891 ..." |
+| S4c | at most 2.0 s; solver alive; queue intact | 0.102 s; met; both finished after the restart, one launch each |
+| S5 | EOF within 10 s; runner outlives the client | met; the lock probe read false before the start and after the shutdown |
+| S6 | paused within 2.0 s; 0 steps held; bitwise | 0.307 s at step 2504 of 8000; 0 steps in 1.0 s; `solution.vtu` byte-equal; 508 steps in the 300 ms before the pause (control); the 60-step run differs |
+| S7 | at most 5.0 s, consistent folders | 0.122 s for all three; folder check clean; both solvers dead; the queued run never launched; the checker found the planted temp file (1 problem) and the truncated status |
+| S8 | one runner, loser exit 3 | 1 alive, exit 3; second project alive |
+| S9 | located refusals; pair max 1 | as registered: "memory budget: the run needs 200 MB (declared as settings.mem_mb in run.json) ... mem_budget_mb = 100 MB (the config path)"; estimated 221 MB from 40 000 cells; "CPU budget: ... threads = 4 ... cpu_threads = 2"; "pre-launch check failed (exit 3): ... --set physics.nu: invalid value at 'physics.nu': -1 outside [Some(0.0), None]"; pair max 1; the in-budget run finished |
+| S10 | JSON case runs; invalid case located | 30 steps finished, hash in `run.json`; "pre-launch check failed (exit 3): ...case.snapshot: line 2: mesh.generator: expected one of [...]" |
+
+Determinism: S6 shows a paused-and-resumed run byte-equal to the uninterrupted one, so the solver is deterministic for this case, as
+the run-control tests showed for thread counts and continue-from.
+
+Not done here, for the lead:
+* the switch to `rcfd-project` (section "Switching to rcfd-project");
+* an MCP tool front end (wave 48, L7);
+* Unix runs of the Unix code paths;
+* runtime memory measurement and enforcement;
+* pause by checkpoint for runs that should give their memory back.
