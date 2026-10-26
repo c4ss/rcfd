@@ -1634,3 +1634,208 @@ fn w44a_hooks_at_defaults_are_bit_identical() {
     };
     assert_eq!(bits(&a), bits(&b));
 }
+
+// ==================================================================================================================================
+// ADR 0117 (wave 45C) block, appended: `solver.cyclic_partner_in_h1` (the ADR 0113 F1) on the `rotating_frame` FAN-01 path. Nothing
+// above this line is changed by ADR 0117. `family()` and `start_arm()` pass `solver_extra = ""`, and a switch closure would be undone
+// by `step()` (it sets the flag every step), so this block calls `arm()` with the key in the case text.
+// ==================================================================================================================================
+
+const W45C_KEY: &str = "cyclic_partner_in_h1 = true";
+
+/// The solver flag after two steps of `text` (the value `step()` gave it).
+fn w45c_flag_after_two_steps(text: &str) -> bool {
+    let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
+    sim.step();
+    sim.step();
+    sim.simple_solver().unwrap().coupled_offdiag_in_h1
+}
+
+/// ADR 0117 rule (d) smoke: the flag inside `step()` (true with the key, false without, E3) and 20 + 20 iterations of E3 and B3 with
+/// the key (finite, no guard trip).
+#[test]
+#[ignore = "ADR 0117 smoke (about 1 min in release)"]
+fn w45c_smoke_key_on_the_fan_path() {
+    let with = w45c_flag_after_two_steps(&case_toml(F3, false, W45C_KEY, false));
+    let without = w45c_flag_after_two_steps(&case_toml(F3, false, "", false));
+    println!("W45C smoke: flag after step 2 with the key {with}, without {without}");
+    arm(
+        "W45C smoke key E3",
+        F3,
+        false,
+        W45C_KEY,
+        false,
+        None,
+        20,
+        &none,
+        20,
+        false,
+    );
+    arm(
+        "W45C smoke key B3",
+        F3,
+        true,
+        W45C_KEY,
+        false,
+        None,
+        20,
+        &none,
+        20,
+        false,
+    );
+}
+
+/// ADR 0117 D-a: on B3 the key absent and `false` give bit-identical u, p, phi after 30 iterations; on E3 the flag is false without the
+/// key and true with it after step 2 (the key reaches the solver through `step()` on a mesh with cyclic faces).
+#[test]
+fn w45c_da_key_false_is_bit_identical_and_the_key_reaches_step() {
+    let bits = |extra: &str| -> Vec<u64> {
+        let case = Case::parse_toml(&case_toml(F3, true, extra, false)).unwrap();
+        let mut s = Simulation::new(&case).unwrap();
+        for _ in 0..30 {
+            s.step();
+        }
+        let v = s.velocity().values.iter().flat_map(|u| u.iter().map(|x| x.to_bits()));
+        let p = s.pressure().values.iter().map(|x| x.to_bits());
+        let f = s.flux().iter().map(|x| x.to_bits());
+        v.chain(p).chain(f).collect()
+    };
+    assert_eq!(bits(""), bits("cyclic_partner_in_h1 = false"));
+    assert!(!w45c_flag_after_two_steps(&case_toml(F3, false, "", false)));
+    assert!(w45c_flag_after_two_steps(&case_toml(F3, false, W45C_KEY, false)));
+}
+
+/// Observed order by the ADR 0086 fixed-point form (copied from `fan01_gci_w37c.rs`; Celik et al. 2008, recalled, UNVERIFIED);
+/// f1 fine, f3 coarse. Returns (sign of eps32 / eps21, p).
+fn w45c_observed_order(f1: f64, f2: f64, f3: f64, r21: f64, r32: f64) -> (f64, f64) {
+    let (e21, e32) = (f2 - f1, f3 - f2);
+    let s = (e32 / e21).signum();
+    let mut p = 1.0f64;
+    for _ in 0..500 {
+        let q = ((r21.powf(p) - s) / (r32.powf(p) - s)).ln();
+        let pn = ((e32 / e21).abs().ln() + q).abs() / r21.ln();
+        if !pn.is_finite() {
+            return (s, f64::NAN);
+        }
+        if (pn - p).abs() < 1e-12 {
+            return (s, pn);
+        }
+        p = pn;
+    }
+    (s, f64::NAN)
+}
+
+/// ADR 0117 F family: E3, E2, E1 (600 iterations from the start) with the key absent and with the key; the harness check (default L
+/// equals the ADR 0110 L1 values to the printed digits), F-a (registered limit), F-b (classification), and the record (rho_med against
+/// the default arm, top-10 cells of |u_key - u_def|).
+#[test]
+#[ignore = "ADR 0117 F family (about 12 min in release)"]
+fn w45c_f_family_key_against_default() {
+    let l1_ref = [-0.009518, 0.059612, 0.105977];
+    let mut fail: Vec<String> = Vec::new();
+    let mut rows = Vec::new();
+    for (i, (name, c)) in [("E3", F3), ("E2", F2), ("E1", F1)].into_iter().enumerate() {
+        let (d, sd) = arm(
+            &format!("W45C default {name}"),
+            c,
+            false,
+            "",
+            false,
+            None,
+            0,
+            &none,
+            600,
+            false,
+        );
+        let (k, sk) = arm(
+            &format!("W45C key {name}"),
+            c,
+            false,
+            W45C_KEY,
+            false,
+            None,
+            0,
+            &none,
+            600,
+            false,
+        );
+        let (ang, tags) = cell_attributes(&sk);
+        let du = speed_change(&sk.velocity().values, &sd.velocity().values);
+        let rho_med = (k.arm_res.0 / d.arm_res.0).max(k.arm_res.1 / d.arm_res.1);
+        println!(
+            "W45C {name}: default L {:.6} N m E_s {:.5} Pa (last-100 {:.2e}); key L {:.6} N m E_s {:.5} Pa (last-100 {:.2e}); rho_med {rho_med:.3e}; |u_key - u_def| {}",
+            d.f_end.0, d.f_end.1, d.last100.0, k.f_end.0, k.f_end.1, k.last100.0, location(&sk, &du, &ang, &tags, 10)
+        );
+        if !((d.f_end.0 - l1_ref[i]).abs() <= 5e-7) {
+            fail.push(format!(
+                "harness: default {name} L {:.6} is not the ADR 0110 L1 value {}",
+                d.f_end.0, l1_ref[i]
+            ));
+        }
+        rows.push((d, k));
+    }
+    // F-a: a member whose default arm is not evaluable is dropped; default evaluable and key arm not evaluable is a miss
+    let band_l = |l: f64| (0.005 * l.abs()).max(1e-4);
+    let band_e = |e: f64| (0.005 * e).max(0.01);
+    let mut evaluated = 0;
+    for ((d, k), name) in rows.iter().zip(["E3", "E2", "E1"]) {
+        if !(d.last100.0 <= 1e-3) {
+            println!("W45C F-a {name}: default arm NOT EVALUABLE, dropped");
+            continue;
+        }
+        evaluated += 1;
+        let ok_l = k.f_end.0.abs() <= d.f_end.0.abs() + band_l(d.f_end.0);
+        let ok_e = k.f_end.1 <= d.f_end.1 + band_e(d.f_end.1);
+        let ok_k = k.last100.0 <= 1e-3;
+        println!("W45C F-a {name}: key arm evaluable {ok_k}, |L| not worse {ok_l}, E_s not worse {ok_e}");
+        if !(ok_k && ok_l && ok_e) {
+            fail.push(format!("F-a {name}"));
+        }
+    }
+    if evaluated == 0 {
+        fail.push("F-a: no evaluable member".into());
+    }
+    // F-b (classification, not a limit)
+    let settled = rows.iter().all(|(d, k)| d.last100.0 <= 1e-3 && k.last100.0 <= 1e-3);
+    let effect = rows
+        .iter()
+        .any(|(d, k)| (k.f_end.0 - d.f_end.0).abs() > band_l(d.f_end.0));
+    let l: Vec<f64> = rows.iter().map(|(_, k)| k.f_end.0.abs()).collect();
+    let (s, p) = w45c_observed_order(l[2], l[1], l[0], 1.4073, 1.4017);
+    let growth = settled && l[0] > l[1] && l[1] > l[2] && p >= 0.5;
+    let fb = if !settled {
+        "NOT EVALUABLE"
+    } else if growth {
+        "EXPLAINS THE GROWTH"
+    } else if effect {
+        "CONTRIBUTES"
+    } else {
+        "NO EFFECT"
+    };
+    println!(
+        "W45C F-b: key |L| E3 {:.6} E2 {:.6} E1 {:.6} N m, observed order {p:.3} (sign {s}); {fb}; F-a and harness {}",
+        l[0],
+        l[1],
+        l[2],
+        if fail.is_empty() { "pass" } else { "MISS" }
+    );
+    assert!(fail.is_empty(), "{fail:?}");
+}
+
+/// ADR 0117 B3 (reported, no limit): the ADR 0110 set-up arm, the reference (1000 iterations, window 500-1000) against the key from the
+/// start (3000, window 2500-3000), with the ADR 0110 verdict wording, torque and Delta p_ts (default stalled 1.849 N m / 46.6 Pa).
+#[test]
+#[ignore = "ADR 0117 B3 (about 4 min in release)"]
+fn w45c_b3_key_from_the_start() {
+    let (r, _) = arm("W45C reference B3", F3, true, "", false, None, 1000, &none, 0, false);
+    let (mut a, _) = arm("W45C key B3", F3, true, W45C_KEY, false, None, 3000, &none, 0, false);
+    a.ref_res = r.arm_res;
+    a.du_ref = r.du_end;
+    let (v, x) = verdict(&a);
+    println!(
+        "W45C B3 VERDICT {v} (largest median ratio {x:.3e}); torque {:.4} N m, Delta p_ts {:.2} Pa (reference {:.4} / {:.2})",
+        a.f_end.0, a.f_end.1, r.f_end.0, r.f_end.1
+    );
+}
+// ================================================================================================================ end of ADR 0117 block
