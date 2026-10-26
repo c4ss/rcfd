@@ -213,3 +213,60 @@ First principles: thin-airfoil theory, cascade momentum, Blasius laminar frictio
 dissipation, dimensional similarity. UNVERIFIED recollections: Howell's annulus and secondary drag (0.020, 0.018, via Dixon, "Fluid
 Mechanics and Thermodynamics of Turbomachinery"), the 2-D slot contraction `pi / (pi + 2)`, the normal flat-plate drag 2.0, `cl_max`
 1.1 (ADR 0078). Data: FAN-01 (ADR 0075, CC BY 4.0).
+
+## Addendum: measured values (one registered run each; debug build, `target-w46b`, commit 618c8c6)
+
+| Check | Measured | Limit | Negative control (must be >= 1e-11 unless stated) | Result |
+|---|---|---|---|---|
+| E1 Euler identity | 1.6e-16 | 1e-12 | NC-E1 5.7e-2 | pass |
+| E2 free vortex (dc, torque, power, work) | 2.7e-15, 9.4e-16, 8.8e-16, 9.5e-16 | 1e-12 | NC-E2 2.8e-1 | pass |
+| Z1 registered, flows {0.7, 1.0, 1.2} | 9.6e-2 (19 stalled strips at 0.7 Q_D) | 1e-12 | NC-Z1 5.6e-2 | known miss (set-up defect of amendment 1, confirmed) |
+| Z1' flows {0.85, 1.0, 1.2}, no stalled strip | dp_t 7.2e-16, eta_t 2.2e-16, 45 Pa 4.7e-16 | 1e-12 | NC-Z1 5.6e-2 | pass |
+| Z2 zero lift | dc 3.1e-61, dp_t 3.1e-122, P 0 | 1e-12 | NC-Z2 4.2e-2 | pass; default model dp_t -4.76 Pa, P 0.350 W (signs as required) |
+| L1 ledger, 0.5 / 0.75 / 1.0 / 1.2 Q_D (39, 5, 0, 0 stalled strips) | 4.5e-16 | 1e-12 | (a) tip 3.7e-3, (b) drag 1.8e-1, (c) drag sign 4.3e-2, (d) swirl 5.5e-2 | pass |
+| L2 tip loss (formula, doubling) | 0, 0 | 1e-12 | NC-L2 1.7e-1 | pass; tip loss 0.0542 W; eta_t 0.7550 / 0.7282 / 0.7014 for gap 0 / 1 / 2 mm |
+| L3 drag terms | 0 | 1e-12 | NC-L3 6.3e-1 | pass; drag loss 0.496 W |
+| F1 fan laws (equal Re) | 3.5e-15 | 1e-12 | NC-F1 3.3e-1 | pass |
+| R1 analytic pair | 0 (q* 4.540166450604437e-2), crossings 1 | 1e-12 | NC-R1 1.4e-1 | pass |
+| R1b ROM residual, q - Q_D | 8.9e-16 Pa, 0 | 1e-10 Pa, 1e-9 | | pass |
+| R2 no intersection | located message with range | | NC-R2 Ok | pass |
+| R3 / R3b stall | "rising fan characteristic ... stall region" at 0.0156; "stalled: 5 of 40 strips (r = 0.0303, ...)" at 0.03375 | | NC-R3 Ok | pass |
+| M1 monotone, interior eta_t maximum | decreasing; margin 0.041 | margin >= 1e-3 | NC-M1 margin 1.2e-15, no interior maximum | pass |
+| G1 Gutin closed form (m = 1, 2; 60 deg) | 1.3e-16 | 1e-12 | NC-G1 6.7e-2 | pass |
+| D1 `harmonic_amplitude` bit-identical | assert_eq on bits, 9 cases | exact | | pass |
+| D2 evaluator | DOE centre ok with 8 finite metrics (q = Q_D); Nelder-Mead 10 evaluations to the bound -3 deg (eta_s 0.211); `bogus` key and the stall condition fail with located messages | functional | | pass |
+
+Reported (no limit):
+* **F1, Reynolds effect.** With nu held fixed at 4500 rpm (Re 1.5 times higher), the largest deviation from the fan laws is 3.9 % (dp_t +3.9 % and
+  P -1.9 % at 1.2 Q_D; eta_t 0.4275 against 0.4038). The fan laws are exact for this model only at equal Reynolds number.
+* **Tones (D1).** Set-up C at Q_D, 1 m: BPF amplitude 1.25e-9 Pa at 90 deg (-87 dB re 20 uPa, rms), 4.8e-10 Pa at 60 deg (-96 dB); the
+  same loads at a compact 0.8 r_tip give 1.06e-9 Pa. The steady-loading tone of a tip-Mach-0.05 rotor is inaudible; this is a lower
+  bound, as stated above, not a prediction.
+* **V1, FAN-01** (default model, all choices fixed before the run; installation effects in the measurement):
+
+| Q m^3/s | ROM dp_s Pa | measured dp_ts Pa | ROM P W | measured P W | ROM stalled strips |
+|---|---|---|---|---|---|
+| 0.199 | 39.9 | 252.8 | 185.2 | 346.9 | 40 |
+| 0.606 | 72.9 | 204.6 | 289.3 | 324.6 | 40 |
+| 0.994 | 60.4 | 134.7 | 297.8 | 286.6 | 40 |
+| 1.186 | 45.2 | 137.9 | 287.4 | 314.3 | 40 |
+| 1.403 (design) | 45.7 | 126.5 | 308.6 | 333.3 | 33 |
+| 1.593 | 94.4 | 103.2 | 392.8 | 326.1 | 11 |
+| 1.700 | 93.5 | 85.9 | 414.3 | 313.5 | 0 |
+| 1.804 | 67.9 | 63.9 | 395.5 | 292.9 | 0 |
+| 1.907 | 40.9 | 42.8 | 372.6 | 272.9 | 0 |
+| 2.079 | -6.9 | 6.8 | 324.9 | 235.3 | 0 |
+
+  Over all 20 points: rms dp_s difference 104 Pa (the measured design-point value is 126 Pa), rms power difference 24 %. At the design
+  point the ROM gives dp_s 45.7 Pa (-64 %), P 308.6 W (-7.4 %), eta_s 0.21 against 0.53. The ROM stalls at the design point: its stall
+  onset (largest measured flow with a stalled strip) is 1.59 m^3/s against about 1.1 measured. Above 1.7 m^3/s, where no ROM strip is
+  stalled, dp_s is within 2 to 14 Pa of the measurement but the power is 32 to 38 % high. Chord Re 5.0e4 to 1.45e5.
+  Reading, not a finding: FAN-01's hub runs at high incidence and solidity (1.14), where an isolated thin plate stalls and a cascade
+  would turn the flow. The ROM has no cascade correction (D-M3), so it calls the hub stalled from 1.59 m^3/s down. The distance is the
+  size of an uncorrected strip model on a fan it was not built for. It is not a calibration, and nothing was changed after the run.
+  It does show that this tier, as registered, cannot bound a high-solidity hub, and that the stall model sets the shape of the curve
+  below its onset.
+
+Deviations from the registered plan: Z1 (amendment 1, written before any registered run; the known miss confirmed the defect: 19
+stalled strips at 0.7 Q_D, error 9.6e-2). D2's Nelder-Mead ran to the parameter bound in 10 evaluations; the check is functional, and
+this is reported, not judged. No limit was changed.
