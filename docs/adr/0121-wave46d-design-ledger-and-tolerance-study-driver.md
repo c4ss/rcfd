@@ -284,3 +284,34 @@ H4 is done when L1-L6 and M1 pass; F1 is partial in any case (library only, anal
 * Standardised regression coefficients: A. Saltelli et al., Global Sensitivity Analysis: The Primer (2008), chapter 1 (UNVERIFIED
   chapter).
 * Cumulants of `a Z + g Z^2` and the variance of the sample variance: first principles (chi-square cumulants `k 2^(r-1) (r-1)!`).
+
+## Addendum: measured values (one registered run each; debug profile, `target-w46d`, at 2cf1ae9)
+
+All registered checks passed; no known miss, no amendment.
+
+| Check | Measured | Limit |
+|---|---|---|
+| L1 | bit-exact round trip of 6 entries (incl. -0.0, 1e-300, NaN metric); 6 located refusals; foreign line skipped | as registered |
+| L2 | 1768 cuts: count, content and the appended entry right at every cut, at most 1 skipped line; naive append lost the new entry at 1764 cuts | as registered; control > 0 |
+| L3 | 200 entries seen before the kill, 203 contiguous entries after, 0 skipped, no torn tail this run; append afterwards at index 203 | as registered |
+| L4 | 2000 entries, 0 skipped, every thread complete and ordered (two handles); interleaved halves: 0 entries, 2 skipped | as registered |
+| L5 | Pareto = the 11 curve points; best-so-far = brute force; mixed evaluator and mixed unit refused | as registered |
+| L6 | re-run bit-identical (difference 0); 1e-6 perturbation fails at rtol 1e-9; version 2 refused; unit flagged | as registered |
+| U1 z (mean, var) | MC linear (-1.617, -0.216), MC quadratic (-1.344, -0.796), LHS linear (+0.006, +0.652), LHS quadratic (+0.008, +0.926) | \|z\| <= 4 |
+| U1 control | wrong models 12.9-25.5 SE on both statistics | \|z\| > 4 |
+| U2 | 12 of 12 exact quantiles inside the 0.999 intervals, coverage 0.99904-0.99907; wrong model: 8 of 8 tail quantiles outside | as registered |
+| U3 | order statistic 0.9275, Clopper-Pearson 0.9420; controls: rank +-1 0.2445, Wald 0.6210 | >= 0.8732; controls < 0.8732 |
+| U4 | ranking (x1, x2, x3) both samplers; max SRC error 0.00224 (MC), 0.00249 (LHS); R^2 error 0.00029, 0.00003; raw ranking (x3, x2, x1) | <= 0.02, <= 0.01 |
+| U5 MC | n 13 500, SE 0.00992, \|mean error\| 0.0298, converged | n in [12 730, 14 570], SE <= 0.01, <= 0.04 |
+| U5 LHS | 29 replicates (5800 samples), SE 0.00495, \|mean\| 0.0058, converged | SE <= 0.005, <= 0.025 |
+| U5 control | capped at 2000: SE 0.0261, not converged | as registered |
+| U6 | MC 1 180 548 bytes, LHS 1 164 689 bytes: identical for 1 and 3 workers; other seed differs | as registered |
+| U7 | norm_inv errors 3.8e-15, 1.1e-15, 8.4e-15, 0; distributions z within 0.73; beta(2, 4) control z_mean -38.4 | 1e-12; \|z\| <= 4; > 4 |
+| U8 | p 0.1986 in [0.1804, 0.2177] (contains 0.202); ok fraction 0.9022 (0.98 SE from 0.898); 489 failed entries with reasons; ignoring failures 0.1008 (outside) | as registered |
+| M1 | all registered assertions hold | as registered |
+
+Run time of the 47 `design::` library tests: 37.5 s (debug). The U5 MC mean error is 3.0 SE: inside the 4-SE limit, reported because it
+is the largest z of the run.
+
+What these numbers are not: they verify the driver and the ledger on analytic functions. They say nothing about the spread of a real
+fan's flow, power, noise or vibration: no fan perturbation model (46A) or fan evaluator (46B) is attached, and F1 stays partial.
