@@ -2526,6 +2526,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcfd-project"
+version = "0.1.0"
+dependencies = [
+ "rcfd-core",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "rcfd-reactor"
 version = "0.1.0"
 dependencies = [
