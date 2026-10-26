@@ -504,6 +504,10 @@ pub struct SimpleSolver {
     /// a body force acts. Off by default (every earlier case bit-identical); the API switches it on for MRF zones with
     /// `cyclic_seams`.
     pub coupled_offdiag_in_h1: bool,
+    /// Test-only route of ADR 0117 (its case key was removed under rule b): the API ORs this into `coupled_offdiag_in_h1` in every
+    /// step, so a test can keep F1 on through `Simulation::step()`. Not read by this crate; default false.
+    #[doc(hidden)]
+    pub cyclic_partner_in_h1_test_only: bool,
     /// Make the H operator consistent with the component-averaged diagonal `a_p`: in cells where the component
     /// matrices have different diagonals (a symmetry plane puts a Dirichlet term on the normal component only) the
     /// H of component `k` gets `(a_p - a_k) u_k`, as OpenFOAM's `fvMatrix::H` does. Without it the converged
@@ -651,6 +655,7 @@ impl SimpleSolver {
             coupled_body_pair_mean: false,
             conv_flux_offset: None,
             coupled_offdiag_in_h1: false,
+            cyclic_partner_in_h1_test_only: false,
             component_diag_correction: false,
             iteration: 0,
             wall_grad: Vec::new(),

@@ -881,10 +881,6 @@ pub fn case_schema() -> Schema {
             Schema::boolean(false).doc("Steady simplec: add the SIMPLEC flux compensation (rAtU - rAU) snGrad(p_old) |S| on the boundary faces whose flux the pressure sets (fixed-pressure and lagged-pressure conditions such as vent, and periodic seams) as internal faces get it (ADR 0102). Without it a converged boundary flux carries rAtU where internal faces carry rAU (default simplec differs from simple with the same alpha_u by about 5e-3 on a duct with a pressure outlet), and a change of a boundary pressure kicks the cell velocity next to the boundary by (rAtU - rAU) grad(p_old); with a velocity inlet and a vent outlet (K > 0) the vent law feeds that kick back and the run diverges unless 0.5 (rAtU - rAU) (A/V) K |u| < 1. With true the fixed point equals that of simple with the same alpha_u. Default false keeps every earlier result bit-identical; no effect with simple; any non-steady algorithm is an error"),
         )
         .field(
-            "cyclic_partner_in_h1",
-            Schema::boolean(false).doc("Steady simple/simplec: count the lagged partner coefficient of every cyclic (coupled) face in h1, so in the SIMPLEC rAtU, as an internal face counts its neighbour (ADR 0113 F1, ADR 0117). Without it a cell on a cyclic seam has a different rAtU from the same cell of the unsplit mesh. An MRF zone with cyclic_seams = true switches it on whatever this key says; false keeps every earlier result bit-identical; no effect without cyclic faces; any non-steady algorithm is an error"),
-        )
-        .field(
             "max_iterations",
             Schema::int(2000).range(1.0, 1e7).doc("Iteration cap for steady runs"),
         )
