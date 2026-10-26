@@ -631,6 +631,17 @@ Remaining limit (ADR 0102): with the key, plain SIMPLEC with a strong vent (K = 
 that grows from the first iteration (the X7 duct does not settle in 3000 iterations, the F-200 C3 channel is non-finite at iteration 2767);
 use pseudo-time there. `false` keeps every earlier result bit for bit.
 
+### Cyclic partner coefficient in `rAtU` (ADR 0113 F1, ADR 0117) and `solver.cyclic_partner_in_h1`
+
+`solver.cyclic_partner_in_h1` (bool, default `false`; steady `simple` / `simplec` only, a located error with any other algorithm):
+the momentum matrix keeps the partner coefficient of a cyclic (coupled) face in the lagged source, so by default it is missing from
+`h1` and a cell on a cyclic face gets a different SIMPLEC `rAtU` from the same cell of the unsplit mesh. With the key, the upwind
+convection part and the Laplacian partner coefficient of every coupled face are counted in `h1` as an internal face counts its
+neighbour. It acts on every coupled face, translational cyclic pairs included, and does nothing on a mesh without them. An MRF zone
+with `cyclic_seams = true` switches the same correction on whatever this key says (`false` does not turn it off there). `false` keeps
+every earlier result bit for bit. Measured effect: ADR 0117 (the library sector against the full annulus with a `rotating_frame`
+source, and the FAN-01 empty and bladed passages).
+
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
 Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset
