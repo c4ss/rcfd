@@ -247,6 +247,17 @@ other checks sit at round-off.
   to housing axes and decomposed with `acoustics::fft`. No adapter is built here, because there is no converged fan transient to
   feed it.
 
+## Final gate
+
+On a fresh `git archive` of 0c8385e (branch `w46c` rebased onto main 98a4903; the measured runs above were on f235b7d, which is
+86d3ce2 after the rebase), in `<scratch dir>`:
+* `cargo fmt --check`: clean;
+* `cargo clippy --workspace --all-targets -- -D warnings`: clean;
+* `cargo test --workspace --release --no-fail-fast`: **2040 passed / 0 failed / 651 ignored**. That is the wave-45 baseline
+  2028 / 649 plus this ADR's 12 tests and 2 ignored (`smoke_w46c`, the J1 defective control). `docs_site` passes.
+
+The commit that records these totals changes this ADR only.
+
 ## References
 
 * Rigid-rotor and Jeffcott equations, gyroscopic moment `Ip Omega theta'`, hysteretic damping as `eta k / omega`: derived from
