@@ -291,3 +291,17 @@ A review found two deliverables without a check. Both are identity or plumbing c
 
 Measured (one run each, debug build): **S1** worst 3.0e-16 against 1e-12; NC swirl omitted 3.3e-2, axial omitted 2.4e-1: pass.
 **P1** fields map exactly; `n_blades = 1` gives "n_blades: needs at least 2 blades ...": pass.
+
+## Final gate
+
+Written at main 8bd609a and rebased three times: onto 98a4903, then 651820b (ADR 0120), then f307f59 (one docs file, `docs/ui-restart-plan.md`).
+The commit ids in the addendum are pre-rebase: 618c8c6 (implementation) is now 28f0a2c.
+* Gate 1, a fresh `git archive` of a3217b2 (on 98a4903), `<scratch dir>`: `cargo test --workspace --release --no-fail-fast`
+  2045 passed, 0 failed, 652 ignored (fmt and clippy clean).
+* Gate 2, a fresh `git archive` of db7e521 (amendment 2 included, on 651820b): fmt clean; `cargo clippy --workspace --all-targets
+  -- -D warnings` clean; `cargo test --workspace --release --no-fail-fast` **2059 passed, 0 failed, 654 ignored**. The baseline main
+  651820b had 2040 / 0 / 651 (ADR 0120); this wave adds 19 passing tests (2 unit tests in `fan_rom.rs`, 16 in `fan_rom_w46b.rs`, 1 in
+  `fan_rom_design_w46b.rs`) and 3 ignored (`smoke_w46b`, `v1_fan01_reported`, `z1_zero_loss_known_miss`). The load-sensitive
+  sandbox test did not fail.
+* After the last rebase onto f307f59 (docs only): `cargo fmt --check` clean, clippy on `rcfd-post` and `rcfd-api` clean, and the two
+  test files pass (16 / 0 / 3 and 1 / 0 / 0). The only commit after that is this section (docs only).
