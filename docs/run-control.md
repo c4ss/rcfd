@@ -11,7 +11,7 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--check-only]
          [--status-json] [--status-file file] [--status-every n]
          [--continue-from checkpoint] [--checkpoint file] [--checkpoint-every n]
-         [--stop-file file] [--max-elapsed seconds]
+         [--stop-file file] [--pause-file file] [--case-dir dir] [--max-elapsed seconds]
          [--threads n] [--precision double] [--journal file]
          [--set path=json]... [--print-settings] [--restart-from file] [--source-case case] [--method m] [--no-chain]
 rcfd restart <case> --from file [--mesh mesh] [--source-case case] [--method m]   (plus every run flag)
@@ -29,6 +29,8 @@ rcfd check <case> [--json] [--set path=json]...
 | `--checkpoint f` | where to write the checkpoint (default `<out>/restart.rcfd`); written when the run is interrupted, hits the time limit or the step cap, and at the end |
 | `--checkpoint-every n` | also write it every n steps |
 | `--stop-file f` | the run stops cleanly before the next step when this file exists |
+| `--pause-file f` | hold between two steps while `f` exists, writing `f.ack` (the iteration count) while held; the stop file ends the hold. Paused time counts towards `--max-elapsed` and `wall_s`. Plain runs only (not chains). Used by the run service (ADR 0123) |
+| `--case-dir d` | read the case from its text whatever the file name (JSON when the text starts with `{`, TOML otherwise) and resolve its relative paths against `d`; the run service runs `runs/<id>/case.snapshot` this way |
 | `--max-elapsed s` | stop cleanly after s wall-clock seconds |
 | `--threads n` | number of worker threads (`RAYON_NUM_THREADS`); results are bit-identical for any thread count (measured, see below) |
 | `--precision double` | the only supported value; `single` is rejected with exit 2 |
