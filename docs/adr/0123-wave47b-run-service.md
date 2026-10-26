@@ -230,3 +230,17 @@ S11 runs in the debug build now; the release gate runs it again.
 Result of S11 (debug, 2026-10-26): the run finished at step 30. The negative control (`rcfd run <snapshot> --check-only` without
 `--case-dir`) exited 3 with "mesh.file: <run folder>\../meshes/cavity/polyMesh: io error: The system cannot find the path specified".
 Met.
+## Note: differences from `rcfd-project` as committed on branch `w47a` (95e1e3c), read only, for the merge
+
+* `RunRecord`: it has `case`, where this ADR has `case_source`, and `mesh`. It has no `case_dir`. Its `solver_version` is a `String`,
+  not optional, and its `settings` is free JSON, which holds `RunSettings` as an object. `case_dir`, or an equivalent, must be added.
+* `RunStatus` has no `reason` and no `exit_code`. They need adding, since every failure reason lives there.
+* `events.jsonl`: `RunEvent` is `{t, kind}` with a closed `EventKind` (`state {from, to}`, `warning`, `stop`). This runner writes
+  `{t, event, ...}` with the kinds `state`, `launched`, `adopted`, `estimate`, `solver`, `cancel_requested`, `killed` and
+  `runner_shutdown`. At the merge, either `EventKind` gains an open variant (for example `other` with a JSON body) or the runner maps
+  its events onto the three kinds and drops the rest. Until then, a strict `rcfd-project` reader fails on this runner's lines.
+* `ResidualLine.residuals` is `BTreeMap<String, f64>`. The runner copies the solver's values, which are `null` when non-finite (a
+  diverged step). A strict reader would reject that line. The runner should drop non-finite entries, or `rcfd-project` should accept
+  `null`.
+* Hash: `rcfd-project` has `hash_bytes`; this runner writes `fnv1a64:<hex>`. Run ids: `is_run_id` and `claim` replace `check_id` and
+  `new_run_id`.
