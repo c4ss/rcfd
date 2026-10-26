@@ -117,3 +117,24 @@ Smoke results (debug unless stated):
 | H4 | Fresh run into a directory with a store | replaced: steps [15, 30], final bit-exact | |
 
 Every existing test unchanged; the default path is covered by the unchanged `baseline_hashes.rs` and the full gate.
+
+## Amendment 1 (2026-10-26, before the corrected run): C8 memory probe
+
+The first gate run (archive of e344301) hung in `c7_c8_scrubbing_a_1m_cell_store_with_20_fields`: the scrubbing child process called
+`powershell -NoProfile -Command (Get-Process -Id <pid>).PeakWorkingSet64`, and that powershell process never returned. On this machine
+many `powershell.exe` processes were hung at that time (tasklist status "Unknown"), and a CIM query from my own shell hung too. The
+set-up is defective: the probe depends on a shell that can hang, without a timeout. What I knew when writing this amendment: the C7
+set-up had completed in that run (the 674 MB store was written and deleted is not known; the parent was blocked in the first child),
+and `typeperf "\Process(scale-*)\Working Set Peak"` returned within seconds from my shell, showing the hung child at 30 089 216 bytes.
+
+Correction (same limits, same set-up otherwise): the memory probe reads `\Process(<test exe>*)\Working Set Peak` and `\ID Process`
+with `typeperf -sc 1` (the PDH performance counters, no PowerShell, no WMI) and takes the instance whose ID is the child's PID; every
+probe runs under a 60 s timeout and is killed after it, so a hung probe fails the test instead of hanging the gate. The original test is
+kept as `c7_c8_scrubbing_a_1m_cell_store_with_20_fields_known_miss` (ignored, limits intact, also with the timeout); the corrected one is
+`..._typeperf`. Smoke of the corrected probe (debug build, before registration of this amendment): scrub peak 29.3 MB, whole-snapshot
+reader 159.0 MB.
+
+The first gate run also failed `crates/rcfd-cli/tests/workspace_graph.rs::layering_matches_architecture_doc`: the test classifies every
+workspace crate and did not know `rcfd-tsstore`. Fixed in b64a412 by placing `rcfd-tsstore` in layer 4 (with `turb` and `post`; it
+depends on core, mesh and io, and api depends on it) in the test and in `docs/architecture.md`. Other wave-47 crates need the same
+one-line addition.

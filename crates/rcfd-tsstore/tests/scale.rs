@@ -44,18 +44,61 @@ fn timed(f: &mut dyn FnMut()) -> f64 {
     t.elapsed().as_secs_f64()
 }
 
-/// Peak working set (Windows) or high-water resident set (Linux) of this process, bytes.
-fn peak_memory() -> Option<u64> {
-    if cfg!(windows) {
-        let out = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!("(Get-Process -Id {}).PeakWorkingSet64", std::process::id()),
-            ])
-            .output()
-            .ok()?;
-        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+/// Stdout of `cmd`, or `None` when it fails or runs longer than 60 s (it is then killed).
+fn output_within_60s(cmd: &mut Command) -> Option<String> {
+    let mut child = cmd.stdout(std::process::Stdio::piped()).spawn().ok()?;
+    let t0 = Instant::now();
+    while child.try_wait().ok()?.is_none() {
+        if t0.elapsed().as_secs() >= 60 {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let mut s = String::new();
+    std::io::Read::read_to_string(&mut child.stdout.take()?, &mut s).ok()?;
+    Some(s)
+}
+
+/// Peak working set from the PDH counters (`typeperf`, ADR 0124 amendment 1): the `Working Set Peak` of the
+/// instance whose `ID Process` is this process.
+fn typeperf_peak() -> Option<u64> {
+    let exe = std::env::current_exe().ok()?;
+    let stem = exe.file_stem()?.to_str()?.to_string();
+    let out = output_within_60s(Command::new("typeperf").args([
+        &format!("\\Process({stem}*)\\Working Set Peak"),
+        &format!("\\Process({stem}*)\\ID Process"),
+        "-sc",
+        "1",
+    ]))?;
+    let mut lines = out.lines().filter(|l| l.starts_with('"'));
+    let split = |l: &str| {
+        l.split("\",\"")
+            .map(|c| c.trim_matches('"').to_string())
+            .collect::<Vec<_>>()
+    };
+    let (head, data) = (split(lines.next()?), split(lines.next()?));
+    let pid = std::process::id() as f64;
+    let j = (0..head.len())
+        .find(|&j| head[j].ends_with("\\ID Process") && data.get(j).and_then(|v| v.parse::<f64>().ok()) == Some(pid))?;
+    let inst = head[j].trim_end_matches("\\ID Process");
+    let k = head.iter().position(|h| h == &format!("{inst}\\Working Set Peak"))?;
+    data.get(k)?.parse::<f64>().ok().map(|x| x as u64)
+}
+
+/// Peak working set (Windows; `method` "typeperf" or the original "powershell") or high-water resident set (Linux)
+/// of this process, bytes.
+fn peak_memory(method: &str) -> Option<u64> {
+    if cfg!(windows) && method == "typeperf" {
+        typeperf_peak()
+    } else if cfg!(windows) {
+        let out = output_within_60s(Command::new("powershell").args([
+            "-NoProfile",
+            "-Command",
+            &format!("(Get-Process -Id {}).PeakWorkingSet64", std::process::id()),
+        ]))?;
+        out.trim().parse().ok()
     } else {
         let s = std::fs::read_to_string("/proc/self/status").ok()?;
         let l = s.lines().find(|l| l.starts_with("VmHWM:"))?;
@@ -84,14 +127,16 @@ fn c8_child_body() {
             .collect();
         check += all.iter().map(|v| v[12345]).sum::<f64>();
     }
-    println!("C8 PEAK {} CHECK {check}", peak_memory().unwrap_or(0));
+    let method = std::env::var("RCFD_TSS_C8_METHOD").unwrap();
+    println!("C8 PEAK {} CHECK {check}", peak_memory(&method).unwrap_or(0));
 }
 
-fn child_peak(dir: &Path, mode: &str) -> u64 {
+fn child_peak(dir: &Path, mode: &str, method: &str) -> u64 {
     let out = Command::new(std::env::current_exe().unwrap())
         .args(["c8_child_body", "--exact", "--nocapture", "--test-threads=1"])
         .env(C8_ENV, dir)
         .env("RCFD_TSS_C8_MODE", mode)
+        .env("RCFD_TSS_C8_METHOD", method)
         .output()
         .unwrap();
     let s = String::from_utf8_lossy(&out.stdout);
@@ -105,13 +150,26 @@ fn child_peak(dir: &Path, mode: &str) -> u64 {
     l.split_whitespace().next().unwrap().parse().unwrap()
 }
 
+/// The registered C7/C8 test as first written: its memory probe (`powershell Get-Process`) hung in the gate run
+/// (ADR 0124 amendment 1, defective set-up); kept with the same limits.
+#[test]
+#[ignore = "defective set-up (ADR 0124 amendment 1): the powershell memory probe hung in the gate; see the typeperf test"]
+fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_known_miss() {
+    c7_c8_run("powershell");
+}
+
+/// ADR 0124 amendment 1: C7/C8 with the memory probe read from the PDH counters by `typeperf`, under a 60 s timeout.
 #[test]
 #[cfg_attr(
     debug_assertions,
     ignore = "1M cells x 20 fields: timing and memory criteria are for release builds"
 )]
-fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields() {
-    let dir = tmp("c7");
+fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf() {
+    c7_c8_run("typeperf");
+}
+
+fn c7_c8_run(method: &str) {
+    let dir = tmp(&format!("c7-{method}"));
     let t_mesh = Instant::now();
     let mesh = box_mesh([100, 100, 100], [1.0; 3], [Grading::Uniform; 3]).unwrap();
     let n = mesh.n_cells();
@@ -171,8 +229,8 @@ fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields() {
     drop(r);
 
     // C8: memory of a separate scrubbing process (the test harness shares this one)
-    let scrub_peak = child_peak(&dir, "scrub");
-    let naive_peak = child_peak(&dir, "naive");
+    let scrub_peak = child_peak(&dir, "scrub", method);
+    let naive_peak = child_peak(&dir, "naive", method);
     println!(
         "C8 peak memory: scrub {:.1} MB, naive whole-snapshot reader {:.1} MB, cap {:.1} MB",
         scrub_peak as f64 / 1048576.0,
@@ -196,7 +254,7 @@ fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields() {
     let _ = std::fs::remove_dir_all(&dir);
 
     // many snapshots: 2000 snapshots of one 1000-cell field
-    let dir = tmp("c7-many");
+    let dir = tmp(&format!("c7-many-{method}"));
     let small = box_mesh([10, 10, 10], [1.0; 3], [Grading::Uniform; 3]).unwrap();
     let mut w = Writer::create(&dir, &small, WriteOptions::default()).unwrap();
     for s in 0..2000usize {
