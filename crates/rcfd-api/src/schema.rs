@@ -924,7 +924,11 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "linear_upwind_limiter",
-            Schema::enumeration("none", &["none", "barth_jespersen"]).doc("Slope limiter of the linear_upwind face extrapolation of the steady simple/simplec momentum equation (ADR 0081): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). Any other algorithm or scheme is an error"),
+            Schema::enumeration("none", &["none", "barth_jespersen", "venkatakrishnan_range"]).doc("Slope limiter of the linear_upwind face extrapolation of the steady simple/simplec momentum equation (ADR 0081): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). venkatakrishnan_range (ADR 0115) uses Venkatakrishnan's smooth factor with eps = solver.linear_upwind_limiter_k times the range (max - min over the cells) of the component at the current iterate, so differences small against that range are not limited. Any other algorithm or scheme is an error"),
+        )
+        .field(
+            "linear_upwind_limiter_k",
+            Schema::float(0.01).doc("Constant k of solver.linear_upwind_limiter = venkatakrishnan_range (ADR 0115): eps = k times the range of the limited velocity component; must be > 0. Setting it to anything but the default without that limiter is an error"),
         )
         .field(
             "velocity_correction",

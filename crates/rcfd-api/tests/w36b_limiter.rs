@@ -316,3 +316,304 @@ fn l3_kovasznay_order_with_the_limiter() {
     );
     assert!(order(&lim, 1, 0) >= 1.8, "L3: fine-pair L2 order {}", order(&lim, 1, 0));
 }
+
+// ================================================================ ADR 0115 (wave 45A): the range-scaled Venkatakrishnan limiter
+// Everything below this line belongs to ADR 0115.
+
+const VR: &str = "linear_upwind_limiter = \"venkatakrishnan_range\"\n";
+
+/// ADR 0115 P5: located errors of `venkatakrishnan_range` and of `solver.linear_upwind_limiter_k`.
+#[test]
+fn w45a_range_limiter_located_errors() {
+    let located = |text: &str, path: &str, what: &str| {
+        let err = match Case::parse_toml(text) {
+            Err(e) => e,
+            Ok(case) => Simulation::new(&case).map(|_| ()).expect_err(what),
+        };
+        println!("W45A P5 {what}: {err:?}");
+        assert!(err.iter().any(|d| d.path == path), "P5 {what}: {err:?}");
+    };
+    let base = with_solver(CAVITY_SIMPLE, VR);
+    let lim = "solver.linear_upwind_limiter";
+    let kp = "solver.linear_upwind_limiter_k";
+    located(
+        &base.replace("convection = \"linear_upwind\"", "convection = \"upwind\""),
+        lim,
+        "upwind",
+    );
+    located(
+        &base.replace(
+            "algorithm = \"simple\"",
+            "algorithm = \"pimple\"\ndt = 0.01\nend_time = 0.05",
+        ),
+        lim,
+        "pimple",
+    );
+    located(
+        &base.replace("algorithm = \"simple\"", "algorithm = \"coupled\""),
+        lim,
+        "coupled",
+    );
+    located(&with_solver(&base, "linear_upwind_limiter_k = 0.0\n"), kp, "k = 0");
+    located(&with_solver(&base, "linear_upwind_limiter_k = -0.01\n"), kp, "k < 0");
+    located(
+        &with_solver(CAVITY_SIMPLE, "linear_upwind_limiter_k = 0.05\n"),
+        kp,
+        "k without the value",
+    );
+    located(
+        &with_solver(&with_solver(CAVITY_SIMPLE, BJ), "linear_upwind_limiter_k = 0.05\n"),
+        kp,
+        "k with barth_jespersen",
+    );
+    // in scope: accepted
+    sim_of(&with_solver(&base, "linear_upwind_limiter_k = 0.05\n"));
+}
+
+/// Build `text` (with the Barth-Jespersen key) and switch the momentum limiter to `lim` before iteration 1 (`None` keeps Barth-Jespersen).
+fn w45a_sim(text: &str, lim: Option<rcfd_fv::gradient::Limiter>) -> Simulation {
+    let mut sim = sim_of(text);
+    if lim.is_some() {
+        sim.simple_solver_mut().unwrap().linear_upwind_limiter = lim;
+    }
+    sim
+}
+
+fn w45a_order(e: &[(f64, f64)], i: usize, linf: bool) -> f64 {
+    let f = |p: (f64, f64)| if linf { p.1 } else { p.0 };
+    (f(e[i]) / f(e[i + 1])).log2()
+}
+
+/// ADR 0115 P3: Kovasznay (the ADR 0081 L3 set-up) with the range-scaled limiter at each registered k; limit: fine-pair L2 order >= 1.8.
+#[test]
+#[ignore = "ADR 0115 P3 (several minutes in release)"]
+fn w45a_p3_kovasznay_order() {
+    let mut fails = Vec::new();
+    for k in [0.002, 0.01, 0.05] {
+        let e: Vec<(f64, f64)> = [12usize, 24, 48]
+            .iter()
+            .map(|&nx| {
+                let t0 = Instant::now();
+                let mut sim = w45a_sim(
+                    &kovasznay(nx, BJ),
+                    Some(rcfd_fv::gradient::Limiter::VenkatakrishnanRange(k)),
+                );
+                let n = sim.run(20000);
+                let e = kovasznay_error(&sim);
+                println!(
+                    "W45A P3 k {k} {nx}: {n} iterations, converged {}, L2 {:.4e}, Linf {:.4e} [{:.1} s]",
+                    sim.is_converged(),
+                    e.0,
+                    e.1,
+                    t0.elapsed().as_secs_f64()
+                );
+                e
+            })
+            .collect();
+        let o = w45a_order(&e, 1, false);
+        println!(
+            "W45A P3 k {k}: L2 orders {:.3} / {o:.3}, Linf {:.3} / {:.3}",
+            w45a_order(&e, 0, false),
+            w45a_order(&e, 0, true),
+            w45a_order(&e, 1, true)
+        );
+        if o.is_nan() || o < 1.8 {
+            fails.push((k, o));
+        }
+    }
+    assert!(fails.is_empty(), "P3: {fails:?}");
+}
+
+/// Forced steady Taylor-Green flow on [0, 2 pi]^2 (U = 1): u = (sin x cos y, -cos x sin y), body force 2 nu u, started from the exact
+/// velocity; doubly periodic (the drafted P4, infeasible at nu = 0.1 by the smoke) or with the exact velocity on all four sides (the
+/// registered P4, ADR 0115).
+fn w45a_tg(n: usize, lim: Option<rcfd_fv::gradient::Limiter>, bj: bool, nu: f64, periodic: bool) -> Simulation {
+    let tp = 2.0 * std::f64::consts::PI;
+    let key = if bj { BJ } else { "" };
+    let ux = "1 [m/s] * sin(x / 1 [m]) * cos(y / 1 [m])";
+    let uy = "-1 [m/s] * cos(x / 1 [m]) * sin(y / 1 [m])";
+    let mut b = String::new();
+    if !periodic {
+        for p in ["xmin", "xmax", "ymin", "ymax"] {
+            b.push_str(&format!(
+                "[boundaries.{p}]
+velocity = \"fixed\"
+velocity_expression_x = \"{ux}\"
+velocity_expression_y = \"{uy}\"
+"
+            ));
+        }
+    }
+    let text = format!(
+        "[mesh]
+generator = \"box_2d\"
+nx = {n}
+ny = {n}
+lx = {tp:?}
+ly = {tp:?}
+periodic_x = {periodic}
+periodic_y = {periodic}
+[physics]
+nu = {nu:?}
+[initial]
+velocity_expression_x = \"{ux}\"
+velocity_expression_y = \"{uy}\"
+{b}[solver]
+algorithm = \"simple\"
+alpha_u = 0.7
+alpha_p = 0.3
+convection = \"linear_upwind\"
+{key}max_iterations = 20000
+tolerance_u = 1e-10
+tolerance_p = 1e-10
+"
+    );
+    let mut sim = w45a_sim(&text, lim);
+    let f = |x: [f64; 3]| {
+        [
+            2.0 * nu * x[0].sin() * x[1].cos(),
+            -2.0 * nu * x[0].cos() * x[1].sin(),
+            0.0,
+        ]
+    };
+    let m = &sim.geom.mesh;
+    let body = rcfd_fv::simple::BodyForce {
+        cell: m.cell_centres().iter().map(|&x| f(x)).collect(),
+        face: m
+            .face_centres()
+            .iter()
+            .zip(m.face_area_vectors())
+            .map(|(&x, s)| vec3::dot(f(x), *s))
+            .collect(),
+    };
+    sim.simple_solver_mut().unwrap().body_force = Some(body);
+    sim
+}
+
+/// (volume-weighted RMS, max) of the velocity error against the exact Taylor-Green field, and the share of cells with a limiter factor
+/// below 0.99 in either component (the factors of `kind` on the final state).
+fn w45a_tg_error(sim: &Simulation, kind: Option<rcfd_fv::gradient::Limiter>) -> (f64, f64, f64) {
+    let g = &sim.geom;
+    let cc = g.mesh.cell_centres();
+    let vol = g.mesh.cell_volumes();
+    let u = &sim.velocity().values;
+    let (mut s, mut v, mut linf) = (0.0, 0.0, 0.0f64);
+    for c in 0..cc.len() {
+        let (x, y) = (cc[c][0], cc[c][1]);
+        let d2 = (u[c][0] - x.sin() * y.cos()).powi(2) + (u[c][1] + x.cos() * y.sin()).powi(2);
+        s += vol[c] * d2;
+        v += vol[c];
+        linf = linf.max(d2.sqrt());
+    }
+    let share = kind.map_or(0.0, |kind| {
+        let ub = sim.velocity().boundary_values(g);
+        let psi: Vec<Vec<f64>> = (0..2)
+            .map(|k| {
+                let cells: Vec<f64> = u.iter().map(|w| w[k]).collect();
+                let b: Vec<f64> = ub.iter().map(|w| w[k]).collect();
+                let gr = rcfd_fv::gradient::least_squares(g, &cells, &b);
+                rcfd_fv::gradient::limiter(g, &cells, &b, &gr, kind)
+            })
+            .collect();
+        (0..cc.len()).filter(|&c| psi[0][c] < 0.99 || psi[1][c] < 0.99).count() as f64 / cc.len() as f64
+    });
+    ((s / v).sqrt(), linf, share)
+}
+
+/// Run one Taylor-Green mesh to convergence or the cap; (L2, Linf, share psi < 0.99, converged).
+fn w45a_tg_run(
+    label: &str,
+    n: usize,
+    lim: Option<rcfd_fv::gradient::Limiter>,
+    bj: bool,
+    periodic: bool,
+) -> (f64, f64, f64, bool) {
+    let t0 = Instant::now();
+    let mut sim = w45a_tg(n, lim, bj, 0.1, periodic);
+    let cap = 20000;
+    let it = sim.run(cap);
+    let kind = lim.or(bj.then_some(rcfd_fv::gradient::Limiter::BarthJespersen));
+    let (l2, linf, share) = w45a_tg_error(&sim, kind);
+    println!(
+        "W45A TG {label} {n}^2: {it} iterations, converged {}, trip {:?}, last {:?}, L2 {l2:.4e}, Linf {linf:.4e}, share psi < 0.99 {share:.3} [{:.1} s]",
+        sim.is_converged(),
+        sim.steady_divergence().map(|d| (d.iteration, d.kind)),
+        sim.last(),
+        t0.elapsed().as_secs_f64()
+    );
+    (l2, linf, share, sim.is_converged())
+}
+
+/// ADR 0115 rule-d feasibility smoke of P4 with Barth-Jespersen and unlimited `linear_upwind`: doubly periodic at 16^2 and 32^2 (run
+/// first; did not converge), then the exact velocity on all sides at 16^2, 32^2 and 64^2 (the corrected set-up).
+#[test]
+#[ignore = "ADR 0115 P4 feasibility smoke (several minutes in release)"]
+fn w45a_p4_feasibility_smoke() {
+    for (per, ns) in [(true, &[16usize, 32][..]), (false, &[16, 32, 64][..])] {
+        for &n in ns {
+            w45a_tg_run(&format!("smoke BJ periodic {per}"), n, None, true, per);
+            w45a_tg_run(&format!("smoke unlimited periodic {per}"), n, None, false, per);
+        }
+    }
+}
+
+/// ADR 0115 P4 (amended before registration: the exact velocity on all sides): with the range-scaled limiter at each registered k, the
+/// fine-pair L2 order >= 1.8 and the 64^2 L2 error <= the Barth-Jespersen 64^2 L2 error of the same run. Reported: L-inf orders, the share
+/// of cells with psi < 0.99.
+#[test]
+#[ignore = "ADR 0115 P4 (about 3 min in release)"]
+fn w45a_p4_taylor_green_order() {
+    let study = |label: &str, lim: Option<rcfd_fv::gradient::Limiter>| -> Vec<(f64, f64)> {
+        [16usize, 32, 64]
+            .iter()
+            .map(|&n| {
+                let (l2, linf, _, conv) = w45a_tg_run(label, n, lim, true, false);
+                assert!(conv, "P4 {label} {n}: not converged");
+                (l2, linf)
+            })
+            .collect()
+    };
+    let bj = study("P4 BJ", None);
+    let mut fails = Vec::new();
+    for k in [0.002, 0.01, 0.05] {
+        let e = study(
+            &format!("P4 k {k}"),
+            Some(rcfd_fv::gradient::Limiter::VenkatakrishnanRange(k)),
+        );
+        let o = w45a_order(&e, 1, false);
+        println!(
+            "W45A P4 k {k}: L2 orders {:.3} / {o:.3}, Linf {:.3} / {:.3}; fine L2 {:.4e} against BJ {:.4e} (BJ orders {:.3} / {:.3})",
+            w45a_order(&e, 0, false),
+            w45a_order(&e, 0, true),
+            w45a_order(&e, 1, true),
+            e[2].0,
+            bj[2].0,
+            w45a_order(&bj, 0, false),
+            w45a_order(&bj, 1, false)
+        );
+        if o.is_nan() || o < 1.8 || e[2].0.is_nan() || e[2].0 > bj[2].0 {
+            fails.push((k, o, e[2].0, bj[2].0));
+        }
+    }
+    assert!(fails.is_empty(), "P4: {fails:?}");
+}
+
+/// ADR 0115 P4 diagnosis of the periodic smoke (16^2, unlimited, 4000 iterations): nu = 1 periodic, nu = 0.1 periodic, nu = 0.1 with the
+/// exact velocity on all sides.
+#[test]
+#[ignore = "ADR 0115 P4 diagnosis (seconds in release)"]
+fn w45a_tg_diag() {
+    for (nu, per) in [(1.0, true), (0.1, true), (0.1, false)] {
+        let mut sim = w45a_tg(16, None, false, nu, per);
+        for it in 1..=4000 {
+            let s = sim.step();
+            if it % 500 == 0 {
+                let (l2, _, _) = w45a_tg_error(&sim, None);
+                let bf = sim.simple_solver().unwrap().body_force.is_some();
+                let pr = sim.pressure().values.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
+                    - sim.pressure().values.iter().cloned().fold(f64::INFINITY, f64::min);
+                println!("DIAG nu {nu} periodic {per} it {it}: res_u {:.3e} res_p {:.3e} L2 {l2:.3e} body {bf} p range {pr:.4} (exact 1.0)", s.res_u, s.res_p);
+            }
+        }
+    }
+}
