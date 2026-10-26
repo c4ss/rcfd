@@ -71,3 +71,30 @@ Source: the Claude Code documentation at code.claude.com/docs/en (sessions, head
 Two documents' wording matched the harness's injection scanner (permission-mode names such as bypassPermissions); they describe options only, nothing in this plan uses them.
 
 Decisions this research forces, for the user when wave 47 starts: (1) whether the sidebar may type into a session that is closed (resume with `-p`) while only mirroring open ones (recommended), and (2) whether approvals go through an Agent SDK sidecar (Python or TypeScript dependency) or a conservative allow-list.
+
+## 8. Decisions of 2026-10-26 (second round) and the wave-47 contract
+
+User decisions: (1) the sidebar may type into a Claude Code session that is closed (resume it with `claude -p --resume`) and only mirrors sessions that another process has open; (2) tool approvals use a conservative allow-list first (no sidecar, no auto-approval of everything); a sidecar on the Agent SDK is reconsidered only if the allow-list proves too narrow.
+
+Project folder contract (agents code against it; later changes are additive and go through the lead):
+
+```text
+<project>/
+  rcfd-project.json        schema_version, name, created, solver_version_created
+  cases/                   case files in the existing case format
+  meshes/                  mesh files or recipes referenced by cases
+  runs/<run-id>/           run-id = r-<UTC yyyymmddThhmmss>-<4 hex>, sortable
+    run.json               immutable record: case snapshot hash, mesh hash, solver version, settings, created
+    case.snapshot          copy of the case as run
+    status.json            state (queued, running, paused, finished, failed, cancelled), step, time, pid, updated; replaced atomically
+    events.jsonl           append-only events (state changes, warnings, stop reasons)
+    log.txt                solver log
+    residuals.jsonl        one line per step: step, time, residuals, monitors
+    fields/                time-series store (index.json, mesh once, one snapshot per saved time)
+    metrics.json           final report values
+  designs/                 design ledger (ADR 0121)
+  notes/                   free text
+  .rcfd/                   runner lock and socket, caches (not versioned)
+```
+
+Crates (all new, library first): `rcfd-project` (47A), `rcfd-runner` (47B), `rcfd-tsstore` (47C), `rcfd-render` (47D), `rcfd-claude` (47E). Studio application and the plugin follow in wave 48.
