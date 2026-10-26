@@ -378,3 +378,12 @@ Fresh `git archive` of 4965e4b (main, including the wave-43A/43B commits up to i
 --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **1979 passed, 0 failed, 616 ignored**
 (no LNK1201; `baseline_hashes.rs` passed unchanged). This wave adds 2 running tests (`s1_e3_frozen_limiter_converges`,
 `frozen_limiter_hook_is_bit_identical_at_the_freeze`) and 21 ignored ones. This paragraph is a docs-only commit, not re-gated.
+
+### Addendum 2026-10-26: `family()` STANDS test deviated from the registered family rule
+
+The registered family rule above (unchanged since the registration commit ca4fc42) is STANDS iff `|L|` decreases monotonically E3 -> E2
+-> E1 with observed order >= 0.5. The implementation (4965e4b) coded STANDS as `|L(E1)| < |L(E2)| && |L(E1)| <= 0.053` (no E3 > E2 check,
+a fixed bound that no amendment registered). `l5_frozen_limiter_family` implemented the registered rule. The test now uses the registered
+rule (the order computation moved into `family_order`, shared with L5). No verdict changes: L2 (|L| 0.01037 / 0.05954 / 0.10689 N m) has
+`|L(E1)| >= |L(E2)|`, so it is FALSIFIED under both versions (same FALSIFIED branch); L3 is NOT EVALUABLE under both (the settled check runs
+before the STANDS test); A1 never ran (F-A was not eligible after L1 was FALSIFIED). The L2 and L3 runs were not repeated.

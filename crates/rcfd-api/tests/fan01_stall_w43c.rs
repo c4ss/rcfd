@@ -713,6 +713,19 @@ fn start_arm(id: &str, laminar: bool, outlet: Option<&str>) -> &'static str {
     v
 }
 
+/// Observed order of |L| over E3, E2, E1 (`l` coarse first), ADR 0086 fixed-point formula with the empty-family ratios (fine first).
+fn family_order(l: &[f64]) -> f64 {
+    let (r21, r32) = (1.4073f64, 1.4017f64);
+    let (e21, e32) = (l[1] - l[2], l[0] - l[1]);
+    let sgn = (e32 / e21).signum();
+    let mut p = 1.0f64;
+    for _ in 0..500 {
+        let q = ((r21.powf(p) - sgn) / (r32.powf(p) - sgn)).ln();
+        p = ((e32 / e21).abs().ln() + q).abs() / r21.ln();
+    }
+    p
+}
+
 /// Empty-passage family with one change from the first iteration (600 iterations each): outlet L and swirl energy per member, their change
 /// over the last 100 iterations, and the registered reading of the L trend.
 fn family(id: &str, switch: &dyn Fn(&mut SimpleSolver), laminar: bool) -> &'static str {
@@ -736,7 +749,7 @@ fn family(id: &str, switch: &dyn Fn(&mut SimpleSolver), laminar: bool) -> &'stat
     let settled = out.iter().all(|a| a.last100.0 <= 1e-3);
     let v = if !settled || l.iter().any(|x| !x.is_finite()) {
         "NOT EVALUABLE"
-    } else if l[2] < l[1] && l[2] <= 0.053 {
+    } else if l[2] < l[1] && l[1] < l[0] && family_order(&l) >= 0.5 {
         "STANDS"
     } else if l[2] >= l[1] {
         "FALSIFIED"
@@ -1087,18 +1100,7 @@ fn l5_frozen_limiter_family() {
     }
     let l: Vec<f64> = out.iter().map(|a| a.f_end.0.abs()).collect();
     let conv = out.iter().all(|a| a.reached.is_some());
-    // ADR 0086 ratios of the empty family (fine first)
-    let (r21, r32) = (1.4073f64, 1.4017f64);
-    let order = {
-        let (e21, e32) = (l[1] - l[2], l[0] - l[1]);
-        let sgn = (e32 / e21).signum();
-        let mut p = 1.0f64;
-        for _ in 0..500 {
-            let q = ((r21.powf(p) - sgn) / (r32.powf(p) - sgn)).ln();
-            p = ((e32 / e21).abs().ln() + q).abs() / r21.ln();
-        }
-        p
-    };
+    let order = family_order(&l);
     let v = if !conv {
         "NOT EVALUABLE"
     } else if l[2] < l[1] && l[1] < l[0] && order >= 0.5 {
@@ -1459,7 +1461,7 @@ fn w44a_lin_smoke() {
     lin_reference();
 }
 
-/// ADR 0111 J0 and its attribution variants (H17, H5, GG17, Hall) and check M1 (J0 with h = 1e-7); m = 80 Arnoldi steps each.
+/// ADR 0111 J0 and its attribution variants (H17, H5, GG17, Hall) and check M1 (J0 with h = 1e-7); m = 200 Arnoldi steps each.
 #[test]
 #[ignore = "ADR 0111 linearisation (several minutes in release); then python scripts/w44a_arnoldi_analysis.py"]
 fn w44a_lin_base_and_attribution() {
