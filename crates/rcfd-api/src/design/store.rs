@@ -250,12 +250,14 @@ impl Store {
             st.records.push(r);
         }
         if !complete && repair {
-            // drop the partial line so that new records are appended after a complete one
-            let mut body = lines.join("\n");
-            if !body.is_empty() {
-                body.push('\n');
-            }
-            std::fs::write(path, body).map_err(|e| format!("cannot rewrite {}: {e}", path.display()))?;
+            // drop the partial line so that new records are appended after a complete one; truncating in place (instead of
+            // rewriting the file) cannot lose the complete records if this process is killed meanwhile (ADR 0121)
+            let keep = text.rfind('\n').map_or(0, |i| i + 1) as u64;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .and_then(|f| f.set_len(keep))
+                .map_err(|e| format!("cannot truncate {}: {e}", path.display()))?;
         }
         Ok(st)
     }

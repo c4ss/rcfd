@@ -400,6 +400,98 @@ fn tools() -> Vec<Tool> {
             access: Access::Read,
             schema: || obj(json!({"dir": {"type": "string"}}), &["dir"]),
         },
+        // ---- wave 46D (ADR 0121): design ledger
+        Tool {
+            name: "design_ledger_append",
+            description: "Append one evaluated variant to a design ledger (a JSON-lines file in the sandbox, created on first use): named parameters and metrics with units, evaluator id and version, geometry/mesh hash, settings, verdict (ok, diverged, constraint_rejected, not_evaluated; a located reason is required unless ok), fidelity tier. The solver version and a timestamp are stamped. Returns the entry index.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string", "description": "ledger file inside the sandbox, e.g. fan/ledger.jsonl"},
+                        "study": {"type": "string"},
+                        "variant": {"type": "string"},
+                        "kind": {"type": "string", "description": "evaluation (default) or a summary kind"},
+                        "params": {"type": "array", "items": {"type": "object"}, "description": "[{name, value, unit}] (unit \"1\" for dimensionless)"},
+                        "metrics": {"type": "array", "items": {"type": "object"}, "description": "[{name, value, unit}]; value may be null when the verdict is not ok"},
+                        "evaluator": {"type": "string"},
+                        "evaluator_version": {"type": "string"},
+                        "solver_version": {"type": "string", "description": "default: this server's rcfd version"},
+                        "geometry_hash": {"type": "string"},
+                        "settings": {"type": "object", "description": "what is needed to re-run (case settings, overrides, operating point)"},
+                        "verdict": {"type": "string", "enum": ["ok", "diverged", "constraint_rejected", "not_evaluated"]},
+                        "reason": {"type": "string"},
+                        "fidelity": {"type": "string", "enum": ["analytic", "reduced_order", "cfd"]},
+                        "wall_s": {"type": "number", "minimum": 0.0},
+                        "seed": {"type": "integer", "minimum": 0},
+                        "provenance": {"type": "object"}
+                    }),
+                    &["ledger", "params", "metrics", "evaluator", "evaluator_version", "verdict", "fidelity"],
+                )
+            },
+        },
+        Tool {
+            name: "design_ledger_query",
+            description: "Read a design ledger: entries filtered by kind, verdict, study, evaluator and fidelity (paged), plus optionally the Pareto-optimal entries for [{metric, sense}], the best entry and running best-so-far trace for {metric, sense}, and the history of one parameter. Pareto and best use ok evaluation entries of one evaluator and tier with consistent units (filter first when the ledger mixes them). Torn or foreign lines are reported in skipped_lines.",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string"},
+                        "kind": {"type": "string"},
+                        "verdict": {"type": "string", "enum": ["ok", "diverged", "constraint_rejected", "not_evaluated"]},
+                        "study": {"type": "string"},
+                        "evaluator": {"type": "string"},
+                        "fidelity": {"type": "string", "enum": ["analytic", "reduced_order", "cfd"]},
+                        "offset": {"type": "integer", "minimum": 0},
+                        "limit": {"type": "integer", "minimum": 0, "maximum": 1000},
+                        "pareto": {"type": "array", "items": {"type": "object"}, "description": "[{metric, sense: min|max}]"},
+                        "best": {"type": "object", "description": "{metric, sense: min|max}"},
+                        "history": {"type": "string", "description": "parameter name"}
+                    }),
+                    &["ledger"],
+                )
+            },
+        },
+        Tool {
+            name: "design_ledger_export",
+            description: "Export the (filtered) entries of a design ledger to a CSV file (one column per parameter and metric with its unit; numbers round-trip exactly) or a JSON file inside the sandbox.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string"},
+                        "out": {"type": "string"},
+                        "format": {"type": "string", "enum": ["csv", "json"]},
+                        "kind": {"type": "string"},
+                        "verdict": {"type": "string", "enum": ["ok", "diverged", "constraint_rejected", "not_evaluated"]},
+                        "study": {"type": "string"},
+                        "evaluator": {"type": "string"},
+                        "fidelity": {"type": "string", "enum": ["analytic", "reduced_order", "cfd"]}
+                    }),
+                    &["ledger", "out"],
+                )
+            },
+        },
+        Tool {
+            name: "design_ledger_rerun_check",
+            description: "Compare the metrics of a re-run (done with the entry's evaluator, settings and parameters) with ledger entry index: per metric recorded, new, absolute difference and whether it is within atol + rtol |recorded| (defaults 0: bit-identical); units, missing metrics and the verdict are checked too.",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string"},
+                        "index": {"type": "integer", "minimum": 0},
+                        "metrics": {"type": "array", "items": {"type": "object"}, "description": "[{name, value, unit}] of the re-run"},
+                        "verdict": {"type": "string", "enum": ["ok", "diverged", "constraint_rejected", "not_evaluated"]},
+                        "rtol": {"type": "number", "minimum": 0.0},
+                        "atol": {"type": "number", "minimum": 0.0}
+                    }),
+                    &["ledger", "index", "metrics"],
+                )
+            },
+        },
+        // ---- end wave 46D
         Tool {
             name: "render_image",
             description: "Render a field as a PNG image (optionally with velocity vectors) and return it as an image content block.",
@@ -791,7 +883,12 @@ impl McpServer {
             | "design_get_metrics"
             | "design_compare_variants"
             | "design_propose"
-            | "design_list_study" => {
+            | "design_list_study"
+            // wave 46D (ADR 0121)
+            | "design_ledger_append"
+            | "design_ledger_query"
+            | "design_ledger_export"
+            | "design_ledger_rerun_check" => {
                 let method = match name {
                     "design_create_study" => "design.create_study",
                     "design_create_variant" => "design.create_variant",
@@ -802,6 +899,10 @@ impl McpServer {
                     "design_get_metrics" => "design.get_metrics",
                     "design_compare_variants" => "design.compare",
                     "design_propose" => "design.propose",
+                    "design_ledger_append" => "design.ledger_append",
+                    "design_ledger_query" => "design.ledger_query",
+                    "design_ledger_export" => "design.ledger_export",
+                    "design_ledger_rerun_check" => "design.ledger_rerun_check",
                     _ => "design.list_study",
                 };
                 let mut p = args.clone();
