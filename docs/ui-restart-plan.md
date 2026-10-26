@@ -52,3 +52,22 @@ Waves 48 and later start after the user has run the previous result and reported
 ## 6. Parity checks before `rcfd-gui` is removed
 
 Open and save a case; settings editor with schema validation; run with live residual and report monitors and run control; the 2D field view with colour map, legend and hover; assistant access (now through Claude Code); the tutorials that name the GUI still run or are rewritten. Each is a named test in the new crate.
+
+## 7. Claude Code integration: what the official docs say (researched 2026-10-26)
+
+Source: the Claude Code documentation at code.claude.com/docs/en (sessions, headless, cli-reference, agent-sdk, remote-control, cross-session-messaging, vs-code, jetbrains, plugins, mcp, channels, agent-view), read on that date. Items below marked NOT DOCUMENTED were not found; they must be checked on the installed build before any design depends on them.
+
+| Question | Finding | Consequence for the app |
+|---|---|---|
+| Transcripts | JSONL at `~/.claude/projects/<working-dir with non-alphanumerics replaced by '-'>/<session-id>.jsonl`. The entry format is declared internal and changing between versions. | List a folder's chats from the directory; do not depend on the line format. Take session id and transcript path from a SessionStart hook or from `-p` JSON output; pin a tested version range and keep a fallback. |
+| Headless | `claude -p`, `--output-format stream-json`, `--input-format stream-json`, `--resume <id>`, `--session-id`, `--fork-session`. No Rust SDK; Python and TypeScript Agent SDKs exist; other languages spawn the CLI. | The app spawns the CLI per project; the stream-json event shapes are read from a real run (no schema published). |
+| Approvals in headless | Tools needing approval are denied unless allowed by flags or settings, a PermissionRequest hook, or `--permission-prompt-tool` (contract NOT DOCUMENTED). The SDK offers a `canUseTool` callback. | Either a small Agent SDK sidecar owns approvals, or a conservative allow-list is used until the prompt-tool contract is verified. The app never auto-approves everything. |
+| Two writers | Resuming one session in two terminals interleaves messages into one transcript; two processes cannot write the same transcript; a session open in a live process cannot be started a second time. | One writer per session. The sidebar mirrors a live terminal session read-only, or offers `claude attach` / Remote Control for control; it types into a session only when no other process has it open. |
+| Observing live sessions | `claude agents --json` lists sessions (id, sessionId, name, cwd, state, status, pid); cross-session messaging gives plain-text messages between local sessions (message wire format beyond auth NOT DOCUMENTED). | Session discovery per project folder through `claude agents --json`; messages to a live session are possible but arrive as text, not commands. |
+| IDE protocol | Lock file and local websocket exist but no third-party host API is published. | The app does not use the IDE protocol. |
+| Plugins | `.claude-plugin/plugin.json`, skills, commands, agents, hooks, `.mcp.json` for a bundled MCP server; local load with `--plugin-dir`; marketplaces for distribution. Mods (panes beside the chat) run inside Claude Code's own process. | The project tools ship as a plugin with an MCP server. A Rust window cannot host a mod; the app builds its own chat panel. |
+| MCP | stdio (local) and HTTP; results over about 10 000 tokens warn and 25 000 is the default limit; images shown inline; `list_changed` supported; server push of events only through channels (research preview, flag and auth constraints); resource subscriptions NOT VERIFIED. | A stdio MCP server in front of the run service; large outputs as files; run-finished events by polling a status tool first, channels later if they stabilise. |
+
+Two documents' wording matched the harness's injection scanner (permission-mode names such as bypassPermissions); they describe options only, nothing in this plan uses them.
+
+Decisions this research forces, for the user when wave 47 starts: (1) whether the sidebar may type into a session that is closed (resume with `-p`) while only mirroring open ones (recommended), and (2) whether approvals go through an Agent SDK sidecar (Python or TypeScript dependency) or a conservative allow-list.
