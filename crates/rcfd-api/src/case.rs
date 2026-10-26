@@ -381,6 +381,23 @@ impl Case {
             .ok()
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_default();
+        // ADR 0124: the field store reads the run; it cannot follow a moving mesh or a steady run's time
+        let num = |p: &str| self.tree.get(p).ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let store_dt = num("output.store_time_interval");
+        if store_dt > 0.0 && matches!(alg.as_str(), "simple" | "simplec" | "coupled") {
+            err(
+                "output.store_time_interval",
+                format!("a steady run (solver.algorithm = \"{alg}\") has no simulated time; use output.store_interval"),
+            );
+        }
+        if (store_dt > 0.0 || num("output.store_interval") > 0.0)
+            && self.tree.get("dynamic_mesh.enabled").ok().and_then(|v| v.as_bool()) == Some(true)
+        {
+            err(
+                "output.store_interval",
+                "the field store keeps the mesh once and does not support dynamic_mesh.enabled".into(),
+            );
+        }
         if matches!(alg.as_str(), "piso" | "pimple") {
             let dt = self.tree.get("solver.dt").ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
             let end = self

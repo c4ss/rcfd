@@ -201,6 +201,15 @@ pub fn drive(
             }),
         ));
     }
+    // ADR 0124: opt-in field store; None (and nothing else happens) unless output.store_* is set
+    let mut store = match crate::fieldstore::Hook::open(&lock_sim(sim), opts.out_dir.as_deref()) {
+        Some(Ok(h)) => Some(h),
+        Some(Err(m)) => {
+            sink(&event("warning", &mut seq, 0.0, json!({ "message": m })));
+            None
+        }
+        None => None,
+    };
     // setup warnings found before solving (rule engine), passed in `info.warnings` as objects with
     // `message`, `rule` and `path`
     if let Some(ws) = opts.info.get("warnings").and_then(Value::as_array) {
@@ -332,6 +341,17 @@ pub fn drive(
         for w in lock_sim(sim).take_runtime_warnings() {
             sink(&event("warning", &mut seq, t0.elapsed().as_secs_f64(), w));
         }
+        if let Some(h) = &mut store {
+            if let Err(m) = h.after_step(&lock_sim(sim), step.index, step.time) {
+                sink(&event(
+                    "warning",
+                    &mut seq,
+                    t0.elapsed().as_secs_f64(),
+                    json!({ "message": format!("field store disabled: {m}") }),
+                ));
+                store = None;
+            }
+        }
         let steady_div = lock_sim(sim).steady_divergence_message();
         if let (Some(dir), true) = (&opts.out_dir, snapshot_every > 0) {
             if step.index % snapshot_every == 0 {
@@ -421,6 +441,16 @@ pub fn drive(
         "interrupted" | "time_limit" | "converged" | "not_converged" | "finished" | "step_limit"
     ) {
         save(&mut seq, sink, outcome.state);
+    }
+    if let Some(h) = store {
+        if let Err(m) = h.finish(&lock_sim(sim)) {
+            sink(&event(
+                "warning",
+                &mut seq,
+                outcome.elapsed_s,
+                json!({ "message": format!("field store: {m}") }),
+            ));
+        }
     }
     let mut body = outcome.to_json();
     body["ok"] = json!(outcome.exit_code == exit::OK);

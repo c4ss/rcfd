@@ -142,6 +142,20 @@ Not covered: statistics are not part of a restart file (a transient run with sta
 statistics for the compressible solver or steady runs, no cumulative time-averaging restarts, no time-based
 (rather than step-based) write interval.
 
+### Field store (ADR 0124)
+
+Off by default. With `output.store_interval = N` (steps or iterations) or `output.store_time_interval = dt`
+(simulated seconds, transient runs only) and an output directory, `rcfd run` and `run.headless` (any caller of
+`runctl::drive` that passes an output directory) add a snapshot of the cell fields `output.store_fields` (default
+`ux uy uz p`) to `<out>/fields/store.rts`, and the final state when the run ends. `store_time_interval` stores the
+first step at or after each multiple of `dt`; it does not change the time steps (unlike `output.write_time_interval`).
+The store keeps the mesh once (with its hash), each snapshot field by field in blocks with checksums; a run that is
+killed leaves every earlier snapshot readable. The Rust reader is `rcfd_tsstore::Reader` (by step or time, nearest,
+floor or linear in time, one field or a cell subset). Units are recorded for velocity (`m/s`) and `T` (`K`); other
+fields carry `unknown`. A fresh run replaces a store left in the same output directory; a continued run appends.
+Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown
+field name gives a warning and no store. Library callers that step a `Simulation` themselves are not covered.
+
 ## Workflows
 
 A workflow is an ordered list of tasks with dependencies over a session (`workflow.*` service

@@ -2568,6 +2568,7 @@ dependencies = [
  "rcfd-particles",
  "rcfd-post",
  "rcfd-reactor",
+ "rcfd-tsstore",
  "rcfd-turb",
  "serde",
  "serde_json",
@@ -2753,6 +2754,18 @@ dependencies = [
 name = "rcfd-runner"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rcfd-tsstore"
+version = "0.1.0"
+dependencies = [
+ "miniz_oxide 0.8.9",
+ "rcfd-core",
+ "rcfd-io",
+ "rcfd-mesh",
  "serde",
  "serde_json",
 ]
