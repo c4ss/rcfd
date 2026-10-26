@@ -1,0 +1,17 @@
+[package]
+name = "rcfd-project"
+description = "Studio L1: project folder format, run records, atomic files, path safety, poll watcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rcfd-core.workspace = true
