@@ -1,0 +1,114 @@
+# ADR 0122: Wave 47A, `rcfd-project`, the project folder library (Studio layer L1)
+
+Status: **ACCEPTED 2026-10-26** (checks and limits registered before the registered runs). Written at main f307f59 on branch
+`w47a`, target `<target dir>`. House rules of ADRs 0110-0117: limits fixed before runs; a missed limit becomes an
+ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults of
+existing code are bit-identical (this ADR adds a crate and touches no existing code); `crates/rcfd-api/tests/baseline_hashes.rs` is not
+re-recorded. Parent: `docs/ui-restart-plan.md` sections 3, 4 and 8 (the project folder contract).
+
+## Context
+
+The Studio restart (plan section 3) puts the project folder at layer L1: every later layer (run service, time-series store, app shell,
+Claude Code plugin) reads and writes it, so it is built first, headless, with no UI and no solver dependency. The folder layout is fixed
+by the plan section 8 contract; this crate codes against it.
+
+## Decisions
+
+1. **New crate `crates/rcfd-project`** (workspace member). Dependencies: `serde`, `serde_json`, `thiserror` and `rcfd-core` (for
+   `rcfd_core::hash::fnv64` only). No new third-party dependency. `rcfd-core` is the light core crate (serde, serde_json, thiserror), not
+   a solver crate.
+2. **Hash.** `case_snapshot_hash` and `mesh_hash` are `"fnv64:<16 hex>"` strings from the repository's FNV-1a 64
+   (`rcfd_core::hash`). The workspace has no cryptographic hash, so none is added. FNV-1a detects accidental change, not tampering.
+   Hashes are strings because JavaScript and Python clients read JSON numbers as doubles (53-bit mantissa).
+3. **Records** (typed, serde, unknown fields ignored so the contract can grow additively):
+   * `rcfd-project.json`: `schema_version`, `name`, `created`, `solver_version_created` (as the contract).
+   * `run.json`: `id`, `case` (project-relative path), `case_snapshot_hash`, `mesh` and `mesh_hash` (optional), `solver_version`,
+     `settings` (free JSON), `created` (RFC 3339 UTC with milliseconds). Written once with an atomic create that never replaces
+     (temp file, fsync, hard link, remove temp).
+   * `status.json`: `state` (`queued`, `running`, `paused`, `finished`, `failed`, `cancelled`), `step`, `time`, `pid` (null when not
+     owned), `updated`. Replaced atomically.
+   * `events.jsonl`: `{"t": ..., "kind": "state", "from": ..., "to": ...}`, `{"kind": "warning", "message"}`,
+     `{"kind": "stop", "reason"}`.
+   * `residuals.jsonl`: `step`, `time`, `residuals` and `monitors` (name to number). `metrics.json`: a flat map name to number.
+   * Additive to the contract (reported to the lead): the `case` and `mesh` path fields of `run.json`, the event shapes, and the flat
+     form of `metrics.json`. Nothing in the contract is changed.
+4. **Run id** `r-<UTC yyyymmddThhmmss>-<4 hex>`. Ownership comes from `create_dir`, which is atomic and fails if the directory exists,
+   across threads and processes; on a clash the suffix is probed linearly from a random start (std `RandomState`, OS-seeded, mixed with
+   the clock), so a free suffix is always found while the second has one (65 536 per second). Ids sort by time to the second; the list
+   orders by `created` (milliseconds), then id. UTC formatting uses the published civil-from-days algorithm of H. Hinnant
+   ("chrono-Compatible Low-Level Date Algorithms").
+5. **Atomic replace**: temp file `.<name>.<pid>.<n>.tmp` in the same directory, `write_all`, `sync_all`, `rename`. A transient error
+   (Windows `PermissionDenied`, sharing or lock violation) is retried: 12 attempts, sleep 1 ms doubling to a 100 ms cap (about 0.63 s
+   in total), then a located `Retry` error naming the operation, the file, the attempts and the OS error; the temp file is removed.
+   On Unix the parent directory is fsynced after the rename; on Windows std cannot open a directory handle without FFI (the crate
+   forbids `unsafe`), so the rename is atomic but its durability across power loss is not forced (a `shortcut:` comment marks it).
+6. **JSONL**: one `write_all` of record plus `\n` per line. The reader ignores a last line without `\n` and reports it (offset,
+   length); a complete line that does not parse is a located error (file, 1-based line, column). The appender truncates a torn tail on
+   open before appending, so a fragment is never glued to the next record. Limit: one writer per file at a time.
+7. **Path safety**: `resolve_in(root, rel)` refuses empty paths, NUL, absolute paths, drive and UNC and verbatim prefixes, `..`
+   components, components with `:` (drive-relative paths, NTFS alternate streams) and any existing component that is a symlink or a
+   junction (`is_symlink` is true for name-surrogate reparse points); then the deepest existing ancestor must canonicalize under the
+   canonical root. Errors are `PathRefused { input, component, reason }`. Limit: check-then-use; a link created between the check
+   and the use is not caught.
+8. **Watcher**: poll-based. `poll()` rescans and returns a token (a generation counter that moves only when something changed);
+   `changes_since(t)` lists the project-relative paths created, modified or deleted after `t`. Signature: length, mtime and, for files
+   up to 1 MiB, the FNV-1a hash of the content. `.rcfd/` and temp files are ignored. Larger files are compared by length and mtime only
+   (a same-length rewrite of a file over 1 MiB inside one mtime tick is missed: stated limit).
+9. **Migration hook**: `MIGRATIONS[n]` turns a version-`n` manifest JSON into version `n+1`. `open` migrates in memory only and reports
+   `migrated_from`; `save_manifest` persists. A newer `schema_version` is refused with a located error. Version 0 is a constructed format
+   (`title`, `created_unix`): no version-0 project was ever written; it exists to exercise the hook.
+10. **Query API**: `runs()` (oldest first, with state, step, time and the numeric entries of `metrics.json`; incomplete run directories
+    are listed in `skipped`, not errors), `runs_in_state`, `latest_finished(case)`, `run_summary(id)`, `cases`, `meshes`, `designs`,
+    `validate`.
+
+## What I already knew when registering (rule d, disclosed)
+
+The crate and every test below were written before this ADR so that each set-up could be smoked (debug build, one run each, this
+machine under load from other agents). The smoke values below are all the output I had seen. Smoke findings that changed a set-up before
+registration:
+
+* The child-process handshake first looked for a line starting with `READY`; libtest prints `test child_entry ... ` on the same line,
+  so the parent hung. Fixed to search the line; child writers now also stop by themselves after 30 s.
+* J2's split-write control first wrote the two halves of a line back to back: 2 torn tails in 10 kills, so a "torn >= 1" control would
+  fail with probability about 0.8^10 = 0.11. A 1 ms sleep between the halves was added: 8 of 10.
+* The A3 Windows smoke showed OS error 5 (access denied, `PermissionDenied`) for a rename onto a file held open without delete sharing.
+
+## Registered checks
+
+Tests in `crates/rcfd-project/tests/` (child processes re-run the test binary with `RCFD_PROJECT_CHILD` set; `child_entry` is a no-op
+without it, so it counts as one passing test per run).
+
+| Id | Check | Limit | Negative control (must discriminate) | Smoke (debug) |
+|---|---|---|---|---|
+| R1 | Round-trip of every record: manifest, `run.json` with and without mesh, `status.json` in all 6 states, 4 event kinds, residual line, metrics; contract literals re-serialize to the same JSON; an unknown field is accepted | exact equality | 5 broken records refused (missing field, unknown state, wrong type, unknown event kind, `run.json` without hash); a parse error names the file | pass |
+| I1 | `run.json` is never replaced | second create is `Exists`, content unchanged, no temp left | the replacing writer does replace | pass |
+| A1 | Atomic replace under readers, threads: 1 writer, 3 readers, 2 s, 1 MiB self-validating payload (header with length and FNV) | 0 partial reads; overlap shown by writes >= 20 and reads >= 200; no temp left | in-place `fs::write` under the same readers: partial >= 1 | 109 writes, 1080 reads, 0 partial; control 20 partial of 874 |
+| A2 | Atomic replace across a kill: child writes 1 MiB payloads in a loop, killed 20 times after 5 + (23 i mod 58) ms while a reader thread hammers; then the file is read | 0 bad observations (partial reads plus invalid file after kill); reads >= 20 | in-place writer child: bad >= 1 | 0 bad in 121 and 127 reads; control 80 and 14 bad |
+| A3 | Windows only: rename onto a file held open without delete sharing | held 50 ms: succeeds, waited >= 40 ms; held throughout: `Retry` error with 12 attempts in < 2 s, old content kept, no temp left | 1 attempt: the 50 ms hold is fatal | 69.8 ms; gave up after 538 ms (OS error 5) |
+| J1 | Torn-line tolerance on fixtures | committed lines returned, torn tail reported with exact offset and length; a parsing line without `\n` is still torn; repair removes exactly the 11 torn bytes | strict per-line reader fails on the fixture; appending without repair gives a located error at line 2 | pass |
+| J2 | JSONL across a kill: one-write appender child killed 10 times (same delay schedule); 200-entry residual lines | reader never errors; every committed line equals the written record; reopen removes exactly the torn bytes; re-read has no torn tail | split-write appender child (two writes 1 ms apart): torn tails >= 1, with the same tolerance asserts | 0 torn; control 8 of 10 |
+| R2 | Run-id uniqueness: 8 threads x 32 and 4 processes x 64 creations at once on one project | 512 distinct ids, 512 listed, 0 skipped, `validate` empty, list in time order | (see R2c) | pass |
+| R2c | Forced contention: 16 threads behind a barrier claim in one fixed second from a 16-value suffix space | 16 distinct ids (deterministic by linear probing) | non-exclusive `create_dir_all` with random suffix: distinct < 16 (chance of a false pass 16!/16^16 = 1.1e-6) | 34 and 30 clashes resolved; control 14 and 9 distinct |
+| P1 | Path escapes: 8 attempts on every platform (`..` forms, absolute, root-relative, a directory link inside `cases/` to an outside folder and a file through it) plus 5 on Windows (backslash `..`, drive-relative, UNC, plain and verbatim absolute), plus 4 refusal-only inputs (empty, blank, alternate stream, NUL) | every one refused with `PathRefused` naming the input; 5 ordinary paths accepted under the root | every escape attempt really leaves the root under a naive `root.join` (lexically, by canonicalizing, or by reading the outside file) | 17 refused (13 escapes); junction made with `mklink /J` |
+| M1 | Migration hook on the constructed v0 fixture | migrated name and `created` exact; open does not write; `validate` reports the unsaved migration; after `save_manifest` reopen is current and valid | without the hook: located error; fixture does not parse as the current schema; newer schema refused; broken v0 fails naming the step | pass |
+| W1 | Watcher: modify, create in a new directory, delete, same-length rewrite with mtime restored; then an atomic replace and a `.rcfd/` write | exactly the 4 changed paths; nothing after the next token; then exactly the replaced file; an idle poll keeps the token | length and mtime alone (hash limit 0) miss the same-length rewrite | pass |
+| V1 | `validate` on a fresh project and after 4 planted defects (edited snapshot, torn events line, stale temp file, missing directory) | 0 issues, then exactly 4 at the right files | the planted defects are the control | pass |
+| Q1 | Query API on 5 runs of 2 cases with mixed states | order, state filter, numeric metrics only, `latest_finished` skips later failed and running runs of the case and a later finished run of another case; a half-created run directory is skipped and reported | built into the fixture | pass |
+| L1 | Listing 500 runs (1/3 finished with metrics), release build, own test binary | slowest of 3 warm `runs()` <= 500 ms | the same listing path with 2 ms extra per run must exceed 500 ms | debug: 166 ms; control 1.31 s |
+| T1 | UTC formatting: known dates (1970-01-01, 2000-02-29, 2000-03-01, 2024-02-29, 1 700 000 000 s) and 100 000 consecutive days | exact | consecutive-day check fails on any skipped or repeated day | pass |
+
+Limit reasons: 0 partial reads, 0 bad observations and exact sets are correctness properties, not tolerances. The A1 overlap minimums
+(20 writes, 200 reads) are a fifth of the debug smoke so that the check cannot pass with readers that never ran. The A3 40 ms is the
+50 ms hold minus 10 ms of timer slack; 2 s bounds the about 0.63 s retry budget with margin for load. L1: 500 ms is half of the 1 s
+"flow of thought" response limit (J. Nielsen, *Usability Engineering*, 1993, chapter 5; recalled from memory, UNVERIFIED), leaving
+margin for a loaded machine; the 2 ms per run control is 1 s over 500 runs, twice the limit. The J2 control asserts a probability:
+with 8 of 10 in smoke, a false miss needs 10 kills without a torn tail.
+
+What the kill checks do not test: process kill leaves the OS cache intact, so they test atomicity (old or new complete file, no torn
+line accepted), not durability across power loss.
+
+## Consequences
+
+* The run service (47B), time-series store (47C) and the plugin (wave 48) can use `rcfd_project::atomic`, `jsonl`, `paths` and
+  `Watcher` instead of writing their own.
+* No existing crate changes; defaults are untouched.
