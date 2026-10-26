@@ -708,3 +708,78 @@ fn v1_fan01_reported() {
         100.0 * (sp2 / n).sqrt()
     );
 }
+
+// ---------------------------------------------------------------- amendment 2 (ADR 0119)
+
+#[test]
+fn s1_static_pressure_deductions() {
+    let o = op();
+    let rom = designed(&RomModel::default());
+    let (mut worst, mut nc_swirl, mut nc_axial) = (0.0_f64, f64::INFINITY, f64::INFINITY);
+    for f in [0.5, 0.75, 1.0, 1.2] {
+        let p = rom.point(&o, f * Q_D).unwrap();
+        let cx = p.strips[0].cx;
+        let axial = 0.5 * o.rho * cx * cx;
+        let swirl = p
+            .strips
+            .iter()
+            .map(|s| 0.5 * o.rho * s.dc_theta * s.dc_theta * dq(s))
+            .sum::<f64>()
+            / p.q;
+        let d = p.dp_t - p.dp_s;
+        worst = worst.max(rel(d, axial + swirl));
+        nc_swirl = nc_swirl.min(rel(axial, d));
+        nc_axial = nc_axial.min(rel(swirl, d));
+    }
+    println!("W46B S1: worst {worst:.2e} (limit 1e-12); NC swirl omitted {nc_swirl:.2e}, axial omitted {nc_axial:.2e}");
+    assert!(nc_swirl >= 1e-11 && nc_axial >= 1e-11, "NC-S1 does not discriminate");
+    assert!(worst <= 1e-12, "{worst:e}");
+}
+
+/// The only `rcfd_mesh::fan::Station` literal of this file (the schema is being extended in parallel).
+fn station(radius: f64, chord: f64, stagger: f64) -> rcfd_mesh::fan::Station {
+    rcfd_mesh::fan::Station {
+        radius,
+        chord,
+        stagger,
+        camber: 0.04,
+        camber_pos: 0.4,
+        thickness: 0.1,
+        sweep: 0.0,
+        lean: 0.0,
+    }
+}
+
+#[test]
+fn p1_from_axial_fan() {
+    use rcfd_mesh::fan::AxialFan;
+    let mk = |n: usize| {
+        AxialFan::linear(
+            n,
+            0.03,
+            0.058,
+            0.0015,
+            0.1,
+            0.02,
+            SectionFamily::Naca4,
+            station(0.0, 0.03, 0.6),
+            station(0.0, 0.025, 1.1),
+        )
+    };
+    let f = mk(7);
+    let r = RomFan::from_axial_fan(&f).unwrap();
+    assert_eq!(
+        (r.n_blades, r.r_hub, r.r_tip, r.tip_gap, r.family),
+        (7, 0.03, 0.058, 0.0015, SectionFamily::Naca4)
+    );
+    assert_eq!(r.sections.len(), f.stations.len());
+    for (a, b) in r.sections.iter().zip(&f.stations) {
+        assert_eq!(
+            (a.radius, a.chord, a.stagger, a.camber, a.camber_pos),
+            (b.radius, b.chord, b.stagger, b.camber, b.camber_pos)
+        );
+    }
+    let e = RomFan::from_axial_fan(&mk(1)).unwrap_err();
+    println!("W46B P1: invalid fan -> {e}");
+    assert!(e.contains("n_blades"), "{e}");
+}
