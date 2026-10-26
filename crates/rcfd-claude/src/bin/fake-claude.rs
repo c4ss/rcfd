@@ -17,6 +17,7 @@ fn sleep_forever() -> ! {
     }
 }
 
+#[allow(clippy::zombie_processes)] // the sleeping grandchild must outlive this process (cancel test D5/D6)
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--fake-sleep") {

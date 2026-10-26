@@ -115,7 +115,7 @@ pub fn live_pids(pids: &[u32]) -> std::io::Result<HashSet<u32>> {
     let run = |c: &mut Command| -> std::io::Result<String> {
         let out = c.stdin(Stdio::null()).stderr(Stdio::null()).output()?;
         if !out.status.success() {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "process listing failed"));
+            return Err(std::io::Error::other("process listing failed"));
         }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     };
@@ -174,7 +174,7 @@ pub fn classify(
         }
         Err(e) => d.warnings.push(format!("{}: {e}", dir.display())),
     }
-    files.sort_by(|a, b| b.2.cmp(&a.2));
+    files.sort_by_key(|f| std::cmp::Reverse(f.2));
     let agents: Option<Vec<AgentEntry>> = match listing {
         Ok(a) => Some(
             a.into_iter()

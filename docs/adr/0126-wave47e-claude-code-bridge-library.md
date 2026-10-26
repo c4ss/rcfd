@@ -171,3 +171,32 @@ UI, the Agent SDK sidecar, cross-session messaging, Remote Control, `claude atta
 
 `Cargo.toml` (workspace member), `crates/rcfd-claude/` (`src/{lib,allow,discover,driver,stream,transcript}.rs`,
 `src/bin/fake-claude.rs`, `tests/{fixtures_v2_1_310,driver_fake,real_cli}.rs`, `tests/fixtures/v2.1.310/*`), this ADR.
+
+## Addendum: measured values (registered runs, 2026-10-26)
+
+The registered run was one release run of the crate (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w47e`) at a45ffa7.
+The real-CLI tests R1-R3 were each run once in debug. Every registered check passed; there are no known misses.
+
+| Check | Limit | Measured |
+|---|---|---|
+| T1 | 0 mismatches; wrong mapper exactly 1 | 0; 1 |
+| T2 | 22 / 22 rejected | 22 / 22 |
+| T3 | no forbidden argument in the generated space; >= 5000 lists, >= 10 000 insertions; 15 / 15 bad lists refused | none; 7469 lists, 13 294 insertions; 15 / 15 |
+| T4 | exact suggestions; `None` cases | as registered |
+| P1 | 0 unrecognised lines; fields and sequences as recorded | 0 in 5 streams and 2 transcripts; all equal |
+| P2 | no panic; 144 / 144 transcript and >= 60 stream targeted mutations unrecognised | no panic in 4800 + 200-per-line random mutations; 144 / 144; stream count >= 60 (assert passed) |
+| P3 | tail and incremental reads exact | exact |
+| P4 | >= 10 MB/s (release) | 259.4 MB/s (30.5 MB, 34 000 events, 0.118 s) |
+| D1-D4, D6, D7 | as registered | passed |
+| D5 | both pids gone within 5 s after `cancel()` | `cancel()` returned after 0.196 s; both pids gone at the first check, 0.528 s after cancel started |
+| R1 | no warnings, scratch sessions CLOSED, a live session OPEN | 2 scratch sessions CLOSED; the lead's live session in `<project dir>` classified OPEN |
+| R2 | id chosen here, dontAsk, `pong`, exit 0 | session 75ebe38e-…, `permissionMode` dontAsk, `pong`, exit 0, 0.0026 USD |
+| R3 | closed session resumed, Write denied with `Edit(r3.txt)`, no file, exit 0 | resumed 75ebe38e-… (the R2 session, the newest closed one), denied with suggestion `Edit(r3.txt)`, no file, exit 0, 0.0058 USD |
+
+Real CLI usage in total: **7** billable headless calls (5 observation calls and R2, R3), all with `--model haiku`, about 0.033 USD.
+`claude agents --json` ran about 12 times and makes no model call.
+
+Deviations:
+* The smoke-time clippy found two style lints in `discover.rs` (`io::Error::other` and `sort_by_key`) and the intended
+  never-waited grandchild in `fake-claude`, which now has an explicit `allow` saying why. None of these changes behaviour.
+* No other deviation from the registered plan.
