@@ -156,3 +156,12 @@ Smoke (debug, 8 runs): 14 to 19 bad of 20, no hang. The old control stays as the
 
 Consequence for the run service (47B): never rewrite a file in place that readers open; an in-place rewrite killed mid-way both
 exposes partial content and, on this machine, could block readers' `open`. Atomic replace never showed either.
+
+## Amendment 2 (2026-10-26, registered before the corrected run): A2n without truncation
+
+Run together with the other tests of `tests/process.rs` (debug smoke), the amendment-1 control hung again: the parent's post-kill
+`File::open` blocked after a kill of the truncating child, so the hang does not need a concurrent reader. Corrected A2n: the child
+writes the file once, then overwrites it in place from offset 0 without truncating (one handle, `rewind`, 8 KiB `write_all` pieces,
+two precomputed payloads of equal length), so a kill leaves a mix of the two generations that fails the hash. Same 20 kills, same
+schedule, read after each kill, limit bad >= 1. Smoke (debug, whole `process` binary, 6 runs): 19 to 20 bad of 20, no hang; the
+positive A2 in the same runs: 0 bad. The registered run of A2n is the final gate.

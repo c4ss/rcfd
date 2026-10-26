@@ -53,10 +53,13 @@ fn child_entry() {
         "naive-pre" => {
             // ADR 0122 amendment 1: payloads built once, so the loop is all writing, not generating.
             let bufs = [common::payload(1, LEN), common::payload(2, LEN)];
+            std::fs::write(&arg, &bufs[1]).unwrap();
+            // Overwritten in place without truncating (truncating a file that a killed process was rewriting
+            // could block readers' open on this machine), in 8 KiB pieces as a `BufWriter` would write.
+            let mut f = std::fs::OpenOptions::new().write(true).open(&arg).unwrap();
             for g in 0.. {
-                // In-place, in 8 KiB pieces as a `BufWriter` would write: a kill lands inside the file.
-                let _ = std::fs::File::create(&arg)
-                    .and_then(|mut f| bufs[g % 2].chunks(8192).try_for_each(|c| f.write_all(c)));
+                let _ = std::io::Seek::rewind(&mut f)
+                    .and_then(|()| bufs[g % 2].chunks(8192).try_for_each(|c| f.write_all(c)));
                 if g == 0 {
                     ready();
                 }
