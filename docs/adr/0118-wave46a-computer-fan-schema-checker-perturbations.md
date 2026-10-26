@@ -344,7 +344,7 @@ The code (`fan_design.rs`, the `Rng` move, `centroid`) and two ignored smoke tes
   test checks them against Phi(1) = 0.841344746068543, Phi(-3) = 1.3498980316301e-3 and Phi(-5) = 2.8665157187919e-7.
 * Moulding thresholds: UNVERIFIED rules of thumb, as stated in the table above.
 
-## Addendum: measured values (one registered run each, debug build, `target-w46a`, on the working tree committed as 8bace16)
+## Addendum: measured values (one registered run each, debug build, `target-w46a`, on the working tree committed as 8bace16, rebased as e09207d)
 
 Every registered check passed. No known-miss test was created.
 
@@ -434,3 +434,17 @@ distribution.
 * They do not show that the thresholds, the default fan or the tolerance magnitudes describe any real fan or mould.
 * They do not show that `U` matches a real rotor, whose hub, magnet and bearing are not modelled.
 * They do not show that the realised meshes are fit for CFD: S4 builds them but checks no quality limit.
+
+## Final gate
+
+* **Gate run.** On a fresh `git archive` of e548e88 (the branch rebased onto main 98a4903), in `<scratch dir>`:
+  * `cargo fmt --check`: clean;
+  * `cargo clippy --workspace --all-targets -D warnings`: clean;
+  * `cargo test --workspace --release --no-fail-fast`: **2042 passed / 0 failed / 651 ignored**.
+* **Reconciliation with wave 45.** The wave-45 gate was 2028 / 0 / 649. This wave adds 13 registered tests and the
+  `normal_cdf` unit test, which gives 2042, and the 2 ignored smokes, which give 651.
+* **D1 and D2.** In that run, `g6_fan_meshes_unchanged`, `baseline_hashes.rs` and `docs_site_builds_with_no_broken_links`
+  passed. `git diff main -- crates/rcfd-api/tests/baseline_hashes.rs` is empty.
+* **After the gate.** Main moved to f307f59 (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
+  branch was rebased onto it: the commits are 4d10635 (registration), e09207d (implementation) and 04b8f62 (addendum).
+  The re-runs on the rebased branch: fmt clean, workspace clippy clean, and this ADR's tests 13 passed / 2 ignored, plus the `normal_cdf` and `rng` unit tests. There was no second full test gate.
