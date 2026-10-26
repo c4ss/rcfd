@@ -1,6 +1,6 @@
 # ADR 0115: Wave 45A, an opt-in range-scaled Venkatakrishnan limiter for `linear_upwind` on the stalled FAN-01 passage
 
-Status: **ACCEPTED (registered 2026-10-26) before any registered run.** Limits and decision rules below are not changed after a run. A
+Status: **ACCEPTED (registered 2026-10-26) before any registered run. Outcome (addendum): Z1 missed at every k, no case key added, the library variant kept.** Limits and decision rules below are not changed after a run. A
 missed limit becomes an ignored `*_known_miss` test with the limit intact. A defective set-up gets an amendment written before the
 corrected run. Defaults stay bit-identical. `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles,
 our own ADRs, and the public literature listed at the end (UNVERIFIED). Parents: ADRs 0081 (part L), 0086, 0110, 0111. Written on branch
@@ -148,9 +148,91 @@ A fully differentiable limiter; the Michalak / Ollivier-Gooch smoothed BJ; limit
 change; meshes finer than F1, B2 / B1; agreement with FAN-01 data; the growth of the spurious L with refinement (ADR 0110 part L); the
 `rotating_frame` seam coefficient (ADR 0117).
 
-## Addendum
+## Addendum: measured values, verdicts, deviations
 
-To be written after the registered runs.
+Release builds of `w45a` at 83935ec (the registered code); each registered run made once, from copies of the built test binaries.
+
+### Z1, the empty passage (switch at 1000, 2000 more iterations)
+
+| k | member | (a) rho_med / rho_du | tolerance / `is_converged()` first | (b) | (c) probe res_u / res_p | (d) abs(L) [N m], E_s [Pa] (limit) | result |
+|---|---|---|---|---|---|---|---|
+| 0.002 | E3 | **0.695 / 1.79** | never / never | **false** | **2.1e-5** / 4.4e-6 | **0.2685** (0.009618), 5.111 (6.298) | **MISS** |
+| 0.002 | E2 | **0.116 / 0.068** | 1092 / never | **false** | 2.8e-6 / 8.2e-7 | **0.2063** (0.059910), 8.526 (9.277) | **MISS** |
+| 0.002 | E1 | **0.033 / 0.019** | 1097 / never | **false** | 1.7e-6 / 3.6e-7 | **0.1811** (0.106507), 5.239 (5.511) | **MISS** |
+| 0.01 | E3 | **0.586 / 1.72** | never / never | **false** | **1.8e-5** / 3.1e-6 | **0.2642**, 5.058 | **MISS** |
+| 0.01 | E2 | **0.055 / 0.048** | 1091 / never | **false** | 1.3e-6 / 3.9e-7 | **0.2023**, 8.537 | **MISS** |
+| 0.01 | E1 | 2.2e-8 / 1.4e-8 | 1096 / 1236 | true | 1.5e-12 / 1.8e-13 | **0.1766**, 5.250 | **MISS (d)** |
+| 0.05 | E3 | **0.489 / 1.41** | never / never | **false** | **1.5e-5** / 1.7e-6 | **0.1946**, 4.611 | **MISS** |
+| 0.05 | E2 | 2.4e-3 / 1.8e-3 | 1089 / never | **false** | 6.2e-9 / 1.2e-8 | **0.1545**, 8.712 | **MISS (b, d)** |
+| 0.05 | E1 | 2.7e-8 / 2.4e-9 | 1122 / 1265 | true | 1.0e-12 / 1.6e-13 | **0.1391**, 5.368 | **MISS (d)** |
+
+* **Z1 misses at every k; no guard trip in any arm.** By the registered rule nothing is added: no case key, no Z2 run, no k*.
+* **The new limiter does not stop the E3 cycle at any k.** At iteration 3000 the change is an exact period-two cycle (period ratio 0.000)
+  carried by four cells near the shroud and the seam (c2962, c3298: seam, r 0.2455-0.2461, z 0.129, 66 deg non-orthogonal; c2926, c3262:
+  interior, r 0.2465-0.2471, z 0.137): 91-96 % of sum |du|^2 in the top ten cells, `max_du` 0.10-0.12 m/s. The smooth y-function with
+  an eps up to 0.05 R leaves the per-cell minimum over faces and the neighbour max / min, and the E3 cycle survives those kinks.
+* **Where it converges (E1 at k 0.01 and 0.05, E2 at k 0.05 to 7e-9) it converges to more spurious swirl.** The exact absolute outlet
+  swirl is zero; the BJ stall gives abs(L) 0.0095 / 0.0596 / 0.1060 N m on E3 / E2 / E1, the new limiter 0.139-0.268 N m on every member
+  and k, 1.3 to 28 times the BJ value (the swirl energy E_s is lower than BJ's in every arm). The (d) check exists exactly to refuse this,
+  and it does. abs(L) falls with k on each member and is nearly the same on the three members at a given k: it does not grow with
+  refinement as BJ's does (ADR 0110 part L), but it is larger.
+* E2 at k 0.05 converges in the residuals (`res_u` 7e-9) but `is_converged()` stays false: a 4e-4 m/s period-two change remains at shroud
+  tip-layer cells (c13537 and neighbours, r 0.2497, z 0.144), c_u 1.1e-5 with `res_nut` 3.2e-3; the SST criterion sees it (ADR 0111
+  part G).
+* The window-worst functionals of the reference windows reproduce the ADR 0111 values (0.0095182 / 6.26632, 0.0596125 / 9.23040,
+  0.1059773 / 5.48377); R at the end of the arms is within 2 % of the smoke values.
+
+### Accuracy and boundedness (all three k)
+
+| Check | Measured (k 0.002 / 0.01 / 0.05) | Limit | Result |
+|---|---|---|---|
+| P1 psi range on the step | [0, 1] / [0.0008, 1] / [0.020, 1] | in [0, 1] | met |
+| P1 face values | [-0.0000, 1.0000] / [-0.0002, 1.0002] / [-0.0049, 1.0049] | [-0.08, 1.08] | met |
+| P1 psi at cell 5 | 1 / 1 / 1 | > 0.99 | met |
+| P2 linear field, max abs(psi - 1) in cells 5..35 | 2.2e-15 / 2.2e-15 / 6.7e-16 | 1e-12 | met |
+| P2 constant field | psi = 1 exactly | psi = 1 | met |
+| P3 Kovasznay fine-pair L2 order | 2.128 / 2.125 / 2.112 (fine L2 2.237e-3 / 2.235e-3 / 2.199e-3; BJ 2.217e-3 in ADR 0081) | >= 1.8 | met |
+| P4 Taylor-Green, all meshes converged | yes (553-5743 iterations) | converged | met |
+| P4 fine-pair L2 order | 3.169 / 3.242 / 3.070 | >= 1.8 | met |
+| P4 64^2 L2 against BJ 4.724e-4 | 4.004e-4 / 3.714e-4 / 3.362e-4 | <= BJ | met |
+| P5 default hashes on B3 | absent = `none` 0xec721116c0963182, `barth_jespersen` 0x26e5a0c524957698 | = main | met |
+| P5 located errors | all seven located on the registered path | located | met (then removed with the key) |
+| P6 key = library variant on E3 | bit-identical, no guard trip | bit-identical | met (then removed with the key) |
+
+* P4 reported: on 16^2 and 32^2 the new limiter is *less* accurate than BJ (L2 3.3-3.5e-2 against 2.6e-2; 2.8-3.6e-3 against 1.8e-3) and
+  more accurate on 64^2, so its fine-pair orders (3.1-3.2) are pre-asymptotic, not a measure of a higher order; the limit (order and the
+  64^2 comparison) is met as registered. The share of cells with psi < 0.99 on 64^2 is 0.64 (k 0.002, 0.01) and 0.054 (k 0.05) against 0.008
+  for BJ: the Venkatakrishnan function is below 1 wherever the neighbour range is less than twice the extrapolated difference, so it acts in
+  most of a smooth field until eps is large. L-inf orders 2.95 / 2.66 / 2.24 (fine pair).
+* P3 now runs in the default suite (10 s); P4 (170 s) stays ignored.
+
+### What is kept and removed (registered rule)
+
+* Kept: `rcfd_fv::gradient::Limiter::VenkatakrishnanRange` (no case key), its unit test (P1 / P2), P3 (`w45a_p3_kovasznay_order`), P4
+  (`w45a_p4_taylor_green_order`, ignored), the P4 smoke and diagnosis (ignored), P5's default hash test, `w45a_smoke`, the Z harness, the
+  three ignored known misses `w45a_z1_k0002_known_miss`, `w45a_z1_k001_known_miss`, `w45a_z1_k005_known_miss` (limits intact), the never
+  run `w45a_z2_*` (ignored), and the field `Arm::conv_first`.
+* Removed: the schema value `venkatakrishnan_range`, `solver.linear_upwind_limiter_k`, their `sim.rs` mapping and checks, the
+  located-error test and P6. `schema.rs` and `sim.rs` are identical to main. `docs/case-schema.md` was not changed.
+
+### Deviations (candid)
+
+* The draft's "R about 78 m/s" was wrong (measured per component, above); found by the smoke, before registration.
+* The drafted doubly periodic P4 was infeasible and was replaced before registration (above); the draft asked for exactly that.
+* P3 and P4 used the library route instead of the case key, P6 used k = 0.01 instead of k*, and P1-P4 limits were applied at all three
+  k: all registered before the runs, with reasons.
+* P5, P6 and the located errors ran once during development before the registration commit (exact checks; disclosed in "What I already
+  knew").
+* Z1 at k 0.01 and 0.05 started after a 56-minute wait for a free release slot (other agents' gates); no effect on any number.
+* `w45a_p3_kovasznay_order` lost its `#[ignore]` after the run (it takes 10 s); no limit changed.
+
+### What remains
+
+* The E3 four-cell period-two cycle at the shroud / seam under every limiter tried so far (BJ, Venkatakrishnan(5), the range-scaled
+  form at three k); a limiter-free mechanism there is not excluded.
+* Why the smoothed limiter converges E1 (and E2 at k 0.05) to 1.3-2.6 times the BJ outlet angular momentum, and why that spurious L
+  hardly changes with refinement.
+* The bladed B3 stall (Z2 not run under the registered rule).
 
 ## References (public literature; UNVERIFIED in content)
 
