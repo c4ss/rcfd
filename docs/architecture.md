@@ -15,7 +15,8 @@ rcfd-fv     -> core, mesh, linalg, gpu
 rcfd-particles -> core, mesh   (one-way Lagrangian particle tracking, ADR 0028)
 rcfd-turb   -> core, mesh, fv
 rcfd-post   -> core, mesh
-rcfd-api    -> core, fv, io, particles (and the crates above)
+rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
+rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
 rcfd-mcp    -> api
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
@@ -25,5 +26,5 @@ rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 01
 ```
 
 Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
-`gpu`/`dist` < `io`/`fv`/`particles` < `turb`/`post` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
+`gpu`/`dist` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.

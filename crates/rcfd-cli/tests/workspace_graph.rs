@@ -85,7 +85,7 @@ fn layering_matches_architecture_doc() {
         "rcfd-mesh" | "rcfd-linalg" | "rcfd-reactor" | "rcfd-project" => 1,
         "rcfd-gpu" | "rcfd-dist" => 2,
         "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 3,
-        "rcfd-turb" | "rcfd-post" => 4,
+        "rcfd-turb" | "rcfd-post" | "rcfd-tsstore" => 4,
         "rcfd-api" | "rcfd-render" => 5,
         "rcfd-mcp" | "rcfd-cli" => 6,
         "rcfd-assistant" => 7,
