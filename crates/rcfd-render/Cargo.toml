@@ -1,0 +1,22 @@
+[package]
+name = "rcfd-render"
+description = "Studio render core (L4): wgpu offscreen rendering of surface meshes with scalar colouring (ADR 0125)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# wgpu 30 needs Rust 1.87 (its declared rust-version); the rest of the workspace keeps 1.75. ADR 0125.
+rust-version = "1.87"
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-core.workspace = true
+rcfd-mesh.workspace = true
+rcfd-post.workspace = true
+png.workspace = true
+
+[dependencies.wgpu]
+version = "=30.0.1"
+default-features = false
+features = ["std", "wgsl", "dx12", "vulkan"]
