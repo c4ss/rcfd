@@ -171,6 +171,18 @@ vibration (no data).
 * `crates/rcfd-post/tests/w46c_rotordyn.rs`
 * `docs/interchange-formats.md` (the two cards)
 
+## Amendment 1 (written after the one registered run of all checks, before the corrected J1 test runs)
+
+* What happened: `w46c_j1_jeffcott_critical_speed` panicked in its **negative control**, after its check had printed critical
+  speed rel 0 and natural frequencies rel 0 / 0 (known to me when writing this). The control set `k_2 = 1e-30`, which leaves the
+  point-mass rotor on a single bearing at `z = -1`. Then `kt kr - kc^2` cancels to round-off, the static stiffness is singular,
+  `critical_speeds` returns an empty list and `[0]` panics. The set-up is defective: the wrong model was meant to be "one bearing's
+  stiffness counted", not "a rotor on one bearing".
+* The old test stays as `w46c_j1_jeffcott_critical_speed_defective_control`, ignored, unchanged except the attribute.
+* New test `w46c_j1b_jeffcott_critical_speed`: the same check and limit (critical speed and `+-omega_n`, rel <= 1e-9). Corrected
+  control: both bearings with `k / 4`, so the total is `k / 2` (the stiffness of one of the two bearings) and `kc` stays 0; expected
+  `sqrt(k / 2m)`, rel 0.29; must miss 1e-9 by at least 10x.
+
 ## References
 
 * Rigid-rotor and Jeffcott equations, gyroscopic moment `Ip Omega theta'`, hysteretic damping as `eta k / omega`: derived from
