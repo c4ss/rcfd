@@ -87,6 +87,7 @@ fn sample_deck() -> Deck {
             },
         ],
         temps: (1..=8).map(|g| (9, g, 300.0 + g as f64 / 7.0)).collect(),
+        ..Default::default()
     }
 }
 

@@ -546,6 +546,7 @@ fn case_deck(tamper: bool) -> Result<(), String> {
             p: [MARK, f64::NAN, f64::NAN, f64::NAN],
         }],
         temps: vec![(8, 1, 300.0 / 7.0), (8, 2, 301.5), (8, 3, 302.0), (8, 4, 303.25)],
+        ..Default::default()
     };
     let txt = deck.to_string_checked().map_err(|e| e.to_string())?;
     let txt = corrupt(txt, tamper);

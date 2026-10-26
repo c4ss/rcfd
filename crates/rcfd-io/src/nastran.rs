@@ -3,7 +3,8 @@
 //!
 //! Cards: `GRID, ID, , X, Y, Z`; `CTRIA3, EID, PID, G1, G2, G3`; `CQUAD4, EID, PID, G1..G4`; `CHEXA, EID, PID, G1..G6` with a
 //! continuation line `, G7, G8`; `PLOAD4, SID, EID, P1, P2, P3, P4` (blank `P2..P4` = uniform `P1`);
-//! `TEMP, SID, G1, T1, G2, T2, G3, T3`. Field positions were read from public pyNastran documentation (PLOAD4, TEMP) or are
+//! `TEMP, SID, G1, T1, G2, T2, G3, T3`; point loads `FORCE, SID, G, CID, F, N1, N2, N3` and `MOMENT` (same fields, load = F N,
+//! basic coordinate system CID = 0 only; written with F = 1, layout recalled and UNVERIFIED, ADR 0120). Field positions were read from public pyNastran documentation (PLOAD4, TEMP) or are
 //! recalled (GRID, element cards, continuation lines, free-field syntax) and UNVERIFIED against a solver; the sign convention of
 //! `PLOAD4` (here: positive = fluid pressure pressing on the structure) is unverified as well. The reader parses exactly the
 //! written subset and reports `line N` in every error.
@@ -76,6 +77,10 @@ pub struct Deck {
     pub pload4: Vec<Pload4>,
     /// Nodal temperatures `(set id, grid id, T)`.
     pub temps: Vec<(i64, i64, f64)>,
+    /// Point forces `(set id, grid id, vector)` (`FORCE` cards).
+    pub forces: Vec<(i64, i64, Vec3)>,
+    /// Point moments `(set id, grid id, vector)` (`MOMENT` cards).
+    pub moments: Vec<(i64, i64, Vec3)>,
 }
 
 fn real(x: f64) -> String {
@@ -125,6 +130,11 @@ impl Deck {
             o.push('\n');
             i = j;
         }
+        for (card, list) in [("FORCE", &self.forces), ("MOMENT", &self.moments)] {
+            for (sid, g, v) in list {
+                let _ = writeln!(o, "{card},{sid},{g},0,1.0,{},{},{}", real(v[0]), real(v[1]), real(v[2]));
+            }
+        }
         o.push_str("ENDDATA\n");
         Ok(o)
     }
@@ -173,6 +183,16 @@ impl Deck {
             }
             if !t.is_finite() {
                 return Err(bad(format!("TEMP set {s} grid {g} has a non-finite temperature")));
+            }
+        }
+        for (card, list) in [("FORCE", &self.forces), ("MOMENT", &self.moments)] {
+            for (s, g, v) in list {
+                if !ids.contains(g) {
+                    return Err(bad(format!("{card} set {s} references missing grid {g}")));
+                }
+                if v.iter().any(|x| !x.is_finite()) {
+                    return Err(bad(format!("{card} set {s} grid {g} has a non-finite component")));
+                }
             }
         }
         Ok(())
@@ -294,6 +314,26 @@ impl Deck {
                     }
                     if n == 0 || n > 3 {
                         return Err(err(ln, "TEMP card needs one to three (G, T) pairs"));
+                    }
+                }
+                c @ ("FORCE" | "MOMENT") => {
+                    let sid = int(1, "SID")?;
+                    let g = int(2, "G")?;
+                    if !gids.contains(&g) {
+                        return Err(err(ln, &format!("{c} references undefined grid {g}")));
+                    }
+                    if f.get(3).is_some_and(|s| !s.is_empty()) && int(3, "CID")? != 0 {
+                        return Err(err(
+                            ln,
+                            &format!("{c}: only the basic coordinate system (CID 0) is supported"),
+                        ));
+                    }
+                    let a = flt(4, "F")?;
+                    let v = [a * flt(5, "N1")?, a * flt(6, "N2")?, a * flt(7, "N3")?];
+                    if c == "FORCE" {
+                        deck.forces.push((sid, g, v));
+                    } else {
+                        deck.moments.push((sid, g, v));
                     }
                 }
                 other => return Err(err(ln, &format!("unknown card '{other}'"))),

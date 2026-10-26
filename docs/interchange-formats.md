@@ -103,5 +103,9 @@ element node orders, CHEXA continuation form, free-field syntax in a given solve
 positive value is fluid pressure pressing on the structure). No third-party solver has read these decks; acceptance by
 one cannot be tested here and is not claimed. Heat-rate (QBDY) loads are not delivered.
 
+Point loads (ADR 0120): `FORCE,SID,G,CID,F,N1,N2,N3` and `MOMENT` (same fields, load = F N; written with CID 0 and F 1.0, any
+other CID is refused on read). The field layout is recalled and unverified. `rcfd_post::rotordyn::load_deck` uses them for the
+bearing and mount loads of a rotor-dynamics response: two static load sets per harmonic (real and imaginary part).
+
 `rcfd_post::structural` maps wall pressure by conservative parameter-space overlap (x,y for planes, theta,z for cylinders
 with 2 pi periodicity) and temperature through `remap` followed by a linear nodal recovery.
