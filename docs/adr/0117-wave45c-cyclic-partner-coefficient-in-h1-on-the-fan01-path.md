@@ -242,7 +242,7 @@ What this means:
 Deviations (all in the amendments): D-d's set-up was defective (no boundary conditions) and was corrected by D-d'; the test-only route sits
 on `SimpleSolver` instead of `Simulation`, which adds one field to `simple.rs` (D2 had said no `simple.rs` change); the F family ran a
 second time, through the route, only to check the route. The D-a / D-b / D-d' tests in the tree are the post-removal versions; their
-registered versions ran on the key code (commit 2f81f36 holds them).
+registered versions ran on the key code (commit 18dab58 holds them).
 
 Follow-ups for the lead (not done here): a tree-level R1 on the ADR 0116 `annulus_3d_sector`, which would put a case-tree sector against
 a case-tree annulus through the `sim.rs` wiring (on main no case-tree mesh allows it); and, if 0115 converges the E family, repeating the F
