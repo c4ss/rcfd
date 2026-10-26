@@ -124,7 +124,7 @@ The first gate run (archive of e344301) hung in `c7_c8_scrubbing_a_1m_cell_store
 `powershell -NoProfile -Command (Get-Process -Id <pid>).PeakWorkingSet64`, and that powershell process never returned. On this machine
 many `powershell.exe` processes were hung at that time (tasklist status "Unknown"), and a CIM query from my own shell hung too. The
 set-up is defective: the probe depends on a shell that can hang, without a timeout. What I knew when writing this amendment: the C7
-set-up had completed in that run (the 674 MB store was written and deleted is not known; the parent was blocked in the first child),
+set-up had reached the first memory child (the parent was blocked waiting for it; no C7 time was printed),
 and `typeperf "\Process(scale-*)\Working Set Peak"` returned within seconds from my shell, showing the hung child at 30 089 216 bytes.
 
 Correction (same limits, same set-up otherwise): the memory probe reads `\Process(<test exe>*)\Working Set Peak` and `\ID Process`
