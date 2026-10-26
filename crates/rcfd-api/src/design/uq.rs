@@ -115,7 +115,7 @@ impl Dist {
                 if !(mean.is_finite() && sd.is_finite() && sd > 0.0) {
                     return Err(format!("normal needs a finite mean and sd > 0 (got {mean}, {sd})"));
                 }
-                if !(lo < hi) || lo.is_nan() || hi.is_nan() {
+                if lo.is_nan() || hi.is_nan() || lo >= hi {
                     return Err(format!("truncation needs lo < hi (got {lo}, {hi})"));
                 }
                 let mass = norm_cdf((hi - mean) / sd) - norm_cdf((lo - mean) / sd);
