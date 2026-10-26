@@ -922,9 +922,8 @@ mod tests {
         }
     }
 
-    /// ADR 0116 G1 (with N2): volume and patch areas of `annulus_3d_sector` against the closed forms of the polygonal (chord)
-    /// sector, relative error <= 1e-12 each, uniform and radially graded; N2 compares the volume with the curved sector instead
-    /// and must miss 1e-12 by at least 10x.
+    /// ADR 0116 G1: volume and patch areas of `annulus_3d_sector` against the closed forms of the polygonal (chord) sector,
+    /// relative error <= 1e-12 each, uniform and radially graded.
     #[test]
     fn annulus_3d_sector_g1_polygonal_volume_and_areas() {
         let (n, ri, ro, lz, angle) = (8usize, 0.124, 0.25, 0.4, 40f64.to_radians());
@@ -949,12 +948,19 @@ mod tests {
                 println!("G1 {g:?} {name}: relative error {rel:.3e} (limit 1e-12)");
                 assert!(rel <= 1e-12, "{name}");
             }
+        }
+        println!("G1 reported: sin(dt) / dt = {:.5}", dt.sin() / dt);
+    }
+
+    /// ADR 0116 N2 (negative control of G1, run first): the volume against the curved sector must miss 1e-12 by at least 10x.
+    #[test]
+    fn annulus_3d_sector_n2_curved_reference_misses() {
+        let (ri, ro, lz, angle) = (0.124, 0.25, 0.4, 40f64.to_radians());
+        for g in [Grading::Uniform, Grading::Expansion(3.0)] {
+            let m = annulus_3d_sector(8, 10, 24, ri, ro, lz, angle, g).unwrap();
             let curved = 0.5 * angle * (ro * ro - ri * ri) * lz;
             let n2 = (m.total_volume() - curved).abs() / curved;
-            println!(
-                "N2 {g:?}: volume against the curved sector {n2:.3e} (must exceed 1e-11); sin(dt)/dt = {:.5}",
-                dt.sin() / dt
-            );
+            println!("N2 {g:?}: volume against the curved sector {n2:.3e} (must be >= 1e-11)");
             assert!(n2 >= 1e-11);
         }
     }
