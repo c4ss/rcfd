@@ -133,3 +133,26 @@ same element; Q1 and L1 check the result.
 
 The J2 one-write appender never left a torn line in 10 kills: `TerminateProcess` does not interrupt a single small `WriteFile`, so the
 torn-tail path is exercised by the split-writer control and the J1 fixtures, not by the production appender.
+
+## Amendment 1 (2026-10-26, registered before the corrected run): A2 negative control
+
+What happened. The first workspace gate (archive of 95e1e3c) failed one test outside this crate:
+`crates/rcfd-cli/tests/workspace_graph.rs::layering_matches_architecture_doc` panics on any crate not in its layer table. Fixed by
+placing `rcfd-project` (depends on `rcfd-core` only) in layer 1 of that table and in `docs/architecture.md`. After the rebase onto
+cc0a8cb a debug run of `cargo test -p rcfd-project` failed the A2 negative control (0 bad observations); three debug reruns gave 1, 8
+and 4. The set-up is defective in debug builds: the child builds each 1 MiB payload inside its loop, which takes longer than the write,
+so the file is complete most of the time. The registered release run (99 bad) was not affected, but a control that fails in debug
+does not discriminate reliably.
+
+Diagnosis while correcting (smoke, debug, disclosed): with payloads precomputed, the child rewrote the file so fast that in 3 of 13
+runs the parent's concurrent reader blocked inside `File::open` for over 60 s after a kill (a file being truncated in place by a
+killed process; a filter driver such as the antivirus is suspected, not diagnosed). With the reader off, one `fs::write` per file
+gave only 1 to 5 bad of 20 (a kill does not interrupt one `WriteFile`; it lands either before or after it).
+
+Corrected control (A2n): the child precomputes two payloads and rewrites the file in place in 8 KiB `write_all` pieces (as a
+`BufWriter` would) in a loop; no concurrent reader; the file is read after each of the 20 kills (same delay schedule). Limit: bad >= 1.
+Smoke (debug, 8 runs): 14 to 19 bad of 20, no hang. The old control stays as the ignored
+`a2_negative_control_in_place_writer_killed_leaves_partial_files_known_miss`. The positive A2 check is unchanged.
+
+Consequence for the run service (47B): never rewrite a file in place that readers open; an in-place rewrite killed mid-way both
+exposes partial content and, on this machine, could block readers' `open`. Atomic replace never showed either.
