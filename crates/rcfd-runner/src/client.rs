@@ -58,24 +58,38 @@ impl Client {
         let dot = dot_dir(self.project());
         std::fs::create_dir_all(&dot).map_err(err)?;
         let project = std::env::current_dir().map_err(err)?.join(self.project());
-        let mut launcher = sys::spawn_detached(
-            &self.runner_exe,
-            &["serve".into(), "--project".into(), project.display().to_string()],
-        )
-        .map_err(|e| format!("cannot start {}: {e}", self.runner_exe.display()))?;
-        let t0 = Instant::now();
-        while t0.elapsed() < Duration::from_secs(10) {
-            if self.runner_running() {
-                let _ = launcher.try_wait();
+        let args = ["serve".into(), "--project".into(), project.display().to_string()];
+        let cannot = |e: std::io::Error| format!("cannot start {}: {e}", self.runner_exe.display());
+        let mut launcher = sys::spawn_detached(&self.runner_exe, &args).map_err(cannot)?;
+        if self.wait_lock(Duration::from_secs(if cfg!(windows) { 5 } else { 10 })) {
+            let _ = launcher.try_wait();
+            return Ok(());
+        }
+        if cfg!(windows) {
+            // PowerShell did not start the runner in time (seen hung on a loaded host, ADR 0123 amendment 2):
+            // start it directly. shortcut: this route hands the runner the caller's inheritable handles.
+            let _ = launcher.kill();
+            let _ = launcher.wait();
+            let _ = sys::spawn_direct(&self.runner_exe, &args).map_err(cannot)?;
+            if self.wait_lock(Duration::from_secs(10)) {
                 return Ok(());
+            }
+        }
+        Err(format!(
+            "the runner did not take the lock in time (see {})",
+            dot.join("runner.log").display()
+        ))
+    }
+
+    fn wait_lock(&self, timeout: Duration) -> bool {
+        let t0 = Instant::now();
+        while t0.elapsed() < timeout {
+            if self.runner_running() {
+                return true;
             }
             std::thread::sleep(Duration::from_millis(20));
         }
-        let _ = launcher.try_wait();
-        Err(format!(
-            "the runner did not take the lock within 10 s (see {})",
-            dot.join("runner.log").display()
-        ))
+        false
     }
 
     /// Queue a run of `case` without starting a runner; returns the run id.

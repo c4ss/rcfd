@@ -244,3 +244,28 @@ Met.
   `null`.
 * Hash: `rcfd-project` has `hash_bytes`; this runner writes `fnv1a64:<hex>`. Run ids: `is_run_id` and `claim` replace `check_id` and
   `new_run_id`.
+## Amendment 2 (2026-10-26, before the second gate run): the gate failure and the direct-start fallback
+
+**Gate run 1 failed.** It ran on a fresh archive of 61d986d: fmt 0, clippy 0, then the test stage, 2077 passed / 12 failed / 656
+ignored.
+* The 12 failures are all of this crate's process tests except S8, which starts `serve` directly. Every one failed in
+  `Client::ensure_runner`: "the runner did not take the lock within 10 s".
+* Cause, found after the run: `powershell.exe` hung on the gate host. 15 instances were left, all waiting. A plain
+  `powershell -NoProfile -NonInteractive -Command "Write-Output hi"` from Git Bash timed out after 30 s, both with and without the
+  gate's `TEMP`. The harness's own PowerShell shells and WMI queries (`Get-CimInstance`) hung at the same time.
+* During the registered run (addendum above) the same route started the runner in about 1 s. So the cause is a host fault that
+  decision 2 depended on. It is a defect of the product, not of the test set-up: `ensure_runner` must not depend on PowerShell
+  answering.
+
+**Fix.**
+* `ensure_runner` (Windows) waits 5 s for the runner started through PowerShell.
+* If the lock is not held by then, it kills the PowerShell launcher and starts the runner directly (`sys::spawn_direct`:
+  `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`, null stdio), then waits 10 s more.
+* The direct route hands the runner the caller's inheritable handles, the limitation recorded in Context. So while PowerShell is
+  unavailable, a shell that captures the client's output waits for the runner. S5 tests exactly that EOF, so S5 is expected to fail
+  for as long as the host's PowerShell is hung.
+* Limits, set-ups and every other check are unchanged. No check was tuned.
+
+What I knew when writing this: the gate log, the hung `powershell.exe` processes and the failed manual `powershell` calls. No run of
+the fixed code had been made. Gate run 2 runs on a fresh archive of the commit that carries this amendment and the fix. The
+15 hung `powershell.exe` processes were not killed, because without WMI I could not confirm that all of them were mine.

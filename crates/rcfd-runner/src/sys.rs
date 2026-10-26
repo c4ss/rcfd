@@ -83,15 +83,31 @@ pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::C
     }
     #[cfg(not(windows))]
     {
-        use std::os::unix::process::CommandExt;
-        Command::new(exe)
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn()
+        spawn_direct(exe, args)
     }
+}
+
+/// Start `exe args` directly, with null stdio, in its own process group (Windows: also without a console).
+/// On Windows it inherits the caller's inheritable handles (see [`spawn_detached`]).
+pub fn spawn_direct(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
+    let mut cmd = Command::new(exe);
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    }
+    #[cfg(not(windows))]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    cmd.spawn()
 }
 
 /// Standard base64 with padding.
