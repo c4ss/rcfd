@@ -227,3 +227,6 @@ OpenFOAM mesh.
 | S11 | the project holds `meshes/cavity/polyMesh` (from `rcfd convert`) and `cases/file.toml` referencing it as `../meshes/cavity/polyMesh`; submitted through the client with 30 steps | `finished` with step 30 | the same `case.snapshot` run directly by `rcfd run` without `--case-dir` exits 3, and stderr names `mesh.file` |
 
 S11 runs in the debug build now; the release gate runs it again.
+Result of S11 (debug, 2026-10-26): the run finished at step 30. The negative control (`rcfd run <snapshot> --check-only` without
+`--case-dir`) exited 3 with "mesh.file: <run folder>\../meshes/cavity/polyMesh: io error: The system cannot find the path specified".
+Met.
