@@ -1,0 +1,20 @@
+[
+  {
+    "pid": 54452,
+    "cwd": "C:\\proj\\other",
+    "kind": "interactive",
+    "startedAt": 1792953239617,
+    "sessionId": "00000000-0000-4000-8000-000000000003",
+    "name": "demo-fc",
+    "status": "busy"
+  },
+  {
+    "pid": 43952,
+    "cwd": "C:\\proj\\demo",
+    "kind": "interactive",
+    "startedAt": 1793020406076,
+    "sessionId": "00000000-0000-4000-8000-000000000002",
+    "name": "demo-40",
+    "status": "busy"
+  }
+]
