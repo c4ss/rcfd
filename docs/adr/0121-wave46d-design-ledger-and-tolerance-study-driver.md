@@ -285,7 +285,7 @@ H4 is done when L1-L6 and M1 pass; F1 is partial in any case (library only, anal
   chapter).
 * Cumulants of `a Z + g Z^2` and the variance of the sample variance: first principles (chi-square cumulants `k 2^(r-1) (r-1)!`).
 
-## Addendum: measured values (one registered run each; debug profile, `target-w46d`, at 2cf1ae9)
+## Addendum: measured values (one registered run each; debug profile, `target-w46d`, at 2cf1ae9, rebased to 4843da9; main moved by docs only)
 
 All registered checks passed; no known miss, no amendment.
 
@@ -315,3 +315,18 @@ is the largest z of the run.
 
 What these numbers are not: they verify the driver and the ledger on analytic functions. They say nothing about the spread of a real
 fan's flow, power, noise or vibration: no fan perturbation model (46A) or fan evaluator (46B) is attached, and F1 stays partial.
+
+## Amendment 1 (written after the addendum's runs, before any run of L3b)
+
+L3 has no negative control of its own, and its registered run did not tear the tail, so the kill-then-recover path of a torn line was
+exercised only by L2's synthetic cuts. Added, without changing any registered limit:
+
+* **Harness:** the L3 child is killed and reaped by a drop guard also when the parent fails an assertion, and the child loop stops
+  after 20 000 entries (before, a failed parent could leave an endless writer).
+* **L3b kill inside a line** (`l3b_kill_inside_a_line`). The same child with `RCFD_W46D_TEAR_CHILD` set writes each line in two
+  raw halves 100 ms apart (it simulates a writer whose write is cut, not `Ledger::append`); the parent kills it once at least 10 entries
+  exist and the last byte is not a newline.
+  * Limits: after the kill the last byte is not a newline; the reader returns exactly the complete lines, contiguous, with exactly one
+    skipped line; a guarded `Ledger::append` is readable at the next index (one skipped line remains).
+  * Negative control: a naive append (no newline guard) to the same killed file is lost (the entry count stays).
+* Smoke before registration (`smoke_w46d_ledger`, at least 3 entries): 59 361 bytes, 3 complete lines, 3 entries, 1 skipped line, torn tail.
