@@ -1,0 +1,18 @@
+[package]
+name = "rcfd-runner"
+description = "Run service: a detached per-project runner that queues and runs `rcfd run` child processes (ADR 0123)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "rcfd-runner"
+path = "src/main.rs"

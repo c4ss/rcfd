@@ -20,6 +20,7 @@ rcfd-mcp    -> api
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
 rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)
+rcfd-runner -> (no workspace crates; run service: runs the `rcfd` binary as child processes, ADR 0123)
 ```
 
 Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <

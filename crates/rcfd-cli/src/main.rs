@@ -58,6 +58,10 @@ COMMANDS:
                                  (default: <out>/restart.rcfd)
         --checkpoint-every <n>   also write the checkpoint every n steps
         --stop-file <file>       stop cleanly (exit 7) when this file appears
+        --pause-file <file>      hold between steps while this file exists (writes <file>.ack with the
+                                 iteration while held; the stop file ends the hold)
+        --case-dir <dir>         read the case from its text (TOML, or JSON when it starts with '{')
+                                 and resolve its relative paths against <dir> (run snapshots)
         --max-elapsed <seconds>  stop cleanly (exit 8) after this wall-clock time
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
@@ -230,6 +234,25 @@ fn load_case(path: &str) -> Result<Case, u8> {
     }
 }
 
+/// `run --case-dir`: a case file of any name (a run snapshot), relative paths resolved against `dir`.
+fn load_case_in(path: &str, dir: &Path) -> Result<Case, u8> {
+    let text = std::fs::read_to_string(path).map_err(|e| {
+        eprintln!("{path}: cannot read: {e}");
+        INVALID
+    })?;
+    let parsed = if text.trim_start().starts_with('{') {
+        Case::parse_json_with(&text, dir, None)
+    } else {
+        Case::parse_toml_with(&text, dir, None)
+    };
+    parsed.map_err(|diags| {
+        for d in diags {
+            eprintln!("{path}: {d}");
+        }
+        INVALID
+    })
+}
+
 fn cmd_validate(args: &[String]) -> u8 {
     let pos = positionals(args, &[]);
     let [path] = pos[..] else {
@@ -301,6 +324,8 @@ const RUN_VALUE_OPTS: &[&str] = &[
     "--checkpoint",
     "--checkpoint-every",
     "--stop-file",
+    "--pause-file",
+    "--case-dir",
     "--max-elapsed",
     "--threads",
     "--precision",
@@ -394,7 +419,11 @@ fn cmd_run(args: &[String]) -> u8 {
             }
         }
     } else {
-        match load_case(pos[0]) {
+        let loaded = match opt(args, "--case-dir") {
+            Some(dir) => load_case_in(pos[0], Path::new(dir)),
+            None => load_case(pos[0]),
+        };
+        match loaded {
             Ok(c) => (c, pos[0].to_string()),
             Err(code) => return code,
         }
@@ -547,7 +576,22 @@ fn cmd_run(args: &[String]) -> u8 {
             .unwrap_or_default()
     ));
     let sim = Mutex::new(sim);
-    let outcome = runctl::drive(&sim, &opts, &|| false, &mut |ev| {
+    let pause_file = opt(args, "--pause-file").map(PathBuf::from);
+    // opt-in pause (ADR 0123): `drive` polls this between steps without holding the lock
+    let hold = || {
+        if let Some(p) = pause_file.as_ref().filter(|p| p.exists()) {
+            let mut ack = p.clone().into_os_string();
+            ack.push(".ack");
+            let it = sim.lock().unwrap_or_else(|e| e.into_inner()).iteration();
+            let _ = std::fs::write(&ack, it.to_string());
+            while p.exists() && !opts.stop_file.as_ref().is_some_and(|s| s.exists()) {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            let _ = std::fs::remove_file(&ack);
+        }
+        false
+    };
+    let outcome = runctl::drive(&sim, &opts, &hold, &mut |ev| {
         if status_json {
             println!("{ev}");
         }

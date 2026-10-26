@@ -19,6 +19,7 @@ members = [
     "crates/rcfd-gui",
     "crates/rcfd-claude",
     "crates/rcfd-project",
+    "crates/rcfd-runner",
 ]
 
 [workspace.package]
