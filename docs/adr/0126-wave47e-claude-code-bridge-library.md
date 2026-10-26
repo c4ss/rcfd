@@ -175,6 +175,7 @@ UI, the Agent SDK sidecar, cross-session messaging, Remote Control, `claude atta
 ## Addendum: measured values (registered runs, 2026-10-26)
 
 The registered run was one release run of the crate (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w47e`) at a45ffa7.
+After the rebase onto main a16cda2 that commit is c2fa881.
 The real-CLI tests R1-R3 were each run once in debug. Every registered check passed; there are no known misses.
 
 | Check | Limit | Measured |
@@ -184,7 +185,7 @@ The real-CLI tests R1-R3 were each run once in debug. Every registered check pas
 | T3 | no forbidden argument in the generated space; >= 5000 lists, >= 10 000 insertions; 15 / 15 bad lists refused | none; 7469 lists, 13 294 insertions; 15 / 15 |
 | T4 | exact suggestions; `None` cases | as registered |
 | P1 | 0 unrecognised lines; fields and sequences as recorded | 0 in 5 streams and 2 transcripts; all equal |
-| P2 | no panic; 144 / 144 transcript and >= 60 stream targeted mutations unrecognised | no panic in 4800 + 200-per-line random mutations; 144 / 144; stream count >= 60 (assert passed) |
+| P2 | no panic; 144 / 144 transcript and >= 60 stream targeted mutations unrecognised | no panic in 4800 + 200-per-line random mutations; 144 / 144; 126 / 126 stream (42 recognised lines x 3; the test asserts >= 60, and the number was counted from the fixtures by a script that makes the same selection) |
 | P3 | tail and incremental reads exact | exact |
 | P4 | >= 10 MB/s (release) | 259.4 MB/s (30.5 MB, 34 000 events, 0.118 s) |
 | D1-D4, D6, D7 | as registered | passed |
@@ -193,10 +194,27 @@ The real-CLI tests R1-R3 were each run once in debug. Every registered check pas
 | R2 | id chosen here, dontAsk, `pong`, exit 0 | session 75ebe38e-…, `permissionMode` dontAsk, `pong`, exit 0, 0.0026 USD |
 | R3 | closed session resumed, Write denied with `Edit(r3.txt)`, no file, exit 0 | resumed 75ebe38e-… (the R2 session, the newest closed one), denied with suggestion `Edit(r3.txt)`, no file, exit 0, 0.0058 USD |
 
+New observations from R2 and R3, the first runs with the driver's exact arguments:
+* `--permission-prompts none` together with `dontAsk` was accepted, and init reported `dontAsk`.
+* The prompt on stdin with `--resume` worked.
+* `--allowedTools <rule>` followed by `--resume <id>` parsed as intended, so the variadic list ended at the next option.
+* The resumed session kept its id.
+
 Real CLI usage in total: **7** billable headless calls (5 observation calls and R2, R3), all with `--model haiku`, about 0.033 USD.
 `claude agents --json` ran about 12 times and makes no model call.
 
 Deviations:
-* The smoke-time clippy found two style lints in `discover.rs` (`io::Error::other` and `sort_by_key`) and the intended
-  never-waited grandchild in `fake-claude`, which now has an explicit `allow` saying why. None of these changes behaviour.
+* Clippy ran after the registered run, not before it. It found two style lints in `discover.rs` (`io::Error::other` and
+  `sort_by_key`) and the intended never-waited grandchild in `fake-claude`, which now has an explicit `allow` saying why. None of these
+  changes behaviour. The final gate re-ran every test on the fixed code.
 * No other deviation from the registered plan.
+
+## Final gate
+
+The final gate ran on a fresh `git archive` of 21557f6 (the branch rebased onto main a16cda2) in `<scratch dir>`:
+* `cargo fmt --check`: exit 0.
+* `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
+* `cargo test --workspace --release --no-fail-fast`: **2093 passed, 0 failed, 659 ignored**.
+
+`rcfd-claude` contributes 20 passed (lib 7, `driver_fake` 7, `fixtures_v2_1_310` 6) and 3 ignored (`real_cli`). After the gate, only
+this ADR changed (the addendum corrections and this section).
