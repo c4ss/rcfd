@@ -41,7 +41,8 @@ impl fmt::Display for FanError {
 }
 
 /// Section family.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SectionFamily {
     /// NACA 4-digit (camber `m`, position `p`, thickness `t`).
     Naca4,
@@ -524,6 +525,19 @@ impl BladeSurface {
                 vec3::dot(a, vec3::cross(b, c)) / 6.0
             })
             .sum()
+    }
+
+    /// Centroid of the enclosed solid (first moment of the tetrahedra on the origin over the volume; ADR 0118).
+    pub fn centroid(&self) -> Vec3 {
+        let mut m = [0.0; 3];
+        for t in &self.triangles {
+            let (a, b, c) = (self.points[t[0]], self.points[t[1]], self.points[t[2]]);
+            let v = vec3::dot(a, vec3::cross(b, c)) / 24.0;
+            for k in 0..3 {
+                m[k] += v * (a[k] + b[k] + c[k]);
+            }
+        }
+        vec3::scale(m, 1.0 / self.volume())
     }
 
     /// Watertightness: every directed edge once and its reverse once, Euler characteristic 2.
