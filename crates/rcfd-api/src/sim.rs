@@ -1550,16 +1550,8 @@ impl Simulation {
             // ADR 0077 F-H0 (opt-in): the momentum gradient takes the partner cell on periodic faces
             solver.periodic_gradient_partner = get_s(case, "solver.periodic_gradient") == "partner_cell";
             // ADR 0081 part L (opt-in): Barth-Jespersen-limited linear-upwind extrapolation of the momentum equation
-            match get_s(case, "solver.linear_upwind_limiter").as_str() {
-                "barth_jespersen" => solver.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::BarthJespersen),
-                // ADR 0115 (opt-in): range-scaled Venkatakrishnan
-                "venkatakrishnan_range" => {
-                    solver.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::VenkatakrishnanRange(get_f(
-                        case,
-                        "solver.linear_upwind_limiter_k",
-                    )))
-                }
-                _ => {}
+            if get_s(case, "solver.linear_upwind_limiter") == "barth_jespersen" {
+                solver.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::BarthJespersen);
             }
             // ADR 0084 (opt-in): cell velocity correction reconstructed from the face flux correction
             solver.reconstructed_correction = get_s(case, "solver.velocity_correction") == "face_flux";
@@ -1676,20 +1668,6 @@ impl Simulation {
             return Err(diag(
                 "solver.linear_upwind_limiter",
                 "the limiter applies only to solver.convection = \"linear_upwind\" with solver.algorithm = \"simple\" or \"simplec\" (incompressible, constant density)",
-            ));
-        }
-        let lim_k = get_f(case, "solver.linear_upwind_limiter_k");
-        if get_s(case, "solver.linear_upwind_limiter") == "venkatakrishnan_range" {
-            if !lim_k.is_finite() || lim_k <= 0.0 {
-                return Err(diag(
-                    "solver.linear_upwind_limiter_k",
-                    "the constant k must be a finite number > 0",
-                ));
-            }
-        } else if lim_k != 0.01 {
-            return Err(diag(
-                "solver.linear_upwind_limiter_k",
-                "the constant k is used only with solver.linear_upwind_limiter = \"venkatakrishnan_range\"",
             ));
         }
         if get_s(case, "solver.velocity_correction") != "gradient" && !matches!(engine, Engine::Steady(_)) {

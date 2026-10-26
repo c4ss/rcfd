@@ -320,55 +320,8 @@ fn l3_kovasznay_order_with_the_limiter() {
 // ================================================================ ADR 0115 (wave 45A): the range-scaled Venkatakrishnan limiter
 // Everything below this line belongs to ADR 0115.
 
-const VR: &str = "linear_upwind_limiter = \"venkatakrishnan_range\"\n";
-
-/// ADR 0115 P5: located errors of `venkatakrishnan_range` and of `solver.linear_upwind_limiter_k`.
-#[test]
-fn w45a_range_limiter_located_errors() {
-    let located = |text: &str, path: &str, what: &str| {
-        let err = match Case::parse_toml(text) {
-            Err(e) => e,
-            Ok(case) => Simulation::new(&case).map(|_| ()).expect_err(what),
-        };
-        println!("W45A P5 {what}: {err:?}");
-        assert!(err.iter().any(|d| d.path == path), "P5 {what}: {err:?}");
-    };
-    let base = with_solver(CAVITY_SIMPLE, VR);
-    let lim = "solver.linear_upwind_limiter";
-    let kp = "solver.linear_upwind_limiter_k";
-    located(
-        &base.replace("convection = \"linear_upwind\"", "convection = \"upwind\""),
-        lim,
-        "upwind",
-    );
-    located(
-        &base.replace(
-            "algorithm = \"simple\"",
-            "algorithm = \"pimple\"\ndt = 0.01\nend_time = 0.05",
-        ),
-        lim,
-        "pimple",
-    );
-    located(
-        &base.replace("algorithm = \"simple\"", "algorithm = \"coupled\""),
-        lim,
-        "coupled",
-    );
-    located(&with_solver(&base, "linear_upwind_limiter_k = 0.0\n"), kp, "k = 0");
-    located(&with_solver(&base, "linear_upwind_limiter_k = -0.01\n"), kp, "k < 0");
-    located(
-        &with_solver(CAVITY_SIMPLE, "linear_upwind_limiter_k = 0.05\n"),
-        kp,
-        "k without the value",
-    );
-    located(
-        &with_solver(&with_solver(CAVITY_SIMPLE, BJ), "linear_upwind_limiter_k = 0.05\n"),
-        kp,
-        "k with barth_jespersen",
-    );
-    // in scope: accepted
-    sim_of(&with_solver(&base, "linear_upwind_limiter_k = 0.05\n"));
-}
+// The case key, its located-error test and P6 were removed under the registered decision rule (Z1 missed at every k); their results
+// are in the ADR 0115 addendum. The checks below set the library variant through `simple_solver_mut`.
 
 /// Build `text` (with the Barth-Jespersen key) and switch the momentum limiter to `lim` before iteration 1 (`None` keeps Barth-Jespersen).
 fn w45a_sim(text: &str, lim: Option<rcfd_fv::gradient::Limiter>) -> Simulation {
@@ -386,7 +339,6 @@ fn w45a_order(e: &[(f64, f64)], i: usize, linf: bool) -> f64 {
 
 /// ADR 0115 P3: Kovasznay (the ADR 0081 L3 set-up) with the range-scaled limiter at each registered k; limit: fine-pair L2 order >= 1.8.
 #[test]
-#[ignore = "ADR 0115 P3 (several minutes in release)"]
 fn w45a_p3_kovasznay_order() {
     let mut fails = Vec::new();
     for k in [0.002, 0.01, 0.05] {

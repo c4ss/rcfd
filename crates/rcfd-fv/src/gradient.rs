@@ -303,7 +303,7 @@ pub enum Limiter {
     /// Venkatakrishnan with the smoothing constant `k`.
     Venkatakrishnan(f64),
     /// Venkatakrishnan with `eps = k R`, R = max - min of the limited field over the cells (ADR 0115): eps has the field's units and is
-    /// the same on every member of a mesh family.
+    /// the same on every member of a mesh family. A library diagnostic without a case key: it did not converge the FAN-01 empty passage.
     VenkatakrishnanRange(f64),
 }
 

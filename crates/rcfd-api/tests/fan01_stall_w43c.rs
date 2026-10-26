@@ -2013,57 +2013,37 @@ fn w45a_z2(k: f64) {
 }
 
 #[test]
-#[ignore = "ADR 0115 Z1 k 0.002 (about 30 min in release)"]
-fn w45a_z1_k0002() {
+#[ignore = "ADR 0115 Z1 k 0.002: registered known miss (about 20 min in release)"]
+fn w45a_z1_k0002_known_miss() {
     w45a_z1(0.002);
 }
 
 #[test]
-#[ignore = "ADR 0115 Z1 k 0.01 (about 30 min in release)"]
-fn w45a_z1_k001() {
+#[ignore = "ADR 0115 Z1 k 0.01: registered known miss (about 20 min in release)"]
+fn w45a_z1_k001_known_miss() {
     w45a_z1(0.01);
 }
 
 #[test]
-#[ignore = "ADR 0115 Z1 k 0.05 (about 30 min in release)"]
-fn w45a_z1_k005() {
+#[ignore = "ADR 0115 Z1 k 0.05: registered known miss (about 20 min in release)"]
+fn w45a_z1_k005_known_miss() {
     w45a_z1(0.05);
 }
 
 #[test]
-#[ignore = "ADR 0115 Z2 k 0.002 (about 3 min in release; run only if Z1 passes at this k)"]
+#[ignore = "ADR 0115 Z2 k 0.002: not run (registered only where Z1 passes; Z1 missed at every k)"]
 fn w45a_z2_k0002() {
     w45a_z2(0.002);
 }
 
 #[test]
-#[ignore = "ADR 0115 Z2 k 0.01 (about 3 min in release; run only if Z1 passes at this k)"]
+#[ignore = "ADR 0115 Z2 k 0.01: not run (registered only where Z1 passes; Z1 missed at every k)"]
 fn w45a_z2_k001() {
     w45a_z2(0.01);
 }
 
 #[test]
-#[ignore = "ADR 0115 Z2 k 0.05 (about 3 min in release; run only if Z1 passes at this k)"]
+#[ignore = "ADR 0115 Z2 k 0.05: not run (registered only where Z1 passes; Z1 missed at every k)"]
 fn w45a_z2_k005() {
     w45a_z2(0.05);
-}
-
-/// ADR 0115 P6: the case key (k = 0.01, the default) and the library variant set before iteration 1 give E3 bit-identical after 30
-/// iterations (u, p, phi).
-#[test]
-fn w45a_p6_case_key_reaches_the_solver() {
-    let bj = case_toml(F3, false, "", false);
-    let key = bj.replace(
-        "linear_upwind_limiter = \"barth_jespersen\"\n",
-        "linear_upwind_limiter = \"venkatakrishnan_range\"\nlinear_upwind_limiter_k = 0.01\n",
-    );
-    let mut a = Simulation::new(&Case::parse_toml(&key).unwrap()).unwrap();
-    let mut b = Simulation::new(&Case::parse_toml(&bj).unwrap()).unwrap();
-    w45a_range(0.01)(b.simple_solver_mut().unwrap());
-    for _ in 0..30 {
-        a.step();
-        b.step();
-    }
-    assert!(a.steady_divergence().is_none());
-    assert_eq!(w45a_hash(&a), w45a_hash(&b));
 }
