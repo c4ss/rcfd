@@ -1,0 +1,181 @@
+# ADR 0123: Wave 47B, the run service (`rcfd-runner`, Studio layer L2)
+
+Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main f307f59 on branch `w47b`, target
+`<target dir>`. House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed limit becomes an
+ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults
+are bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parents: [the Studio plan](../ui-restart-plan.md)
+(layer L2, the section-8 folder contract), [run control](../run-control.md) (F-120, F-121). ADR 0122 (`rcfd-project`, wave 47A) is
+built in parallel; this ADR codes against the section-8 file contract with local types (see "Switching to rcfd-project").
+
+## Context (checked against the code at f307f59)
+
+* Runs start today through `rcfd run` (`crates/rcfd-cli/src/main.rs` `cmd_run`) and `runctl::drive` (`crates/rcfd-api/src/runctl.rs`):
+  stop file (exit 7, clean stop, results and checkpoint written), wall-clock limit, the `rcfd-status` JSON-lines stream
+  (`--status-file`, `--status-every`), checkpoints and `--continue-from`. The service (`service.rs`) pauses in process with an atomic
+  flag polled between steps (`run.pause`). The CLI has no pause.
+* Checkpoint and continue covers steady SIMPLE/SIMPLEC without turbulence and transient laminar PISO/PIMPLE without energy, scalars or
+  statistics (`Simulation::supports_restart`). A checkpoint-and-stop pause would therefore not work for turbulent or MRF runs, which
+  include the fan runs.
+* `Case::load` picks the format from the file extension (`.json`, else TOML) and resolves relative paths against the case file's
+  folder. A snapshot named `case.snapshot` inside `runs/<id>/` would lose both.
+* Windows finding from the smoke: a std spawn passes the child every inheritable handle of the parent. A client started by a shell
+  that reads its output (`$id = rcfd-runner start ...`) hands the shell's pipe to the runner, and the shell then waits until the runner
+  exits. `Stdio::null()` does not prevent it, and neither does `cmd /c start` (both tried). PowerShell `Start-Process` without
+  redirection uses ShellExecute, which passes no handles (tried: returned in 0.64 s).
+* `crates/rcfd-cli/tests/workspace_graph.rs` `layer()` panics on an unknown crate only when that crate has an rcfd dependency.
+  `rcfd-runner` has none (std, serde, serde_json), so no existing test changes.
+
+## What I already knew when registering (rules c, d; disclosed)
+
+* The code and the tests below were written before this registration so that the rule-d smoke could run. They are committed after
+  this ADR, unchanged except as stated in amendments.
+* Smoke, debug build, one run of every test: all passed except S4b, whose helper counted the runs of a two-run project as one (a
+  test-code defect). It was fixed and re-run (pass) before registration. Debug smoke values: S3 detection 0.156 s; S4b 0.277 s;
+  S4c shutdown 0.125 s; S6 pause acknowledged in 0.144 s, 0 steps in 1 s paused, bitwise equal; S7 0.128 s; S8 one runner, loser exit 3;
+  S1 max 2 by status and by OS, negative control 3. No release-build test values were seen before registration.
+* Solver timings (12 x 12 cavity, SIMPLEC, tolerance 1e-14 so the iteration cap ends it): debug about 2.2 ms per step with
+  `--status-every 1`; release 0.42 ms per step with it (5000 steps 2.49 s). Test run lengths are set from these:
+  `long_steps()` = 2500 (debug) or 8000 (release), short runs 60 steps.
+* Memory (release, peak working set): 144 cells 9.7-19.1 MB (growing with the step count); 10 000 cells 33.9 MB; 40 000 cells 110.2 MB;
+  160 000 cells 422.3 MB, about 2.6 KB per cell. Only the 2-D laminar cavity was measured.
+
+## Decisions
+
+1. **Transport: plain files, no socket and no network port.**
+   * The project folder is the queue. A client builds `runs/.tmp-<id>/` (run.json, case.snapshot, status `queued`, events) and renames
+     it to `runs/<id>/`, so a run appears whole or not at all. Requests are files in the run folder: `pause` and `cancel`, plus
+     `.rcfd/shutdown` for the runner.
+   * Reasons:
+     * std only. Named pipes need FFI on Windows and the workspace forbids unsafe code; Unix sockets are Unix-only.
+     * There is no inbox to lose: a runner crash cannot lose or duplicate a submission.
+     * Requests work while no runner is alive, because the solver watches them itself.
+     * The same files are what the GUI and Claude Code read.
+   * Cost: a 100 ms poll (`poll_ms`).
+2. **Process model.**
+   * `rcfd-runner serve --project <dir>`, one per project, holding `.rcfd/runner.lock`.
+     * Windows: the lock file is opened without sharing; the OS releases it when the holder dies.
+     * Unix: `create_new` with the pid inside; a stale lock, whose pid is not a live `rcfd-runner`, is taken over under a second
+       `create_new` guard.
+   * Each run is the child `rcfd run <runs/id/case.snapshot> --case-dir <case folder> --out runs/<id>/output --status-file
+     runs/<id>/solver-status.jsonl --status-every 1 --quiet --threads n --stop-file runs/<id>/cancel --pause-file runs/<id>/pause`.
+     Its stdout and stderr go to `log.txt`, never to a pipe, so it outlives the runner.
+   * The runner turns the stream into `residuals.jsonl`, `events.jsonl`, `status.json` and `metrics.json`.
+   * Clients start the runner detached. Windows uses `Start-Process` through `powershell -EncodedCommand`, for the handle reason in
+     Context. Unix uses `process_group(0)` with null stdio.
+3. **Pause and resume: a pause file, held at a step boundary in memory, on both platforms.** This deviates from the task's suggestion
+   of a signal on Unix. Reasons:
+   * One mechanism, and it is tested on the gate host.
+   * It stops between steps, never mid-write.
+   * It needs no FFI.
+   * It works for every case type (checkpoint-and-stop does not; see Context).
+
+   **CLI change (opt-in):** `rcfd run --pause-file f`. The `should_stop` closure of `cmd_run`, which `drive` polls between steps
+   without holding the simulation lock, writes `f.ack` (the iteration count) and sleeps in 20 ms ticks while `f` exists. The stop file
+   ends the hold. Without the flag the closure is the old `|| false`.
+
+   The runner reports `paused` only after the ack exists, and drains the stream again first. A paused run keeps its slot, threads and
+   memory.
+4. **Cancel.** A queued run is cancelled at once. A running or held one gets the stop file, so the solver exits 7 after writing its
+   results. If it has not stopped after `cancel_grace_ms` (10 s), it is killed.
+5. **Crash recovery.** The first scan of a new runner reads every run:
+   * `queued`, or `paused` without a pid: pending.
+   * `running` or `paused` with a pid: adopted and never relaunched. Its stream is read from the start, skipping residual steps and
+     solver events (`solver_seq`) already forwarded.
+   * Adopted processes are probed every `adopt_probe_ms` (500 ms in the tests, 1 s by default) by pid and image name (`tasklist` or
+     `ps`).
+   * A dead process without a finish event becomes `failed`, with a reason giving the pid, the probe, the last step, the last log line
+     and the log path. A finish event read after the death decides the state as usual.
+6. **Budgets and their defaults (conservative, stated).**
+
+   | key (`.rcfd/runner-config.json`) | default | reason |
+   | --- | --- | --- |
+   | `max_runs` | 2 | parallel runs on a workstation |
+   | `cpu_threads` | half the logical cores, at least 1 | leaves the GUI and the OS responsive |
+   | `mem_budget_mb` | 4096 | std cannot read the installed memory, so the default is small |
+   | `mem_base_mb` | 64 | covers the 9.7-19 MB measured on small meshes |
+   | `mem_kb_per_cell` | 4 | 1.5 times the 2.6 KB per cell measured |
+   | `poll_ms` | 100 | — |
+   | `cancel_grace_ms` | 10 000 | — |
+   | `adopt_probe_ms` | 1000 | — |
+
+   * A run's memory is its declared `settings.mem_mb`, or else `mem_base_mb + cells x mem_kb_per_cell`. The cell count comes from a
+     pre-launch `rcfd run --check-only --status-json` (one check at a time, outside the budget), which also turns an invalid case into a
+     located failure.
+   * A run that cannot fit even alone (threads > `cpu_threads`, memory > `mem_budget_mb`) fails with a reason naming the value, the
+     key and the config file.
+   * A run that fits alone waits.
+7. **Queue order.** Priority descending, then `created` (UTC with nanoseconds), then id. The queue is strict: a waiting head is not
+   overtaken, and nothing launches while a queued run still lacks its estimate.
+8. **Clean shutdown** (`.rcfd/shutdown`). The runner:
+   * stops launching;
+   * kills only its pre-launch checks;
+   * writes a `runner_shutdown` event for each running solver, which keeps running;
+   * releases the lock and exits 0.
+
+   The next runner adopts the running solvers. Closing the app therefore never stops a run.
+9. **Files added to the section-8 contract (additive, for the lead).** In `runs/<id>/`: `pause`, `pause.ack`, `cancel`,
+   `solver-status.jsonl`, `output/` (the solver's `--out`) and `check.json`. In `status.json`: `reason` and `exit_code`. In `run.json`:
+   `case_source`, `case_dir` and `settings` (`priority`, `threads`, `mem_mb`, `set`). In `.rcfd/`: `runner.lock`, `runner.json`,
+   `runner.log`, `runner-config.json` and `shutdown`. The `residuals.jsonl` lines carry `monitors: {}`, because the status stream has no
+   monitors. `mesh_hash` is null, because the runner does not resolve meshes.
+10. **Second CLI flag (opt-in):** `rcfd run --case-dir d` reads the case from its text (JSON when it starts with `{`, else TOML) and
+    resolves relative paths against `d`. Both flags are in `RUN_VALUE_OPTS` and in [run control](../run-control.md).
+11. **Client library** (`client::Client`): `start` (submit, then `ensure_runner`), `submit`, `list`, `status`, `pause`, `resume`,
+    `cancel`, `wait`, `shutdown`, `ensure_runner`, `runner_running`. The binary exposes the same as subcommands. Run ids from users are
+    validated (`r-` plus `[A-Za-z0-9-]`) before they become path components.
+
+## Switching to rcfd-project (what must change at merge)
+
+The runner and the client reach records only through the trait `store::RunStore` (implemented by `store::FsStore`) and the types of
+`records`. To switch:
+
+1. Replace `crates/rcfd-runner/src/records.rs` with re-exports from `rcfd-project`: `RunState` (six states), `RunStatus` (`state`,
+   `step`, `time`, `pid`, `updated`, plus `reason` and `exit_code`), `RunRecord` (`id`, `created`, `case_dir`, `settings`, plus
+   `case_source`, `case_snapshot_hash`, `mesh_hash`, `solver_version`), `RunSettings`, `new_run_id`, `now_iso`, `atomic_write`,
+   `append_line`, `retry`. Any field missing in `rcfd-project` goes to the lead as an additive change (list in decision 9).
+2. Re-implement the eight `RunStore` methods of `FsStore` on `rcfd-project`'s helpers. `create_run` takes `rcfd-project`'s snapshot
+   hash instead of `fnv1a64`.
+3. Replace `client::check_id` with `rcfd-project`'s run-id validator.
+4. Add `rcfd-project` to `crates/rcfd-runner/Cargo.toml`, both crates to `layer()` in `crates/rcfd-cli/tests/workspace_graph.rs` (it
+   panics on a crate with an rcfd dependency that it does not know), and the edge to `docs/architecture.md`.
+5. `runner.rs` reads two contract files directly when it adopts a run: the last line of `residuals.jsonl` and the `solver_seq` and
+   `launched` lines of `events.jsonl`. If `rcfd-project` offers readers, use them.
+
+Nothing else touches the run records.
+
+## Registered checks (`crates/rcfd-runner/tests/runner_w47b.rs`; release gate)
+
+Each test has its own temp project `rcfd_runner_w47b_<pid>_<name>`, its own runner and its own solvers. It kills only pids it recorded.
+
+| id | check | limit | reason for the limit | negative control |
+| --- | --- | --- | --- | --- |
+| S1 | 5 runs of `long_steps()/4` steps, `max_runs` 2 | `status.json`, sampled every 20 ms over the whole queue: at most 2 in running or paused. OS process list (pids launched by this project), every ~200 ms: at most 2 live solvers. Saturation exactly 2 | the contract | `max_runs` 3 on 3 runs: the samplers see 3 by status and more than 2 by OS |
+| S2 | 4 short runs with priorities [0, 0, 5, 0], `max_runs` 1 | `launch_seq` order [2, 0, 1, 3] | the contract | all priorities 0 give [0, 1, 2, 3] |
+| S3 | kill a running solver (pid from status) | failed within 2.0 s of the kill. The reason names the pid, "without a finish event", the last step and `log.txt` | 20 poll periods: margin for a loaded host running two release test suites | a short run of the same project ends `finished` |
+| S4a | kill the runner while run A runs (`max_runs` 1, A plus 2 queued); start a new one | A's solver survives the kill and is adopted. All 3 finish. Each run has exactly one `launched` event. Residual steps are exactly 1..n with no gap or duplicate. 3 run folders | the contract | the counts would fail on a duplicate or a loss |
+| S4b | kill the runner, then A's solver; start a runner | A failed within `adopt_probe_ms` + 2.0 s = 2.5 s after `ensure_runner` returns. The reason names the probe and the last step. B finishes; one launch each | first probe at once, plus margin | the reason distinguishes it from S3 (exit code) |
+| S4c | clean shutdown with A running and B queued | runner gone (lock released) within 2.0 s. A's solver alive; B still queued; `runner_shutdown` event. After a restart both finish, one launch each | 20 poll periods | — |
+| S5 | the client is a separate process (`rcfd-runner start`, stdout piped) that exits | the client's stdout reaches EOF within 10 s of its exit (no inherited pipe). The runner is alive after the client exits and after the run finishes | the Windows handle finding | the lock probe reads false before the first start and after the shutdown |
+| S6 | pause a run at step >= m/5 of m = `long_steps()`; resume after 1.0 s; an uninterrupted reference run of the same case | `paused` within 2.0 s. 0 new residual steps and the same status step during the 1.0 s held. Residual steps exactly 1..m. `output/solution.vtu` byte-equal to the reference | the solver is deterministic: `crates/rcfd-cli/tests/run_control.rs` shows byte-equal solutions for 1 and 4 threads and for continue-from, so bitwise is registered | the run moved more than 0 steps in 300 ms before the pause; a 60-step run's solution differs from the reference |
+| S7 | cancel a running run, a held one and a queued held one | all three `cancelled` within 5.0 s. The folder check passes: status, events, metrics and residuals parse and agree, no `.tmp-` or request files remain, pid null. The solvers are dead; the two that ran wrote `output/solution.vtu`; the queued one never launched | grace not reached: a clean stop takes one step | the folder check reports a left-over temp file (exactly 1 problem) and a truncated `status.json` |
+| S8 | two `serve` on one project at once | after 1.5 s exactly one alive; the other exited 3 | the contract | a `serve` on a second project is alive too |
+| S9 | budgets: `cpu_threads` 2, `mem_budget_mb` 100 | declared 200 MB fails, naming "memory budget", "200 MB", `mem_budget_mb = 100`, `settings.mem_mb` and the config path. The 200 x 200 mesh is estimated (40 000 cells) and fails, pointing to the estimate event. 4 threads fail with "CPU budget". `physics.nu = -1` fails "pre-launch check failed" naming `physics.nu`. None launched. Two 60 MB runs never run together (max 1 by status) | the contract | a run under the budget (and the pair) finishes |
+| S10 | a JSON case and an invalid TOML case | JSON runs to 30 steps through `--case-dir`; `run.json` holds the snapshot's fnv1a64. The invalid one fails "pre-launch check failed" naming `mesh.generator` | — | the invalid case |
+
+Unit tests: the civil date of day 0, 2000-02-29 and 2026-10-26; the run id format; an atomic write leaves no temporary; base64 RFC
+4648 vectors.
+
+## Limits
+
+* The Unix code paths (lock takeover, `ps` probe, `process_group`, `kill -9`) compile only on Unix and are not run on the Windows gate
+  host.
+* Liveness by pid and image name: a recycled pid of another `rcfd` process reads as alive, and the run then stays `running` until that
+  process ends.
+* The memory estimate is calibrated on the 2-D laminar cavity only. 3-D and turbulence use more per cell. Measured memory is not
+  enforced: the budget is an admission rule, not a cap.
+* A held run keeps memory, its slot and its threads. `--max-elapsed` and the solver's `wall_s` count held time. Chains
+  (`chain.sequence`) ignore the pause file.
+* No fsync: a power loss can lose the last status write, a killed process cannot. The runner does not exit when idle, and polls every
+  100 ms.
+* Windows detached start needs `powershell.exe`, which is present on every supported Windows; without it `ensure_runner` reports the
+  spawn error.
