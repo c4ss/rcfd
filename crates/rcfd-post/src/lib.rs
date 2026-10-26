@@ -16,6 +16,7 @@ pub mod registers;
 pub mod remap;
 pub mod render;
 pub mod rotor;
+pub mod rotordyn;
 pub mod stats;
 pub mod structural;
 pub mod surface_series;
