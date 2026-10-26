@@ -210,3 +210,35 @@ image); volume-capped cut planes; Metal, GLES and WebGPU back ends.
 
 `crates/rcfd-render/` (`src/lib.rs`, `src/camera.rs`, `src/surface.rs`, `src/gpu.rs`, `src/shader.wgsl`, `tests/render.rs`,
 `tests/cpu_ref/mod.rs`, `examples/adapters.rs`); workspace member in the root `Cargo.toml`; `Cargo.lock`.
+
+## Addendum: measured values (gate machine = this machine, the five adapters of step 0)
+
+First registered run: debug build, commit 599c517, all tests except T1. A1 and A2 then ran on 810fd54. T1 ran once, in a release build
+(see the T1 row). Every value below is the same on all five adapters unless the row says otherwise.
+
+| Id | Measured | Limit | Status |
+|---|---|---|---|
+| R0 | red 2016 and black 2080 on all five adapters | 2016 / 2080 | pass |
+| C1, C2, C3, U1 | all assertions hold. C3: the 1e-6 round trip holds, and the swapped-aspect control exceeds 1e-3 in every orientation | as registered | pass |
+| G1 | max channel difference 0 on all 73 984 pixels (bit-identical to rcfd-post); negative control: 99.2 % of the drawn pixels differ | <= 1; control >= 50 % | pass |
+| G2 a | 6830 edge pixels; interior max 0; edges over the limit 3 (0.04 %); mean 0.0027; control interior max 218 | <= 1, <= 1 %, <= 0.25 | pass |
+| G2 b | interior max 0; edges over 2; mean 0.0029; control 231 | <= 2 | pass |
+| G2 c | interior max 1; edges over 1; mean 0.00339 (NVIDIA), 0.00339 (AMD), 0.00340 (WARP); control 254 | <= 2 | pass |
+| G2 d | 6126 edge pixels; interior max 1; edges over 1; mean 0.0024; control 255 | <= 1 | pass |
+| D1 | two renders byte-identical, every scene and adapter | identical | pass |
+| G3 | ramp max 1, strip centres max 0; control: 747 of 768 pixels differ | <= 1; control >= 384 | pass |
+| P1 (registered) | 64/64 probes correct, control 0/64; background probe failed (a set-up defect, A1) | | ignored `_known_miss` |
+| P1b (A1) | 64/64 probes correct, control 0/64, wide-view background `None` and centre a face | as registered | pass |
+| P2 depth / visibility | centre `zmax`, hidden `zmin`, 0 interior id mismatches | as registered | pass |
+| P2 value (A2) | 1.47e-5 of the range (NVIDIA and AMD, DX12 and Vulkan), 1.48e-5 (WARP) | 1e-5 | **miss**, ignored `_known_miss` |
+| V1 | hidden 0 pixels, visible 65 536, solid red 65 536 | 0 / 65 536 / 65 536 | pass |
+| K1 | 0 mismatches; control 256 mismatches (one column) | 0; control > 0 | pass |
+| W1 | PNG round trip equal; every invalid input rejected | | pass |
+| T1 (release, 810fd54) | median frame time with 1 000 000 triangles at 1920 x 1080, readback included (upload in brackets): NVIDIA RTX 5080 Vulkan 2.8 ms (160 ms), DX12 2.4 ms (163 ms); AMD Radeon integrated Vulkan 9.9 ms (205 ms), DX12 9.7 ms (163 ms); WARP (CPU) 68.6 ms (146 ms) | <= 250 ms on discrete GPUs only | pass (others reported) |
+| S1 | `wgpu: no adapter for back ends Backends(0x0)` | contains "no adapter" | pass |
+
+**Cross-backend differences.** These are the G1 and G2 images saved by the tests, compared with NVIDIA DX12:
+* G1 and G2 a, b and d are bit-identical on all five adapters.
+* G2 c (smooth lighting with a point field) differs by 1 in one pixel on AMD Vulkan, one on AMD DX12 and two on WARP; NVIDIA Vulkan is
+  identical.
+* So on this machine the back ends differ only by single-step rounding in lit, interpolated pixels.
