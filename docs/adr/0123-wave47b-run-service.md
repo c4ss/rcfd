@@ -269,3 +269,14 @@ ignored.
 What I knew when writing this: the gate log, the hung `powershell.exe` processes and the failed manual `powershell` calls. No run of
 the fixed code had been made. Gate run 2 runs on a fresh archive of the commit that carries this amendment and the fix. The
 15 hung `powershell.exe` processes were not killed, because without WMI I could not confirm that all of them were mine.
+
+## Amendment 3 (2026-10-26, before S5a's first run): S5 split
+
+After the fallback, the debug run of every test passed except S5. S5 failed on its EOF part: "the client's stdout did not reach EOF:
+the runner inherited the pipe". `powershell.exe` was still hung, so the fallback was taken, and amendment 2 predicted this.
+* S5 checks two things: survival and EOF. The EOF part depends on the host's PowerShell.
+* Following the house rule, S5 stays as the ignored `s5_runner_survives_the_client_known_miss`, its limit intact. It passed in the
+  registered run while PowerShell worked.
+* New S5a: the same survival check and negative control, with the client's stdout going to a file instead of a pipe.
+  Limit: the client exits 0; the runner is alive after the client exits and after the run finishes; the lock probe reads false
+  before the start and after the shutdown.
