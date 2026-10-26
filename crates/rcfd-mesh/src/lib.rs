@@ -12,6 +12,7 @@ pub mod adapt;
 pub mod edit;
 pub mod fan;
 pub mod fan_cgrid;
+pub mod fan_design;
 pub mod fan_mesh;
 pub mod gen;
 pub mod inflate;
