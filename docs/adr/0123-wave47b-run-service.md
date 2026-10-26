@@ -296,3 +296,10 @@ The workspace clippy failure is not in this branch's files:
 * Both files came to main with the wave-46D merge (last commit 1c6e4c3, ADR 0121), and the toolchain is now rustc 1.99.0.
 
 Commit ids: the registered run of the addendum was on 8b83bb1, which became 7a561b7 after the rebases; the tree is unchanged.
+
+After the gate: rebased on main e314bca, which merges `rcfd-project` and `rcfd-claude` and fixes the two lints. Results there:
+* `cargo fmt --check` passes.
+* `cargo clippy --workspace --all-targets -D warnings` is clean.
+* In debug, this crate (13 passed, 1 ignored) and the rcfd-cli tests `run_control`, `cli`, `docs_site` and `workspace_graph` pass.
+
+`rcfd-runner` still does not depend on `rcfd-project`; the switch is the lead's merge step.
