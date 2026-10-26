@@ -5,19 +5,23 @@ use crate::policy::{Approval, PERMISSION_DENIED};
 use rcfd_api::service::ServiceConfig;
 use std::sync::Mutex;
 
-const WRITE_TOOLS: [&str; 6] = [
+const WRITE_TOOLS: [&str; 8] = [
     "design_create_study",
     "design_create_variant",
     "design_run_operating_map",
     "design_run_study",
     "design_evaluate",
     "design_record",
+    "design_ledger_append",
+    "design_ledger_export",
 ];
-const READ_TOOLS: [&str; 4] = [
+const READ_TOOLS: [&str; 6] = [
     "design_get_metrics",
     "design_compare_variants",
     "design_propose",
     "design_list_study",
+    "design_ledger_query",
+    "design_ledger_rerun_check",
 ];
 
 fn rpc(s: &McpServer, id: u64, method: &str, params: Value) -> Value {
@@ -94,12 +98,21 @@ fn args_for(s: &McpServer, tool: &str, any: &Value) -> Value {
             out.insert(k.clone(), v.clone());
         }
     }
+    // the ledger tools take params and metrics as lists of {name, value, unit}, the study tools as objects (ADR 0121)
+    for k in ["params", "metrics"] {
+        match props.get(k).and_then(|p| p["type"].as_str()) {
+            Some("array") => out.insert(k.into(), json!([])),
+            Some("object") => out.insert(k.into(), json!({})),
+            _ => None,
+        };
+    }
     Value::Object(out)
 }
 
 #[test]
 fn t1_permissions() {
-    let any = json!({"dir": "d", "path": "p", "out_dir": "o", "params": {}, "parameters": [], "objectives": [], "method": {}});
+    let any = json!({"dir": "d", "path": "p", "out_dir": "o", "params": {}, "parameters": [], "objectives": [], "method": {},
+        "ledger": "l.jsonl", "evaluator": "e", "evaluator_version": "1", "verdict": "ok", "fidelity": "cfd", "index": 0, "out": "o.csv"});
     // read-only server: the six write tools are denied, the read tools never
     let s = McpServer::new(Service::new(ServiceConfig::default()), Policy::read_only());
     for t in WRITE_TOOLS {
@@ -190,6 +203,13 @@ fn t2_paths_are_sandboxed_and_names_are_restricted() {
         cases.push(("design_compare_variants", json!({"dir": bad})));
         cases.push(("design_propose", json!({"dir": bad})));
         cases.push(("design_list_study", json!({"dir": bad})));
+        cases.push(("design_ledger_append", json!({"ledger": bad, "params": [], "metrics": [], "evaluator": "e", "evaluator_version": "1", "verdict": "ok", "fidelity": "cfd"})));
+        cases.push(("design_ledger_query", json!({"ledger": bad})));
+        cases.push(("design_ledger_export", json!({"ledger": bad, "out": "x.csv"})));
+        cases.push((
+            "design_ledger_rerun_check",
+            json!({"ledger": bad, "index": 0, "metrics": []}),
+        ));
         for (tool, args) in cases {
             let r = call(&s, tool, args.clone());
             assert_eq!(err_code(&r), 1004, "{tool} {args}: {r}");
@@ -482,3 +502,155 @@ fn t5_tool_list_flags_and_schemas() {
         assert!(t["description"].as_str().unwrap().len() > 20);
     }
 }
+
+// ---- wave 46D (ADR 0121): M1, the design ledger through the MCP tools
+
+#[test]
+fn m1_ledger_round_trip_through_the_tools() {
+    let (root, s) = sandbox("m1");
+    let lp = "fan/ledger.jsonl";
+    let xs = [0.1, 1.0 / 3.0, 2f64.sqrt(), 1e-300, 123456.789];
+    for (k, &x) in xs.iter().enumerate() {
+        let r = ok(
+            &s,
+            "design_ledger_append",
+            json!({
+                "ledger": lp, "study": "m1", "variant": format!("v{k}"),
+                "params": [{"name": "chord", "value": x, "unit": "m"}, {"name": "blades", "value": 7, "unit": "1"}],
+                "metrics": [{"name": "flow", "value": 2.0 * x, "unit": "m3/s"}, {"name": "noise", "value": x / 3.0, "unit": "dB(A)"}],
+                "evaluator": "analytic.m1", "evaluator_version": "1", "geometry_hash": "abc", "settings": {"rpm": 2000},
+                "verdict": "ok", "fidelity": "analytic", "seed": 7, "provenance": {"k": k}
+            }),
+        );
+        assert_eq!(r["index"], k);
+    }
+    let r = ok(
+        &s,
+        "design_ledger_append",
+        json!({
+            "ledger": lp, "study": "m1", "params": [{"name": "chord", "value": 9.0, "unit": "m"}],
+            "metrics": [{"name": "flow", "value": null, "unit": "m3/s"}],
+            "evaluator": "analytic.m1", "evaluator_version": "1",
+            "verdict": "diverged", "reason": "residual blew up at iteration 12", "fidelity": "analytic"
+        }),
+    );
+    assert_eq!(r["index"], 5);
+    // every value comes back bit for bit, with its unit; the server stamps the version and the time
+    let q = ok(&s, "design_ledger_query", json!({"ledger": lp}));
+    assert_eq!((q["total"].as_u64(), q["matched"].as_u64()), (Some(6), Some(6)));
+    assert!(q["skipped_lines"].as_array().unwrap().is_empty());
+    for (k, &x) in xs.iter().enumerate() {
+        let e = &q["entries"][k];
+        assert_eq!(e["index"], k);
+        assert_eq!(e["params"][0]["value"].as_f64().unwrap().to_bits(), x.to_bits());
+        assert_eq!(e["params"][0]["unit"], "m");
+        assert_eq!(
+            e["metrics"][1]["value"].as_f64().unwrap().to_bits(),
+            (x / 3.0).to_bits()
+        );
+        assert_eq!(e["metrics"][1]["unit"], "dB(A)");
+        assert_eq!(
+            (e["verdict"].as_str(), e["fidelity"].as_str()),
+            (Some("ok"), Some("analytic"))
+        );
+        assert_eq!(e["settings"], json!({"rpm": 2000}));
+        assert!(e["solver_version"].as_str().unwrap().starts_with("rcfd "));
+        assert!(e["recorded_at_ms"].as_u64().unwrap() > 0);
+    }
+    assert!(q["entries"][5]["metrics"][0]["value"].is_null());
+    // filters, Pareto membership, best so far, history
+    let d = ok(&s, "design_ledger_query", json!({"ledger": lp, "verdict": "diverged"}));
+    assert_eq!(d["matched"], 1);
+    assert_eq!(d["entries"][0]["reason"], "residual blew up at iteration 12");
+    let q = ok(
+        &s,
+        "design_ledger_query",
+        json!({"ledger": lp, "limit": 0, "pareto": [{"metric": "flow", "sense": "max"}, {"metric": "noise", "sense": "min"}],
+               "best": {"metric": "flow", "sense": "max"}, "history": "chord"}),
+    );
+    assert!(q["entries"].as_array().unwrap().is_empty());
+    assert_eq!(q["pareto"], json!([0, 1, 2, 3, 4]));
+    assert_eq!(q["best"]["index"], 4);
+    assert_eq!(q["best"]["trace"].as_array().unwrap().len(), 5);
+    assert_eq!(q["history"].as_array().unwrap().len(), 6);
+    assert_eq!(q["history"][5]["verdict"], "diverged");
+    // export: JSON parses back to the query entries; CSV has one row per entry
+    ok(
+        &s,
+        "design_ledger_export",
+        json!({"ledger": lp, "out": "fan/out.json", "format": "json"}),
+    );
+    let back: Value = serde_json::from_str(&std::fs::read_to_string(root.join("fan/out.json")).unwrap()).unwrap();
+    let all = ok(&s, "design_ledger_query", json!({"ledger": lp}));
+    assert_eq!(back, all["entries"]);
+    let r = ok(
+        &s,
+        "design_ledger_export",
+        json!({"ledger": lp, "out": "fan/out.csv", "verdict": "ok"}),
+    );
+    assert_eq!(r["entries"], 5);
+    assert_eq!(
+        std::fs::read_to_string(root.join("fan/out.csv"))
+            .unwrap()
+            .lines()
+            .count(),
+        6
+    );
+    // re-run check: identical metrics pass at zero tolerance; a perturbed one fails (negative control)
+    let same = json!([{"name": "flow", "value": 2.0 * xs[1], "unit": "m3/s"}, {"name": "noise", "value": xs[1] / 3.0, "unit": "dB(A)"}]);
+    let r = ok(
+        &s,
+        "design_ledger_rerun_check",
+        json!({"ledger": lp, "index": 1, "metrics": same}),
+    );
+    assert_eq!(r["pass"], true, "{r}");
+    let moved = json!([{"name": "flow", "value": 2.0 * xs[1] * (1.0 + 1e-12), "unit": "m3/s"}, {"name": "noise", "value": xs[1] / 3.0, "unit": "dB(A)"}]);
+    let r = ok(
+        &s,
+        "design_ledger_rerun_check",
+        json!({"ledger": lp, "index": 1, "metrics": moved}),
+    );
+    assert_eq!(r["pass"], false);
+    let r = ok(
+        &s,
+        "design_ledger_rerun_check",
+        json!({"ledger": lp, "index": 1, "metrics": moved, "rtol": 1e-9}),
+    );
+    assert_eq!(r["pass"], true);
+    // located refusals
+    let bad_unit = call(
+        &s,
+        "design_ledger_append",
+        json!({"ledger": lp, "params": [{"name": "chord", "value": 1.0, "unit": ""}], "metrics": [],
+               "evaluator": "e", "evaluator_version": "1", "verdict": "ok", "fidelity": "cfd"}),
+    );
+    assert_eq!(err_code(&bad_unit), -32602);
+    let no_reason = call(
+        &s,
+        "design_ledger_append",
+        json!({"ledger": lp, "params": [], "metrics": [], "evaluator": "e", "evaluator_version": "1",
+               "verdict": "diverged", "fidelity": "cfd"}),
+    );
+    assert_eq!(err_code(&no_reason), -32602);
+    let mixed = call(
+        &s,
+        "design_ledger_append",
+        json!({"ledger": lp, "params": [], "metrics": [{"name": "flow", "value": 1.0, "unit": "m3/s"}],
+               "evaluator": "rom.bem", "evaluator_version": "1", "verdict": "ok", "fidelity": "reduced_order"}),
+    );
+    assert_eq!(mixed["isError"], false);
+    let r = call(
+        &s,
+        "design_ledger_query",
+        json!({"ledger": lp, "best": {"metric": "flow", "sense": "max"}}),
+    );
+    assert_eq!(err_code(&r), -32602, "mixed evaluators are refused for best-so-far");
+    let r = ok(
+        &s,
+        "design_ledger_query",
+        json!({"ledger": lp, "evaluator": "analytic.m1", "best": {"metric": "flow", "sense": "max"}}),
+    );
+    assert_eq!(r["best"]["index"], 4);
+    let _ = std::fs::remove_dir_all(&root);
+}
+// ---- end wave 46D

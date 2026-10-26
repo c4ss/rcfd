@@ -18,6 +18,8 @@ The code is `crates/rcfd-api/src/design/`:
 | `opmap` | operating-map driver (generic over a point evaluator), CSV/JSON tables |
 | `case_eval` | running rcfd cases: the candidate evaluator, the map point evaluator, warm start |
 | `tools` | the `design.*` service methods behind the MCP tools |
+| `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
+| `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
 
 ## Operating maps
 
@@ -124,8 +126,8 @@ all fronts and `crowding_distance` the usual spread measure; a multi-objective o
 
 ## Assistant tools
 
-The service methods `design.*` and the MCP tools `design_*` (see `docs/mcp-tools.md`) expose the loop. Access classes: the six tools
-that write files are `write_files` and need approval under the permission model of F-091; the four that only inspect are `read`.
+The service methods `design.*` and the MCP tools `design_*` (see `docs/mcp-tools.md`) expose the loop. Access classes: the eight tools
+that write files are `write_files` and need approval under the permission model of F-091; the six that only inspect are `read`.
 All paths go through the sandbox (`..` and absolute paths outside the root are error 1004 and create nothing); names (study,
 condition labels, variant names) use `[A-Za-z0-9_.-]` without a leading dot; errors are located, for example
 `parameter 'angle': value 14 is outside [0, 12]`.
@@ -142,6 +144,10 @@ condition labels, variant names) use `[A-Za-z0-9_.-]` without a leading dot; err
 | `design_compare_variants` | `design.compare` | read | side by side metrics, exact differences to the first, ranking |
 | `design_propose` | `design.propose` | read | the next candidates of the method given the store |
 | `design_list_study` | `design.list_study` | read | definition, counts, best record, Pareto indices |
+| `design_ledger_append` | `design.ledger_append` | write_files | append one evaluated variant to a design ledger |
+| `design_ledger_query` | `design.ledger_query` | read | filter; Pareto set, best so far, parameter history |
+| `design_ledger_export` | `design.ledger_export` | write_files | ledger entries to CSV or JSON |
+| `design_ledger_rerun_check` | `design.ledger_rerun_check` | read | compare a re-run with a ledger entry |
 
 Limits: `max_design_evaluations` (service configuration; `rcfd-mcp --max-design-evaluations`) bounds the number of case runs one call
 may start (map points, study evaluations); `max_cells` and `max_steps_per_call` apply to every run.
@@ -185,6 +191,36 @@ descent, Armijo backtracking; trial points ask for the value only). Library API 
   wall drag match central finite differences of converged solutions to 1.1e-6 relative (registered limit 5 percent). One gradient
   (N = 2050) takes about 6 s against 0.33 s per primal solve, so it pays off only beyond roughly 9 parameters (central
   differences) on this mesh.
+
+## Design ledger (ADR 0121)
+
+The study store above belongs to one optimiser run. The design ledger (`design::ledger`) keeps every evaluated variant of every study,
+evaluator and fidelity tier in one JSON-lines file, so the design history survives sessions:
+
+* An entry holds the parameters and metrics as `{name, value, unit}` (unit `1` when dimensionless), the evaluator id and version, the
+  solver version (`rcfd <version>`, plus the git revision when the build sets `RCFD_GIT_REV`), a geometry or mesh hash, the settings
+  that re-run it, a verdict (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`) with a located reason, the tier (`analytic`,
+  `reduced_order`, `cfd`), a time stamp, a seed and free provenance. Its index is the position of its line.
+* Crash safety: each batch is one append-mode write followed by a sync; a writer that finds a torn last line (from a killed process)
+  starts with a newline, and the reader reports such lines and skips them. Nothing is truncated or rewritten. Threads share one
+  `Ledger`; several writer processes are not locked against each other (single-writer assumption).
+* Queries: filters, Pareto set, best so far with its running trace, history of one parameter, CSV and JSON export. Pareto and best use
+  `ok` evaluation entries of one evaluator and tier only, and refuse a metric recorded in two units.
+* Re-run: an evaluator implements `ledger::Model` (id, version, tier, evaluate over named parameters); `ledger::rerun_check` refuses
+  another id or version, re-evaluates from the stored parameters and compares metrics, units, verdict and geometry hash.
+
+## Tolerance and uncertainty studies (ADR 0121, library only)
+
+`design::uq::run(spec, model, ledger)` samples named parameters with units from uniform, truncated normal or beta distributions (Monte
+Carlo, or replicated Latin hypercubes: one independent LHS per batch), evaluates any `Model` with a worker limit, and stops when the
+standard error of the mean of every controlled metric is below `max(se_abs, se_rel |mean|)` or at `max_samples` (`converged = false`).
+For each metric it reports the mean, standard deviation, standard error, quantiles with distribution-free order-statistic intervals
+at a stated confidence (exact coverage for Monte Carlo, approximate for LHS), the probability of violating each requirement with a
+Clopper-Pearson interval (a failed sample counts as a violation), and a sensitivity ranking by standardised regression coefficients
+with R^2. SRC sees linear effects only: an R^2 well below 1 means the ranking misses interactions or non-monotone effects. Every sample
+and a summary are written to the ledger; the same seed gives a byte-identical ledger for any worker count (with a fixed clock). It is
+verified on analytic functions (closed-form means, variances, quantiles and SRC); no fan evaluator is attached yet and there is no MCP
+tool for it.
 
 ## Not delivered
 
