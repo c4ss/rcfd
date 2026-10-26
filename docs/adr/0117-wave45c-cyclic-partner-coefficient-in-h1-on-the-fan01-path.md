@@ -180,6 +180,79 @@ values are in the addendum), so by the status decision rule the key is to be rem
   route on a mesh without cyclic faces bit-identical), and D-d' becomes "the removed key is refused" (a diagnostic at
   `solver.cyclic_partner_in_h1` for a steady case too). These post-removal versions are checks of the route, not of the registered key.
 
-## Addendum (placeholder)
+## Amendment 2 (written after D-a and D-d' passed on the key code, before the removal and any run of the route)
 
-Measured values, verdicts, deviations and the final gate: to be written after the registered runs.
+* The registered test-only route was "a `#[doc(hidden)] pub` bool on `Simulation`". That cannot reach the F-family and B3 tests without
+  editing `arm()` above the ADR 0117 block: `arm()` builds its own `Simulation`, and the only hook it offers is the `switch` closure on
+  the `SimpleSolver`. The route is therefore a `#[doc(hidden)] pub` bool on `SimpleSolver`, `cyclic_partner_in_h1_test_only` (default
+  false, read nowhere in rcfd-fv), ORed into `sim.rs` 2667 next to `cyclic_seams`. The tests set it through the switch before iteration
+  1, so `step()` keeps F1 from the first iteration, as the key did. This is the one change to `simple.rs` (D2 said none): a struct field
+  and its initialiser, no kernel line.
+* Route check (registered now, reported in the addendum): the F family, rerun once through the route, reproduces the key-arm values of
+  the registered run (L and E_s to the printed digits). Not a new acceptance; it shows the known-miss tests still measure what failed.
+
+## Addendum: measured values (one registered run each; release, `target-w45c`)
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| N1 sector without F1 - annulus (run first) | 3.04e-2 U (annulus converged at 82, sector at 89) | >= 1e-7 (exactness tier); >= 4.3e-3 reported | discriminates at both tiers |
+| R1 converged (annulus / sector with F1) | iteration 82 / 90 | within 4000 | pass |
+| R1-exact: sector with F1 - annulus | 6.64e-11 U | 1e-8 | pass |
+| R1 L_DIFF tier (implied) | 6.64e-11 U | 4.3e-4 | pass |
+| R1 seam balance | 0 (exactly) | 1e-8 | pass |
+| R1 reported: F1 with the pair mean off - annulus; seam balance | 6.63e-11 U; 1.0e-14 | none | reported |
+| F harness: default L E3 / E2 / E1 | -0.009518 / 0.059612 / 0.105977 N m | the ADR 0110 L1 values to 5e-7 | pass |
+| F-a E3: abs(L_key); E_s,key | 0.010108 against 0.009618; 5.97814 against 6.29765 Pa | not worse | **MISS** (abs(L)) |
+| F-a E2: abs(L_key); E_s,key | 0.060824 against 0.059910; 9.26279 against 9.27651 Pa | not worse | **MISS** (abs(L)) |
+| F-a E1: abs(L_key); E_s,key | 0.106131 against 0.106507; 5.43131 against 5.51119 Pa | not worse | pass |
+| F evaluability (last-100 change of L, default / key) | E3 9.0e-8 / 4.8e-8, E2 4.0e-6 / 2.5e-9, E1 8.2e-8 / 6.3e-7 N m | <= 1e-3 | all evaluable |
+| F-b | key abs(L) 0.010108 / 0.060824 / 0.106131 N m (still rising; order 0.367); change 5.9e-4 / 1.21e-3 / 1.5e-4 N m against the bands 1e-4 / 3.0e-4 / 5.3e-4 | classification | **CONTRIBUTES** (E3, E2), not EXPLAINS THE GROWTH |
+| F record: `rho_med` key against default | 1.04 / 0.37 / 1.02 | none | reported |
+| F record: top cells of abs(u_key - u_def) | E3: 0.28 m/s, hub-radius cells at the outlet (outlet+seam, outlet) and interior; E2: 2.3 m/s, seam cells at r 0.245 (near the shroud), z 0.10, non-orthogonality 73 deg; E1: 0.54 m/s, hub cells at z 0.094-0.099 | none | reported |
+| B3 key from the start (reported) | `rho_med` 0.656, `rho_du` 1.000: FALSIFIED; torque 1.8468 against 1.8493 N m, Delta p_ts 46.23 against 46.64 Pa | none | reported |
+| D-a (on the key code): absent = false on B3 after 30 iterations; flag after step 2 on E3 | bit-identical; false without, true with the key | bit-identical; false / true | pass |
+| D-b (on the key code): key true on the M2 annulus | bit-identical | bit-identical | pass |
+| D-d as registered | refused at `boundaries.lid` / `boundaries.walls` before the key check | located at the key | defective set-up (amendment 1), ignored known miss |
+| D-d' (on the key code): `pimple`, `coupled` | located error at `solver.cyclic_partner_in_h1` | located | pass |
+| D-c: `baseline_hashes.rs`, `mrf_cyclic_seams_w44c.rs` (both crates) | pass unchanged (final gate) | pass | pass |
+| Route check (amendment 2): F family rerun through the route | every printed value equal to the key run | reproduces | pass |
+
+Verdict by the status decision rule: R1, N1, the harness and D pass, **F-a misses on E3 and E2**, so **the key is removed** (rule b).
+What remains in the code: the `sim.rs` line 2667 ORs `SimpleSolver::cyclic_partner_in_h1_test_only` (doc-hidden, default false, no case
+key) into the flag, as registered for this outcome (amendment 2 moved it from `Simulation` to `SimpleSolver`); `schema.rs` and
+`docs/case-schema.md` are back to their main state, so the key named in D1 does not exist. Defaults are bit-identical
+(`x || false == x`; `baseline_hashes.rs` passes). The F-family test is an ignored `*_known_miss` with its limits; the B3 and smoke tests run
+through the route; D-a, D-b and D-d' now check the route and the refusal of the removed key (amendment 1).
+
+What this means:
+* F1 itself is right on the `rotating_frame` path with the pair mean on: a true sector reproduces the full annulus to 6.6e-11 U, against
+  3.0e-2 U without it (larger than the 4.6e-3 U of the inertial K3i: the body force raises the seam defect). The pair mean has no
+  measurable effect on that set-up (6.63e-11 against 6.64e-11).
+* On FAN-01, F1 is not "not worse". It raises abs(L) on E3 by 6 % and on E2 by 2 %, lowers E_s on E3 and E1, and moves cells at the hub
+  (E1, E3) and at the seam near the shroud (E2), not only seam-wall corner cells. The premise of F-a (a consistency fix may not add
+  spurious swirl) does not hold here: the camber-seam passage is not an exact sector of an annulus mesh, so the default seam `rAtU` error
+  and the other discretisation errors do not separate, and removing one can raise the total. My prediction was CONTRIBUTES at the
+  seam-wall corners; it was CONTRIBUTES, but at the hub and the near-shroud seam cells.
+* F1 does not explain the part L growth: with F1 abs(L) still grows E3 -> E2 -> E1 (0.0101 -> 0.0608 -> 0.1061 N m), and the change F1
+  makes (at most 1.2e-3 N m) is about 1 % of the growth (0.096 N m). ADR 0110 part L stays open; the seam `rAtU` defect is now a tested
+  candidate that contributes but does not cause it.
+* B3: F1 does not touch the limiter stall (`rho_du` 1.000, FALSIFIED by the ADR 0110 wording); torque -0.13 %, Delta p_ts -0.9 %.
+* No F1 default-flip draft follows (user decision: not before the combined wave-45 result; and F-a speaks against it on FAN-01).
+
+Deviations (all in the amendments): D-d's set-up was defective (no boundary conditions) and was corrected by D-d'; the test-only route sits
+on `SimpleSolver` instead of `Simulation`, which adds one field to `simple.rs` (D2 had said no `simple.rs` change); the F family ran a
+second time, through the route, only to check the route. The D-a / D-b / D-d' tests in the tree are the post-removal versions; their
+registered versions ran on the key code (commit 2f81f36 holds them).
+
+Follow-ups for the lead (not done here): a tree-level R1 on the ADR 0116 `annulus_3d_sector`, which would put a case-tree sector against
+a case-tree annulus through the `sim.rs` wiring (on main no case-tree mesh allows it); and, if 0115 converges the E family, repeating the F
+family on converged states.
+
+Unverified references: the ADR 0086 observed-order formula (Celik et al. 2008, recalled there). Every other reference value is from ADRs
+0008, 0086, 0110 and 0113.
+
+Status: F-126 stays partial; ADR 0110 part L stays open; no default changed.
+
+## Final gate
+
+GATE_PLACEHOLDER

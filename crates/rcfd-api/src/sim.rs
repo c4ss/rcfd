@@ -1682,12 +1682,6 @@ impl Simulation {
                 "the boundary compensation applies only to the steady incompressible solver (solver.algorithm = \"simplec\", constant density)",
             ));
         }
-        if get_b(case, "solver.cyclic_partner_in_h1") && !matches!(engine, Engine::Steady(_)) {
-            return Err(diag(
-                "solver.cyclic_partner_in_h1",
-                "the cyclic partner coefficient in h1 applies only to the steady incompressible solver (solver.algorithm = \"simple\" or \"simplec\", constant density)",
-            ));
-        }
         let steady = steady_alg || coupled_alg || matches!(&engine, Engine::Compressible(c) if c.steady);
         let transient_alg = matches!(alg.as_str(), "piso" | "pimple");
         let energy = if energy_on && !vdens && (steady_alg || transient_alg || coupled_alg) {
@@ -2700,8 +2694,8 @@ impl Simulation {
                 s.wall_pressure_trapezoid =
                     src_force.is_some() && self.sources.as_ref().is_some_and(|x| x.wall_pressure_trapezoid);
                 s.coupled_body_pair_mean = s.wall_pressure_trapezoid;
-                s.coupled_offdiag_in_h1 = self.sources.as_ref().is_some_and(|x| x.cyclic_seams)
-                    || get_b(&self.case, "solver.cyclic_partner_in_h1");
+                s.coupled_offdiag_in_h1 =
+                    self.sources.as_ref().is_some_and(|x| x.cyclic_seams) || s.cyclic_partner_in_h1_test_only;
                 let tw_force = self.two_way.as_ref().and_then(|t| t.force().cloned());
                 if self.energy.is_some() || self.udf_momentum.is_some() || src_force.is_some() || tw_force.is_some() {
                     let bous = self.energy.as_ref().and_then(|en| {

@@ -1636,74 +1636,70 @@ fn w44a_hooks_at_defaults_are_bit_identical() {
 }
 
 // ==================================================================================================================================
-// ADR 0117 (wave 45C) block, appended: `solver.cyclic_partner_in_h1` (the ADR 0113 F1) on the `rotating_frame` FAN-01 path. Nothing
-// above this line is changed by ADR 0117. `family()` and `start_arm()` pass `solver_extra = ""`, and a switch closure would be undone
-// by `step()` (it sets the flag every step), so this block calls `arm()` with the key in the case text.
+// ADR 0117 (wave 45C) block, appended: the ADR 0113 F1 (`coupled_offdiag_in_h1`) on the `rotating_frame` FAN-01 path. Nothing above
+// this line is changed by ADR 0117. `step()` sets the flag every step, so a plain switch would be undone; the case key
+// `solver.cyclic_partner_in_h1` missed F-a and was removed (rule b), and these tests keep F1 on through the test-only route
+// `SimpleSolver::cyclic_partner_in_h1_test_only` (ADR 0117 amendment 2), set by the switch before iteration 1.
 // ==================================================================================================================================
 
-const W45C_KEY: &str = "cyclic_partner_in_h1 = true";
+/// The ADR 0117 test-only route: F1 kept on by `step()` from the next iteration on.
+fn w45c_route(s: &mut SimpleSolver) {
+    s.cyclic_partner_in_h1_test_only = true;
+}
 
-/// The solver flag after two steps of `text` (the value `step()` gave it).
-fn w45c_flag_after_two_steps(text: &str) -> bool {
-    let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"));
+/// The solver flag after two steps of the E3 case (the value `step()` gave it), with or without the route.
+fn w45c_flag_after_two_steps(route: bool) -> bool {
+    let case = Case::parse_toml(&case_toml(F3, false, "", false)).unwrap_or_else(|e| panic!("{e:?}"));
     let mut sim = Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"));
+    sim.simple_solver_mut().unwrap().cyclic_partner_in_h1_test_only = route;
     sim.step();
     sim.step();
     sim.simple_solver().unwrap().coupled_offdiag_in_h1
 }
 
-/// ADR 0117 rule (d) smoke: the flag inside `step()` (true with the key, false without, E3) and 20 + 20 iterations of E3 and B3 with
-/// the key (finite, no guard trip).
+/// ADR 0117 rule (d) smoke (run on the key code before registration; now through the route): the flag inside `step()` on E3, and 40
+/// iterations of E3 and B3 with F1 (finite, no guard trip).
 #[test]
 #[ignore = "ADR 0117 smoke (about 1 min in release)"]
 fn w45c_smoke_key_on_the_fan_path() {
-    let with = w45c_flag_after_two_steps(&case_toml(F3, false, W45C_KEY, false));
-    let without = w45c_flag_after_two_steps(&case_toml(F3, false, "", false));
-    println!("W45C smoke: flag after step 2 with the key {with}, without {without}");
+    println!(
+        "W45C smoke: flag after step 2 with the route {}, without {}",
+        w45c_flag_after_two_steps(true),
+        w45c_flag_after_two_steps(false)
+    );
     arm(
         "W45C smoke key E3",
         F3,
         false,
-        W45C_KEY,
+        "",
         false,
         None,
-        20,
-        &none,
-        20,
+        0,
+        &w45c_route,
+        40,
         false,
     );
     arm(
         "W45C smoke key B3",
         F3,
         true,
-        W45C_KEY,
+        "",
         false,
         None,
-        20,
-        &none,
-        20,
+        0,
+        &w45c_route,
+        40,
         false,
     );
 }
 
-/// ADR 0117 D-a: on B3 the key absent and `false` give bit-identical u, p, phi after 30 iterations; on E3 the flag is false without the
-/// key and true with it after step 2 (the key reaches the solver through `step()` on a mesh with cyclic faces).
+/// ADR 0117 D-a after the removal (amendment 1): on E3 the solver flag after step 2 is false without the route and true with it (F1
+/// reaches the kernel through `step()` on a mesh with cyclic faces). Bit-identity of the default rests on `x || false == x` and on
+/// `baseline_hashes.rs`.
 #[test]
-fn w45c_da_key_false_is_bit_identical_and_the_key_reaches_step() {
-    let bits = |extra: &str| -> Vec<u64> {
-        let case = Case::parse_toml(&case_toml(F3, true, extra, false)).unwrap();
-        let mut s = Simulation::new(&case).unwrap();
-        for _ in 0..30 {
-            s.step();
-        }
-        let v = s.velocity().values.iter().flat_map(|u| u.iter().map(|x| x.to_bits()));
-        let p = s.pressure().values.iter().map(|x| x.to_bits());
-        let f = s.flux().iter().map(|x| x.to_bits());
-        v.chain(p).chain(f).collect()
-    };
-    assert_eq!(bits(""), bits("cyclic_partner_in_h1 = false"));
-    assert!(!w45c_flag_after_two_steps(&case_toml(F3, false, "", false)));
-    assert!(w45c_flag_after_two_steps(&case_toml(F3, false, W45C_KEY, false)));
+fn w45c_da_route_reaches_step() {
+    assert!(!w45c_flag_after_two_steps(false));
+    assert!(w45c_flag_after_two_steps(true));
 }
 
 /// Observed order by the ADR 0086 fixed-point form (copied from `fan01_gci_w37c.rs`; Celik et al. 2008, recalled, UNVERIFIED);
@@ -1726,12 +1722,13 @@ fn w45c_observed_order(f1: f64, f2: f64, f3: f64, r21: f64, r32: f64) -> (f64, f
     (s, f64::NAN)
 }
 
-/// ADR 0117 F family: E3, E2, E1 (600 iterations from the start) with the key absent and with the key; the harness check (default L
+/// ADR 0117 F family: E3, E2, E1 (600 iterations from the start) without and with F1 (registered run: the case key; now the test-only
+/// route, which reproduced it, amendment 2); the harness check (default L
 /// equals the ADR 0110 L1 values to the printed digits), F-a (registered limit), F-b (classification), and the record (rho_med against
 /// the default arm, top-10 cells of |u_key - u_def|).
 #[test]
-#[ignore = "ADR 0117 F family (about 12 min in release)"]
-fn w45c_f_family_key_against_default() {
+#[ignore = "known miss (ADR 0117 F-a): |L| E3 0.010108 > 0.009618 and E2 0.060824 > 0.059910 N m; key removed, runs through the test-only route (about 8 min in release)"]
+fn w45c_f_family_key_against_default_known_miss() {
     let l1_ref = [-0.009518, 0.059612, 0.105977];
     let mut fail: Vec<String> = Vec::new();
     let mut rows = Vec::new();
@@ -1752,11 +1749,11 @@ fn w45c_f_family_key_against_default() {
             &format!("W45C key {name}"),
             c,
             false,
-            W45C_KEY,
+            "",
             false,
             None,
             0,
-            &none,
+            &w45c_route,
             600,
             false,
         );
@@ -1826,10 +1823,10 @@ fn w45c_f_family_key_against_default() {
 /// ADR 0117 B3 (reported, no limit): the ADR 0110 set-up arm, the reference (1000 iterations, window 500-1000) against the key from the
 /// start (3000, window 2500-3000), with the ADR 0110 verdict wording, torque and Delta p_ts (default stalled 1.849 N m / 46.6 Pa).
 #[test]
-#[ignore = "ADR 0117 B3 (about 4 min in release)"]
+#[ignore = "ADR 0117 B3, reported (about 3 min in release); through the test-only route since the key was removed"]
 fn w45c_b3_key_from_the_start() {
     let (r, _) = arm("W45C reference B3", F3, true, "", false, None, 1000, &none, 0, false);
-    let (mut a, _) = arm("W45C key B3", F3, true, W45C_KEY, false, None, 3000, &none, 0, false);
+    let (mut a, _) = arm("W45C key B3", F3, true, "", false, None, 0, &w45c_route, 3000, false);
     a.ref_res = r.arm_res;
     a.du_ref = r.du_end;
     let (v, x) = verdict(&a);
