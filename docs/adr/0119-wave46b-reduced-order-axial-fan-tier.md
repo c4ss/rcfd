@@ -156,8 +156,8 @@ Also reported (no limit): the BPF tone of C at Q_D, 1 m, 90 and 60 deg (amplitud
 ### Stated accuracy of the tones (D1)
 
 The closed form is exact for its assumptions and agrees with the FW-H solver within 4e-5 (ADR 0066). The strip loads are model
-values. The steady-loading component of a low-Mach rotor is tiny: the smoke gives 1.25e-9 Pa at 1 m for C (tip Mach 0.053, J_7 of
-about 0.37). Measured computer-fan BPF tones are, by common experience, far louder; they come from unsteady loading (struts, inflow
+values. The steady-loading component of a low-Mach rotor is tiny: the smoke gives 1.25e-9 Pa at 1 m for C (tip Mach 0.053; the
+Bessel factor is J_7 at an argument of about 0.37, which is about 1e-9). Measured computer-fan BPF tones are, by common experience, far louder; they come from unsteady loading (struts, inflow
 distortion, rotor-stator interaction) that this model does not contain (UNVERIFIED as a quantitative statement; no measured small-fan
 noise is in the repository, D5). The number is a lower bound of the tonal level, not a prediction of it.
 
@@ -261,12 +261,30 @@ Reported (no limit):
   point the ROM gives dp_s 45.7 Pa (-64 %), P 308.6 W (-7.4 %), eta_s 0.21 against 0.53. The ROM stalls at the design point: its stall
   onset (largest measured flow with a stalled strip) is 1.59 m^3/s against about 1.1 measured. Above 1.7 m^3/s, where no ROM strip is
   stalled, dp_s is within 2 to 14 Pa of the measurement but the power is 32 to 38 % high. Chord Re 5.0e4 to 1.45e5.
-  Reading, not a finding: FAN-01's hub runs at high incidence and solidity (1.14), where an isolated thin plate stalls and a cascade
-  would turn the flow. The ROM has no cascade correction (D-M3), so it calls the hub stalled from 1.59 m^3/s down. The distance is the
-  size of an uncorrected strip model on a fan it was not built for. It is not a calibration, and nothing was changed after the run.
-  It does show that this tier, as registered, cannot bound a high-solidity hub, and that the stall model sets the shape of the curve
-  below its onset.
+  Reading, not a finding: at the design point 33 of 40 strips are stalled, so most of the span is past the threshold, not only the
+  hub (solidity 1.14). The threshold is `cl_max / 2 pi` = 10.0 deg of effective incidence, and the camber adds about 4.3 deg through
+  `alpha_L0`. An isolated thin plate with this `cl_max` therefore stalls where the real blade row, a cascade with a measured stall
+  onset near 1.1 m^3/s, still turns the flow. The ROM has no cascade correction (D-M3). The distance is the size of an uncorrected
+  strip model on a fan it was not built for. It is not a calibration, and nothing was changed after the run. It does show that this
+  tier, as registered, does not bound FAN-01 below 1.6 m^3/s, and that the stall model sets the shape of the curve below its onset.
+* **Efficiency maximum and the design loop.** M1 passes with stall switched off (`cl_max = 100`). With the default model, the eta_t
+  maximum inside the unstalled range [0.80, 1.30] Q_D lies at the stall boundary (0.7714 at 0.80 Q_D against 0.7682 at 0.85 Q_D): the
+  model's efficiency keeps rising with loading until a strip stalls. D2 shows the consequence: Nelder-Mead on eta_s ran to the
+  most-loaded bound. An efficiency objective on this tier drives a design to the stall edge, so a design loop needs a stall-margin
+  constraint (not provided here).
 
 Deviations from the registered plan: Z1 (amendment 1, written before any registered run; the known miss confirmed the defect: 19
 stalled strips at 0.7 Q_D, error 9.6e-2). D2's Nelder-Mead ran to the parameter bound in 10 evaluations; the check is functional, and
 this is reported, not judged. No limit was changed.
+
+## Amendment 2 (2026-10-26, written after every registered run and after V1, before the two checks below were written or run)
+
+A review found two deliverables without a check. Both are identity or plumbing checks; neither can move V1 or any limit above.
+
+* **S1 static-pressure deductions** (`s1_static_pressure_deductions`). C, default model, at the L1 flows {0.5, 0.75, 1.0, 1.2} Q_D:
+  `dp_t - dp_s` equals `rho c_x^2 / 2 + sum (rho dc^2 / 2) dQ / Q`, recomputed from the strip fields, within 1e-12 relative. Reason:
+  D-M7 is the quantity the operating point and V1 use, and no registered check covered it (F1 tests only its scaling; R1b uses it on
+  both sides). NCs, each must miss by >= 1e-11: the swirl term omitted; the axial term omitted.
+* **P1 input conversion** (`p1_from_axial_fan`). An `AxialFan` built by `AxialFan::linear` maps to `RomFan` field by field
+  (`tip_clearance` to `tip_gap`, stations to sections, exact equality); an invalid fan (`n_blades = 1`) returns the located error
+  naming `n_blades`. Functional, no numeric limit.
