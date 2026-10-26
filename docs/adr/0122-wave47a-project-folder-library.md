@@ -112,3 +112,24 @@ line accepted), not durability across power loss.
 * The run service (47B), time-series store (47C) and the plugin (wave 48) can use `rcfd_project::atomic`, `jsonl`, `paths` and
   `Watcher` instead of writing their own.
 * No existing crate changes; defaults are untouched.
+
+## Addendum 2026-10-26: measured values (registered run, release, `cargo test -p rcfd-project --release`, this machine with other agents' gates running)
+
+| Id | Limit | Measured | Negative control |
+|---|---|---|---|
+| R1, I1, J1, M1, W1, V1, Q1, T1 | exact | pass | each control discriminated (pass) |
+| A1 | 0 partial; writes >= 20, reads >= 200 | 0 partial; 589 writes, 1270 reads; 0 reader open errors; no temp left | in-place writer: 862 partial of 1088 reads |
+| A2 | 0 bad; reads >= 20 | 0 bad in 162 concurrent reads + 20 post-kill reads | in-place writer: 99 bad |
+| A3 | >= 40 ms; `Retry` with 12 attempts in < 2 s | replaced after 71.5 ms; gave up after 537 ms (OS error 5, access denied) | 1 attempt fails (pass) |
+| J2 | reader never errors; repair exact | 0 torn tails in 10 kills of the one-write appender, all asserts pass | split writer: 10 torn tails in 10 kills, all tolerated and repaired |
+| R2 | 512 distinct, listed, valid | 512 distinct (ids in seconds 14:33:20 to 14:33:23 UTC), 0 skipped, `validate` empty | (R2c) |
+| R2c | 16 distinct | 16 distinct, 33 clashes resolved by probing | non-exclusive: 8 distinct of 16 |
+| P1 | all refused, located | 17 of 17 refused (13 escapes, junction made); 5 ordinary paths accepted | every escape left the root under a naive join |
+| L1 | <= 500 ms | 82.8 ms (slowest of 3 warm listings of 500 runs; creating them took 5.5 s) | 2 ms extra per run: 1.28 s |
+
+No misses, no amendments after registration. Deviation: clippy (`double_ended_iterator_last`) asked for `.rev().find(..)` in place of
+`.filter(..).last()` in `latest_finished`; the edit landed while the registered release run was building. The two forms return the
+same element; Q1 and L1 check the result.
+
+The J2 one-write appender never left a torn line in 10 kills: `TerminateProcess` does not interrupt a single small `WriteFile`, so the
+torn-tail path is exercised by the split-writer control and the J1 fixtures, not by the production appender.

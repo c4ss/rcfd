@@ -358,8 +358,8 @@ impl Project {
         Ok(self
             .runs_in_state(RunState::Finished)?
             .into_iter()
-            .filter(|r| r.case == case)
-            .last())
+            .rev()
+            .find(|r| r.case == case))
     }
 
     /// Check the folder against the contract. An empty list means valid.
