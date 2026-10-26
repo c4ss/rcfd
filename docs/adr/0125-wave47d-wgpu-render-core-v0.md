@@ -171,6 +171,35 @@ passing test, and the missing adapters get an ignored `*_known_miss` test with t
 makes its check **non-discriminating**; the result is reported and the limit is not changed. On another machine the T1 limit applies to
 discrete GPUs only, and the frame time is always printed with the adapter name.
 
+## Amendments (written after the first registered run, before the runs they govern)
+
+The first registered run was a debug build of every test except T1, on all five adapters. Two tests failed:
+
+* P1 failed on its background probe on the first adapter.
+* P2 failed on its value limit on the first adapter: 1.47e-5 against 1e-5.
+
+Both tests stopped at the first adapter.
+
+**A1 (P1, defective set-up).**
+* The background probe at pixel (0, 0) lies inside the unit square, because the registered view (half height 0.5 at 256 x 256) fills the
+  whole image. The probe at (300, 0) is outside the image, so it tests only the bounds check. The 64 face probes and the negative
+  control had passed on that adapter: 64/64 correct, and 0/64 for the control.
+* The registered test stays as `p1_picking_returns_face_cell_and_value_known_miss` (ignored, unchanged).
+* The corrected test `p1b_picking_returns_face_cell_and_value` keeps the 64 probes, their limits and the negative control unchanged. It
+  checks the background on a second view of half height 1.0, where the square covers the middle 128 x 128 pixels. Pixels (5, 5) and
+  (250, 128) must give `None`, and the centre pixel (128, 128) must give a face (its own control).
+
+**A2 (P2, a miss, not a set-up defect).**
+* The registered value limit of 1e-5 assumed f32 interpolation error only. Rasterisers also snap vertex positions to a sub-pixel grid:
+  8 bits in D3D, and at least 4 in the Vulkan specification. The interpolated value is then that of a point displaced by up to about
+  1/512 px. With this field's screen gradient of about 0.015 of the range per pixel, that is up to about 3e-5 of the range.
+* I wrote this explanation after seeing 1.47e-5; it is a reading of the result, not a registered prediction.
+* The value check moves unchanged into `p2_pick_interpolated_value_known_miss`, which is ignored and is run with `--ignored` so that all
+  five adapters are recorded.
+* The rest of P2 is unchanged: centre `zmax`, hidden `zmin`, and 0 interior id mismatches. It stays in
+  `p2_pick_depth_and_visibility`.
+* No new value limit is registered. P1 still checks picked values exactly on per-face fields.
+
 ## Out of scope
 
 Windowing, swap chains and egui integration (wave 48); iso-surfaces, streamlines, vectors, particles, animation and video (wave 49);
