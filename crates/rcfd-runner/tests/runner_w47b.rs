@@ -771,3 +771,37 @@ fn s10_json_case_snapshot_runs() {
         "{reason}"
     );
 }
+
+/// S11 (ADR 0123 amendment 1): a case in `cases/` that references `../meshes/...` runs from its snapshot
+/// in `runs/<id>/` (`--case-dir`); negative control: the snapshot without `--case-dir` cannot find the mesh.
+#[test]
+fn s11_relative_mesh_path_resolves_against_the_case_folder() {
+    let p = Project::new("s11", base_config(1));
+    let o = Command::new(rcfd_bin())
+        .arg("convert")
+        .arg(p.case())
+        .arg(p.dir.join("meshes/cavity"))
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let text = CASE.replace(
+        "generator = \"cavity_2d\"\nnx = 12\nny = 12",
+        "source = \"file\"\nfile = \"../meshes/cavity/polyMesh\"",
+    );
+    assert!(text.contains("polyMesh"));
+    let case = p.dir.join("cases/file.toml");
+    std::fs::write(&case, text).unwrap();
+    let id = p.client.start(&case, &settings(30, 0)).unwrap();
+    let s = p.client.wait(&id, Duration::from_secs(120)).unwrap();
+    assert_eq!((s.state, s.step), (RunState::Finished, 30), "{s:?}");
+    let o = Command::new(rcfd_bin())
+        .arg("run")
+        .arg(p.run_dir(&id).join("case.snapshot"))
+        .args(["--check-only"])
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&o.stderr);
+    eprintln!("S11 without --case-dir: exit {:?}: {}", o.status.code(), err.trim());
+    assert_eq!(o.status.code(), Some(3));
+    assert!(err.contains("mesh.file"), "{err}");
+}
