@@ -371,7 +371,9 @@ pub fn natural_frequencies(rotor: &Rotor, spin: f64) -> Result<Vec<C64>, String>
 
 /// Harmonic load on the rotor in stationary housing axes at circular frequency `omega` [rad/s]: `f(t) = Re(F exp(i omega t))`.
 /// `force = [Fx, Fy, Fz]` [N], `moment = [Mx, My, Mz]` [N m] about the centre of mass. `Fz` and `Mz` are passed to the mount
-/// unchanged.
+/// unchanged. Loads taken from a rotating-frame (MRF) solution must first be turned to housing axes: a lateral rotor-frame
+/// harmonic of order `k` appears at `(k + 1) spin` (forward) and `(k - 1) spin` (backward) in housing axes, so a steady
+/// rotor-frame lateral force is a 1x rotating load like unbalance; stator and strut interaction loads are already in housing axes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HarmonicLoad {
     /// Circular frequency [rad/s], positive.
