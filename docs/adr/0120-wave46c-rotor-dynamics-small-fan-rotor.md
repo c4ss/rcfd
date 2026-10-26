@@ -183,6 +183,55 @@ vibration (no data).
   control: both bearings with `k / 4`, so the total is `k / 2` (the stiffness of one of the two bearings) and `kc` stays 0; expected
   `sqrt(k / 2m)`, rel 0.29; must miss 1e-9 by at least 10x.
 
+## Addendum: measured values (one registered run each, debug build, `target-w46c`, commit f235b7d)
+
+Every check passed with its negative control discriminating; J1 passed in its check and failed in its control set-up
+(amendment 1), and its corrected test J1b passed. No known miss.
+
+| Id | Measured | Limit | Negative control (measured) |
+|---|---|---|---|
+| J1 (defective control) | critical speed rel 0, natural `+-omega_n` rel 0 / 0; control panicked (empty critical-speed list) | 1e-9 | defective, test ignored |
+| J1b | critical speed 3380.617 rad/s, rel 0; natural `+-omega_n` rel 0 / 0 | 1e-9 | rel 0.293 |
+| J2 | `|X| / e = 9.999999999999996` against 10, rel 3.6e-16 | 1e-9 | rel 1.00 |
+| J3 | (a) `|X| / e - 1 = 9.95e-11` at `r = 1e5` (analytic `(1 - 2 zeta^2) / r^2 = 9.95e-11`); (b) centre of mass rel 3.2e-14 | 1e-9 | `|X| / e = 1.0e10` |
+| J4 | force rel 9.8e-11, moment rel 2.8e-10 | 1e-9 | rel 2.0 |
+| R1 | roots `+-1795.1387`, `+-3789.8801` rad/s, worst rel 1.3e-16 | 1e-9 | rel 1.10 |
+| R2 | forward tilt 4000.000 rad/s rel 2e-90 (exact to print), backward -1000.000 rel 1.1e-16, translation rel 1.3e-16 / 7e-98; critical speeds `[3380.617]` only | 1e-9 | forward rel 0.155 |
+| E | general load rel 5.5e-16 (work 9.5977e-8 J per cycle); unbalance rel 0 (6.5272e-9 J) | 1e-9 | rel 2.03 |
+| B | `G = 250` and `U_per = 2^-9` bitwise; round trip rel 1.4e-16 | bitwise; 4 eps = 8.9e-16 | rel 8.55 |
+| U | static 1.2e-16, couple 1.2e-16, direction 1.2e-16 | 1e-12 | rel 0.997 (`1 - 1 / Omega` at 300 rad/s) |
+| X | deck round trip identical; resultant worst rel 0 | exact; 1e-12 | the dropped axial force is caught (asserted) |
+| I | all 14 messages name their field, frequency or line | contains | valid inputs accepted |
+
+J4's moment deviation (2.8e-10) is the largest relative number and is the analytic `O(r^2)` term at `r = 1e-5`, as registered. All
+other checks sit at round-off.
+
+### Worked example W (REPORTED; assumed rotor, see above)
+
+* `U_per` at G 6.3, 35 g, 2000 rpm: **1.053 g mm**. The assumed 1.0 g mm static unbalance is grade **G 5.98** at 2000 rpm.
+* Critical speeds: **one**, 32 062 rpm (translation). The conical mode has no synchronous crossing (`Ip > It`).
+* Natural frequencies at 2000 rpm: backward -541.1 Hz and -205.1 Hz, forward 259.7 Hz and 542.1 Hz. The conical pair splits by
+  gyroscopic coupling around about 230 Hz.
+* Unbalance response (static plus couple):
+
+| rpm | centre-of-mass orbit [um] | bearing 1 force [N] | bearing 2 force [N] | mount force [N] | mount moment [N m] |
+|---|---|---|---|---|---|
+| 600 | 0.0124 | 0.00208 | 0.00433 | 0.00395 | 3.94e-5 |
+| 1000 | 0.0345 | 0.00576 | 0.0120 | 0.0110 | 1.09e-4 |
+| 2000 | 0.138 | 0.0228 | 0.0479 | 0.0441 | 4.32e-4 |
+| 3000 | 0.311 | 0.0506 | 0.107 | 0.0998 | 9.54e-4 |
+| 4800 | 0.800 | 0.125 | 0.269 | 0.260 | 2.32e-3 |
+
+* The whole range is subcritical. The mount force is 0.5 % above the static unbalance force `U Omega^2` at 2000 rpm (0.0441 against
+  0.0439 N) and 2.8 % above it at 4800 rpm (0.260 against 0.253 N). The couple adds the mount moment.
+* Blade-passing spectrum at 2000 rpm (7 blades):
+  * BPF 233.3 Hz: bearing forces 3.16 and 3.70 mN, mount lateral 6.18 mN for 5 mN applied (x1.24), axial 20 mN passed through.
+  * 2 BPF 466.7 Hz: bearing forces 3.95 and 3.33 mN, mount lateral 7.28 mN for 2 mN applied (x3.6), axial 8 mN.
+* What an optimiser would read from this: with these assumed bearing stiffnesses, BPF at 2000 rpm falls between the backward
+  (205 Hz) and forward (260 Hz) conical modes, and 2 BPF lies 14 % below the 542 Hz translation mode. Blade count and speed range
+  move the tonal vibration more than the balance grade does. This depends entirely on the assumed `k`, `c`, `It` and `Ip`; nothing
+  here is measured.
+
 ## References
 
 * Rigid-rotor and Jeffcott equations, gyroscopic moment `Ip Omega theta'`, hysteretic damping as `eta k / omega`: derived from
