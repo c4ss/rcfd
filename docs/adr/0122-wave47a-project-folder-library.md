@@ -168,8 +168,8 @@ positive A2 in the same runs: 0 bad. The registered run of A2n is the final gate
 
 ## Final gate (2026-10-26, fresh archive of b21b195 on main cc0a8cb)
 
-* fmt: clean. Tests (`cargo test --workspace --release --no-fail-fast`): **2137 passed, 0 failed, 662 ignored**. This crate adds 28
-  passed (2 unit, 26 integration including the no-op `child_entry`) and 1 ignored (the amendment-1 known miss); the corrected A2n
+* fmt: clean. Tests (`cargo test --workspace --release --no-fail-fast`): **2137 passed, 0 failed, 662 ignored**. This crate adds 27
+  passed (2 unit, 25 integration including the no-op `child_entry`) and 1 ignored (the amendment-1 known miss); the corrected A2n
   control passed in this run (its count is not printed by the gate, which captures test output).
 * Workspace clippy: **exit 101, not caused by this branch**: two errors in `crates/rcfd-api/src/design/ledger_tests.rs:134`
   (`cloned_ref_to_slice_refs`) and `crates/rcfd-api/src/design/uq_tests.rs:295` (`type_complexity`), files this branch does not
