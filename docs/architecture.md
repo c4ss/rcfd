@@ -7,6 +7,7 @@ rcfd-core   (no rcfd deps: scalar, units, errors, log, settings tree, hash)
 rcfd-mesh   -> core
 rcfd-linalg -> core
 rcfd-reactor -> (no workspace crates; 0D reactor toolkit, stiff ODE integrator)
+rcfd-project -> core   (Studio L1 project folder: run records, atomic files, path safety, poll watcher; ADR 0122)
 rcfd-gpu    -> linalg   (optional CUDA device solvers, cargo feature cuda; the only crate with unsafe code, ADR 0038)
 rcfd-dist   -> core, mesh, linalg   (transport-agnostic distributed-memory layer: communicator, halo exchange, distributed matrix and Krylov solvers; in-process threads transport, no MPI, ADR 0058)
 rcfd-io     -> core, mesh
@@ -21,6 +22,6 @@ rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
 rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)
 ```
 
-Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg` <
+Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
 `gpu`/`dist` < `io`/`fv`/`particles` < `turb`/`post` < `api` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.
