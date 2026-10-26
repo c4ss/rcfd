@@ -330,3 +330,5 @@ exercised only by L2's synthetic cuts. Added, without changing any registered li
     skipped line; a guarded `Ledger::append` is readable at the next index (one skipped line remains).
   * Negative control: a naive append (no newline guard) to the same killed file is lost (the entry count stays).
 * Smoke before registration (`smoke_w46d_ledger`, at least 3 entries): 59 361 bytes, 3 complete lines, 3 entries, 1 skipped line, torn tail.
+* Measured (registered run, at 0661647): torn tail after the kill, 10 complete lines, 10 entries, 1 skipped line; guarded append
+  readable at index 10; the naive append lost the entry. L3 re-run with the guard: 200 seen, 202 after, no tear. Pass.
