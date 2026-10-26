@@ -165,3 +165,17 @@ writes the file once, then overwrites it in place from offset 0 without truncati
 two precomputed payloads of equal length), so a kill leaves a mix of the two generations that fails the hash. Same 20 kills, same
 schedule, read after each kill, limit bad >= 1. Smoke (debug, whole `process` binary, 6 runs): 19 to 20 bad of 20, no hang; the
 positive A2 in the same runs: 0 bad. The registered run of A2n is the final gate.
+
+## Final gate (2026-10-26, fresh archive of b21b195 on main cc0a8cb)
+
+* fmt: clean. Tests (`cargo test --workspace --release --no-fail-fast`): **2137 passed, 0 failed, 662 ignored**. This crate adds 28
+  passed (2 unit, 26 integration including the no-op `child_entry`) and 1 ignored (the amendment-1 known miss); the corrected A2n
+  control passed in this run (its count is not printed by the gate, which captures test output).
+* Workspace clippy: **exit 101, not caused by this branch**: two errors in `crates/rcfd-api/src/design/ledger_tests.rs:134`
+  (`cloned_ref_to_slice_refs`) and `crates/rcfd-api/src/design/uq_tests.rs:295` (`type_complexity`), files this branch does not
+  touch, present on main cc0a8cb. `cargo clippy -p rcfd-project -p rcfd-cli --all-targets -- -D warnings`: clean.
+
+Found defect, not fixed (R1 covers finite values only): serde_json writes NaN and infinity as `null` and refuses `null` for an
+`f64`, so a diverged run whose `residuals.jsonl` or `status.json` holds NaN would make the whole residual file unreadable and drop
+the run into `skipped` (probe: `{"step":1,"time":null,"residuals":{"p":null},...}` gives "invalid type: null, expected f64"). An
+additive reader-side fix (read `null` as NaN) is proposed for the roadmap.
