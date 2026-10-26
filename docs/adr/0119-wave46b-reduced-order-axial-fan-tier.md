@@ -185,6 +185,17 @@ noise is in the repository, D5). The number is a lower bound of the tonal level,
 * FAN-01 construction: 17 sections, 20 data rows, `FanRom::new` ok (not evaluated).
 * No set-up was found defective.
 
+## Amendment 1 (2026-10-26, written after the ADR commit 92048b5 and before any registered test was written or run)
+
+* **Z1 set-up defect, found by reading the smoke, not by a run.** The registered Z1 flows include 0.7 Q_D. The smoke shows stalled
+  strips below 0.80 Q_D (12 at 0.70 Q_D with the default model), and `RomModel::lossless()` keeps the stall model, whose post-stall
+  branch carries the normal-force drag `C_N sin alpha_e`. That drag is a loss by construction, so `eta_t = 1` cannot hold at 0.7 Q_D:
+  the set-up does not test what Z1 states. The registered Z1 stays as the ignored `z1_zero_loss_known_miss` (limits unchanged, flows
+  {0.7, 1.0, 1.2}). Corrected **Z1'** (`z1b_zero_loss_unstalled`): flows {0.85, 1.0, 1.2} Q_D, the same limits, plus an assertion
+  that no strip is stalled at those flows. NC-Z1 unchanged.
+* **NC-M1 wording.** "The same with `RomModel::lossless()`" means the M1 set-up (`cl_max = 100`) with every loss switched off, i.e.
+  `RomModel { cl_max: 100, ..RomModel::lossless() }`. With `cl_max = 1.1` the post-stall drag would make it a different control.
+
 ## Out of scope
 
 Cascade correlations (Carter, Weinig), deviation, radial equilibrium, centrifugal fans (A3), broadband noise (D3), calibration against
