@@ -2393,6 +2393,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcfd-claude"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "rcfd-cli"
 version = "0.1.0"
 dependencies = [

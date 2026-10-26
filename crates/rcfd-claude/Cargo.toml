@@ -1,0 +1,20 @@
+[package]
+name = "rcfd-claude"
+description = "Claude Code bridge (Studio layer L6): session discovery, tolerant transcript tail, headless chat driver with an allow-list"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true
+
+# Test-only replay double of the `claude` executable (ADR 0126); the driver never calls it unless a test passes its path.
+[[bin]]
+name = "fake-claude"
+path = "src/bin/fake-claude.rs"
+test = false
+doc = false
