@@ -1840,6 +1840,11 @@ pub const METHODS: &[&str] = &[
     "design.compare",
     "design.propose",
     "design.list_study",
+    // wave 46D (ADR 0121)
+    "design.ledger_append",
+    "design.ledger_query",
+    "design.ledger_export",
+    "design.ledger_rerun_check",
 ];
 
 /// Minimal blocking client for the line protocol (tests, CLI, scripts).

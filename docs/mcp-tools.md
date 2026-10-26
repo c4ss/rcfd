@@ -46,6 +46,10 @@ F-147, F-148):
 | `design_compare_variants` | read | `design.compare` | side by side metrics, differences, ranking |
 | `design_propose` | read | `design.propose` | next candidates of the method, no side effects |
 | `design_list_study` | read | `design.list_study` | definition, counts, best record, Pareto indices |
+| `design_ledger_append` | write_files | `design.ledger_append` | append one evaluated variant to a design ledger |
+| `design_ledger_query` | read | `design.ledger_query` | filter the ledger; Pareto set, best so far, parameter history |
+| `design_ledger_export` | write_files | `design.ledger_export` | ledger entries to a CSV or JSON file |
+| `design_ledger_rerun_check` | read | `design.ledger_rerun_check` | compare a re-run's metrics with a ledger entry |
 | `render_image` | read | `render.png` | PNG image of a field |
 
 ## Design tools
@@ -64,3 +68,15 @@ Repeating a call is safe: `design_evaluate` returns a stored candidate without r
 `design_run_operating_map` returns the stored table when the case, the points and the options are unchanged, and `design_record` refuses a
 candidate that already has a record. Metric values must be finite numbers; an unknown or missing parameter, a value outside its bounds, a
 name with separators or a leading dot, and a base case that changed since the study was created are located errors (-32602).
+
+## Design ledger tools
+
+The design ledger (ADR 0121, `docs/design-loop.md`) is one JSON-lines file (for example `fan/ledger.jsonl`) that keeps every evaluated
+variant across studies, evaluators and sessions. `design_ledger_append` takes the parameters and metrics as lists of
+`{name, value, unit}`, the evaluator id and version, the verdict (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`; a located
+`reason` is required unless `ok`) and the tier (`analytic`, `reduced_order`, `cfd`), and stamps the server's rcfd version and the time.
+`design_ledger_query` filters and pages the entries and, on request, returns the Pareto set, the best entry with its running best and
+the history of one parameter; Pareto and best refuse a set that mixes evaluators, tiers or units of a metric, so filter by `evaluator`
+and `fidelity` first. `design_ledger_export` writes CSV or JSON, and `design_ledger_rerun_check` compares the metrics of a re-run with an
+entry (tolerances default to 0, bit-identical). A line torn by a killed writer is reported in `skipped_lines` and never joins the next
+entry.
