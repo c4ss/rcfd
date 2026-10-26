@@ -109,7 +109,8 @@ open geometry; (3) fan curve, noise and vibration from the same fan; (4) licence
 
 **Verdict: no open source is adequate as the first computer-fan reference case.** The only source with geometry, fan curve, noise and
 vibration from one fan on public terms is the NASA Quiet Space Fan (rank 1), and it is a ducted rotor-stator ventilation fan at about
-50 m/s tip speed with a 0.23 mm tip gap, outside the computer-fan regime on tip speed, loading and tip leakage. The only source inside
+50 m/s tip speed with a 0.23 mm tip gap (about 0.9 % of chord, against 2.9 % for the NASA 80 mm cooling fan of rank 2), outside the
+computer-fan regime on tip speed, configuration and tip leakage. The only source inside
 the regime (rank 2) publishes no geometry. G2 therefore needs a fan measured by the user, following the
 [fan measurement protocol](fan-measurement-protocol.md). Rank 1 is usable to exercise the small-fan tool chain (geometry import, curve, tones,
 imbalance) against real data, stated as not computer-fan validation.
@@ -130,13 +131,15 @@ imbalance) against real data, stated as not computer-fan validation.
   as `nasa-rotor37`). Geometry and reports are downloadable; no measured data file is published (the aerodynamic paper reports about
   150 GB acquired; curves are figures).
 - Fan: axial rotor-stator stage, 9 rotor blades, 11 stator vanes, flow-path diameter 88.9 mm (3.50 in), rotor tip clearance 0.23 mm
-  (0.009 in), design 12 000 rpm, rotor tip speed 50.2 m/s (inlet) and 52.7 m/s (exit) (Tweedt), rotor chord Reynolds number about
+  (0.009 in), design 12 000 rpm, rotor tip speed 50.2 m/s (inlet) and 52.7 m/s (exit) (Tweedt; that is a rotor tip radius of 40.0 mm at
+the leading edge and 42.0 mm at the trailing edge, a rotor of about 80 to 84 mm in an 88.9 mm duct), rotor chord Reynolds number about
   75 000 and stator about 60 000 (Tweedt), specific speed in the mixed-flow range with a 30 deg hub slope at the rotor inlet and a 22 %
   annulus area contraction through the rotor (Tweedt). Spinner, 3 aft struts, long exit diffuser, inlet bellmouth on the rig.
 - Geometry (SUPPL2, derived here; coordinates in inches, 91 points LE to TE by 21 sections per surface, pressure and suction side paired by
   point index, unwrapped at each section's mean radius, so the values are approximate): rotor chord 23.7 mm at the hub to 28.1 mm at the tip
   (hub 16 % shorter; Tweedt states 15 %), stagger from the axis about 39 deg (hub) to 54 deg (tip), maximum thickness about 0.11 to 0.08 of
-  chord (Tweedt: 10 % to 8 %), camber about 0.12 to 0.04 of chord; rotor tip radius about 42.7 mm; stator chord 29.1 mm constant (Tweedt
+  chord (Tweedt: 10 % to 8 %), camber about 0.12 to 0.04 of chord (the surfaces extend 0.005 in beyond each endwall, README); stator
+chord 29.1 mm constant (Tweedt
   1.15 in), thickness 0.10. Section definition (Tweedt): polynomial camber-angle and thickness distributions joined at 35 % chord, laid out
   on conic surfaces; the rotor camber-angle distribution is double circular arc, the thickness is not.
 - Measured (text values): 3.48 in. water (867 Pa) at 150.6 cfm at 12 000 rpm, design goal 3.64 in. water (907 Pa) at 150 cfm; wide open
@@ -152,8 +155,9 @@ imbalance) against real data, stated as not computer-fan validation.
   (2023, unthrottled); first blade bending mode 7 430 Hz, lowest stator mode about 2 800 Hz.
 - Representable: not as it stands (conic sections, contoured hub and shroud, stator row, polynomial thickness). A NACA 4-digit or
   circular-arc fit on cylinders would be an approximation whose geometric error must be reported. The coordinates can be used directly by a
-  future coordinate-import path. E1 (imbalance force and balance grade) can be checked against the vibration paper now: the inputs (rotor
-  mass, unbalance, speed) are stated.
+  future coordinate-import path. The vibration paper states the inputs of the E1 imbalance force (2021 rotor assembly mass, unbalance
+  tolerance, speed); comparing that force with the measured casing velocity needs the mount dynamics (E2), and NASA attribute the 2021
+  vibration to assembly repeatability (bushing, motor centring) as well as balance.
 
 **2. NASA 80 mm electronics cooling fan** (rank 2; inside the regime, no geometry).
 - Sources. Van Zante, Koch, Wernet, Podboy, NASA/TM-2006-214448 (Part 1: aerodynamic performance), NTRS 20060048234: READ (text; figures
@@ -242,7 +246,8 @@ aeroacoustics records (repository pages returned 403); Fitzgerald and Lauchle, J
 
 Inconsistencies found while reading: QSF design flow 0.0709 m^3/s in the report bodies but 0.709 m^3/s in the abstracts of NTRS 20240005078
 and 20120014314; Koch et al. 2024 states the measured pressure rise as "3.478 psia" and "3.487 psia" where inches of water are meant; QSF
-in-duct PWL values are figure labels; NASA 80 mm fan hub size differs between Parts 1 and 2; Tutar and Cam Table 1 numbering and citation
+in-duct PWL values are figure labels; the QSF vibration paper's residual unbalance for fan 2 at the front plane (0.0014 oz-in, about
+1.0 g mm) exceeds the stated 0.762 g mm tolerance; NASA 80 mm fan hub size differs between Parts 1 and 2; Tutar and Cam Table 1 numbering and citation
 as above; Mo and Choi mm/cm; the KIT FAN 2022 paper planned a first release for mid-2022, the Zenodo data records are dated January 2026.
 
 ## Provenance table (generated by `rcfd data provenance`)

@@ -5,9 +5,10 @@ found no open source adequate as a computer-fan reference case. This page lists 
 computer-fan tools of the [computer-fan project breakdown](fan-project-breakdown.md) can be checked against it. It is a minimum
 protocol, not a standard; where a standard applies it is named, and standards not read for this page are marked so.
 
-Scope: one axial or centrifugal fan of 40 to 140 mm, 1 000 to 5 000 rpm. Accuracy targets are derived below from the size of the
-quantities, using the rule that each measurement's standard uncertainty should be at most one third of the comparison tolerance the
-tools will be held to (so that a disagreement is the model's, not the rig's).
+Scope: one axial or centrifugal fan of 40 to 140 mm, 1 000 to 5 000 rpm. Accuracy targets follow from the rule that each
+measurement's standard uncertainty should be at most one third of the comparison tolerance the tools will be held to (so that a
+disagreement is the model's, not the rig's). The tolerance is not set yet: this page assumes 5 % on pressure rise and flow, so about
+1.7 % per measurement; the limit registered in the ADR of the first comparison replaces this assumption, and the targets scale with it.
 
 ## What the measurements validate
 
@@ -24,7 +25,7 @@ tools will be held to (so that a disagreement is the model's, not the rig's).
 - Fan make, model, nominal voltage, speed control (DC voltage or PWM), bearing type, blade count, rotation direction.
 - Rotor: tip diameter, hub diameter, blade sections at no fewer than 7 radii from hub to tip (chord, stagger, camber, thickness, leading
   edge position, so sweep and lean follow). Preferred: a 3D scan (structured light or CT) with a stated accuracy of 0.05 mm or better on
-  the blade surface, which is about 2 % of a 2 mm blade thickness; supply the raw scan (STL or point cloud) as well as the sections.
+  the blade surface, which is 2.5 % of a 2 mm blade thickness; supply the raw scan (STL or point cloud) as well as the sections.
 - Tip gap: feeler gauges or the scan, at no fewer than 4 circumferential positions and for every blade, because the gap and its spread
   dominate small-fan losses and are an A5 tolerance input.
 - Frame: inner diameter along the axis, inlet and outlet shape (a square frame uncovers part of the blade tip), strut count, shape and
@@ -47,7 +48,7 @@ tools will be held to (so that a disagreement is the model's, not the rig's).
 - Pressure: target 1 % of reading plus 0.5 Pa. The scale is rho U_tip^2: about 190 Pa for 120 mm at 2 000 rpm (U_tip = 12.6 m/s),
   130 Pa for 40 mm at 5 000 rpm, 65 Pa for 140 mm at 1 000 rpm; the fan pressure rise is a fraction of this, and 0.5 Pa is 0.8 % of the
   smallest case. A transducer of 0 to 250 Pa range or a calibrated micromanometer is needed; record the zero before and after each speed.
-- Flow: target 2 % of reading.
+- Flow: target 1.5 % of reading (from the assumed 5 % tolerance).
 - Ambient: pressure (0.5 kPa), temperature (1 K) and relative humidity (5 %) at the start and end of each speed, so that density is known
   to about 0.5 %.
 - Electrical input: supply voltage and current at every point (1 % each). With PWM speed control the current is pulsed: either run the
