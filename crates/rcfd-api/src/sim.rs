@@ -224,6 +224,9 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
             );
         }
     }
+    if generator != "annulus_3d_sector" && get_f(case, "mesh.sector_angle") != 0.0 {
+        bad("mesh.sector_angle", "a sector angle (annulus_3d_sector only)");
+    }
     if generator != "box_2d" {
         for p in ["mesh.periodic_x", "mesh.periodic_y"] {
             if get_b(case, p) {
@@ -490,6 +493,33 @@ pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             }
         }
         "annulus_3d_cylindrical_interface" => cylindrical_interface_mesh(case, nx, ny, grading),
+        "annulus_3d_sector" => {
+            // annulus_3d cut to a rotationally cyclic sector with planar faces (ADR 0116)
+            let (r_in, r_out, angle) = (
+                get_f(case, "mesh.r_in"),
+                get_f(case, "mesh.r_out"),
+                get_f(case, "mesh.sector_angle"),
+            );
+            if r_out <= r_in {
+                return Err(diag(
+                    "mesh.r_out",
+                    format!("annulus_3d_sector needs r_out > r_in (r_in = {r_in}, r_out = {r_out})"),
+                ));
+            }
+            if !(angle > 0.0 && angle < 360.0) {
+                return Err(diag(
+                    "mesh.sector_angle",
+                    format!("annulus_3d_sector needs 0 < sector_angle < 360 degrees (got {angle})"),
+                ));
+            }
+            let g = if (grading - 1.0).abs() < 1e-12 {
+                Grading::Uniform
+            } else {
+                Grading::Expansion(grading)
+            };
+            let nz = get_i(case, "mesh.nz").max(1) as usize;
+            gen::annulus_3d_sector(nx, ny, nz, r_in, r_out, get_f(case, "mesh.lz"), angle.to_radians(), g).map_err(me)
+        }
         "pipe_sweep" => {
             // all-hex circular pipe along z: multizone O-grid + core disc swept in nz layers (F-235, ADR 0047)
             for (path, v) in [
