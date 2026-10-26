@@ -50,6 +50,21 @@ fn child_entry() {
                 }
             }
         }
+        "naive-pre" => {
+            // ADR 0122 amendment 1: payloads built once, so the loop is all writing, not generating.
+            let bufs = [common::payload(1, LEN), common::payload(2, LEN)];
+            for g in 0.. {
+                // In-place, in 8 KiB pieces as a `BufWriter` would write: a kill lands inside the file.
+                let _ = std::fs::File::create(&arg)
+                    .and_then(|mut f| bufs[g % 2].chunks(8192).try_for_each(|c| f.write_all(c)));
+                if g == 0 {
+                    ready();
+                }
+                if std::time::Instant::now() > deadline {
+                    return;
+                }
+            }
+        }
         "append" | "append-split" => {
             let (mut a, _) = Appender::open(&arg).unwrap();
             let mut f = std::fs::OpenOptions::new().append(true).open(&arg).unwrap();
@@ -134,7 +149,7 @@ fn wait_line(child: &mut Child, prefix: &str) -> String {
 }
 
 /// Kill a writer child `KILLS` times while a reader thread hammers; returns (bad observations, reads).
-fn kill_loop(mode: &str, tag: &str) -> (u64, u64) {
+fn kill_loop(mode: &str, tag: &str, concurrent_reader: bool) -> (u64, u64) {
     let dir = common::scratch(tag);
     let path = dir.join("status.json");
     let mut bad = 0;
@@ -147,7 +162,7 @@ fn kill_loop(mode: &str, tag: &str) -> (u64, u64) {
         let reader = {
             let (path, stop, reads, partial) = (path.clone(), stop.clone(), reads.clone(), partial.clone());
             std::thread::spawn(move || {
-                while !stop.load(Ordering::Relaxed) {
+                while concurrent_reader && !stop.load(Ordering::Relaxed) {
                     if let Ok(b) = std::fs::read(&path) {
                         reads.fetch_add(1, Ordering::Relaxed);
                         if !common::payload_ok(&b) {
@@ -172,14 +187,23 @@ fn kill_loop(mode: &str, tag: &str) -> (u64, u64) {
 
 #[test]
 fn a2_atomic_replace_survives_kill_mid_write() {
-    let (bad, reads) = kill_loop("atomic", "a2");
+    let (bad, reads) = kill_loop("atomic", "a2", true);
     assert_eq!(bad, 0);
     assert!(reads >= KILLS, "reader did not overlap the writer: {reads}");
 }
 
+/// Defective set-up (ADR 0122 amendment 1): in a debug build the child spends most of its loop building
+/// the payload, so the file is complete most of the time; one debug run saw 0 bad. Kept, ignored.
 #[test]
-fn a2_negative_control_in_place_writer_killed_leaves_partial_files() {
-    let (bad, _) = kill_loop("naive", "a2neg");
+#[ignore = "ADR 0122 amendment 1: defective set-up, replaced by the precomputed-payload control"]
+fn a2_negative_control_in_place_writer_killed_leaves_partial_files_known_miss() {
+    let (bad, _) = kill_loop("naive", "a2neg", true);
+    assert!(bad >= 1);
+}
+
+#[test]
+fn a2_negative_control_precomputed_in_place_writer_killed_leaves_partial_files() {
+    let (bad, _) = kill_loop("naive-pre", "a2negpre", false);
     assert!(bad >= 1);
 }
 
