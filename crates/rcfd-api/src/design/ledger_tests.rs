@@ -131,7 +131,7 @@ fn l2_torn_tail_at_every_byte_offset() {
         assert_eq!(c.entries.len(), complete, "cut {cut}");
         assert_eq!(c.entries[..], stamped(&es[..complete])[..], "cut {cut}");
         assert!(c.skipped.len() <= 1, "cut {cut}");
-        l.append(&[extra.clone()]).unwrap();
+        l.append(std::slice::from_ref(&extra)).unwrap();
         let c = l.read().unwrap();
         assert_eq!(
             c.entries.len(),

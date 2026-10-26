@@ -292,6 +292,7 @@ fn src_exact() -> (Vec<f64>, f64) {
 }
 
 /// U4: per sampler (ranking, max |SRC error|, |R^2 error|, ranking by raw coefficients).
+#[allow(clippy::type_complexity)]
 fn u4(seed_mc: u64, seed_lhs: u64, n: usize) -> Vec<(Sampler, Vec<String>, f64, f64, Vec<String>)> {
     let (src, r2) = src_exact();
     [(Sampler::MonteCarlo, seed_mc), (Sampler::Lhs, seed_lhs)]
