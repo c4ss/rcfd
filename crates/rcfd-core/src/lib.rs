@@ -12,6 +12,7 @@ pub mod hash;
 pub mod iapws;
 pub mod log;
 pub mod materials;
+pub mod rng;
 pub mod scalar;
 pub mod settings;
 pub mod table;
