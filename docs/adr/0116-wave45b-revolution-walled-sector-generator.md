@@ -216,7 +216,7 @@ Common set-up (FAN-01 empty-passage dimensions):
 * New `crates/rcfd-api/tests/revolved_sector_w45b.rs`: G2-G7, N1 and the smoke.
 * `docs/case-schema.md`, `docs/meshing.md`.
 
-## Addendum: measured values (one run each, release build, on commit 0abc8fe plus the N2 split)
+## Addendum: measured values (one run each, release build, on the pre-rebase commits 0abc8fe and its N2 split; rebased onto main 25422d4 as f4a574c and 62d8b86)
 
 Order: N2 and N1 first, then G1 and G7 (library), then G2-G7 (case tree).
 
@@ -271,6 +271,18 @@ Deviations from the registered plan:
 Unverified references: none. Every reference value is a closed form or an earlier ADR's measured value.
 
 Status: F-126 stays partial. Its acceptance, a published compressor case, is not attempted.
+
+## Final gate
+
+The gate ran on a fresh `git archive` of c965662, the branch rebased onto main 25422d4, in `<scratch dir>`. Stages ran
+one at a time (CARGO_BUILD_JOBS=3, RUST_TEST_THREADS=3):
+* `cargo fmt --check`: clean;
+* `cargo clippy --workspace --all-targets -- -D warnings`: clean;
+* `cargo test --workspace --release --no-fail-fast`: 2020 passed, 0 failed, 634 ignored.
+
+The wave-44 baseline was 2010 / 0 / 633. This wave adds 10 passing tests (3 in `gen.rs`, 7 in `revolved_sector_w45b.rs`) and 1
+ignored test (`smoke_w45b`). `baseline_hashes.rs`, `rules_w19c.rs`, `fan_sector.rs` and both `mrf_cyclic_seams_w44c.rs` files pass
+unchanged. The only commit after the gated one adds this section (docs only).
 
 ## References
 
