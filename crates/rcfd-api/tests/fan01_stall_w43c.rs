@@ -410,6 +410,8 @@ struct Arm {
     res_nut_end: f64,
     /// ADR 0111 rule G: res_u and res_p below 1e-5 in each of the last 500 iterations
     tail_below: bool,
+    /// ADR 0115: first iteration (absolute) at which `is_converged()` was true
+    conv_first: Option<usize>,
 }
 
 /// Run `n0` iterations of the reference set-up, apply `switch` to the solver, run `n1` more; print the location record. With `probe`, the
@@ -448,6 +450,7 @@ fn arm(
         bool,
     )> = None;
     let mut reached = None;
+    let mut conv_first = None;
     let mut psi_prev: Option<[Vec<f64>; 3]> = None;
     let mut phi_prev: Vec<f64> = Vec::new();
     let mut f_hist: Vec<(usize, f64, f64)> = Vec::new();
@@ -484,6 +487,9 @@ fn arm(
         }
         if (it > n0 || n1 == 0) && reached.is_none() && st.res_u < 1e-5 && st.res_p < 1e-5 {
             reached = Some(it);
+        }
+        if conv_first.is_none() && sim.is_converged() {
+            conv_first = Some(it);
         }
         if it % 100 == 0 {
             let (fa, fb) = functionals(&sim, blade);
@@ -595,6 +601,7 @@ fn arm(
         cu_end,
         res_nut_end,
         tail_below,
+        conv_first,
     };
     println!(
         "W43C {label} RESULT ({nc} cells, {:.1} s): {a:?}",
@@ -1205,6 +1212,7 @@ fn s12_frozen_limiter_window_minimum() {
         cu_end: f64::NAN,
         res_nut_end: f64::NAN,
         tail_below: false,
+        conv_first: None,
     };
     println!("W43C S12 B3 RESULT: {a:?}");
     assert_ne!(verdict(&a).0, "NOT EVALUABLE", "{a:?}");
@@ -1836,3 +1844,226 @@ fn w45c_b3_key_from_the_start() {
     );
 }
 // ================================================================================================================ end of ADR 0117 block
+
+// ================================================================ ADR 0115 (wave 45A): the range-scaled Venkatakrishnan limiter
+// Everything below this line belongs to ADR 0115 (registered there before the registered runs).
+
+/// FNV-1a (64 bit) over the little-endian bytes of the u, p and phi bit patterns (the `baseline_hashes.rs` hash).
+fn w45a_hash(sim: &Simulation) -> u64 {
+    let v = sim.velocity().values.iter().flat_map(|u| u.iter().map(|x| x.to_bits()));
+    let p = sim.pressure().values.iter().map(|x| x.to_bits());
+    let f = sim.flux().iter().map(|x| x.to_bits());
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for b in v.chain(p).chain(f).flat_map(u64::to_le_bytes) {
+        h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// ADR 0115 P5: the key absent, `none` and `barth_jespersen` give B3 after 30 iterations bit-identical to main 511bed4 (hashes recorded there).
+#[test]
+fn w45a_p5_defaults_are_bit_identical_to_main() {
+    let mut miss = Vec::new();
+    for (lim, want) in [
+        ("", 0xec72_1116_c096_3182u64),
+        ("linear_upwind_limiter = \"none\"\n", 0xec72_1116_c096_3182),
+        ("linear_upwind_limiter = \"barth_jespersen\"\n", 0x26e5_a0c5_2495_7698),
+    ] {
+        let text = case_toml(F3, true, "", false).replace("linear_upwind_limiter = \"barth_jespersen\"\n", lim);
+        let mut sim = Simulation::new(&Case::parse_toml(&text).unwrap()).unwrap();
+        for _ in 0..30 {
+            sim.step();
+        }
+        let h = w45a_hash(&sim);
+        println!(
+            "W45A P5 [{}]: {h:#018x} (guard {:?})",
+            lim.trim(),
+            sim.steady_divergence().map(|d| d.kind)
+        );
+        if h != want {
+            miss.push(lim.trim());
+        }
+    }
+    assert!(miss.is_empty(), "P5: {miss:?}");
+}
+
+/// The ADR 0115 switch: the range-scaled Venkatakrishnan limiter with constant `k`.
+fn w45a_range(k: f64) -> impl Fn(&mut SimpleSolver) {
+    move |s: &mut SimpleSolver| s.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::VenkatakrishnanRange(k))
+}
+
+/// The range R = max - min over the cells of each velocity component of the solver's current iterate.
+fn w45a_ranges(s: &SimpleSolver) -> [f64; 3] {
+    [0, 1, 2].map(|k| {
+        let v = s.u.values.iter().map(|u| u[k]);
+        v.clone().fold(f64::NEG_INFINITY, f64::max) - v.fold(f64::INFINITY, f64::min)
+    })
+}
+
+/// ADR 0115 rule-d smoke: R at iteration 1000 of the default (Barth-Jespersen) run on E3, E2, E1, B3, and 20 + 20 iterations at each
+/// registered k on each member (finite, no guard trip).
+#[test]
+#[ignore = "ADR 0115 smoke (about 15 min in release)"]
+fn w45a_smoke() {
+    for (name, c, blade) in [
+        ("E3", F3, false),
+        ("E2", F2, false),
+        ("E1", F1, false),
+        ("B3", F3, true),
+    ] {
+        let show = |s: &mut SimpleSolver| {
+            let r = w45a_ranges(s);
+            println!(
+                "W45A smoke {name}: R at the switch (u_x, u_y, u_z) {:.4} / {:.4} / {:.4} m/s",
+                r[0], r[1], r[2]
+            );
+            w45a_range(0.01)(s);
+        };
+        arm(
+            &format!("w45a smoke R {name}"),
+            c,
+            blade,
+            "",
+            false,
+            None,
+            1000,
+            &show,
+            20,
+            false,
+        );
+        for k in [0.002, 0.01, 0.05] {
+            let (_, sim) = arm(
+                &format!("w45a smoke k {k} {name}"),
+                c,
+                blade,
+                "",
+                false,
+                None,
+                20,
+                &w45a_range(k),
+                20,
+                false,
+            );
+            println!(
+                "W45A smoke k {k} {name}: iterations {}, guard {:?}",
+                sim.iteration(),
+                sim.steady_divergence_message()
+            );
+        }
+    }
+}
+
+/// One registered Z arm of ADR 0115 (1000 default iterations, the limiter with `k`, 2000 more): the list of missed parts of (a) `rho_med`,
+/// `rho_du` <= 0.01, (b) `is_converged()` at the end, (c) the probe (one more iteration, same limiter) `res_u`, `res_p` <= 1e-5, (d) on
+/// the empty passage the one-sided exact-swirl check against `lc_ec` (the stalled cycle's worst |L| and swirl energy, ADR 0111).
+fn w45a_z(name: &str, c: Counts, blade: bool, k: f64, lc_ec: Option<(f64, f64)>) -> Vec<String> {
+    let label = format!("W45A Z k {k} {name}");
+    let (a, mut sim) = arm(&label, c, blade, "", false, None, 1000, &w45a_range(k), 2000, false);
+    let (_, rho_med) = verdict(&a);
+    let rho_du = a.du_end / a.du_ref;
+    let r = w45a_ranges(sim.simple_solver().unwrap());
+    let mut miss = Vec::new();
+    if let Some(m) = sim.steady_divergence_message() {
+        miss.push(format!("guard trip: {m}"));
+    }
+    let pr = sim.step();
+    if !(rho_med <= 0.01 && rho_du <= 0.01) {
+        miss.push(format!("(a) rho_med {rho_med:.3e} rho_du {rho_du:.3e}"));
+    }
+    if !a.converged_flag {
+        miss.push("(b) is_converged() false at the end".into());
+    }
+    if !(pr.res_u <= 1e-5 && pr.res_p <= 1e-5) {
+        miss.push(format!("(c) probe {:.3e} / {:.3e}", pr.res_u, pr.res_p));
+    }
+    if let Some((lc, ec)) = lc_ec {
+        let (l, e) = a.f_end;
+        if !(l.abs() <= lc + (0.005 * lc).max(1e-4) && e <= ec + (0.005 * ec).max(0.01)) {
+            miss.push(format!("(d) |L| {:.6} (L_c {lc}), E_s {e:.5} (E_c {ec})", l.abs()));
+        }
+    }
+    println!(
+        "{label}: rho_med {rho_med:.3e}, rho_du {rho_du:.3e}, tolerance reached {:?}, is_converged first {:?} / end {}, probe {:.3e} / {:.3e}, functionals at the switch {:?} at the end {:?} (window worst {:?}), R at the end {:.3} / {:.3} / {:.3}, c_u {:.3e}, res_nut {:.3e}; MISSES {miss:?}",
+        a.reached, a.conv_first, a.converged_flag, pr.res_u, pr.res_p, a.f_ref, a.f_end, a.f_ref_max, r[0], r[1], r[2], a.cu_end, a.res_nut_end
+    );
+    miss
+}
+
+/// ADR 0115 Z1 at one k: E3, E2, E1 (each member run whatever the previous one gave), with the ADR 0111 reference values.
+fn w45a_z1(k: f64) {
+    let mut miss = Vec::new();
+    for (name, c, lc_ec) in [
+        ("E3", F3, (0.009518, 6.26632)),
+        ("E2", F2, (0.059612, 9.23040)),
+        ("E1", F1, (0.105977, 5.48377)),
+    ] {
+        for m in w45a_z(name, c, false, k, Some(lc_ec)) {
+            miss.push(format!("{name} {m}"));
+        }
+    }
+    println!("W45A Z1 k {k}: {}", if miss.is_empty() { "PASS" } else { "MISS" });
+    assert!(miss.is_empty(), "Z1 k {k}: {miss:?}");
+}
+
+/// ADR 0115 Z2 at one k: B3; the torque and Delta p_ts are printed by the arm (no limit).
+fn w45a_z2(k: f64) {
+    let miss = w45a_z("B3", F3, true, k, None);
+    println!("W45A Z2 k {k}: {}", if miss.is_empty() { "PASS" } else { "MISS" });
+    assert!(miss.is_empty(), "Z2 k {k}: {miss:?}");
+}
+
+#[test]
+#[ignore = "ADR 0115 Z1 k 0.002 (about 30 min in release)"]
+fn w45a_z1_k0002() {
+    w45a_z1(0.002);
+}
+
+#[test]
+#[ignore = "ADR 0115 Z1 k 0.01 (about 30 min in release)"]
+fn w45a_z1_k001() {
+    w45a_z1(0.01);
+}
+
+#[test]
+#[ignore = "ADR 0115 Z1 k 0.05 (about 30 min in release)"]
+fn w45a_z1_k005() {
+    w45a_z1(0.05);
+}
+
+#[test]
+#[ignore = "ADR 0115 Z2 k 0.002 (about 3 min in release; run only if Z1 passes at this k)"]
+fn w45a_z2_k0002() {
+    w45a_z2(0.002);
+}
+
+#[test]
+#[ignore = "ADR 0115 Z2 k 0.01 (about 3 min in release; run only if Z1 passes at this k)"]
+fn w45a_z2_k001() {
+    w45a_z2(0.01);
+}
+
+#[test]
+#[ignore = "ADR 0115 Z2 k 0.05 (about 3 min in release; run only if Z1 passes at this k)"]
+fn w45a_z2_k005() {
+    w45a_z2(0.05);
+}
+
+/// ADR 0115 P6: the case key (k = 0.01, the default) and the library variant set before iteration 1 give E3 bit-identical after 30
+/// iterations (u, p, phi).
+#[test]
+fn w45a_p6_case_key_reaches_the_solver() {
+    let bj = case_toml(F3, false, "", false);
+    let key = bj.replace(
+        "linear_upwind_limiter = \"barth_jespersen\"\n",
+        "linear_upwind_limiter = \"venkatakrishnan_range\"\nlinear_upwind_limiter_k = 0.01\n",
+    );
+    let mut a = Simulation::new(&Case::parse_toml(&key).unwrap()).unwrap();
+    let mut b = Simulation::new(&Case::parse_toml(&bj).unwrap()).unwrap();
+    w45a_range(0.01)(b.simple_solver_mut().unwrap());
+    for _ in 0..30 {
+        a.step();
+        b.step();
+    }
+    assert!(a.steady_divergence().is_none());
+    assert_eq!(w45a_hash(&a), w45a_hash(&b));
+}

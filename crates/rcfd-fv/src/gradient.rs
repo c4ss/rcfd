@@ -302,6 +302,9 @@ pub enum Limiter {
     BarthJespersen,
     /// Venkatakrishnan with the smoothing constant `k`.
     Venkatakrishnan(f64),
+    /// Venkatakrishnan with `eps = k R`, R = max - min of the limited field over the cells (ADR 0115): eps has the field's units and is
+    /// the same on every member of a mesh family.
+    VenkatakrishnanRange(f64),
 }
 
 /// Compute per-cell limiter values in `[0, 1]` for gradient `grad`.
@@ -328,6 +331,14 @@ pub fn limiter(geom: &FvGeometry, cells: &[f64], bvals: &[f64], grad: &[Vec3], k
     let cc = mesh.cell_centres();
     let cf = mesh.face_centres();
     let mut psi = vec![1.0f64; n];
+    let eps2_range = match kind {
+        Limiter::VenkatakrishnanRange(k) => {
+            let range = cells.iter().fold(f64::NEG_INFINITY, |a, &v| a.max(v))
+                - cells.iter().fold(f64::INFINITY, |a, &v| a.min(v));
+            (k * range).powi(2)
+        }
+        _ => 0.0,
+    };
     let mut update = |c: usize, f: usize| {
         let d = vec3::dot(grad[c], vec3::sub(cf[f], cc[c]));
         let (dmax, dmin) = (hi[c] - cells[c], lo[c] - cells[c]);
@@ -341,8 +352,11 @@ pub fn limiter(geom: &FvGeometry, cells: &[f64], bvals: &[f64], grad: &[Vec3], k
                     1.0
                 }
             }
-            Limiter::Venkatakrishnan(k) => {
-                let eps2 = (k * mesh.cell_volumes()[c].cbrt()).powi(3);
+            Limiter::Venkatakrishnan(_) | Limiter::VenkatakrishnanRange(_) => {
+                let eps2 = match kind {
+                    Limiter::Venkatakrishnan(k) => (k * mesh.cell_volumes()[c].cbrt()).powi(3),
+                    _ => eps2_range,
+                };
                 let dm = if d >= 0.0 { dmax } else { dmin };
                 // smooth function: (dm^2 + eps^2) d + 2 d^2 dm over dm^2 + 2 d^2 + dm d + eps^2, divided by d
                 if d.abs() < 1e-300 {
@@ -574,5 +588,50 @@ mod tests {
         let grad = least_squares(&geom, &lin.values, &b);
         let psi = limiter(&geom, &lin.values, &b, &grad, Limiter::BarthJespersen);
         assert!(psi[5..35].iter().all(|&p| (p - 1.0).abs() < 1e-12));
+    }
+
+    /// ADR 0115 P1 (step profile: psi in [0, 1], face values in [-0.08, 1.08], psi > 0.99 at cell 5) and P2 (psi = 1 within 1e-12 in the
+    /// interior for a linear field, psi = 1 for a constant field) of the range-scaled Venkatakrishnan limiter at every registered k.
+    #[test]
+    fn w45a_range_venkatakrishnan_p1_p2() {
+        let m = Arc::new(box_mesh([40, 1, 1], [1.0, 0.1, 0.1], [Grading::Uniform; 3]).unwrap());
+        let geom = FvGeometry::new(m).unwrap();
+        let (cc, cf) = (geom.mesh.cell_centres(), geom.mesh.face_centres());
+        let step = ScalarField::from_fn("s", &geom, |p| if p[0] < 0.5 { 1.0 } else { 0.0 });
+        let lin = ScalarField::from_fn("l", &geom, |p| 2.0 * p[0]);
+        let cst = ScalarField::from_fn("c", &geom, |_| 3.0);
+        for k in [0.002, 0.01, 0.05] {
+            let kind = Limiter::VenkatakrishnanRange(k);
+            let psi_of = |f: &ScalarField| {
+                let b = f.boundary_values(&geom);
+                let g = least_squares(&geom, &f.values, &b);
+                (limiter(&geom, &f.values, &b, &g, kind), g)
+            };
+            let (psi, grad) = psi_of(&step);
+            let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+            for f in 0..geom.n_internal {
+                for c in [geom.mesh.owner()[f], geom.mesh.neighbour()[f]] {
+                    let v = step.values[c] + psi[c] * vec3::dot(grad[c], vec3::sub(cf[f], cc[c]));
+                    (lo, hi) = (lo.min(v), hi.max(v));
+                }
+            }
+            let (psi_lin, _) = psi_of(&lin);
+            let lin_dev = psi_lin[5..35].iter().map(|p| (p - 1.0).abs()).fold(0.0, f64::max);
+            let (psi_cst, _) = psi_of(&cst);
+            println!(
+                "W45A P1/P2 k {k}: step psi in [{:.4}, {:.4}], face values [{lo:.4}, {hi:.4}], psi[5] {}; linear max |psi - 1| {lin_dev:.2e}",
+                psi.iter().cloned().fold(f64::INFINITY, f64::min),
+                psi.iter().cloned().fold(0.0, f64::max),
+                psi[5]
+            );
+            assert!(
+                psi.iter().all(|&p| (0.0..=1.0).contains(&p)),
+                "P1 k {k}: psi outside [0, 1]"
+            );
+            assert!(lo >= -0.08 && hi <= 1.08, "P1 k {k}: face values [{lo}, {hi}]");
+            assert!(psi[5] > 0.99, "P1 k {k}: psi[5] {}", psi[5]);
+            assert!(lin_dev < 1e-12, "P2 k {k}: linear field {lin_dev}");
+            assert!(psi_cst.iter().all(|&p| p == 1.0), "P2 k {k}: constant field");
+        }
     }
 }
