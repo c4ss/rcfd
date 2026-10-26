@@ -150,7 +150,10 @@ change; meshes finer than F1, B2 / B1; agreement with FAN-01 data; the growth of
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of `w45a` at 83935ec (the registered code); each registered run made once, from copies of the built test binaries.
+Release builds of `w45a` at 83935ec (the registered code, on base 25422d4; registration commit cd5bc53); each registered run made once,
+from copies of the built test binaries. The P5 hashes were recorded at 511bed4. The branch was then rebased without conflicts onto main
+58fabcf (ADR 0116 merged) and then onto c224954 (ADR 0117 merged; the only conflict was the two appended blocks at the end of
+`fan01_stall_w43c.rs`, both kept, 0117's first): the registration and implementation commits are now 6d3ec16 and cd79c0c.
 
 ### Z1, the empty passage (switch at 1000, 2000 more iterations)
 
@@ -201,7 +204,8 @@ Release builds of `w45a` at 83935ec (the registered code); each registered run m
 
 * P4 reported: on 16^2 and 32^2 the new limiter is *less* accurate than BJ (L2 3.3-3.5e-2 against 2.6e-2; 2.8-3.6e-3 against 1.8e-3) and
   more accurate on 64^2, so its fine-pair orders (3.1-3.2) are pre-asymptotic, not a measure of a higher order; the limit (order and the
-  64^2 comparison) is met as registered. The share of cells with psi < 0.99 on 64^2 is 0.64 (k 0.002, 0.01) and 0.054 (k 0.05) against 0.008
+  64^2 comparison) is met as registered. On 64^2 it is also below the unlimited scheme (4.712e-4 in the smoke), which a limiter cannot
+  earn by accuracy: read as error cancellation, not as a better scheme. P4 discriminates weakly here (BJ costs only 0.26 % against unlimited). The share of cells with psi < 0.99 on 64^2 is 0.64 (k 0.002, 0.01) and 0.054 (k 0.05) against 0.008
   for BJ: the Venkatakrishnan function is below 1 wherever the neighbour range is less than twice the extrapolated difference, so it acts in
   most of a smooth field until eps is large. L-inf orders 2.95 / 2.66 / 2.24 (fine pair).
 * P3 now runs in the default suite (10 s); P4 (170 s) stays ignored.
@@ -233,6 +237,15 @@ Release builds of `w45a` at 83935ec (the registered code); each registered run m
 * Why the smoothed limiter converges E1 (and E2 at k 0.05) to 1.3-2.6 times the BJ outlet angular momentum, and why that spurious L
   hardly changes with refinement.
 * The bladed B3 stall (Z2 not run under the registered rule).
+
+### Final gate
+
+Fresh `git archive` of 692599f (main 58fabcf plus this wave) in `<scratch dir>`: `cargo fmt --check` clean, `cargo clippy
+--workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **2023 passed, 0 failed, 644 ignored**
+(main 58fabcf: 2020 / 0 / 634; this wave adds 3 running and 10 ignored tests); `baseline_hashes.rs` passed unchanged. After the rebase
+onto c224954 (ADR 0117 merged) the cheap checks were re-run on the rebased tree: fmt clean, clippy on `rcfd-fv` and `rcfd-api` clean, the
+non-ignored tests of `fan01_stall_w43c`, `w36b_limiter`, `rules_w19c` (e2 included), `baseline_hashes` and the `rcfd-fv` gradient unit
+tests pass. The full gate was not repeated on the rebased HEAD; this paragraph is a docs-only commit.
 
 ## References (public literature; UNVERIFIED in content)
 
