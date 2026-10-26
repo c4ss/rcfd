@@ -430,7 +430,8 @@ fn c5b_child_body() {
         },
     )
     .unwrap();
-    for k in 1u64.. {
+    // until killed (the parent kills after a few snapshots)
+    for k in 1u64..=u64::MAX {
         let mut s = w.snapshot(k, k as f64 * 0.1).unwrap();
         for f in ["a", "bits", "c", "d"] {
             s.field(f, "unknown", Location::Cell, &values(k, f, n), Precision::F64)
