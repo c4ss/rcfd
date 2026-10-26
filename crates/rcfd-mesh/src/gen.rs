@@ -613,6 +613,86 @@ pub fn annulus_3d(
     Mesh::from_cell_faces(points, &cells, &specs)
 }
 
+/// 3-D annular sector `r_in <= r <= r_out`, `0 <= theta <= angle`, `0 <= z <= height` about the z axis (ADR 0116): the
+/// hexahedra of [`annulus_3d`] (axes radial, theta, z) over `n_theta` chords of `angle / n_theta`, cut open at theta = 0 and
+/// theta = angle. Every face is planar (chord rectangles on the walls), so an MRF zone's frame flux closes per cell to
+/// round-off. Patches: `inner`, `outer`, `zmin`, `zmax` (walls) and `theta_min` / `theta_max`, a rotationally cyclic pair
+/// (rotation `angle` about z).
+#[allow(clippy::too_many_arguments)]
+pub fn annulus_3d_sector(
+    n_theta: usize,
+    n_r: usize,
+    n_z: usize,
+    r_in: f64,
+    r_out: f64,
+    height: f64,
+    angle: f64,
+    grading: Grading,
+) -> Result<Mesh> {
+    if n_theta < 1
+        || n_r < 1
+        || n_z < 1
+        || !(r_in > 0.0 && r_out > r_in && height > 0.0 && angle > 0.0 && angle < 2.0 * std::f64::consts::PI)
+    {
+        return Err(Error::Mesh(
+            "annulus_3d_sector needs n_theta, n_r, n_z >= 1, 0 < r_in < r_out, height > 0 and 0 < angle < 2 pi".into(),
+        ));
+    }
+    let rs: Vec<f64> = axis_coords(n_r, r_out - r_in, grading)?
+        .into_iter()
+        .map(|r| r + r_in)
+        .collect();
+    let zs = axis_coords(n_z, height, Grading::Uniform)?;
+    let pid = |ir: usize, it: usize, k: usize| ir + (n_r + 1) * (it + (n_theta + 1) * k);
+    let mut points = Vec::new();
+    for &z in &zs {
+        for it in 0..=n_theta {
+            let th = angle * it as f64 / n_theta as f64;
+            for &r in &rs {
+                points.push([r * th.cos(), r * th.sin(), z]);
+            }
+        }
+    }
+    let mut patches: [Vec<Vec<usize>>; 6] = Default::default();
+    let mut cells = Vec::new();
+    for k in 0..n_z {
+        for it in 0..n_theta {
+            for ir in 0..n_r {
+                let mut p = [0usize; 8];
+                for (c, pc) in p.iter_mut().enumerate() {
+                    *pc = pid(ir + (c & 1), it + ((c >> 1) & 1), k + (c >> 2));
+                }
+                let faces = hex_faces(p);
+                // hex_faces order: r-min, r-max, theta-min, theta-max, z-min, z-max
+                let on = [ir == 0, ir + 1 == n_r, it == 0, it + 1 == n_theta, k == 0, k + 1 == n_z];
+                for (side, &b) in on.iter().enumerate() {
+                    if b {
+                        patches[side].push(faces[side].clone());
+                    }
+                }
+                cells.push(faces);
+            }
+        }
+    }
+    let [inner, outer, tmin, tmax, zmin, zmax] = patches;
+    let spec = |name: &str, kind: PatchKind, faces: Vec<Vec<usize>>| BoundarySpec {
+        name: name.into(),
+        kind,
+        faces,
+    };
+    let specs = vec![
+        spec("inner", PatchKind::Wall, inner),
+        spec("outer", PatchKind::Wall, outer),
+        spec("zmin", PatchKind::Wall, zmin),
+        spec("zmax", PatchKind::Wall, zmax),
+        spec("theta_min", PatchKind::Generic, tmin),
+        spec("theta_max", PatchKind::Generic, tmax),
+    ];
+    let mut m = Mesh::from_cell_faces(points, &cells, &specs)?;
+    m.set_periodic_rotation("theta_min", "theta_max", [0.0; 3], [0.0, 0.0, 1.0], angle)?;
+    Ok(m)
+}
+
 /// One block of the staged annulus: points and hex cells of `annulus_3d` with the patch faces split by side, appended to
 /// `points` (indices offset) and `cells`.
 #[allow(clippy::too_many_arguments)]
@@ -840,6 +920,64 @@ mod tests {
         for name in ["inner", "outer", "zmin", "zmax"] {
             assert!(m.patch(name).is_some(), "{name}");
         }
+    }
+
+    /// ADR 0116 G1 (with N2): volume and patch areas of `annulus_3d_sector` against the closed forms of the polygonal (chord)
+    /// sector, relative error <= 1e-12 each, uniform and radially graded; N2 compares the volume with the curved sector instead
+    /// and must miss 1e-12 by at least 10x.
+    #[test]
+    fn annulus_3d_sector_g1_polygonal_volume_and_areas() {
+        let (n, ri, ro, lz, angle) = (8usize, 0.124, 0.25, 0.4, 40f64.to_radians());
+        let dt = angle / n as f64;
+        let ring = 0.5 * n as f64 * dt.sin() * (ro * ro - ri * ri);
+        let chord = |r: f64| n as f64 * 2.0 * r * (0.5 * dt).sin() * lz;
+        for g in [Grading::Uniform, Grading::Expansion(3.0)] {
+            let m = annulus_3d_sector(n, 10, 24, ri, ro, lz, angle, g).unwrap();
+            assert_eq!(m.n_cells(), n * 10 * 24);
+            let area = |p: &str| m.patch(p).unwrap().faces().map(|f| m.face_area(f)).sum::<f64>();
+            let checks = [
+                ("volume", m.total_volume(), ring * lz),
+                ("inner", area("inner"), chord(ri)),
+                ("outer", area("outer"), chord(ro)),
+                ("zmin", area("zmin"), ring),
+                ("zmax", area("zmax"), ring),
+                ("theta_min", area("theta_min"), (ro - ri) * lz),
+                ("theta_max", area("theta_max"), (ro - ri) * lz),
+            ];
+            for (name, got, exact) in checks {
+                let rel = (got - exact).abs() / exact;
+                println!("G1 {g:?} {name}: relative error {rel:.3e} (limit 1e-12)");
+                assert!(rel <= 1e-12, "{name}");
+            }
+            let curved = 0.5 * angle * (ro * ro - ri * ri) * lz;
+            let n2 = (m.total_volume() - curved).abs() / curved;
+            println!(
+                "N2 {g:?}: volume against the curved sector {n2:.3e} (must exceed 1e-11); sin(dt)/dt = {:.5}",
+                dt.sin() / dt
+            );
+            assert!(n2 >= 1e-11);
+        }
+    }
+
+    /// ADR 0116 G7 (library part): invalid counts, radii, height and angles are errors.
+    #[test]
+    fn annulus_3d_sector_g7_invalid_arguments() {
+        let (u, a) = (Grading::Uniform, 1.0);
+        let pi2 = 2.0 * std::f64::consts::PI;
+        for (nt, nr, nz, ri, ro, h, ang) in [
+            (0, 2, 2, 0.5, 1.0, 1.0, a),
+            (2, 0, 2, 0.5, 1.0, 1.0, a),
+            (2, 2, 0, 0.5, 1.0, 1.0, a),
+            (2, 2, 2, 0.0, 1.0, 1.0, a),
+            (2, 2, 2, 1.0, 1.0, 1.0, a),
+            (2, 2, 2, 0.5, 1.0, 0.0, a),
+            (2, 2, 2, 0.5, 1.0, 1.0, 0.0),
+            (2, 2, 2, 0.5, 1.0, 1.0, pi2),
+            (2, 2, 2, 0.5, 1.0, 1.0, f64::NAN),
+        ] {
+            assert!(annulus_3d_sector(nt, nr, nz, ri, ro, h, ang, u).is_err());
+        }
+        assert!(annulus_3d_sector(1, 1, 1, 0.5, 1.0, 1.0, a, u).is_ok());
     }
 
     #[test]

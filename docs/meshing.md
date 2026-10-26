@@ -142,6 +142,14 @@ face balance is optional and measured with `max_face_level_jump`).
   acceptance (public case, literature values) is not met. Registered plane-area expectation missed (ignored
   `t2_plane_area_polygon_known_miss`, corrected test compares with the circular annulus).
 
+## Exact annular sector (`gen::annulus_3d_sector`, ADR 0116)
+
+The hexahedra of `annulus_3d` over `n_theta` chords of `angle / n_theta`, opened at theta = 0 and theta = angle, with the
+rotationally cyclic pair `theta_min` / `theta_max`. Every face is planar, so volume and areas equal the polygonal closed forms
+and an MRF zone with cyclic seams is exact per cell; see the ADR 0116 addendum for the measured values. Case tree:
+`mesh.generator = "annulus_3d_sector"` with `mesh.sector_angle` (docs/case-schema.md). It has no blade, so it does not open
+MRF on the fan passage.
+
 ## Axial-fan blade geometry and periodic-sector hex mesh (F-133 partial, ADR 0065)
 
 `rcfd_mesh::fan` (geometry) and `rcfd_mesh::fan_mesh` (mesh); case hook `mesh.generator = "axial_fan_sector"` (docs/case-schema.md).
