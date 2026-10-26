@@ -216,9 +216,61 @@ Common set-up (FAN-01 empty-passage dimensions):
 * New `crates/rcfd-api/tests/revolved_sector_w45b.rs`: G2-G7, N1 and the smoke.
 * `docs/case-schema.md`, `docs/meshing.md`.
 
-## Addendum (placeholder)
+## Addendum: measured values (one run each, release build, on commit 0abc8fe plus the N2 split)
 
-Measured values, verdicts, deviations and the final gate: written after the registered runs.
+Order: N2 and N1 first, then G1 and G7 (library), then G2-G7 (case tree).
+
+| check | measured | limit | result |
+| --- | --- | --- | --- |
+| N2 G1 volume against the curved sector (uniform / graded) | 1.269e-3 / 1.269e-3 | >= 1e-11 | discriminates |
+| N1 G4 without seam frame flux (library, tree mesh) | 6.38 U | >= 1e-7 U | discriminates |
+| G1 volume (uniform / graded) | 2.0e-15 / 4.0e-16 | 1e-12 | pass |
+| G1 inner, outer (both gradings) | 4.0e-16, 9.9e-16 | 1e-12 | pass |
+| G1 zmin, zmax (both gradings) | 4.2e-16, 2.1e-16 | 1e-12 | pass |
+| G1 theta_min, theta_max (uniform / graded) | 3.2e-15, 3.3e-15 / 1.1e-15, 6.9e-16 | 1e-12 | pass |
+| G1 reported: sin(dt) / dt | 0.99873 | none | reported |
+| G2 `FvGeometry` accepts the pair (1 920 cells) | accepted | accepted | pass |
+| G2 partner face centre / r_out | 5.4e-16 | 1e-9 | pass |
+| G2 pair mismatch | 1.8e-15 | 1e-12 | pass |
+| G2 per-cell closure | 3.2e-16 | 1e-12 | pass |
+| G3 with `cyclic_seams = true` | `Simulation::new` accepts; worst 1.8e-15 (a theta_max pair) | <= 1e-6 | pass |
+| G3 without the key | refused at `sources.rotor.zone`, `patch 'theta_max'`, 1.00 | located, names a seam | pass |
+| G4 tree, 300 steps: max u - (0, 0, U); max p | 5.6e-13 U; 3.0e-14 U^2 | 1e-8; 1e-8 | pass |
+| G4 `coupled_offdiag_in_h1` after every step | true | true | pass |
+| G5 sector / annulus converged | 349 / 316 iterations | targets met within 4000 | pass |
+| G5 sector - annulus velocity | 1.4e-11 W r_out | 4.3e-4 | pass |
+| G5 reported: sector against analytic; pressure difference | 3.0e-3 W r_out; 2.1e-10 of the range | none | reported |
+| G6 content hashes (default, B3, E3) | equal to the 511bed4 values | equal | pass |
+| G7 located errors (10 cases; library invalid arguments) | each at its key; each an error | located | pass |
+
+Verdict: G1-G7 pass and N1, N2 discriminate, so by the decision rule the generator and its case-tree name are kept.
+
+What this delivers:
+* A case-tree mesh, `annulus_3d_sector`, on which an MRF zone with `cyclic_seams = true` is accepted.
+* The positive path of ADR 0113 now runs through the case tree, through `Sources` and the `sim.rs` 2667 F1 line (G4 asserts the flag).
+* The exact empty passage holds to 5.6e-13 U.
+* The solid-body sector reproduces the full annulus to 1.4e-11 W r_out. The library F1 level of ADR 0113 K1 was 3.6e-9.
+
+On the measured levels:
+* The G4 level is above the library bent-box K4 value (1.1e-15) and far below its limit. The tree case differs: FAN-01 speeds,
+  `upwind`, tree defaults. I did not look further.
+* The G5 analytic error (3.0e-3 W r_out) is reported only. It is the discretisation error of both meshes, shared by sector and annulus.
+
+What it does not deliver:
+* MRF on the bladed FAN-01 passage. There the blade wall is refused by `MrfZone::worst_non_axisymmetry`, whatever the hub and shroud
+  are. This generator has no blade.
+* By user decision, no third F-RP (blade-wall frame flux) attempt is drafted.
+
+Deviations from the registered plan:
+* N2 was registered as part of the G1 description, and the first code computed it inside the G1 unit test. Before any registered run
+  it was split into its own unit test `annulus_3d_sector_n2_curved_reference_misses`, so that it could run first as registered.
+  The criterion is unchanged.
+* The cargo filter for the first N2 run used `--exact` with the wrong module path and ran nothing. It was re-run with a name filter.
+* Docs and the one-sentence F-126 roadmap note were written after the runs. They state the measured values only.
+
+Unverified references: none. Every reference value is a closed form or an earlier ADR's measured value.
+
+Status: F-126 stays partial. Its acceptance, a published compressor case, is not attempted.
 
 ## References
 
