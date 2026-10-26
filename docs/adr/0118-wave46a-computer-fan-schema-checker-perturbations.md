@@ -343,3 +343,94 @@ The code (`fan_design.rs`, the `Rng` move, `centroid`) and two ignored smoke tes
 * `erfc` continued fraction (Laplace) and the `erf` series: the same forms as `crates/rcfd-reactor/src/mixfrac.rs`. The unit
   test checks them against Phi(1) = 0.841344746068543, Phi(-3) = 1.3498980316301e-3 and Phi(-5) = 2.8665157187919e-7.
 * Moulding thresholds: UNVERIFIED rules of thumb, as stated in the table above.
+
+## Addendum: measured values (one registered run each, debug build, `target-w46a`, on the working tree committed as 8bace16)
+
+Every registered check passed. No known-miss test was created.
+
+**A1 schema**
+* **S1:** the default and the seed-46 specimen round-trip through JSON equal and bitwise equal, and re-serialising gives the same
+  string. NS-S: the unknown key `tip_gapp` and the missing `chord` are both rejected.
+* **S2:** every scalar has a spec and every spec is used. All 32 `PARAMS` paths serialise with their units, and every default is
+  bitwise equal to the default fan's field.
+* **S3:** a zero deviation realises every blade bitwise equal to the nominal blade. For blade 3:
+  * chord: nominal times 1.03 (limit 1e-15 relative);
+  * absolute thickness: nominal times 0.95 (limit 1e-14);
+  * stagger: nominal + 0.3 deg (limit 1e-15 rad);
+  * clearance: exact.
+* **S4:** h_slit gives 11 648 cells (max non-orthogonality 86.07 deg). c_grid `camber_seam_h` gives 12 841 cells (87.91 deg).
+  c_grid `pursuit` rejects the default with "the wake line leaves the passage" at `n_down`, r = 0.0215 (reported, as at smoke).
+
+**A2 checker**
+* **C1:** the default fan gives no violation.
+* **C2:** every variant gave its code at its path, with the registered radius where one was registered, and no `out_of_bounds`.
+  NC1, the bounds-only checker, accepts all 15. Value against limit:
+
+  | Variant | Value | Limit |
+  |---|---|---|
+  | thin tip | 0.783 mm | 0.8 |
+  | small gap | 0.2 mm | 0.3 |
+  | large gap | 0.0603 r_tip | 0.05 |
+  | eccentric rub | -0.2 mm | 0 |
+  | hub ratio | 0.724 | 0.7 |
+  | tip solidity | 0.272 | 0.3 |
+  | axial overlap | 0.624 mm | 0, at `r_hub` |
+  | collision | distance 0 | |
+  | passage gap | 0.517 mm | 0.8 |
+  | draft | 0.116 deg | 1, at `r_hub` |
+  | undercut | 4 crossings | 2, at `r_hub` |
+  | thin blade 3 | 0.666 mm | 0.8; three violations, all blade 3 |
+  | frame wall | 0.5 mm | 0.8 |
+  | axial fit | 22.85 mm | 22.0 |
+  | root off hub | root LE 1.96 mm | hub start 4.0 mm |
+
+* **C3:** with `axial_mould = false`, the overlap, draft and undercut variants lose their mould code.
+* **C4** and **C5:** pass.
+
+**A5 ensembles: E1** passes. Same seed gives the same JSON, seed 47 differs, zero tolerances are bitwise nominal, and `U` is
+bitwise nominal.
+
+**E2:** measured over limit for the mean, variance and KS statistics. The largest ratio is 0.699, the KS of the far-tail
+distribution.
+
+| Variable | n | Mean | Variance | KS |
+|---|---|---|---|---|
+| stagger_common_deg | 4000 | 0.239 | 0.117 | 0.391 |
+| tip_gap_delta | 4000 | 0.168 | 0.006 | 0.327 |
+| eccentricity | 4000 | 0.009 | 0.151 | 0.288 |
+| eccentricity direction | 4000 | 0.094 | 0.068 | 0.348 |
+| stagger_blade_deg | 28 000 | 0.170 | 0.115 | 0.355 |
+| chord_rel | 28 000 | 0.134 | 0.012 | 0.505 |
+| thickness_rel | 28 000 | 0.012 | 0.083 | 0.351 |
+| mass_rel | 28 000 | 0.153 | 0.009 | 0.416 |
+| roughness_ks | 28 000 | 0.083 | 0.312 | 0.453 |
+| E2b far tail | 28 000 | 0.509 | 0.194 | 0.699 |
+
+**E3:** the quadrature mass is 1 to 1e-12. The worst relative errors of the analytic moments are 1.7e-14 for the mean and
+1.1e-13 for the variance (far tail), against a limit of 1e-9.
+* Deviation in reading the limit: for the zero-mean distributions, "relative" was taken relative to `max(|mean|, sigma)`,
+  because a relative error of a zero mean is undefined. This was decided while writing the test, before the run.
+
+**Negative controls:** NS1 13.77x, NS2 4.27x and NS3 5.75x their limits (required 2x).
+
+**Imbalance**
+* **I1:** the nominal `|U|` is 2.44e-20 kg m, 7.3e-5 of the limit. NI1 is 1.0e12 times the limit.
+* **I2:** `|U|` is 4.781441e-7 kg m (0.478 g mm), equal to `0.01 m0 r_c` to 3.8e-4 of the limit. NI2 is 1.0e10 times the
+  limit.
+* **I3:** the worst of 20 specimens is 6.8e-6 of the limit.
+* **I4:**
+
+  | Blade | Mass | Mass error | Centroid error / `r_c` | Error ratios |
+  |---|---|---|---|---|
+  | F0 blade 0 | 1.169093 g | 3.99e-4 (limit 1e-3) | 6.32e-5 (2e-4) | 4.00 and 4.00 (limit 3) |
+  | S3 blade 3 | 1.143958 g | 4.52e-4 | 6.90e-5 | 4.00 and 4.00 |
+
+**Other findings**
+* A unit test, not a registered check: the first version of the `normal_cdf` continuity assertion ignored the slope `2 h phi(x)`
+  and failed. Its assertion was corrected; `normal_cdf` itself was not changed.
+* The reference values Phi(1), Phi(-3) and Phi(-5) agree with an independent evaluation (Python `math.erfc`) to below 1e-16.
+
+**What these results do not show**
+* They do not show that the thresholds, the default fan or the tolerance magnitudes describe any real fan or mould.
+* They do not show that `U` matches a real rotor, whose hub, magnet and bearing are not modelled.
+* They do not show that the realised meshes are fit for CFD: S4 builds them but checks no quality limit.
