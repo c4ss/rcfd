@@ -138,3 +138,17 @@ The first gate run also failed `crates/rcfd-cli/tests/workspace_graph.rs::layeri
 workspace crate and did not know `rcfd-tsstore`. Fixed in b64a412 by placing `rcfd-tsstore` in layer 4 (with `turb` and `post`; it
 depends on core, mesh and io, and api depends on it) in the test and in `docs/architecture.md`. Other wave-47 crates need the same
 one-line addition.
+
+## Addendum (partial, 2026-10-26): measured so far
+
+* First gate run (archive of e344301, before the rebase onto cc0a8cb): fmt and clippy clean. Tests, until the run hung in C7/C8
+  (amendment 1): 1999 passed, 1 failed (`layering_matches_architecture_doc`, fixed in a3e43fd), 577 ignored; `baseline_hashes`
+  passed; H1-H4 passed in release. `store.rs` (C1-C6, C9-C12) and the crates after `rcfd-tsstore` had not run when the run hung.
+* Debug runs after the rebase onto cc0a8cb (0295b9f): C1-C6, C9-C12 and H1-H4 pass; `workspace_graph` passes. Measured values equal
+  the smoke values above (deterministic data).
+* C7/C8 with the corrected probe, debug build (smoke of amendment 1, not the registered release run): scrub 29.3 MB, whole-snapshot
+  reader 159.0 MB (cap 64 MiB); debug times 0.0001 / 0.0052 / 0.0772 / 0.1683 / 0.0718 / 0.0026 / 0.0382 / 0.0001 s, all inside the
+  release limits.
+* Not yet run: the final gate on the rebased HEAD, which includes the registered release run of C7/C8 (typeperf) and C1-C6, C9-C12 in
+  release. The hung processes of the first gate run (the C7/C8 test and its child) hold a release slot and could not be stopped
+  from this session.
