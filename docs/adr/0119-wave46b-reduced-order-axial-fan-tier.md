@@ -288,3 +288,6 @@ A review found two deliverables without a check. Both are identity or plumbing c
 * **P1 input conversion** (`p1_from_axial_fan`). An `AxialFan` built by `AxialFan::linear` maps to `RomFan` field by field
   (`tip_clearance` to `tip_gap`, stations to sections, exact equality); an invalid fan (`n_blades = 1`) returns the located error
   naming `n_blades`. Functional, no numeric limit.
+
+Measured (one run each, debug build): **S1** worst 3.0e-16 against 1e-12; NC swirl omitted 3.3e-2, axial omitted 2.4e-1: pass.
+**P1** fields map exactly; `n_blades = 1` gives "n_blades: needs at least 2 blades ...": pass.
