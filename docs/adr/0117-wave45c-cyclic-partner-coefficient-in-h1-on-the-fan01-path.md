@@ -163,6 +163,23 @@ the fan passage (0116); finer meshes than F1; agreement with FAN-01 data; pseudo
 None outside our own ADRs. Every number above is from ADRs 0008, 0086, 0110 and 0113. The observed-order formula is ADR 0086's (Celik et
 al. 2008, recalled there, UNVERIFIED).
 
+## Amendment 1 (written after N1, R1, the F family, B3, D-a and D-b had run on the key code, before the corrected D-d runs)
+
+What I knew when writing this: N1 discriminates (3.0e-2 U), R1 passes (6.6e-11 U, seam balance 0), F-a **missed** on E3 and E2 (the
+values are in the addendum), so by the status decision rule the key is to be removed; B3 reads FALSIFIED; D-b passed.
+
+* D-d as registered failed before reaching the check: its `cavity_2d` case text has no boundary conditions, so `Simulation::new`
+  refuses it at `boundaries.lid` / `boundaries.walls` and never reaches the algorithm check. That is a defective set-up, not a miss of
+  the validation. The test stays, ignored, as `dd_key_outside_the_steady_solver_is_a_located_error_known_miss` with its criterion.
+* **D-d' (corrected, registered now):** the same check with the cavity's `lid` (fixed, (1, 0, 0)) and `walls` (fixed) conditions; the
+  criterion is unchanged (a diagnostic at `solver.cyclic_partner_in_h1` for `pimple` and for `coupled`). It runs once on the key code
+  (the code it was registered for), before the removal.
+* D-a had not run yet (cargo stopped after the D-d binary failed); it runs together with D-d' on the key code.
+* After the removal the key is unknown to the schema. D-a, D-b and D-d' are then kept through the test-only route where they still
+  test something: D-a and D-b set the route instead of the key (route off bit-identical to the default; the route reaches `step()`; the
+  route on a mesh without cyclic faces bit-identical), and D-d' becomes "the removed key is refused" (a diagnostic at
+  `solver.cyclic_partner_in_h1` for a steady case too). These post-removal versions are checks of the route, not of the registered key.
+
 ## Addendum (placeholder)
 
 Measured values, verdicts, deviations and the final gate: to be written after the registered runs.

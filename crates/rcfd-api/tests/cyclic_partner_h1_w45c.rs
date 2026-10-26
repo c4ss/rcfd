@@ -62,9 +62,37 @@ max_iterations = 20
     }
 }
 
-/// D-d: the key with a non-steady or coupled algorithm is a located error at `solver.cyclic_partner_in_h1`.
+/// The diagnostics of `text`: those of the parse, else those of `Simulation::new` (panics if the case is accepted).
+fn refusal(text: &str) -> Vec<rcfd_api::case::Diagnostic> {
+    match Case::parse_toml(text) {
+        Err(d) => d,
+        Ok(case) => match Simulation::new(&case) {
+            Ok(_) => panic!("the case must be refused"),
+            Err(d) => d,
+        },
+    }
+}
+
+/// D-d' (ADR 0117 amendment 1): D-d with the cavity's boundary conditions; the key with `pimple` or `coupled` is a located error at
+/// `solver.cyclic_partner_in_h1`.
 #[test]
-fn dd_key_outside_the_steady_solver_is_a_located_error() {
+fn dd2_key_outside_the_steady_solver_is_a_located_error() {
+    for alg in ["pimple", "coupled"] {
+        let d = refusal(&format!(
+            "[mesh]\ngenerator = \"cavity_2d\"\n[boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n[solver]\nalgorithm = \"{alg}\"\ncyclic_partner_in_h1 = true\n"
+        ));
+        assert!(
+            d.iter().any(|x| x.path == "solver.cyclic_partner_in_h1"),
+            "{alg}: {d:?}"
+        );
+    }
+}
+
+/// D-d as registered: a defective set-up (ADR 0117 amendment 1), the case has no boundary conditions, so it is refused before the
+/// algorithm check.
+#[test]
+#[ignore = "known miss (defective set-up, ADR 0117 amendment 1): refused at boundaries.lid / boundaries.walls before the key check"]
+fn dd_key_outside_the_steady_solver_is_a_located_error_known_miss() {
     for alg in ["pimple", "coupled"] {
         let text = format!(
             "[mesh]\ngenerator = \"cavity_2d\"\n[solver]\nalgorithm = \"{alg}\"\ncyclic_partner_in_h1 = true\n"
