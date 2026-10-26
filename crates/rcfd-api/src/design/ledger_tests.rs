@@ -176,16 +176,64 @@ fn big_entry(k: usize) -> Entry {
     e
 }
 
-/// Child process of L3: appends until killed (returns at once without the environment variable).
+const TEAR_ENV: &str = "RCFD_W46D_TEAR_CHILD";
+
+/// Child process of L3 and L3b: appends until killed (bounded at 20 000 entries; returns at once without the environment
+/// variable). With `RCFD_W46D_TEAR_CHILD` set it writes every line in two halves 100 ms apart (raw writes, not `Ledger::append`),
+/// so that a kill lands inside a line.
 #[test]
 fn l3_kill_child() {
     let Ok(p) = std::env::var(KILL_ENV) else {
         return;
     };
+    let tear = std::env::var(TEAR_ENV).is_ok();
     let l = Ledger::new(Path::new(&p));
-    for k in 0.. {
-        l.append(&[big_entry(k)]).unwrap();
+    for k in 0..20_000 {
+        if tear {
+            let mut e = big_entry(k);
+            e.solver_version = solver_version();
+            e.recorded_at_ms = 1;
+            let line = e.to_json().to_string() + "\n";
+            let (a, b) = line.split_at(line.len() / 2);
+            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&p).unwrap();
+            f.write_all(a.as_bytes()).unwrap();
+            f.sync_data().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            f.write_all(b.as_bytes()).unwrap();
+            f.sync_data().unwrap();
+        } else {
+            l.append(&[big_entry(k)]).unwrap();
+        }
     }
+}
+
+/// Kills and reaps the child when the parent test ends, also on a failed assertion.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn spawn_child(p: &Path, tear: bool) -> KillOnDrop {
+    let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+    cmd.args([
+        "design::ledger::tests::l3_kill_child",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1",
+    ])
+    .env(KILL_ENV, p)
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null());
+    if tear {
+        cmd.env(TEAR_ENV, "1");
+    } else {
+        cmd.env_remove(TEAR_ENV);
+    }
+    KillOnDrop(cmd.spawn().unwrap())
 }
 
 /// L3: a process killed while appending leaves a readable ledger with every entry it wrote before the last one.
@@ -196,18 +244,7 @@ fn l3_kill_during_append_leaves_a_readable_ledger() {
 
 fn l3(kill_after: usize, tag: &str) {
     let p = tmp(tag);
-    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "design::ledger::tests::l3_kill_child",
-            "--exact",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(KILL_ENV, &p)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .unwrap();
+    let child = spawn_child(&p, false);
     let l = Ledger::new(&p);
     let t0 = std::time::Instant::now();
     let mut seen = 0;
@@ -216,8 +253,7 @@ fn l3(kill_after: usize, tag: &str) {
         std::thread::sleep(std::time::Duration::from_millis(5));
         seen = l.read().unwrap().entries.len();
     }
-    child.kill().unwrap();
-    child.wait().unwrap();
+    drop(child);
     let c = l.read().unwrap();
     let torn = std::fs::read(&p).unwrap().last() != Some(&b'\n');
     eprintln!(
@@ -238,6 +274,68 @@ fn l3(kill_after: usize, tag: &str) {
     assert_eq!(c.entries[n].variant, format!("v{n}"));
 }
 
+/// L3b (ADR 0121 amendment 1): a kill that lands inside a line; the guarded append recovers, a naive one loses the entry.
+#[test]
+fn l3b_kill_inside_a_line() {
+    l3b(10, "l3b");
+}
+
+fn l3b(min_entries: usize, tag: &str) {
+    let p = tmp(tag);
+    let child = spawn_child(&p, true);
+    let l = Ledger::new(&p);
+    let t0 = std::time::Instant::now();
+    loop {
+        assert!(
+            t0.elapsed().as_secs() < 120,
+            "the child did not reach {min_entries} entries with a torn tail"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let b = std::fs::read(&p).unwrap_or_default();
+        if b.last().is_some_and(|&c| c != b'\n')
+            && parse_text(&String::from_utf8_lossy(&b)).entries.len() >= min_entries
+        {
+            break;
+        }
+    }
+    drop(child);
+    let bytes = std::fs::read(&p).unwrap();
+    let complete = bytes.iter().filter(|&&c| c == b'\n').count();
+    let c = l.read().unwrap();
+    eprintln!(
+        "L3b: {} bytes, {complete} complete lines, {} entries, {} skipped, last byte newline {}",
+        bytes.len(),
+        c.entries.len(),
+        c.skipped.len(),
+        bytes.last() == Some(&b'\n')
+    );
+    assert_ne!(bytes.last(), Some(&b'\n'), "the kill must leave a torn line");
+    assert_eq!(c.entries.len(), complete);
+    assert_eq!(c.skipped.len(), 1);
+    for (k, e) in c.entries.iter().enumerate() {
+        assert_eq!(e.variant, format!("v{k}"));
+    }
+    // guarded append after the kill: readable at the next index
+    l.append(&[sample_entry(complete, 0.5)]).unwrap();
+    let after = l.read().unwrap();
+    assert_eq!(after.entries.len(), complete + 1);
+    assert_eq!(after.entries[complete].variant, format!("v{complete}"));
+    assert_eq!(after.skipped.len(), 1);
+    // negative control: a naive append to the killed file merges into the torn line and is lost
+    std::fs::write(&p, &bytes).unwrap();
+    let mut e = sample_entry(complete, 0.5);
+    e.solver_version = solver_version();
+    e.recorded_at_ms = 1;
+    let mut f = std::fs::OpenOptions::new().append(true).open(&p).unwrap();
+    f.write_all((e.to_json().to_string() + "\n").as_bytes()).unwrap();
+    drop(f);
+    assert_eq!(
+        l.read().unwrap().entries.len(),
+        complete,
+        "the naive append must lose the entry"
+    );
+}
+
 /// L4: threads appending through one handle and through two handles of the same file.
 #[test]
 fn l4_concurrent_appends() {
@@ -249,6 +347,7 @@ fn l4_concurrent_appends() {
 #[ignore]
 fn smoke_w46d_ledger() {
     l3(50, "l3smoke");
+    l3b(3, "l3bsmoke");
     l4(4, 50, "l4smoke");
 }
 
