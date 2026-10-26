@@ -232,6 +232,21 @@ other checks sit at round-off.
   move the tonal vibration more than the balance grade does. This depends entirely on the assumed `k`, `c`, `It` and `Ip`; nothing
   here is measured.
 
+### Notes added with the addendum (documentation only, no registered result changes)
+
+* **Double roots, probed.** I ran an uncommitted probe on the disc rotor at the spin where the forward conical branch crosses the
+  translation frequency (1098.70 rad/s), at that spin times `1 + 1e-9`, and on a rotor with equal tilt and translation
+  frequencies at rest. `natural_frequencies` returned `Ok` every time. At the double roots the error was 3e-9 to 7e-9 relative, of
+  order `sqrt(eps)`, as D2 states. A Campbell sweep can land on such a crossing; the result is then less accurate, never an error.
+* **Frame of the E3 input (D5).** `HarmonicLoad` is in housing axes. Loads from a rotating-frame (MRF) solution are in rotor axes:
+  a lateral rotor-frame harmonic of order `k` appears at `(k + 1)` and `(k - 1)` times the spin in housing axes. A steady
+  rotor-frame lateral force is therefore a 1x rotating load, like unbalance. Stator and strut interaction loads are already in
+  housing axes. This is in the type's documentation too.
+* **Reuse in `rcfd-post`.** `rotor.rs` is Gutin tonal noise (not a load source). `surface_series.rs` is FW-H surface input. The
+  E3 input would come from a blade force and moment time series (for example `structural::fluid_force_moment` per time step), turned
+  to housing axes and decomposed with `acoustics::fft`. No adapter is built here, because there is no converged fan transient to
+  feed it.
+
 ## References
 
 * Rigid-rotor and Jeffcott equations, gyroscopic moment `Ip Omega theta'`, hysteretic damping as `eta k / omega`: derived from
