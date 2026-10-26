@@ -8,6 +8,7 @@
 
 pub mod adjoint;
 pub mod case_eval;
+pub mod fan_rom_eval;
 pub mod opmap;
 pub mod optim;
 pub mod pareto;
