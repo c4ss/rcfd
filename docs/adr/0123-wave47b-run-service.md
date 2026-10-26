@@ -280,3 +280,19 @@ the runner inherited the pipe". `powershell.exe` was still hung, so the fallback
 * New S5a: the same survival check and negative control, with the client's stdout going to a file instead of a pipe.
   Limit: the client exits 0; the runner is alive after the client exits and after the run finishes; the lock probe reads false
   before the start and after the shutdown.
+
+## Final gate (2026-10-26, fresh archive of 43618e3, rebased on main cc0a8cb)
+
+| stage | result |
+| --- | --- |
+| fmt | 0 |
+| workspace tests (release) | 2126 passed, 0 failed, 662 ignored |
+| this crate (release) | 13 passed, 1 ignored (`s5_runner_survives_the_client_known_miss`) |
+| `cargo clippy -p rcfd-runner -p rcfd-cli --all-targets -D warnings` | clean |
+| `cargo clippy --workspace --all-targets -D warnings` | exit 101 |
+
+The workspace clippy failure is not in this branch's files:
+* `crates/rcfd-api/src/design/ledger_tests.rs:134` (`cloned_ref_to_slice_refs`) and `uq_tests.rs:295` (`type_complexity`).
+* Both files came to main with the wave-46D merge (last commit 1c6e4c3, ADR 0121), and the toolchain is now rustc 1.99.0.
+
+Commit ids: the registered run of the addendum was on 8b83bb1, which became 7a561b7 after the rebases; the tree is unchanged.
