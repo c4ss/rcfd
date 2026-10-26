@@ -93,6 +93,158 @@ What a fan validation with these tools needs (from the FAN-01 attempt, ADR 0075)
 sector at the FAN-01 hub); a turbulence wall treatment that accepts moving walls (a stationary casing is a moving wall in the rotating frame; fixed
 for k-omega SST in wave 34D); an inlet nozzle / finite hub / diffuser model or a rig-independent measured quantity to compare with.
 
+## Small-fan sources (computer-fan scale)
+
+Searched and read on 2026-10-26 (wave 46E, part G1 of `docs/fan-project-breakdown.md`). Target: computer fans, axial or centrifugal,
+40 to 140 mm, 1 000 to 5 000 rpm, tip speed 5 to 25 m/s, chord Reynolds number 2e4 to 2e5, large tip gap, high-impedance system. Labels as
+above: READ (opened and the relevant content read), seen (citation, record page or search snippet only), NOT read, UNVERIFIED (a value
+not checked against a primary text). Numbers below are quoted from the text of the sources or derived here (said so); values that exist
+only in figures were not read off the plots. No data tables are copied into the repository; nothing was added to `manifest.json`.
+Reynolds numbers derived here use nu = 1.5e-5 m^2/s. The generator these sources are judged against is `rcfd_mesh::fan` as of main
+8bd609a: one NACA 4-digit or double-circular-arc family per rotor, sections on cylinders given at radial stations (chord, stagger, camber,
+thickness, sweep, lean), cylindrical hub, cylindrical shroud with a tip gap, no stator row, no import of measured section coordinates.
+
+Ranking criteria (written after reading, not before): (1) regime match (size, tip speed, chord Reynolds number, tip gap); (2) complete
+open geometry; (3) fan curve, noise and vibration from the same fan; (4) licence; (5) representable by `rcfd_mesh::fan`.
+
+**Verdict: no open source is adequate as the first computer-fan reference case.** The only source with geometry, fan curve, noise and
+vibration from one fan on public terms is the NASA Quiet Space Fan (rank 1), and it is a ducted rotor-stator ventilation fan at about
+50 m/s tip speed with a 0.23 mm tip gap, outside the computer-fan regime on tip speed, loading and tip leakage. The only source inside
+the regime (rank 2) publishes no geometry. G2 therefore needs a fan measured by the user, following the
+[fan measurement protocol](fan-measurement-protocol.md). Rank 1 is usable to exercise the small-fan tool chain (geometry import, curve, tones,
+imbalance) against real data, stated as not computer-fan validation.
+
+**1. NASA Quiet Space Fan (QSF), spacecraft cabin ventilation fan** (rank 1; best available, regime mismatch).
+- Sources. Stephens, Goodman, Buehrle, Mirhashemi, Koch, Shook, Sutliff, Allen, Matty, "Highlights of Aeroacoustic Tests of a Metal
+  Spacecraft Cabin Ventilation Fan Prototype", NASA/TM-20220012622 (Nov 2022), https://ntrs.nasa.gov/citations/20220012622: READ (text;
+  figures not read numerically), with supplements SUPPL1 (assembly drawing, READ), SUPPL2 (blade and endwall coordinates, READ and parsed
+  here), SUPPL4 (16 dimensioned part drawings, listed, not read), SUPPL3 (CREO solid model, 90 MB, NOT downloaded). Koch et al.,
+  "Spacecraft Cabin Ventilation Fan Research at NASA", NTRS 20240004675 (2024): READ. Stephens and Koch, "Quiet Spacecraft Cabin
+  Ventilation Fan: Aerodynamic Measurements Results", NOISE-CON 2023, NTRS 20230003206: READ. Stephens, Goodman, Shook, Koch, "...
+  Vibration Measurements Results", NOISE-CON 2023, NTRS 20230003228: READ (text). Sutliff, "... Acoustic Measurements Results",
+  NOISE-CON 2023 presentation, NTRS 20230006061: READ (slide text). Tweedt, "Aerodynamic Design and Computational Analysis of a Spacecraft
+  Cabin Ventilation Fan", NASA/CR-2010-216329, NTRS 20110002741: READ (design sections). Seen only: TM-20230001811 (test set-up, downloaded,
+  not read beyond the abstract), Koch et al. TM-2012-217692 (plastic prototype acoustics), Mirhashemi NOISE-CON 2023 (wake hot wire),
+  Butler et al. 2023 (stall simulations).
+- Licence: NTRS distribution PUBLIC, copyright determination GOV_PUBLIC_USE_PERMITTED, no third-party material flagged (same record type
+  as `nasa-rotor37`). Geometry and reports are downloadable; no measured data file is published (the aerodynamic paper reports about
+  150 GB acquired; curves are figures).
+- Fan: axial rotor-stator stage, 9 rotor blades, 11 stator vanes, flow-path diameter 88.9 mm (3.50 in), rotor tip clearance 0.23 mm
+  (0.009 in), design 12 000 rpm, rotor tip speed 50.2 m/s (inlet) and 52.7 m/s (exit) (Tweedt), rotor chord Reynolds number about
+  75 000 and stator about 60 000 (Tweedt), specific speed in the mixed-flow range with a 30 deg hub slope at the rotor inlet and a 22 %
+  annulus area contraction through the rotor (Tweedt). Spinner, 3 aft struts, long exit diffuser, inlet bellmouth on the rig.
+- Geometry (SUPPL2, derived here; coordinates in inches, 91 points LE to TE by 21 sections per surface, pressure and suction side paired by
+  point index, unwrapped at each section's mean radius, so the values are approximate): rotor chord 23.7 mm at the hub to 28.1 mm at the tip
+  (hub 16 % shorter; Tweedt states 15 %), stagger from the axis about 39 deg (hub) to 54 deg (tip), maximum thickness about 0.11 to 0.08 of
+  chord (Tweedt: 10 % to 8 %), camber about 0.12 to 0.04 of chord; rotor tip radius about 42.7 mm; stator chord 29.1 mm constant (Tweedt
+  1.15 in), thickness 0.10. Section definition (Tweedt): polynomial camber-angle and thickness distributions joined at 35 % chord, laid out
+  on conic surfaces; the rotor camber-angle distribution is double circular arc, the thickness is not.
+- Measured (text values): 3.48 in. water (867 Pa) at 150.6 cfm at 12 000 rpm, design goal 3.64 in. water (907 Pa) at 150 cfm; wide open
+  0.52 in. water (130 Pa) at 220.4 cfm; peak 4.0 in. water (996 Pa) at 120.7 cfm; maps at 8 000, 10 000, 12 000 rpm (figures). Pressure
+  rise between static taps on each side of the fan; flow from an ISO 5801 bellmouth wall tap, cross-checked against a pitot-static probe;
+  transducer ranges 0-1 and 0-15 in. water; no uncertainty statement in anything read. Efficiency (figure) is isentropic power over
+  electrical input to the controller (motor and controller included; "mechanical work" assumes 90 % motor efficiency): 75 % at design;
+  design-point current 1.73 A at 48 V. AMCA International repeated the curve (AMCA 210-16) and sound power (AMCA 300-14, reverberant room)
+  at 8 000 to 12 000 rpm: 71 dBA at design point. In-duct 72-microphone array: tones at 1 BPF (1 800 Hz) and 4 BPF (7 200 Hz), a
+  non-blade-rate tone at the m = 1 cut-on frequency 2 270 Hz; in-duct PWL labels 64.2 dB (inlet, run 031) and 61.7 dB (exhaust, run 069)
+  against 73.4 dB for a commercial fan of similar size. Vibration: rotor assembly 191 g, residual unbalance tolerance 0.762 g mm (grade
+  G 5 at 1 257 rad/s), measured peak casing velocity just under 4 mm/s at shaft rate (2021 rotor), about 1 mm/s after the 2022 redesign
+  (2023, unthrottled); first blade bending mode 7 430 Hz, lowest stator mode about 2 800 Hz.
+- Representable: not as it stands (conic sections, contoured hub and shroud, stator row, polynomial thickness). A NACA 4-digit or
+  circular-arc fit on cylinders would be an approximation whose geometric error must be reported. The coordinates can be used directly by a
+  future coordinate-import path. E1 (imbalance force and balance grade) can be checked against the vibration paper now: the inputs (rotor
+  mass, unbalance, speed) are stated.
+
+**2. NASA 80 mm electronics cooling fan** (rank 2; inside the regime, no geometry).
+- Sources. Van Zante, Koch, Wernet, Podboy, NASA/TM-2006-214448 (Part 1: aerodynamic performance), NTRS 20060048234: READ (text; figures
+  not read numerically). Koch, Van Zante, Wernet, Podboy, NASA/TM-2006-214450 (Part 2: source identification), NTRS 20060045853: READ.
+  Licence: NTRS GOV_PUBLIC_USE_PERMITTED. No data files.
+- Fan: commercial spaceflight-qualified 80 mm axial fan (maker not named), 5 blades, 4 downstream struts, 80 x 80 x 32 mm case, duct
+  diameter 77 mm, tip radius 37 mm, casing radius 38 mm, tip clearance 1 mm, chord 34 mm (clearance 2.9 % of chord), solidity 0.86,
+  3 300 rpm, tip speed 12.8 m/s, BPF about 275 Hz; chord Reynolds number about 3e4 at the tip (derived). Hub: Part 1 table gives radius
+  26 mm (hub/tip 0.70), Part 2 table gives diameter 42 mm; the two disagree.
+- Measured: fan curve and A-weighted sound power at 3 300 rpm per ISO 10302 on an automated plenum with a 19-microphone array (ISO 3744),
+  with and without a 1-diameter inlet duct (figures; text: stall plateau near 42 m^3/h, useful range 40 to 50 m^3/h, free delivery
+  50 m^3/h); third-octave and narrowband spectra at free delivery (figures); 2D/3D PIV of the inlet (free delivery, mild stall) and hot-wire
+  rotor wakes (free delivery). No uncertainty statement.
+- Representable: no; blade geometry not published (sections, stagger and twist unknown). Usable only as a plausibility check of the
+  regime (tip-gap blockage, inlet distortion from the square frame, stall plateau), not as a validation case.
+
+**3. OpenCeFaDB, KIT generic centrifugal fan** (rank 3; open CAD and curves, centrifugal, no noise, larger than the target).
+- Sources. Zenodo records by Probst and Pritz (KIT), all CC BY 4.0: "Generic Centrifugal Fan CAD File", doi:10.5281/zenodo.17871736
+  (2025-12-09; `metadata.ttl` READ, `cefa_asm_v1.igs` 14.3 MB NOT opened); fan-curve datasets at 600, 800, 1 000, 1 200 rpm (Dataset 1 and 2,
+  e.g. doi:10.5281/zenodo.18349134, 28 runs of HDF5 + RDF each; one run's RDF metadata READ, HDF5 values NOT read); catalog
+  doi:10.5281/zenodo.18349358 and Python package (seen). Probst, Pritz, Bauer, "Towards a FAIR centrifugal fan database for off-design
+  validation of CFD simulations", FAN 2022, doi:10.26083/tuprints-00021695 (CC BY 4.0): READ. Pritz, Walter, Gabi, FAN 2018 (rig and design
+  point): NOT read.
+- Fan (CAD metadata): backward-curved, 9 blades, D1 138 mm, D2 306 mm, D3 325 mm, b1 = b2 58.5 mm, blade angles 30.2 deg (inlet) and
+  40.7 deg (outlet), spiral casing; design 25 1/s (1 500 rpm), flow coefficient 0.071, pressure coefficient 0.958, total efficiency 0.85
+  (design values). Tip speed 9.6 to 19.2 m/s over 600 to 1 200 rpm (derived), inside the target range although D2 is not.
+- Measured quantities per run (metadata): volume flow rate (orifice per ISO 5167), static and total pressure differences across the fan,
+  fan torque, rotational speed, inlet/outlet/ambient temperature, humidity, atmospheric pressure, air density, each with a recorded
+  standard deviation; PIV planned in the rotor and volute (FAN 2022 paper). Instrument uncertainty not stated in what was read. No noise.
+- Representable: no (A3, the centrifugal generator, is missing). The best open candidate for a centrifugal reference once A3 exists:
+  torque gives a true shaft-power route that the axial sources lack.
+
+**4. Tutar and Cam, small axial fan with NACA 4-digit blades** (rank 4; representable table, experiment not read).
+- Source. M. Tutar, J. B. Cam, "Computational Design of an Energy-Efficient Small Axial-Flow Fan Using Staggered Blades with Winglets",
+  Int. J. Turbomach. Propuls. Power 10 (2025) 1, doi:10.3390/ijtpp10010001, CC BY 4.0: READ. Data availability: on request. The experiment
+  is Lin and Tsai, "An integrated study of the design method for small axial-flow fans, based on the airfoil theory", Proc. IMechE Part C
+  225(4) (2011) 885-895, doi:10.1243/09544062JMES2231: abstract READ (Crossref), full text NOT read; its data are UNVERIFIED.
+- Fan: 7 blades, rotor diameter 120 mm, hub 50 mm, 2 000 rpm (tip speed 12.6 m/s, derived), NACA 4420 at the hub to 4406 at the tip,
+  chord 18.6 to 41.6 mm, setting angle 39.9 to 36.0 deg (Table 1); chord Reynolds number about 7e3 (hub) to 3.6e4 (tip) at 60 cfm
+  (derived). CFD (RNG k-epsilon, MRF) against Lin and Tsai's static pressure-flow curve at 2 000 rpm (figure; best efficiency near 60 cfm).
+- Representable: yes in form (NACA 4-digit on stations), but the table is not self-consistent (11 radii, 10 segment numbers; only 3.9 deg
+  setting-angle change over a radius ratio of 2.5, reference of the setting angle not defined), the computational domain has no shroud or
+  tip gap, and the paper cites Lin and Tsai as "Int. J. Adv. Eng. Innov. Technol. 2010" while Crossref gives Proc. IMechE C 2011. Not usable
+  until the original geometry and curve are read.
+
+**5. FAN-02, enclosed centrifugal fan (FAU/TU Graz)** (rank 5; rich noise and vibration, not small, impeller data not yet in the record).
+- Sources. Zenodo "FAN-02 Benchmark: Enclosed Centrifugal Fan with Duct System", doi:10.5281/zenodo.17909944 (2025-12-12, CC BY 4.0):
+  record READ; its 11 files are housing STEP models and sensor positions only. Czwielong et al., "An Overview of the Benchmark Case for the
+  Aeroacoustics and Structural Acoustics of an Enclosed Centrifugal Fan", Int. J. Turbomach. Propuls. Power 11 (2026) 10,
+  doi:10.3390/ijtpp11010010: READ; licence CC BY-NC-ND (not CC BY).
+- Fan: 12 backward-curved blades, outer diameter 400 mm, constant 5 mm thickness, 28 mm channel width, 1 800 rpm, tip speed 37.7 m/s,
+  design 0.28 m^3/s and 700 Pa, BPF 360 Hz. Described data: inflow hot wire, PIV at the tongue, fan curve (ISO 5801 nozzle) with torque at
+  three points, blade-surface pressure telemetry, housing modal and operational laser vibrometry, sound intensity, 8 free-field
+  microphones. Impeller geometry and measured data were not in the record version read.
+
+**Not usable for validation (read).**
+- Dozolme, Metwally, Marchal, "Electronics Cooling Fan Noise Prediction", THERMINIC 2006, arXiv:0709.1876 (arXiv default licence): READ.
+  No geometry, fan not named; "experimental" values are catalogue data (OMRON pages, NOT read); compares a computed surface acoustic power
+  (Proudman model) with catalogue levels, which are not the same quantity.
+- matutani/cooling-fan (GitHub; Sunaga, Kondo, Matsutani, IEEE Micro 43(6) 2023, NOT read): README READ. Vibration spectra 1-512 Hz of
+  8, 12 and 14 cm fans at three speeds, normal and deliberately unbalanced; no licence file (cite only), no sensor, units or calibration
+  stated.
+- Not small fans: Mo and Choi, Appl. Sci. 10 (2020) 5432 (automotive fan, radii given in mm in the text and cm in Table 1; about 360 mm
+  diameter; licence not checked); Zhang et al., Appl. Sci. 16 (2026) 2227 (train fan, 665 mm, CFD only); Assaf, Gras, Ferhat, Int. J.
+  Turbomach. Propuls. Power 11 (2026) 17 (excavator fan, CC BY-NC-ND); Szelka et al., Energies 16 (2023) 542 (mining fan, hub 0.48 m).
+- Open-licence computer-fan geometry: one search (Printables, Thingiverse, MakerWorld, GitHub) found parametric PC-fan grilles and a
+  propeller generator but no CC BY 80-140 mm rotor; geometry without measured data cannot validate in any case.
+
+**Seen only, NOT read (UNVERIFIED):** L. Huang, "Characterizing computer cooling fan noise", J. Acoust. Soc. Am. 114 (2003) 3189,
+doi:10.1121/1.1624074; Quin and Grimes, Reynolds-number effect on micro axial fans, J. Fluids Eng. 130 (2008); Zhou and Yang, axial fan for
+electronic devices, IEEE Trans. Compon. Packag. Technol. 33 (2010) 287; Trinity College Dublin (Persoons group) electronics-cooling fan
+aeroacoustics records (repository pages returned 403); Fitzgerald and Lauchle, J. Acoust. Soc. Am. 76 (1984) 158.
+
+**Measurement standards (procedure reference only; no text copied).**
+- Fan performance: ISO 5801 (2017 edition cited by NASA and KIT) and ANSI/AMCA 210-16 = ANSI/ASHRAE 51-16 (used by AMCA for the QSF):
+  NOT read. Open descriptions READ: the QSF rig (ISO 5801 bellmouth, wall tap about one inch downstream of the bellmouth curvature,
+  throttle cone at the duct exit, static taps either side of the fan) and the KIT rig (ISO 5167 orifice for flow, pressures upstream and
+  downstream of the fan).
+- Small-fan noise: ISO 10302-1:2024 (second edition; airborne noise of small air-moving devices as a function of flow rate and static
+  pressure on a plenum, including a limit on the plenum's flow) seen via the ISO catalogue summary, NOT read; ISO 10302-2 (structure-borne
+  vibration) title only. ECMA-74, 22nd edition (Dec 2025), free download: READ in part; it references ISO 10302-1/-2, gives the prominent
+  discrete tone method (tone-to-noise ratio, prominence ratio, Annex D) and states a reproducibility standard deviation of about 1.5 dB for
+  A-weighted sound power in reverberation rooms and in free field over a reflecting plane. In-duct ISO 5136, ANSI/ASHRAE 68 and
+  reverberant-room AMCA 300-14: cited by NASA, NOT read.
+- Balance: ISO 21940-11 balance grade G = e omega (as used in the QSF vibration paper; the relation itself is first principles).
+
+Inconsistencies found while reading: QSF design flow 0.0709 m^3/s in the report bodies but 0.709 m^3/s in the abstracts of NTRS 20240005078
+and 20120014314; Koch et al. 2024 states the measured pressure rise as "3.478 psia" and "3.487 psia" where inches of water are meant; QSF
+in-duct PWL values are figure labels; NASA 80 mm fan hub size differs between Parts 1 and 2; Tutar and Cam Table 1 numbering and citation
+as above; Mo and Choi mm/cm; the KIT FAN 2022 paper planned a first release for mid-2022, the Zenodo data records are dated January 2026.
+
 ## Provenance table (generated by `rcfd data provenance`)
 
 ## Lid-driven cavity centreline velocities (Ghia, Ghia and Shin 1982) (`cavity-ghia1982`)

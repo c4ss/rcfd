@@ -27,7 +27,8 @@ written). The tutorials are executed by the test suite (`cargo test -p rcfd-cli 
 
 ## Validation and status
 
-* [Verification report](verification-report.md), [validation data](validation-data.md), [reference data](reference-data.md).
+* [Verification report](verification-report.md), [validation data](validation-data.md), [reference data](reference-data.md),
+  [fan measurement protocol](fan-measurement-protocol.md).
 * [Fan milestone](milestone-fan.md): the assistant-driven fan design goal and its current state.
 * [Roadmap](ROADMAP.md), [parity matrix](parity-matrix.md), [product suites](product-suites.md), [audit report](audit-report.md).
 * [Architecture](architecture.md) and the decision records in `docs/adr/` (for example
