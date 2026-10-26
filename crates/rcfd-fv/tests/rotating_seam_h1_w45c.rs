@@ -4,6 +4,8 @@
 //! centrifugal term. R1 (sector with F1 against the annulus), negative control N1 (without F1). Limits registered in ADR 0117 before
 //! this code ran.
 
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the checks
+
 use rcfd_fv::bc::{FixedValue, ZeroGradient};
 use rcfd_fv::simple::{BodyForce, Coupling, IterationInfo, SimpleSettings, SimpleSolver};
 use rcfd_fv::sources::RotatingFrame;
