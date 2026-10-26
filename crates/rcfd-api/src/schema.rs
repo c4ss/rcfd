@@ -1327,6 +1327,22 @@ pub fn case_schema() -> Schema {
             Schema::int(1)
                 .range(1.0, 1e6)
                 .doc("Periodic restart files kept (backup retention): 1 overwrites one file; N > 1 writes <checkpoint>.<step> files and keeps the newest N, the end-of-run checkpoint always goes to <checkpoint>"),
+        )
+        .field(
+            "store_interval",
+            Schema::int(0)
+                .range(0.0, 1e9)
+                .doc("Time-series field store (ADR 0124): every N iterations/steps add a snapshot of output.store_fields to <output directory>/fields/store.rts, plus the final state; rcfd run and run.headless with an output directory (0 = off)"),
+        )
+        .field(
+            "store_time_interval",
+            Schema::float(0.0)
+                .at_least(0.0)
+                .doc("Field store every this much simulated time [s]: the first step at or after each multiple is stored; the time steps are not changed (transient runs; 0 = off)"),
+        )
+        .field(
+            "store_fields",
+            Schema::list(Schema::string("")).doc("Cell fields of the field store, any name of the probe/field list such as ux, uy, uz, p, T, k, nut (empty = ux, uy, uz, p)"),
         );
 
     let statistics = Schema::object()

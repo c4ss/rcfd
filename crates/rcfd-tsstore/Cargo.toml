@@ -1,0 +1,20 @@
+[package]
+name = "rcfd-tsstore"
+description = "Time-series field store: mesh once, field snapshots per saved time, random access for scrubbing (ADR 0124)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-core.workspace = true
+rcfd-mesh.workspace = true
+rcfd-io.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Deflate for the optional lossless codec. Already compiled in this workspace through png 0.18 (rcfd-post),
+# so it adds no crate to the build graph. MIT OR Zlib OR Apache-2.0. (ADR 0124 D3)
+miniz_oxide = "=0.8.9"

@@ -21,6 +21,7 @@ members = [
     "crates/rcfd-project",
     "crates/rcfd-runner",
     "crates/rcfd-render",
+    "crates/rcfd-tsstore",
 ]
 
 [workspace.package]
@@ -52,6 +53,7 @@ rcfd-particles = { path = "crates/rcfd-particles" }
 rcfd-api = { path = "crates/rcfd-api" }
 rcfd-mcp = { path = "crates/rcfd-mcp" }
 rcfd-assistant = { path = "crates/rcfd-assistant" }
+rcfd-tsstore = { path = "crates/rcfd-tsstore" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
