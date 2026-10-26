@@ -6,6 +6,7 @@
 //! All paths go through [`Service::sandbox_path`]; names are restricted to `[A-Za-z0-9_.-]` without a leading dot.
 
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
+use super::ledger;
 use super::opmap::{self, Axis, MapOptions, MapPoint, OnFailure, PointEvaluator, PointResult};
 use super::optim::Stop;
 use super::store::{CondResult, Store};
@@ -613,6 +614,12 @@ pub fn call(svc: &Arc<Service>, method: &str, p: &Value) -> Rpc {
         "design.compare" => compare(svc, p),
         "design.propose" => propose(svc, p),
         "design.list_study" => list_study(svc, p),
+        // ---- wave 46D (ADR 0121): design ledger
+        "design.ledger_append" => ledger_append(svc, p),
+        "design.ledger_query" => ledger_query(svc, p),
+        "design.ledger_export" => ledger_export(svc, p),
+        "design.ledger_rerun_check" => ledger_rerun_check(svc, p),
+        // ---- end wave 46D
         other => Err(RpcError::new(
             code::METHOD_NOT_FOUND,
             format!("unknown method '{other}'"),
@@ -1169,3 +1176,184 @@ fn list_study(svc: &Service, p: &Value) -> Rpc {
     out["signature"] = json!(l.sig);
     Ok(out)
 }
+
+// ---------------------------------------------------------------- wave 46D (ADR 0121): design ledger
+
+fn ledger_at(svc: &Service, p: &Value) -> Rpc<ledger::Ledger> {
+    Ok(ledger::Ledger::new(&svc.sandbox_path(str_arg(p, "ledger")?)?))
+}
+
+fn read_ledger(svc: &Service, p: &Value) -> Rpc<(ledger::Ledger, ledger::Contents)> {
+    let l = ledger_at(svc, p)?;
+    if !l.path().exists() {
+        return Err(bad(format!(
+            "ledger: no ledger at {}; append an entry first",
+            l.path().display()
+        )));
+    }
+    let c = l.read().map_err(|e| RpcError::new(code::INTERNAL, e))?;
+    Ok((l, c))
+}
+
+fn ledger_append(svc: &Service, p: &Value) -> Rpc {
+    let l = ledger_at(svc, p)?;
+    let s = |k: &str, default: &str| -> Rpc<String> { Ok(opt_str(p, k)?.unwrap_or(default).to_string()) };
+    let verdict = str_arg(p, "verdict")?;
+    let fidelity = str_arg(p, "fidelity")?;
+    let e = ledger::Entry {
+        kind: s("kind", "evaluation")?,
+        study: s("study", "")?,
+        variant: s("variant", "")?,
+        params: ledger::quantities_from(p.get("params").unwrap_or(&Value::Null), "params").map_err(bad)?,
+        evaluator: str_arg(p, "evaluator")?.to_string(),
+        evaluator_version: str_arg(p, "evaluator_version")?.to_string(),
+        solver_version: s("solver_version", "")?,
+        geometry_hash: s("geometry_hash", "")?,
+        settings: p.get("settings").cloned().unwrap_or(Value::Null),
+        metrics: ledger::quantities_from(p.get("metrics").unwrap_or(&Value::Null), "metrics").map_err(bad)?,
+        verdict: ledger::Verdict::parse(verdict).ok_or_else(|| {
+            bad(format!(
+                "verdict: '{verdict}' is not ok, diverged, constraint_rejected or not_evaluated"
+            ))
+        })?,
+        reason: s("reason", "")?,
+        fidelity: ledger::Fidelity::parse(fidelity)
+            .ok_or_else(|| bad(format!("fidelity: '{fidelity}' is not analytic, reduced_order or cfd")))?,
+        recorded_at_ms: 0,
+        wall_s: match p.get("wall_s") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(f64_of(v, "wall_s")?),
+        },
+        seed: match p.get("seed") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(v.as_u64().ok_or_else(|| bad("seed: expected a non-negative integer"))?),
+        },
+        provenance: p.get("provenance").cloned().unwrap_or(Value::Null),
+    };
+    e.validate().map_err(bad)?;
+    l.append(&[e]).map_err(|m| RpcError::new(code::INTERNAL, m))?;
+    // shortcut: the index assumes no other writer between the append and this read (single-writer ledger, ADR 0121)
+    let n = l.read().map_err(|m| RpcError::new(code::INTERNAL, m))?.entries.len();
+    Ok(json!({"ledger": l.path().display().to_string(), "index": n - 1, "entries": n}))
+}
+
+fn ledger_filter(p: &Value) -> Rpc<ledger::Filter> {
+    Ok(ledger::Filter {
+        kind: opt_str(p, "kind")?.map(str::to_string),
+        verdict: match opt_str(p, "verdict")? {
+            None => None,
+            Some(v) => Some(ledger::Verdict::parse(v).ok_or_else(|| bad(format!("verdict: '{v}' is unknown")))?),
+        },
+        study: opt_str(p, "study")?.map(str::to_string),
+        evaluator: opt_str(p, "evaluator")?.map(str::to_string),
+        fidelity: match opt_str(p, "fidelity")? {
+            None => None,
+            Some(v) => Some(ledger::Fidelity::parse(v).ok_or_else(|| bad(format!("fidelity: '{v}' is unknown")))?),
+        },
+    })
+}
+
+fn sense_of(o: &Value, at: &str) -> Rpc<(String, Sense)> {
+    let metric = o
+        .get("metric")
+        .and_then(Value::as_str)
+        .ok_or_else(|| bad(format!("{at}.metric: missing")))?;
+    let sense = match o.get("sense").and_then(Value::as_str).unwrap_or("min") {
+        "min" => Sense::Min,
+        "max" => Sense::Max,
+        other => return Err(bad(format!("{at}.sense: '{other}' is not min or max"))),
+    };
+    Ok((metric.to_string(), sense))
+}
+
+fn ledger_query(svc: &Service, p: &Value) -> Rpc {
+    let (l, c) = read_ledger(svc, p)?;
+    let idx = ledger_filter(p)?.apply(&c.entries);
+    let offset = opt_usize(p, "offset")?.unwrap_or(0);
+    let lim = opt_usize(p, "limit")?.unwrap_or(100).min(1000);
+    let mut out = json!({
+        "ledger": l.path().display().to_string(), "total": c.entries.len(), "matched": idx.len(), "offset": offset,
+        "skipped_lines": c.skipped.iter().map(|s| json!({"line": s.line, "reason": s.reason})).collect::<Vec<_>>(),
+        "entries": idx.iter().skip(offset).take(lim).map(|&i| ledger::indexed_json(i, &c.entries[i])).collect::<Vec<_>>(),
+    });
+    if let Some(objs) = p.get("pareto") {
+        let list = objs
+            .as_array()
+            .ok_or_else(|| bad("pareto: expected a list of {metric, sense}"))?;
+        let objs = list
+            .iter()
+            .enumerate()
+            .map(|(i, o)| sense_of(o, &format!("pareto[{i}]")))
+            .collect::<Rpc<Vec<_>>>()?;
+        out["pareto"] = json!(ledger::pareto_front(&c.entries, &idx, &objs).map_err(bad)?);
+    }
+    if let Some(b) = p.get("best") {
+        let (metric, sense) = sense_of(b, "best")?;
+        let (best, trace) = ledger::best_so_far(&c.entries, &idx, &metric, sense).map_err(bad)?;
+        out["best"] = json!({
+            "index": best, "entry": best.map(|i| ledger::indexed_json(i, &c.entries[i])),
+            "trace": trace.iter().map(|(i, v)| json!({"index": i, "best": v})).collect::<Vec<_>>(),
+        });
+    }
+    if let Some(name) = opt_str(p, "history")? {
+        out["history"] = json!(ledger::history(&c.entries, &idx, name)
+            .iter()
+            .map(|(i, v, u, verdict)| json!({"index": i, "value": v, "unit": u, "verdict": verdict.as_str()}))
+            .collect::<Vec<_>>());
+    }
+    Ok(out)
+}
+
+fn ledger_export(svc: &Service, p: &Value) -> Rpc {
+    let (_, c) = read_ledger(svc, p)?;
+    let out = svc.sandbox_path(str_arg(p, "out")?)?;
+    let idx = ledger_filter(p)?.apply(&c.entries);
+    let text = match opt_str(p, "format")?.unwrap_or("csv") {
+        "csv" => ledger::to_csv(&c.entries, &idx),
+        "json" => {
+            serde_json::to_string_pretty(
+                &idx.iter()
+                    .map(|&i| ledger::indexed_json(i, &c.entries[i]))
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or_default()
+                + "\n"
+        }
+        other => return Err(bad(format!("format: '{other}' is not csv or json"))),
+    };
+    write_text(&out, &text)?;
+    Ok(json!({"path": out.display().to_string(), "entries": idx.len()}))
+}
+
+fn ledger_rerun_check(svc: &Service, p: &Value) -> Rpc {
+    let (_, c) = read_ledger(svc, p)?;
+    let i = opt_usize(p, "index")?.ok_or_else(|| bad("index: missing"))?;
+    let e = c
+        .entries
+        .get(i)
+        .ok_or_else(|| bad(format!("index {i}: the ledger has {} entries", c.entries.len())))?;
+    let new = ledger::quantities_from(p.get("metrics").unwrap_or(&Value::Null), "metrics").map_err(bad)?;
+    let verdict = match opt_str(p, "verdict")? {
+        None => ledger::Verdict::Ok,
+        Some(v) => ledger::Verdict::parse(v).ok_or_else(|| bad(format!("verdict: '{v}' is unknown")))?,
+    };
+    let tol = |k: &str| -> Rpc<f64> {
+        match p.get(k) {
+            None | Some(Value::Null) => Ok(0.0),
+            Some(v) => f64_of(v, k).and_then(|x| {
+                if x >= 0.0 {
+                    Ok(x)
+                } else {
+                    Err(bad(format!("{k}: must be >= 0")))
+                }
+            }),
+        }
+    };
+    let r = ledger::compare_metrics(e, &new, verdict, tol("rtol")?, tol("atol")?);
+    Ok(json!({
+        "index": i, "pass": r.pass, "problems": r.problems,
+        "metrics": r.metrics.iter().map(|(n, a, b, d, ok)| json!({"name": n, "recorded": a, "new": b, "abs_diff": d, "ok": ok})).collect::<Vec<_>>(),
+    }))
+}
+
+// ---------------------------------------------------------------- end wave 46D
