@@ -255,4 +255,9 @@ Status: F-126 stays partial; ADR 0110 part L stays open; no default changed.
 
 ## Final gate
 
-GATE_PLACEHOLDER
+Fresh `git archive` of HEAD 3a1cab1 (branch `w45c` rebased onto main 58fabcf, which includes the ADR 0116 merge), gate directory
+`<scratch dir>`: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test
+--workspace --release --no-fail-fast` **2025 passed, 0 failed, 639 ignored** (main 2020 / 0 / 634 plus this ADR's 5 passing and 5 ignored
+tests). `baseline_hashes.rs` untouched and passing; `mrf_cyclic_seams_w44c.rs` passes in both crates. An earlier gate of 87b4a60 (before
+the rebase onto 58fabcf) failed clippy only: `neg_cmp_op_on_partial_ord` on the two NaN-failing checks of `rotating_seam_h1_w45c.rs`, now
+allowed file-wide as in `fan01_stall_w43c.rs`; its tests gave 2015 / 0 / 638 on the older base.
