@@ -133,7 +133,7 @@ The runner and the client reach records only through the trait `store::RunStore`
    `step`, `time`, `pid`, `updated`, plus `reason` and `exit_code`), `RunRecord` (`id`, `created`, `case_dir`, `settings`, plus
    `case_source`, `case_snapshot_hash`, `mesh_hash`, `solver_version`), `RunSettings`, `new_run_id`, `now_iso`, `atomic_write`,
    `append_line`, `retry`. Any field missing in `rcfd-project` goes to the lead as an additive change (list in decision 9).
-2. Re-implement the eight `RunStore` methods of `FsStore` on `rcfd-project`'s helpers. `create_run` takes `rcfd-project`'s snapshot
+2. Re-implement the nine required `RunStore` methods of `FsStore` (`project`, `list_runs`, `create_run`, `read_record`, `read_status`, `write_status`, `append_event`, `append_residual`, `write_metrics`; `run_dir` has a default) on `rcfd-project`'s helpers. `create_run` takes `rcfd-project`'s snapshot
    hash instead of `fnv1a64`.
 3. Replace `client::check_id` with `rcfd-project`'s run-id validator.
 4. Add `rcfd-project` to `crates/rcfd-runner/Cargo.toml`, both crates to `layer()` in `crates/rcfd-cli/tests/workspace_graph.rs` (it
@@ -210,3 +210,20 @@ Not done here, for the lead:
 * Unix runs of the Unix code paths;
 * runtime memory measurement and enforcement;
 * pause by checkpoint for runs that should give their memory back.
+
+## Amendment 1 (2026-10-26, before its run): S11, relative paths through `--case-dir`
+
+Written after the addendum above and before S11 was run as a registered test. It was prompted by a review: decision 10 claims that
+relative paths resolve against the case folder, and no check covered it. What I knew: a manual smoke, debug build, on a converted
+OpenFOAM mesh.
+* `rcfd convert case.toml meshes/cavity` writes `meshes/cavity/polyMesh`.
+* `cases/cavity.toml` with `mesh.source = "file"` and `mesh.file = "../meshes/cavity/polyMesh"` ran from `cases/`, and ran from
+  `runs/x/case.snapshot` with `--case-dir cases`; both exited 5 after the 20-step cap.
+* Without `--case-dir` it exited 3, naming `mesh.file` and the path resolved against `runs/x`. The first smoke attempt pointed at
+  `meshes/cavity` (without `polyMesh`) and failed with a missing-file error. That was a set-up error of the smoke, not of the flag.
+
+| id | check | limit | negative control |
+| --- | --- | --- | --- |
+| S11 | the project holds `meshes/cavity/polyMesh` (from `rcfd convert`) and `cases/file.toml` referencing it as `../meshes/cavity/polyMesh`; submitted through the client with 30 steps | `finished` with step 30 | the same `case.snapshot` run directly by `rcfd run` without `--case-dir` exits 3, and stderr names `mesh.file` |
+
+S11 runs in the debug build now; the release gate runs it again.
