@@ -82,7 +82,7 @@ fn layering_matches_architecture_doc() {
     let g = graph();
     let layer = |n: &str| match n {
         "rcfd-core" => 0,
-        "rcfd-mesh" | "rcfd-linalg" | "rcfd-reactor" => 1,
+        "rcfd-mesh" | "rcfd-linalg" | "rcfd-reactor" | "rcfd-project" => 1,
         "rcfd-gpu" | "rcfd-dist" => 2,
         "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 3,
         "rcfd-turb" | "rcfd-post" => 4,
