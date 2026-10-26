@@ -279,6 +279,7 @@ mod tests {
 
     // C3: unproject(project(p)) = p to 1e-6 relative; negative control: a swapped aspect must miss by > 1e-3.
     #[test]
+    #[allow(clippy::approx_constant)] // 1.5707963 is the registered near-vertical pitch (ADR 0125 C3), not pi/2
     fn c3_unproject_round_trip() {
         for mut c in [persp(), ortho()] {
             for (yaw, pitch) in [(0.0, 0.0), (0.8, 0.4), (-2.0, 1.5707963), (3.0, -0.9)] {
