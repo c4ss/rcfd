@@ -132,6 +132,8 @@ struct Active {
     cancel_at: Option<Instant>,
     killed_for_cancel: bool,
     next_probe: Instant,
+    /// Consecutive missed liveness probes (adopted solvers).
+    misses: u8,
 }
 
 struct Pending {
@@ -148,6 +150,8 @@ struct Runner<S: RunStore = FsStore> {
     cfg_src: String,
     /// The solver binary, fixed at runner start.
     solver: PathBuf,
+    /// Liveness probe of adopted solvers (`sys::pid_alive`; tests script it).
+    probe: fn(u32, &str) -> bool,
     known: HashSet<String>,
     pending: Vec<Pending>,
     active: Vec<Active>,
@@ -196,6 +200,16 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     Ok(0)
 }
 
+/// Missed-probe count after one probe: a hit resets it. Two consecutive misses finalise an adopted run, so one
+/// failed probe (a slow or failed process listing) does not end a live solver (ADR 0128 finding 4).
+fn next_misses(misses: u8, alive: bool) -> u8 {
+    if alive {
+        0
+    } else {
+        misses.saturating_add(1)
+    }
+}
+
 fn read_last_line(p: &Path) -> Option<String> {
     let text = std::fs::read_to_string(p).ok()?;
     text.lines().rev().find(|l| !l.trim().is_empty()).map(String::from)
@@ -206,6 +220,7 @@ impl<S: RunStore> Runner<S> {
         Runner {
             store,
             solver: cfg.solver(),
+            probe: sys::pid_alive,
             cfg,
             cfg_src,
             known: HashSet::new(),
@@ -361,6 +376,7 @@ impl<S: RunStore> Runner<S> {
             cancel_at: None,
             killed_for_cancel: false,
             next_probe: Instant::now(),
+            misses: 0,
         });
     }
 
@@ -627,6 +643,7 @@ impl<S: RunStore> Runner<S> {
                     cancel_at: None,
                     killed_for_cancel: false,
                     next_probe: Instant::now(),
+                    misses: 0,
                 });
             }
             Err(e) => {
@@ -707,7 +724,9 @@ impl<S: RunStore> Runner<S> {
                 },
                 None if Instant::now() >= a.next_probe => {
                     a.next_probe = Instant::now() + Duration::from_millis(self.cfg.adopt_probe_ms);
-                    (!sys::pid_alive(a.pid, "rcfd")).then_some(None)
+                    let name = self.solver.file_stem().map_or("rcfd".into(), |s| s.to_string_lossy());
+                    a.misses = next_misses(a.misses, (self.probe)(a.pid, &name));
+                    (a.misses >= 2).then_some(None)
                 }
                 None => None,
             };
@@ -948,6 +967,53 @@ mod tests {
         fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()> {
             self.0.write_metrics(id, metrics)
         }
+    }
+
+    thread_local! {
+        /// Scripted probe answers of this test thread (alive when empty).
+        static PROBE: std::cell::RefCell<std::collections::VecDeque<bool>> = Default::default();
+    }
+
+    fn scripted(_: u32, _: &str) -> bool {
+        PROBE.with(|q| q.borrow_mut().pop_front().unwrap_or(true))
+    }
+
+    /// F4: an adopted run is finalised after two consecutive missed probes, not after one.
+    #[test]
+    fn f04_one_missed_probe_does_not_finalise_two_do() {
+        let dir = project("f04");
+        let fs = FsStore::new(&dir);
+        let settings = RunSettings {
+            mem_mb: Some(10),
+            ..RunSettings::default()
+        };
+        let state_after = |answers: &[bool]| {
+            let id = fs.create_run(&dir.join("cases/cavity.toml"), &settings, None).unwrap();
+            let mut st = RunStatus::new(RunState::Running);
+            st.pid = Some(u32::MAX - 7); // never probed for real: the probe is scripted
+            fs.write_status(&id, &st).unwrap();
+            let mut r = runner(fs.clone());
+            r.probe = scripted;
+            r.scan();
+            for &alive in answers {
+                PROBE.with(|q| q.borrow_mut().push_back(alive));
+                r.tick_active();
+            }
+            fs.read_status(&id).unwrap().state
+        };
+        let cases = [
+            (vec![false], RunState::Running),
+            (vec![false, true, false], RunState::Running),
+            (vec![false, false], RunState::Failed),
+            (vec![true, false, false], RunState::Failed),
+        ];
+        let got: Vec<RunState> = cases.iter().map(|(a, _)| state_after(a)).collect();
+        eprintln!(
+            "F4 probe scripts {:?} -> {got:?}",
+            cases.iter().map(|c| &c.0).collect::<Vec<_>>()
+        );
+        assert_eq!(got, cases.iter().map(|c| c.1).collect::<Vec<_>>());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// F3: a failed `running` write kills the solver and fails the run; a later runner launches nothing.

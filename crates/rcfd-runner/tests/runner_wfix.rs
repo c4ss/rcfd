@@ -246,3 +246,66 @@ fn f03_queued_run_with_launched_event_is_not_relaunched() {
 fn client_status(dir: &Path, id: &str) -> rcfd_runner::records::RunStatus {
     Client::new(dir, RUNNER).status(id).unwrap()
 }
+
+/// F4: a solver whose binary is not named `rcfd` stays adopted across a runner restart (the probe uses the real name).
+#[test]
+fn f04_renamed_solver_survives_a_runner_restart() {
+    let dir = project(
+        "f04",
+        json!({"max_runs": 1, "cpu_threads": 8, "mem_budget_mb": 100_000, "poll_ms": 50, "adopt_probe_ms": 500}),
+    );
+    std::fs::create_dir_all(dir.join("bin")).unwrap();
+    let solver = dir
+        .join("bin")
+        .join(format!("mysolver{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(rcfd_bin(), &solver).unwrap();
+    let steps = if cfg!(debug_assertions) { 10_000 } else { 40_000 };
+    let settings = RunSettings {
+        mem_mb: Some(10),
+        set: vec![format!("solver.max_iterations={steps}")],
+        ..RunSettings::default()
+    };
+    let client = Client::new(&dir, RUNNER);
+    let id = client.submit(&dir.join("cases/cavity.toml"), &settings).unwrap();
+    let start = || {
+        serve(&dir)
+            .env("RCFD_BIN", &solver)
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap()
+    };
+    let mut a = start();
+    let t0 = Instant::now();
+    let pid = loop {
+        let s = client.status(&id).unwrap();
+        if s.state == rcfd_runner::records::RunState::Running && s.step >= 5 {
+            break s.pid.unwrap();
+        }
+        assert!(t0.elapsed() < Duration::from_secs(60), "not running: {s:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let _ = a.kill();
+    let _ = a.wait();
+    let b = start();
+    std::thread::sleep(Duration::from_secs(3));
+    let mid = client.status(&id).unwrap();
+    let alive = rcfd_runner::sys::pid_alive(pid, "mysolver");
+    let end = if mid.state.is_terminal() {
+        mid.clone()
+    } else {
+        client.wait(&id, Duration::from_secs(300)).unwrap()
+    };
+    stop(&dir, b);
+    if rcfd_runner::sys::pid_alive(pid, "mysolver") {
+        rcfd_runner::sys::kill(pid);
+    }
+    eprintln!(
+        "F4: 3 s after the restart: {:?} step {} (solver {pid} alive {alive}); end {:?} step {}: {:?}",
+        mid.state, mid.step, end.state, end.step, end.reason
+    );
+    assert!(alive, "set-up: the solver died with the first runner");
+    assert_eq!(mid.state, rcfd_runner::records::RunState::Running, "{:?}", mid.reason);
+    assert_eq!(end.state, rcfd_runner::records::RunState::Finished, "{:?}", end.reason);
+    std::thread::sleep(Duration::from_millis(300));
+    let _ = std::fs::remove_dir_all(&dir);
+}
