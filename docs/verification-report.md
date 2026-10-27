@@ -14,6 +14,11 @@ curl): NASA NTRS PDFs, arXiv PDFs, Bari ROBER report, NIST WebBook tables. Other
 
 Verdict key: confirmed / differs / unverified. `secondary` = a reputable page or paper reproducing the primary value.
 
+Outcome in brief: no fetched authoritative source contradicts a benchmark number or a registered tolerance, and two code constants
+differ from the sources. The discrepancies section ranks them by impact, the next section lists the items still unverified, and the
+counts close the report. This is a record of the pass on the date in the title; later re-checks are in
+[reference data](reference-data.md).
+
 ## 1. Results table
 
 ### 1.1 Turbulence models and wall treatment

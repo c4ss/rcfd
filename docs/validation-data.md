@@ -1,6 +1,15 @@
 # Public validation-data pack (F-125)
 
 Open benchmark data for validating rcfd, with fetch scripts, SHA-256 checksums and licence records.
+This page is a lookup record for anyone checking where a dataset comes from, under what licence, and how to fetch and verify it.
+It also records the published sources read for the fan work. Read it in this order: the pack layout and rules, then the unresolved
+gaps and the findings made while pinning, then the rotating-machinery and small-fan source surveys, and last the provenance table of
+every dataset. In the source surveys, READ means a document or data file was opened and the relevant content read, seen means only a
+citation, record page or search snippet was seen, NOT read means it was not opened, and UNVERIFIED marks a value not checked against a
+primary text. For the benchmark values and constants typed into tests, and how each was checked, read
+[reference data](reference-data.md) instead; for the later re-check of values marked unverified there, see the
+[verification report](verification-report.md).
+
 Everything lives in `validation-data/`:
 
 - `manifest.json`: datasets, upstream URLs (pinned to a commit or tag where the host allows it),
