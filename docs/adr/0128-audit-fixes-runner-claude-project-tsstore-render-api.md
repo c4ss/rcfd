@@ -231,3 +231,14 @@ lookup-table file and the UDF module file with a diagnostic naming the root (pre
 Fresh `git archive` of the branch head into `<scratch dir>\src`, `cargo fmt --check`, `cargo clippy --workspace
 --all-targets -- -D warnings`, tests with `scripts/gate_test.py` (docs/test-process.md section 4). Then rebase onto the current main
 and re-run fmt, clippy and the touched crates' tests.
+
+## Amendment 1 (finding 5, written after the run that motivated it)
+
+What I knew: with the registered "stop forwarding after an abort", D3 failed. Its second half replays the recorded
+default-mode stream (`stream_denied_default.jsonl`) and expects the two denials with their suggestions; that stream aborts at its
+`init` (mode `default`), and D3 relied on the lines after the abort still being forwarded. D1-D7 must stay unchanged, so the
+stop-forwarding part is withdrawn: after an abort, lines already buffered are still forwarded (as before this ADR), after the
+`Aborted` event. Unchanged: the offending event itself is not forwarded (except an `Init`, which shows the mode the CLI applied, D4).
+D8 and D9 therefore check "no `ToolCall` before the `Aborted` event" (and D9: the offending call is never forwarded, at most the two
+later calls follow the abort) instead of "no `ToolCall` forwarded". Both still fail on the pre-fix driver (no `Aborted` event,
+three tool calls forwarded).
