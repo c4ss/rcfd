@@ -66,13 +66,7 @@ pub fn kill(pid: u32) -> bool {
 pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
     #[cfg(windows)]
     {
-        let q = |s: &str| s.replace('\'', "''");
-        let list: Vec<String> = args.iter().map(|a| format!("'\"{}\"'", q(a))).collect();
-        let script = format!(
-            "Start-Process -FilePath '{}' -ArgumentList {} -WindowStyle Hidden",
-            q(&exe.display().to_string()),
-            list.join(",")
-        );
+        let script = start_script(exe, args);
         let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
         Command::new("powershell")
             .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &base64(&utf16)])
@@ -85,6 +79,46 @@ pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::C
     {
         spawn_direct(exe, args)
     }
+}
+
+/// The Windows command line of `args`: each argument in double quotes by the `CommandLineToArgvW` rules (backslashes
+/// before a quote or at the end are doubled, a quote is escaped), separated by spaces. A project path ending in `\`
+/// (or `C:\`) stays one argument; trimming it instead would turn `C:\` into `C:` (ADR 0128 finding 15).
+pub fn command_line(args: &[String]) -> String {
+    let quote = |a: &String| {
+        let mut out = String::from("\"");
+        let mut slashes = 0;
+        for c in a.chars() {
+            match c {
+                '\\' => slashes += 1,
+                '"' => {
+                    out.extend(std::iter::repeat('\\').take(2 * slashes + 1));
+                    out.push('"');
+                    slashes = 0;
+                }
+                c => {
+                    out.extend(std::iter::repeat('\\').take(slashes));
+                    out.push(c);
+                    slashes = 0;
+                }
+            }
+        }
+        out.extend(std::iter::repeat('\\').take(2 * slashes));
+        out.push('"');
+        out
+    };
+    args.iter().map(quote).collect::<Vec<_>>().join(" ")
+}
+
+/// The PowerShell script of [`spawn_detached`]: the whole command line as one `-ArgumentList` string (PowerShell
+/// passes a single string through as the command line), single quotes doubled for PowerShell.
+pub fn start_script(exe: &Path, args: &[String]) -> String {
+    let q = |s: &str| s.replace('\'', "''");
+    format!(
+        "Start-Process -FilePath '{}' -ArgumentList '{}' -WindowStyle Hidden",
+        q(&exe.display().to_string()),
+        q(&command_line(args))
+    )
 }
 
 /// Start `exe args` directly, with null stdio, in its own process group (Windows: also without a console).
