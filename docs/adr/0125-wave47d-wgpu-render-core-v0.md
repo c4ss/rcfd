@@ -263,3 +263,10 @@ First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto
   2 ignored tests (the A1 and A2 known misses).
 * **Every GPU test ran in the gate** on the five adapters of step 0; none took the SKIP branch.
 * **Lockfile:** after both rebases, `git diff main -- Cargo.lock` removes no `name` or `version` line. No existing locked version moved.
+* **Post-rebase checks** (onto main 93fe245, which adds `rcfd-runner`; the full gate was not re-run):
+  * `Cargo.toml`, `Cargo.lock` and `docs/architecture.md` conflicted; each was resolved by keeping both members, and
+    `cargo metadata --locked` passes;
+  * `git diff main -- Cargo.lock` removes no `name` or `version` line;
+  * fmt and workspace clippy (`--all-targets -D warnings`) are clean;
+  * `rcfd-render` gives 5 + 11 passed and 2 ignored;
+  * `rcfd-cli` `workspace_graph` (3) and `docs_site` (2) pass.
