@@ -102,6 +102,11 @@ known data set per supported format, reads it back where a reader exists, and ch
 vtk_legacy, openfoam, ensight, stl, tecplot, xdmf, plot3d, gmsh, fluent, nastran_deck. Registered as `NotSupported` with a
 reason: cgns and hdf5 (not delivered). A tampered data value makes the case fail with the format name.
 
+Fluent `.msh` / `.cas` (reader `rcfd_io::fluent`): no public specification document is named for this format in the record. The
+reader was written from memory of a public description of the section layout, so its source is UNVERIFIED; it was checked only as a
+black box against the public `elbow.msh` sample (OpenFOAM tutorial, GPL, fetched, never committed). See
+[mesh import](mesh-import.md) and the [provenance record](provenance.md).
+
 `rcfd_io::nastran::Deck` writes and parses a free-field (comma separated) Nastran-style load deck in full double
 precision (`{:?}` formatting, so the round trip is bit-exact): `GRID`, `CTRIA3`, `CQUAD4`, `CHEXA` (second line `,G7,G8`),
 `PLOAD4,SID,EID,P1..P4` (blank P2..P4 = uniform), `TEMP,SID,G1,T1,G2,T2,G3,T3`. Parse errors carry `line N`.

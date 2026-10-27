@@ -1,5 +1,10 @@
 //! Fluent `.msh` / `.cas` mesh reader (F-118), from the publicly documented section layout.
 //!
+//! Source: written from memory of a public description of the section layout. No specification document is named in
+//! the record, so the source is UNVERIFIED (docs/provenance.md). The ASCII 2D layout and the boundary type ids 2, 3, 5
+//! and 10 were checked only as a black box against the public `elbow.msh` sample (an OpenFOAM tutorial file, GPL,
+//! fetched and never committed; `tests/fluent_public.rs`).
+//!
 //! Handled sections: comment (0), header (1), dimension (2), nodes (10, binary 2010/3010),
 //! cells (12, binary 2012/3012), faces (13, binary 2013/3013) and zone names (45 / 39). The
 //! solver-setup sections of a `.cas` file are skipped and listed in [`Report::ignored_sections`].
