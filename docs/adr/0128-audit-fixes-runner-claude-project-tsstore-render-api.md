@@ -272,3 +272,69 @@ the 5 s fallback is unchanged. The claude CLI spawns get only the flag: stdio an
 * (e) whether a child started with the flag has no console window: checked once outside the test suite (Python, standard library:
   `GetConsoleWindow()` in a child started with and without `0x0800_0000`); reported in the addendum, or reported as not verified.
 Fails-before: (a) and (c) fail on the pre-fix code (the builders are introduced as a seam returning the old flags first).
+
+## Addendum: measured values (2026-10-27)
+
+Every finding was reproduced: each new test failed on the pre-fix code (the same test, or the test plus its seam alone) and passes
+after the fix. Debug runs unless noted; one commit per finding on branch `wfix`.
+
+| # | Test(s) | Before the fix | After the fix |
+|---|---|---|---|
+| 1 | `runner_wfix::f01_config_naming_rcfd_bin_is_rejected_and_never_run` | the named `.cmd` ran; runner still serving after 10 s | `serve` exits 1: `...\.rcfd\runner-config.json: unknown field 'rcfd_bin' ... at line 1 column 76`; script never ran |
+| 2 | `allow::tests::t5_control_files_are_refused` (113 forms) | plain, `./`, upper/lower case, trailing-dot and nested forms of all five names accepted | all 113 refused; ordinary paths allowed; T1-T4 pass |
+| 3 | unit `f03_failed_running_write_kills_the_solver_and_fails_the_run`; `runner_wfix::f03_queued_run_with_launched_event_is_not_relaunched` | 2 spawns, first solver alive, run left `queued`; a queued run with a dead-pid `launched` event was launched again (still running after 10.2 s) | 1 spawn, solver killed, `failed`: "cannot record the launched solver N in ...status.json: injected write failure; ..."; dead pid: `failed` 0.25 s after start, no relaunch; live pid: adopted, `running` with that pid |
+| 4 | unit `f04_one_missed_probe_does_not_finalise_two_do`; `runner_wfix::f04_renamed_solver_survives_a_runner_restart` | every probe script finalised; renamed solver (alive) marked failed at step 155 | [miss], [miss, hit, miss] stay running, [miss, miss] and [hit, miss, miss] fail; renamed solver running 3 s after the restart (step 2131), finished at 10000 steps |
+| 5 | `driver_init_wfix::d8_init_without_session_id_is_aborted`, `d9_tool_call_before_init_is_aborted` | no `Aborted`, 3 tool calls forwarded | D8 aborted "the CLI's system/init line has no session_id, so its permission mode cannot be checked", D9 aborted "a tool call (Write) arrived before a checked system/init ...", 0 tool calls before the abort |
+| 6 | unit `f06_large_status_file_is_drained_in_bounded_chunks` (100,000,284 bytes, 99,624 lines) | 1 tick read the whole file; peak working set 100.6 MB (trivial test of the same binary: 5.2 MB) | 24 ticks, largest 4,194,162 bytes, 99,624 residual lines; peak working set 14.2 MB, **+9.0 MB** (limit 16 MiB) |
+| 7 | `tail_wfix::c13_zero_and_garbage_tails_after_complete_snapshots` | `Reader::open` and `refresh` failed ("frame head checksum mismatch at offset 4239/4920/6282/6392") | 0/1/3 snapshots bit-exact, `tail_bytes` 4096 (finished store plus tail: 3 snapshots, 4226); `refresh` adds 2; `open_append` still refuses |
+| 8 | `upload_limit_wfix::u1_upload_over_the_buffer_limit_is_an_error`, `vertex_bytes_check_bounds` | wgpu panic "Buffer size 268435752 is greater than the maximum buffer size (268435456)" | `Error::Mesh` naming both sizes on all 5 adapters (RTX 5080 DX12/Vulkan, Radeon DX12/Vulkan, WARP); no panic |
+| 9 | `watch_wfix::w2_unchanged_project_poll_reads_ten_times_fewer_bytes` (300 runs, 1202 files) | unchanged poll hashed 121,817 of 121,817 bytes | 0 bytes; new file, same-length rewrite with restored time inside the window, and an old file rewritten are all reported |
+| 10 | `root_wfix::root_has_no_verbatim_prefix`, `verbatim_strings_are_stripped_only_when_safe`; rcfd-claude `project_dir_name_and_same_path_of_a_plain_root` | `root()` = `\\?\<scratch dir>\...\proj` | `<scratch dir>\...\proj`, same folder; 9 string cases and a 300-character path as registered |
+| 11 | `runner_wfix::f11_bad_wait_timeouts_are_clean_errors` | `-1`, `NaN`, `inf`, `1e300`: exit 101, panic in `core::time` | exit 1, "--timeout needs a non-negative number of seconds, got '<v>' (...)" |
+| 12 | L1 (release) | decision run: worst listing 196.4 ms, so `10 w` = 1.96 s > 500 ms; the old control (500 x 2 ms sleep) read 1.44 s whatever the listing cost | control replaced by the listing done 10 times: 1.67 s > 500 ms (worst 159.7 ms); throwaway with the listing made 10x slower: worst 1.45 s, **L1 fails** on the 500 ms budget |
+| 13 | `case_path_wfix::r9_case_path_is_recorded_normalised` | `./cases/a.json`, `cases/./a.json` recorded as given and not found; the absolute path inside refused; old records not matched | all record `cases/a.json` and are found (also by `./cases/a.json`); old records `./cases/a.json`, `cases\a.json`, `cases//a.json` matched; outside still refused |
+| 14 | `uq::tests::u9_second_writer_during_a_study` | summary at index 2000 claimed `ledger_range` (0, 1000) with 1000 foreign entries interleaved | no positional claim; samples `u#0..u#999` and `u#summary` found by name; U1-U8 pass |
+| 15 | `runner_wfix::f15_command_line_round_trips_through_the_real_argv_parser` (9 arguments), `f15_runner_starts_with_a_trailing_backslash_project_path` | 6 of 9 parsed wrong (e.g. `C:\` became `C:" --no-runner --project ...`) | 9 of 9 exact; script text exact |
+| 16a | `case::sandbox_tests::unresolvable_sandbox_root_is_refused_by_all_three`, `sandbox_helper_matches_the_old_check_on_resolvable_roots` | none of the three refused (the files were read) | all three: "the sandbox root ... cannot be resolved: ..." at `chemistry.mechanism`, `tables.<n>.file`, `udf.<n>.file`; 84 (base, file) cases (60 inside; junctions in/out and a file symlink created) identical to the old check |
+| 17 | `sys::tests::no_window_flags_on_every_console_spawn` (runner), `tests::no_window_flags_on_every_console_spawn` (bridge), `no_window_scan::no_console_program_is_started_without_the_no_window_helper` | old flags (seam): tasklist, taskkill, powershell, `rcfd --version` 0x0, direct start 0x208, every bridge spawn 0x0; scan found 5 direct spawns (`sys.rs` 16, 44, 71; `discover.rs` 124; `driver.rs` 331) | runner 0x8000000, launcher and direct start 0x8000208; bridge 0x8000000; scan: none in 316 files; negative controls hold |
+
+### Deviations and notes
+
+* **Finding 5:** amendment 1 (forwarding after an abort kept for D3).
+* **Finding 4:** the first version of the F4 unit test put every probe script into one project; the runner of a later script
+  adopted the earlier scripts' runs too, which shared the scripted answers (2 of 3 reruns failed). Fixed in the finding-6 commit
+  (one project per script); the pre-fix evidence (all four scripts finalised) is unaffected.
+* **Finding 6:** the pre-fix peak (100.6 MB) was measured with the first test version, which counted the residual lines through one
+  `read_to_string` (about 10 MB); the final test counts them streaming. With the fix but an unbounded chunk (`take(u64::MAX)`, no
+  size hint) the peak was 134.2 MB. 24 ticks is exactly the registered floor (100,000,284 / 4 MiB = 23.8).
+* **Finding 7:** C6 still has 0 undetected flips, but 56 flips per codec (the 28-byte footer frame head, two masks) are now
+  flagged (index rebuilt by scan, data exact) instead of rejected: 260 flagged per codec, ADR 0124 recorded 204.
+* **Finding 8:** the test mesh is one *triangle* over the limit (296 bytes), not one byte as the registration worded it.
+* **Finding 10:** `tests/paths.rs` P1's link control now compares the canonicalized link target with the canonicalized root; with the
+  plain root it would have passed vacuously on Windows. Not pre-declared; P1's refusals are unchanged.
+* **Finding 13:** the mesh path of `create_run` is normalised the same way (same code path).
+* **Finding 15:** the start check passes before and after the fix: on this host `powershell.exe` does not start the runner within
+  5 s and `ensure_runner` falls back to the direct start. The PowerShell route itself is not observed; the round trip through the
+  real argv parser is the evidence.
+* **Finding 16a:** `service.rs::sandbox_path` (falls back to the raw root) is untouched.
+* **Finding 17 (e):** outside the suite (Python, standard library): from a parent started with `DETACHED_PROCESS` (no console, like the
+  runner), a child console program without flags got a console window (`GetConsoleWindow` = 31656568) and with `CREATE_NO_WINDOW`
+  none (0). From this agent's own shell the check does not discriminate (no flag also read 0). This verifies the flag's effect, not
+  `tasklist` itself; that our spawns carry the flag is what the unit tests check. The runner's solver and pre-launch check already used
+  `no_window` and keep it (now through the same helper); `fake-claude` and test-only spawns are unchanged. The claude CLI spawns get
+  only the flag (pipes unchanged); the real CLI was not run (R1-R3 are ignored tests).
+
+### Gate
+
+Fresh `git archive` in `<scratch dir>`, `scripts/gate_test.py` (docs/test-process.md section 4):
+
+| Run | HEAD | fmt | clippy | tests (passed / failed / ignored) |
+|---|---|---|---|---|
+| 1 | 652e598 (findings 1-16) | 0 | **failed**: `clippy::double_ended_iterator_last` in `launched_pid` (finding 3) | 2213 / 0 / 666 |
+| 2 | e646d2d (clippy fixed) | 0 | 0 | 2213 / 0 / 666 |
+| 3 | b8cf6eb (finding 17 added) | 0 | 0 | **2216 / 0 / 666** (61 min) |
+
+Run 3 is the final gate. The ADR 0124 gate on main's code (8e1d2a3) recorded 2158 / 0 / 663 with the old `cargo test` stage; the
+difference is not broken down here (the new tests of this ADR are 31 non-ignored tests, none ignored).
+Main had not moved (cb61148) when the work ended, so the rebase was a no-op; fmt, clippy and the touched crates' debug tests were re-run
+on the branch head.
