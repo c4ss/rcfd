@@ -1,5 +1,10 @@
 # Sandboxed user functions: WebAssembly ABI version 1 (F-122, hook catalogue v2 F-239)
 
+This page is the contract between rcfd and a user-function module: the case keys that load a module, the exports the solver
+calls with their signatures and units, the sandbox limits and what happens when a module fails. It is for people who write a
+module or wire one into a case. Read "Limits and failure behaviour" and "Not implemented" before you start: the source and
+property hooks work in a narrow set of runs only. For the other keys of the case file, see the [case schema](case-schema.md).
+
 A case can load user code as WebAssembly modules (`udf.<name>`). The code runs inside the `wasmi` interpreter
 (pure Rust, no JIT), so a module cannot touch the host: there is no file, network, clock, process or host-memory
 access, and no WASI. Any language that compiles to plain `wasm32` works (Rust `no_std`, C, Zig, WAT).
@@ -119,3 +124,8 @@ with the spurious velocity falling from 4.4e-2 (10x10) to 1.1e-2 (20x20) and the
 wrong signature, missing ABI export, infinite loop, memory growth, NaN, negative viscosity are rejected or stop
 the run; 20 000 calls of a 1000-fuel budget succeed (budget renewal); the sandbox keeps module files inside the
 root.
+
+## Where to go next
+
+- [Case schema](case-schema.md): the user-function section and the other keys a hook interacts with.
+- [Run control](run-control.md): the exit codes and stop reasons a failing module produces.

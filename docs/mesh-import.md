@@ -1,5 +1,10 @@
 # Mesh import: Fluent `.msh` / `.cas` (F-118)
 
+This page lists which sections of these mesh and case files the reader uses, how their zones become patches, what it reports or
+refuses, and what is not done. It is for people who bring an existing mesh in this format into an rcfd case. Binary input is
+unverified against real files; see "Not done" before you rely on it. For the other interchange formats and the convert command, see
+[interchange formats](interchange-formats.md); for the mesh keys of a case, see the [case schema](case-schema.md).
+
 `mesh.source = "file"` with `mesh.file = "x.msh"` (or `x.cas`) accepts Fluent files as well as Gmsh and
 OpenFOAM meshes; the family is chosen from the first byte (`(` means Fluent, `$MeshFormat` Gmsh).
 `rcfd check-mesh` and `rcfd convert` read the same files. The reader is written from the publicly documented
@@ -54,3 +59,8 @@ on a Fluent 2D channel), and `crates/rcfd-io/tests/fluent_public.rs`, which read
 is absent): 537 nodes and 918 triangles as declared, five boundary zones plus `frontAndBack`, passes the mesh quality
 check, and the extruded volume equals thickness times the shoelace area computed independently from the file's
 boundary edges (relative difference 5e-16).
+
+## Where to go next
+
+- [Mesh quality](mesh-quality.md): the quality report that the mesh check prints for an imported mesh.
+- [Interchange formats](interchange-formats.md): converting meshes to and from other formats.

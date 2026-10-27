@@ -1,5 +1,10 @@
 # Python access (F-083, ADR 0034)
 
+This page describes the Python package: how it finds the solver, the calls it offers, how results and errors come back, and
+what is not delivered. It is for people who want to script cases, runs and studies from Python. The package wraps the command
+line rather than linking the solver in-process; the in-process extension is listed under "Not delivered". For the command-line
+behaviour it relies on, see [run control](run-control.md); for the settings paths it sets, see the [case schema](case-schema.md).
+
 `python/rcfd` is a pure-Python package (standard library only; numpy is used for field arrays when installed). It drives the `rcfd`
 command line with argument lists (no shell). The Rust binary does all validation and all computation, so the Python object, `rcfd run
 --set` and `rcfd check` agree by construction, with the same located diagnostic paths.
@@ -37,3 +42,8 @@ forbids `unsafe_code` and PyO3's macros expand to unsafe code, PyO3/maturin are 
 here is a Microsoft Store 3.9 install. Also not delivered: access through the JSON-RPC service (`rcfd serve`), live access to a
 running solver's fields, commands other than run/check/study, and a typed class per settings section (the tree is addressed by
 dotted path and validated by the schema of the binary).
+
+## Where to go next
+
+- [Parametric studies](studies.md): the study command the package drives, its table and its exit codes.
+- [Run control](run-control.md): the exit codes a run returns.

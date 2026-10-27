@@ -1,12 +1,29 @@
 # Headless launch, run control and workflows (F-120, F-121)
 
-This page is the contract for scripts, CI jobs, the service, the MCP server and the assistant.
+This page is the reference for launching and controlling runs without the desktop app: the command-line flags, exit codes, the
+status stream, checkpoints and restarts, output policy, workflows and studies. It is the contract for scripts, CI jobs, the
+service, the MCP server and the assistant. Several parts are not delivered yet; they are listed in "Not implemented / deviations"
+at the end. For a first run step by step, follow the [command-line quick start](tutorials/quick-start-cli.md); for the keys of the
+case file itself, see the [case schema](case-schema.md).
+
 Everything here is implemented in `rcfd-api` (`runctl`, `workflow`) and shared by the CLI, the
 service (`docs/service-protocol.md`) and the MCP tools, so all of them behave the same way.
 
+On this page:
+
+- rcfd run: flags and exit codes
+- Status stream
+- Checkpoints
+- Chains
+- Setup check
+- Output policy and statistics, with the field store
+- Workflows
+- Parametric studies
+- Not implemented / deviations
+
 ## `rcfd run`
 
-```
+```text
 rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--check-only]
          [--status-json] [--status-file file] [--status-every n]
@@ -97,7 +114,14 @@ the time is kept but the BDF2 history starts fresh.
 Field transfer methods (`rcfd-post::remap`): `nearest`, `inverse_distance`, `least_squares`, `gradient`, `conservative` and
 `conservative_overlap`; measured orders and conservation are in the addendum of `docs/adr/0031-wave19c-restart-chain.md`.
 
-### Chains
+Measured on a 12x12 lid-driven cavity (tolerances 1e-7): a run stopped after 30/40 iterations and
+continued from its checkpoint stops after the same 111 iterations as the uninterrupted run, and the
+solution files are byte-identical; 25 steps after a restore are bit-identical to 25 uninterrupted
+steps. `--threads 1` and `--threads 4` give byte-identical solution files. The residual
+normalisation history restarts at the restore, so for runs that are restored in the middle of a
+transient phase the stopping iteration is not guaranteed to be identical.
+
+## Chains
 
 `rcfd run` on a case with `chain.sequence` runs the stages in order (case-schema.md, `chain`). Every status event carries a
 `stage` field; additional events: `stage_start` (`stage`, `index`, `of`), `restart` (`stage`, `report`), `stage_finish`
@@ -105,20 +129,13 @@ Field transfer methods (`rcfd-post::remap`): `nearest`, `inverse_distance`, `lea
 exit code is that of the first stage that did not end with 0 (a steady stage at its iteration cap, exit 5, is accepted with
 `allow_unconverged`). `summarize_stream` is unchanged and reports the last `finish` event, which is that of the last stage run.
 
-### Setup check
+## Setup check
 
 `rcfd check <case> [--json]` validates the settings, builds the simulation, checks the mesh and evaluates the setup rules; exit 0
 (also with warnings and infos), 3 (invalid case or an error-level rule) or 4 (mesh failed). `--json` prints one object with the keys
 `ok`, `exit_code`, `diagnostics`, `rules`, `mesh`. `rcfd validate` prints the rule diagnostics too; `rcfd run` stops with exit 3 before
 solving on an error-level rule and reports warnings as `warning` events. For a chain, `rcfd check` checks the base case; each stage is
 checked when it starts.
-
-Measured on a 12x12 lid-driven cavity (tolerances 1e-7): a run stopped after 30/40 iterations and
-continued from its checkpoint stops after the same 111 iterations as the uninterrupted run, and the
-solution files are byte-identical; 25 steps after a restore are bit-identical to 25 uninterrupted
-steps. `--threads 1` and `--threads 4` give byte-identical solution files. Note that the residual
-normalisation history restarts at the restore, so for runs that are restored in the middle of a
-transient phase the stopping iteration is not guaranteed to be identical.
 
 ## Output policy and statistics (F-116)
 
@@ -199,3 +216,10 @@ The Python package (`docs/python.md`) drives `run`, `check` and `study`.
 - Not delivered (F-121 stays partial): MPI (`--hostfile`), per-core affinity, commands run at start or on a schedule (`--set` is
   the safe subset), automatic case-modification strategies, single precision, a control socket; chains and `restart.from` are
   not driven through the service method `run.headless`.
+
+## Where to go next
+
+- [Case schema](case-schema.md): the restart, chain, output and study keys this page refers to.
+- [Service protocol](service-protocol.md): the service methods that run the same drivers remotely.
+- [Parametric studies](studies.md): the study command and its result table.
+- [Python access](python.md): driving run, check and study from Python.
