@@ -17,6 +17,25 @@ backward-facing-step and laminar-step values, Milne, Robertson, flame temperatur
 constants) were re-checked against web sources; per-item values, URLs and verdicts are in
 `docs/verification-report.md`. One code constant differs from the original (Realizable A0 4.04 vs 4.0).
 
+This page is a lookup record for anyone who needs to know where a benchmark value or constant in a test, case or data file comes from
+and how well it was checked. Each section names the value, the source read and the result; later waves added their own sections at
+the end, in the order the work was done. Sources that could not be reached online, and what still rests on secondary copies, are
+in "Not verifiable online"; registered criteria the code does not meet, with their ignored known-miss tests, are in "Known misses". For the downloadable datasets, their checksums and licences, read
+[validation data](validation-data.md) instead.
+
+On this page:
+
+- Benchmarks and model constants: Lid-driven cavity; Differentially heated cavity; Exact Riemann solver, Sod problem and oblique
+  shock; Taylor-Green vortex; Turbulence model constants; k-omega SST and wall treatment; Channel DNS; Cylinder wake;
+  Backward-facing step; Laminar backward-facing step; Flat plate; the NACA four-digit thickness check.
+- Literature and data: Other cited literature; Not verifiable online; Public validation-data pack.
+- Models and formats, by feature: mesh-file format details; Viscosity laws; Material property library; Variable-density
+  validation; Transient variable density; Known misses; Compressible boundary conditions; Real-gas equation of state; MRF zones;
+  Interchange formats, registers and GLB validation; Lumped zones and radiation; reactors and FW-H acoustics; Spalart-Allmaras;
+  Turbulence finishing.
+- Wave sections, one per wave part, in the order the work was done, ending with the fan sections; among them "Wave 25B reference
+  verification" (a re-check of earlier values) and "Wave 31C: reference reading" (sources read for the validation cases).
+
 ## Lid-driven cavity (Ghia, Ghia and Shin, J. Comput. Phys. 48 (1982) 387-411)
 
 Used in `cases/cavity/reference/*.csv`, `crates/rcfd-fv/tests/cavity.rs`, `rcfd-io` cases test.

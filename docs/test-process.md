@@ -2,6 +2,9 @@
 
 Status: measured 2026-10-26 on the gate machine (16 logical processors, 96 GB, shared by up to six agents and two gate slots).
 Decision record: [ADR 0127](adr/0127-test-gate-efficiency.md). No test, limit, profile or solver code was changed.
+This page is for whoever runs or changes the gate. It records what the gate runs, where its time and memory go, the options ranked by
+saving against risk, the new test stage that runs each test as its own process, its measured results, and the scan for tests that
+cannot fail.
 
 ## 1. What the gate runs today
 

@@ -2,6 +2,8 @@
 
 Status: plan (2026-10-26), written at the user's request. This is a plan, not a claim of capability. It extends `docs/milestone-fan.md` (assistant-driven fan design iteration) from "a fan the solver can run" to "a fan model that predicts real-world behaviour and that Claude optimises over time for the computer-fan use case".
 
+This page is for the user and for contributors choosing which part to pick up next. It gives the target, then the limits, every part with its status, the order of work, and last what the user could decide or supply that changes the plan most (the open questions). The state of the large reference fan and the solver work behind it are in the [fan milestone](milestone-fan.md); how to measure a fan for this plan is in the [fan measurement protocol](fan-measurement-protocol.md).
+
 ## 1. The target, stated plainly
 
 A parametric fan (a mesh that spins, modified by Claude through the assistant tools) that returns, for each variant and each operating condition:
@@ -120,3 +122,9 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 - Measured data of one real computer fan (fan curve at several impedances, sound level, vibration if available) and its geometry (or the fan itself to scan). Without it the plan can predict trends, not absolute performance.
 - Which fan to target first (axial 120 mm, centrifugal blower, other).
 - Whether structural/FSI coupling (E5) is to be started once wave 46 completes.
+
+## Where to go next
+
+- [Fan measurement protocol](fan-measurement-protocol.md) for what a measured fan must supply.
+- [Validation data](validation-data.md) for the small-fan sources surveyed for this plan and why none is adequate.
+- [Studio plan](ui-restart-plan.md) for the desktop app that will show the computer-fan modes.

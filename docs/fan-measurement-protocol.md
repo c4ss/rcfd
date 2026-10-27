@@ -10,6 +10,15 @@ measurement's standard uncertainty should be at most one third of the comparison
 disagreement is the model's, not the rig's). The tolerance is not set yet: this page assumes 5 % on pressure rise and flow, so about
 1.7 % per measurement; the limit registered in the ADR of the first comparison replaces this assumption, and the targets scale with it.
 
+What you produce: the fan's geometry, its fan curves, and, if you can, one system impedance curve, noise and vibration, delivered as
+CSV files with a plain-text rig description (see "Data delivery" at the end). Work through the tiers below in order: geometry and the fan
+curve are required, the system impedance curve is strongly recommended, noise is recommended and vibration is optional.
+
+## What this does not cover
+
+Thermal effects (motor heating of the air), long-term ageing and dust (F2, F3), psychoacoustic metrics beyond tonality, and
+structural modes of the blades (E5) are not part of this protocol.
+
 ## What the measurements validate
 
 | Measurement | Checks |
@@ -104,7 +113,7 @@ Raw audio and vibration files are named by point. State the licence under which 
 choice) the files can be pinned with checksums in `validation-data/manifest.json` like the other datasets; without a stated licence they
 stay on the user's machine and only the comparison is recorded.
 
-## What this does not cover
+## Where to go next
 
-Thermal effects (motor heating of the air), long-term ageing and dust (F2, F3), psychoacoustic metrics beyond tonality, and
-structural modes of the blades (E5) are not part of this protocol.
+- [Computer-fan project breakdown](fan-project-breakdown.md) for the parts each measurement checks.
+- [Validation data](validation-data.md) for the open sources and rigs that were read, and the standards named on this page.

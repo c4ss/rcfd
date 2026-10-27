@@ -6,6 +6,8 @@ Status: first-pass backlog, 2026-10-17. This is a log, not a plan. Nothing here 
 
 Clean-room: all capability names are short paraphrases of public product pages and public documentation tables of contents. No vendor text or code was copied; no vendor binary or install was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
 
+This page is for whoever triages work beyond CFD. It lists the sources read, a legend, then one entry per suite (S-numbered, grouped by category A to J), each with the same fields: purpose, capabilities, sources read, CFD overlap and dependencies, size and priority, open route and first slice. The cross-suite section at the end gives the shared infrastructure, the dependency summary on CFD and the coverage statement, which says how weak the evidence is for each area; read that before relying on any entry.
+
 ## Sources actually read
 
 All fetched with WebFetch, which returns a model-condensed extraction of the page, not raw HTML; the extraction can omit or reword items. Product pages were reached on `ansys.synopsys.com` (the vendor catalogue now redirects there). Release labels (2026 R1 etc.) are as stated by those pages and were not checked against release notes.

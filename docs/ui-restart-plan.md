@@ -2,6 +2,8 @@
 
 Status: plan (2026-10-26), set by the user: restart the UI from scratch, wgpu renderer, project folders holding many runs, background and parallel runs, time scrubbing, a Claude Code chat inside the app, and the same project tools available from Claude Code itself. This is a plan, not a claim of capability.
 
+This page is for the user and for contributors working on the Studio. Read section 5 first for the limits: what agents cannot check, what may not be possible, and what does not exist yet. Section 8 holds the second round of decisions (how the chat sidebar treats open sessions and how tool approvals work) and the project folder contract that the new crates code against. For the computer-fan work that the Studio's later modes serve, see the [computer-fan project breakdown](fan-project-breakdown.md).
+
 ## 1. Decisions (user, 2026-10-26)
 
 1. **Renderer: wgpu** (not OpenGL). Reason given: better capability for 3D deforming meshes with flow over their surfaces (compute shaders for streamlines, particles and iso-surfaces, large buffers, offscreen export).
@@ -98,3 +100,9 @@ Project folder contract (agents code against it; later changes are additive and 
 ```
 
 Crates (all new, library first): `rcfd-project` (47A), `rcfd-runner` (47B), `rcfd-tsstore` (47C), `rcfd-render` (47D), `rcfd-claude` (47E). Studio application and the plugin follow in wave 48.
+
+## Where to go next
+
+- [Desktop assistant tutorial](tutorials/desktop-assistant.md) for the current, frozen GUI that the Studio replaces.
+- [MCP tools](mcp-tools.md) for the existing project tools that the planned plugin (layer L7) extends.
+- [Computer-fan project breakdown](fan-project-breakdown.md) for the fan work behind the later computer-fan modes.

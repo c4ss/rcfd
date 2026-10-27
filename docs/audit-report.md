@@ -3,7 +3,8 @@
 Date: 2026-10-14. Repository state audited: branch `main`, HEAD `d1b43f0` (31 commits, working tree clean apart from one
 locally excluded file, see section 6). Auditor: an independent model-run audit (Claude Sonnet 5.5). This report is model
 output; every number below was read from the repository or from a command run during the audit, but none of it has been
-reviewed by a human. Nothing in the repository other than this file was changed.
+reviewed by a human. Nothing in the repository other than this file was changed. This is a record of that date and commit;
+for the current status of each item, read the [roadmap](ROADMAP.md).
 
 Method: read `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/reference-data.md`, `docs/adr/`, `docs/bfs-convergence-findings.md`;
 diffed `roadmap.json` and every test file across all 31 commits; compared the current roadmap against three pre-commit
