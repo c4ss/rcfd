@@ -12,7 +12,9 @@ mod gpu;
 pub mod surface;
 
 pub use camera::{Camera, Projection};
-pub use gpu::{adapters, adapters_of, GpuMesh, PartStyle, PickImage, Renderer, Shading, View, VERTEX_BYTES};
+pub use gpu::{
+    adapters, adapters_of, vertex_bytes_check, GpuMesh, PartStyle, PickImage, Renderer, Shading, View, VERTEX_BYTES,
+};
 pub use rcfd_post::render::Image;
 pub use surface::{Field, SurfaceMesh};
 pub use wgpu;

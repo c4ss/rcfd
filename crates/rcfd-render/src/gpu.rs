@@ -18,6 +18,18 @@ use crate::ColorMap;
 /// `disp[point]` in the vertex shader without rebuilding this buffer.
 pub const VERTEX_BYTES: u64 = 52;
 
+/// Bytes of the vertex buffer of `triangles` triangles, or a located error when that exceeds `limit` (the device's
+/// `max_buffer_size`; ADR 0128 finding 8).
+pub fn vertex_bytes_check(triangles: u64, limit: u64) -> Result<u64> {
+    match triangles.checked_mul(3 * VERTEX_BYTES) {
+        Some(b) if b <= limit => Ok(b),
+        b => Err(Error::Mesh(format!(
+            "the surface needs {} bytes of vertex buffer ({triangles} triangles x 3 x {VERTEX_BYTES}), more than the device's max_buffer_size of {limit} bytes",
+            b.map_or_else(|| "more than 2^64".to_string(), |b| b.to_string())
+        ))),
+    }
+}
+
 /// Lighting and normals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shading {
@@ -276,10 +288,21 @@ impl Renderer {
         &self.info
     }
 
+    /// The largest buffer the device accepts, bytes (bounds the triangles of one upload).
+    pub fn max_buffer_size(&self) -> u64 {
+        self.device.limits().max_buffer_size
+    }
+
     /// Upload a surface with its field (a field change is a new upload).
     pub fn upload(&self, s: &SurfaceMesh, field: Field) -> Result<GpuMesh> {
         let range = s.field_range(field)?;
         let normals = s.point_normals();
+        // checked before anything is built: an over-limit buffer is a wgpu validation panic
+        let triangles = s.triangles().count() as u64;
+        vertex_bytes_check(triangles, self.max_buffer_size()).map_err(|e| match e {
+            Error::Mesh(m) => Error::Mesh(format!("{m} ({})", self.info.name)),
+            e => e,
+        })?;
         let face_n: Vec<Vec3> = (0..s.n_faces())
             .map(|f| {
                 let a = s.face_area_vector(f);
