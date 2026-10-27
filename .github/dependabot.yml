@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # A Cargo.lock change can make THIRD_PARTY_LICENSES.md stale (scripts/third_party_licenses.py --check) and can change
+  # numerical results; review lock updates with the full test run.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

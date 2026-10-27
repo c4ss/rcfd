@@ -1,0 +1,46 @@
+# cargo-deny configuration: `cargo deny check` (https://github.com/EmbarkStudios/cargo-deny).
+# Not wired into CI yet. The allowed licences are the ones THIRD_PARTY_LICENSES.md lists for Cargo.lock; a dependency
+# change that brings in another licence fails here until it is reviewed and added.
+
+[advisories]
+# Advisories in the RustSec database fail the check; yanked crates only warn.
+yanked = "warn"
+ignore = []
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "0BSD",
+    "Unlicense",
+    "CC0-1.0",
+    "Unicode-3.0",
+    # webpki-roots: certificate-authority data; the licence text must ship with binaries (THIRD_PARTY_LICENSES.md).
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.9
+exceptions = [
+    # Fonts bundled in epaint (desktop app only); their licence texts must ship with binaries (THIRD_PARTY_LICENSES.md).
+    { crate = "epaint", allow = ["OFL-1.1", "LicenseRef-UFL-1.0"] },
+]
+
+[licenses.private]
+# Workspace crates are publish = false and licensed MIT OR Apache-2.0 (Cargo.toml).
+ignore = true
+
+[bans]
+# wgpu and egui pull in several versions of some crates; report them without failing.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
