@@ -92,8 +92,10 @@ class TimeLimit(unittest.TestCase):
                            stderr=subprocess.STDOUT)
         out = r.stdout.decode("utf-8", "replace")
         print(f"\n--- hang {hang_secs} s, flags {flags}: exit {r.returncode}, {time.time() - t:.1f} s\n{out}")
-        rows = {ln.split("\t")[1]: ln.split("\t") for ln in open(tsv).read().splitlines()[1:]}
-        pids = [int(x) for x in open(pid_file).read().split()]
+        with open(tsv) as f:
+            rows = {ln.split("\t")[1]: ln.split("\t") for ln in f.read().splitlines()[1:]}
+        with open(pid_file) as f:
+            pids = [int(x) for x in f.read().split()]
         return r.returncode, out, rows["hang"], pids
 
     def test_t1_hang_is_killed_with_its_child(self):
