@@ -74,10 +74,10 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
     Good: `docs, rcfd-claude: machine paths replaced by placeholders`.
     Bad: a commit titled `wip` whose body quotes a log file by its drive path on your machine.
 
-11. **The only trailer is `Signed-off-by`**, required on every contributed commit as CONTRIBUTING says (`git commit -s`).
-    Why: the sign-off certifies the Developer Certificate of Origin; nothing else in a message is machine metadata.
-    Good: a last line `Signed-off-by: Your Name <you@example.org>`.
-    Bad: a `Co-Authored-By:` line naming a tool, or a link to an assistant session.
+11. **A message ends with its body; it has no trailer lines** (`Signed-off-by`, `Co-Authored-By`, session links or similar).
+    Why: the author is already in the commit's author field, and the licence terms of a contribution are in CONTRIBUTING.
+    Good: a body whose last line is `No behaviour change.`
+    Bad: a last line `Co-Authored-By:` naming a tool, or a link to an assistant session.
 
 12. **A pull request is merged with its commits kept, not squashed**; tidy them before review (`git rebase -i`, `fixup!`
     commits folded in) so each one follows these rules.

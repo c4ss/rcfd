@@ -41,15 +41,6 @@ Mark a value you could not check against its source as UNVERIFIED. The
 project's own record of what was consulted while it was built is
 [docs/provenance.md](docs/provenance.md).
 
-## Sign-off (DCO)
-
-Every commit must carry a `Signed-off-by: Your Name <email>` line
-(`git commit -s` adds it). By signing off you certify the Developer
-Certificate of Origin, version 1.1, as published at developercertificate.org:
-in short, that you wrote the change or otherwise have the right to submit it
-under the project's licence. Your contribution is licensed as MIT OR
-Apache-2.0.
-
 ## How to make a change
 
 Run these commands before you submit:
