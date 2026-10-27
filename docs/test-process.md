@@ -234,3 +234,128 @@ run 1, slot 2 from 00:43 to 01:48 on 2026-10-27, another agent's gate in slot 1:
 Ordering by the earlier run's times put the test phase on its floor (run 1: 0.6 min above it), as expected a small gain. Some tests
 start their own executable as a child process (rcfd-project `process`, rcfd-gpu `fallback`, rcfd-api `gpu_case` and the design ledger
 tests), so the number of test processes can briefly exceed `--jobs`, as it could inside the original binaries.
+
+## 6. Tests that cannot fail (ADR 0129)
+
+### 6.1 Scanner
+
+`python scripts/limit_audit.py` (read-only, Python 3.9 standard library) reads `crates/**/tests/*.rs` and `crates/**/src/**/*tests*.rs`
+and prints `file:line: (class) line` for five classes: (i) an assertion whose operands are only literals and constants, or a
+sleep/elapsed value in a test that sleeps; (ii) a `#[test]` with no assertion, panic, `unwrap`/`expect`, no `?` in a test returning a
+value and no `should_panic`, counting helper functions and macros of the same file (and of `tests/<folder>/` modules) that check;
+(iii) a test named with the word control(s) or negative whose assertions do not express a failure; (iv) an early `return` before
+the first assertion; (v) `assert!(true)` or a value compared with itself. Self-test: `python -m unittest scripts/test_limit_audit.py`
+(one planted example per class, all five found, and a clean test with a helper assertion, a comment and a string that is not flagged).
+Not scanned: the 99 inline `#[cfg(test)]` modules in other `src/` files (the registered scope).
+
+On the tests of main cb61148 it reports 80 hits: (i) 15, (ii) 2, (iii) 13, (iv) 50, (v) 0. Every hit was read.
+
+### 6.2 Triage
+
+Real weakness: 2. Documented skip (or documented report-only test): 53. False positive: 25. Unclassified: 0.
+
+| Hit | Class | Line | Classification | Reason |
+|---|---|---|---|---|
+| `crates/rcfd-api/src/design/ledger_tests.rs:187` | (iv) | `return;` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-api/tests/bc_catalogue.rs:560` | (i) | `assert!((om0 - 1.597191).abs() / 1.597191 < 1e-6);` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-api/tests/bc_catalogue.rs:569` | (i) | `assert!((e1 - 1.265625e-6).abs() / 1.265625e-6 < 1e-9);` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-api/tests/divergence_guard_w32c.rs:50` | (iii) | `fn unset_key_runs_a_stable_case_to_the_end_and_a_negative_value_is_...` | false positive | 'negative' is a negative input value; the rejection is checked with `unwrap_err` |
+| `crates/rcfd-api/tests/duct_diagnosis.rs:112` | (iii) | `fn a_control_walls_at_stream_velocity_hold_plug_flow() {  [fn a_con...` | false positive | positive control: expects success and asserts it (plug flow, valid keys, first-order band 0.9 to 1.15) |
+| `crates/rcfd-api/tests/gpu_case.rs:106` | (iv) | `return;` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-api/tests/gpu_case.rs:261` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-api/tests/gpu_case.rs:271` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-api/tests/mixing_plane_run.rs:597` | (iii) | `fn mp4_control_single_block() {  [fn mp4_control_single_block]` | documented skip | `#[ignore]`d diagnostic, documented as prints only / reported only |
+| `crates/rcfd-api/tests/report_conductivity_vd.rs:62` | (iii) | `fn w2_positive_controls_validate() {  [fn w2_positive_controls_vali...` | false positive | positive control: expects success and asserts it (plug flow, valid keys, first-order band 0.9 to 1.15) |
+| `crates/rcfd-api/tests/validation_refs_w31c.rs:220` | (i) | `assert!((c - 0.1752).abs() < 5e-5);` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-api/tests/validation_refs_w31c.rs:237` | (i) | `assert!((0.073 / 2f64.powf(0.25) - alpha).abs() < 5e-5);` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-api/tests/w35b_linear_upwind.rs:274` | (iii) | `fn d_controls() {  [fn d_controls]` | documented skip | `#[ignore]`d diagnostic, documented as prints only / reported only |
+| `crates/rcfd-api/tests/wall_options.rs:160` | (i) | `const _: () = assert!(BUILD_HOOK_INSTALLED);` | false positive | compile-time `const` assertion of a build-hook flag: fails the build if the flag is false |
+| `crates/rcfd-claude/tests/driver_fake.rs:305` | (i) | `assert!(dt < CANCEL_LIMIT, "{dt:?}");  [sleep/elapsed]` | false positive | elapsed time of the code under test (cancel, retry, pause), not of the test's own sleeps; fails if that code is slower or faster than the limit |
+| `crates/rcfd-claude/tests/driver_fake.rs:313` | (iii) | `fn d6_negative_control_plain_kill_orphans_the_grandchild() {  [fn d...` | false positive | asserts the expected failure: `assert!(orphaned)` (a plain kill leaves the grandchild) |
+| `crates/rcfd-cli/tests/python_w20c.rs:30` | (iv) | `return;  [skip message]` | documented skip | no Python interpreter: prints `SKIPPED` |
+| `crates/rcfd-fv/tests/adaptive_step.rs:327` | (iii) | `fn e2_error_control_reaches_the_requested_error_on_a_two_timescale_...` | false positive | 'error control' is the step controller, not a control experiment |
+| `crates/rcfd-fv/tests/adaptive_step.rs:664` | (iv) | `return it;` | false positive | `return it` inside a closure (iteration count), not an early exit of the test |
+| `crates/rcfd-fv/tests/masstransfer.rs:283` | (i) | `assert!((coef - 0.943).abs() / 0.943 <= 3e-4, "{coef}");` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-fv/tests/pseudo_control.rs:328` | (iii) | `fn p4_control_fixed_cfl1() {  [fn p4_control_fixed_cfl1]` | documented skip | `#[ignore]`d diagnostic, documented as prints only / reported only |
+| `crates/rcfd-fv/tests/schemes_wave13.rs:452` | (iv) | `return;` | real weakness | T2 returns green when plain BDF2 overshoots less than 0.02; ADR 0016 registered that case as 'reported as vacuous, not as passed', and the measured 2.467e-2 is only 23 % above it. Needs a decision (section 6.3) |
+| `crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs:95` | (iii) | `fn d2c_viscosity_ratio_one_control() {  [fn d2c_viscosity_ratio_one...` | documented skip | `#[ignore]`d diagnostic, documented as prints only / reported only |
+| `crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs:247` | (iii) | `fn b1xc_hysing_bubble_all_options_indicator_fraction_control_known_...` | documented skip | `#[ignore]`d known miss of ADR 0108 (XC control); its helper asserts the limits |
+| `crates/rcfd-fv/tests/w33b_transient_order.rs:542` | (iii) | `fn o8_euler_controls() {  [fn o8_euler_controls]` | false positive | positive control: expects success and asserts it (plug flow, valid keys, first-order band 0.9 to 1.15) |
+| `crates/rcfd-fv/tests/w36b_sheared.rs:207` | (iii) | `fn part_x_controls_without_shear() {  [fn part_x_controls_without_s...` | documented skip | `#[ignore]`d diagnostic, documented as prints only / reported only |
+| `crates/rcfd-gpu/tests/errors.rs:12` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/errors.rs:45` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/f1.rs:12` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/fallback.rs:12` | (iv) | `return;` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-gpu/tests/kernels.rs:12` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/kernels.rs:55` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/kernels.rs:97` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/leaks.rs:13` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/solvers.rs:79` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-gpu/tests/solvers.rs:89` | (iv) | `return;  [skip message]` | documented skip | no CUDA device: `GPU TEST SKIPPED` on stderr; `RCFD_GPU_REQUIRE=1` turns the skip into a failure |
+| `crates/rcfd-io/tests/fluent_public.rs:91` | (iv) | `return;  [skip message]` | documented skip | public data set not fetched: prints `skipped` with the fetch command; always skipped in a `git archive` gate (section 6.3) |
+| `crates/rcfd-io/tests/interchange.rs:672` | (iv) | `return;` | documented skip | export helper for a manual external check, runs only when its output folder variable is set |
+| `crates/rcfd-io/tests/plot3d_public.rs:27` | (iv) | `return;  [skip message]` | documented skip | public data set not fetched: prints `skipped` with the fetch command; always skipped in a `git archive` gate (section 6.3) |
+| `crates/rcfd-io/tests/w26c_ensight.rs:518` | (iv) | `return;` | documented skip | export helper for a manual external check, runs only when its output folder variable is set |
+| `crates/rcfd-mesh/tests/cgrid_e_w34a.rs:740` | (ii) | `fn r_e_robustness_scan_construction_33a_reported() {  [fn r_e_robus...` | documented skip | report only, documented 'reported, not gated' (the gated twin is the known miss `r_e_robustness_scan_construction_e_known_miss`) |
+| `crates/rcfd-mesh/tests/cgrid_w34a.rs:471` | (ii) | `fn w_falsifiers() {  [fn w_falsifiers]` | documented skip | `#[ignore]`d falsifier run by hand, prints its verdict (ADR 0072 amendment 2) |
+| `crates/rcfd-post/tests/glb_check.rs:402` | (iv) | `return;` | documented skip | export helper for a manual external check, runs only when its output folder variable is set |
+| `crates/rcfd-project/tests/hammer.rs:131` | (i) | `assert!(  [sleep/elapsed]` | false positive | elapsed time of the code under test (cancel, retry, pause), not of the test's own sleeps; fails if that code is slower or faster than the limit |
+| `crates/rcfd-project/tests/hammer.rs:155` | (i) | `assert!(spent < Duration::from_secs(2), "{spent:?}");  [sleep/elapsed]` | false positive | elapsed time of the code under test (cancel, retry, pause), not of the test's own sleeps; fails if that code is slower or faster than the limit |
+| `crates/rcfd-project/tests/listing_budget.rs:79` | (i) | `assert!(  [sleep/elapsed]` | real weakness | 500 sleeps of 2 ms always exceed the 500 ms budget: the control cannot fail. Fix owned by branch `wfix` (ADR 0128 finding 12), not repeated here |
+| `crates/rcfd-project/tests/process.rs:27` | (iv) | `return;` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-project/tests/process.rs:49` | (iv) | `return;` | false positive | `return` inside the child body's write loop after its deadline, not a skip |
+| `crates/rcfd-project/tests/process.rs:67` | (iv) | `return;` | false positive | `return` inside the child body's write loop after its deadline, not a skip |
+| `crates/rcfd-project/tests/process.rs:90` | (iv) | `return;` | false positive | `return` inside the child body's write loop after its deadline, not a skip |
+| `crates/rcfd-project/tests/watch.rs:76` | (iii) | `fn w1_negative_control_length_and_mtime_alone_miss_the_same_tick_re...` | false positive | asserts the expected miss: the change list without `cases/d.json` |
+| `crates/rcfd-reactor/tests/accel.rs:482` | (iv) | `return println!("D2 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:492` | (iv) | `let Some(m) = gri() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:499` | (iv) | `return println!("D3 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:508` | (iv) | `let Some(m) = gri() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:515` | (iv) | `return println!("D4 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:755` | (iv) | `let Some(r) = i4_run(true) else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:770` | (iv) | `let Some(r) = i4_run(true) else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:779` | (iv) | `let Some(r) = i4_run(false) else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:846` | (iv) | `let Some((worst, _, _, speed)) = i5_run() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:858` | (iv) | `let Some((_, dtmax, _, _)) = i5_run() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:867` | (iv) | `let Some((_, _, el, _)) = i5_run() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/accel.rs:874` | (iv) | `return println!("C2 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/cell.rs:41` | (i) | `assert!((dt_ad - 2000.0).abs() < 1e-9, "hand DeltaT_ad {dt_ad}");` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-reactor/tests/cell.rs:135` | (i) | `assert!((hand - 1149.4339).abs() < 1e-3, "hand arithmetic {hand}");` | false positive | reference arithmetic: the test's own hand value against the registered number (guards a transcription error); the code is compared with that value by the neighbouring assertion |
+| `crates/rcfd-reactor/tests/combustion.rs:396` | (iv) | `return println!("B7 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/combustion.rs:779` | (iv) | `return println!("P3 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/combustion.rs:809` | (iv) | `let Some(g) = gri() else { return };` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/combustion.rs:825` | (iv) | `return println!("P3b skipped: GRI-Mech data not fetched");  [skip m...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/reactor.rs:288` | (iv) | `return println!("R3 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/reactor.rs:308` | (iv) | `return println!("R3 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/reactor.rs:329` | (iv) | `return println!("R7 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/reactor.rs:373` | (iv) | `return println!("R7 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-reactor/tests/reactor.rs:461` | (iv) | `return println!("R7 skipped: GRI-Mech data not fetched");  [skip me...` | documented skip | GRI-Mech 3.0 files not fetched: prints `skipped` (the three silent `gri() else` returns are in `#[ignore]`d tests). The gate's `git archive` has no `validation-data/data`, so these always skip in the gate (section 6.3) |
+| `crates/rcfd-runner/tests/runner_w47b.rs:500` | (i) | `assert!(dt <= 2.0);  [sleep/elapsed]` | false positive | elapsed time of the code under test (cancel, retry, pause), not of the test's own sleeps; fails if that code is slower or faster than the limit |
+| `crates/rcfd-tsstore/tests/scale.rs:114` | (iv) | `let Ok(dir) = std::env::var(C8_ENV) else { return };` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-tsstore/tests/store.rs:326` | (iv) | `let Ok(dir) = std::env::var(C5_ENV) else { return };` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-tsstore/tests/store.rs:421` | (iv) | `let Ok(dir) = std::env::var(C5B_ENV) else { return };` | documented skip | child-process entry point: does nothing unless the parent test sets its environment variable; the parent asserts |
+| `crates/rcfd-turb/tests/step_realizable_a0.rs:32` | (i) | `assert_eq!(REALIZABLE_A0_DEFAULT, 4.04);` | false positive | pins a library constant to its documented value; fails if the constant is edited |
+| `crates/rcfd-turb/tests/step_realizable_a0.rs:33` | (i) | `assert_eq!(REALIZABLE_A0_ORIGINAL, 4.0);` | false positive | pins a library constant to its documented value; fails if the constant is edited |
+
+### 6.3 Real weaknesses and items that need a decision
+
+No hit could be fixed by adding or correcting an assertion alone, so no test was edited (A3: 0 fixes, 2 real weaknesses listed, and
+one gate-level gap found while triaging the skips):
+
+1. **`rcfd-project/tests/listing_budget.rs` L1 negative control** (class i): `slow` is the sum of 500 sleeps of 2 ms plus the listing,
+   compared with the 500 ms budget, so it is always above the budget. Branch `wfix` (ADR 0128, finding 12) already registered the
+   fix and its decision rule; not repeated here to avoid two edits of one test.
+2. **`rcfd-fv/tests/schemes_wave13.rs` T2** (class iv): when plain BDF2 overshoots less than 0.02 the test prints "vacuous" and
+   returns green. ADR 0016 registered that case as "reported as vacuous, not as passed"; measured 2.467e-2 is 23 % above the
+   threshold, so a small change of the wave or the scheme would turn T2 into a silent pass. Options: (a) keep; (b) fail the vacuous
+   case (an `assert!(ob2 >= 0.02, ...)` before the limit check, which no longer passes the vacuous case); (c) ignore T2 and add a
+   corrected set-up with more overshoot. Recommendation: (b), it matches the registered wording. Not done: it changes what the
+   test accepts, which is the user's decision.
+3. **Data-gated tests always skip in the gate.** `validation-data/data` (GRI-Mech 3.0, the public Fluent and PLOT3D files) is not in
+   git, and the gate runs on a `git archive`, so 12 non-ignored tests return early and count as passed in every gate: rcfd-reactor
+   `accel` d2, d3, d4, i4, i5 and c2 (GRI-Mech), `combustion` b7, p3, p3b, `reactor` r3, rcfd-io `fluent_public` and
+   `plot3d_public`. GPU tests have `RCFD_GPU_REQUIRE=1` to turn their skip into a failure; these have no such switch. Options: (a)
+   copy the fetched folder into the gate copy and add a `RCFD_DATA_REQUIRE=1` switch that fails a skip; (b) keep and list them as
+   not run by the gate; (c) count a skip separately in the runner (needs a skip marker the runner can read). Recommendation: (a).
+4. Child-process entry points (`*_child_body`, `child_entry`, `l3_kill_child`: 7 tests) pass without doing anything when run alone
+   and are counted as passed tests. Documented and harmless; they inflate the passed count by 7.

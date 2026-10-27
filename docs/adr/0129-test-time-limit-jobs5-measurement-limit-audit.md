@@ -97,3 +97,44 @@ table of the drawn ones goes to `docs/test-process.md` section 6.4. Excluded: 23
 
 The draw is `random.Random(1290127).sample(population, 12)` over this sorted list. A drawn check that does not run on this machine
 (a GPU test that skips without an adapter, a release-only assertion run in debug) is reported as not exercised, not as detected.
+
+## Addendum 2026-10-27: measured against the registered checks
+
+### Part 1: time limit (implemented in de3df40)
+
+| Id | Pass condition | Measured | Verdict |
+|---|---|---|---|
+| T1 | killed within limit + 5 s, test and child pids gone, run non-zero, counted failed, `FAILED (timeout after 10 s)`, TSV `TIMEOUT` | test killed at 10.2 s (whole run 10.8 s including the doc-test step); test pid 75572 and child pid 67776 (`ping`) not in `tasklist` afterwards; exit 101; `test result: FAILED. 1 passed; 1 failed`; line `test hang ... FAILED (timeout after 10 s)`; TSV `TIMEOUT` | **met** |
+| T2 | 15 s sleep not killed with `--timeout-max 0`; killed with the 10 s limit | limit off: passes at 15.0 s, exit 0; limit on: `TIMEOUT` at 10.2 s, exit 101, both pids gone | **met** (discriminates) |
+| T3 | `--jobs 3` run: (binary, test, outcome) list equals gate47's; no timeout; max time/limit < 0.5 | 2856 = 2856 lines (2190 ok, 666 ignored), `diff` empty; 0 timeouts; max ratio 0.264 (`transient_sources::t3d_...`, 949 s against its 3600 s limit) | **met** |
+| T4 | at least 10 clamp cases, all pass | 15 cases (no record, zero, 0.07 s, exact min and max boundaries, huge, min = max, no minimum, limit off with and without record, negative max) | **met** |
+
+The synthetic tests are `scripts/test_gate_test.py` (`GATE_TEST_E2E=1`, run in slot 1 at 09:51). The process-group branch for other
+systems was not exercised. The cargo exclusion of the tree kill was not exercised by a test (no test of the repo times out while
+`cargo metadata` runs).
+
+### Part 2: `--jobs 5` (archive of de3df40 in `<scratch dir>`, logs there)
+
+| | `--jobs 3` | `--jobs 5` |
+|---|---|---|
+| slot, time | slot 1, 09:52 to 11:03 (build 6 min 35 s, shared) | slot 1, 11:03 to 11:59 (build no-op) |
+| other slot | busy 10:10 to 10:12 and from 10:23 (another gate): about 39 of the 64 test minutes | busy throughout |
+| CPU, mean of 30 s `typeperf` samples in the test phase | 94 % | 100 % |
+| test-phase wall (runner `wall`) | **3849 s (64.1 min)** | **3343 s (55.7 min)** |
+| test-seconds (sum over tests) | 11 547 s (gate47: 9296 s) | 16 714 s |
+| result | 2190 / 0 / 666 | 2190 / 0 / 666 |
+| (binary, test, outcome) list | = gate47 | = `--jobs 3`, `diff` empty |
+| timeouts; max time/limit | 0; 0.264 | 0; 0.521 (`t3d_...` 1877 s) |
+| peak summed working set (runner, 2 s samples) | 2702 MB | 2704 MB |
+
+* Prediction 31.0 min (9296 s / 5); measured 55.7 min. The machine was saturated (CPU 100 %), so every test ran longer: the
+  test-seconds rose 45 % from 3 to 5 jobs and the 5-job run sat on its own floor (16 714 s / 5 = 55.7 min). The largest slowdowns
+  were about 2x (`w34c_symmetry::a6_mirror_equivalence_graded` 140 s to 284 s, `t3d_...` 949 s to 1877 s).
+* Pass condition: list identical, 0 new failures, no timeout, 2.7 GB < 12 GB: **met**. No test failed only at 5 jobs (no
+  load-sensitive test found).
+* Decision rule: wall time 13.2 % below the 3-job run, not the required 25 %: **the default stays 3**; the gate command is not
+  changed. Why: with another gate in the other slot the processors are already full at 3 jobs (94 % CPU), so more test processes only
+  stretch each test. The load was not equal: the other slot was busy for about 61 % of the 3-job run and all of the 5-job run, which
+  works against 5 jobs; the measured gain is a lower bound for an idle machine but the gate machine is rarely idle.
+* Observation: at 5 jobs under load the slowest test reached 52 % of its limit (the 0.5 check is registered for the default run
+  only, T3). A default of 5 jobs would need the factor or the maximum looked at again.
