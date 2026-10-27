@@ -348,8 +348,6 @@ pub struct UqResult {
     pub metrics: Vec<MetricStats>,
     /// Requirements.
     pub requirements: Vec<ReqStats>,
-    /// Ledger index of the first sample entry and of the summary entry (when a ledger was given).
-    pub ledger_range: Option<(usize, usize)>,
 }
 
 fn mean_sd(y: &[f64]) -> (f64, f64) {
@@ -492,10 +490,6 @@ fn evaluate_guarded(model: &dyn Model, params: &[Quantity]) -> Outcome {
 pub fn run(spec: &UqSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Result<UqResult, String> {
     spec.validate()?;
     let d = spec.params.len();
-    let first = match ledger {
-        Some(l) => Some(l.read()?.entries.len()),
-        None => None,
-    };
     let mut rng = Rng::new(spec.seed);
     let mut xs: Vec<Vec<f64>> = Vec::new();
     let mut outs: Vec<Outcome> = Vec::new();
@@ -652,18 +646,17 @@ pub fn run(spec: &UqSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Result<
             }
         })
         .collect();
-    let mut res = UqResult {
+    let res = UqResult {
         n_samples: outs.len(),
         n_ok: ok.len(),
         batches,
         converged,
         metrics,
         requirements,
-        ledger_range: None,
     };
-    if let (Some(l), Some(first)) = (ledger, first) {
-        let summary_index = first + res.n_samples;
-        res.ledger_range = Some((first, summary_index));
+    // the entries are found by name (study, `name#k`, `name#summary`), not by position: another writer may
+    // append to the same ledger meanwhile (ADR 0128 finding 14)
+    if let Some(l) = ledger {
         l.append(&[summary_entry(spec, model, &res)])?;
     }
     Ok(res)
@@ -726,7 +719,6 @@ pub fn result_json(spec: &UqSpec, res: &UqResult) -> Value {
             "requirements": spec.requirements.iter().map(|r| json!({"metric": r.metric, "cmp": match r.cmp { Cmp::Le => "<=", Cmp::Ge => ">=" }, "limit": r.limit})).collect::<Vec<_>>(),
         },
         "n_samples": res.n_samples, "n_ok": res.n_ok, "batches": res.batches, "converged": res.converged,
-        "ledger_range": res.ledger_range,
         "metrics": res.metrics.iter().map(|m| json!({
             "name": m.name, "unit": m.unit, "n": m.n, "mean": f(m.mean), "sd": f(m.sd), "se": f(m.se), "r2": f(m.r2),
             "quantiles": m.quantiles.iter().map(|q| json!({"p": q.p, "value": f(q.value), "lo": f(q.lo), "hi": f(q.hi), "coverage": f(q.coverage)})).collect::<Vec<_>>(),

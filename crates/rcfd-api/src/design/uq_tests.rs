@@ -382,10 +382,11 @@ fn u6_bytes(tag: &str, sampler: Sampler, seed: u64, workers: usize) -> Vec<u8> {
         cmp: Cmp::Le,
         limit: 2.0,
     }];
-    let r = run(&s, &model("src", src_fn), Some(&l)).unwrap();
-    assert_eq!(r.ledger_range, Some((0, 2000)));
+    run(&s, &model("src", src_fn), Some(&l)).unwrap();
     let c = l.read().unwrap();
     assert_eq!(c.entries.len(), 2001);
+    // ADR 0128 finding 14: entries are identified by name, not by a positional ledger_range
+    assert!((0..2000).all(|k| c.entries[k].variant == format!("u#{k}")));
     assert_eq!(c.entries[2000].kind, "uq_summary");
     std::fs::read(l.path()).unwrap()
 }
@@ -623,4 +624,77 @@ fn smoke_w46d() {
         worst = worst.max((binom_cdf(k as i64, n, p) - acc).abs());
     }
     eprintln!("smoke binomial CDF max error {worst:e}");
+}
+
+/// U9 (ADR 0128 finding 14): another writer appends to the same ledger during a study. The study's own entries are
+/// identified by name (`study` and the variant `name#k`), and no positional range recorded in the ledger points at a
+/// foreign entry.
+#[test]
+fn u9_second_writer_during_a_study() {
+    let dir = std::env::temp_dir().join(format!("rcfd_wfix_u9_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let path = dir.join("ledger.jsonl");
+    let l = Ledger::new(&path);
+    let other = Ledger::new(&path);
+    let m = FnModel {
+        id: "u9".into(),
+        version: "1".into(),
+        fidelity: Fidelity::Analytic,
+        f: |p: &[Quantity]| {
+            let foreign = Entry {
+                kind: "evaluation".into(),
+                study: "other".into(),
+                variant: "other#x".into(),
+                evaluator: "foreign".into(),
+                evaluator_version: "1".into(),
+                verdict: Verdict::Ok,
+                metrics: vec![Quantity::new("z", 1.0, "1")],
+                ..Default::default()
+            };
+            other.append(&[foreign]).unwrap();
+            Outcome::ok(vec![Quantity::new("y", p.iter().map(|q| q.value).sum(), "1")])
+        },
+    };
+    let mut s = fixed_spec(lin_params(), Sampler::MonteCarlo, 46_090, 1000);
+    s.stop.batch = 500;
+    let r = run(&s, &m, Some(&l)).unwrap();
+    let c = l.read().unwrap();
+    let mine: Vec<&Entry> = c.entries.iter().filter(|e| e.study == s.name).collect();
+    let samples: std::collections::BTreeSet<String> = mine
+        .iter()
+        .filter(|e| e.kind == "evaluation")
+        .map(|e| e.variant.clone())
+        .collect();
+    let want: std::collections::BTreeSet<String> = (0..r.n_samples).map(|k| format!("{}#{k}", s.name)).collect();
+    let summaries: Vec<&&Entry> = mine.iter().filter(|e| e.kind == "uq_summary").collect();
+    let foreign = c.entries.iter().filter(|e| e.study == "other").count();
+    // any positional range a summary records must name exactly the study's entries
+    let mut wrong_ranges = Vec::new();
+    for (i, e) in c.entries.iter().enumerate().filter(|(_, e)| e.kind == "uq_summary") {
+        if let Some([a, b]) = e.provenance.get("ledger_range").and_then(|v| v.as_array()).map(|v| {
+            let n = |k: usize| v.get(k).and_then(Value::as_u64).unwrap_or(0) as usize;
+            [n(0), n(1)]
+        }) {
+            let ok = b == i && c.entries[a..b].iter().all(|x| x.study == s.name);
+            if !ok {
+                wrong_ranges.push((a, b, i));
+            }
+        }
+    }
+    eprintln!(
+        "U9: {} entries ({foreign} foreign), {} study samples by name, {} summaries, wrong positional ranges {wrong_ranges:?}",
+        c.entries.len(),
+        samples.len(),
+        summaries.len()
+    );
+    assert_eq!(r.n_samples, 1000);
+    assert_eq!(foreign, 1000, "set-up: the second writer did not interleave");
+    assert_eq!(samples, want, "the study's samples by name");
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].variant, format!("{}#summary", s.name));
+    assert!(
+        wrong_ranges.is_empty(),
+        "positional ranges name foreign entries: {wrong_ranges:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
