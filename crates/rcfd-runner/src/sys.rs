@@ -123,6 +123,7 @@ pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::C
 
 /// The PowerShell launcher of [`spawn_detached`] running `script`, and its creation flags: detached from the
 /// caller's console and Ctrl+C like [`spawn_direct`], no window.
+#[cfg(windows)]
 fn launcher_cmd(script: &str) -> (Command, u32) {
     let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let (mut c, flags) = console("powershell", DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
