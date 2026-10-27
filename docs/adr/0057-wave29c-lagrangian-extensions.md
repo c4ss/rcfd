@@ -12,7 +12,7 @@ and `particle_run.rs` (additive keys) and docs; it does not touch `sim.rs`, `sch
 hashes and all existing tests are unchanged by construction (struct literals of `Particle`, `Flow`, `InjectorSpec` in existing tests
 stay valid: new state lives in parallel vectors and optional extension structs).
 
-## Audit (HEAD 60a5375)
+## Audit (HEAD 372e7fd)
 
 * `rcfd-particles` (wave 18C/21C): one-way point particles, `Tracker::advance` calls `advance_particle` per parcel; each sub-step
   integrates drag + buoyant gravity (`step_particle`) and walks the segment across cells; reflection/stick/escape at boundaries.

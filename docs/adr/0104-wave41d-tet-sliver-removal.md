@@ -3,7 +3,7 @@
 Status: registered before the diagnostics and the registered tests were run. Limits are not changed after a run; a miss becomes an
 ignored `*_known_miss` test with the limit intact. Library change: an opt-in stage in `rcfd_mesh::tetmesh`, off by default; the default
 output must stay bit-identical (W0 below). Clean-room: first principles only; any literature attribution is marked UNVERIFIED. Written
-at HEAD 2eb65ee, target `<target dir>`.
+at HEAD 33807c2, target `<target dir>`.
 
 ## Context
 
@@ -19,7 +19,7 @@ sequence of split, collapse, flip and smooth sweeps over vertex and edge orders 
 
 ## Smoke (run before this ADR was written)
 
-`w0_default_fingerprints` (ignored, prints), default options, at HEAD 2eb65ee: (cell count, `Mesh::content_hash` of `to_mesh`):
+`w0_default_fingerprints` (ignored, prints), default options, at HEAD 33807c2: (cell count, `Mesh::content_hash` of `to_mesh`):
 
 | case | cells | content hash |
 | --- | --- | --- |
@@ -181,6 +181,6 @@ mesh (the development runs measured them per variant, not per stage). The pass h
 sliver exudation); it is a bounded heuristic (10 sweeps). No literature value enters a gate; the method names (Delaunay refinement,
 constrained cavities, optimisation-based smoothing, bistellar flips) are from memory and UNVERIFIED.
 
-Gate on a fresh archive of 71b703c: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
+Gate on a fresh archive of e08f482: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1949 passed / 0 failed / 551 ignored (wave 40: 1939 / 0 / 549; this ADR adds 10
 passed and 2 ignored diagnostics). The commit after the gate changes this ADR's text only.

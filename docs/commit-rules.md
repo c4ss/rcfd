@@ -1,6 +1,7 @@
 # Commit rules
 
-Status: written 2026-10-27. These rules apply to commits made from now on; the 835 commits before them are not rewritten.
+Status: written 2026-10-27. The history before this date was reworded once to meet rules 1 to 3 and 10 (subjects of 72 characters
+or fewer, no dashes, no trailers); its diffs were not split, so some old commits are larger than rule 1 allows.
 
 This page is for anyone who commits to rcfd. A commit message is read far more often than it is written: by the reviewer, by
 the maintainer assembling a release from `git log --oneline vP..main` ([releasing](releasing.md), step 2), and by whoever runs
@@ -11,12 +12,12 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
    changes more than about 400 lines outside generated files, fixtures and data says in its body why it cannot be split.
    Why: a small commit can be reviewed, reverted and bisected on its own, and its message can be precise.
    Good: `rcfd-mesh: tet quality pass removes slivers below the dihedral limit`.
-   Bad: `docs: add wave 46/47 and test-gate items to the roadmap; reword F-042 wall-function note` (161 older subjects have a `; `).
+   Bad: `docs: add wave 46/47 and test-gate items to the roadmap; reword F-042 wall-function note`.
 
 2. **The subject is `area: effect`, imperative or a plain statement, at most 72 characters, no full stop.** The area is the
    crate (`rcfd-fv`), `docs`, `scripts`, `ci`, or `ADR NNNN` for a decision record; the effect is what changes for the person
    using that area, not which files were touched. `Merge ...` and `release X.Y.Z` are the only subjects without an area.
-   Why: `git log --oneline` is the index of the history and must be scannable at a glance (640 of the older subjects exceed 72).
+   Why: `git log --oneline` is the index of the history and must be scannable at a glance.
    Good: `rcfd-cli: run exits 2 when the case file is missing`.
    Bad: `rcfd-cli: update main.rs and args.rs`.
 

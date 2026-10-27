@@ -13,7 +13,7 @@ in the same tree: this wave adds a new crate `rcfd-dist` and one-line hunks in t
 a temporary index. No existing solver path is edited, so the baseline hashes and all existing tests are unchanged by construction
 (re-verified at the end).
 
-## Audit (HEAD 60a5375)
+## Audit (HEAD 372e7fd)
 
 * `rcfd_mesh::partition` (F-016) already has the `Partitioner` trait, `Rcb`, `Bisection`, `Sectors`, `GraphPartitioner`, and
   `Decomposition` with per-part `SubDomain` (owned cells ascending by global id, ghost cells grouped by owning peer in ascending peer

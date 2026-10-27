@@ -237,7 +237,7 @@ relaxation weight 0.5 and are only checked on the cases above.
 
 ## Addendum: results, deviations and misses (written after the implementation; no registered limit is changed)
 
-Commits: library `cbb352e`, settings tree `ec410cb`. Tests: `crates/rcfd-fv/tests/bc_catalogue.rs` (6) and
+Commits: library `d563c2f`, settings tree `1c0f96b`. Tests: `crates/rcfd-fv/tests/bc_catalogue.rs` (6) and
 `crates/rcfd-api/tests/bc_catalogue.rs` (21, one ignored known miss).
 
 ### Measured against the registered limits (release build)

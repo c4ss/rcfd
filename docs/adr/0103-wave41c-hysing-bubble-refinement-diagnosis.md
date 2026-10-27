@@ -2,7 +2,7 @@
 
 Status: registered before the diagnostic runs. The decision rules below are fixed; results go into the addendum, misses and
 deviations included. Clean-room: first principles and the Hysing et al. (2009) case-1 values already read in ADR 0096
-(V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Written at HEAD 2eb65ee (scratch copy `<scratch dir>`, target
+(V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Written at HEAD 33807c2 (scratch copy `<scratch dir>`, target
 `<target dir>`). Test file: `crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs`.
 
 ## Problem
@@ -201,7 +201,7 @@ every outcome (it would move every VOF result with a symmetry or component-speci
 
 ## Addendum: measured values (after the runs)
 
-All runs once, in the scratch tree (archive of 2eb65ee plus this wave's files), release build. Rising-bubble metrics are
+All runs once, in the scratch tree (archive of 33807c2 plus this wave's files), release build. Rising-bubble metrics are
 y_c(3) / V_c,max / time of V_c,max; errors are to 1.0813 / 0.2417. Defaults on 40 x 80: 1.0282 / 0.2204 / 0.850; on 80 x 160:
 1.0178 / 0.2187 / 0.829 (ADR 0100). `vof_bubble_diagnosis_w41c.rs` prints exactly the quantities below.
 

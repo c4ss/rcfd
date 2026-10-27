@@ -352,7 +352,7 @@ repository.
    `Simulation::new` to succeed; since D1 reports those errors in `Simulation::new`, its set-up now builds the simulation from the
    same case with the section switched off. Its assertions are unchanged; the new behaviour is checked by W5.
 6. A particle-tracking failure during a run (tracker error) stops the simulation with `failure` set (like a user-function error).
-7. The first commit of the fractional-step schema keys (775dd4f) contained the three keys twice (a mistake of my commit tooling);
+7. The first commit of the fractional-step schema keys (f338489) contained the three keys twice (a mistake of my commit tooling);
    it was corrected in the next commit.
 8. F-210 stops at `partial`: the registered BDF2 temporal-order, spatial-order and Kim-Moin checks are misses (above). The roadmap
    acceptance (Taylor-Green decay within 2 percent, cavity against published data) is met by F1 and F6.

@@ -1,7 +1,7 @@
 # ADR 0074: Wave 34C, Symmetry boundary term audit and the SST flat-plate convergence order
 
 Status: registered before any rcfd run or code change of this wave (this file is committed first; results go into an addendum, limits are never widened).
-Branch main, written at HEAD 7e7492f. Parents: ADR 0010 (component-consistent diagonal), ADR 0070 (wave 33C, addendum: Symmetry finding, P2f known miss,
+Branch main, written at HEAD c785dca. Parents: ADR 0010 (component-consistent diagonal), ADR 0070 (wave 33C, addendum: Symmetry finding, P2f known miss,
 +2 percent u+ offset), ADR 0071 (wave 33D, `coupled_body_pair_mean`), ADR 0063 (HA1 to HA10).
 
 ## Open items

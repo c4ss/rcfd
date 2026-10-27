@@ -3,7 +3,7 @@
 Status: registered before any code of this wave was written. Everything under "Registered" was committed before the code and the runs it governs.
 Limits are not changed, widened or deleted after a run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a
 NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles and published literature only;
-nothing here is taken from another CFD code or its documentation. Written at HEAD 697ebe6 (scratch clone `<scratch dir>`).
+nothing here is taken from another CFD code or its documentation. Written at HEAD 57dbdd5 (scratch clone `<scratch dir>`).
 
 Parents: ADR 0077 (wave 35B: steady divergence guard, part B diagnostics D0-D9 with D3 "Barth-Jespersen-limited gradient STABLE", finding B-X, the
 `f64::max` finding, the C4 miss and the one-corrector restriction), ADR 0073 (B3/B4 lag model and its measured classifications), ADR 0069 (the stability
@@ -11,7 +11,7 @@ criteria of the transient cavity harness), ADR 0050 (SIMPLEC non-orthogonal flux
 
 ## Disclosure: what was run before this registration (rule (d))
 
-All smoke runs: scratch files not committed (`crates/rcfd-api/tests/w36b_smoke.rs`, `crates/rcfd-fv/tests/w36b_smoke_fv.rs`), release build of 697ebe6.
+All smoke runs: scratch files not committed (`crates/rcfd-api/tests/w36b_smoke.rs`, `crates/rcfd-fv/tests/w36b_smoke_fv.rs`), release build of 57dbdd5.
 
 * SM-K Kovasznay set-up of part L (below) with the limiter OFF (`linear_upwind` unlimited) on all three meshes: converged in 91, 196, 501 iterations
   (res_u, res_p below 1e-10); L2 velocity error 4.105e-2, 9.580e-3, 2.204e-3 (orders 2.10, 2.12), L-infinity 1.801e-1, 4.788e-2, 1.214e-2 (orders 1.91,
@@ -22,7 +22,7 @@ All smoke runs: scratch files not committed (`crates/rcfd-api/tests/w36b_smoke.r
 * SM-X the sheared-channel set-ups of part X, 20 iterations each (construction): S3 at 50 and 55 degrees (55: max speed 13 at iteration 10, 70 at 20, the
   ADR 0077 S3 behaviour); the x-periodic body-forced walled channel at 0 and 60 degrees and the doubly periodic Kolmogorov box (nu 0.5) at 0 and 60
   degrees build and iterate (max speed 1.17, 1.03, 1.14, 1.03 at iteration 20).
-* SM-N on 697ebe6, fv level, the ADR 0077 S2 cavity (12 x 12, nu 1e-3, SIMPLE, upwind, alpha 1/1, unguarded): the fields are first non-finite at
+* SM-N on 57dbdd5, fv level, the ADR 0077 S2 cavity (12 x 12, nu 1e-3, SIMPLE, upwind, alpha 1/1, unguarded): the fields are first non-finite at
   iteration 375, where `IterationInfo` reports `max_du = 0`, `continuity = 0`, `res_u = 0.971`, `res_p = NaN`; at 376 `res_u = 0` too. `SimpleSolver::run(3000,
   1e-6)` on the same set-up returns `converged = true` at iteration 375 with non-finite fields (its test is `max_du < tol && continuity < 1e-6`).
 * SM-G coupled solver (`solver.algorithm = "coupled"`, lid cavity, guard off, alpha_u 1.0): no finite runaway found in ten set-ups (32 x 32: nu 1e-3, 1e-4
@@ -133,8 +133,8 @@ Checks (`crates/rcfd-fv/tests/w36b_nan_reports.rs`, `crates/rcfd-api/tests/w36b_
 
 | id | set-up | limit |
 |----|--------|-------|
-| N1 | SM-N set-up, unguarded, iterated to the first iteration whose fields are non-finite (375 on 697ebe6) | at that iteration `max_du`, `continuity` and `res_u` are NaN (all three); the iteration number is reported |
-| N2 | SM-N set-up, `SimpleSolver::run(3000, 1e-6)` | `converged == false` (it returned true at 375 on 697ebe6) |
+| N1 | SM-N set-up, unguarded, iterated to the first iteration whose fields are non-finite (375 on 57dbdd5) | at that iteration `max_du`, `continuity` and `res_u` are NaN (all three); the iteration number is reported |
+| N2 | SM-N set-up, `SimpleSolver::run(3000, 1e-6)` | `converged == false` (it returned true at 375 on 57dbdd5) |
 | N3 | coupled solver, cavity 12 x 12, nu 0.01, one cell velocity set to NaN before the first iteration | the reported `max_du`, `continuity` and `res_u` of that iteration are NaN |
 | N4 | the A1b guard of ADR 0077 on the SM-N set-up (guard on) and a K1 trip on a NaN state | the A1b limits unchanged (trip before the twin's NaN iteration); a `non_finite` trip on a NaN velocity field reports quantity `velocity` and a cell |
 | N5 | `baseline_hashes.rs` and the full suite | all registered hashes match; no other test changes outcome |
@@ -192,7 +192,7 @@ first iteration that ends with non-finite fields) `max_du` and `continuity` are 
 non-finite inside that iteration (the pressure solve, `res_p` NaN). The registered N1 limit asked for a NaN residual of a finite state: a defective limit.
 The registered test stays as the ignored `n1_registered_setup_defect` (limit unchanged). Corrected N1' (new test `n1_corrected_reports_are_nan_from_the_
 first_non_finite_state`): at the first iteration whose fields end non-finite, `max_du` and `continuity` are NaN; at the next iteration (whose starting
-state is non-finite) `max_du`, `continuity` and `res_u` are all NaN (on 697ebe6 that iteration, 376, reported 0, 0, 0; SM-N).
+state is non-finite) `max_du`, `continuity` and `res_u` are all NaN (on 57dbdd5 that iteration, 376, reported 0, 0, 0; SM-N).
 
 ## Amendment 2 (2026-10-20): part X controls without shear; written after the registered scan and V9 ran once, before the runs below
 
@@ -218,7 +218,7 @@ Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
 
 ## Addendum (measured values, misses, deviations)
 
-Release builds, scratch tree on top of 2403566 (rebased onto bae16d5 before the gate; the rebase touched no file of this wave except the two docs).
+Release builds, scratch tree on top of 2403566 (rebased onto 6afa15a before the gate; the rebase touched no file of this wave except the two docs).
 One run per registered set-up unless stated. Limits are the registered ones (with amendments 1 and 2), unchanged.
 
 Outcome in one paragraph. (1) `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the FAN-01
@@ -289,8 +289,8 @@ transient-growth effect (not tested further). A start-up procedure (an alpha_p r
 | Check | Measured | Limit | Result |
 |---|---|---|---|
 | N1 registered (res_u NaN at the first non-finite iteration) | 375: `max_du` NaN, `continuity` NaN, `res_u` 0.971 (residual of the finite starting state) | all three NaN | set-up defect (amendment 1); ignored `n1_registered_setup_defect` |
-| N1' corrected | 375: `max_du`, `continuity` NaN; 376: `max_du`, `continuity`, `res_u` NaN (697ebe6 reported 0, 0, 0) | as amended | pass |
-| N2 `SimpleSolver::run(3000, 1e-6)` | `converged = false` after 3000 iterations (697ebe6: `true` at 375 with NaN fields) | false | pass |
+| N1' corrected | 375: `max_du`, `continuity` NaN; 376: `max_du`, `continuity`, `res_u` NaN (57dbdd5 reported 0, 0, 0) | as amended | pass |
+| N2 `SimpleSolver::run(3000, 1e-6)` | `converged = false` after 3000 iterations (57dbdd5: `true` at 375 with NaN fields) | false | pass |
 | N3 coupled, one NaN cell velocity | `max_du`, `continuity`, `res_u` NaN at iteration 1 | NaN | pass |
 | N4 K1 trip on the NaN state | `non_finite`, quantity `velocity`, cell 0, iteration 375; ADR 0077 A1a-A1c unchanged | located | pass |
 | N5 `baseline_hashes.rs`, suite | hashes match; suite: see the final gate | unchanged | pass |
@@ -342,7 +342,7 @@ UNVERIFIED; used only through its closed form). The sqrt(2) linear stability bou
 only used to choose nu = 0.5 for V7). The statement that Barth-Jespersen clips smooth extrema (recalled, UNVERIFIED; not tested).
 ### Further deviations and checks (added after the addendum)
 
-* The commits were landed in the main repository by a fast-forward merge from the scratch clone onto a clean working tree (main HEAD bae16d5 had no dirty
+* The commits were landed in the main repository by a fast-forward merge from the scratch clone onto a clean working tree (main HEAD 6afa15a had no dirty
   files), not through the temporary-index procedure; only this wave's commits were added.
 * The final gate's test run took about 2 h 20 min, over the 60-minute run guideline (as the L2s sweep).
 * Checked after the code was final (review): the NaN-keeping reports change no persisted record type. Design-loop records store no residuals and write
@@ -350,7 +350,7 @@ only used to choose nu = 0.5 for V7). The statement that Barth-Jespersen clips s
 
 ### Final gate
 
-Fresh `git archive` of 4ac4fcc: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+Fresh `git archive` of ad620a8: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1875 passed, 0 failed, 520 ignored (no LNK1201). The heavy ignored tests L1a, L1b and L2c were rerun on
-that archive and reproduce every printed digit (the main-repository commits since the measured tree, 2264dda..bae16d5, changed only
+that archive and reproduce every printed digit (the main-repository commits since the measured tree, ebca197..6afa15a, changed only
 `rcfd-mesh/src/fan_cgrid.rs` among the sources, an opt-in C-grid construction). This paragraph and the corrections above are a docs-only commit, not re-gated.

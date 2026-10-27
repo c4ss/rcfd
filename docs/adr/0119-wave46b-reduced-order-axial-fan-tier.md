@@ -6,12 +6,12 @@ rules of ADRs 0110-0117:
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
-Written at main 9fbedff (worktree `<scratch dir>`, branch `w46b`, target `<target dir>`). Serves parts C7,
+Written at main 3175951 (worktree `<scratch dir>`, branch `w46b`, target `<target dir>`). Serves parts C7,
 C4/C5 (reduced-order part) and D1 of `docs/fan-project-breakdown.md`. Clean-room: first principles, our own ADRs, and the labelled
 recollections below. Parents: ADRs 0012 (F-113 lumped fan curve, `bisect`, `network_pressure`), 0036 (F-218 actuator disk), 0065
 (`rcfd_mesh::fan`), 0066 (Gutin-type closed form, `rcfd_post::rotor`), 0075 (FAN-01 data), 0078 (arm E, blade-element estimate).
 
-## What already existed (re-checked at 9fbedff)
+## What already existed (re-checked at 3175951)
 
 * F-218 (`rcfd_fv::actuator`): momentum-theory disk only. ADR 0036 lists "blade-element lookup, tip loss, trim" as NOT provided; there
   is no blade-element code to reuse.
@@ -294,14 +294,14 @@ Measured (one run each, debug build): **S1** worst 3.0e-16 against 1e-12; NC swi
 
 ## Final gate
 
-Written at main 9fbedff and rebased three times: onto 53e1fac, then 975dbfc (ADR 0120), then 7fcdf9c (one docs file, `docs/ui-restart-plan.md`).
-The commit ids in the addendum are pre-rebase: 618c8c6 (implementation) is now bcb35b9.
-* Gate 1, a fresh `git archive` of a3217b2 (on 53e1fac), `<scratch dir>`: `cargo test --workspace --release --no-fail-fast`
+Written at main 3175951 and rebased three times: onto 7ba9d46, then 7efbd33 (ADR 0120), then 3a379a1 (one docs file, `docs/ui-restart-plan.md`).
+The commit ids in the addendum are pre-rebase: 618c8c6 (implementation) is now b5b32c4.
+* Gate 1, a fresh `git archive` of a3217b2 (on 7ba9d46), `<scratch dir>`: `cargo test --workspace --release --no-fail-fast`
   2045 passed, 0 failed, 652 ignored (fmt and clippy clean).
-* Gate 2, a fresh `git archive` of db7e521 (amendment 2 included, on 975dbfc): fmt clean; `cargo clippy --workspace --all-targets
+* Gate 2, a fresh `git archive` of db7e521 (amendment 2 included, on 7efbd33): fmt clean; `cargo clippy --workspace --all-targets
   -- -D warnings` clean; `cargo test --workspace --release --no-fail-fast` **2059 passed, 0 failed, 654 ignored**. The baseline main
-  975dbfc had 2040 / 0 / 651 (ADR 0120); this wave adds 19 passing tests (2 unit tests in `fan_rom.rs`, 16 in `fan_rom_w46b.rs`, 1 in
+  7efbd33 had 2040 / 0 / 651 (ADR 0120); this wave adds 19 passing tests (2 unit tests in `fan_rom.rs`, 16 in `fan_rom_w46b.rs`, 1 in
   `fan_rom_design_w46b.rs`) and 3 ignored (`smoke_w46b`, `v1_fan01_reported`, `z1_zero_loss_known_miss`). The load-sensitive
   sandbox test did not fail.
-* After the last rebase onto 7fcdf9c (docs only): `cargo fmt --check` clean, clippy on `rcfd-post` and `rcfd-api` clean, and the two
+* After the last rebase onto 3a379a1 (docs only): `cargo fmt --check` clean, clippy on `rcfd-post` and `rcfd-api` clean, and the two
   test files pass (16 / 0 / 3 and 1 / 0 / 0). The only commit after that is this section (docs only).

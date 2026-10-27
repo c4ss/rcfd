@@ -2,7 +2,7 @@
 
 Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here as an
-amendment before it runs. Written at HEAD 3ac9a0e (worktree `<scratch dir>`, branch `w44b`, target
+amendment before it runs. Written at HEAD 79b0805 (worktree `<scratch dir>`, branch `w44b`, target
 `<target dir>`). Parent: ADR 0109 (wave 43B). Clean-room: first principles (polygon geometry, exact solutions of the
 Navier-Stokes equations) and the measured values of ADR 0109; no literature value enters a limit.
 
@@ -103,7 +103,7 @@ matched) = 48x8x2 + 35x8x2; M_t (counts around matched) = 48x8x2 + 48x8x3; K2 = 
   case with the counts of M (uniform) -> `mesh.r_interface`, `non-orthogonal` and `factor`; `isotropic_interface` with `ny = 1` and a
   rotor block thinner than `h` -> `mesh.isotropic_interface`.
 * **T4 bit identity without the keys.** An `annulus_3d_interface` MRF case (24 x 4 x 2 lower, ny_right 3, `zone = "all"`, 30
-  iterations) hashed with FNV-1a over the bits of `ux, uy, uz, p` and the face fluxes equals the value recorded at HEAD 3ac9a0e before any
+  iterations) hashed with FNV-1a over the bits of `ux, uy, uz, p` and the face fluxes equals the value recorded at HEAD 79b0805 before any
   code change; `crates/rcfd-api/tests/baseline_hashes.rs` passes unchanged.
 * **T5 the option in the full-annulus solver.** The tree case with the counts of K2 (96/70, 6/6 radial, 4/6 axial) and
   `isotropic_interface = true`: the pre-flight passes; C2 converges (`is_converged`, 4000 iterations at most, `face_flux`) and
@@ -155,7 +155,7 @@ there. Not defective; no limit changes.
 | T1 tree mesh = library join | content hash 0xea943f5d2aa3382e both, 4824 cells | exact | PASS |
 | T2 tree run = library run | 272 / 272 iterations, max difference 0.0 (error 3.788e-3 V_i, as ADR 0109 K2) | 1e-12 | PASS |
 | T3 located errors | all 7 at the registered path with the registered words | substrings | PASS |
-| T4 case without the keys | hash 0x6eca7279950f43c3 = HEAD 3ac9a0e value; `baseline_hashes.rs` untouched (gate) | exact | PASS |
+| T4 case without the keys | hash 0x6eca7279950f43c3 = HEAD 79b0805 value; `baseline_hashes.rs` untouched (gate) | exact | PASS |
 | T5 isotropic option, full annulus K2 counts | converged in 238 it, error 6.239e-3 V_i | converged, 2e-2 | PASS |
 
 Interpretation, in plain words: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success, so the case
@@ -181,6 +181,6 @@ existing keys unchanged; `baseline_hashes.rs` not touched.
 
 ## Final gate
 
-Fresh `git archive` of HEAD eb1d830 (includes the wave-44C ADR commit c02f2a3): `cargo fmt --check` clean, `cargo clippy --workspace
+Fresh `git archive` of HEAD 9aa80ee (includes the wave-44C ADR commit b178fda): `cargo fmt --check` clean, `cargo clippy --workspace
 --all-targets -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1992 passed, 0 failed, 622 ignored (wave 43: 1983 /
 0 / 619; +9 passing tests of this ADR, +3 ignored: two smokes and the S2 known miss).

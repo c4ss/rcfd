@@ -320,8 +320,8 @@ steady solver has no divergence stop (a diverged SIMPLEC run continued for hours
 convection diverges on this mesh both laminar and with SST, `upwind` is stable; (5) the measured FAN-01 pressure rise is an installation value, a rotor-only
 model needs either the inlet nozzle, hub and diffuser or a rig-independent quantity (torque) to compare with.
 
-Code state of the measurements: Part C was measured on 7e7492f plus the wave 34D test files; G1, the attempt 2 probe and the bit-identity checks on 7e7492f
-plus the wave 34D code; the diagnostic round and attempt 3 on 1ea78dc (which contains all wave 34D code). Between those trees and the gated HEAD other agents
+Code state of the measurements: Part C was measured on c785dca plus the wave 34D test files; G1, the attempt 2 probe and the bit-identity checks on c785dca
+plus the wave 34D code; the diagnostic round and attempt 3 on 7f16fc9 (which contains all wave 34D code). Between those trees and the gated HEAD other agents
 changed only opt-in paths (34A wall-velocity projection and C-grid construction, 34B consistent momentum interpolation, 34C component diagonal for PISO/PIMPLE);
 the non-ignored Part C and Part B tests are re-run by the final gate on the gated HEAD. The attempt 1 C-grid refusal is no longer asserted by the test (34A is
 changing the C-grid construction); it is recorded here.

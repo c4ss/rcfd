@@ -1,6 +1,6 @@
 # Partials audit, group 9
 
-Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at 57d5755). Grades follow the acceptance text as
+Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at a72d646). Grades follow the acceptance text as
 written. Tests were re-run by the auditor (release build, own target directory, Windows, two test threads) unless marked "read
 only". The earlier notes were not trusted. Where a note and a measurement disagree, the measurement is recorded. Every failure seen
 under `--include-ignored` was checked to be an `#[ignore]`d known-miss or set-up-defect test. No non-ignored test failed.
@@ -61,8 +61,8 @@ monotonically with diameter and d50 is within a registered factor of the cited e
 
 Every registered check of ADR 0089 re-passes: the site now has 129 pages (other audits added files) with 0 broken relative links,
 5 tutorials, and the slow blocks run. The unmet clause is "executed in CI". `ci.yml` runs `cargo test --workspace` on ubuntu and
-windows but has not run on these commits. `origin/main` is at c7e44ea (wave 32), so the remote has an older state, and the
-tutorials (wave 38) were never on it. Whether any hosted run happened for c7e44ea was not checked (no `gh` here). One push by the
+windows but has not run on these commits. `origin/main` is at 5e300f9 (wave 32), so the remote has an older state, and the
+tutorials (wave 38) were never on it. Whether any hosted run happened for 5e300f9 was not checked (no `gh` here). One push by the
 user would also settle F-001 and F-002. The GUI and sidebar steps stay `not-executed` by design. Linux execution of the tutorials is
 untested.
 

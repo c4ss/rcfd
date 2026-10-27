@@ -21,7 +21,7 @@ tolerances stay at 1e-11. Exact torque magnitude `4 pi mu B = 2.513274` per unit
 New test D5d `d5d_taylor_couette_torque_converged`. Limits: `s.is_converged() == true` (asserted) and
 `|M / M_exact - 1| <= 0.01`.
 
-Smoke (ignored scratch test on 85705c7, not kept): the D5 case at n_r = 128 with the 20000 cap, stepped in chunks of 1000
+Smoke (ignored scratch test on a310dea, not kept): the D5 case at n_r = 128 with the 20000 cap, stepped in chunks of 1000
 iterations: torque -2.4704335 / -2.5004316 / -2.5023231 / -2.5024422 / -2.5024496 / -2.5024501 / -2.5024501 after 1000 ... 7000;
 res_u 1.79e-5, 1.12e-6, 7.07e-8, 4.45e-9, 2.80e-10, 1.762e-11, 9.965e-12; res_p 1.29e-5 ... 1.365e-11, 9.971e-12; the
 converged flag is set by 7000 iterations (580 s). The residual fell by about 16 per 1000 iterations down to 6000 and by only
@@ -52,7 +52,7 @@ New test M5 `m5_stretched_mesh_third_level_order`. Limits: every run converged u
 `log2(e_32 / e_64) >= 1.7` for each of C0, C1 and C2 (the user-set threshold; stricter than the ADR 0016 limit of 1.5 for C2,
 which on this orthogonal mesh has been inert: identical orders for all three sets). The 16 -> 32 order is printed only.
 
-Smoke (scratch test on 85705c7 with the sweep cap as a parameter, not kept): C0 at n = 32 converges in 19 sweeps
+Smoke (scratch test on a310dea with the sweep cap as a parameter, not kept): C0 at n = 32 converges in 19 sweeps
 (change/range 5.7e-14, 0.9 s), L2 error 2.091082e-4; C0 at n = 64 for 8 sweeps only takes 7.4 s, the change/range falls by a
 factor of about 7 per sweep (3.6e-8 at sweep 8), L2 error 5.571089e-5 at that point. What I knew when registering: that
 unconverged n = 64 error (it would give an order of about 1.91) and the ADR 0016 orders (S: 1.594 / 1.744 for all sets).
@@ -87,7 +87,7 @@ Smoke (ignored `piston_mach02_smoke`, kept): `piston_run(P, 0.25)`, a quarter st
 0.912, 3 removals, p_bar V^gamma - 1 = 2.28e-4, B1 3.3e-16, B2 1.3e-14, B3 6.7e-16, p/rho^gamma spread [0.999994, 1.000063]. What I
 knew when registering: those numbers and the ADR 0090 results at Mach 0.05.
 
-## Addendum: measured (registered runs on the work tree of d5bdf33, release)
+## Addendum: measured (registered runs on the work tree of dc5cecc, release)
 
 | Item | Check | Measured | Limit | Verdict |
 |---|---|---|---|---|

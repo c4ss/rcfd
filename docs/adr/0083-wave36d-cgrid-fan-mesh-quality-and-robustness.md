@@ -11,7 +11,7 @@ and lost R-E builds, so both were removed. Nothing here is a fan performance cla
 
 ## What was run before this ADR was written (disclosed)
 
-All on HEAD 697ebe6 unmodified, in a scratch copy, release builds:
+All on HEAD 57dbdd5 unmodified, in a scratch copy, release builds:
 * P10 of ADR 0079 reproduced: continuity 7.915e-4 at iteration 10, 6.619e-3 at most over 200-300, largest relative speed 62.95 m/s, `|m_in + m_out|`
   7.2e-5 of `m_in`, no failure (18 s for 300 iterations on 11 536 cells).
 * The ADR 0079 attribution on FAN-01-C (`fan01_attribution`): the non-orthogonality maximum (83.26 deg) is the i-face between C cells (19, 9) and
@@ -233,7 +233,7 @@ B' 80.93 / 8.894 / 8805.0, so C5b is not blind; prediction: A' aspect MISSED, B'
 
 ## Addendum: measured values, misses and deviations
 
-Release builds, scratch tree of this wave on 697ebe6; each registered run once. Code state of the measurements: record commit a9677ea (H with the
+Release builds, scratch tree of this wave on 57dbdd5; each registered run once. Code state of the measurements: record commit 0129f49 (H with the
 H5 range); H5 was then rejected by its registered acceptance and removed in the next commit (below), which moves no node. Limits are the registered ones, unchanged. No external reference
 value enters any gate. No fan performance claim. Solver physics files were not touched.
 
@@ -321,7 +321,7 @@ Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072
 
 ### Final gate
 
-On a fresh `git archive` of 8988eb0 (the H5 removal; it also contains the other wave-36 agents' commits up to it): `cargo fmt --all -- --check`
+On a fresh `git archive` of 33aac19 (the H5 removal; it also contains the other wave-36 agents' commits up to it): `cargo fmt --all -- --check`
 clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1873 passed, 0 failed, 519
-ignored** (wave 35: 1853 / 0 / 494). An earlier gate of the record commit a9677ea (with H5) gave 1861 / 0 / 506, fmt and clippy clean. This text
+ignored** (wave 35: 1853 / 0 / 494). An earlier gate of the record commit 0129f49 (with H5) gave 1861 / 0 / 506, fmt and clippy clean. This text
 was added afterwards in a docs-only commit that was not re-gated. The B1 hashes are specific to x86_64-pc-windows-msvc.

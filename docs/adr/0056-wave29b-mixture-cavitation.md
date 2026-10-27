@@ -15,7 +15,7 @@ polydisperse bubble sizes, bubble-size evolution (population balance coupling), 
 the multiphase path), vapour compressibility, non-condensable gas, the Zwart-Gerber-Belamri and Singhal models, turbulence
 cavitation pressure correction. Published cavitation or bubble-column data are NOT compared (see "Reference data").
 
-## Audit (HEAD 60a5375)
+## Audit (HEAD 372e7fd)
 
 * `AlphaTransport::substep` solves `alpha_t + div(alpha phi + alpha(1-alpha) phi_r) = 0` with a first-order upwind low flux, a
   central-plus-compression high flux and a Zalesak limiter (bounded, conservative for a solenoidal flux). The compression term has
@@ -252,8 +252,8 @@ and the existing VOF, mass-transfer and wave tests pass unchanged.
 
 ### Other disclosures
 
-* Commit d2df25e (mixture/cavitation modules) is not buildable alone: the lib.rs hunk was missing (path error in my commit script);
-  commit 98f5fab completes it. Later commits build.
+* Commit 4f354df (mixture/cavitation modules) is not buildable alone: the lib.rs hunk was missing (path error in my commit script);
+  commit d617c7e completes it. Later commits build.
 * The momentum equation uses the density of the start of the step (explicit density lag; alpha is updated after the solve).
 * A cavitation case without a `pressure = "fixed"` boundary is refused with a located error.
 * The N tests run through the library, not the tree (W3 covers the tree wiring with a small box).

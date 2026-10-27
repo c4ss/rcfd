@@ -1,6 +1,6 @@
 # Partials audit, group 2
 
-Read-only audit of ten roadmap items with status `partial` (HEAD a7fb534, 2026-10-21). Every grade below rests on tests re-run
+Read-only audit of ten roadmap items with status `partial` (HEAD 07ae2db, 2026-10-21). Every grade below rests on tests re-run
 for this audit in release mode (`cargo test --release ... -- --include-ignored --nocapture`, own target directory), unless the row
 says "read". Ignored `*_known_miss` tests were run too; all of them still fail, which confirms the recorded misses. Paths are given
 as plain text.
@@ -24,7 +24,7 @@ less than exists): F-132 and F-121.
 | F-224 | Chemistry input formats | PARTIAL | run: rcfd-reactor slices k12a/k12b, reactor `gri` filter (r3_gri_reads 53 species / 325 reactions; r3 NASA continuity known miss fails as recorded); counted gri30.yaml: 53 species, 325 reactions | no second-format reader (YAML); no three-condition hydrogen-air equilibrium comparison | M | none (data present locally) | yes | yes (YAML crate vs subset parser) |
 | F-234 | Octree fill with prism layers | PARTIAL | run: rcfd-mesh octree 9/9 (+O5 known miss fails: 77.41 deg), rcfd-fv octree_cavity 1/1 | sphere quality miss (non-orthogonality); sphere drag Re 100 not run; flat-plate y+/Cf not attempted | L | drag reference not in repo | no | no |
 
-Clippy result (run for F-002 at HEAD a7fb534): exit 0. Recommended status flips: F-072, F-121 and F-202 to done, with their
+Clippy result (run for F-002 at HEAD 07ae2db): exit 0. Recommended status flips: F-072, F-121 and F-202 to done, with their
 title-only remainders moved to new items or to F-238 / F-100.
 
 ## F-002 (PARTIAL)
@@ -33,7 +33,7 @@ Measured: `cargo fmt --all -- --check` passes at HEAD; `cargo clippy --workspace
 re-run for this audit. The
 licence files and the clean-room and sourcing rules in CONTRIBUTING.md are present. The unmet clause is "CI runs": the GitHub
 Actions API for the origin repository returns 404 without authentication, so whether a hosted run ever happened (origin/main is at
-c7e44ea, wave 32) cannot be shown either way from here. Two things will differ from the local gate when it does run: ci.yml runs
+5e300f9, wave 32) cannot be shown either way from here. Two things will differ from the local gate when it does run: ci.yml runs
 `cargo test --workspace` in debug mode on the stable toolchain (the local gate uses `--release`; MSRV 1.75 is not tested), and
 `validation-data/data/` is gitignored, so every test that reads the downloaded data pack returns early on CI. Closing it needs the
 user to make the run visible (or authenticate `gh`). Proposed rewording: "ci.yml runs fmt, clippy -D warnings and tests; one green

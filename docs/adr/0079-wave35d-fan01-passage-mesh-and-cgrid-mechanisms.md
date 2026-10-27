@@ -8,7 +8,7 @@ Nothing here is a fan performance claim.
 
 ## What was run before this ADR was written (disclosed)
 
-All on HEAD abd10f2 unmodified, in a scratch copy, release builds:
+All on HEAD b225b90 unmodified, in a scratch copy, release builds:
 * FAN-01 with the ADR 0075 amendment 1 C-grid counts and the y+ = 30 rule: both `pursuit` and `smoothed` refuse with `mesh.fan.n_down`: "the wake line
   (s from -0.0683 to -0.0862) leaves the passage (-0.0774, 0.0092) [layer k=0 (r = 0.12400)]" (the 34D result reproduced).
 * A' and B' with construction E rebuilt (timing): A' 14 s, B' 72 s; B' 593 250 cells, 78.17 deg, skewness 7.084, aspect 8531.6 (the 0072 numbers
@@ -339,7 +339,7 @@ MISSED on FAN-01.**
 ## Addendum: measured values, misses and deviations
 
 Release builds; code state of the measurements: the scratch tree of this wave, committed as 5348934 (record commit, with the four Part 2 options)
-and e733b3b (the rejected options removed; B1, P1-P8, R-G (b) and the control-range test re-run on that code with identical numbers; P9 runs in the
+and ae6b570 (the rejected options removed; B1, P1-P8, R-G (b) and the control-range test re-run on that code with identical numbers; P9 runs in the
 final gate, P10 (b) by hand on the gated tree, see "Measurement (b)" below). Limits are the
 registered ones, unchanged. No external reference value enters any gate. No fan performance claim.
 
@@ -397,7 +397,7 @@ recomputed from them and the corrected test (results back in list order) reprodu
 
 ### Part 4: default behaviour
 
-B1 met: the FNV hashes of S and A' with `pursuit` and with E are those recorded on abd10f2, after every change of this wave and at e733b3b; the
+B1 met: the FNV hashes of S and A' with `pursuit` and with E are those recorded on b225b90, after every change of this wave and at ae6b570; the
 default FAN-01 refusal message is unchanged. `baseline_hashes.rs` untouched (final gate below). The ADR 0072 tests are unchanged.
 
 ### Deviations from the registered plan (candid list)
@@ -425,11 +425,11 @@ design-point speed, flow and the assumed density 1.2 kg/m^3 of the smoke set-up 
 
 ### Measurement (b) and the final gate
 
-Measurement (b), construction G on the final code (gated tree 3589c98): P1-P8 identical to (a3) (re-run at e733b3b); P9 met in the final gate
+Measurement (b), construction G on the final code (gated tree 25ad698): P1-P8 identical to (a3) (re-run at ae6b570); P9 met in the final gate
 (`p9_fan01_mesh_is_accepted_by_the_solver_and_the_rules` ok); P10 run by hand on the gated tree: continuity 7.915e-4 at iteration 10, 6.619e-3 at most
 over 200-300, largest relative speed 62.95 m/s, `|m_in + m_out|` 7.2e-5 of `m_in`, no failure: **MISS**, identical to (a3).
 
-Final gate on a fresh `git archive` of 3589c98 (which also contains the other wave-35 agents' commits up to it): `cargo fmt --all -- --check` clean,
+Final gate on a fresh `git archive` of 25ad698 (which also contains the other wave-35 agents' commits up to it): `cargo fmt --all -- --check` clean,
 `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1832 passed, 0 failed, 479
 ignored** (wave 34: 1822 / 0 / 448). This text was added afterwards in a docs-only commit that was not re-gated. The B1 hashes are specific to the
 x86_64-pc-windows-msvc target on which they were recorded.
