@@ -147,7 +147,7 @@ Conclusion for B: the mesh dependence of the Standard wall function in the chann
 
 ### Deviations from the registered plan
 
-1. Re_theta definitions beyond HA9 (Deviation 1 of Addendum 1). 2. The finest mesh was run twice (baseline as the reference for the new Re_theta definitions, and factor 1). 3. Not every treatment was run on every mesh (cells marked "not run"); HA2, HA3, HA5, HA7, HA8 were run on the coarse mesh (HA2, HA3 also medium), the effects being below the noise floor. 4. The scalable-function text of Fluent (an unofficial copy (not linked)) was seen only through the fetch summary and Grotjans-Menter was not read.
+1. Re_theta definitions beyond HA9 (Deviation 1 of Addendum 1). 2. The finest mesh was run twice (baseline as the reference for the new Re_theta definitions, and factor 1). 3. Not every treatment was run on every mesh (cells marked "not run"); HA2, HA3, HA5, HA7, HA8 were run on the coarse mesh (HA2, HA3 also medium), the effects being below the noise floor. 4. The scalable-function text of the secondary description was seen only through the fetch summary and Grotjans-Menter was not read.
 
 ### Not delivered
 
