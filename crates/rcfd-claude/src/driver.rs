@@ -219,6 +219,7 @@ impl Claude {
             let mut inputs: HashMap<String, Value> = HashMap::new();
             let mut r = BufReader::new(stdout);
             let mut line = Vec::new();
+            let mut checked = false;
             loop {
                 line.clear();
                 match r.read_until(b'\n', &mut line) {
@@ -247,13 +248,16 @@ impl Claude {
                         }
                         ev => ev,
                     };
-                    let abort = matches!(&ev, StreamEvent::Init { permission_mode, .. } if permission_mode.as_deref() != Some("dontAsk"));
-                    let _ = tx.send(ev);
-                    if abort {
+                    let abort = if checked { None } else { unchecked(&ev) };
+                    checked |= abort.is_none() && matches!(&ev, StreamEvent::Init { .. });
+                    // the offending event itself is not forwarded, except an Init (it shows the mode the CLI applied)
+                    if abort.is_none() || matches!(ev, StreamEvent::Init { .. }) {
+                        let _ = tx.send(ev);
+                    }
+                    if let Some(why) = abort {
                         kill_tree(&mut lock(&reaper));
-                        let _ = tx.send(StreamEvent::Aborted(
-                            "the CLI did not apply --permission-mode dontAsk".into(),
-                        ));
+                        let _ = tx.send(StreamEvent::Aborted(why));
+                        checked = true; // abort once; lines already buffered still reach the UI after the Aborted event
                     }
                 }
             }
@@ -275,6 +279,33 @@ impl Claude {
             child,
             args,
         })
+    }
+}
+
+/// Why `ev` aborts a session whose permission mode has not been checked yet; `None` when it may pass. Only a
+/// `system/init` with a session id and `permissionMode` `dontAsk` checks the session. Unknown `system/*` lines
+/// (e.g. hook output) carry no action and pass; anything else before the check aborts (ADR 0128 finding 5).
+fn unchecked(ev: &StreamEvent) -> Option<String> {
+    let before = |what: String| {
+        Some(format!(
+            "{what} arrived before a checked system/init (session_id and permissionMode dontAsk)"
+        ))
+    };
+    match ev {
+        StreamEvent::Init { permission_mode, .. } if permission_mode.as_deref() == Some("dontAsk") => None,
+        StreamEvent::Init { permission_mode, .. } => Some(format!(
+            "the CLI did not apply --permission-mode dontAsk (system/init reports {permission_mode:?})"
+        )),
+        StreamEvent::Unrecognised { kind: Some(k) } if k == "system/init" => {
+            Some("the CLI's system/init line has no session_id, so its permission mode cannot be checked".into())
+        }
+        StreamEvent::Unrecognised { kind: Some(k) } if k.starts_with("system/") => None,
+        StreamEvent::Unrecognised { kind } => before(format!("an unrecognised line ({kind:?})")),
+        StreamEvent::ToolCall { name, .. } => before(format!("a tool call ({name})")),
+        StreamEvent::TextDelta(_) => before("assistant text".into()),
+        StreamEvent::PermissionDenied { tool_name, .. } => before(format!("a permission denial ({tool_name})")),
+        StreamEvent::Result { .. } => before("a result".into()),
+        StreamEvent::Aborted(_) | StreamEvent::Exited { .. } => None,
     }
 }
 
