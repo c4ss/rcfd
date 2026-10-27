@@ -63,6 +63,7 @@ Most task steps live in the reference pages below for now.
 * [Fan project breakdown](fan-project-breakdown.md): the plan for the computer-fan target, split into parts, with its limits.
 * [Studio plan](ui-restart-plan.md): the plan for the new desktop application.
 * [Validation data](validation-data.md): the open benchmark data pack, with fetch scripts, checksums and licence records.
+* [Provenance record](provenance.md): where rcfd's knowledge comes from, and every recorded case in which vendor documentation was consulted.
 * [Reference data](reference-data.md): benchmark values and published constants checked against public sources.
 * [Verification report](verification-report.md): reference values that were marked unverified, re-checked against their sources.
 * [Product suites](product-suites.md): a log of capabilities outside CFD; not a plan.

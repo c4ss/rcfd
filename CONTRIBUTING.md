@@ -7,8 +7,8 @@ a change. For what rcfd is and its current limits, read
 [the roadmap overview](docs/roadmap-overview.md).
 
 rcfd is licensed under either of Apache-2.0 (`LICENSE-APACHE`) or MIT
-(`LICENSE-MIT`) at your option. Contributions are accepted under the same
-terms.
+(`LICENSE-MIT`) at your option. Every contribution is licensed as MIT OR
+Apache-2.0, without additional terms.
 
 ## Clean-room policy (mandatory)
 
@@ -17,7 +17,11 @@ rcfd is a clean-room implementation. By submitting a change you confirm that:
 1. You used no proprietary code or text. You did not copy, translate,
    decompile, disassemble or otherwise derive anything from proprietary CFD
    software (source, binaries, installers, help files, UI strings,
-   undocumented file formats, or its documentation text).
+   undocumented file formats, or its documentation text). Do not decompile,
+   disassemble or inspect vendor binaries. Do not use vendor manuals, help
+   pages or theory guides (including unofficial copies) as a source for
+   anything, not even as a secondary check of a value, and do not add vendor
+   binaries, code or documentation text to the repository.
 2. Your sources are textbooks and papers only. Algorithms, correlations,
    model coefficients and benchmark data come from publicly published
    literature (textbooks, peer-reviewed papers, public standards, public
@@ -31,6 +35,22 @@ rcfd is a clean-room implementation. By submitting a change you confirm that:
 
 PRs that cannot state a public source for a non-trivial algorithm will be
 asked to add one before merge.
+
+Declare provenance in the pull request: for every algorithm, constant, data
+file or table you add, name the published source (or say it is derived from
+first principles), and say where any data came from and under which licence.
+Mark a value you could not check against its source as UNVERIFIED. The
+project's own record of what was consulted while it was built is
+[docs/provenance.md](docs/provenance.md).
+
+## Sign-off (DCO)
+
+Every commit must carry a `Signed-off-by: Your Name <email>` line
+(`git commit -s` adds it). By signing off you certify the Developer
+Certificate of Origin, version 1.1, as published at developercertificate.org:
+in short, that you wrote the change or otherwise have the right to submit it
+under the project's licence. Your contribution is licensed as MIT OR
+Apache-2.0.
 
 ## How to make a change
 
