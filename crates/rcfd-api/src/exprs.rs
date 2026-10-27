@@ -77,17 +77,16 @@ pub fn load_tables(case: &Case) -> (BTreeMap<String, Arc<Table>>, Vec<Diagnostic
         let text = if !file.is_empty() {
             let path = case.base_dir.join(&file);
             if let Some(root) = &case.sandbox {
-                let inside = !std::path::Path::new(&file)
-                    .components()
-                    .any(|c| matches!(c, std::path::Component::ParentDir))
-                    && path
-                        .canonicalize()
-                        .ok()
-                        .zip(root.canonicalize().ok())
-                        .map_or(true, |(p, r)| p.starts_with(r));
-                if !inside {
-                    diags.push(bad(p("file"), format!("table file '{file}' is outside the sandbox")));
-                    continue;
+                match crate::case::sandbox_contains(root, &case.base_dir, &file) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        diags.push(bad(p("file"), format!("table file '{file}' is outside the sandbox")));
+                        continue;
+                    }
+                    Err(e) => {
+                        diags.push(bad(p("file"), e));
+                        continue;
+                    }
                 }
             }
             match std::fs::read_to_string(&path) {

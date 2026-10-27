@@ -698,3 +698,179 @@ alpha_u = 7.0
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+/// Is the data file `file` (as written in the case, relative to `base`) inside the sandbox `root`? A `..`
+/// component is outside; a file that does not exist counts as inside (reading it then fails with its own located
+/// error). A root that cannot be resolved is an error: the check fails closed (ADR 0128 finding 16; the three
+/// readers of data files used to treat it as inside).
+pub(crate) fn sandbox_contains(root: &Path, base: &Path, file: &str) -> std::result::Result<bool, String> {
+    if Path::new(file)
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Ok(false);
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|e| format!("the sandbox root {} cannot be resolved: {e}", root.display()))?;
+    Ok(base.join(file).canonicalize().map_or(true, |p| p.starts_with(root)))
+}
+
+/// ADR 0128 finding 16: the sandbox containment of data files (chemistry mechanism, lookup tables, UDF modules).
+#[cfg(test)]
+mod sandbox_tests {
+    use super::*;
+    use serde_json::json;
+    use std::path::PathBuf;
+
+    const BASE: &str = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 4\nny = 4\n[physics]\nnu = 0.01\n\
+        [boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n\
+        [solver]\nalgorithm = \"simplec\"\n";
+
+    fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("rcfd_api_sandbox_{}_{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// The check the three readers used before (copied as it was): the oracle for resolvable roots.
+    fn old_inside(root: &Path, base: &Path, file: &str) -> bool {
+        let path = base.join(file);
+        !Path::new(file)
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+            && path
+                .canonicalize()
+                .ok()
+                .zip(root.canonicalize().ok())
+                .map_or(true, |(p, r)| p.starts_with(r))
+    }
+
+    /// `link` -> directory `target` (a junction on Windows, which needs no privilege); false if not possible.
+    fn dir_link(target: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .output()
+                .is_ok_and(|o| o.status.success())
+        }
+    }
+
+    fn file_link(target: &Path, link: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(target, link).is_ok()
+        }
+    }
+
+    #[test]
+    fn sandbox_helper_matches_the_old_check_on_resolvable_roots() {
+        let d = scratch("table");
+        let (root, outside) = (d.join("root"), d.join("outside"));
+        let sub = root.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        for f in [
+            root.join("a.csv"),
+            sub.join("b.csv"),
+            outside.join("c.csv"),
+            d.join("top.csv"),
+        ] {
+            std::fs::write(f, "x").unwrap();
+        }
+        let links = [
+            ("dir link out", dir_link(&outside, &root.join("link_out"))),
+            ("dir link in", dir_link(&sub, &root.join("link_in"))),
+            (
+                "file link out",
+                file_link(&outside.join("c.csv"), &root.join("f_out.csv")),
+            ),
+        ];
+        let abs = |p: PathBuf| p.display().to_string();
+        let files = [
+            "a.csv".to_string(),
+            "sub/b.csv".into(),
+            "b.csv".into(),
+            "missing.csv".into(),
+            "sub/missing.csv".into(),
+            "../outside/c.csv".into(),
+            "../a.csv".into(),
+            "./a.csv".into(),
+            "sub/../a.csv".into(),
+            "link_out/c.csv".into(),
+            "link_in/b.csv".into(),
+            "f_out.csv".into(),
+            "root/a.csv".into(),
+            "outside/c.csv".into(),
+            "top.csv".into(),
+            ".".into(),
+            String::new(),
+            abs(root.join("a.csv")),
+            abs(outside.join("c.csv")),
+            abs(outside.join("missing.csv")),
+            abs(root.join("sub").join("missing.csv")),
+        ];
+        let (mut n, mut inside, mut mismatches) = (0, 0, Vec::new());
+        for base in [&root, &sub, &d, &outside] {
+            for f in &files {
+                let old = old_inside(&root, base, f);
+                let new = sandbox_contains(&root, base, f);
+                n += 1;
+                inside += usize::from(old);
+                if new != Ok(old) {
+                    mismatches.push(format!("base {} file {f:?}: old {old}, new {new:?}", base.display()));
+                }
+            }
+        }
+        eprintln!("16a: {n} (base, file) cases, {inside} inside, links {links:?}, mismatches {mismatches:#?}");
+        assert!(
+            n >= 30 && inside > 0 && inside < n,
+            "set-up: {n} cases, {inside} inside"
+        );
+        assert!(mismatches.is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// With a sandbox root that cannot be resolved, each of the three readers refuses its file at its own key.
+    #[test]
+    fn unresolvable_sandbox_root_is_refused_by_all_three() {
+        let d = scratch("unresolvable");
+        for f in ["mech.txt", "t.csv", "f.wasm"] {
+            std::fs::write(d.join(f), "y,v\n0,0\n1,1\n").unwrap();
+        }
+        let mut case = Case::parse_toml_in(BASE, &d).unwrap();
+        case.set("chemistry.model", json!("finite_rate")).unwrap();
+        case.set("chemistry.mechanism", json!("mech.txt")).unwrap();
+        case.set("tables.tab1.file", json!("t.csv")).unwrap();
+        case.set("tables.tab1.inputs", json!(["y"])).unwrap();
+        case.set("udf.f.file", json!("f.wasm")).unwrap();
+        case.sandbox = Some(d.join("no-such-root"));
+        let chem = crate::chemistry::check(&case);
+        let (_, tables) = crate::exprs::load_tables(&case);
+        let (_, udfs) = crate::udf::load_case_udfs(&case);
+        let refused = |ds: &[Diagnostic], key: &str| {
+            ds.iter()
+                .any(|x| x.path == key && x.message.contains("sandbox root") && x.message.contains("no-such-root"))
+        };
+        let got = [
+            refused(&chem, "chemistry.mechanism"),
+            refused(&tables, "tables.tab1.file"),
+            refused(&udfs, "udf.f.file"),
+        ];
+        eprintln!("16a unresolvable root: chemistry {chem:?}\n tables {tables:?}\n udf {udfs:?}\n refused {got:?}");
+        assert_eq!(got, [true; 3]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
