@@ -326,9 +326,9 @@ impl<S: RunStore> Runner<S> {
         std::fs::read_to_string(self.dir(id).join("events.jsonl"))
             .unwrap_or_default()
             .lines()
+            .rev()
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .filter(|v| v["event"] == "launched")
-            .last()
+            .find(|v| v["event"] == "launched")
             .and_then(|v| v["pid"].as_u64())
             .and_then(|p| u32::try_from(p).ok())
     }
