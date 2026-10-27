@@ -47,6 +47,8 @@ fn p1_escape_attempts_are_refused_and_located() {
     std::fs::write(outside.join("secret.txt"), b"secret").unwrap();
     let p = Project::create(&base.join("proj"), "p1", "0").unwrap();
     let root = p.root().to_path_buf();
+    // ADR 0128 finding 10: root() is no longer verbatim on Windows; the link control compares canonical forms
+    let canon_root = root.canonicalize().unwrap();
     let out_abs = outside.canonicalize().unwrap().join("secret.txt");
     let link_ok = dir_link(&outside, &root.join("cases").join("out"));
     assert!(
@@ -88,7 +90,10 @@ fn p1_escape_attempts_are_refused_and_located() {
         let naive = root.join(a);
         let lexical_out = !lexical(&naive).starts_with(&root);
         let reads_secret = std::fs::read(&naive).map(|b| b == b"secret").unwrap_or(false);
-        let link_out = naive.canonicalize().map(|c| !c.starts_with(&root)).unwrap_or(false);
+        let link_out = naive
+            .canonicalize()
+            .map(|c| !c.starts_with(&canon_root))
+            .unwrap_or(false);
         assert!(
             lexical_out || reads_secret || link_out,
             "control: {a:?} does not escape naively ({})",
