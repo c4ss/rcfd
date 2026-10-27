@@ -10,4 +10,4 @@
 - [ ] Provenance declared: every algorithm, constant, data file or table has its published source (or "first principles")
       named here or in the doc comments, data licences are stated, and unchecked values are marked UNVERIFIED. No vendor code,
       binaries or documentation text was used (`CONTRIBUTING.md`).
-- [ ] Every commit carries a `Signed-off-by:` line (DCO, `git commit -s`).
+- [ ] Commits follow `docs/commit-rules.md`.
