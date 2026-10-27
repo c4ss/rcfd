@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use rcfd in your work, please cite it as below, with the commit you used."
+title: "rcfd: a clean-room finite-volume CFD suite in Rust"
+type: software
+authors:
+  - given-names: Robert
+    family-names: Cass
+repository-code: "https://github.com/c4ss/rcfd"
+license:
+  - MIT
+  - Apache-2.0

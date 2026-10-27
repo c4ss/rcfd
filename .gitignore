@@ -3,3 +3,6 @@ Cargo.lock.bak
 *.vtu
 *.pvd
 __pycache__/
+.DS_Store
+# Agent worktrees created inside the checkout.
+/.claude/worktrees/
