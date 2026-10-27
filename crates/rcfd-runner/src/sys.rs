@@ -1,11 +1,59 @@
 //! Platform pieces, std only (the workspace forbids unsafe code): the runner lock, process liveness,
 //! killing a process by id, and detached spawning.
 
+use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
+
+/// Windows `CreateProcess` flag: a console program gets a console without a window.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+/// Windows `CreateProcess` flag: no console at all (`CREATE_NO_WINDOW` is then ignored).
+pub const DETACHED_PROCESS: u32 = 0x0000_0008;
+/// Windows `CreateProcess` flag: the caller's Ctrl+C does not reach the new process.
+pub const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+
+/// `program` as a console program that opens no window: creation flags `extra | CREATE_NO_WINDOW` on Windows (flags
+/// are combined, never replaced; none elsewhere). Returns the command and the flags set: std's `Command` has no
+/// getter, so the tests read them here. Every console program the runner or its client starts goes through this
+/// (ADR 0128 finding 17; `tests/no_window_scan.rs` checks the source).
+pub fn console(program: impl AsRef<OsStr>, extra: u32) -> (Command, u32) {
+    let mut cmd = Command::new(program);
+    let flags = hide(&mut cmd, extra);
+    (cmd, flags)
+}
+
+fn hide(cmd: &mut Command, extra: u32) -> u32 {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let flags = extra | CREATE_NO_WINDOW;
+        cmd.creation_flags(flags);
+        flags
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (cmd, extra);
+        0
+    }
+}
+
+/// The liveness query of [`pid_alive`] and its creation flags.
+fn probe_cmd(pid: u32) -> (Command, u32) {
+    let (mut c, flags) = if cfg!(windows) {
+        let (mut c, f) = console("tasklist", 0);
+        c.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+        (c, f)
+    } else {
+        let (mut c, f) = console("ps", 0);
+        c.args(["-p", &pid.to_string(), "-o", "comm="]);
+        (c, f)
+    };
+    c.stdin(Stdio::null()).stderr(Stdio::null());
+    (c, flags)
+}
 
 /// Is process `pid` alive and its executable named `name` (without `.exe`)? The name check guards against a
 /// recycled pid of an unrelated program.
@@ -13,12 +61,7 @@ use std::time::Duration;
 pub fn pid_alive(pid: u32, name: &str) -> bool {
     #[cfg(windows)]
     {
-        let Ok(o) = Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-        else {
+        let Ok(o) = probe_cmd(pid).0.output() else {
             return false;
         };
         let want = format!("\"{}.exe\",\"{pid}\"", name.to_ascii_lowercase());
@@ -28,28 +71,32 @@ pub fn pid_alive(pid: u32, name: &str) -> bool {
     }
     #[cfg(not(windows))]
     {
-        Command::new("ps")
-            .args(["-p", &pid.to_string(), "-o", "comm="])
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
+        probe_cmd(pid)
+            .0
             .output()
             .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim().ends_with(name))
             .unwrap_or(false)
     }
 }
 
+/// The command of [`kill`] and its creation flags.
+fn kill_cmd(pid: u32) -> (Command, u32) {
+    if cfg!(windows) {
+        let (mut c, f) = console("taskkill", 0);
+        c.args(["/PID", &pid.to_string(), "/F"]);
+        (c, f)
+    } else {
+        let (mut c, f) = console("kill", 0);
+        c.args(["-9", &pid.to_string()]);
+        (c, f)
+    }
+}
+
 /// Kill process `pid` (forced). Returns whether the kill command succeeded.
 pub fn kill(pid: u32) -> bool {
-    let mut c = if cfg!(windows) {
-        let mut c = Command::new("taskkill");
-        c.args(["/PID", &pid.to_string(), "/F"]);
-        c
-    } else {
-        let mut c = Command::new("kill");
-        c.args(["-9", &pid.to_string()]);
-        c
-    };
-    c.stdin(Stdio::null())
+    kill_cmd(pid)
+        .0
+        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -66,19 +113,24 @@ pub fn kill(pid: u32) -> bool {
 pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
     #[cfg(windows)]
     {
-        let script = start_script(exe, args);
-        let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-        Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &base64(&utf16)])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
+        launcher_cmd(&start_script(exe, args)).0.spawn()
     }
     #[cfg(not(windows))]
     {
         spawn_direct(exe, args)
     }
+}
+
+/// The PowerShell launcher of [`spawn_detached`] running `script`, and its creation flags: detached from the
+/// caller's console and Ctrl+C like [`spawn_direct`], no window.
+fn launcher_cmd(script: &str) -> (Command, u32) {
+    let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let (mut c, flags) = console("powershell", DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+    c.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &base64(&utf16)])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    (c, flags)
 }
 
 /// The Windows command line of `args`: each argument in double quotes by the `CommandLineToArgvW` rules (backslashes
@@ -124,24 +176,22 @@ pub fn start_script(exe: &Path, args: &[String]) -> String {
 /// Start `exe args` directly, with null stdio, in its own process group (Windows: also without a console).
 /// On Windows it inherits the caller's inheritable handles (see [`spawn_detached`]).
 pub fn spawn_direct(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
-    let mut cmd = Command::new(exe);
+    direct_cmd(exe, args).0.spawn()
+}
+
+/// The command of [`spawn_direct`] and its creation flags.
+fn direct_cmd(exe: &Path, args: &[String]) -> (Command, u32) {
+    let (mut cmd, flags) = console(exe, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-    }
     #[cfg(not(windows))]
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    cmd.spawn()
+    (cmd, flags)
 }
 
 /// Standard base64 with padding.
@@ -162,15 +212,9 @@ pub fn base64(bytes: &[u8]) -> String {
     s
 }
 
-/// A console program started by the (console-less) runner must not open a window.
+/// A console program started by the (console-less) runner must not open a window (see [`console`]).
 pub fn no_window(cmd: &mut Command) {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-    let _ = cmd;
+    hide(cmd, 0);
 }
 
 /// The runner lock `<project>/.rcfd/runner.lock`, held for the runner's lifetime.
@@ -295,6 +339,36 @@ pub fn lock_held(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// ADR 0128 finding 17 (a, b): every console program the runner and its client start is built with
+    /// `CREATE_NO_WINDOW`; the PowerShell launcher and the direct start keep `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`.
+    #[cfg(windows)]
+    #[test]
+    fn no_window_flags_on_every_console_spawn() {
+        use super::*;
+        let hidden = |f: u32| f & CREATE_NO_WINDOW != 0;
+        let detached =
+            |f: u32| f & (DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP) == DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
+        let exe = Path::new("rcfd-runner.exe");
+        let sites = [
+            ("tasklist (pid_alive)", probe_cmd(1).1),
+            ("taskkill (kill)", kill_cmd(1).1),
+            ("powershell (spawn_detached)", launcher_cmd("x").1),
+            ("runner (spawn_direct)", direct_cmd(exe, &[]).1),
+            ("rcfd --version (Client::submit)", crate::client::version_cmd(exe).1),
+        ];
+        eprintln!(
+            "F17 runner flags: {:?}",
+            sites.iter().map(|(n, f)| format!("{n} {f:#x}")).collect::<Vec<_>>()
+        );
+        for (name, f) in sites {
+            assert!(hidden(f), "{name}: flags {f:#x} lack CREATE_NO_WINDOW");
+        }
+        assert!(detached(launcher_cmd("x").1) && detached(direct_cmd(exe, &[]).1));
+        // negative control: a command built without the helper carries no flags and fails the same check
+        let _plain = Command::new("tasklist");
+        assert!(!hidden(0));
+    }
+
     #[test]
     fn base64_matches_rfc4648_vectors() {
         let v: Vec<String> = ["", "f", "fo", "foo", "foob", "fooba", "foobar"]

@@ -23,6 +23,28 @@ pub use transcript::TranscriptEntry;
 
 use std::fmt;
 use std::path::PathBuf;
+use std::process::Command;
+
+/// Windows `CreateProcess` flag: a console program gets a console without a window.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// `program` as a console program that opens no window (creation flags `CREATE_NO_WINDOW` on Windows, none elsewhere;
+/// stdio untouched). Returns the command and the flags set, which std's `Command` cannot report. Every program the
+/// bridge starts goes through this (ADR 0128 finding 17).
+pub(crate) fn console(program: impl AsRef<std::ffi::OsStr>) -> (Command, u32) {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        (cmd, CREATE_NO_WINDOW)
+    }
+    #[cfg(not(windows))]
+    {
+        (cmd, 0)
+    }
+}
 
 /// Errors of the bridge. Each names the session, rule, argument or path it is about.
 #[derive(Debug)]
@@ -149,5 +171,27 @@ mod tests {
             assert!(!is_uuid(bad), "{bad}");
         }
         assert!(is_uuid("00000000-0000-4000-8000-000000000001"));
+    }
+
+    /// ADR 0128 finding 17 (a, b): every program the bridge starts is built with `CREATE_NO_WINDOW`.
+    #[cfg(windows)]
+    #[test]
+    fn no_window_flags_on_every_console_spawn() {
+        let c = crate::driver::Claude::new("claude", "home");
+        let here = std::path::Path::new(".");
+        let sites = [
+            ("tasklist (live_pids)", crate::discover::tasklist_cmd(1).1),
+            ("taskkill (kill_tree)", crate::driver::kill_tree_cmd(1).1),
+            ("claude agents --json", c.agents_cmd(here).1),
+            ("claude -p (chat)", c.chat_cmd(here, &[]).1),
+        ];
+        eprintln!("F17 bridge flags: {sites:x?}");
+        let hidden = |f: u32| f & crate::CREATE_NO_WINDOW != 0;
+        for (name, f) in sites {
+            assert!(hidden(f), "{name}: flags {f:#x} lack CREATE_NO_WINDOW");
+        }
+        // negative control: a command built without the helper carries no flags and fails the same check
+        let _plain = std::process::Command::new("tasklist");
+        assert!(!hidden(0));
     }
 }

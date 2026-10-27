@@ -54,12 +54,9 @@ impl Claude {
 
     /// `claude agents --json`, run in `cwd`, killed after `listing_timeout`.
     pub fn agents(&self, cwd: &Path) -> Result<Vec<AgentEntry>, String> {
-        let mut child = Command::new(&self.program)
-            .args(["agents", "--json"])
-            .current_dir(cwd)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+        let mut child = self
+            .agents_cmd(cwd)
+            .0
             .spawn()
             .map_err(|e| format!("{}: {e}", self.program.display()))?;
         let mut out = child.stdout.take().expect("piped");
@@ -89,6 +86,33 @@ impl Claude {
             return Err(format!("exit {:?}: {}", status.code(), err.trim()));
         }
         parse_agents(&text)
+    }
+
+    /// The `claude agents --json` command (no window; stdio as before) and its creation flags.
+    pub(crate) fn agents_cmd(&self, cwd: &Path) -> (Command, u32) {
+        let (mut c, flags) = crate::console(&self.program);
+        c.args(["agents", "--json"])
+            .current_dir(cwd)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        (c, flags)
+    }
+
+    /// The chat command for `args` in `project` (no window; stdin, stdout and stderr piped as before) and its flags.
+    pub(crate) fn chat_cmd(&self, project: &Path, args: &[String]) -> (Command, u32) {
+        let (mut cmd, flags) = crate::console(&self.program);
+        cmd.args(args)
+            .current_dir(project)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0); // so cancel can kill the whole group
+        }
+        (cmd, flags)
     }
 
     /// Sessions of `project` with their open state; either source may fail (see `Discovery::warnings`).
@@ -174,18 +198,7 @@ impl Claude {
         }
         let args = self.chat_args(flag, &session_id, allow);
         check_args(&args)?;
-        let mut cmd = Command::new(&self.program);
-        cmd.args(&args)
-            .current_dir(project)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0); // so cancel can kill the whole group
-        }
-        let mut child = cmd.spawn().map_err(|source| Error::Io {
+        let mut child = self.chat_cmd(project, &args).0.spawn().map_err(|source| Error::Io {
             path: self.program.clone(),
             source,
         })?;
@@ -319,21 +332,28 @@ fn kill_tree(child: &mut Child) {
     if !matches!(child.try_wait(), Ok(None)) {
         return;
     }
-    let pid = child.id().to_string();
-    let quiet = |c: &mut Command| {
-        let _ = c
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-    };
-    if cfg!(windows) {
-        quiet(Command::new("taskkill").args(["/PID", &pid, "/T", "/F"]));
-    } else {
-        quiet(Command::new("kill").args(["-KILL", "--", &format!("-{pid}")]));
-    }
+    let _ = kill_tree_cmd(child.id())
+        .0
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// The command that kills process `pid` and its descendants (no window) and its creation flags.
+pub(crate) fn kill_tree_cmd(pid: u32) -> (Command, u32) {
+    let pid = pid.to_string();
+    if cfg!(windows) {
+        let (mut c, f) = crate::console("taskkill");
+        c.args(["/PID", &pid, "/T", "/F"]);
+        (c, f)
+    } else {
+        let (mut c, f) = crate::console("kill");
+        c.args(["-KILL", "--", &format!("-{pid}")]);
+        (c, f)
+    }
 }
 
 /// A running chat turn. Dropping it cancels the process.

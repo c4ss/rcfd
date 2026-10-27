@@ -94,11 +94,8 @@ impl Client {
 
     /// Queue a run of `case` without starting a runner; returns the run id.
     pub fn submit(&self, case: &Path, settings: &RunSettings) -> Result<String, String> {
-        let solver = sibling_of(&self.runner_exe, "rcfd");
-        let version = Command::new(solver)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
+        let version = version_cmd(&sibling_of(&self.runner_exe, "rcfd"))
+            .0
             .output()
             .ok()
             .filter(|o| o.status.success())
@@ -189,6 +186,13 @@ impl Client {
         }
         Ok(())
     }
+}
+
+/// `solver --version` (a console program: no window, ADR 0128 finding 17) and its creation flags.
+pub(crate) fn version_cmd(solver: &Path) -> (Command, u32) {
+    let (mut c, flags) = sys::console(solver, 0);
+    c.arg("--version").stdin(Stdio::null()).stderr(Stdio::null());
+    (c, flags)
 }
 
 fn sibling_of(exe: &Path, name: &str) -> PathBuf {
