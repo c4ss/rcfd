@@ -11,7 +11,7 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
    changes more than about 400 lines outside generated files, fixtures and data says in its body why it cannot be split.
    Why: a small commit can be reviewed, reverted and bisected on its own, and its message can be precise.
    Good: `rcfd-mesh: tet quality pass removes slivers below the dihedral limit`.
-   Bad: `docs: add wave 46/47 items to the roadmap; reword F-042 wall-function note` (161 subjects in history have a `; `).
+   Bad: `docs: add wave 46/47 and test-gate items to the roadmap; reword F-042 wall-function note` (161 older subjects have a `; `).
 
 2. **The subject is `area: effect`, imperative or a plain statement, at most 72 characters, no full stop.** The area is the
    crate (`rcfd-fv`), `docs`, `scripts`, `ci`, or `ADR NNNN` for a decision record; the effect is what changes for the person
@@ -24,7 +24,7 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
    Deprecated, Removed, Fixed or Security, written for the user. A commit that should change nothing a user can see says
    `No behaviour change.` in its body, as the history already does.
    Why: the changelog is then written when the change is understood best, and `git log --oneline vP..main -- CHANGELOG.md`
-   lists exactly the user-visible commits of a release.
+   lists the user-visible commits of a release (plus the `release X.Y.Z` commit itself).
    Good: CHANGELOG line `* rcfd run exits with code 2, not 0, when the case file does not exist.`
    Bad: CHANGELOG line `* Refactored args.rs.`
 
@@ -58,7 +58,7 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
 8. **Validation data, licence texts, NOTICE and provenance records change in their own commit**, whose body names the source,
    the licence and the date fetched, or says UNVERIFIED.
    Why: these are the commits an auditor reads to establish what rcfd may redistribute and where every number came from.
-   Good: `docs: state the Fluent .msh reader's format source as UNVERIFIED`.
+   Good: `rcfd-io, docs: state the Fluent .msh reader's format source as UNVERIFIED`.
    Bad: a new reference table added in the same commit as the solver change it validates, with no source in the body.
 
 9. **Tests go in the same commit as the change they cover; acceptance limits are registered in their ADR in an earlier commit.**
@@ -72,13 +72,17 @@ says why, and what a user will notice. Each rule below has the rule, the reason,
     `fixup!` on `main`.
     Why: history is public and permanent once pushed; removing anything from it means rewriting every later commit id.
     Good: `docs, rcfd-claude: machine paths replaced by placeholders`.
-    Bad: `wip` with `E:\work\gate47\log.txt` in the body.
+    Bad: a commit titled `wip` whose body quotes a log file by its drive path on your machine.
 
 11. **The only trailer is `Signed-off-by`**, required on every contributed commit as CONTRIBUTING says (`git commit -s`).
     Why: the sign-off certifies the Developer Certificate of Origin; nothing else in a message is machine metadata.
+    Good: a last line `Signed-off-by: Your Name <you@example.org>`.
+    Bad: a `Co-Authored-By:` line naming a tool, or a link to an assistant session.
 
 12. **A pull request is merged with its commits kept, not squashed**; tidy them before review (`git rebase -i`, `fixup!`
     commits folded in) so each one follows these rules.
     Why: ADRs cite individual commit ids, and the registered-before-run order of rule 9 exists only as separate commits.
+    Good: `ADR 0124: wave 47C time-series field store, registered checks and limits` lands before `rcfd-tsstore: ...`.
+    Bad: both squashed into one `Wave 47C` commit, so nothing shows the limits came first.
 
 A template with these reminders is in `.gitmessage`; use it with `git config commit.template .gitmessage`.
