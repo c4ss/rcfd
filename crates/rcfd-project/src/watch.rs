@@ -3,17 +3,23 @@
 //! [`Watcher::poll`] rescans the tree and returns a token; [`Watcher::changes_since`] lists the
 //! project-relative paths created, modified or deleted after a token. A file's signature is its
 //! length, modification time and, up to [`DEFAULT_HASH_LIMIT`] bytes, an FNV-1a hash of its content,
-//! so a same-length rewrite inside one timestamp tick is still seen for small files. Larger files are
+//! so a same-length rewrite inside one timestamp tick is still seen for small files. The hash is reused, not
+//! re-read, for a file whose length and time are unchanged and were already [`REUSE_AGE`] old when it was
+//! hashed; a rewrite that restores an old time on purpose is not seen. Larger files are
 //! compared by length and modification time only. `.rcfd/` and atomic-write temp files are ignored.
 
 use crate::atomic::is_temp_name;
 use crate::{io_err, paths, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-/// Files up to this size (1 MiB) are content-hashed on every poll.
+/// Files up to this size (1 MiB) are content-hashed (again only while their time is recent, see [`REUSE_AGE`]).
 pub const DEFAULT_HASH_LIMIT: u64 = 1 << 20;
+
+/// A file whose length and time are unchanged keeps its hash once its time was this much older than the start of
+/// the scan that hashed it (ADR 0128 finding 9).
+pub const REUSE_AGE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Sig {
@@ -30,6 +36,9 @@ pub struct Watcher {
     generation: u64,
     snapshot: BTreeMap<String, Sig>,
     changed_at: BTreeMap<String, u64>,
+    bytes_hashed: u64,
+    /// Start of the latest scan (kept out of `Sig`, so it never reads as a change).
+    scanned_at: Option<SystemTime>,
 }
 
 impl Watcher {
@@ -46,9 +55,16 @@ impl Watcher {
             generation: 0,
             snapshot: BTreeMap::new(),
             changed_at: BTreeMap::new(),
+            bytes_hashed: 0,
+            scanned_at: None,
         };
         w.snapshot = w.scan()?;
         Ok(w)
+    }
+
+    /// Bytes read for content hashes since the watcher was created (cost measure).
+    pub fn bytes_hashed(&self) -> u64 {
+        self.bytes_hashed
     }
 
     /// The token of the latest poll.
@@ -84,7 +100,11 @@ impl Watcher {
             .collect()
     }
 
-    fn scan(&self) -> Result<BTreeMap<String, Sig>> {
+    fn scan(&mut self) -> Result<BTreeMap<String, Sig>> {
+        // A hash taken when the file's time was already REUSE_AGE older than that scan's start stays valid while
+        // length and time are unchanged: a later write would have moved the time (granularity <= 2 s).
+        let reuse_before = self.scanned_at.and_then(|t| t.checked_sub(REUSE_AGE));
+        self.scanned_at = Some(SystemTime::now());
         let mut out = BTreeMap::new();
         let mut stack = vec![self.root.clone()];
         while let Some(dir) = stack.pop() {
@@ -107,18 +127,26 @@ impl Watcher {
                     continue;
                 }
                 let rel = paths::rel_string(&self.root, &path).unwrap_or(name);
+                let mut hashed = 0;
                 let sig = std::fs::metadata(&path).ok().and_then(|md| {
-                    let hash = if md.len() <= self.hash_limit {
-                        Some(rcfd_core::hash::fnv64(&crate::atomic::read(&path).ok()?))
+                    let (len, mtime) = (md.len(), md.modified().ok());
+                    let old = self.snapshot.get(&rel).filter(|o| {
+                        o.hash.is_some()
+                            && (o.len, o.mtime) == (len, mtime)
+                            && matches!((mtime, reuse_before), (Some(m), Some(b)) if m <= b)
+                    });
+                    let hash = if let Some(o) = old {
+                        o.hash
+                    } else if len <= self.hash_limit {
+                        let data = crate::atomic::read(&path).ok()?;
+                        hashed = data.len() as u64;
+                        Some(rcfd_core::hash::fnv64(&data))
                     } else {
                         None
                     };
-                    Some(Sig {
-                        len: md.len(),
-                        mtime: md.modified().ok(),
-                        hash,
-                    })
+                    Some(Sig { len, mtime, hash })
                 });
+                self.bytes_hashed += hashed;
                 // A file that cannot be read right now (replaced or removed mid-scan) keeps its old
                 // signature; the next poll settles it.
                 if let Some(sig) = sig.or_else(|| self.snapshot.get(&rel).cloned()) {
