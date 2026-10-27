@@ -14,12 +14,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --release --no-fail-fast        # CARGO_BUILD_JOBS=3, RUST_TEST_THREADS=3
 ```
 
-It runs on a `git archive HEAD` copy with a fresh `CARGO_TARGET_DIR`, inside one of two slots (`mkdir <scratch dir>` or
+It runs on a `git archive HEAD` copy with a fresh `CARGO_TARGET_DIR`, inside one of two slots (`mkdir <work dir>/slot-1` or
 `slot-2`).
 
 ## 2. Measured baseline
 
-Sources: the logs of seven gates of waves 46 and 47 (`gate46*/`, `gate47*/` under `<project dir>`), a passive `tasklist` sampler
+Sources: the logs of seven gates of waves 46 and 47 (`gate46*/`, `gate47*/` under `<work dir>`), a passive `tasklist` sampler
 (every 5 s) while other agents' gates ran, and a CPU-time sample of a running test binary. Stable Rust 1.99 has no per-test timing
 (`--report-time` needs `-Z unstable-options`) and `cargo nextest` is not installed, so per-test times come from the new runner (section 5).
 
@@ -136,11 +136,11 @@ passed test, so a crash, an abort or a name that matched nothing fails it. Doc-t
 ```bash
 cd "$GATE/src"
 export TEMP=$GATE/tmp TMP=$GATE/tmp CARGO_TARGET_DIR=$GATE/target CARGO_BUILD_JOBS=3 RUST_TEST_THREADS=3
-python scripts/gate_test.py --tsv ../times.tsv --order <scratch dir>$SLOT.tsv > ../test.log 2> ../progress.log
+python scripts/gate_test.py --tsv ../times.tsv --order <work dir>/gate-times-$SLOT.tsv > ../test.log 2> ../progress.log
 echo "test_exit=$?" > ../stage_test.txt
 grep "^test result" ../test.log | awk '{p+=$4;f+=$6;i+=$8} END{print p" passed "f" failed "i" ignored"}' >> ../stage_test.txt
 grep -E "^test .* FAILED" ../test.log >> ../stage_test.txt
-cp ../times.tsv <scratch dir>$SLOT.tsv.tmp && mv -f <scratch dir>$SLOT.tsv.tmp <scratch dir>$SLOT.tsv
+cp ../times.tsv <work dir>/gate-times-$SLOT.tsv.tmp && mv -f <work dir>/gate-times-$SLOT.tsv.tmp <work dir>/gate-times-$SLOT.tsv
 ```
 
 `$SLOT` is `slot-1` or `slot-2`: one order file per slot, replaced by a rename, so a gate never reads a half-written file. The script
@@ -161,7 +161,7 @@ command stays valid as the reference: `cargo test --workspace --release --no-fai
 
 ## 5. Results
 
-Registered run 1 (ADR 0127): `git archive 21557f6` in `<scratch dir>\src`, `--jobs 3`, no `--order`, slot 1 from 23:25 to
+Registered run 1 (ADR 0127): `git archive 21557f6` in `<work dir>\gate-weff\src`, `--jobs 3`, no `--order`, slot 1 from 23:25 to
 00:32 on 2026-10-26/27, another agent's gate in slot 2 throughout. Logs: `gate-weff/test_full.log`, `progress_full.log`,
 `times_full.tsv`, `mem_full.log`.
 
@@ -240,7 +240,7 @@ tests), so the number of test processes can briefly exceed `--jobs`, as it could
 
 ### 5.7 Five jobs (ADR 0129)
 
-One archive of de3df40 (`<scratch dir>`), `--order` from gate47, time-limit defaults, `--jobs 3` then `--jobs 5` back
+One archive of de3df40 (`<work dir>\gatetp-p2`), `--order` from gate47, time-limit defaults, `--jobs 3` then `--jobs 5` back
 to back in slot 1. Another gate held slot 2 for about 61 % of the 3-job run and all of the 5-job run; CPU was 94 % and 100 %.
 
 | | `--jobs 3` | `--jobs 5` |
@@ -388,7 +388,7 @@ one gate-level gap found while triaging the skips):
 ### 6.4 Mutation spot-check of registered limits
 
 Population (ADR 0129 amendment 1): 183 registered check ids of ADRs 0115 to 0126 that a non-ignored test enforces. Draw:
-`random.Random(1290127).sample(population, 12)`. Each mutation was made in a scratch `git archive` copy (`<scratch dir>`, own
+`random.Random(1290127).sample(population, 12)`. Each mutation was made in a scratch `git archive` copy (`<work dir>\wtp-mut`, own
 target `target-wtp-mut`, every run showed `Compiling <crate>` after the edit), only that test was run in release, and the file was
 restored before the next one. Rule: the quantity the limit governs made 10x worse in the code under test where one line does it,
 at the measurement in the test for an elapsed time or a per-specimen error; a discrete check is broken by an off-by-one or by
