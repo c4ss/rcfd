@@ -1,5 +1,5 @@
 # cargo-deny configuration: `cargo deny check` (https://github.com/EmbarkStudios/cargo-deny).
-# Not wired into CI yet. The allowed licences are the ones THIRD_PARTY_LICENSES.md lists for Cargo.lock; a dependency
+# Run in CI by the deny job (licences, bans, sources). The allowed licences are the ones THIRD_PARTY_LICENSES.md lists for Cargo.lock; a dependency
 # change that brings in another licence fails here until it is reviewed and added.
 
 [advisories]
