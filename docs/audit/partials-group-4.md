@@ -1,6 +1,6 @@
 # Partials audit, group 4
 
-Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at 04716a7). Grades follow the acceptance text as
+Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at a7fb534). Grades follow the acceptance text as
 written, from tests re-run by the auditor (release build, own target directory, Windows, two test threads) unless marked "read
 only". The earlier notes were not trusted; where a note and a measurement disagree, the measurement is recorded.
 

@@ -176,7 +176,7 @@ and P8 (the ADR text says only "cell-centre values; disclosed"), not a property 
 
 ## Addendum: results and deviations (written after the runs; no registered limit was changed)
 
-Commits: ADR `8087ad7`, fractional fix `3570b2c`, ADR amendment `efd6e6b`, safeguarded Newton `1aa26b0`, S7 tests and S6 check follow
+Commits: ADR `139bdc2`, fractional fix `68527ac`, ADR amendment `bcc591a`, safeguarded Newton `39459a8`, S7 tests and S6 check follow
 in the log. Release builds; tests in `crates/rcfd-fv/tests/fractional_step.rs` and `crates/rcfd-fv/tests/solidification.rs`.
 
 ### F-210 (D1)

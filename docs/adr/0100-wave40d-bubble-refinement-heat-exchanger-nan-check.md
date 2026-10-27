@@ -2,7 +2,7 @@
 
 Status: registered before the registered runs. Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the
 limit intact. No library code changes: both parts are test code only, so defaults and the baseline hashes are untouched. Clean-room: the only
-literature values are the Hysing et al. (2009) case-1 values read in wave 39E (ADR 0096). Written at HEAD f0168d0 (scratch copy
+literature values are the Hysing et al. (2009) case-1 values read in wave 39E (ADR 0096). Written at HEAD 85705c7 (scratch copy
 `<scratch dir>`, target `<target dir>`).
 
 ## Part B: F-055 rising-bubble refinement (test file `crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs`)
@@ -60,12 +60,12 @@ Registered checks:
 
 * H1 `h1_stationarity_rejects_nan_field`: `assert_stationary` on a field with a NaN (equal before and after) panics with "is not finite".
 * H2 `h2_stationarity_rejects_stationary_infinity`: same with +inf in the same cell before and after.
-* H3: every non-ignored test of `heat_exchanger.rs` gives the same result as at f0168d0 (all pass), and every ignored known miss still
+* H3: every non-ignored test of `heat_exchanger.rs` gives the same result as at 85705c7 (all pass), and every ignored known miss still
   fails. A test that passed before and fails now was passing on a non-finite field; that would be reported as a finding with its limit kept.
 
 ## Addendum: measured values (after the runs)
 
-### Part B (one registered run, 1750 s in total; scratch tree: archive of f0168d0 plus the 40D test files; no library source changed from f0168d0 to dbaf20d)
+### Part B (one registered run, 1750 s in total; scratch tree: archive of 85705c7 plus the 40D test files; no library source changed from 85705c7 to 08e8a83)
 
 | Grid | dt / dt_cap | y_c(3) (err) | V_c,max (err) | t of V_c,max (err) | drift | bound violation | run time |
 |------|-------------|--------------|---------------|--------------------|-------|-----------------|----------|
@@ -100,7 +100,7 @@ missing transposed viscous stress at the viscosity jump (listed as not delivered
 |-------|----------|--------|
 | H1 NaN field | panics "T is not finite after 10 iterations" | pass |
 | H2 stationary +inf | panics "p is not finite after 10 iterations" | pass |
-| H3 non-ignored tests | the 7 tests x1-x7 pass, as at f0168d0; with H1 and H2, 9 of 9 | pass |
+| H3 non-ignored tests | the 7 tests x1-x7 pass, as at 85705c7; with H1 and H2, 9 of 9 | pass |
 | H3 known misses still fail | x1 registered stationarity: p change 0.423 (as before); x4 registered lossless: ux change 4.06e-8 > 1e-8 with finite fields; x7 fixed pseudo-dt: now stops at the new finiteness assert in `run` (it stopped at the finiteness assert of `x7_sweep` before) | pass |
 
 No test that passed before fails now, so no existing pass came from a non-finite field. One stale comment found: the ignore reason and the doc

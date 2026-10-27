@@ -10,7 +10,7 @@ Solver physics files are not touched by this wave. Nothing here is a fan perform
 
 ## What was run before this ADR was written (disclosed)
 
-All on HEAD 6f97dcb in a scratch copy, release builds, construction only (no solve). A development hook (`dev_layer`: the algebraic and the smoothed
+All on HEAD 86145b9 in a scratch copy, release builds, construction only (no solve). A development hook (`dev_layer`: the algebraic and the smoothed
 in-plane layer of one radius, step-0 setting) was added to the scratch copy only; it moves no node and will not be committed.
 
 * Corner angles of H per layer (direction from the lower corner node to its neighbours, degrees from `+z` in the unrolled plane `(z, s)`; the upper
@@ -189,7 +189,7 @@ builds and runs 3 iterations with finite residuals. No set-up is defective.
 
 ## Addendum: measured values, misses and deviations
 
-Release builds, scratch tree of this wave; code state of the measurements: record commit 18b083c (construction I and its tests). By the keep clause
+Release builds, scratch tree of this wave; code state of the measurements: record commit 26ac300 (construction I and its tests). By the keep clause
 I was then removed in the next commit; that removal moves no node of any other construction (part D re-run on the final code). Each registered run
 once. Limits are the registered ones, unchanged. No external reference value enters any gate. No fan performance claim. Solver physics files were not
 touched.
@@ -260,7 +260,7 @@ B1 met on the final code: the ADR 0079 hashes (S and A' with `pursuit` and E), t
   far grid is blended with the remapped layer and radially filtered.
 * The development hook (`dev_layer`, `dev_rho`, the environment-driven variant parameters) and the development test file were not committed.
 * I-b was not developed (above). The 12-variant budget was used up by I-a.
-* The record commit 18b083c holds the I acceptance tests un-ignored, so `c1q_fan01_i_...`, `c1b_blade_b_with_i` and `c4_r_i_...` fail on it by
+* The record commit 26ac300 holds the I acceptance tests un-ignored, so `c1q_fan01_i_...`, `c1b_blade_b_with_i` and `c4_r_i_...` fail on it by
   design; it builds, but it was never gated (its fmt and clippy status is unknown). The rule that a miss becomes an ignored `*_known_miss` test could
   not apply because the construction was removed; as with the R-H tests of ADR 0083, the tests went with it.
 
@@ -270,8 +270,8 @@ Thompson, Warsi & Mastin (1985) for the elliptic smoother (recalled, as ADR 0072
 
 ### Final gate
 
-On a fresh `git archive` of a98e531 (the removal of I; it also contains the other wave-37 agents' commits up to it, all of them ADR text at that
+On a fresh `git archive` of 21ea925 (the removal of I; it also contains the other wave-37 agents' commits up to it, all of them ADR text at that
 point): `cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release
 --no-fail-fast`: **1874 passed, 0 failed, 519 ignored** (wave 36: 1873 / 0 / 519; the one new test is `b1_construction_h_is_bit_identical`). Later
-commits of other agents (wave 37A code from dbc28a7 on) are not in this gate. This text was added afterwards in a docs-only commit that was not
+commits of other agents (wave 37A code from fd89244 on) are not in this gate. This text was added afterwards in a docs-only commit that was not
 re-gated. The B1 hashes are specific to x86_64-pc-windows-msvc.

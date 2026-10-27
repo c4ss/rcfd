@@ -1,6 +1,6 @@
 # ADR 0126: Wave 47E, the Claude Code bridge library `rcfd-claude` (Studio layer L6)
 
-Status: **ACCEPTED 2026-10-26** (limits registered after the rule-d smoke and before the registered runs). Written at main f307f59 on
+Status: **ACCEPTED 2026-10-26** (limits registered after the rule-d smoke and before the registered runs). Written at main 7fcdf9c on
 branch `w47e`, target `<target dir>`. House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected
 run; defaults of existing code are bit-identical (this wave adds a new crate and touches no existing crate). Parents: the Studio plan
@@ -175,7 +175,7 @@ UI, the Agent SDK sidecar, cross-session messaging, Remote Control, `claude atta
 ## Addendum: measured values (registered runs, 2026-10-26)
 
 The registered run was one release run of the crate (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w47e`) at a45ffa7.
-After the rebase onto main a16cda2 that commit is c2fa881.
+After the rebase onto main f2d22c9 that commit is ed518d9.
 The real-CLI tests R1-R3 were each run once in debug. Every registered check passed; there are no known misses.
 
 | Check | Limit | Measured |
@@ -211,7 +211,7 @@ Deviations:
 
 ## Final gate
 
-The final gate ran on a fresh `git archive` of 21557f6 (the branch rebased onto main a16cda2) in `<scratch dir>`:
+The final gate ran on a fresh `git archive` of 63fad82 (the branch rebased onto main f2d22c9) in `<scratch dir>`:
 * `cargo fmt --check`: exit 0.
 * `cargo clippy --workspace --all-targets -- -D warnings`: exit 0.
 * `cargo test --workspace --release --no-fail-fast`: **2093 passed, 0 failed, 659 ignored**.

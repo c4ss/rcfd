@@ -13,7 +13,7 @@ drag run, no flat-plate y+/Cf run). Clean-room: first principles and published l
 vendor material. Other waves (26A transient solver, 26C post/export) work in the same tree; this wave touches only new
 modules (`sweep.rs`, `octree.rs`) plus small additive hunks in `lib.rs`, `schema.rs`, `sim.rs`, docs.
 
-## Audit of what exists (HEAD 6af8a66)
+## Audit of what exists (HEAD 080934d)
 
 * `gen.rs`: structured generators (`box_mesh`, `cylinder_ogrid`, `annulus_3d`, ...) all built through `Mesh::from_cell_faces`, which
   orients faces from the vertex average, pairs faces by sorted point set and handles polyhedral cells. `axis_coords(n, len, Grading)`

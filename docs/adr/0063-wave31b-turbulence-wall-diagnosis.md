@@ -1,7 +1,7 @@
 # ADR 0063: Wave 31B, diagnosis of the SST wall-resolved skin-friction deficit and of the k-epsilon wall-function mesh dependence
 
 Status: registered before any experiment of this wave (this file is committed first; results go into addenda, limits are never widened).
-Branch main, written at HEAD d0c7ed1 (plus uncommitted work of other agents, none of it in `crates/rcfd-turb/src`).
+Branch main, written at HEAD 61ce212 (plus uncommitted work of other agents, none of it in `crates/rcfd-turb/src`).
 
 ## Deficits under diagnosis (both diagnosed-but-unproven in ADR 0060 and 0061)
 

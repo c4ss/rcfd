@@ -174,8 +174,8 @@ recorded in an amendment before the runs they govern.
 
 ## Amendment 1 (2026-10-19): checks, smoke results and set-up corrections, written before any registered long run
 
-Code state of every run below and of the long runs: 0cef8f5 plus the wave-35C files exactly as committed in 1ce94c0 (built in a private copy of
-the tree; commits of other wave-35 agents between 0cef8f5 and 1ce94c0 are not in the runs).
+Code state of every run below and of the long runs: abd10f2 plus the wave-35C files exactly as committed in d1030ea (built in a private copy of
+the tree; commits of other wave-35 agents between abd10f2 and d1030ea are not in the runs).
 
 What I knew when writing this: the construction and the 30-iteration smoke values below, the X1 results, S2a/S2b, the N1 smoke, and the
 blade-element values. No arm has been run beyond 30 iterations (N1 schemes: 300).
@@ -294,7 +294,7 @@ not an F-126 attempt; the attribution rules apply unchanged (KN - E0 is the comb
 
 ## Addendum: measured values, attribution, misses and deviations
 
-All runs: release builds of 0cef8f5 plus the wave-35C files (S2 and F-RE as in 1ce94c0; the harness as in 236f09b, whose changes after 1ce94c0 add
+All runs: release builds of abd10f2 plus the wave-35C files (S2 and F-RE as in d1030ea; the harness as in cf5a639, whose changes after d1030ea add
 arms and print-outs only, the E0 path unchanged), single thread, two runs at a time on a shared machine, one run per set-up, design point
 Q = 1.4032 m^3/s only. "Resolved" and "significant" are the registered rules (5 x the larger last-1000-iteration change; 5 % of the E0 gap). E0 gaps:
 Delta p_ts 130.27 Pa (126.46 measured against -3.81), torque 0.8218 N m (2.1419 measured against 1.3201).
@@ -470,11 +470,11 @@ the ADR 0077 opt-in `solver.periodic_gradient = "partner_cell"`, F-H0):
   measure its effect on the FAN-01 numbers. Otherwise N1c is not run.
 Order: X2a-HEAD, then X2f + X2h, then X2i (+ N1c if triggered); one cargo at a time, two test threads.
 
-### Amendment 4 results (runs on a fresh archive of d88f816, the HEAD at hand-back)
+### Amendment 4 results (runs on a fresh archive of 0785d45, the HEAD at hand-back)
 
 | Run | Measured | Rule | Result |
 |---|---|---|---|
-| X2a-HEAD | outlet L 2.25440 N m, Delta p_ts -59.984 Pa, 374 iterations, every printed digit equal to X2a | reproduce | reproduced: the measurements of this ADR carry over to d88f816 |
+| X2a-HEAD | outlet L 2.25440 N m, Delta p_ts -59.984 Pa, 374 iterations, every printed digit equal to X2a | reproduce | reproduced: the measurements of this ADR carry over to 0785d45 |
 | X2f (frame source removed, solid-body swirl in the absolute frame) | L excess 2.052 N m (inlet L -10.129, outlet -8.142 N m: the solid-body swirl is not carried unchanged; total pressure -200.6 Pa) | >= 0.5 x 2.313: convection; <= 0.1 x: frame terms | >= 0.5 x: the error is the convection of a large swirl on this mesh; the rotating-frame source and coupling terms are cleared |
 | X2h (X2a + `partner_cell`) | identical to X2a in every printed digit (upwind uses no momentum gradient) | 0.116 N m | no effect |
 | X2i (X2d + `partner_cell`) | Delta p_tt 16.71 Pa (X2d 16.77), swirl energy 19.96 Pa (19.97), outlet L -0.0016 N m | half of 16.8 / 20.0 Pa | no effect; N1c not run |
@@ -490,6 +490,6 @@ grading, pre-swirl 0.67 against 0.03 N m) gives +9.8 / +10.8 deg at the hub bin 
 
 ### Final gate
 
-Fresh `git archive` of bf98a7d: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace
---release --no-fail-fast` 1853 passed, 0 failed, 494 ignored. The HEAD at hand-back (1326b97) differs from bf98a7d only in a wave-35B ADR text; this
+Fresh `git archive` of 18b23f6: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace
+--release --no-fail-fast` 1853 passed, 0 failed, 494 ignored. The HEAD at hand-back (c0a3caf) differs from 18b23f6 only in a wave-35B ADR text; this
 paragraph is a docs-only commit and was not re-gated.

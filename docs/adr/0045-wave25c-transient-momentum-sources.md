@@ -16,7 +16,7 @@ interface code, 25B heat-exchanger effectiveness functions and waves) work in th
 `fractional.rs`, the SIMPLE/SIMPLEC duct boundary treatment, `hx.rs` effectiveness functions or `waves.rs`; shared files
 (`sim.rs`, `schema.rs`, `case-schema.md`, `roadmap.json`) get small targeted edits committed through a temporary index.
 
-## Audit of what exists (HEAD 78fcadd)
+## Audit of what exists (HEAD 82417ff)
 
 Where the `sources.<n>` path is applied (measured by reading, not assumed):
 
@@ -176,7 +176,7 @@ reported as such, not tuned).
 **T8 (steady results unchanged).** (i) `tests/baseline_hashes.rs`: 3 passed / 1 ignored identically before and after, hashes not
 re-recorded. (ii) Bit-identity beyond the baseline file: a scratch test (not committed) prints the IEEE-754 bit hash of `ux, uy, p`
 after 150 iterations of steady SIMPLEC cases with a porous source, an acceleration, an actuator disk, a Lorentz source, a fan plus
-porous jump and an NTU heat exchanger with loss closure; the hashes from a `git archive` of HEAD 78fcadd and from the final tree
+porous jump and an NTU heat exchanger with loss closure; the hashes from a `git archive` of HEAD 82417ff and from the final tree
 must be equal bit for bit. (iii) the existing test files `sources.rs`, `actuator_disk.rs`, `mrf.rs`, `component_diagonal.rs`,
 `lumped.rs`, `heat_exchanger.rs`, `mhd.rs` pass with the three assertions of D3 as the only edited lines.
 
@@ -189,7 +189,7 @@ closure / exchanger) are updated only with what the measured addendum supports. 
 
 ## Addendum A: baseline before any change
 
-`cargo test --release -p rcfd-api --test baseline_hashes` on a `git archive` of HEAD 78fcadd: 3 passed, 0 failed, 1 ignored
+`cargo test --release -p rcfd-api --test baseline_hashes` on a `git archive` of HEAD 82417ff: 3 passed, 0 failed, 1 ignored
 (`rotating_channel_matches_pre_adr0005_hash`, known). Recorded before any solver edit of this wave.
 
 ## Addendum B: measured results, deviations, what is not resolved
@@ -220,7 +220,7 @@ corrected or diagnostic variants are separate tests that do not count as criteri
 | T7c (loss closure) | registered | 6.9e-15, 5.9e-14 | 1e-3 | PASS |
 | T7d (fan_boundary) | registered | Q 1.85e-13, patch pressure 5.3e-15 | 5e-3 / 2e-3 | PASS |
 | T7e (NTU duty, transient = steady) | registered | 451.450431 W, relative difference 1.35e-14; equals the eps-NTU library value to 1e-9 | 1e-4 | PASS |
-| T8 (steady unchanged) | (i) registered; (ii) reference changed; (iii) four edited assertions | (i) identical; (ii) all 8 bit hashes identical to b1c5c9a, `fan_jump` differs from 78fcadd; (iii) four assertions edited | (i) identical; (ii) identical to 78fcadd; (iii) three assertions | PASS for (i); (ii) and (iii) PASS WITH DEVIATION, see T8 evidence and Deviations |
+| T8 (steady unchanged) | (i) registered; (ii) reference changed; (iii) four edited assertions | (i) identical; (ii) all 8 bit hashes identical to e8c371b, `fan_jump` differs from 82417ff; (iii) four assertions edited | (i) identical; (ii) identical to 82417ff; (iii) three assertions | PASS for (i); (ii) and (iii) PASS WITH DEVIATION, see T8 evidence and Deviations |
 
 A corrected set-up (new test, limits unchanged, registered configuration kept as an ignored known miss):
 
@@ -246,10 +246,10 @@ Diagnostics (new tests, NOT registered configurations, NOT criterion passes; the
 
 1. Lagged periodic momentum coupling (T1, T5c, partly T5a). The transient momentum matrix takes the partner value of a periodic
    face pair from the previous iterate, so the H operator at the wrap cells differs from the interior while u changes in time, and
-   the pressure equation sees a divergence of order dt. Verified on an unmodified `git archive` of b1c5c9a with the existing
+   the pressure equation sees a divergence of order dt. Verified on an unmodified `git archive` of e8c371b with the existing
    `body_force = Some(BodyForce::uniform)` and no source: PISO 5.093e-1, PIMPLE (n_outer 3, alpha 0.8 / 0.5) 1.646e-1, the same
    error as with the new hook.
-2. Instability of transient PISO / PIMPLE at a high diffusion number (T3, T3d and T5b as registered). On unmodified HEAD 78fcadd
+2. Instability of transient PISO / PIMPLE at a high diffusion number (T3, T3d and T5b as registered). On unmodified HEAD 82417ff
    the unforced impulsively started plane Couette flow (`box_2d` 4x80 or 40x40, PISO, nu = 1) diverges at nu dt / dy^2 of about
    3 to 6 and above and is stable at 1.6 and below (also with `n_correctors = 1`, `ddt_correction = false`, n_outer 4 or 40,
    other tolerances, periodic or not). No source is involved. The root cause was NOT found in this wave; it is a significant
@@ -259,24 +259,24 @@ Diagnostics (new tests, NOT registered configurations, NOT criterion passes; the
 
 * `baseline_hashes`: 3 passed, 1 ignored, identical; hashes not re-recorded.
 * Scratch bit-hash test (not committed; 8 steady SIMPLEC cases, 150 iterations): all 8 hashes identical between a `git archive` of
-  b1c5c9a (parent of the wave 25C code commit) and the wave 25C tree. Against the registered reference 78fcadd only `fan_jump`
-  differs; this is attributed to wave 24 commit b1c5c9a ("lag the inflow through zero-gradient boundary faces in the steady SIMPLE/SIMPLEC
-  convection"), by inference and not bisected: 78fcadd..b1c5c9a also contains documentation, F-210/F-212/F-215/F-220/F-227/F-054
-  and F-217 hx-function commits of waves 25A/25B and the wave 24 diagnosis tests, and b1c5c9a is the only commit of the range that
-  changes the steady SIMPLE/SIMPLEC convection. The registered criterion (ii) names 78fcadd as the reference, so it is NOT met
-  verbatim; it holds against b1c5c9a.
+  e8c371b (parent of the wave 25C code commit) and the wave 25C tree. Against the registered reference 82417ff only `fan_jump`
+  differs; this is attributed to wave 24 commit e8c371b ("lag the inflow through zero-gradient boundary faces in the steady SIMPLE/SIMPLEC
+  convection"), by inference and not bisected: 82417ff..e8c371b also contains documentation, F-210/F-212/F-215/F-220/F-227/F-054
+  and F-217 hx-function commits of waves 25A/25B and the wave 24 diagnosis tests, and e8c371b is the only commit of the range that
+  changes the steady SIMPLE/SIMPLEC convection. The registered criterion (ii) names 82417ff as the reference, so it is NOT met
+  verbatim; it holds against e8c371b.
 * Existing tests: `sources`, `actuator_disk` (2 passed, 2 ignored), `lumped` (6, 2 ignored), `heat_exchanger` (5, 2 ignored),
   `component_diagonal` (3), `mrf` (10, 11 ignored), `mhd` (5), `rcfd-fv` lib (63), `rcfd-api` lib (54) pass.
 
 ### Deviations
 
-* T8(ii) is met against b1c5c9a, not against the registered 78fcadd (`fan_jump` differs, attributed to b1c5c9a); T8(iii) says three
+* T8(ii) is met against e8c371b, not against the registered 82417ff (`fan_jump` differs, attributed to e8c371b); T8(iii) says three
   edited assertions, four were edited.
 * D3 listed three superseded assertions; four were edited (also `invalid_sources` in `tests/sources.rs`: PISO became coupled,
   because PISO is now supported). The code commit message says "four ... per D3", which is inexact.
 * In `tests/mhd.rs` the loop over the two transient algorithms became a single inline `compressible` assertion (a single-element
   loop is a clippy error); the coupled assertion is separate (the ADR said `["coupled"]`).
-* Code commit 56bcd7c reverted one wave 24 comment line in `tests/lumped.rs` from a stale working copy; commit 4780aef restores
+* Code commit 5f93394 reverted one wave 24 comment line in `tests/lumped.rs` from a stale working copy; commit b34d5ea restores
   it (comment only).
 * Component heat sources are evaluated once per step from the previous step's flux and temperature (mirrors the steady path);
   face jumps and network pressures are evaluated per outer iteration.

@@ -5,7 +5,7 @@ anyone who wants to know what that change would move. For the key itself and its
 [case-schema.md](case-schema.md).
 
 Analysis for a decision that is the user's (ADR 0074 part C, wave 34C). Nothing here changes the default; `averaged` stays the default and no
-baseline hash was re-recorded. All numbers below were measured in wave 34C on the tree at HEAD 1f571fb plus the wave-34C changes; the harness is
+baseline hash was re-recorded. All numbers below were measured in wave 34C on the tree at HEAD 7e7492f plus the wave-34C changes; the harness is
 `crates/rcfd-api/tests/w34c_component_diagonal_default.rs` (ignored diagnostics, C1 and C2) and one full workspace test run of a scratch copy whose
 schema default was flipped to `corrected` (never committed).
 

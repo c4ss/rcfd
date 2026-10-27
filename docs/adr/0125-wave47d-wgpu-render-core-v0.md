@@ -1,6 +1,6 @@
 # ADR 0125: Wave 47D, the wgpu render core v0 (`rcfd-render`, layer L4 of the Studio plan)
 
-Status: **ACCEPTED 2026-10-26** (limits and decision rules registered before any registered check ran). Written at main f307f59 on branch
+Status: **ACCEPTED 2026-10-26** (limits and decision rules registered before any registered check ran). Written at main 7fcdf9c on branch
 `w47d` (worktree `<scratch dir>`, target `<target dir>`). House rules of ADRs 0110-0121 apply:
 * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
@@ -214,7 +214,7 @@ image); volume-capped cut planes; Metal, GLES and WebGPU back ends.
 
 ## Addendum: measured values (gate machine = this machine, the five adapters of step 0)
 
-First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto main e314bca), all tests except T1. A1 and A2 then ran on 810fd54 (a1df12f after the rebase). T1 ran once, in a release build
+First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto main f170925), all tests except T1. A1 and A2 then ran on 810fd54 (a1df12f after the rebase). T1 ran once, in a release build
 (see the T1 row). Every value below is the same on all five adapters unless the row says otherwise.
 
 | Id | Measured | Limit | Status |
@@ -246,15 +246,15 @@ First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto
 
 ## Final gate
 
-* **First gate: failed.** It ran on a git archive of 19999b5, the tree rebased onto main cc0a8cb. fmt was clean.
+* **First gate: failed.** It ran on a git archive of 19999b5, the tree rebased onto main fa341bb. fmt was clean.
   * The first clippy run failed on the C3 test value 1.5707963 (`approx_constant`). Fixed with a scoped allow; the registered value is
     unchanged.
   * The test stage gave 2088 passed / 1 failed / 658 ignored. `rcfd-cli` `workspace_graph::layering_matches_architecture_doc`
     panicked with `unknown crate rcfd-render`, because a new crate with rcfd dependencies must be given a layer.
   * Fix: `rcfd-render` is placed at layer 5, next to `rcfd-api`, in that test and in `docs/architecture.md`. This edits an existing
     test, additively.
-  * A clippy rerun after a later rebase failed on two lints in `rcfd-api` design tests that came from main. Main fixed them in e314bca.
-* **Final gate: passed** on a git archive of **33e9266**, rebased onto main e314bca, with one release slot held per stage:
+  * A clippy rerun after a later rebase failed on two lints in `rcfd-api` design tests that came from main. Main fixed them in f170925.
+* **Final gate: passed** on a git archive of **33e9266**, rebased onto main f170925, with one release slot held per stage:
   * fmt clean;
   * clippy (`--workspace --all-targets -D warnings`) clean;
   * `cargo test --workspace --release --no-fail-fast`: **2153 passed / 0 failed / 664 ignored**.
@@ -263,7 +263,7 @@ First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto
   2 ignored tests (the A1 and A2 known misses).
 * **Every GPU test ran in the gate** on the five adapters of step 0; none took the SKIP branch.
 * **Lockfile:** after both rebases, `git diff main -- Cargo.lock` removes no `name` or `version` line. No existing locked version moved.
-* **Post-rebase checks** (onto main 93fe245, which adds `rcfd-runner`; the full gate was not re-run):
+* **Post-rebase checks** (onto main da5cc80, which adds `rcfd-runner`; the full gate was not re-run):
   * `Cargo.toml`, `Cargo.lock` and `docs/architecture.md` conflicted; each was resolved by keeping both members, and
     `cargo metadata --locked` passes;
   * `git diff main -- Cargo.lock` removes no `name` or `version` line;

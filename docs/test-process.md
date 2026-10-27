@@ -33,7 +33,7 @@ Sources: the logs of seven gates of waves 46 and 47 (`gate46*/`, `gate47*/` unde
 | 46C | 15 s | 5 min 56 s | 86.5 min | 2040 / 0 / 651 |
 | 47C | 40 s | 7 min 54 s | 90.1 min | |
 | 47D | 24 s | 7 min 08 s | 95.9 min | |
-| 47E (21557f6) | 65 s | 6 min 26 s | 95.8 min | 2093 / 0 / 659 |
+| 47E (63fad82) | 65 s | 6 min 26 s | 95.8 min | 2093 / 0 / 659 |
 
 The test stage is 92 % to 95 % running tests and 5 % to 8 % building. Clippy is under 1.5 min. Wall time of the 47E test stage from
 file times: 103 min.
@@ -93,7 +93,7 @@ in rcfd-linalg and rcfd-fv parallelise only part of a solve. Three such tests at
 
 ### 2.4 Memory while testing
 
-Per-test peak working set from the new runner at 21557f6 (exact, from the process counters): 2087 of the 2093 tests stay under
+Per-test peak working set from the new runner at 63fad82 (exact, from the process counters): 2087 of the 2093 tests stay under
 500 MB, most under 100 MB. Six are larger: rcfd-post `render_pixels::r2_one_million_cells_render_in_under_two_seconds` 2720 MB,
 rcfd-api `rules_w19c::e2_no_error_level_false_positives_and_warnings_are_only_sv103` 2692 MB, three rcfd-mesh C-grid tests at
 1225 MB to 1290 MB and rcfd-mesh `fan::m4_quality_gates_and_m5_first_cell` 540 MB. The original `cargo test` reaches the same peaks:
@@ -161,7 +161,7 @@ command stays valid as the reference: `cargo test --workspace --release --no-fai
 
 ## 5. Results
 
-Registered run 1 (ADR 0127): `git archive 21557f6` in `<work dir>\gate-weff\src`, `--jobs 3`, no `--order`, slot 1 from 23:25 to
+Registered run 1 (ADR 0127): `git archive 63fad82` in `<work dir>\gate-weff\src`, `--jobs 3`, no `--order`, slot 1 from 23:25 to
 00:32 on 2026-10-26/27, another agent's gate in slot 2 throughout. Logs: `gate-weff/test_full.log`, `progress_full.log`,
 `times_full.tsv`, `mem_full.log`.
 
@@ -206,7 +206,7 @@ were repeated with their own target folder (section 5.5).
 
 ### 5.5 Negative controls
 
-Throwaway copy `gate-weff/neg` of 21557f6 with three breaks in rcfd-core, own target folder `target-weff-neg`, runner and original
+Throwaway copy `gate-weff/neg` of 63fad82 with three breaks in rcfd-core, own target folder `target-weff-neg`, runner and original
 `cargo test` on `-p rcfd-core`:
 
 | Break | Runner | Original `cargo test` |
@@ -222,7 +222,7 @@ failed) and the failing test is named only in cargo's error line. The runner nam
 
 ### 5.6 Run 2 on the rebased branch
 
-`git archive` of `weff` at e7fbbb1 (main 93fe245 with this change; two more crates, rcfd-project and rcfd-runner), `--order` from
+`git archive` of `weff` at e7fbbb1 (main da5cc80 with this change; two more crates, rcfd-project and rcfd-runner), `--order` from
 run 1, slot 2 from 00:43 to 01:48 on 2026-10-27, another agent's gate in slot 1:
 
 | | Run 2 |
@@ -240,7 +240,7 @@ tests), so the number of test processes can briefly exceed `--jobs`, as it could
 
 ### 5.7 Five jobs (ADR 0129)
 
-One archive of de3df40 (`<work dir>\gatetp-p2`), `--order` from gate47, time-limit defaults, `--jobs 3` then `--jobs 5` back
+One archive of 47d73c2 (`<work dir>\gatetp-p2`), `--order` from gate47, time-limit defaults, `--jobs 3` then `--jobs 5` back
 to back in slot 1. Another gate held slot 2 for about 61 % of the 3-job run and all of the 5-job run; CPU was 94 % and 100 %.
 
 | | `--jobs 3` | `--jobs 5` |
@@ -267,7 +267,7 @@ the first assertion; (v) `assert!(true)` or a value compared with itself. Self-t
 (one planted example per class, all five found, and a clean test with a helper assertion, a comment and a string that is not flagged).
 Not scanned: the 99 inline `#[cfg(test)]` modules in other `src/` files (the registered scope).
 
-On the tests of main cb61148 it reports 80 hits: (i) 15, (ii) 2, (iii) 13, (iv) 50, (v) 0. Every hit was read.
+On the tests of main 35d9505 it reports 80 hits: (i) 15, (ii) 2, (iii) 13, (iv) 50, (v) 0. Every hit was read.
 
 ### 6.2 Triage
 

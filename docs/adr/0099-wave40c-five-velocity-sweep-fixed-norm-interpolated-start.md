@@ -71,7 +71,7 @@ Decision rule: if F1 passes for both modes, F-115 is set `done`.
 
 ## Addendum: measured values
 
-All runs after this ADR was committed (commit 16d0952), release build. P1 and P2 ran once. F1 ran three times with identical values and with the set-up and limit unchanged: twice as written (the first run stopped at the non-conservative R_p assertion, the second only re-printed the values), then once after the change to evaluate both modes before asserting.
+All runs after this ADR was committed (commit 784252a), release build. P1 and P2 ran once. F1 ran three times with identical values and with the set-up and limit unchanged: twice as written (the first run stopped at the non-conservative R_p assertion, the second only re-printed the values), then once after the change to evaluate both modes before asserting.
 
 F-095:
 * P1 passes (`p1_five_velocity_sweep_parallel_equals_sequential_and_resumes`): `--parallel 2` exit 0, run 5 / skipped 0,

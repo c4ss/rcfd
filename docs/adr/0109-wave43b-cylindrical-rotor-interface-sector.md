@@ -2,7 +2,7 @@
 
 Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a
 missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test
-registered here as an amendment before it runs. Written at HEAD 80c26e9, target `<target dir>`. Clean-room:
+registered here as an amendment before it runs. Written at HEAD 38718c0, target `<target dir>`. Clean-room:
 first principles only (exact solutions of the Navier-Stokes equations and polygon geometry); no literature value enters a limit.
 
 ## Context
@@ -65,7 +65,7 @@ faces" are the faces listed in `JoinReport::interface_faces`.
 
 * **G0 planar bit-identity.** `Mesh::content_hash` of (i) the planar join of the 3-D channel test (3x4x5 against 2x7x3) and
   (ii) the planar join of `annulus_3d(48, 16, 2)` / `annulus_3d(48, 11, 3)` at z = 0.2 equal the values recorded at HEAD
-  80c26e9 before any code change. Exact equality.
+  38718c0 before any code change. Exact equality.
 * **G1 full annulus.** A = `annulus_3d(48, 6, 2, 0.5, 0.75, 0.4, 0)` (patch `outer`), B = `annulus_3d(35, 6, 3, 0.75, 1.0,
   0.4, 0)` (patch `inner`); 35 is odd, so B faces straddle theta = +-pi, and gcd(48, 35) = 1. Criteria: overlap count
   (48 + 35 - 1) x 4 = 328 exactly (axial breakpoints {0, 0.4/3, 0.2, 0.8/3, 0.4}); worst face tiling error <= 1e-12; every
@@ -189,7 +189,7 @@ K2 with the registered limits.
 
 | check | measured | limit | result |
 | --- | --- | --- | --- |
-| G0 planar join hashes | equal to the HEAD 80c26e9 values (0xd055127ef92b9c59, 0x7c6b5d7b77039063) | exact | PASS |
+| G0 planar join hashes | equal to the HEAD 38718c0 values (0xd055127ef92b9c59, 0x7c6b5d7b77039063) | exact | PASS |
 | G1 overlaps / tiling / closure | 328 / 3.1e-15 / 1.2e-16 | 328 / 1e-12 / 1e-14 | PASS |
 | G1 volume / interface area | 1.4e-15 / 1.2e-16 relative | 1e-12 | PASS |
 | G1 frame flux (tangential / axial part of S) | 1.8e-14 / 1.1e-15 | 1e-12 | PASS |
@@ -239,6 +239,6 @@ cylinder; (f) the FAN-01 numerics of docs/milestone-fan.md for the acceptance ca
 
 ## Final gate
 
-Fresh `git archive` of HEAD 894c277: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -D warnings` clean,
+Fresh `git archive` of HEAD 54e0170: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1977 passed, 0 failed, 595 ignored (this HEAD includes the wave-43A commits made
 meanwhile).

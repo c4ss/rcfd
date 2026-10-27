@@ -14,7 +14,7 @@ vendor material. Waves 30B/30C (validation) work in the same tree and mostly add
 key whose default is inert and every inert path is the old code path (no `Some(zero)`), so `baseline_hashes` and all existing tests
 are unchanged by construction; this is re-verified, never re-recorded.
 
-## Audit (HEAD 9d06638)
+## Audit (HEAD 249d3a7)
 
 * F-128 (ADR 0057): `Tracker::enable_coupling` records, per cell, the momentum given to the carrier (`Coupling::impulse`, already
   with the sign "to the carrier", N s) and the mechanical and heat parts of the total energy given to it. `Coupling::sources(vol, dt)`

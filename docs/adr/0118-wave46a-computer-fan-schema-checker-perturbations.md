@@ -6,7 +6,7 @@ house rules of ADRs 0110-0117 apply:
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
-Written at main 8bd609a (worktree `<scratch dir>`, branch `w46a`, target `<target dir>`). It serves
+Written at main 9fbedff (worktree `<scratch dir>`, branch `w46a`, target `<target dir>`). It serves
 parts A1, A2 and A5 of `docs/fan-project-breakdown.md` for an **axial** computer fan. Clean-room: first principles, our own ADRs
 and standard statistics. Parents: ADR 0065 (blade geometry), ADR 0067 (seeded generator), ADRs 0068/0083 (C-grid).
 
@@ -344,7 +344,7 @@ The code (`fan_design.rs`, the `Rng` move, `centroid`) and two ignored smoke tes
   test checks them against Phi(1) = 0.841344746068543, Phi(-3) = 1.3498980316301e-3 and Phi(-5) = 2.8665157187919e-7.
 * Moulding thresholds: UNVERIFIED rules of thumb, as stated in the table above.
 
-## Addendum: measured values (one registered run each, debug build, `target-w46a`, on the working tree committed as 8bace16, rebased as e09207d)
+## Addendum: measured values (one registered run each, debug build, `target-w46a`, on the working tree committed as 8bace16, rebased as 64b4fd3)
 
 Every registered check passed. No known-miss test was created.
 
@@ -437,7 +437,7 @@ distribution.
 
 ## Final gate
 
-* **Gate run.** On a fresh `git archive` of e548e88 (the branch rebased onto main 98a4903), in `<scratch dir>`:
+* **Gate run.** On a fresh `git archive` of e548e88 (the branch rebased onto main 53e1fac), in `<scratch dir>`:
   * `cargo fmt --check`: clean;
   * `cargo clippy --workspace --all-targets -D warnings`: clean;
   * `cargo test --workspace --release --no-fail-fast`: **2042 passed / 0 failed / 651 ignored**.
@@ -445,6 +445,6 @@ distribution.
   `normal_cdf` unit test, which gives 2042, and the 2 ignored smokes, which give 651.
 * **D1 and D2.** In that run, `g6_fan_meshes_unchanged`, `baseline_hashes.rs` and `docs_site_builds_with_no_broken_links`
   passed. `git diff main -- crates/rcfd-api/tests/baseline_hashes.rs` is empty.
-* **After the gate.** Main moved to f307f59 (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
-  branch was rebased onto it: the commits are 4d10635 (registration), e09207d (implementation) and 04b8f62 (addendum).
+* **After the gate.** Main moved to 7fcdf9c (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
+  branch was rebased onto it: the commits are a306711 (registration), 64b4fd3 (implementation) and cc88f3e (addendum).
   The re-runs on the rebased branch: fmt clean, workspace clippy clean, and this ADR's tests 13 passed / 2 ignored, plus the `normal_cdf` and `rng` unit tests. There was no second full test gate.
