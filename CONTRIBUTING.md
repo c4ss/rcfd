@@ -56,7 +56,11 @@ Run these commands before you submit:
 
 * `cargo fmt --all`
 * `cargo clippy --workspace --all-targets -- -D warnings`
-* `cargo test --workspace`
+* `cargo test --workspace --release` (about an hour; debug mode is much
+  slower). While you work, test only the crates you changed with
+  `cargo test --release -p <crate>`. The project's gate script,
+  `python scripts/gate_test.py`, runs the same release tests with more of
+  them at once ([docs/test-process.md](docs/test-process.md)).
 
 These rules apply to the code itself:
 
