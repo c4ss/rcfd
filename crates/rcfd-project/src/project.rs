@@ -178,6 +178,28 @@ impl Project {
         paths::resolve_in(&self.root, rel)
     }
 
+    /// A file given project-relative (any separators, `.` components) or as an absolute path inside the project:
+    /// the resolved path and its normalised project-relative form (`cases/a.json`), as `run.json` records it.
+    fn resolve_rel(&self, given: &str) -> Result<(PathBuf, String)> {
+        let rel = if Path::new(given).is_absolute() {
+            let c = paths::canonicalize(Path::new(given)).map_err(io_err("canonicalize", Path::new(given)))?;
+            // outside the project: resolve() refuses the absolute path with a located error
+            paths::rel_string(&self.root, &c).unwrap_or_else(|| given.to_string())
+        } else {
+            given.to_string()
+        };
+        let path = self.resolve(&rel).map_err(|e| match e {
+            ProjectError::PathRefused { component, reason, .. } => ProjectError::PathRefused {
+                input: given.to_string(),
+                component,
+                reason,
+            },
+            e => e,
+        })?;
+        let norm = paths::rel_string(&self.root, &path).unwrap_or(rel);
+        Ok((path, norm))
+    }
+
     /// Case files under `cases/`, as project-relative paths, sorted.
     pub fn cases(&self) -> Result<Vec<String>> {
         self.files_under("cases")
@@ -236,8 +258,11 @@ impl Project {
         solver_version: &str,
         settings: Value,
     ) -> Result<RunRecord> {
-        let case_path = self.resolve(case)?;
-        let mesh_path = mesh.map(|m| self.resolve(m)).transpose()?;
+        let (case_path, case) = self.resolve_rel(case)?;
+        let (mesh_path, mesh) = match mesh.map(|m| self.resolve_rel(m)).transpose()? {
+            Some((p, r)) => (Some(p), Some(r)),
+            None => (None, None),
+        };
         // Hash the exact bytes written to the snapshot (one read), so hash and snapshot agree.
         let case_bytes = atomic::read(&case_path)?;
         let mesh_hash = mesh_path
@@ -250,9 +275,9 @@ impl Project {
         atomic::write_new(&dir.join("case.snapshot"), &case_bytes)?;
         let record = RunRecord {
             id: id.clone(),
-            case: case.replace('\\', "/"),
+            case,
             case_snapshot_hash: hash_bytes(&case_bytes),
-            mesh: mesh.map(|m| m.replace('\\', "/")),
+            mesh,
             mesh_hash,
             solver_version: solver_version.into(),
             settings,
@@ -352,14 +377,22 @@ impl Project {
         Ok(self.runs()?.runs.into_iter().filter(|r| r.state == state).collect())
     }
 
-    /// The most recently created finished run of `case` (path as recorded in `run.json`).
+    /// The most recently created finished run of `case`. Query and recorded path are compared normalised (`\` as
+    /// `/`, empty and `.` components dropped), so older records that kept the path as given still match.
     pub fn latest_finished(&self, case: &str) -> Result<Option<RunSummary>> {
-        let case = case.replace('\\', "/");
+        let norm = |s: &str| {
+            s.replace('\\', "/")
+                .split('/')
+                .filter(|c| !c.is_empty() && *c != ".")
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        let case = norm(case);
         Ok(self
             .runs_in_state(RunState::Finished)?
             .into_iter()
             .rev()
-            .find(|r| r.case == case))
+            .find(|r| norm(&r.case) == case))
     }
 
     /// Check the folder against the contract. An empty list means valid.
