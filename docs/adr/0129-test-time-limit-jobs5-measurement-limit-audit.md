@@ -75,3 +75,25 @@ other slot's occupancy recorded.
 | A5 | Test list after the fixes | the sorted (binary, test) list is a superset of the one before: only additions |
 
 A missed check is reported as missed with the measured value; no check is moved.
+
+## Amendment 1 (2026-10-27, before the A4 draw): the A4 population
+
+Enumerated from the acceptance sections and amendments of ADRs 0115 to 0126 (each id with its enforcing `#[test]`, checked by a
+script for existence and ignore flag; nothing run). Known before writing this: the scanner hits (A2), not any mutation result. Population: 183 (ADR, id) pairs, sorted by (ADR, id) as strings; the enforcing test of each is in the enumeration
+table of the drawn ones goes to `docs/test-process.md` section 6.4. Excluded: 23 (0115 N1 no test, 0115 P4 ignored, 0115 P6 no test, 0115 Z1 ignored, 0115 Z2 ignored, 0117 B no test, 0117 D-c no test, 0117 D-d ignored, 0117 F-a ignored, 0117 F-b no test, 0117 F-harness ignored, 0117 route-check no test, 0118 D1 no test, 0118 D2 no test, 0119 V1 no test, 0119 Z1 ignored, 0120 J1 ignored, 0120 W no test, 0123 S5 ignored, 0125 P1 ignored, 0126 R1 ignored, 0126 R2 ignored, 0126 R3 ignored).
+
+* 0115: P1, P2, P3, P5
+* 0116: G1, G2, G3, G4, G5, G6, G7, N1, N2
+* 0117: D-a, D-b, D-d', N1, R1
+* 0118: C1, C2, C3, C4, C5, E1, E2, E2b, E3, I1, I2, I3, I4, NC1, NI1, NI2, NS-S, NS1, NS2, NS3, S1, S2, S3, S4
+* 0119: D1, D2, E1, E2, F1, G1, L1, L2, L3, M1, NC-E1, NC-E2, NC-F1, NC-G1, NC-L1, NC-L2, NC-L3, NC-M1, NC-R1, NC-R2, NC-R3, NC-S1, NC-Z1, NC-Z2, P1, R1, R1b, R2, R3, R3b, S1, Z1', Z2
+* 0120: B, E, I, J1b, J2, J3, J4, R1, R2, U, X
+* 0121: L1, L2, L3, L3b, L4, L5, L6, M1, T1, T2, U1, U2, U3, U4, U5, U6, U7, U8
+* 0122: A1, A2, A2n, A3, I1, J1, J2, L1, M1, P1, Q1, R1, R2, R2c, T1, V1, W1
+* 0123: S1, S10, S11, S2, S3, S4a, S4b, S4c, S5a, S6, S7, S8, S9
+* 0124: C1, C10, C11, C12, C2, C3, C4, C5, C5b, C6, C6b, C7, C8, C9, H1, H2, H3, H4
+* 0125: C1, C2, C3, D1, G1, G2, G3, K1, P1b, P2, R0, S1, T1, U1, V1, W1
+* 0126: D1, D2, D3, D4, D5, D6, D7, P1, P2, P3, P4, T1, T2, T3, T4
+
+The draw is `random.Random(1290127).sample(population, 12)` over this sorted list. A drawn check that does not run on this machine
+(a GPU test that skips without an adapter, a release-only assertion run in debug) is reported as not exercised, not as detected.
