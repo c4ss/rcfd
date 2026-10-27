@@ -1,5 +1,11 @@
 # Drive rcfd from an assistant: the MCP design loop
 
+This tutorial walks through a design loop driven over MCP: you connect a client to the rcfd MCP server, set up and run a case,
+run a small optimisation study, write the chosen variant and map its operating range. It is for people who connect an AI
+assistant to rcfd or write their own MCP client. The fan part of the page stops at checking the mesh on purpose; the reason is
+in that section. If you want the desktop app instead, see the [desktop tutorial](desktop-assistant.md): its assistant sidebar
+uses the same tools in-process.
+
 `rcfd-mcp` is a Model Context Protocol server on stdio. An MCP client (an AI assistant such as Claude, or any program that speaks
 JSON-RPC 2.0) lists its tools, sets up and runs cases, and iterates on a design with the `design_*` tools. This tutorial shows the
 exact JSON-RPC messages an assistant sends, on two examples: the contraction duct of the design loop (a pressure-drop minimisation)
@@ -7,7 +13,11 @@ and the parametric axial fan passage. The tool reference is [MCP tools](../mcp-t
 operating maps, the store) is explained in [the design loop](../design-loop.md); the plan and state of the fan work are in
 [the fan milestone](../milestone-fan.md).
 
-The same tools are used in-process by the assistant sidebar of the desktop app ([desktop tutorial](desktop-assistant.md)).
+What you need: a checkout of this repository and a Rust toolchain to build the server, and an MCP client or any program that can
+write JSON-RPC lines to the server's standard input. The case file format is introduced in the [quick start](quick-start-cli.md).
+
+The steps: connect a client, start a session and list the tools, set up and run the duct once, create a design study and
+evaluate candidates, write the chosen variant and map its operating range, then check the fan passage.
 
 ## Connect a client
 
@@ -34,7 +44,7 @@ Each `jsonl` block below is one session: the test of this tutorial starts `rcfd-
 copy of the repository's `cases/`), sends the lines and requires every response to be free of errors. What one session leaves on
 disk (case files, study directories) is used by the next; the in-memory simulation sessions are not.
 
-## Handshake and the tool list
+## Start a session and list the tools
 
 ```jsonl run
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"tutorial","version":"1"}}}
@@ -49,11 +59,11 @@ disk (case files, study directories) is used by the next; the in-memory simulati
 "rcfd/needsApproval":true
 ```
 
-## The contraction duct
+## Optimise a contraction duct
 
 A 2D channel of length 5 and height 1 whose upper wall ramps down at `ramp_angle` degrees from `ramp_start` (mesh generator
 `wedge_2d`, 40 x 12 cells), laminar, inlet velocity 1. The reports give the inlet and outlet pressures, the mean outlet velocity and
-the pressure drop `dp`; reports are the metrics the design tools optimise.
+the pressure drop `dp`; reports are the metrics the design tools optimise. Save it as `duct.toml` in the `--root` directory.
 
 ```toml file=duct.toml
 title = "contraction duct"
@@ -131,7 +141,7 @@ expression = "p_in - p_out"
 "name":"dp"
 ```
 
-### A design study
+### Create a design study and evaluate candidates
 
 Two parameters, the ramp angle in [0, 12] degrees and the ramp start in [0.5, 3]; minimise `dp` subject to "mean outlet velocity at
 least 1.3" (the constraint keeps the optimiser from flattening the ramp), Nelder-Mead from (6, 0.5). The study lives in the
@@ -199,7 +209,7 @@ over inlet velocities, each point restarting from the previous one:
 
 `map_angle4/map.csv` holds one row per inlet velocity with `dp`, `ux_out` and the iteration counts.
 
-## The axial fan passage
+## Check an axial fan passage (no design study)
 
 The parametric fan generator builds a periodic single-passage mesh from blade count, hub and tip radius, chord, stagger, camber,
 thickness, sweep, lean and tip gap (`[mesh.fan]`, see [meshing](../meshing.md)). Through MCP the assistant creates the case from the
@@ -227,3 +237,10 @@ The fan example files are smoke cases of the geometry and the plumbing, as the [
 The messages above are what an assistant sends; the assistant's part is choosing them: which parameters, bounds, objectives and
 constraints, when to stop, and how to read the metrics. The rcfd side is deterministic: the same study definition and seed give the
 same history, and every evaluation is stored and resumable.
+
+## Where to go next
+
+* [The desktop app and the assistant sidebar](desktop-assistant.md): the same tools behind approval cards in the app.
+* [MCP tools](../mcp-tools.md): every tool, its access class and the approval model.
+* [The design loop](../design-loop.md): how studies, optimisers, operating maps and the evaluation store work.
+* [The fan milestone](../milestone-fan.md): the state of the fan work and why a fan study is not shown here.
