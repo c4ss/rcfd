@@ -98,10 +98,151 @@ fn f01_config_naming_rcfd_bin_is_rejected_and_never_run() {
     }
     std::thread::sleep(Duration::from_secs(2));
     let ran = marker.exists();
-    eprintln!("F1: runner exit {status:?} (still serving after 10 s: {alive}), script ran {ran}, stderr: {}", err.trim());
+    eprintln!(
+        "F1: runner exit {status:?} (still serving after 10 s: {alive}), script ran {ran}, stderr: {}",
+        err.trim()
+    );
     assert!(!ran, "the program named by rcfd_bin was run");
     assert!(!alive, "the runner accepted a config naming rcfd_bin");
     assert!(!status.unwrap().success());
     assert!(err.contains("runner-config.json") && err.contains("rcfd_bin"), "{err}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn rcfd_bin() -> PathBuf {
+    Path::new(RUNNER).with_file_name(format!("rcfd{}", std::env::consts::EXE_SUFFIX))
+}
+
+fn events(dir: &Path, id: &str) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(dir.join("runs").join(id).join("events.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect()
+}
+
+fn count(dir: &Path, id: &str, kind: &str) -> usize {
+    events(dir, id).iter().filter(|e| e["event"] == kind).count()
+}
+
+fn append_event(dir: &Path, id: &str, ev: serde_json::Value) {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(dir.join("runs").join(id).join("events.jsonl"))
+        .unwrap();
+    writeln!(f, "{ev}").unwrap();
+}
+
+fn stop(dir: &Path, mut child: std::process::Child) {
+    let _ = std::fs::write(dir.join(".rcfd/shutdown"), b"");
+    let t0 = Instant::now();
+    while child.try_wait().unwrap().is_none() && t0.elapsed() < Duration::from_secs(5) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn fast_config() -> serde_json::Value {
+    json!({"max_runs": 1, "cpu_threads": 8, "mem_budget_mb": 100_000, "poll_ms": 50, "adopt_probe_ms": 200})
+}
+
+/// F3 scan leg: a run left `queued` with a `launched` event is adopted (live pid) or failed (dead pid), never relaunched.
+#[test]
+fn f03_queued_run_with_launched_event_is_not_relaunched() {
+    let settings = RunSettings {
+        mem_mb: Some(10),
+        set: vec!["solver.max_iterations=100000".into()],
+        ..RunSettings::default()
+    };
+    let launched = |pid: u32| json!({"event": "launched", "pid": pid, "launch_seq": 1, "threads": 1, "mem_mb": 10});
+    // (a) dead pid
+    let dir = project("f03dead", fast_config());
+    let id = Client::new(&dir, RUNNER)
+        .submit(&dir.join("cases/cavity.toml"), &settings)
+        .unwrap();
+    let mut short = Command::new(rcfd_bin())
+        .arg("--version")
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    let dead = short.id();
+    short.wait().unwrap();
+    append_event(&dir, &id, launched(dead));
+    let child = serve(&dir).spawn().unwrap();
+    let client = Client::new(&dir, RUNNER);
+    let t0 = Instant::now();
+    while !client.status(&id).unwrap().state.is_terminal() && t0.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let st = client.status(&id).unwrap();
+    let relaunched = count(&dir, &id, "launched") - 1;
+    let pids: Vec<u64> = events(&dir, &id)
+        .iter()
+        .filter(|e| e["event"] == "launched")
+        .filter_map(|e| e["pid"].as_u64())
+        .collect();
+    stop(&dir, child);
+    for p in pids.iter().skip(1) {
+        rcfd_runner::sys::kill(*p as u32);
+    }
+    eprintln!(
+        "F3 dead pid: state {:?} after {:?}, relaunched {relaunched}: {:?}",
+        st.state,
+        t0.elapsed(),
+        st.reason
+    );
+    assert_eq!(relaunched, 0, "a launched run was put back in the queue");
+    assert_eq!(st.state, rcfd_runner::records::RunState::Failed);
+    let _ = std::fs::remove_dir_all(&dir);
+    // (b) live pid
+    let dir = project("f03live", fast_config());
+    let id = Client::new(&dir, RUNNER)
+        .submit(&dir.join("cases/cavity.toml"), &settings)
+        .unwrap();
+    let mut solver = Command::new(rcfd_bin())
+        .arg("run")
+        .arg(dir.join("cases/cavity.toml"))
+        .args(["--quiet", "--set", "solver.max_iterations=100000", "--out"])
+        .arg(dir.join("own-output"))
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    append_event(&dir, &id, launched(solver.id()));
+    let child = serve(&dir).spawn().unwrap();
+    std::thread::sleep(Duration::from_secs(2));
+    let st = client_status(&dir, &id);
+    let relaunched = count(&dir, &id, "launched") - 1;
+    let adopted = count(&dir, &id, "adopted");
+    let pids: Vec<u64> = events(&dir, &id)
+        .iter()
+        .filter(|e| e["event"] == "launched")
+        .filter_map(|e| e["pid"].as_u64())
+        .collect();
+    stop(&dir, child);
+    let _ = solver.kill();
+    let _ = solver.wait();
+    for p in pids.iter().skip(1) {
+        rcfd_runner::sys::kill(*p as u32);
+    }
+    eprintln!(
+        "F3 live pid {}: state {:?} pid {:?}, adopted events {adopted}, relaunched {relaunched}",
+        solver.id(),
+        st.state,
+        st.pid
+    );
+    assert_eq!(relaunched, 0, "a launched run was put back in the queue");
+    assert_eq!(
+        (st.state, st.pid),
+        (rcfd_runner::records::RunState::Running, Some(solver.id()))
+    );
+    assert_eq!(adopted, 1);
+    std::thread::sleep(Duration::from_millis(300));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn client_status(dir: &Path, id: &str) -> rcfd_runner::records::RunStatus {
+    Client::new(dir, RUNNER).status(id).unwrap()
 }
