@@ -552,7 +552,7 @@ pub fn run(spec: &UqSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Result<
                 .collect();
             l.append(&entries)?;
         }
-        batch_of.extend(std::iter::repeat(batches).take(s.batch));
+        batch_of.extend(std::iter::repeat_n(batches, s.batch));
         xs.extend(bx);
         outs.extend(bout);
         batches += 1;

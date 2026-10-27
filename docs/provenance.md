@@ -68,4 +68,5 @@ The cases below are all the exceptions on record. They come from the project's o
 ## Third-party data and code
 
 Data tables and their licences are listed in `NOTICE` and `validation-data/manifest.json` (see
-[validation data](validation-data.md)).
+[validation data](validation-data.md)). Licences of third-party Rust packages are listed in `THIRD_PARTY_LICENSES.md` at the
+repository root.

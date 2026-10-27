@@ -4,7 +4,9 @@ description = "Finite-volume discretisation and solvers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+# The dependency closure needs Rust 1.80 (rayon 1.12; cargo metadata rust_version fields).
+rust-version = "1.80"
+publish = false
 
 [lints]
 workspace = true

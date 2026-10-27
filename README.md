@@ -50,6 +50,8 @@ at your option. Unless you state otherwise, any contribution you submit for
 inclusion is dual-licensed as above, without additional terms. Third-party
 data shipped in `validation-data/` and `cases/*/reference/` keep their own
 terms and attributions; see `NOTICE` and `validation-data/manifest.json`.
+The licences of the third-party Rust packages rcfd depends on are listed in
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Trademarks and independence
 

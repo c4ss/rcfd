@@ -300,7 +300,7 @@ impl Workflow {
             .map(|t| {
                 t.deps
                     .iter()
-                    .find(|d| self.task(d).map_or(true, |x| x.state != TaskState::Done))
+                    .find(|d| self.task(d).is_none_or(|x| x.state != TaskState::Done))
             })
             .and_then(|x| x.cloned())
         {

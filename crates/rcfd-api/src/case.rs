@@ -119,7 +119,7 @@ pub fn locate_line(text: &str, path: &str) -> Option<usize> {
             header = line.trim_matches(|c| c == '[' || c == ']').trim().to_string();
             let hs: Vec<&str> = header.split('.').collect();
             let n = hs.iter().zip(&target).take_while(|(a, b)| a.trim() == **b).count();
-            if n == hs.len() && n > 0 && best.map_or(true, |(m, _)| n > m) {
+            if n == hs.len() && n > 0 && best.is_none_or(|(m, _)| n > m) {
                 best = Some((n, i + 1));
             }
         } else if let Some((k, _)) = line.split_once('=') {
@@ -744,7 +744,7 @@ mod sandbox_tests {
                 .canonicalize()
                 .ok()
                 .zip(root.canonicalize().ok())
-                .map_or(true, |(p, r)| p.starts_with(r))
+                .is_none_or(|(p, r)| p.starts_with(r))
     }
 
     /// `link` -> directory `target` (a junction on Windows, which needs no privilege); false if not possible.

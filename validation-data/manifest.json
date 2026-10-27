@@ -577,7 +577,7 @@
         "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
         "url": "https://archive.nptel.ac.in/content/storage2/courses/112101002/downloads/l19.pdf",
         "attribution": "NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)",
-        "notes": "Tables of slides 11 to 19 read on 2026-10-17 (constant wall temperature theta_b and Nu_x, constant flux Nu_x; D_h based, x+ = x / (D_h Re Pr)). Used by validation_graetz.rs (ADR 0061). Shah and London were not read."
+        "notes": "Tables of slides 11 to 19 read on 2026-10-17 (constant wall temperature theta_b and Nu_x, constant flux Nu_x; D_h based, x+ = x / (D_h Re Pr)). Used by validation_graetz.rs (ADR 0061). Shah and London were not read. Licence status UNVERIFIED: the PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked 2026-10-27) and the licence of NPTEL course material in general was not confirmed; only numeric values are transcribed; whether the table may be redistributed is open for the maintainer."
       },
       "files": [
         {

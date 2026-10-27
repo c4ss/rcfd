@@ -4,7 +4,9 @@ description = "CUDA device linear solvers (feature `cuda`, off by default; ADR 0
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+# The dependency closure needs Rust 1.80 (rayon 1.12; cargo metadata rust_version fields).
+rust-version = "1.80"
+publish = false
 
 # This crate does NOT inherit the workspace lint table: the workspace sets `unsafe_code = "forbid"`, which cannot be
 # relaxed inside a crate. Every other lint entry is copied from the workspace; `unsafe_code` is `deny` here and is

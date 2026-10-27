@@ -367,7 +367,7 @@ impl Rule {
                 .as_array()
                 .and_then(|l| {
                     l.iter()
-                        .find(|c| c.get("when").map_or(true, |w| eval(w, ctx)))
+                        .find(|c| c.get("when").is_none_or(|w| eval(w, ctx)))
                         .and_then(|c| c["path"].as_str().map(String::from))
                 })
                 .unwrap_or_default(),
@@ -477,7 +477,7 @@ fn eval(c: &Value, ctx: &Ctx) -> bool {
         let n = items
             .into_iter()
             .filter(|it| {
-                c.get("where").map_or(true, |w| {
+                c.get("where").is_none_or(|w| {
                     eval(
                         w,
                         &Ctx {

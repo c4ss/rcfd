@@ -67,7 +67,7 @@ fn save(img: &Image, file: &str) {
 }
 
 fn count(img: &Image, rgba: [u8; 4]) -> usize {
-    img.rgba.chunks_exact(4).filter(|p| *p == rgba).count()
+    img.rgba.as_chunks::<4>().0.iter().filter(|p| **p == rgba).count()
 }
 
 /// Unit square [0,1]^2 at z = 0 as `n` vertical strips (one part), points shared between strips.

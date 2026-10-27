@@ -247,7 +247,7 @@ fn docs_site_builds_with_no_broken_links() {
     assert!(pages.len() >= 100, "S1: {} pages", pages.len());
     let broken: Vec<_> = links
         .iter()
-        .filter(|(p, h)| resolve(p, h).map_or(true, |t| !pages.contains(&t)))
+        .filter(|(p, h)| resolve(p, h).is_none_or(|t| !pages.contains(&t)))
         .collect();
     assert!(
         broken.is_empty(),

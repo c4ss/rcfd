@@ -2566,7 +2566,7 @@ impl Simulation {
                     }
                     en.res_t = en.solver.iterate(&s.phi);
                 }
-                let converged = self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u);
+                let converged = self.energy.as_ref().is_none_or(|e| e.res_t < self.tol_u);
                 StepSummary {
                     index: iteration,
                     time: 0.0,
@@ -2857,10 +2857,10 @@ impl Simulation {
                 let converged = i.res_u < self.tol_u
                     && i.res_p < self.tol_p
                     && res_sc < self.tol_u
-                    && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u)
-                    && self.turb.as_ref().map_or(true, |t| t.change < self.tol_u)
-                    && self.two_way.as_ref().map_or(true, |t| t.converged())
-                    && self.mixing.as_ref().map_or(true, |m| m.converged());
+                    && self.energy.as_ref().is_none_or(|e| e.res_t < self.tol_u)
+                    && self.turb.as_ref().is_none_or(|t| t.change < self.tol_u)
+                    && self.two_way.as_ref().is_none_or(|t| t.converged())
+                    && self.mixing.as_ref().is_none_or(|m| m.converged());
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,
@@ -2911,7 +2911,7 @@ impl Simulation {
                 let converged = i.res_u < self.tol_u
                     && i.res_p < self.tol_p
                     && res_sc < self.tol_u
-                    && self.energy.as_ref().map_or(true, |e| e.res_t < self.tol_u);
+                    && self.energy.as_ref().is_none_or(|e| e.res_t < self.tol_u);
                 StepSummary {
                     index: i.iteration,
                     time: 0.0,

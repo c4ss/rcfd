@@ -4,7 +4,8 @@ Copyright (c) 2026 The rcfd contributors
 rcfd is licensed under either of the Apache License, Version 2.0 (LICENSE-APACHE) or the MIT licence (LICENSE-MIT), at
 your option. The licences cover the rcfd source code and documentation. The third-party data listed below keep their own
 terms. The full licence record of every dataset (SPDX id, URL, attribution, notes, checksums) is in
-validation-data/manifest.json; `rcfd data provenance` prints it.
+validation-data/manifest.json; `rcfd data provenance` prints it. Licences of third-party Rust packages are listed in
+THIRD_PARTY_LICENSES.md. What was consulted while rcfd was built is recorded in docs/provenance.md.
 
 Trademarks: all product and company names mentioned in this repository are trademarks or registered trademarks of their
 respective owners. rcfd is an independent project and is not affiliated with, endorsed by or sponsored by any of them.
@@ -79,6 +80,9 @@ graetz-parallel-plates-nptel
   Files: validation-data/reference/w30c_graetz_parallel_plates_nptel.csv
   Source: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
   Attribution: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
+  Licence status: UNVERIFIED. The lecture PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked
+    2026-10-27); the licence of NPTEL course material in general was not confirmed. Only numeric values are transcribed.
+    Whether this table may be redistributed is an open question for the maintainer.
 
 laminar-internal-flow-limits
   Files: validation-data/reference/w30c_laminar_internal_flow_limits.csv
@@ -129,6 +133,53 @@ w34c-tmr-flatplate-grid-axes
   Files: validation-data/reference/w34c_tmr_flatplate_545x385_axes.csv
   Source: NASA Turbulence Modeling Resource, 2DZP grids (https://tmbwg.github.io/turbmodels/flatplate_grids.html), file flatplate_clust2.p2dfmt in flatplategrids-grids.zip
   Attribution: NASA TMR (TMBWG), 2DZP verification grids
+
+------------------------------------------------------------------------------------------------------------------------
+Data in source code under the BSD 3-Clause licence (Cantera)
+------------------------------------------------------------------------------------------------------------------------
+crates/rcfd-core/src/fluids.rs transcribes NASA seven-coefficient polynomial coefficients (McBride, Gordon and Reno, NASA
+TM-4513, 1993, a US government work) for the listed species from the Cantera distribution of that data set
+(data/nasa_gas.yaml). Cantera is distributed under the following licence (text of License.txt in the Cantera repository,
+https://github.com/Cantera/cantera/blob/main/License.txt, read 2026-10-27; the copyright lines are those of the current
+file, and whether they match the release the coefficients were taken from is UNVERIFIED):
+
+  Copyright (c) 2001-2009, California Institute of Technology
+  All rights reserved.
+
+  Copyright (c) 2009 Sandia Corporation. Under the terms of
+  Contract AC04-94AL85000 with Sandia Corporation, the U.S. Government
+  retains certain rights in this software.
+
+  Copyright (c) 2011-2026, Cantera Developers.
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+  - Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+  - Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+  - Neither the name of the California Institute of Technology, Sandia
+    Corporation nor the names of other  contributors may be used to
+    endorse or promote products derived from this software without
+    specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------------------------------------
 Fetched only, never committed
