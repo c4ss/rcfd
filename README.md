@@ -27,6 +27,21 @@ warranty of any kind (see the licences). The main gaps today:
 does not and what comes next. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
 plan.
 
+## Quick start
+
+You need a Rust toolchain (see the prerequisites below). From the repository
+root, build the command-line solver and check one of the shipped cases:
+
+    cargo build --release -p rcfd-cli
+    target/release/rcfd --help
+    target/release/rcfd check cases/sod/sod.toml
+
+`check` builds the mesh and validates the set-up without solving. For a first
+real run, follow [the quick-start tutorial](docs/tutorials/quick-start-cli.md):
+it writes a small lid-driven cavity case, runs it to convergence and
+post-processes the result. Every command in it is executed by the test suite.
+On Windows the binary is `target\release\rcfd.exe`.
+
 ## Build and test
 
 Prerequisites:
@@ -56,12 +71,19 @@ machine, and much longer in debug mode. The project's gate runs it with
   [docs/index.md](docs/index.md); the tutorials are executed by the test suite.
 * [CONTRIBUTING.md](CONTRIBUTING.md) is the clean-room policy you must agree
   to before you submit a change, and the workflow commands.
+* [The glossary](docs/glossary.md) explains the project's own terms (wave,
+  gate, ADR, F-xxx ids, FAN-01 and others) that appear throughout the docs.
 * [docs/architecture.md](docs/architecture.md) describes the crate layout.
 * [The provenance record](docs/provenance.md) says where rcfd's knowledge
   comes from.
 * [SECURITY.md](SECURITY.md) says how to report a vulnerability and which
   parts run programs or listen for requests; [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
   and [CHANGELOG.md](CHANGELOG.md) are next to it.
+
+## Questions and bug reports
+
+Open a GitHub issue; [SUPPORT.md](SUPPORT.md) says which template to use.
+Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Licence
 

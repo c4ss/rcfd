@@ -27,6 +27,7 @@ Most task steps live in the reference pages below for now.
 
 ## Look something up
 
+* [Glossary](glossary.md): the project's own terms (wave, gate, ADR, F-xxx, PARTIAL, UNVERIFIED, FAN-01 and others).
 * [Case file schema](case-schema.md): every setting of a case file.
 * [Run control](run-control.md): exit codes, status stream, checkpoints, stop files.
 * [Studies](studies.md): parametric studies over design points and their result table.
