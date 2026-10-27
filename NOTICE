@@ -16,8 +16,16 @@ Data under Creative Commons Attribution 4.0 International (CC BY 4.0)
 ------------------------------------------------------------------------------------------------------------------------
 FAN-01 low-pressure axial fan benchmark (manifest id w34d-fan01-fau-eaa-axial-fan)
   Files: validation-data/reference/w34d_fan01_characteristic_n1ug.csv, validation-data/reference/w34d_fan01_cad_sections.csv
-  Source: Kroemer, Junger, Becker, Kaltenbacher, Czwielong, Schoder, 'FAN 01 Benchmark: Low Pressure Axial Fan in a Short Duct', Zenodo, doi:10.5281/zenodo.20037409 (v5, 2026); fan and rig: Zenger, Junger, Kaltenbacher, Becker, SAE Technical Paper 2016-01-1805 (2016)
-  Attribution: FAN-01 benchmark, Friedrich-Alexander-Universitaet Erlangen-Nuernberg / EAA; cite Zenger et al., SAE 2016-01-1805
+  Source: F. Kroemer (FAU Erlangen), C. Junger (TU Wien), S. Becker (FAU Erlangen), M. Kaltenbacher (TU Graz),
+    F. Czwielong (FAU Erlangen), S. Schoder (TU Graz), 'FAN 01 Benchmark: Low pressure Axial Fan in a short Duct', Zenodo,
+    version v5, published 2026-05-05, doi:10.5281/zenodo.20037409 (creators, affiliations, title, date and licence from
+    the record's metadata, version from the record page, read 2026-10-27; the record spells the first name Kroemer with
+    an umlaut); fan and rig: Zenger, Junger, Kaltenbacher, Becker, SAE Technical Paper 2016-01-1805 (2016)
+  Attribution: Kroemer et al., FAN 01 Benchmark, Zenodo, doi:10.5281/zenodo.20037409, CC BY 4.0. The record's description
+    gives Zenger et al., SAE 2016-01-1805, under "Citation of the fan and the data:", and its notes read "Jointly organized
+    by the EAA TC Computational Acoustics, DEGA Fachausschuss Stroemungsakustik, AAA TC Computational Acoustics and
+    ERCOFTAC SIG39 Aeroacoustics represented by the member Stefan Schoder." (umlaut written as oe; read 2026-10-27). The
+    record shows no copyright notice. The "fau-eaa" in the manifest id is a label only.
   Record: https://doi.org/10.5281/zenodo.20037409
   Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
   Changes: the measured characteristic was transcribed from the published .mat file to CSV (the column labelled
@@ -80,14 +88,23 @@ graetz-parallel-plates-nptel
   Files: validation-data/reference/w30c_graetz_parallel_plates_nptel.csv
   Source: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
   Attribution: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
-  Licence status: UNVERIFIED. The lecture PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked
-    2026-10-27); the licence of NPTEL course material in general was not confirmed. Only numeric values are transcribed.
-    Whether this table may be redistributed is an open question for the maintainer.
+  Licence status: UNRESOLVED. The lecture PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked
+    2026-10-27). The footer of https://nptel.ac.in/ (raw page read 2026-10-27) reads "Distributed under", "Creative Commons
+    Attribution-ShareAlike", "CC BY - NC - SA" next to a by-nc-sa badge image, and "[copyright sign] - 2026 All rights reserved"; the
+    text names two different licences, and whether that site-wide footer covers this archived lecture PDF is not stated.
+    If CC BY-NC-SA applied to the table, its non-commercial and share-alike terms would not fit this repository's
+    MIT OR Apache-2.0 terms. Only numeric values are transcribed; they are solutions of the classical
+    Graetz problem for parallel plates. Whether this table may be redistributed is an open question for the maintainer.
 
 laminar-internal-flow-limits
   Files: validation-data/reference/w30c_laminar_internal_flow_limits.csv
   Source: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)
-  Attribution: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation)
+  Attribution: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19
+    (parallel-plate limits)
+  Licence status: the two parallel-plate values come from the NPTEL lecture above and share its unresolved status. The
+    BYU sheet carries no licence statement; its only credit line ("Used with permission from W. M. Kays and M. E. Crawford,
+    Convection Heat and Mass Transfer, 3rd ed. McGraw-Hill, New York, 1993.", read 2026-10-27) belongs to its Table 8.1,
+    from which no value was taken.
 
 tmr-2dzp-coles-uplus-retheta10000
   Files: validation-data/reference/w30c_tmr_coles_uplus_yplus_retheta10000.csv
@@ -135,13 +152,19 @@ w34c-tmr-flatplate-grid-axes
   Attribution: NASA TMR (TMBWG), 2DZP verification grids
 
 ------------------------------------------------------------------------------------------------------------------------
-Data in source code under the BSD 3-Clause licence (Cantera)
+NASA polynomial coefficients in source code, taken from Cantera (BSD 3-Clause)
 ------------------------------------------------------------------------------------------------------------------------
 crates/rcfd-core/src/fluids.rs transcribes NASA seven-coefficient polynomial coefficients (McBride, Gordon and Reno, NASA
-TM-4513, 1993, a US government work) for the listed species from the Cantera distribution of that data set
-(data/nasa_gas.yaml). Cantera is distributed under the following licence (text of License.txt in the Cantera repository,
-https://github.com/Cantera/cantera/blob/main/License.txt, read 2026-10-27; the copyright lines are those of the current
-file, and whether they match the release the coefficients were taken from is UNVERIFIED):
+TM-4513, 1993) for the listed species from the Cantera distribution of that data set (data/nasa_gas.yaml), added to rcfd
+on 2026-10-13; which Cantera release was used is not recorded. The header of data/nasa_gas.yaml (main branch, read
+2026-10-27) names TM-4513 as "The original source" and the Caltech Shepherd thermo page as the download location, and
+carries no licence or copyright statement of its own. The NASA Technical Reports Server record of TM-4513
+(https://ntrs.nasa.gov/citations/19940013151, read 2026-10-27) lists the copyright determination
+"GOV_PUBLIC_USE_PERMITTED", distribution "PUBLIC" and the flag belongsToUsGov false; two of its three authors are listed
+without a NASA affiliation. Whether the coefficients are free of copyright everywhere is therefore not established here.
+The Cantera licence is reproduced below as a courtesy for the transcription. Text of License.txt in the Cantera
+repository (https://github.com/Cantera/cantera/blob/main/License.txt, read 2026-10-27); the v3.0.0 tag of the same file
+differs only in the last copyright line, which reads "2011-2023":
 
   Copyright (c) 2001-2009, California Institute of Technology
   All rights reserved.

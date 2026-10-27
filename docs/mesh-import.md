@@ -7,8 +7,10 @@ unverified against real files; see "Not done" before you rely on it. For the oth
 
 `mesh.source = "file"` with `mesh.file = "x.msh"` (or `x.cas`) accepts Fluent files as well as Gmsh and
 OpenFOAM meshes; the family is chosen from the first byte (`(` means Fluent, `$MeshFormat` Gmsh).
-`rcfd check-mesh` and `rcfd convert` read the same files. The reader is written from the publicly documented
-section layout; no Ansys text, tool or file was used.
+`rcfd check-mesh` and `rcfd convert` read the same files. The reader was written from memory of a public description
+of the section layout; which description is not recorded (see the [provenance record](provenance.md)). No vendor
+software or source code was used; the tests read a public Fluent-written sample file distributed with an OpenFOAM
+tutorial (see "Tests").
 
 ## What is read
 
