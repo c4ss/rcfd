@@ -1,7 +1,21 @@
 # Dynamic mesh and rigid-body dynamics (F-063, F-229; ADR 0033)
 
+This page explains how rcfd moves the mesh during a run, how a rigid body driven by the flow is integrated, and where the method
+stops. It is for users who plan a moving-wall or moving-body case and want to know what the solver does and does not cover. For the
+exact keys and defaults of the case section see [case-schema.md](case-schema.md); for the full decision record and the measured
+checks read the ADR named below.
+
 Status: partial. Incompressible laminar PISO/PIMPLE with implicit Euler on a mesh whose points move every step. Decisions and checks are in
 `docs/adr/0033-wave20b-dynamic-mesh.md` (read its addendum for the misses).
+
+## Limits and gaps
+
+Euler time scheme only; no turbulence, energy, scalars, particles, sources, rheology, statistics or restart. No sliding interfaces (AMI, F-250); layering is in F-230 and remeshing in F-247,
+no strong coupling or added-mass stabilisation (the explicit coupling needs a body that is not much lighter than the displaced fluid; the checks use a
+fluid-to-body mass ratio of 0.2). The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
+1e-6 missed, cause not proven). The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed
+mesh difference 1.84e-14, re-run 2026-10-21). Baseline limitation met: `Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient`
+sides).
 
 ## Method
 
@@ -25,15 +39,6 @@ Status: partial. Incompressible laminar PISO/PIMPLE with implicit Euler on a mes
 Section `dynamic_mesh`; keys, defaults and unset values are in `docs/case-schema.md`. Static errors are located at the key; incompatible sections are reported
 at `dynamic_mesh.enabled`.
 
-## Limits and gaps
-
-Euler time scheme only; no turbulence, energy, scalars, particles, sources, rheology, statistics or restart. No sliding interfaces (AMI, F-250); layering is in F-230 and remeshing in F-247,
-no strong coupling or added-mass stabilisation (the explicit coupling needs a body that is not much lighter than the displaced fluid; the checks use a
-fluid-to-body mass ratio of 0.2). The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
-1e-6 missed, cause not proven). The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed
-mesh difference 1.84e-14, re-run 2026-10-21). Baseline limitation met: `Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient`
-sides).
-
 ## Layering and compressible ALE (F-230, ADR 0090; library only)
 
 - **Layering.** `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the layer next to the piston deforms.
@@ -44,3 +49,8 @@ sides).
   `replace_mesh` installs the mesh and state after a layer change.
 - **Stiffness.** `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
 - **Not available:** local remeshing, unstructured layering, case-tree keys, and characteristic boundary conditions on moving faces.
+
+## Where to go next
+
+* [mesh-quality.md](mesh-quality.md): what the mesh validation checks after every move.
+* [meshing.md](meshing.md): how the meshes that move are generated.

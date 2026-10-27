@@ -1,5 +1,22 @@
 # Backward-facing step: why second-order SIMPLE did not converge (wave 6, F-106 / F-042)
 
+This is an analysis record for solver developers and for users who meet a stalled steady run with a second-order scheme. It
+records the question, the cause found, the fix and the measurements behind them. For the solver setting that controls the H
+operator today see the solver keys in [case-schema.md](case-schema.md).
+
+## Summary
+
+Question: why did the steady SIMPLE solver stall on the backward-facing step once second-order convection was switched on?
+
+Answer: the default evaluated the H operator from the previous iterate, which made the pressure-velocity iteration only
+marginally stable; the flow itself was not unsteady. The default now evaluates H from the solved momentum predictor (the lagged
+form is kept while a bulk-velocity driver is active), and the side effects on the cavity and the step were measured (sections
+"Root cause" and "Fix").
+
+Status: fixed in this wave. Still open and recorded below: at the highest step Reynolds number tested a limiter scheme remains
+sensitive to the coupling and relaxation choice, the laminar reattachment length is not yet mesh independent there, and the
+literature values it is compared with are from memory and unverified.
+
 Scope: rcfd-fv `SimpleSolver` (SIMPLE/SIMPLEC, collocated, Rhie-Chow), backward-facing step (BFS),
 Re_h >= 200 with second-order convection (linearUpwind, vanLeer), cavity Re = 1000.
 
@@ -70,6 +87,8 @@ Re_h = 400 with a TVD limiter is therefore sensitive to the coupling/relaxation 
 (non-smooth limiter chatter; SIMPLEC with a smooth scheme is marginal). Re_h <= 200 is robust
 (SIMPLE and SIMPLEC, linearUpwind and vanLeer, all converge). No automatic setting was added
 beyond the H default; the working recipe is vanLeer + SIMPLEC alpha_u 0.9.
+
+## Wall-function oscillation in the k-epsilon runs (fixed)
 
 Also found in rcfd-turb, now fixed (F-042): in the Driver and Seegmiller k-epsilon runs the
 nu_t of some cells kept oscillating by O(1) (relative) between iterations. A top-N listing of the

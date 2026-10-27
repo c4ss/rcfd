@@ -1,9 +1,27 @@
 # `solver.component_diagonal = "corrected"` as the default: what would change
 
+This page is the analysis record for the user, who decides whether the corrected component diagonal becomes the default, and for
+anyone who wants to know what that change would move. For the key itself and its values see the solver keys in
+[case-schema.md](case-schema.md).
+
 Analysis for a decision that is the user's (ADR 0074 part C, wave 34C). Nothing here changes the default; `averaged` stays the default and no
 baseline hash was re-recorded. All numbers below were measured in wave 34C on the tree at HEAD 1f571fb plus the wave-34C changes; the harness is
 `crates/rcfd-api/tests/w34c_component_diagonal_default.rs` (ignored diagnostics, C1 and C2) and one full workspace test run of a scratch copy whose
 schema default was flipped to `corrected` (never committed).
+
+## Summary
+
+Question: what would change if the corrected diagonal became the default for the segregated kernels?
+
+Answer: the correction removes the sink that symmetry-type boundaries add to the tangential velocity. How much results change
+depends on how diffusion-dominated the cells next to those boundaries are. One registered baseline hash (`packed_bed`) moves,
+every other shipped case is bit-identical, and the tests that assert today's default or its defect would need rewording. The
+heat-exchanger channel that stopped converging with the flipped default turned out to be a relative stationarity criterion
+applied to a round-off pressure field, not a solver defect (see the update at the end of this page); its two tests would still
+need an absolute stationarity criterion, or the averaged setting made explicit, if the default changed.
+
+Status of the decision: it is the user's. Nothing on this page changes the default and no baseline hash was re-recorded. The
+options are listed in "Options".
 
 ## What the key does
 
@@ -86,6 +104,8 @@ One `cargo test --workspace --release --no-fail-fast` of a scratch copy (this wa
 | `duct_diagnosis::a6_default_deviation_is_located_in_the_wall_cells` | asserts that the default run shows its deviation in the wall cells (it documents the averaged-diagonal defect recorded in ADR 0022/0033); with `corrected` the wall-cell deviation is 4.4e-13 and the interior one 1.6e-12, i.e. the defect is gone | test written for the averaged behaviour |
 | `lumped::z4_heat_exchanger_energy_balance` and `lumped::z4_effectiveness_duty_follows_reported_inlet_temperature` | the heat-exchanger channel (`channel_2d` 100 x 2, `symmetry` on both walls, SIMPLEC, `h_operator = "from_solution"`, a `heat_exchanger` component) is not stationary after 1500 iterations (p changes by 0.18 of its maximum over the next 300). A probe of the fixed-duty case: `averaged` is stationary to 4e-10 from iteration 1000 on; `corrected` keeps changing p by 3 to 26 percent per 500 iterations up to 10000 iterations | a genuine convergence regression of `corrected` on this case; cause not investigated |
 
+The verdict on the two heat-exchanger tests in this table was revised later: see the update at the end of this page.
+
 All other tests pass with the flipped default (the other lumped fan and porous-jump channels with the same symmetry walls, the duct, MRF, rotating-frame,
 slip-wall and packed-bed tests included).
 
@@ -105,7 +125,8 @@ slip-wall and packed-bed tests included).
 1. Keep `averaged` as the default (today): no hash moves; users must know to set `corrected` with symmetry-type boundaries; the failure is silent.
 2. Make `corrected` the default: one registered baseline (`packed_bed`) moves and must be re-registered by an explicit decision; every shipped case other
    than `packed_bed` is bit-identical; three tests that assert today's default or its defect need rewording; the lumped heat-exchanger channel stops
-   converging and would need a diagnosis (or the key set to `averaged` in that case) first.
+   converging and would need a diagnosis (or the key set to `averaged` in that case) first. The update below withdraws the
+   diagnosis part of this option; the two tests would still need an absolute stationarity criterion.
 3. Keep `averaged` but warn (a run-time diagnostic) when a segregated kernel meets a symmetry-type boundary with the averaged diagonal (not implemented).
 
 ## Update 2026-10-19 (wave 35B, ADR 0077 part D): the heat-exchanger channel is not a convergence regression

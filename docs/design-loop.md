@@ -1,32 +1,29 @@
 # Design loop: operating maps, DOE, optimisation and the assistant tools
 
+This page explains how rcfd runs a case over many operating points or design candidates without hand work, what each part
+guarantees (determinism, resume, failure handling) and what was measured. It is for users and assistant integrators who plan a
+parameter study or an optimisation. For a step-by-step walk-through with the assistant tools read the tutorial
+[tutorials/mcp-design-loop.md](tutorials/mcp-design-loop.md); for the tool list and the order of calls see [mcp-tools.md](mcp-tools.md).
+This page also describes the study and map file formats.
+
 Wave 32C (ADR 0067) builds the infrastructure that lets a person or the assistant iterate on a design (the fan of
 `docs/milestone-fan.md`) without hand work: run a case over a range of operating points, sample or optimise design parameters,
 keep every evaluation in a resumable store and ask "what next". The real fan is not part of this wave; everything below is
 exercised on small laminar cases and on analytic surrogates.
 
-The code is `crates/rcfd-api/src/design/`:
+## Not delivered
 
-| Module | Content |
-|---|---|
-| `rng` | SplitMix64-seeded xoshiro256** generator (deterministic, documented) |
-| `sampling` | full factorial, Latin hypercube (seeded), Sobol (dimensions 1 to 10), L2-star discrepancy |
-| `optim` | Nelder-Mead with restarts, differential evolution (DE/rand/1/bin), Deb's feasibility rules |
-| `pareto` | fast non-dominated sorting with constrained domination, crowding distance |
-| `store` | JSON-lines evaluation store, exact bit-pattern keys, resume |
-| `study` | study definition, robust scalarisation, concurrent evaluation, propose/record, best, Pareto front |
-| `opmap` | operating-map driver (generic over a point evaluator), CSV/JSON tables |
-| `case_eval` | running rcfd cases: the candidate evaluator, the map point evaluator, warm start |
-| `tools` | the `design.*` service methods behind the MCP tools |
-| `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
-| `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
+CMA-ES, multi-objective evolutionary search, Halton sequences, adjoint gradients for turbulent, transient or energy runs, adjoint
+gradients through studies, the service or MCP tools, RBF morphing, surrogate models, warm start for
+transient, energy or turbulence runs (they run cold), and any use with the real fan (the fan case belongs to the other wave 32
+work and the milestone itself).
 
 ## Operating maps
 
 An operating map is a list of points; a point is a set of settings-tree overrides `(dotted path, JSON value)` with a label. Points
 come from axes (a grid, first axis slowest, optionally serpentine so that successive points are neighbours) or from an explicit list.
 
-```
+```text
 rcfd map cavity.toml --axis boundaries.inlet.velocity_value=[0.5,0,0],[0.6,0,0] --out map
 rcfd map duct.toml --axis physics.nu=0.02:0.01:5 --axis solver.alpha_u=0.6,0.8 --serpentine --out map
 ```
@@ -222,9 +219,26 @@ and a summary are written to the ledger; the same seed gives a byte-identical le
 verified on analytic functions (closed-form means, variances, quantiles and SRC); no fan evaluator is attached yet and there is no MCP
 tool for it.
 
-## Not delivered
+## Code map
 
-CMA-ES, multi-objective evolutionary search, Halton sequences, adjoint gradients for turbulent, transient or energy runs, adjoint
-gradients through studies, the service or MCP tools, RBF morphing, surrogate models, warm start for
-transient, energy or turbulence runs (they run cold), and any use with the real fan (the fan case belongs to the other wave 32
-work and the milestone itself).
+The code is `crates/rcfd-api/src/design/`:
+
+| Module | Content |
+|---|---|
+| `rng` | SplitMix64-seeded xoshiro256** generator (deterministic, documented) |
+| `sampling` | full factorial, Latin hypercube (seeded), Sobol (dimensions 1 to 10), L2-star discrepancy |
+| `optim` | Nelder-Mead with restarts, differential evolution (DE/rand/1/bin), Deb's feasibility rules |
+| `pareto` | fast non-dominated sorting with constrained domination, crowding distance |
+| `store` | JSON-lines evaluation store, exact bit-pattern keys, resume |
+| `study` | study definition, robust scalarisation, concurrent evaluation, propose/record, best, Pareto front |
+| `opmap` | operating-map driver (generic over a point evaluator), CSV/JSON tables |
+| `case_eval` | running rcfd cases: the candidate evaluator, the map point evaluator, warm start |
+| `tools` | the `design.*` service methods behind the MCP tools |
+| `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
+| `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
+
+## Where to go next
+
+* [tutorials/mcp-design-loop.md](tutorials/mcp-design-loop.md): the design loop driven through MCP, executed step by step.
+* [milestone-fan.md](milestone-fan.md): the fan design this loop is built for.
+* [studies.md](studies.md): the older parametric-study section of the case file.

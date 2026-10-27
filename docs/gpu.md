@@ -1,13 +1,36 @@
 # GPU linear solvers (F-101, ADR 0038)
 
+This page explains the optional GPU path for the pressure solve: what runs on the device, how a run decides between device
+and CPU, what was measured, and what is missing. It is for users with a supported graphics card who want to know whether the
+GPU pays off for their case, and for anyone building with GPU support. For the exact case key see [case-schema.md](case-schema.md); for the
+full decision record read the ADR named in the title.
+
 Wave 22 adds an optional CUDA backend for the linear solvers: CSR matrix-vector product, dot / axpy / norm, Jacobi and
 Chebyshev preconditioning, and Conjugate Gradient and BiCGStab running entirely on the device (f64 throughout). It is used by the
 segregated pressure solve (`simple`, `piso`, `pimple`) through `linear_solver.device` (see `docs/case-schema.md`).
 The default build, the default case setting (`device = "cpu"`) and every recorded baseline hash are unchanged.
 
+## Gaps (F-101 is `partial`)
+
+Delivered: CUDA through `cudarc`, f64 NVRTC kernels, CG and BiCGStab on the device, Jacobi and Chebyshev preconditioners, the case
+setting and benchmarks on one device. Not delivered:
+
+* multi-GPU and domain-decomposed device solves;
+* device-resident finite-volume assembly (the matrix is assembled on the CPU and uploaded for each solve);
+* AMG, ILU, GMRES on the device (the device path replaces the CPU's DIC/AMG preconditioning of the pressure CG with Jacobi or Chebyshev);
+* other vendors (ROCm, oneAPI, Metal), and non-segregated (coupled), compressible or variable-density cases on the device;
+* the run header does not print the device decision yet;
+* the result is measured on a single machine (one GPU model, one CPU).
+
+## Behaviour without a device
+
+`device = "cpu"` never touches the GPU code. `device = "auto"` uses the device for systems of 100000 unknowns or more (fixed
+threshold) when one is usable; otherwise it runs the CPU path and records why (`rcfd_gpu::fallbacks()`). `device = "cuda"` without a
+usable device (or in a build without the feature) is a located error at `linear_solver.device` naming the reason.
+
 ## Build and run
 
-```
+```text
 cargo build --release -p rcfd-cli --features cuda
 ```
 
@@ -36,15 +59,9 @@ device needs the NVIDIA driver and the toolkit's NVRTC library. All `unsafe` cod
 | `RCFD_CUDA_BIN` | directory with the NVRTC library |
 | `RCFD_GPU_REQUIRE=1` | GPU tests panic instead of skipping when no device is usable |
 
-### Behaviour without a device
-
-`device = "cpu"` never touches the GPU code. `device = "auto"` uses the device for systems of 100000 unknowns or more (fixed
-threshold) when one is usable; otherwise it runs the CPU path and records why (`rcfd_gpu::fallbacks()`). `device = "cuda"` without a
-usable device (or in a build without the feature) is a located error at `linear_solver.device` naming the reason.
-
 ## Tests
 
-```
+```text
 cargo test --workspace --release                      # no GPU needed; GPU tests are not compiled
 cargo test -p rcfd-gpu --features cuda --release -- --nocapture
 cargo test -p rcfd-api --features cuda --release --test gpu_case --test baseline_hashes
@@ -55,7 +72,7 @@ GPU tests print `GPU TEST SKIPPED: ...` when there is no device (they do not pas
 
 ## Benchmark
 
-```
+```text
 cargo run -p rcfd-gpu --features cuda --release --example gpu_bench -- --sizes 16,32,64,100,171 --n 5
 ```
 
@@ -103,14 +120,7 @@ Reading the table honestly:
 * The CPU 1-thread time per iteration jumps from 8.3 ms (1M) to 52.6 ms (5M), well above the 5x size ratio; the 5M matrix (about 480 MB)
   no longer fits the caches. Not investigated further.
 
-## Gaps (F-101 is `partial`)
+## Where to go next
 
-Delivered: CUDA through `cudarc`, f64 NVRTC kernels, CG and BiCGStab on the device, Jacobi and Chebyshev preconditioners, the case
-setting and benchmarks on one device. Not delivered:
-
-* multi-GPU and domain-decomposed device solves;
-* device-resident finite-volume assembly (the matrix is assembled on the CPU and uploaded for each solve);
-* AMG, ILU, GMRES on the device (the device path replaces the CPU's DIC/AMG preconditioning of the pressure CG with Jacobi or Chebyshev);
-* other vendors (ROCm, oneAPI, Metal), and non-segregated (coupled), compressible or variable-density cases on the device;
-* the run header does not print the device decision yet;
-* the result is measured on a single machine (one GPU model, one CPU).
+* [case-schema.md](case-schema.md): the linear-solver section and its keys.
+* [architecture.md](architecture.md): where the GPU crate sits in the crate graph.

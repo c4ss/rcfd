@@ -1,8 +1,14 @@
 # Architecture and crate graph
 
+This page shows how the workspace crates depend on each other and which layering rules a new crate or a new dependency must
+follow. It is for contributors who add or move code between crates. For how to contribute see CONTRIBUTING.md at the
+repository root, and for the reasons behind a single crate read the ADR named next to it, where one is named.
+
+## Crate dependency graph
+
 Workspace members (`crates/`), arrows mean "depends on":
 
-```
+```text
 rcfd-core   (no rcfd deps: scalar, units, errors, log, settings tree, hash)
 rcfd-mesh   -> core
 rcfd-linalg -> core
@@ -25,6 +31,13 @@ rcfd-runner -> (no workspace crates; run service: runs the `rcfd` binary as chil
 rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 0125)
 ```
 
+## Layering rules
+
 Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
 `gpu`/`dist` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.
+
+## Where to go next
+
+* [index.md](index.md): the list of all documentation pages.
+* [gpu.md](gpu.md) and [particles.md](particles.md): the two optional or one-way crates in more detail.
