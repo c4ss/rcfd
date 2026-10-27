@@ -242,3 +242,33 @@ stop-forwarding part is withdrawn: after an abort, lines already buffered are st
 D8 and D9 therefore check "no `ToolCall` before the `Aborted` event" (and D9: the offending call is never forwarded, at most the two
 later calls follow the abort) instead of "no `ToolCall` forwarded". Both still fail on the pre-fix driver (no `Aborted` event,
 three tool calls forwarded).
+
+## Amendment 2: finding 17 (added on the lead's request, registered before code)
+
+### 17. Console windows flash on Windows
+
+Console programs started by the console-less runner, by the Studio client or by the bridge open a visible window. Spawns found by
+grep over `crates/*/src` (non-test code): rcfd-runner `sys.rs` `pid_alive` (`tasklist`), `kill` (`taskkill`), `spawn_detached`
+(`powershell`), `spawn_direct` (the runner itself), `client.rs` `submit` (`rcfd --version`), `runner.rs` solver and pre-launch check
+(already `no_window` since ADR 0123); rcfd-claude `discover.rs` `live_pids` (`tasklist`), `driver.rs` `kill_tree` (`taskkill`),
+`agents` (`claude agents --json`) and the chat spawn (`claude -p`). rcfd-cli, rcfd-api, rcfd-mcp and rcfd-gui spawn no console
+program outside tests (the `cmd` spawns in `case.rs` and `discover.rs` are inside `#[cfg(test)]`; `fake-claude` is a test double).
+**Fix:** one helper per crate, no new dependency and no new crate edge: rcfd-runner `sys::console(program, extra) -> (Command, u32)`
+and rcfd-claude's own equivalent create the command with creation flags `extra | CREATE_NO_WINDOW (0x0800_0000)` on Windows and
+return the flags set (std's `Command` has no getter). Every spawn above is built through it, by a small builder function per site that
+returns the command and its flags. Flags are combined, never replaced: `spawn_direct` keeps `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`;
+the PowerShell launcher gets the same pair (it had none; registered decision: it detaches the launcher from the caller's console and
+Ctrl+C like the fallback, and `CREATE_NO_WINDOW` is ignored by Windows together with `DETACHED_PROCESS`, so no window either way);
+the 5 s fallback is unchanged. The claude CLI spawns get only the flag: stdio and pipes are unchanged.
+**Accept:**
+* (a) a Windows unit test per crate (`no_window_flags_on_every_console_spawn`) builds each site's command through its builder and
+  asserts `CREATE_NO_WINDOW` in the flags, and `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` in the PowerShell launcher's and
+  `spawn_direct`'s flags;
+* (b) negative control in the same test: a command built without the helper (flags 0) fails the same check;
+* (c) `tests/no_window_scan.rs` (rcfd-runner): scans every `.rs` file under `crates/*/src`, text before the first `#[cfg(test)]`,
+  for `Command::new("tasklist" | "taskkill" | "cmd" | "powershell" | "typeperf" | "where")` (with or without `.exe`); none may remain;
+  negative control: the scanner finds such a line in a synthetic text and ignores it after `#[cfg(test)]`;
+* (d) S1-S11, D1-D9, P1-P4 unchanged and passing (gate);
+* (e) whether a child started with the flag has no console window: checked once outside the test suite (Python, standard library:
+  `GetConsoleWindow()` in a child started with and without `0x0800_0000`); reported in the addendum, or reported as not verified.
+Fails-before: (a) and (c) fail on the pre-fix code (the builders are introduced as a seam returning the old flags first).
