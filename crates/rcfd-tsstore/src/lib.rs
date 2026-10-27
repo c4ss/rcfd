@@ -218,15 +218,23 @@ fn read_at(f: &mut File, off: u64, buf: &mut [u8]) -> Result<()> {
     Ok(())
 }
 
-/// Frame head at `off`; `Ok(None)` when the head or its payload runs past `len` (a truncated tail).
-fn head_at(f: &mut File, off: u64, len: u64) -> Result<Option<Head>> {
+/// A frame head as found at an offset.
+enum Found {
+    Head(Head),
+    /// The head or its payload runs past the end of the file (a truncated tail).
+    Short,
+    /// The head's checksum does not match.
+    Damaged,
+}
+
+fn find_head(f: &mut File, off: u64, len: u64) -> Result<Found> {
     if len < off || len - off < FRAME_HEAD_LEN {
-        return Ok(None);
+        return Ok(Found::Short);
     }
     let mut h = [0u8; 28];
     read_at(f, off, &mut h)?;
     if fnv64(&h[..20]) != le64(&h[20..]) {
-        return bad(format!("frame head checksum mismatch at offset {off}"));
+        return Ok(Found::Damaged);
     }
     let head = Head {
         kind: h[..4].try_into().expect("4 bytes"),
@@ -234,9 +242,18 @@ fn head_at(f: &mut File, off: u64, len: u64) -> Result<Option<Head>> {
         sum: le64(&h[12..]),
     };
     if head.len > len - off - FRAME_HEAD_LEN {
-        return Ok(None);
+        return Ok(Found::Short);
     }
-    Ok(Some(head))
+    Ok(Found::Head(head))
+}
+
+/// Frame head at `off`; `Ok(None)` when the head or its payload runs past `len` (a truncated tail).
+fn head_at(f: &mut File, off: u64, len: u64) -> Result<Option<Head>> {
+    match find_head(f, off, len)? {
+        Found::Head(h) => Ok(Some(h)),
+        Found::Short => Ok(None),
+        Found::Damaged => bad(format!("frame head checksum mismatch at offset {off}")),
+    }
 }
 
 /// Complete, verified payload of a frame of `kind` at `off`.
@@ -351,16 +368,30 @@ fn monotone(prev: Option<&SnapInfo>, step: u64, time: f64) -> bool {
 struct ScanOut {
     snaps: Vec<SnapInfo>,
     committed_end: u64,
+    /// Offset of the damaged frame head a lenient scan stopped at.
+    stopped_at: Option<u64>,
 }
 
-/// Scan frames from `start` (just after the mesh frame or the last committed snapshot).
-fn scan(f: &mut File, len: u64, m: &MeshPrefix, start: u64, prev: Option<SnapInfo>) -> Result<ScanOut> {
+/// Scan frames from `start` (just after the mesh frame or the last committed snapshot). A `lenient` scan (readers)
+/// stops at a frame head whose checksum does not match: what follows is a tail (a zero-filled or torn end after a
+/// crash, or a write a live reader sees half done); a strict one (the appending writer) fails there.
+fn scan(f: &mut File, len: u64, m: &MeshPrefix, start: u64, prev: Option<SnapInfo>, lenient: bool) -> Result<ScanOut> {
     let mut out = ScanOut {
         snaps: Vec::new(),
         committed_end: start,
+        stopped_at: None,
     };
     let mut pos = start;
-    while let Some(h) = head_at(f, pos, len)? {
+    loop {
+        let h = match find_head(f, pos, len)? {
+            Found::Head(h) => h,
+            Found::Short => break,
+            Found::Damaged if lenient => {
+                out.stopped_at = Some(pos);
+                break;
+            }
+            Found::Damaged => return bad(format!("frame head checksum mismatch at offset {pos}")),
+        };
         let next = pos + FRAME_HEAD_LEN + h.len;
         match h.kind {
             K_DATA | K_FOOT => {}
@@ -555,7 +586,7 @@ impl Writer {
         let len = file.metadata()?.len();
         check_header(&mut file, len)?;
         let mesh = mesh_prefix(&mut file, len)?;
-        let s = scan(&mut file, len, &mesh, mesh.end, None)?;
+        let s = scan(&mut file, len, &mesh, mesh.end, None, false)?;
         file.set_len(s.committed_end)?;
         file.seek(SeekFrom::Start(s.committed_end))?;
         Ok(Writer {
@@ -772,6 +803,16 @@ pub struct Reader {
     mesh: MeshPrefix,
     snaps: Vec<SnapInfo>,
     source: IndexSource,
+    /// Why the footer was not used (empty with a footer index).
+    footer_reason: String,
+}
+
+/// The `reason` of a scanned index: why the footer was not used, and where a damaged frame head stopped the scan.
+fn scan_reason(footer: &str, s: &ScanOut) -> String {
+    match s.stopped_at {
+        Some(off) => format!("{footer}; the scan stopped at a damaged frame head at offset {off} (tail ignored)"),
+        None => footer.to_string(),
+    }
 }
 
 impl Reader {
@@ -781,12 +822,13 @@ impl Reader {
         let len = file.metadata()?.len();
         check_header(&mut file, len)?;
         let mesh = mesh_prefix(&mut file, len)?;
-        let (snaps, source) = match read_footer(&mut file, len, &mesh) {
-            Ok(s) => (s, IndexSource::Footer),
-            Err(reason) => {
-                let s = scan(&mut file, len, &mesh, mesh.end, None)?;
+        let (snaps, source, footer_reason) = match read_footer(&mut file, len, &mesh) {
+            Ok(s) => (s, IndexSource::Footer, String::new()),
+            Err(footer) => {
+                let s = scan(&mut file, len, &mesh, mesh.end, None, true)?;
                 let tail_bytes = len - s.committed_end;
-                (s.snaps, IndexSource::Scanned { reason, tail_bytes })
+                let reason = scan_reason(&footer, &s);
+                (s.snaps, IndexSource::Scanned { reason, tail_bytes }, footer)
             }
         };
         Ok(Reader {
@@ -795,27 +837,27 @@ impl Reader {
             mesh,
             snaps,
             source,
+            footer_reason,
         })
     }
 
     /// Pick up snapshots a live writer committed since the last open/refresh (scanned index only); returns how
     /// many were added.
     pub fn refresh(&mut self) -> Result<usize> {
-        let IndexSource::Scanned { reason, .. } = &self.source else {
+        if self.source == IndexSource::Footer {
             return Ok(0);
-        };
-        let reason = reason.clone();
+        }
         let len = self.file.metadata()?.len();
         let last = self.snaps.last().copied();
         let start = last.map_or(self.mesh.end, |s| s.end);
-        let s = scan(&mut self.file, len, &self.mesh, start, last)?;
+        let s = scan(&mut self.file, len, &self.mesh, start, last, true)?;
+        self.source = IndexSource::Scanned {
+            reason: scan_reason(&self.footer_reason, &s),
+            tail_bytes: len - s.committed_end,
+        };
         let added = s.snaps.len();
         self.snaps.extend(s.snaps);
         self.len = len;
-        self.source = IndexSource::Scanned {
-            reason,
-            tail_bytes: len - s.committed_end,
-        };
         Ok(added)
     }
 
