@@ -1,33 +1,96 @@
+# Checks on every pull request and every push to main. They are fast on purpose and do NOT replace the full gate:
+# integration tests (crates/*/tests) run only in gate.yml. See docs/releasing.md for what each job proves.
 name: CI
+
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push to the same pull request makes the older run useless; runs on main are kept.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  # The toolchain the project's gate uses. Change it together with gate.yml and docs/releasing.md.
+  RUST_GATE_TOOLCHAIN: "1.99.0"
+  # The oldest toolchain README.md promises for the whole workspace.
+  RUST_MIN_TOOLCHAIN: "1.90.0"
 
 jobs:
-  fmt-clippy:
+  fmt:
+    name: fmt
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
-          components: rustfmt, clippy
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+          components: rustfmt
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
 
-  test:
+  clippy:
+    name: clippy (all targets, warnings are errors)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+          components: clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      # --all-targets type-checks every integration test too, so a test that no longer compiles fails here.
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  unit-tests:
+    name: unit tests, ${{ matrix.os }} (integration tests run only in the full gate)
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        # Windows costs about twice the wall time; it runs on main and on demand, not on every pull request.
+        exclude:
+          - os: ${{ github.event_name == 'pull_request' && 'windows-latest' || 'none' }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --workspace
-      - run: cargo test --workspace
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      # Release, like the gate: numeric limits and timing checks were measured in release.
+      # --lib --bins is cargo's own selection (the tests inside src/), not a hand-picked list.
+      - run: cargo test --workspace --release --locked --lib --bins --no-fail-fast
+
+  min-toolchain:
+    name: type-checks with Rust 1.90 (README minimum)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_MIN_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      # No -D warnings: lint names newer than 1.90 would warn here without anything being wrong.
+      - run: cargo check --workspace --all-targets --locked
+
+  scripts:
+    name: gate and release script self-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.x"
+      - run: python -m unittest scripts/test_gate_test.py scripts/test_limit_audit.py scripts/test_release_notes.py
