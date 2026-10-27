@@ -309,3 +309,25 @@ fn f04_renamed_solver_survives_a_runner_restart() {
     std::thread::sleep(Duration::from_millis(300));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// F11: a negative, NaN, infinite or huge `wait --timeout` is a clean error, not a panic.
+#[test]
+fn f11_bad_wait_timeouts_are_clean_errors() {
+    let dir = project("f11", json!({}));
+    let mut bad = Vec::new();
+    for v in ["-1", "NaN", "inf", "1e300"] {
+        let o = Command::new(RUNNER)
+            .args(["wait", "r-20260101T000000-abcd", "--project"])
+            .arg(&dir)
+            .args(["--timeout", v])
+            .output()
+            .unwrap();
+        let err = String::from_utf8_lossy(&o.stderr).to_string();
+        eprintln!("F11 --timeout {v}: exit {:?}, stderr {}", o.status.code(), err.trim());
+        if o.status.code() != Some(1) || !err.contains("--timeout") || !err.contains(v) || err.contains("panicked") {
+            bad.push(v);
+        }
+    }
+    assert!(bad.is_empty(), "not a clean error: {bad:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

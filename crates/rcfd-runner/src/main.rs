@@ -98,7 +98,12 @@ fn run(args: &[String]) -> Result<u8, String> {
         "resume" => client.resume(id()?)?,
         "cancel" => client.cancel(id()?)?,
         "wait" => {
-            let st = client.wait(id()?, Duration::from_secs_f64(num(rest, "--timeout", 86_400.0)?))?;
+            let secs = num(rest, "--timeout", 86_400.0)?;
+            let timeout = Duration::try_from_secs_f64(secs).map_err(|e| {
+                let raw = opt(rest, "--timeout").unwrap_or_default();
+                format!("--timeout needs a non-negative number of seconds, got '{raw}' ({e})")
+            })?;
+            let st = client.wait(id()?, timeout)?;
             println!("{}", serde_json::to_string_pretty(&st).unwrap_or_default());
             return Ok(u8::from(st.state != rcfd_runner::records::RunState::Finished));
         }
