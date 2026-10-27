@@ -4,13 +4,26 @@
 controls and an assistant sidebar that talks to a model of your choice (a local server such as Ollama or LM Studio, or a hosted API)
 through the same tools as the [MCP server](mcp-design-loop.md).
 
+This tutorial opens a cavity case in the app, runs it, uses the assistant's quick actions, connects a model and walks through
+an approval. It is for people who prefer a window to the command line, or who want to try the assistant on a case. If you want
+to script runs instead, start with the [quick start](quick-start-cli.md).
+
 **What is and is not tested on this page.** Only the command-line steps (writing and checking the case file) are executed by the
 tutorial test. Every GUI step below is marked `not-executed`: the test suite cannot click through a window. The app's logic is
 covered by headless tests (frames rendered without a window, in `crates/rcfd-gui/tests/`, including a mock-model turn with an
 approval in `smoke.rs`), but nobody has checked these instructions against the running app's look, and no real or local model has
 been run through the sidebar in the test suite (roadmap F-145, F-150).
 
-## 1. Prepare a case
+What you need: a checkout of this repository and a Rust toolchain with cargo (the [quick start](quick-start-cli.md) covers the
+build of the command-line tool used in the first step). Connecting a model needs either a local model
+server or a key for a hosted API; the steps before that, including the quick actions, need no model.
+
+The steps: write and check a case, start the app, run the case and look at the result, try the quick actions, connect a model,
+then ask it for a change and approve or deny its tool calls.
+
+## 1. Write and check a case
+
+Save this as `cavity.toml` in the directory you start the app from.
 
 ```toml file=cavity.toml
 title = "cavity for the desktop app"
@@ -110,7 +123,8 @@ Assistant:  run                                 [Approve] [Deny]
 
 That exchange is illustrative only: what a real model answers depends on the model.
 
-## See also
+## Where to go next
 
 * [MCP design loop](mcp-design-loop.md): the tool calls the sidebar makes, executed.
 * [MCP tools](../mcp-tools.md): the access classes and the approval model.
+* [The case schema](../case-schema.md): every setting the settings panel edits.
