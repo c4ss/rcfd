@@ -39,7 +39,8 @@ root, build the command-line solver and check one of the shipped cases:
 `check` builds the mesh and validates the set-up without solving. For a first
 real run, follow [the quick-start tutorial](docs/tutorials/quick-start-cli.md):
 it writes a small lid-driven cavity case, runs it to convergence and
-post-processes the result. Every command in it is executed by the test suite.
+post-processes the result. Apart from the build, every command in it (and the
+`check` above) is executed by the test suite.
 On Windows the binary is `target\release\rcfd.exe`.
 
 ## Build and test
