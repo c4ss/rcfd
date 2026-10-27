@@ -378,6 +378,9 @@ one gate-level gap found while triaging the skips):
 5. **ADR 0123 S7 cancel time** (from the mutation spot-check, section 6.4): 5 s limit against 0.116 s measured; a 10x slower
    cancel passes. Options: (a) keep; (b) a new registered limit derived from the measured time (needs a registered derivation, not
    a tuned number). Recommendation: (a) unless cancel latency matters to the Studio UI, then (b).
+6. **ADR 0119 R3** (section 6.4): the test accepts any error with "stall", so the rising-characteristic check is unguarded. Options:
+   (a) keep (R3's registered wording is "an error containing 'stall'"); (b) add a new test asserting the "rising fan
+   characteristic" message at the R3 point, with R3 unchanged. Recommendation: (b), an addition, no limit changed.
 
 ### 6.4 Mutation spot-check of registered limits
 
@@ -397,15 +400,20 @@ turning the guarded behaviour off. Unmutated, every one of these tests passed in
 | 0118 I3 | `fan_design_w46a::i1_i2_i3_unbalance_equals_the_sum_of_mass_times_offset` | static unbalance x10 in the I3 loop | detected (:1089) |
 | 0123 S7 | `runner_w47b::s7_cancel_leaves_a_consistent_folder` | measured cancel time x10 | **not detected**: 0.116 s x10 = 1.16 s <= 5.0 s |
 | 0118 C4 | `fan_design_w46a::c4_structural_violations_are_located` | `n_blades` upper bound 15 to 150 | detected (:806, no `n_blades` violation) |
-| 0119 R3 | `fan_rom_w46b::r3_stall_is_located` | stall check of `operating_point` turned off | detected (:545, the R3b `unwrap_err` gets `Ok`) |
+| 0119 R3 | `fan_rom_w46b::r3_stall_is_located` | rising-characteristic (slope) stall check of the free `operating_point` turned off (rerun; see below) | **not detected**: the error still says "stalled: 40 of 40 strips", which contains "stall" |
 | 0122 A2 | `process::a2_atomic_replace_survives_kill_mid_write` | `atomic_write` writes in place instead of rename | detected (:194, bad observations > 0) |
 | 0121 L6 | `ledger_tests::l6_rerun_check` | `compare_metrics` accepts every finite difference | detected (:522, the negative control passes) |
 | 0119 L3 | `fan_rom_w46b::l3_drag_terms` | drag loss x10 | detected (:446) |
 | 0119 NC-L3 | `fan_rom_w46b::l3_drag_terms` | annulus drag term removed from the model | detected (:445, "NC-L3 does not discriminate") |
 
-**11 of 12 detected.** Finding: ADR 0123 S7 registers "three cancels within 5 s"; measured 0.116 s, so a cancel path 10 times
+**10 of 12 detected.** Finding 1: ADR 0119 R3 asserts only that the error contains "stall". Two separate checks produce such an
+error: the slope check of the free `operating_point` ("rising fan characteristic ... stall region", the message the ADR 0119
+addendum recorded for R3) and the strip check of `FanRom::operating_point` ("is stalled: n of 40 strips"). With the slope check off,
+the strip check still fails the R3 point, so R3 passes; the slope check is not guarded by any assertion of this test. The first R3
+mutation (strip check off) made the test fail, but at :545, the R3b part (a separate id), so it was counted as a set-up defect of the
+mutation and replaced by the slope-check mutation before the result was written down. Finding 2: ADR 0123 S7 registers "three cancels within 5 s"; measured 0.116 s, so a cancel path 10 times
 slower (and anything up to about 40 times) still passes. The limit stays as registered; whether S7 should get a tighter limit or a
-relative one is a design decision (section 6.3 item 5). First attempts that did not count: J3 did not compile (a `f64` times a
+relative one is a design decision (section 6.3 item 5); R3 is item 6. First attempts that did not count: J3 did not compile (a `f64` times a
 complex value) and L6 had a duplicated test flag; both were corrected and rerun. The first S7 run failed only because the scratch
 target had no `rcfd.exe` (the test says "build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the
 mutated S7 passed.
