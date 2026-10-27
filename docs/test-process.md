@@ -107,7 +107,7 @@ Times are for the test stage at 47E (103 min). "Robustness" is what the option c
 | Rank | Option | Saving | Robustness cost | Done? |
 |---|---|---|---|---|
 | 1 | Run tests of different binaries at the same time: one process per test from one pool of 3 (`scripts/gate_test.py`) | measured: test stage 102 min to 67 min (section 5) | tests now overlap across binaries (audited: no shared fixed path); more isolation inside a binary than today | **yes** (ADR 0127) |
-| 2 | More test processes per slot (`--jobs 5` or `6`) | at 3 the stage sits on its floor (test-seconds / 3 = 59 min); at 6 the floor is 29 min plus contention | CPU: a solver test uses about two cores, so 6 jobs in each of two slots ask for 24 of 16 processors; memory: worst case the six largest tests together, 9.6 GB, typical under 1 GB | proposed: needs a registered measurement and the user's decision on the concurrency rule |
+| 2 | More test processes per slot (`--jobs 5` or `6`) | at 3 the stage sits on its floor (test-seconds / 3 = 59 min); at 6 the floor is 29 min plus contention | CPU: a solver test uses about two cores, so 6 jobs in each of two slots ask for 24 of 16 processors; memory: worst case the six largest tests together, 9.6 GB, typical under 1 GB | measured at 5 (ADR 0129, section 5.7): -13 % under load, below the registered 25 %: **not adopted**, default stays 3 |
 | 3 | Start the slowest tests first, using the TSV of an earlier run as an ordering hint | small: binary order already finished 0.6 min above the floor (section 5) | none: every test still runs; a missing file falls back to binary order | yes, as `--order` |
 | 4 | A persistent release target folder per slot (not per gate), cleared of `target/tmp` before each run | measured about 2 min: 7 min 20 s with an empty folder (run 1) against 5 min 22 s with the dependencies already built (run 2); and 4.4 GB of disk per gate | **measured pitfall** (section 5.4): binaries do not depend on the source folder's path, so a target shared by two copies reuses the other copy's binaries when the new copy's files are older than the last build; safe only if the copy is extracted with `tar -m` right before its build | proposed, with that rule |
 | 5 | A time limit per test that fails the test (for example three times its last time, at least 30 min) | frees a slot from a hung test (section 2.4: about 3.5 h on 2026-10-26) | a very slow test that would have passed now fails; the limit must not hide behind a retry | **yes** (ADR 0129): `clamp(5 x last time, 10 min, 60 min)`, section 4 |
@@ -235,6 +235,22 @@ Ordering by the earlier run's times put the test phase on its floor (run 1: 0.6 
 start their own executable as a child process (rcfd-project `process`, rcfd-gpu `fallback`, rcfd-api `gpu_case` and the design ledger
 tests), so the number of test processes can briefly exceed `--jobs`, as it could inside the original binaries.
 
+### 5.7 Five jobs (ADR 0129)
+
+One archive of de3df40 (`<scratch dir>`), `--order` from gate47, time-limit defaults, `--jobs 3` then `--jobs 5` back
+to back in slot 1. Another gate held slot 2 for about 61 % of the 3-job run and all of the 5-job run; CPU was 94 % and 100 %.
+
+| | `--jobs 3` | `--jobs 5` |
+|---|---|---|
+| test phase (wall) | 64.1 min | 55.7 min (-13.2 %) |
+| test-seconds | 11 547 | 16 714 (+45 %: every test ran longer) |
+| result, list | 2190 / 0 / 666, = gate47 | 2190 / 0 / 666, = `--jobs 3` |
+| peak summed working set | 2702 MB | 2704 MB |
+| max test time / limit | 0.264 | 0.521 |
+
+Prediction was the floor 9296 s / 5 = 31.0 min. Under load the processors are already full at three jobs, so five only stretch each
+test; the gain stays below the registered 25 % and the default stays 3. No test failed only at five jobs.
+
 ## 6. Tests that cannot fail (ADR 0129)
 
 ### 6.1 Scanner
@@ -359,3 +375,39 @@ one gate-level gap found while triaging the skips):
    not run by the gate; (c) count a skip separately in the runner (needs a skip marker the runner can read). Recommendation: (a).
 4. Child-process entry points (`*_child_body`, `child_entry`, `l3_kill_child`: 7 tests) pass without doing anything when run alone
    and are counted as passed tests. Documented and harmless; they inflate the passed count by 7.
+5. **ADR 0123 S7 cancel time** (from the mutation spot-check, section 6.4): 5 s limit against 0.116 s measured; a 10x slower
+   cancel passes. Options: (a) keep; (b) a new registered limit derived from the measured time (needs a registered derivation, not
+   a tuned number). Recommendation: (a) unless cancel latency matters to the Studio UI, then (b).
+
+### 6.4 Mutation spot-check of registered limits
+
+Population (ADR 0129 amendment 1): 183 registered check ids of ADRs 0115 to 0126 that a non-ignored test enforces. Draw:
+`random.Random(1290127).sample(population, 12)`. Each mutation was made in a scratch `git archive` copy (`<scratch dir>`, own
+target `target-wtp-mut`, every run showed `Compiling <crate>` after the edit), only that test was run in release, and the file was
+restored before the next one. Rule: the quantity the limit governs made 10x worse in the code under test where one line does it,
+at the measurement in the test for an elapsed time or a per-specimen error; a discrete check is broken by an off-by-one or by
+turning the guarded behaviour off. Unmutated, every one of these tests passed in the `--jobs 3` run at the same tests.
+
+| ADR id | Test | Mutation | Result |
+|---|---|---|---|
+| 0118 C1 | `fan_design_w46a::c1_default_fan_is_accepted` | `Limits::default().min_wall` 8e-4 to 8e-3 | detected (fails at :568) |
+| 0124 C11 | `store::c11_lookup_by_step_and_time_and_writer_preconditions` | `Pick::Floor` returns the next snapshot | detected (:727) |
+| 0124 C5 | `store::c5_writer_killed_mid_snapshot_leaves_earlier_snapshots_readable` | scan recovery drops the last complete snapshot | detected (:398) |
+| 0120 J3 | `w46c_rotordyn::w46c_j3_supercritical_limit` | `response` translational displacement x10 | detected (:167, \|X\|/e - 1 = 9.0) |
+| 0118 I3 | `fan_design_w46a::i1_i2_i3_unbalance_equals_the_sum_of_mass_times_offset` | static unbalance x10 in the I3 loop | detected (:1089) |
+| 0123 S7 | `runner_w47b::s7_cancel_leaves_a_consistent_folder` | measured cancel time x10 | **not detected**: 0.116 s x10 = 1.16 s <= 5.0 s |
+| 0118 C4 | `fan_design_w46a::c4_structural_violations_are_located` | `n_blades` upper bound 15 to 150 | detected (:806, no `n_blades` violation) |
+| 0119 R3 | `fan_rom_w46b::r3_stall_is_located` | stall check of `operating_point` turned off | detected (:545, the R3b `unwrap_err` gets `Ok`) |
+| 0122 A2 | `process::a2_atomic_replace_survives_kill_mid_write` | `atomic_write` writes in place instead of rename | detected (:194, bad observations > 0) |
+| 0121 L6 | `ledger_tests::l6_rerun_check` | `compare_metrics` accepts every finite difference | detected (:522, the negative control passes) |
+| 0119 L3 | `fan_rom_w46b::l3_drag_terms` | drag loss x10 | detected (:446) |
+| 0119 NC-L3 | `fan_rom_w46b::l3_drag_terms` | annulus drag term removed from the model | detected (:445, "NC-L3 does not discriminate") |
+
+**11 of 12 detected.** Finding: ADR 0123 S7 registers "three cancels within 5 s"; measured 0.116 s, so a cancel path 10 times
+slower (and anything up to about 40 times) still passes. The limit stays as registered; whether S7 should get a tighter limit or a
+relative one is a design decision (section 6.3 item 5). First attempts that did not count: J3 did not compile (a `f64` times a
+complex value) and L6 had a duplicated test flag; both were corrected and rerun. The first S7 run failed only because the scratch
+target had no `rcfd.exe` (the test says "build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the
+mutated S7 passed.
+
+Test list (A5): no test was added, removed or edited, so the list is unchanged (checked again in the final gate).

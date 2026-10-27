@@ -138,3 +138,19 @@ systems was not exercised. The cargo exclusion of the tree kill was not exercise
   works against 5 jobs; the measured gain is a lower bound for an idle machine but the gate machine is rarely idle.
 * Observation: at 5 jobs under load the slowest test reached 52 % of its limit (the 0.5 check is registered for the default run
   only, T3). A default of 5 jobs would need the factor or the maximum looked at again.
+
+### Part 3: tests that cannot fail (details: `docs/test-process.md` section 6)
+
+| Id | Pass condition | Measured | Verdict |
+|---|---|---|---|
+| A1 | 5 of 5 planted classes found, clean example not flagged | 5 of 5 (7 planted hits), clean test not flagged (`scripts/test_limit_audit.py`) | **met** |
+| A2 | every hit classified, 0 unclassified | 80 hits: 2 real weaknesses, 53 documented skips or report-only tests, 25 false positives; 0 unclassified | **met** |
+| A3 | each real weakness fixed with a shown break, or listed for a decision | 0 fixed; listed: L1 sleep control (fix registered by `wfix`, ADR 0128 finding 12), schemes_wave13 T2 vacuous pass; also listed: 12 data-gated tests that always skip in a `git archive` gate, 7 child-entry tests counted as passed | **met** (all handled; no assertion-only fix was possible) |
+| A4 | 12 of 12 detected, or each miss reported | 11 of 12; miss: ADR 0123 S7 `s7_cancel_leaves_a_consistent_folder` (5 s limit, 0.116 s measured, 10x slower passes), reported as a finding, limit unchanged | **missed** (1 finding) |
+| A5 | test list only grows | no test edited, list unchanged | **met** |
+| A6 | own target per scratch copy; `Compiling <crate>` in every counted run | `target-wtp-mut`; shown in all 12 counted runs | **met** |
+
+Deviations: the scanner's helper resolution and constant rules were tightened after its first run on the repo (871 hits, mostly
+`let mut worst = 0.0` taken as a constant and helper calls not followed); the self-test was written for the final rules. The scanner
+covers the registered paths only, not the 99 inline `#[cfg(test)]` modules of other `src/` files. Three mutation runs were
+repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a result.
