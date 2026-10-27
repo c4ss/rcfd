@@ -420,17 +420,16 @@ pub fn load_case_udfs(case: &Case) -> (BTreeMap<String, Udf>, Vec<Diagnostic>) {
         }
         let path = case.base_dir.join(&file);
         if let Some(root) = &case.sandbox {
-            let inside = !std::path::Path::new(&file)
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-                && path
-                    .canonicalize()
-                    .ok()
-                    .zip(root.canonicalize().ok())
-                    .map_or(true, |(p, r)| p.starts_with(r));
-            if !inside {
-                diags.push(bad(p("file"), format!("module '{file}' is outside the sandbox")));
-                continue;
+            match crate::case::sandbox_contains(root, &case.base_dir, &file) {
+                Ok(true) => {}
+                Ok(false) => {
+                    diags.push(bad(p("file"), format!("module '{file}' is outside the sandbox")));
+                    continue;
+                }
+                Err(e) => {
+                    diags.push(bad(p("file"), e));
+                    continue;
+                }
             }
         }
         let bytes = match std::fs::read(&path) {

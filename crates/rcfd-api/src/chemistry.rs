@@ -148,19 +148,15 @@ fn text_of(case: &Case, file_key: &str, text_key: &str) -> Result<Option<(String
     if !file.is_empty() {
         let path = case.base_dir.join(&file);
         if let Some(root) = &case.sandbox {
-            let inside = !std::path::Path::new(&file)
-                .components()
-                .any(|c| matches!(c, std::path::Component::ParentDir))
-                && path
-                    .canonicalize()
-                    .ok()
-                    .zip(root.canonicalize().ok())
-                    .map_or(true, |(p, r)| p.starts_with(r));
-            if !inside {
-                return Err(diag(
-                    &format!("chemistry.{file_key}"),
-                    format!("file '{file}' is outside the sandbox"),
-                ));
+            match crate::case::sandbox_contains(root, &case.base_dir, &file) {
+                Ok(true) => {}
+                Ok(false) => {
+                    return Err(diag(
+                        &format!("chemistry.{file_key}"),
+                        format!("file '{file}' is outside the sandbox"),
+                    ))
+                }
+                Err(e) => return Err(diag(&format!("chemistry.{file_key}"), e)),
             }
         }
         return match std::fs::read_to_string(&path) {
