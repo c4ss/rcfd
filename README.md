@@ -47,8 +47,9 @@ On Windows the binary is `target\release\rcfd.exe`.
 
 Prerequisites:
 
-* Rust 1.90 or later to build the whole workspace. Each crate's
-  `rust-version` states its own minimum (1.75 to 1.90): 1.75, or the
+* Rust 1.90 or later for the whole workspace. CI type-checks it with 1.90
+  and builds and tests it with 1.99; tests have not been run on 1.90. Each
+  crate's `rust-version` states its own minimum (1.75 to 1.90): 1.75, or the
   highest minimum its dependencies declare if that is higher. Older
   toolchains are not tested.
 * The render crate uses the GPU through wgpu. Without a GPU or a software

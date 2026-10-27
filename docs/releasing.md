@@ -43,8 +43,12 @@ or reused: a broken release is followed by a new one with a higher number.
 | CI `clippy` | same | the whole workspace, integration tests included, compiles on Linux with Rust 1.99.0 and has no clippy warning | that any test passes |
 | CI `unit tests` | same; Windows only on `main` and on demand | the tests inside `src/` (`--lib --bins`, release) pass on Linux, and on Windows where run | anything about the integration tests in `crates/*/tests`: about 80 % of the tests, more than 99 % of the test time and every solver validation case |
 | CI `type-checks with Rust 1.90` | same | the workspace, tests included, still type-checks (`cargo check`) with the oldest toolchain README promises | that it links or passes tests there; the lower per-crate `rust-version` values are not checked |
+| CI `dependency licences and sources` | same | every dependency's licence is on the allow-list in `deny.toml`, no dependency comes from a git URL or an unknown registry | RustSec advisories (left out so a new advisory cannot fail an unrelated pull request) |
 | CI `script self-tests` | same | the gate runner's time-limit rule, the limit scanner and the release-notes check work | |
 | `Full gate` workflow | Sundays and on demand | fmt, clippy and every non-ignored test plus the doc-tests pass, one process per test (`scripts/gate_test.py`) | the about 660 `#[ignore]` tests; CUDA tests (no device: they skip and count as passed); wgpu tests where the runner offers no adapter (same); the 12 tests that need fetched validation data (they skip and count as passed, [test process](test-process.md) section 6.3); macOS |
+
+GitHub switches off scheduled workflows in a public repository after 60 days without a push, so the weekly gate stops by itself in a quiet
+period: start it by hand before a release and re-enable it in the Actions tab if it was switched off.
 
 The workflow runs in a fresh checkout with no build cache, which matches the maintainer's `git archive` copy with an empty target
 folder: `.gitattributes` fixes line endings to LF on every platform, and no build script reads git. The full gate on a GitHub
