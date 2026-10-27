@@ -3,8 +3,8 @@
 //! Everything here is built from published literature and public data:
 //!
 //! * Species `cp(T)`, `h(T)`, `s(T)`: NASA seven-coefficient polynomials of McBride, Gordon and Reno, NASA TM-4513
-//!   (1993) (NASA report server: "GOV_PUBLIC_USE_PERMITTED"; see `NOTICE`); the coefficients were taken from the BSD-licensed Cantera
-//!   distribution of that data set (`data/nasa_gas.yaml`) and are used only for the listed species.
+//!   (1993) (NASA report server: "GOV_PUBLIC_USE_PERMITTED"; see `NOTICE`); the coefficients were taken from the
+//!   BSD-licensed Cantera distribution of that data set (`data/nasa_gas.yaml`) and are used only for the listed species.
 //! * Mixture rules: mass-weighted and mole-weighted sums, ideal-gas and ideal-volume densities, and the Wilke
 //!   (1950) rule for the viscosity and thermal conductivity of gas mixtures.
 //! * Air viscosity and conductivity: Sutherland's law (see [`PropertyLaw`]).
