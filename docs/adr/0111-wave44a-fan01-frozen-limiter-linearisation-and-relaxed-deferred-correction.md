@@ -2,7 +2,7 @@
 
 Status: registered before any registered run. Limits and decision rules are fixed here and are not changed after a run; a miss becomes an
 ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected run. Defaults stay
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles only. Written at HEAD 3ac9a0e
+bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles only. Written at HEAD 79b0805
 (scratch clone `<scratch dir>`, target `<target dir>`). Parents: ADR 0084 (the Jacobian method), ADR 0086
 (the FAN-01 family), ADR 0110 (the stall diagnosis), `docs/milestone-fan.md`. No agreement with measured fan data is a question of this ADR
 or is claimed.
@@ -218,7 +218,7 @@ the registered rules and fixes beta*.
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of the scratch clone at 3ac9a0e plus this wave's files; each registered run made once. The commits on main in the meantime
+Release builds of the scratch clone at 79b0805 plus this wave's files; each registered run made once. The commits on main in the meantime
 (ADR 0112, 0113) touch `simple.rs` only in a separate opt-in hunk (`coupled_offdiag_in_h1`, default off) and nothing else on the path of
 these runs; this wave's hunks were applied onto main's current files.
 
@@ -308,7 +308,7 @@ G1 reproduces ADR 0110 S10 (tolerance at 1114, first-order torque 1.3353 N m, De
 
 ### Final gate
 
-Fresh `git archive` of 22efe56 (main with the wave-44B/44C commits up to 8c2c8f0 and this wave's commits): `cargo fmt --all -- --check` clean,
+Fresh `git archive` of dfeca81 (main with the wave-44B/44C commits up to 5885604 and this wave's commits): `cargo fmt --all -- --check` clean,
 `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **2007 passed, 1 failed,
 631 ignored** (no LNK1201; `baseline_hashes.rs` passed unchanged). The one failure is `rules_w19c`
 `e2_no_error_level_false_positives_and_warnings_are_only_sv103`: it lists new mesh warnings from `cylindrical_interface_w44b.rs` (SV103) and

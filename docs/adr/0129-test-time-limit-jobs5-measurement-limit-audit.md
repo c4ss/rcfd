@@ -1,6 +1,6 @@
 # ADR 0129: Per-test time limit, one measurement at five jobs, and an audit of tests that cannot fail
 
-Status: **ACCEPTED 2026-10-27** (acceptance registered before any code or run). Written at main 35d9505 on branch `wtp`, worktree
+Status: **ACCEPTED 2026-10-27** (acceptance registered before any code or run). Written at main 511a24c on branch `wtp`, worktree
 `<scratch dir>`, target `<target dir>`. Follows [ADR 0127](0127-test-gate-efficiency.md); the process is
 described in [`docs/test-process.md`](../test-process.md). ADR 0128 is taken by branch `wfix`.
 
@@ -8,7 +8,7 @@ described in [`docs/test-process.md`](../test-process.md). ADR 0128 is taken by 
 
 * A hung test held a gate slot for about 3.5 h on 2026-10-26 (`docs/test-process.md` section 2.4). Neither `cargo test` nor
   `scripts/gate_test.py` has a time limit.
-* ADR 0127 measured the test phase on its floor at three jobs: test-seconds / 3. The combined gate `gate47` at 35d9505 ran 2190 tests
+* ADR 0127 measured the test phase on its floor at three jobs: test-seconds / 3. The combined gate `gate47` at 511a24c ran 2190 tests
   in 3122 s wall at `--jobs 3`; its `times.tsv` sums to 9296 test-seconds (154.9 min). The user approved one registered measurement at
   `--jobs 5` (option (b) of the efficiency report); six is out of scope.
 * Branch `wfix` (ADR 0128) found one negative control that is always true (500 sleeps of 2 ms compared with 500 ms,
@@ -41,7 +41,7 @@ described in [`docs/test-process.md`](../test-process.md). ADR 0128 is taken by 
 |---|---|---|
 | T1 | A synthetic test (a tiny cargo crate in a temp folder, built and run by `gate_test.py` through the same code path, in a slot; not a repo test) that starts a child process, writes its own pid and the child's pid to a file, and then sleeps for an hour, run with `--timeout-min 10 --timeout-max 10` and no `--order` | killed within limit + 5 s (test wall <= 15 s); the test's pid and its child's pid no longer exist afterwards (checked with `tasklist`); the run exits non-zero; the test is counted `failed` in its `test result:` line and printed `FAILED (timeout after 10 s)`; TSV outcome `TIMEOUT` |
 | T2 | Negative control: the same synthetic test with a 15 s sleep, run with `--timeout-max 0` (off) | not killed: it passes with test wall >= 15 s, run exits 0. And with the 10 s limit on, the same 15 s test is killed (so T1 discriminates) |
-| T3 | Full real run under defaults with `--order <scratch dir>/times.tsv`: the `--jobs 3` run of Part 2, on the commit that adds Part 1 (before any Part 3 test edit, so the tests are those of 35d9505) | sorted (binary, test, outcome) list equals the one of `gate47/test.log` (`diff` empty); no test times out; max over tests of (test seconds / its limit) **< 0.5** |
+| T3 | Full real run under defaults with `--order <scratch dir>/times.tsv`: the `--jobs 3` run of Part 2, on the commit that adds Part 1 (before any Part 3 test edit, so the tests are those of 511a24c) | sorted (binary, test, outcome) list equals the one of `gate47/test.log` (`diff` empty); no test times out; max over tests of (test seconds / its limit) **< 0.5** |
 | T4 | Unit tests of the clamp function | at least 10 cases incl. no record, zero time, huge time, limit off; all pass |
 
 The process-group branch (non-Windows) cannot be run on this machine; it is reported as not exercised.
@@ -100,7 +100,7 @@ The draw is `random.Random(1290127).sample(population, 12)` over this sorted lis
 
 ## Addendum 2026-10-27: measured against the registered checks
 
-### Part 1: time limit (implemented in 47d73c2)
+### Part 1: time limit (implemented in 0ce026a)
 
 | Id | Pass condition | Measured | Verdict |
 |---|---|---|---|
@@ -113,7 +113,7 @@ The synthetic tests are `scripts/test_gate_test.py` (`GATE_TEST_E2E=1`, run in s
 systems was not exercised. The cargo exclusion of the tree kill was not exercised by a test (no test of the repo times out while
 `cargo metadata` runs).
 
-### Part 2: `--jobs 5` (archive of 47d73c2 in `<scratch dir>`, logs there)
+### Part 2: `--jobs 5` (archive of 0ce026a in `<scratch dir>`, logs there)
 
 | | `--jobs 3` | `--jobs 5` |
 |---|---|---|
@@ -159,8 +159,8 @@ was replaced by the slope-check mutation, which R3 does not detect. The replacem
 
 ### Final gate
 
-`git archive` of 21dddc4 in `<scratch dir>` (slot 2, 12:06 to 13:36, another gate in slot 1 for most of it):
+`git archive` of 5ec4423 in `<scratch dir>` (slot 2, 12:06 to 13:36, another gate in slot 1 for most of it):
 `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `python scripts/gate_test.py --order
 gatetp-p2/times_j3.tsv`: **2190 passed, 0 failed, 666 ignored**, exit 0; 0 timeouts, max time/limit 0.458, peak summed working set
 2636 MB, test phase 76.1 min (load). The (binary, test, outcome) list equals the `--jobs 3` run's and gate47's (`diff` empty), so
-A5 holds. Later commits change only this ADR and `docs/test-process.md`. Main was still 35d9505, so the rebase was a no-op.
+A5 holds. Later commits change only this ADR and `docs/test-process.md`. Main was still 511a24c, so the rebase was a no-op.

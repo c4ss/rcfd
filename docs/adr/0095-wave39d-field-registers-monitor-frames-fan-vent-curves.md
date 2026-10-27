@@ -2,7 +2,7 @@
 
 Status: registered before any F-124 code was written and before the F-144 and F-217 tests were added to the repository. Limits are not changed
 after a run; a miss becomes an ignored `*_known_miss` test with the limit intact. Baseline hashes are not re-recorded; the new register type is
-opt-in, so a case without it builds and runs exactly as before. Clean-room: first principles only. Written at HEAD 3143c71 (scratch copy
+opt-in, so a case without it builds and runs exactly as before. Clean-room: first principles only. Written at HEAD 1965eb1 (scratch copy
 `<scratch dir>`, target `<target dir>`).
 
 The residual gaps come from the partials audit: `docs/audit/partials-group-4.md` (F-124) and `docs/audit/partials-group-7.md` (F-144, F-217).

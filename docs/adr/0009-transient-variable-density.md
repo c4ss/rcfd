@@ -265,8 +265,8 @@ unchanged (Q1, Q2 MET).
 * **Re-measurement.** After the last kernel change (prescribed-velocity `phid`) the ignored `varden_transient` and
   `varden_transient_duct` tests were run again: T3c BDF2 errors 1.114e-2, 2.99e-3, 1.18e-3 (order 1.34) and T5 6.04e-4,
   1.88e-4, 1.64e-3 / 1.62e-3, 1.56e-5 are unchanged.
-* **History.** The `schema.rs` keys and the `sim.rs` transient branch were committed inside the MRF commit d27eec0 of
-  another agent (it picked up the working-tree files); `vd.rs` followed in ebc22ef, so d27eec0 alone does not build.
+* **History.** The `schema.rs` keys and the `sim.rs` transient branch were committed inside the MRF commit 11e658f of
+  another agent (it picked up the working-tree files); `vd.rs` followed in dc6834f, so 11e658f alone does not build.
 * **Viscous heating in steady runs** is available (same terms) but unvalidated; only the transient Couette checks
   exercise the term.
 

@@ -7,7 +7,7 @@ E2 is rcfd's exact semi-discrete solution (ADR 0101); F-248 has no reference val
 
 ## What was run before this ADR was written (disclosed)
 
-Release build, HEAD e952528 plus the two smoke tests below (both kept as ignored set-up smokes):
+Release build, HEAD 44d7ccc plus the two smoke tests below (both kept as ignored set-up smokes):
 
 * `e2_default_controller_setup_smoke` (rcfd-fv tests/adaptive_step.rs): the E2 controller below at tol 1e-2 on the E1 shear
   wave, first 50 accepted steps: t = 2.2199e-4 reached, 18 rejected trial steps (the first proposal 1 halved down to about
@@ -100,7 +100,7 @@ Verdict: F-248 stays `done`; its note is extended.
 
 ## Results
 
-Addendum written after the runs: release build on top of ee43c8b (this ADR) plus the test files and the `sim.rs` hunk. Each
+Addendum written after the runs: release build on top of b7ec907 (this ADR) plus the test files and the `sim.rs` hunk. Each
 registered test was run once.
 
 | Check | Measured | Limit | Result |
@@ -120,6 +120,6 @@ No deviation from the registered plan. Statuses: F-209 `partial` (first clause m
 clause open; the case-key path still takes its first, largest and smallest step from `solver.dt`). F-248 stays `done` with the
 diagnostic added.
 
-Final gate on a fresh `git archive` of 1dab876 (which also holds the wave 42B/42C commits made up to then): `cargo fmt --check` clean,
+Final gate on a fresh `git archive` of 384805c (which also holds the wave 42B/42C commits made up to then): `cargo fmt --check` clean,
 `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1965 passed /
 0 failed / 580 ignored.

@@ -12,7 +12,7 @@ robustness) work in the same tree: this wave adds new files (`rcfd-fv/src/viscoe
 `case-schema.md`, `roadmap.json`, committed through a temporary index. No existing solver path is edited, so the baseline hashes and
 all existing tests are unchanged by construction (re-verified at the end).
 
-## Audit (HEAD aeb9548)
+## Audit (HEAD bc792a5)
 
 * `PimpleSolver` (PISO / PIMPLE) takes an explicit momentum source through `source_force: Option<BodyForce>` (cell accelerations and
   face values `a_f . S_f`, `BodyForce::from_cells` interpolates linearly), applied face-consistently in four places (ADR 0045). The

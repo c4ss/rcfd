@@ -11,7 +11,7 @@ code, `fractional.rs` (read only), the `sources.<n>` mechanism.
 
 ## Findings that precede the fix (diagnosis, added after a bisect; the registered checks below do not depend on them)
 
-* Before-values of the wave 25C known-miss tests, rerun on the unmodified HEAD c8405be (`--ignored`): T1a PISO Euler ux 5.093e-1,
+* Before-values of the wave 25C known-miss tests, rerun on the unmodified HEAD 599d15e (`--ignored`): T1a PISO Euler ux 5.093e-1,
   uy 3.207e-4, p 1.510e-1; PIMPLE (3) 1.080e-1 / 1.276e-4 / 3.089e-2; PISO BDF2 5.091e-1 / 3.797e-4 / 1.563e-1. T1b: vs recursion
   7.587e-2 / 1.402e-2 / 7.437e-2. They reproduce the wave 25C numbers.
 * Reproducer `crates/rcfd-fv/tests/w26a_couette.rs` (impulsively started plane Couette flow, nu = 1, wall speed 1, `d = nu dt / dy^2`,
@@ -88,7 +88,7 @@ registered, the cavity PISO/PIMPLE hash included).
 
 ### C1 (T1, limits unchanged, the ignored registered tests run with `--ignored`)
 
-| Check | Before (HEAD c8405be) | After | Limit |
+| Check | Before (HEAD 599d15e) | After | Limit |
 |---|---|---|---|
 | T1a PISO Euler | ux 5.093e-1, uy 3.207e-4, p 1.510e-1 | 3.508e-14, 0, 0 | 1e-9 / 1e-12 / 1e-9 |
 | T1a PIMPLE n_outer 3 | 1.080e-1, 1.276e-4, 3.089e-2 | 1.776e-14, 0, 0 | same |

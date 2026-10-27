@@ -1,6 +1,6 @@
 # Partials audit, group 5
 
-Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at a7fb534). Grades follow the acceptance text as
+Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at 07ae2db). Grades follow the acceptance text as
 written, from tests re-run by the auditor (release build, own target directory) unless marked "read only". Earlier notes were
 not trusted; where a note and a measurement disagree, the measurement is recorded.
 
@@ -65,7 +65,7 @@ memory (UNVERIFIED). Alternatively, register a held-out check of the fit against
 second, independent table. Size S. Unverified: mixture-rule formulas, PR/RK constants and atomic weights are recalled from memory
 (docs/reference-data.md says so). The Huber rows were read from a rendered NIST page. The auditor recalls (UNVERIFIED) other textbook
 tables giving about 23.0 uPa s at 400 K, so the 400 K miss is sensitive to the table chosen; the 500 K miss (over 1 %) is not.
-Licensed-data clause: `git ls-files` finds no file matching refprop, .fld, .hmx or .mix (checked at a7fb534). That clause is met.
+Licensed-data clause: `git ls-files` finds no file matching refprop, .fld, .hmx or .mix (checked at 07ae2db). That clause is met.
 
 ## F-125 public-data validation pack
 
@@ -140,6 +140,6 @@ on its own and closable in one wave. Unverified: the deck card layouts other tha
 
 ## Not re-run
 
-Every test named above was re-run at a7fb534, including the ignored known-miss tests, except the two ignored `vof_waves` known misses
+Every test named above was re-run at 07ae2db, including the ignored known-miss tests, except the two ignored `vof_waves` known misses
 (w2, w4). Those failures are documented in ADR 0052, and their corrected versions passed. Not checked: the F-092 live-host behaviour.
 The F-027 V-cycle numbers come from an auditor scratch crate, not from a repository test.

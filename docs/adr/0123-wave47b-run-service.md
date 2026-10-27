@@ -1,13 +1,13 @@
 # ADR 0123: Wave 47B, the run service (`rcfd-runner`, Studio layer L2)
 
-Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main 7fcdf9c on branch `w47b`, target
+Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main 3a379a1 on branch `w47b`, target
 `<target dir>`. House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed limit becomes an
 ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults
 are bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parents: [the Studio plan](../ui-restart-plan.md)
 (layer L2, the section-8 folder contract), [run control](../run-control.md) (F-120, F-121). ADR 0122 (`rcfd-project`, wave 47A) is
 built in parallel; this ADR codes against the section-8 file contract with local types (see "Switching to rcfd-project").
 
-## Context (checked against the code at 7fcdf9c)
+## Context (checked against the code at 3a379a1)
 
 * Runs start today through `rcfd run` (`crates/rcfd-cli/src/main.rs` `cmd_run`) and `runctl::drive` (`crates/rcfd-api/src/runctl.rs`):
   stop file (exit 7, clean stop, results and checkpoint written), wall-clock limit, the `rcfd-status` JSON-lines stream
@@ -281,7 +281,7 @@ the runner inherited the pipe". `powershell.exe` was still hung, so the fallback
   Limit: the client exits 0; the runner is alive after the client exits and after the run finishes; the lock probe reads false
   before the start and after the shutdown.
 
-## Final gate (2026-10-26, fresh archive of 43618e3, rebased on main fa341bb)
+## Final gate (2026-10-26, fresh archive of 43618e3, rebased on main f0a8814)
 
 | stage | result |
 | --- | --- |
@@ -293,11 +293,11 @@ the runner inherited the pipe". `powershell.exe` was still hung, so the fallback
 
 The workspace clippy failure is not in this branch's files:
 * `crates/rcfd-api/src/design/ledger_tests.rs:134` (`cloned_ref_to_slice_refs`) and `uq_tests.rs:295` (`type_complexity`).
-* Both files came to main with the wave-46D merge (last commit c54959b, ADR 0121), and the toolchain is now rustc 1.99.0.
+* Both files came to main with the wave-46D merge (last commit 6bb6f51, ADR 0121), and the toolchain is now rustc 1.99.0.
 
 Commit ids: the registered run of the addendum was on 8b83bb1, which became 7a561b7 after the rebases; the tree is unchanged.
 
-After the gate: rebased on main f170925, which merges `rcfd-project` and `rcfd-claude` and fixes the two lints. Results there:
+After the gate: rebased on main df20467, which merges `rcfd-project` and `rcfd-claude` and fixes the two lints. Results there:
 * `cargo fmt --check` passes.
 * `cargo clippy --workspace --all-targets -D warnings` is clean.
 * In debug, this crate (13 passed, 1 ignored) and the rcfd-cli tests `run_control`, `cli`, `docs_site` and `workspace_graph` pass.

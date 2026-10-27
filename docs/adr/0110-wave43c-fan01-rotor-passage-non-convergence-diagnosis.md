@@ -3,7 +3,7 @@
 Status: registered before any registered run and before any solver code of this wave. Limits and decision rules are fixed here and are
 not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
 before the corrected run. Defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first
-principles only; the one literature statement used is marked UNVERIFIED. Written at HEAD 84da44e (scratch clone
+principles only; the one literature statement used is marked UNVERIFIED. Written at HEAD e73cc5e (scratch clone
 `<scratch dir>`, target `<target dir>`). Parents: ADR 0075, 0077-0087, 0101-0104, `docs/milestone-fan.md`.
 No agreement with measured fan data is a question of this ADR or is claimed.
 
@@ -256,7 +256,7 @@ Registered now:
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of the scratch clone at 84da44e plus this wave's files. On main at hand-back, `crates/rcfd-fv/src/simple.rs` is identical
+Release builds of the scratch clone at e73cc5e plus this wave's files. On main at hand-back, `crates/rcfd-fv/src/simple.rs` is identical
 apart from this wave's hunk, and the wave-43A/43B commits made in the meantime touch no file on the path of these runs. Each registered run
 was made once, at most two at a time, all on F3 except L1-L5. Verdicts follow the registered rule (`rho_med`, `rho_du`). The reference
 window ("ref") gives median `res_u` / `res_p` of 1.09e-3 / 4.87e-4 for B3 (iterations 500-1000) and 3.03e-5 / 6.88e-6 for E3.
@@ -374,15 +374,15 @@ nothing depends on them. The single-cell gain model is first principles (ADR 008
 
 ### Final gate
 
-Fresh `git archive` of cdabc2a (main, including the wave-43A/43B commits up to it): `cargo fmt --all -- --check` clean, `cargo clippy
+Fresh `git archive` of 2ff98ee (main, including the wave-43A/43B commits up to it): `cargo fmt --all -- --check` clean, `cargo clippy
 --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **1979 passed, 0 failed, 616 ignored**
 (no LNK1201; `baseline_hashes.rs` passed unchanged). This wave adds 2 running tests (`s1_e3_frozen_limiter_converges`,
 `frozen_limiter_hook_is_bit_identical_at_the_freeze`) and 21 ignored ones. This paragraph is a docs-only commit, not re-gated.
 
 ### Addendum 2026-10-26: `family()` STANDS test deviated from the registered family rule
 
-The registered family rule above (unchanged since the registration commit 6aaf45c) is STANDS iff `|L|` decreases monotonically E3 -> E2
--> E1 with observed order >= 0.5. The implementation (cdabc2a) coded STANDS as `|L(E1)| < |L(E2)| && |L(E1)| <= 0.053` (no E3 > E2 check,
+The registered family rule above (unchanged since the registration commit 7ed893a) is STANDS iff `|L|` decreases monotonically E3 -> E2
+-> E1 with observed order >= 0.5. The implementation (2ff98ee) coded STANDS as `|L(E1)| < |L(E2)| && |L(E1)| <= 0.053` (no E3 > E2 check,
 a fixed bound that no amendment registered). `l5_frozen_limiter_family` implemented the registered rule. The test now uses the registered
 rule (the order computation moved into `family_order`, shared with L5). No verdict changes: L2 (|L| 0.01037 / 0.05954 / 0.10689 N m) has
 `|L(E1)| >= |L(E2)|`, so it is FALSIFIED under both versions (same FALSIFIED branch); L3 is NOT EVALUABLE under both (the settled check runs

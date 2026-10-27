@@ -167,7 +167,7 @@ symptom 1's mechanism, unverified for the 2.9e-4 cell velocity).
 
 1. The limit of B (1e-2) was written after an exploratory run had shown 3.8e-3 (disclosed above in the registered text). The
    remaining 0.4 percent difference to the closed form of a uniform Darcy duct is not explained and was not chased.
-2. The tests `b1_` and `b2_` (committed at 29b27b5 as records of the pre-fix mechanism) fail once F2 is in, so they are ignored
+2. The tests `b1_` and `b2_` (committed at 77dac13 as records of the pre-fix mechanism) fail once F2 is in, so they are ignored
    records with a reason; post-fix counterparts `b1f_` (first-iteration velocity bounded independently of viscosity: 30.0 and
    25.5 m/s for nu 1.5e-5 and 1.5e-3, ratio 1.2; before F2: 1.3e6 and 1.2e4) and `b2f_` (closed form `v = 2` m/s from
    `12 v^2 + 36 v - 120 = 0`; measured 2.000156, limit 1e-3 set after a first run showed 7.8e-5 and that a limit of 1e-6 on the

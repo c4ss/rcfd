@@ -2,7 +2,7 @@
 
 Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here as an
-amendment before it runs. Written at HEAD b7e631f, target `<target dir>`. Clean-room: the only literature values are
+amendment before it runs. Written at HEAD 8eec9f5, target `<target dir>`. Clean-room: the only literature values are
 the Hysing et al. (2009) case-1 values read in ADR 0096 and the code-to-code range of the reworded F-055 acceptance (user, 2026-10-24,
 Hysing et al. 2009 Table XII, read by the user).
 
@@ -32,7 +32,7 @@ ADR 0108 CSF fallback built in.
 
 ## (1) Existing tests whose printed or asserted value changes under the new defaults
 
-Method (done before this ADR): two fresh archives of b7e631f; in the second the four `VofSettings::new` defaults were set to `true`
+Method (done before this ADR): two fresh archives of 8eec9f5; in the second the four `VofSettings::new` defaults were set to `true`
 (nothing else changed, never committed). In each, every VOF-related test file was run in release with `--nocapture`: rcfd-fv
 cavitating_venturi, mixture_drift, vof_advection, vof_bubble, vof_bubble_diagnosis_w41c, vof_bubble_refinement_w40d, vof_dambreak,
 vof_dambreak_amg, vof_droplet, vof_height_function_fallback_w43a, vof_height_function_w42b, vof_masstransfer, vof_static, vof_waves;
@@ -95,7 +95,7 @@ sides, no-slip top and bottom, 3 PISO correctors, exact initial fractions) with 
 Reference: the full-precision errors printed by the ADR 0108 X run (`B errors` line of its log, `<scratch dir>\x.log`):
 y_c(3) errors to 1.0813: 0.002053058745789871, 0.0012840785484355965, 0.0018457966779672486 (y_c(3) = 1.0792, 1.0800, 1.0795);
 V_c,max errors to 0.2417: 0.0015273890756644926, 0.0007790117810689556, 8.49155348201236e-5 (V_c,max = 0.2402, 0.2409, 0.2416).
-Both lie below the reference on every grid. No VOF-path source changed since that run (`git log 83f58cb..b7e631f` touches no file of
+Both lie below the reference on every grid. No VOF-path source changed since that run (`git log aa8da45..8eec9f5` touches no file of
 `rcfd-fv/src` used by the VOF solver; `simple.rs`, `sources.rs` and the mesh joins changed, which the VOF path does not call).
 
 Limit: on each grid |e - e_43A| <= 1e-9 for the y_c(3) error and the V_c,max error. A mismatch is a defect to diagnose (the defaults
@@ -173,7 +173,7 @@ contains rcfd-api mixture_cavitation_tree `w2_mixture_column_tree_equals_library
 
 ### Final gate
 
-Fresh `git archive` of d55d382: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+Fresh `git archive` of 6460339: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 2010 passed / 0 failed / 633 ignored (baseline 2008 / 631: this wave adds two
 non-ignored tests, `x0_default_settings_reproduce_adr0108_x_40` and `f5_vof_option_keys_reach_the_library`, and two ignored ones).
 `d_dam_break_front` and the baseline-hash tests pass (no hash re-recorded). This addendum text was committed after the gate.

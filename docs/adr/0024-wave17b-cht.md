@@ -249,7 +249,7 @@ partially overlapping non-conformal interfaces (F-114 limits).
 
 ## Addendum: results, deviations and what was not delivered
 
-Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/{cht,thermal_bc}.rs` (commit bd60fb2), case checks in
+Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/{cht,thermal_bc}.rs` (commit 81595f3), case checks in
 `crates/rcfd-api/tests/cht_case.rs`. "Measured" values are printed by the tests (`--nocapture`).
 
 ### Results (measured against the registered limit)

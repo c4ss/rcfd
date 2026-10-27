@@ -6,7 +6,7 @@ house rules of ADRs 0110-0113 apply:
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
-Written at main ea649d1 (worktree `<scratch dir>`, branch `w45b`, target `<target dir>`). Clean-room: first
+Written at main cf7c7e2 (worktree `<scratch dir>`, branch `w45b`, target `<target dir>`). Clean-room: first
 principles and our own ADRs only. Parents: ADRs 0065 (S4), 0109, 0113.
 
 ## User decisions (taken before this wave started)
@@ -22,7 +22,7 @@ principles and our own ADRs only. Parents: ADRs 0065 (S4), 0109, 0113.
   * the schema entry and the `sim.rs` dispatch;
   * the test file `crates/rcfd-api/tests/revolved_sector_w45b.rs` and the unit tests in `gen.rs`.
 * Two things were run before registration:
-  * the G6 hash print, at ea649d1 before any change, which is the reference the test asserts;
+  * the G6 hash print, at cf7c7e2 before any change, which is the reference the test asserts;
   * the ignored smoke `smoke_w45b`, whose results are below.
 * No registered test (G1-G5, G7, N1, N2) was run before this ADR was committed.
 * I checked the draft's code claims against the source:
@@ -142,7 +142,7 @@ Common set-up (FAN-01 empty-passage dimensions):
   * Same as the library: trapezoid and pair mean off, component-diagonal correction on, F1 on with seams.
 * **G6, defaults unchanged** (`g6_fan_meshes_unchanged`).
   * `Mesh::content_hash` (points, faces, owner, neighbour, patches, zones) of `build_mesh` is identical to the hashes recorded at
-    ea649d1 before any change, for three meshes:
+    cf7c7e2 before any change, for three meshes:
     * the default `axial_fan_sector` case: `8471bf9a1aef1dd4`;
     * the ADR 0086 C-grid F3 bladed mesh B3: `be64f588a252d0b4`;
     * its empty passage E3: `04fbabedbad41768`.
@@ -216,7 +216,7 @@ Common set-up (FAN-01 empty-passage dimensions):
 * New `crates/rcfd-api/tests/revolved_sector_w45b.rs`: G2-G7, N1 and the smoke.
 * `docs/case-schema.md`, `docs/meshing.md`.
 
-## Addendum: measured values (one run each, release build, on the pre-rebase commits 0abc8fe and its N2 split; rebased onto main 2edc4fd as 674286f and 63d2d06)
+## Addendum: measured values (one run each, release build, on the pre-rebase commits 0abc8fe and its N2 split; rebased onto main bfce6ec as cc40ebb and eb2ddbc)
 
 Order: N2 and N1 first, then G1 and G7 (library), then G2-G7 (case tree).
 
@@ -240,7 +240,7 @@ Order: N2 and N1 first, then G1 and G7 (library), then G2-G7 (case tree).
 | G5 sector / annulus converged | 349 / 316 iterations | targets met within 4000 | pass |
 | G5 sector - annulus velocity | 1.4e-11 W r_out | 4.3e-4 | pass |
 | G5 reported: sector against analytic; pressure difference | 3.0e-3 W r_out; 2.1e-10 of the range | none | reported |
-| G6 content hashes (default, B3, E3) | equal to the ea649d1 values | equal | pass |
+| G6 content hashes (default, B3, E3) | equal to the cf7c7e2 values | equal | pass |
 | G7 located errors (10 cases; library invalid arguments) | each at its key; each an error | located | pass |
 
 Verdict: G1-G7 pass and N1, N2 discriminate, so by the decision rule the generator and its case-tree name are kept.
@@ -274,7 +274,7 @@ Status: F-126 stays partial. Its acceptance, a published compressor case, is not
 
 ## Final gate
 
-The gate ran on a fresh `git archive` of c7a56ea, the branch rebased onto main 2edc4fd, in `<scratch dir>`. Stages ran
+The gate ran on a fresh `git archive` of 38f0b39, the branch rebased onto main bfce6ec, in `<scratch dir>`. Stages ran
 one at a time (CARGO_BUILD_JOBS=3, RUST_TEST_THREADS=3):
 * `cargo fmt --check`: clean;
 * `cargo clippy --workspace --all-targets -- -D warnings`: clean;

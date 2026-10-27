@@ -92,7 +92,7 @@ which repeats the S2 assertions without the dihedral limit, so the watertightnes
 check. It is not a registered test of its own and does not change the F-131 verdict. What I knew when writing this: the full
 registered results below.
 
-## Results (release build, HEAD f002a3c plus the test files)
+## Results (release build, HEAD 4bd4868 plus the test files)
 
 ### F-233: pass
 
@@ -127,7 +127,7 @@ compressive(2) 1.9815..1.9816 and 1.9910..1.9910. Limit band [1.85, 2.3]: met.
   27.9, 68 bad tetrahedra left after 3 refinement rounds.
 
 `s2b` is a post-hoc subset of S2 (see the amendment) and does not count toward the verdict. Test-count delta of this ADR:
-+3 passed (O1d, S1, S2b), +4 ignored (O1d smoke, S0 smoke, S2 and S3 known misses). Gate on a fresh archive of 828d1aa:
++3 passed (O1d, S1, S2b), +4 ignored (O1d smoke, S0 smoke, S2 and S3 known misses). Gate on a fresh archive of 2139d61:
 fmt and clippy clean, 1914 passed / 0 failed / 540 ignored.
 
 F-131 stays partial: the STL clause and watertightness are met; the tetrahedral quality is not. Closing it needs sliver removal
