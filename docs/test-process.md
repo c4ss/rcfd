@@ -110,7 +110,7 @@ Times are for the test stage at 47E (103 min). "Robustness" is what the option c
 | 2 | More test processes per slot (`--jobs 5` or `6`) | at 3 the stage sits on its floor (test-seconds / 3 = 59 min); at 6 the floor is 29 min plus contention | CPU: a solver test uses about two cores, so 6 jobs in each of two slots ask for 24 of 16 processors; memory: worst case the six largest tests together, 9.6 GB, typical under 1 GB | proposed: needs a registered measurement and the user's decision on the concurrency rule |
 | 3 | Start the slowest tests first, using the TSV of an earlier run as an ordering hint | small: binary order already finished 0.6 min above the floor (section 5) | none: every test still runs; a missing file falls back to binary order | yes, as `--order` |
 | 4 | A persistent release target folder per slot (not per gate), cleared of `target/tmp` before each run | measured about 2 min: 7 min 20 s with an empty folder (run 1) against 5 min 22 s with the dependencies already built (run 2); and 4.4 GB of disk per gate | **measured pitfall** (section 5.4): binaries do not depend on the source folder's path, so a target shared by two copies reuses the other copy's binaries when the new copy's files are older than the last build; safe only if the copy is extracted with `tar -m` right before its build | proposed, with that rule |
-| 5 | A time limit per test that fails the test (for example three times its last time, at least 30 min) | frees a slot from a hung test (section 2.4: about 3.5 h on 2026-10-26) | a very slow test that would have passed now fails; the limit must not hide behind a retry | proposed |
+| 5 | A time limit per test that fails the test (for example three times its last time, at least 30 min) | frees a slot from a hung test (section 2.4: about 3.5 h on 2026-10-26) | a very slow test that would have passed now fails; the limit must not hide behind a retry | **yes** (ADR 0129): `clamp(5 x last time, 10 min, 60 min)`, section 4 |
 | 6 | Less memory per test thread | nothing to gain: 2087 of 2093 tests stay under 500 MB; the large ones are large by design (one-million-cell render, C-grid stacks) | none | no |
 | 7 | `debug = 0` for the test profile | none: the release profile already has no debug info | none | no |
 | 8 | `lld-link` instead of `link.exe` (the linker is in the Rust toolchain as `rust-lld`) | part of the 3.9 min in which the test binaries are compiled and linked (section 2.3); link time alone not measured | a second linker in the gate; Windows `rust-lld` is not the default for MSVC targets | proposed, measure first |
@@ -144,6 +144,14 @@ cp ../times.tsv <scratch dir>$SLOT.tsv.tmp && mv -f <scratch dir>$SLOT.tsv.tmp <
 needs Python 3.9 or later (installed: 3.9.13, PSF licence), standard library only, no build step; it uses no syntax newer than 3.9.
 `gate46/stage.sh` and the other stage scripts are not changed by this work; the lines above work once the script is on main, because
 the gate runs on a `git archive` that must contain it.
+
+**Time limit (ADR 0129).** Each test gets `clamp(F x its seconds in the --order TSV, min, max)` with `--timeout-factor F`
+(default 5), `--timeout-min` (600 s) and `--timeout-max` (3600 s); a test with no record gets the maximum, `--timeout-max 0` turns the
+limit off. On expiry the runner kills that test and the processes it started (never a `cargo.exe`, which `workspace_graph` starts,
+and nothing the runner did not start), prints `test X ... FAILED (timeout after N s)`, writes outcome `TIMEOUT` to the TSV and goes on.
+The last line of the test phase also gives the peak summed working set of the running test processes (sampled every 2 s) and the
+largest ratio of a test's time to its limit. Tests: `python -m unittest scripts/test_gate_test.py` (the end-to-end part needs
+`GATE_TEST_E2E=1` and a slot).
 
 `progress.log` gets one line per finished test (outcome, seconds, peak working set). `times.tsv` holds the same per test. The old
 command stays valid as the reference: `cargo test --workspace --release --no-fail-fast`.
