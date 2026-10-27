@@ -1,0 +1,8 @@
+
+# Subject: area: effect, at most 72 characters, no full stop (docs/commit-rules.md).
+#   [breaking] or [results] first if it can break a user or changes a default number.
+# Body: why, not what. Required for behaviour, results, data, licence or ADR changes.
+#   User-visible: add a line under Unreleased in CHANGELOG.md in this commit.
+#   Nothing user-visible: say "No behaviour change."
+# Refer to ADR NNNN, F-xxx, #issue. No local paths, secrets, vendor text, wip.
+# Sign off with git commit -s; no other trailers.
