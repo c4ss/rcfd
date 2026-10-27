@@ -1,0 +1,75 @@
+# The full gate (docs/test-process.md): fmt, clippy, then every non-ignored test of the workspace in release, one process per
+# test, followed by the doc-tests. It takes hours, so it runs on a schedule and on demand, not on pull requests.
+# What a green run does not prove is listed in docs/releasing.md.
+name: Full gate
+
+on:
+  schedule:
+    - cron: "0 2 * * 0" # Sundays 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Runner (the maintainer's gate runs on Windows)
+        type: choice
+        options: [windows-latest, ubuntu-latest]
+        default: windows-latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.ref }}-${{ inputs.os || 'windows-latest' }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: never
+  RUST_GATE_TOOLCHAIN: "1.99.0"
+  # Three tests at once, as in the maintainer's gate (ADR 0127).
+  RUST_TEST_THREADS: "3"
+
+jobs:
+  gate:
+    name: full gate, ${{ inputs.os || 'windows-latest' }}
+    runs-on: ${{ inputs.os || 'windows-latest' }}
+    timeout-minutes: 340
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+          components: rustfmt, clippy
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.x"
+      # No build cache: the gate starts from an empty target folder.
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        timeout-minutes: 45
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: tests (scripts/gate_test.py)
+        # Shorter than the job, so the logs are still uploaded when this step runs out of time.
+        timeout-minutes: 290
+        run: |
+          mkdir -p gate-out
+          python scripts/gate_test.py --tsv gate-out/times.tsv > gate-out/test.log 2> gate-out/progress.log
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo "### Full gate at ${GITHUB_SHA}"
+            grep "^test result" gate-out/test.log | awk '{p+=$4;f+=$6;i+=$8} END{print p" passed, "f" failed, "i" ignored"}'
+            grep -E "^test .* FAILED" gate-out/test.log || true
+            grep "^gate_test:" gate-out/test.log || true
+          } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gate-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
+          path: gate-out/
+          if-no-files-found: warn
+          retention-days: 90
