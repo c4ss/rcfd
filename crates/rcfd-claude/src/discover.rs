@@ -108,6 +108,13 @@ pub fn parse_agents(json: &str) -> Result<Vec<AgentEntry>, String> {
         .collect())
 }
 
+/// The filtered `tasklist` query of one pid (no window) and its creation flags.
+pub(crate) fn tasklist_cmd(pid: u32) -> (Command, u32) {
+    let (mut c, flags) = crate::console("tasklist");
+    c.args(["/NH", "/FO", "CSV", "/FI", &format!("PID eq {pid}")]);
+    (c, flags)
+}
+
 /// The subset of `pids` that are live processes (Windows: one filtered `tasklist` per pid, about 0.3 s each on the
 /// development machine where an unfiltered listing took 2.5 s; elsewhere: one `ps`). No `unsafe`, no extra dependency.
 pub fn live_pids(pids: &[u32]) -> std::io::Result<HashSet<u32>> {
@@ -121,7 +128,7 @@ pub fn live_pids(pids: &[u32]) -> std::io::Result<HashSet<u32>> {
     };
     if cfg!(windows) {
         for &pid in pids {
-            let text = run(Command::new("tasklist").args(["/NH", "/FO", "CSV", "/FI", &format!("PID eq {pid}")]))?;
+            let text = run(&mut tasklist_cmd(pid).0)?;
             // "image","pid",... ; "INFO: No tasks ..." when none
             if text.lines().any(|l| {
                 l.split("\",\"")
@@ -135,7 +142,7 @@ pub fn live_pids(pids: &[u32]) -> std::io::Result<HashSet<u32>> {
     } else if !pids.is_empty() {
         // shortcut: the non-Windows path is not exercised in wave 47 (Windows-only machine); test it on the first Linux/macOS run.
         let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-        let text = run(Command::new("ps").args(["-o", "pid=", "-p", &list])).unwrap_or_default(); // ps exits 1 when none match
+        let text = run(crate::console("ps").0.args(["-o", "pid=", "-p", &list])).unwrap_or_default(); // ps exits 1 when none match
         live.extend(text.lines().filter_map(|l| l.trim().parse::<u32>().ok()));
     }
     Ok(live)
