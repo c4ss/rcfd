@@ -24,7 +24,8 @@ beyond today's three test threads.
 
 ## Decision
 
-1. **D1** New script `scripts/gate_test.py` (Python standard library only; no new dependency, no build cost) replaces the
+1. **D1** New script `scripts/gate_test.py` (Python 3.9 or later, already installed, PSF licence; standard library only, no build
+   cost) replaces the
    `cargo test` line of the gate's test stage. It
    * builds with `cargo test <selection> --release --no-fail-fast --no-run` (the same command and profile as today, so the binaries
      are the ones `cargo test` would run);
@@ -74,7 +75,7 @@ other slot. Details and logs: [`docs/test-process.md`](../test-process.md) secti
 | G1 | 0 differences against the 47E `cargo test` log | 2752 = 2752 lines (2093 ok, 659 ignored), `diff` empty | **met** |
 | G2 | 3 of 3 negative controls fail | 3 of 3 FAILED, exit 101 (the original `cargo test` loses the aborting test's name and its sibling from the counts) | **met** |
 | G3 | test stage at most 51 min | 66.8 min (build 7.3, tests 59.4, doc-tests 0.03) against 103 min: -35 % | **missed** |
-| G4 | at most `jobs` test processes; summed working set at most 1.5 GB | at most 3 by construction; sampled peak 2184 MB, of which one test (`rules_w19c` e2) 2160 MB; per-test peaks up to 2720 MB | **missed** (the limit) |
+| G4 | at most `jobs` test processes; summed working set at most 1.5 GB | at most 3 direct children by construction (tests that start their own executable add children, as inside the original binaries; the sampler also counts the other slot's processes of identical name); sampled peak 2184 MB, of which one test (`rules_w19c` e2) 2160 MB; per-test peaks up to 2720 MB | **missed** (the limit) |
 | G5 | rebased HEAD: executed and ignored set equals `--list` union; fmt, clippy clean | e7fbbb1: 2816 = 2816 pairs against `cargo test -- --list`, `diff` empty; fmt and clippy clean; 2153 / 0 / 663; test stage 64.2 min | **met** |
 
 Why G3 missed: the registered estimate assumed the original run kept about one test busy per binary. Measured, the tests add up to
@@ -82,6 +83,12 @@ Why G3 missed: the registered estimate assumed the original run kept about one t
 faster tests can go further. Why G4 missed: the 1.5 GB limit came from the 30 MB to 135 MB processes seen before the run; two single
 tests need 2.7 GB on their own, in the original process as well (another gate's `rules_w19c` was sampled at 2460 MB). The test stage
 uses no more memory than before; the limit was set too low and stays as registered.
+
+Same-load comparison: replaying the original per-binary scheduling with run 1's per-test times gives 109.6 min of tests against
+59.4 min measured (-46 %), so the -35 % is not an artefact of a quieter day.
+
+Transparency: the runner was drafted before this ADR was written; the ADR was committed before the script and before any run. A
+slot waiter of this agent that survived a task stop took slot 2 at 22:56 for the one-minute rcfd-core smoke run and released it.
 
 Correction to the context: the CPU sample of a running solver test showed about two cores (from `tasklist /v` over 186 s), not one.
 

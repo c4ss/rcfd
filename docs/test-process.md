@@ -78,6 +78,9 @@ in rcfd-linalg and rcfd-fv parallelise only part of a solve. Three such tests at
   `incremental = true`.
 * 190 compile units per release build: 17 workspace crates and 173 dependency crates (most of them for rcfd-gui: egui, winit, glutin,
   image; and rustls, ring for rcfd-assistant).
+* Build time split, from file times of run 2 (section 5.6; dependencies already built): the 19 workspace libraries were done 92 s
+  after the build started, the last of the 400 test executables 323 s after it. So compiling and linking the test binaries takes
+  about 3.9 min of the 5.4 min with `-j 3`; link time alone was not measured.
 * Every gate starts with an empty target folder, so all 190 units are compiled again; the ten gate target folders of waves 46 and 47
   hold 3.8 GB to 5.1 GB each, 46 GB together.
 * The 13 agent target folders (`target-w45a` to `target-w47e`) hold 0.2 GB to 23 GB each, 60 GB together, mostly `debug`; each agent
@@ -106,11 +109,11 @@ Times are for the test stage at 47E (103 min). "Robustness" is what the option c
 | 1 | Run tests of different binaries at the same time: one process per test from one pool of 3 (`scripts/gate_test.py`) | measured: test stage 102 min to 67 min (section 5) | tests now overlap across binaries (audited: no shared fixed path); more isolation inside a binary than today | **yes** (ADR 0127) |
 | 2 | More test processes per slot (`--jobs 5` or `6`) | at 3 the stage sits on its floor (test-seconds / 3 = 59 min); at 6 the floor is 29 min plus contention | CPU: a solver test uses about two cores, so 6 jobs in each of two slots ask for 24 of 16 processors; memory: worst case the six largest tests together, 9.6 GB, typical under 1 GB | proposed: needs a registered measurement and the user's decision on the concurrency rule |
 | 3 | Start the slowest tests first, using the TSV of an earlier run as an ordering hint | small: binary order already finished 0.6 min above the floor (section 5) | none: every test still runs; a missing file falls back to binary order | yes, as `--order` |
-| 4 | A persistent release target folder per slot (not per gate), cleared of `target/tmp` before each run | 2 min to 4 min of the 4.4 min to 7.9 min build (the 173 dependencies), and 4.4 GB of disk per gate | **measured pitfall** (section 5.4): binaries do not depend on the source folder's path, so a target shared by two copies reuses the other copy's binaries when the new copy's files are older than the last build; safe only if the copy is extracted with `tar -m` right before its build | proposed, with that rule |
+| 4 | A persistent release target folder per slot (not per gate), cleared of `target/tmp` before each run | measured about 2 min: 7 min 20 s with an empty folder (run 1) against 5 min 22 s with the dependencies already built (run 2); and 4.4 GB of disk per gate | **measured pitfall** (section 5.4): binaries do not depend on the source folder's path, so a target shared by two copies reuses the other copy's binaries when the new copy's files are older than the last build; safe only if the copy is extracted with `tar -m` right before its build | proposed, with that rule |
 | 5 | A time limit per test that fails the test (for example three times its last time, at least 30 min) | frees a slot from a hung test (section 2.4: about 3.5 h on 2026-10-26) | a very slow test that would have passed now fails; the limit must not hide behind a retry | proposed |
 | 6 | Less memory per test thread | nothing to gain: 2087 of 2093 tests stay under 500 MB; the large ones are large by design (one-million-cell render, C-grid stacks) | none | no |
 | 7 | `debug = 0` for the test profile | none: the release profile already has no debug info | none | no |
-| 8 | `lld-link` instead of `link.exe` (the linker is in the Rust toolchain as `rust-lld`) | part of the link time of 384 test binaries, at most a minute or two of the build | a second linker in the gate; Windows `rust-lld` is not the default for MSVC targets | proposed, measure first |
+| 8 | `lld-link` instead of `link.exe` (the linker is in the Rust toolchain as `rust-lld`) | part of the 3.9 min in which the test binaries are compiled and linked (section 2.3); link time alone not measured | a second linker in the gate; Windows `rust-lld` is not the default for MSVC targets | proposed, measure first |
 | 9 | Merge `tests/*.rs` into fewer binaries | fewer links (365 today), at most a few minutes | test names change (module prefix), so the before/after list no longer matches by name; one panic that aborts kills the whole binary | no |
 | 10 | sccache | dependency compiles across agents and gates | a cache outside cargo; a new tool (Apache-2.0); not needed if option 4 is taken | no |
 | 11 | One target folder shared by all agents with a lock | disk and dependency compiles | agents block each other on the build lock; a broken build in one folder affects all | no |
@@ -130,12 +133,17 @@ passed test, so a crash, an abort or a name that matched nothing fails it. Doc-t
 ```bash
 cd "$GATE/src"
 export TEMP=$GATE/tmp TMP=$GATE/tmp CARGO_TARGET_DIR=$GATE/target CARGO_BUILD_JOBS=3 RUST_TEST_THREADS=3
-python scripts/gate_test.py --tsv ../times.tsv --order <scratch dir>.tsv > ../test.log 2> ../progress.log
+python scripts/gate_test.py --tsv ../times.tsv --order <scratch dir>$SLOT.tsv > ../test.log 2> ../progress.log
 echo "test_exit=$?" > ../stage_test.txt
 grep "^test result" ../test.log | awk '{p+=$4;f+=$6;i+=$8} END{print p" passed "f" failed "i" ignored"}' >> ../stage_test.txt
 grep -E "^test .* FAILED" ../test.log >> ../stage_test.txt
-cp ../times.tsv <scratch dir>.tsv
+cp ../times.tsv <scratch dir>$SLOT.tsv.tmp && mv -f <scratch dir>$SLOT.tsv.tmp <scratch dir>$SLOT.tsv
 ```
+
+`$SLOT` is `slot-1` or `slot-2`: one order file per slot, replaced by a rename, so a gate never reads a half-written file. The script
+needs Python 3.9 or later (installed: 3.9.13, PSF licence), standard library only, no build step; it uses no syntax newer than 3.9.
+`gate46/stage.sh` and the other stage scripts are not changed by this work; the lines above work once the script is on main, because
+the gate runs on a `git archive` that must contain it.
 
 `progress.log` gets one line per finished test (outcome, seconds, peak working set). `times.tsv` holds the same per test. The old
 command stays valid as the reference: `cargo test --workspace --release --no-fail-fast`.
@@ -160,6 +168,9 @@ Registered run 1 (ADR 0127): `git archive 21557f6` in `<scratch dir>\src`, `--jo
 * The slowest test is rcfd-api `transient_sources::t3d_solved_potential_cancels_the_motional_current_converged_outer_iterations`,
   969 s; eight tests over 5 min take 36 % of all test-seconds, 38 tests over 1 min take 65 %. The 1652 tests under 1 s take 171 s
   together, process start included.
+* Same load for both: replaying the original scheduling (each binary in turn, three threads taking tests in `--list` order) with
+  run 1's per-test times gives 109.6 min for the tests, against 59.4 min measured: -46 % for the test phase, -43 % for the stage,
+  without the load difference between the two days.
 * The same test in its own process took 4 % to 22 % longer than in the original run where comparable (one-test binaries:
   `validation_blasius_plate` 296 s to 361 s, `vof_droplet` 39 s to 41 s); both runs shared the machine with another gate.
 
