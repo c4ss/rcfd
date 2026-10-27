@@ -41,8 +41,6 @@ pub struct Config {
     pub adopt_probe_ms: u64,
     /// Time a cancelled solver gets to stop cleanly before it is killed, ms.
     pub cancel_grace_ms: u64,
-    /// The `rcfd` binary (default: `RCFD_BIN`, else next to the runner executable).
-    pub rcfd_bin: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -57,7 +55,6 @@ impl Default for Config {
             poll_ms: 100,
             adopt_probe_ms: 1000,
             cancel_grace_ms: 10_000,
-            rcfd_bin: None,
         }
     }
 }
@@ -90,11 +87,11 @@ impl Config {
         Ok(c)
     }
 
-    /// The solver binary.
+    /// The solver binary: `RCFD_BIN`, else `rcfd` next to the runner. Never from the config file: a project folder
+    /// must not choose the program the runner executes (ADR 0128 finding 1; an `rcfd_bin` key is an unknown field).
     pub fn solver(&self) -> PathBuf {
-        self.rcfd_bin
-            .clone()
-            .or_else(|| std::env::var_os("RCFD_BIN").map(PathBuf::from))
+        std::env::var_os("RCFD_BIN")
+            .map(PathBuf::from)
             .unwrap_or_else(|| sibling_exe("rcfd"))
     }
 }
