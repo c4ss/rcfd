@@ -63,3 +63,27 @@ A missed goal is reported as missed in the addendum with the measured value; the
   sharing a single-process binary already had, nothing new.
 * Startup of about 2100 processes adds seconds, not minutes.
 * The original `cargo test` remains the reference; if the runner and it ever disagree, the runner is wrong.
+
+## Addendum 2026-10-27: measured against the registered goals
+
+Run 1 on `git archive 21557f6` (`<scratch dir>`), `--jobs 3`, slot 1 from 23:25 to 00:32, another agent's gate in the
+other slot. Details and logs: [`docs/test-process.md`](../test-process.md) section 5.
+
+| Id | Goal | Measured | Verdict |
+|---|---|---|---|
+| G1 | 0 differences against the 47E `cargo test` log | 2752 = 2752 lines (2093 ok, 659 ignored), `diff` empty | **met** |
+| G2 | 3 of 3 negative controls fail | 3 of 3 FAILED, exit 101 (the original `cargo test` loses the aborting test's name and its sibling from the counts) | **met** |
+| G3 | test stage at most 51 min | 66.8 min (build 7.3, tests 59.4, doc-tests 0.03) against 103 min: -35 % | **missed** |
+| G4 | at most `jobs` test processes; summed working set at most 1.5 GB | at most 3 by construction; sampled peak 2184 MB, of which one test (`rules_w19c` e2) 2160 MB; per-test peaks up to 2720 MB | **missed** (the limit) |
+| G5 | rebased HEAD: executed and ignored set equals `--list` union; fmt, clippy clean | e7fbbb1: 2816 = 2816 pairs against `cargo test -- --list`, `diff` empty; fmt and clippy clean; 2153 / 0 / 663; test stage 64.2 min | **met** |
+
+Why G3 missed: the registered estimate assumed the original run kept about one test busy per binary. Measured, the tests add up to
+10 578 test-seconds (176 min); at 3 jobs the floor is 58.8 min and the run ended 0.6 min above it. Only more jobs (doc option 2) or
+faster tests can go further. Why G4 missed: the 1.5 GB limit came from the 30 MB to 135 MB processes seen before the run; two single
+tests need 2.7 GB on their own, in the original process as well (another gate's `rules_w19c` was sampled at 2460 MB). The test stage
+uses no more memory than before; the limit was set too low and stays as registered.
+
+Correction to the context: the CPU sample of a running solver test showed about two cores (from `tasklist /v` over 186 s), not one.
+
+Not done, by decision: no result caching, no skipping of unchanged tests, no change to `RUST_TEST_THREADS` or the slot rule; the
+affected-crates fast tier, more jobs per slot, a persistent target per slot and a per-test time limit are proposals in the doc.
