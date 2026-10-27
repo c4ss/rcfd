@@ -11,8 +11,6 @@ use std::time::{Duration, Instant};
 const RUNS: usize = 500;
 /// Registered limit for the slowest of 3 warm `runs()` calls in release (ADR 0122 L1).
 const BUDGET: Duration = Duration::from_millis(500);
-/// Negative control: the same listing with 2 ms of extra cost per run must exceed the budget.
-const EXTRA: Duration = Duration::from_millis(2);
 
 #[test]
 fn l1_listing_hundreds_of_runs_within_budget() {
@@ -67,18 +65,18 @@ fn l1_listing_hundreds_of_runs_within_budget() {
     );
     assert_eq!(p.runs_in_state(RunState::Finished).unwrap().len(), RUNS.div_ceil(3));
 
-    // Negative control: per-run cost of EXTRA in the same listing path (ids, then one summary each).
+    // Negative control (ADR 0128 finding 12; replaces 500 sleeps of 2 ms, which exceeded the budget whatever the
+    // listing cost): the same listing done 10 times must exceed the budget, i.e. the budget catches a listing 10x
+    // slower than the one measured.
     let t = Instant::now();
-    let ids = p.run_ids().unwrap();
-    for id in &ids {
-        std::thread::sleep(EXTRA);
-        p.run_summary(id).unwrap();
+    for _ in 0..10 {
+        p.runs().unwrap();
     }
     let slow = t.elapsed();
-    eprintln!("L1: worst of 3 listings {worst:?} (budget {BUDGET:?}); with {EXTRA:?}/run: {slow:?}");
+    eprintln!("L1: worst of 3 listings {worst:?} (budget {BUDGET:?}); the listing 10 times: {slow:?}");
     assert!(
         slow > BUDGET,
-        "negative control: the budget does not catch a {EXTRA:?}/run regression"
+        "negative control: the budget does not catch a 10x slower listing"
     );
     if !cfg!(debug_assertions) {
         assert!(worst <= BUDGET, "listing {RUNS} runs took {worst:?} > {BUDGET:?}");
