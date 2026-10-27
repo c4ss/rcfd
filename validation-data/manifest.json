@@ -599,7 +599,7 @@
         "spdx": "LicenseRef-published-numeric-data",
         "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
         "url": "https://www.et.byu.edu/~vps/ME340/TABLES/8.4.pdf",
-        "attribution": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation)",
+        "attribution": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)",
         "notes": "Eight values read on 2026-10-17 from BYU ME340 table 8.4 and NPTEL ME-662 lecture 19 (see the source column of the file). The original sources of the correlations (Hausen, Shah and London, Incropera) were not read. Used by validation_graetz.rs (ADR 0061)."
       },
       "files": [
