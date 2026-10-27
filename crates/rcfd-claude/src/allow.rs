@@ -84,7 +84,43 @@ fn check_path(s: &str) -> Result<(), &'static str> {
     if !p.chars().any(|c| c.is_alphanumeric()) {
         return Err("pattern must name something (no wildcard-only file rule)");
     }
+    if p.contains('~') {
+        return Err("'~' is refused (a short 8.3 name can reach a control file)");
+    }
+    let segs = p.split('/').filter(|s| !s.is_empty() && *s != ".");
+    if segs.enumerate().any(|(i, s)| control_segment(s, i == 0)) {
+        return Err("path reaches a file that configures Claude or the project (.mcp.json, CLAUDE.md, .claude, .rcfd, rcfd-project.json)");
+    }
     Ok(())
+}
+
+/// Names no rule may reach, lowercase (ADR 0128 finding 2).
+const CONTROL: [&str; 5] = [".mcp.json", "claude.md", ".claude", ".rcfd", "rcfd-project.json"];
+
+/// Does one path segment name a control file? ASCII case and trailing dots and spaces are ignored (Windows does).
+/// A wildcard segment counts when it is the first one and could match a control name.
+// shortcut: a wildcard in a deeper segment (`cases/**`) can still match a nested CLAUDE.md; refusing it would remove
+// the main use of the list (ADR 0128 known limit).
+fn control_segment(seg: &str, first: bool) -> bool {
+    let s = seg.trim_end_matches(['.', ' ']).to_ascii_lowercase();
+    if s.contains(['*', '?', '[']) {
+        return first && CONTROL.iter().any(|c| glob(s.as_bytes(), c.as_bytes()));
+    }
+    CONTROL.contains(&s.as_str())
+}
+
+/// Glob match of one segment: `*` any run, `?` one character, `[...]` any one character (wider than a class).
+fn glob(p: &[u8], s: &[u8]) -> bool {
+    match p.split_first() {
+        None => s.is_empty(),
+        Some((b'*', rest)) => (0..=s.len()).any(|i| glob(rest, &s[i..])),
+        Some((b'?', rest)) => !s.is_empty() && glob(rest, &s[1..]),
+        Some((b'[', rest)) => match rest.iter().position(|&c| c == b']') {
+            Some(k) => !s.is_empty() && glob(&rest[k + 1..], &s[1..]),
+            None => s.first() == Some(&b'[') && glob(rest, &s[1..]),
+        },
+        Some((c, rest)) => s.first() == Some(c) && glob(rest, &s[1..]),
+    }
 }
 
 fn strip_dot(s: &str) -> &str {
@@ -531,5 +567,96 @@ mod tests {
             suggest("mcp__rcfd__start_run", None, proj),
             Some(AllowRule::Tool("mcp__rcfd__start_run".into()))
         );
+    }
+
+    /// T5 (ADR 0128 finding 2): rules and suggestions never reach the files that configure Claude or the project.
+    #[test]
+    fn t5_control_files_are_refused() {
+        let names = [".mcp.json", "CLAUDE.md", ".claude", ".rcfd", "rcfd-project.json"];
+        let mut forms = Vec::new();
+        for n in names {
+            for x in [n.to_string(), n.to_ascii_uppercase(), n.to_ascii_lowercase()] {
+                forms.extend([
+                    x.clone(),
+                    format!("./{x}"),
+                    format!("{x}."),
+                    format!("cases/../{x}"),
+                    format!("a\\{x}"),
+                    format!("cases/{x}"),
+                ]);
+            }
+        }
+        for d in [".claude", ".rcfd", ".Claude", ".RCFD"] {
+            forms.extend([
+                format!("{d}/settings.json"),
+                format!("{d}/**"),
+                format!("./{d}/sub/f"),
+                format!("{d}./x"),
+            ]);
+        }
+        forms.extend(
+            [
+                "*.md",
+                ".c*",
+                "*.json",
+                "rcfd-*",
+                "**/CLAUDE.md",
+                "CLAUDE~1.MD",
+                ".//CLAUDE.md",
+            ]
+            .map(String::from),
+        );
+        let accepted: Vec<&String> = forms
+            .iter()
+            .filter(|f| {
+                AllowRule::Edit((*f).clone()).validate().is_ok() || AllowRule::Read((*f).clone()).validate().is_ok()
+            })
+            .collect();
+        assert!(accepted.is_empty(), "control-file rules accepted: {accepted:?}");
+        let (proj, sep) = if cfg!(windows) {
+            (Path::new("C:\\proj\\demo"), "\\")
+        } else {
+            (Path::new("/proj/demo"), "/")
+        };
+        for f in [
+            ".mcp.json",
+            "CLAUDE.md",
+            ".claude/settings.json",
+            ".rcfd/runner-config.json",
+            "rcfd-project.json",
+        ] {
+            let mut abs = format!("{}{sep}{}", proj.display(), f.replace('/', sep));
+            for tool in ["Write", "Edit", "Read"] {
+                assert_eq!(
+                    suggest(tool, Some(&json!({"file_path": abs})), proj),
+                    None,
+                    "{tool} {abs}"
+                );
+            }
+            if cfg!(windows) {
+                abs = abs.to_ascii_uppercase();
+                assert_eq!(suggest("Write", Some(&json!({"file_path": abs})), proj), None, "{abs}");
+            }
+        }
+        // ordinary paths stay allowed
+        for ok in [
+            "cases/x.json",
+            "notes/a.md",
+            "./cases/**",
+            "runs/*/metrics.json",
+            "note.txt",
+        ] {
+            assert!(AllowRule::Edit(ok.into()).validate().is_ok(), "{ok}");
+            assert!(AllowRule::Read(ok.into()).validate().is_ok(), "{ok}");
+        }
+        assert_eq!(
+            suggest(
+                "Write",
+                Some(&json!({"file_path": format!("{}{sep}notes{sep}a.md", proj.display())})),
+                proj
+            ),
+            Some(AllowRule::Edit("notes/a.md".into()))
+        );
+        eprintln!("T5: {} control-file forms refused", forms.len());
     }
 }
