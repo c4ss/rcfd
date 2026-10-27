@@ -156,3 +156,11 @@ covers the registered paths only, not the 99 inline `#[cfg(test)]` modules of ot
 repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a result. The first R3
 mutation (strip stall check off) failed the test at the R3b line, a separate id; on review it did not break R3's own path, so it
 was replaced by the slope-check mutation, which R3 does not detect. The replacement lowered the count from 11 to 10.
+
+### Final gate
+
+`git archive` of ea77b91 in `<scratch dir>` (slot 2, 12:06 to 13:36, another gate in slot 1 for most of it):
+`cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `python scripts/gate_test.py --order
+gatetp-p2/times_j3.tsv`: **2190 passed, 0 failed, 666 ignored**, exit 0; 0 timeouts, max time/limit 0.458, peak summed working set
+2636 MB, test phase 76.1 min (load). The (binary, test, outcome) list equals the `--jobs 3` run's and gate47's (`diff` empty), so
+A5 holds. Later commits change only this ADR and `docs/test-process.md`. Main was still cb61148, so the rebase was a no-op.
