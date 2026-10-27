@@ -243,6 +243,23 @@ mod tests {
         );
     }
 
+    /// ADR 0128 finding 10, the bridge side: the plain root rcfd-project now returns gives Claude Code's folder name and
+    /// matches the cwd Claude reports; the verbatim form would not (why rcfd-project strips it).
+    #[test]
+    fn project_dir_name_and_same_path_of_a_plain_root() {
+        let plain = r"D:\work\demo-scratch";
+        let verbatim = r"\\?\D:\work\demo-scratch";
+        assert_eq!(project_dir_name(Path::new(plain)), "D--work-demo-scratch");
+        assert_ne!(
+            project_dir_name(Path::new(verbatim)),
+            project_dir_name(Path::new(plain))
+        );
+        assert!(same_path(plain, r"D:\work\demo-scratch\"));
+        assert!(same_path(plain, "D:/work/demo-scratch"));
+        assert_eq!(same_path(plain, r"d:\WORK\demo-scratch"), cfg!(windows));
+        assert!(!same_path(plain, verbatim));
+    }
+
     #[test]
     fn live_pids_sees_this_process_and_not_an_exited_one() {
         let me = std::process::id();

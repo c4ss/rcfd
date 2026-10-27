@@ -146,7 +146,7 @@ impl Project {
             line: None,
             source,
         })?;
-        let root = root.canonicalize().map_err(io_err("canonicalize", root))?;
+        let root = paths::canonicalize(root).map_err(io_err("canonicalize", root))?;
         Ok(Project {
             root,
             manifest,

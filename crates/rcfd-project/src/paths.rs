@@ -87,6 +87,38 @@ pub fn resolve_in(root: &Path, rel: &str) -> Result<PathBuf> {
     Ok(out)
 }
 
+/// `path` canonicalized, without the Windows verbatim prefix where the plain form names the same file (see
+/// [`strip_verbatim`]); MSRV 1.75 has no `std::path::absolute`.
+pub fn canonicalize(path: &Path) -> std::io::Result<PathBuf> {
+    let c = path.canonicalize()?;
+    Ok(c.to_str().and_then(strip_verbatim).map_or(c, PathBuf::from))
+}
+
+/// The plain form of a Windows verbatim path: `\\?\C:\x` to `C:\x`, `\\?\UNC\server\share\x` to
+/// `\\server\share\x`. `None` (keep the verbatim form) for anything else and where the plain form would read
+/// differently: 260 characters or more, a component ending in `.` or a space, or a reserved device name.
+pub fn strip_verbatim(s: &str) -> Option<String> {
+    let (plain, rest) = if let Some(r) = s.strip_prefix(r"\\?\UNC\") {
+        (format!(r"\\{r}"), r)
+    } else {
+        let r = s.strip_prefix(r"\\?\")?;
+        let b = r.as_bytes();
+        if !(b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\') {
+            return None;
+        }
+        (r.to_string(), &r[3..])
+    };
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1",
+        "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let odd = |c: &str| {
+        let stem = c.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+        c.ends_with(['.', ' ']) || RESERVED.contains(&stem.as_str())
+    };
+    (plain.len() < 260 && !rest.split('\\').any(odd)).then_some(plain)
+}
+
 /// `path` relative to `root` with `/` separators, if it is under `root`.
 pub fn rel_string(root: &Path, path: &Path) -> Option<String> {
     let rel = path.strip_prefix(root).ok()?;
