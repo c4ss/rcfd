@@ -8,7 +8,7 @@ read the [roadmap overview](roadmap-overview.md); for the acceptance text of eac
 
 Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
 
-Status: first-pass inventory, 2026-10-17. Roadmap statuses are read mechanically from `docs/roadmap.json` (158 items); the matrix does not guess them. Clean-room: every capability name and description below is a short paraphrase of public feature lists; no vendor text or code was copied, no vendor binary or install was inspected or read.
+Status: first-pass inventory, 2026-10-17. Roadmap statuses are read mechanically from `docs/roadmap.json` (158 items); the matrix does not guess them. Clean-room: every capability name and description below is a short paraphrase of the vendor's public product pages (S1, S2) and of contents pages of its online help (S3 to S10, which normally need a login); no vendor text or code was copied, no vendor binary or install was inspected or read. The [provenance record](provenance.md) says what was consulted and for what.
 
 On this page:
 
@@ -28,7 +28,7 @@ All fetched through WebFetch, which returns a model-condensed extraction of the 
 |---|---|---|
 | S1 | https://ansys.synopsys.com/products/fluids/ansys-fluent (redirect from ansys.com Fluent product page) | Product page feature list (read in full as extracted) |
 | S2 | https://ansys.synopsys.com/products/fluids/ansys-cfx (redirect from ansys.com CFX page) | Product page feature list incl. 2026 R1 additions |
-| S3 | vendor online help (login required; not linked) | Fluent Theory Guide 2025 R1 introduction: chapter-by-chapter description (all 25 chapters) |
+| S3 | vendor online help (login required; not linked) | Fluent Theory Guide 2025 R1 introduction: chapter-by-chapter overview |
 | S4 | vendor online help (login required; not linked) | Fluent Theory Guide 2025 R1 contents, up to the multiphase chapter. Battery, fuel-cell and later sections were NOT read here |
 | S5 | vendor online help (login required; not linked) | Fluent Theory Guide 2024 R2 ch.23 (solver theory): section headings only |
 | S6 | vendor online help (login required; not linked) | CFX-Solver Modeling Guide 2025 R1 table of contents, chapters 1 to 18 and the start of 19 |

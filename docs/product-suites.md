@@ -4,7 +4,7 @@ Trademarks and independence: all product and company names in this document are 
 
 Status: first-pass backlog, 2026-10-17. This is a log, not a plan. Nothing here is scheduled, nothing is added to `docs/roadmap.json`, and the priority classes are rough sizing hints for later triage. The CFD-class inventory lives in `docs/parity-matrix.md` (F-244..F-267); this file covers the rest of the vendor catalogue, grouped by product category.
 
-Clean-room: all capability names are short paraphrases of public product pages and public documentation tables of contents. No vendor text or code was copied; no vendor binary or install was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
+Clean-room: all capability names are short paraphrases of public product pages and of one documentation contents page from the vendor's online help (P21, which normally needs a login); the [provenance record](provenance.md) says what was consulted and for what. No vendor text or code was copied; no vendor binary or install was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
 
 This page is for whoever triages work beyond CFD. It lists the sources read, a legend, then one entry per suite (S-numbered, grouped by category A to J), each with the same fields: purpose, capabilities, sources read, CFD overlap and dependencies, size and priority, open route and first slice. The cross-suite section at the end gives the shared infrastructure, the dependency summary on CFD and the coverage statement, which says how weak the evidence is for each area; read that before relying on any entry.
 
@@ -480,7 +480,7 @@ No ordering is proposed. The common prerequisites are FE element infrastructure 
 
 ### Honest coverage statement
 
-- Read with a tool: 21 vendor public pages (P1..P21), all through WebFetch's model-condensed extraction. P1 descriptions were inferred from names by the extractor and count as names only. P21 gives chapter and section headings only, not theory.
+- Read with a tool: 20 public vendor pages (P1..P20) and one online-help contents page (P21, login required), all through WebFetch's model-condensed extraction. P1 descriptions were inferred from names by the extractor and count as names only. P21 gives chapter and section headings only, not theory.
 - Weak evidence: three WebSearch snippet sets (Q1..Q3), marked "(snippet)".
 - Failed fetches (404): Lumerical FDTD, Additive landing page, Digital Twins category, Composite PrepPost, Workbench platform page, Autonomous Vehicles category, Workbench meshing guide. S-05 (detail), S-09, S-16 (catalogue structure), S-18, S-26, S-28 (mesher method names) and S-31 therefore rest partly or mostly on general knowledge, marked GK.
 - Not examined at all: Aqwa, AVxcelerate, Cloud/HPC product pages, EnSight product page (snippets only), Discovery/SpaceClaim documentation, LS-DYNA keyword manual, Motion theory, Maxwell/HFSS user guides, Lumerical, Granta technical docs, Minerva product page, medini and SCADE docs, release notes. The P1 catalogue lists 16 categories with products for only 5, so the product inventory is likely incomplete.

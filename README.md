@@ -4,8 +4,11 @@ Clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust.
 It has a command-line solver, a solver service, an MCP server that lets an AI
 assistant drive the solver, and a desktop app. Clean-room means every
 algorithm comes from published literature or first principles, with no vendor
-code, binaries or documentation; [CONTRIBUTING.md](CONTRIBUTING.md) sets out
-the policy.
+code, binaries or documentation text. Vendor documentation was consulted in a
+few recorded cases: mostly contents pages, to list capabilities, and some
+theory pages, as a check of model constants that are now marked UNVERIFIED.
+The [provenance record](docs/provenance.md) lists each case.
+[CONTRIBUTING.md](CONTRIBUTING.md) sets out the policy.
 
 ## Status and main limits
 

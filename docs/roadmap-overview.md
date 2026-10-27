@@ -6,7 +6,7 @@ It is for anyone who wants to know what rcfd can do today and what comes next. T
 
 ## What rcfd is
 
-rcfd is a finite-volume CFD (computational fluid dynamics) solver written in Rust. It is built clean-room: every algorithm comes from published literature or first principles, with no vendor code, binaries or documentation. The long-term goal is an open-source toolset that covers what commercial simulation packages do, starting with CFD, so that small teams can build cheap products on top of it.
+rcfd is a finite-volume CFD (computational fluid dynamics) solver written in Rust. It is built clean-room: every algorithm comes from published literature or first principles, with no vendor code, binaries or documentation text. Vendor documentation was consulted in a few recorded cases: mostly contents pages, to list capabilities, and some theory pages, as a check of model constants that are now marked UNVERIFIED. The [provenance record](provenance.md) lists each case. The long-term goal is an open-source toolset that covers what commercial simulation packages do, starting with CFD, so that small teams can build cheap products on top of it.
 
 It is early-stage software. It has not been validated for engineering decisions, and nothing here is certified for safety-critical use.
 
