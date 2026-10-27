@@ -69,6 +69,7 @@ Most task steps live in the reference pages below for now.
 * [Product suites](product-suites.md): a log of capabilities outside CFD; not a plan.
 * [Audit report](audit-report.md): an independent model-run audit of the repository, not reviewed by a human.
 * [Test process](test-process.md): what the gate runs, how long it takes, and the options to make it faster.
+* [Releasing](releasing.md): what a version number means, what each automatic check proves, and the steps to cut a release.
 
 ## About these pages
 
