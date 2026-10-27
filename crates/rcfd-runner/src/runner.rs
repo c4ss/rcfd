@@ -18,6 +18,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// Most bytes of the solver stream read per drain (ADR 0128 finding 6).
+const DRAIN_CHUNK: u64 = 4 << 20;
+
 /// Exit code of `rcfd-runner serve` when another runner holds the project's lock.
 pub const EXIT_ALREADY_RUNNING: i32 = 3;
 
@@ -653,19 +656,29 @@ impl<S: RunStore> Runner<S> {
         }
     }
 
-    /// Forward complete new lines of the solver stream: iterations to `residuals.jsonl`, everything else
-    /// to `events.jsonl`. Returns whether the step moved.
+    /// Forward complete new lines of the solver stream (at most [`DRAIN_CHUNK`] bytes per call): iterations to
+    /// `residuals.jsonl`, everything else to `events.jsonl`. Returns whether the step moved.
     fn drain(&self, a: &mut Active) -> bool {
         let path = self.dir(&a.id).join(extra::SOLVER_STREAM);
         let Ok(mut f) = std::fs::File::open(&path) else {
             return false;
         };
         let mut buf = Vec::new();
-        if f.seek(SeekFrom::Start(a.offset)).is_err() || f.read_to_end(&mut buf).is_err() {
+        if f.seek(SeekFrom::Start(a.offset)).is_err() || f.take(DRAIN_CHUNK).read_to_end(&mut buf).is_err() {
             return false;
         }
-        drop(f);
         let Some(end) = buf.iter().rposition(|&b| b == b'\n') else {
+            if buf.len() as u64 == DRAIN_CHUNK {
+                // a full chunk without a newline is no status line: skip it, the rest of that line fails to parse
+                note(
+                    "event",
+                    self.store.append_event(
+                        &a.id,
+                        json!({"event": "skipped_line", "offset": a.offset, "bytes": buf.len()}),
+                    ),
+                );
+                a.offset += DRAIN_CHUNK;
+            }
             return false;
         };
         a.offset += end as u64 + 1;
@@ -732,6 +745,12 @@ impl<S: RunStore> Runner<S> {
             };
             let mut dirty = self.drain(&mut a);
             if let Some(code) = exited {
+                // everything the solver wrote before it exited, however much that is
+                let mut at = None;
+                while at != Some(a.offset) {
+                    at = Some(a.offset);
+                    self.drain(&mut a);
+                }
                 self.finalize(&a, code);
                 continue;
             }
@@ -981,13 +1000,14 @@ mod tests {
     /// F4: an adopted run is finalised after two consecutive missed probes, not after one.
     #[test]
     fn f04_one_missed_probe_does_not_finalise_two_do() {
-        let dir = project("f04");
-        let fs = FsStore::new(&dir);
         let settings = RunSettings {
             mem_mb: Some(10),
             ..RunSettings::default()
         };
         let state_after = |answers: &[bool]| {
+            // one project per script: a runner adopts every running run of its project
+            let dir = project(&format!("f04-{answers:?}"));
+            let fs = FsStore::new(&dir);
             let id = fs.create_run(&dir.join("cases/cavity.toml"), &settings, None).unwrap();
             let mut st = RunStatus::new(RunState::Running);
             st.pid = Some(u32::MAX - 7); // never probed for real: the probe is scripted
@@ -999,7 +1019,9 @@ mod tests {
                 PROBE.with(|q| q.borrow_mut().push_back(alive));
                 r.tick_active();
             }
-            fs.read_status(&id).unwrap().state
+            let state = fs.read_status(&id).unwrap().state;
+            let _ = std::fs::remove_dir_all(&dir);
+            state
         };
         let cases = [
             (vec![false], RunState::Running),
@@ -1013,6 +1035,54 @@ mod tests {
             cases.iter().map(|c| &c.0).collect::<Vec<_>>()
         );
         assert_eq!(got, cases.iter().map(|c| c.1).collect::<Vec<_>>());
+    }
+
+    /// F6: a 100 MB solver stream of an adopted run is drained in chunks of at most 4 MiB, every line forwarded.
+    #[test]
+    fn f06_large_status_file_is_drained_in_bounded_chunks() {
+        use std::io::Write;
+        let dir = project("f06");
+        let fs = FsStore::new(&dir);
+        let settings = RunSettings {
+            mem_mb: Some(10),
+            ..RunSettings::default()
+        };
+        let id = fs.create_run(&dir.join("cases/cavity.toml"), &settings, None).unwrap();
+        let mut st = RunStatus::new(RunState::Running);
+        st.pid = Some(u32::MAX - 7);
+        fs.write_status(&id, &st).unwrap();
+        let pad = "x".repeat(900);
+        let mut w = std::io::BufWriter::new(std::fs::File::create(fs.run_dir(&id).join(extra::SOLVER_STREAM)).unwrap());
+        let (mut bytes, mut lines) = (0u64, 0u64);
+        while bytes < 100_000_000 {
+            lines += 1;
+            let l = format!(
+                "{{\"event\":\"iteration\",\"index\":{lines},\"time\":{lines}.0,\"res_u\":1e-3,\"res_p\":1e-3,\"continuity\":1e-3,\"pad\":\"{pad}\"}}
+"
+            );
+            w.write_all(l.as_bytes()).unwrap();
+            bytes += l.len() as u64;
+        }
+        drop(w);
+        let mut r = runner(fs.clone());
+        r.probe = scripted; // always alive
+        r.scan();
+        let (mut ticks, mut max_step) = (0, 0u64);
+        while r.active[0].offset < bytes && ticks < 1000 {
+            let before = r.active[0].offset;
+            r.tick_active();
+            max_step = max_step.max(r.active[0].offset - before);
+            ticks += 1;
+        }
+        // counted streaming, so the count adds no memory to the measured peak
+        let residuals = std::io::BufRead::lines(std::io::BufReader::new(
+            std::fs::File::open(fs.run_dir(&id).join("residuals.jsonl")).unwrap(),
+        ))
+        .count() as u64;
+        eprintln!("F6: {bytes} bytes, {lines} lines drained in {ticks} ticks, largest tick {max_step} bytes, {residuals} residual lines");
+        assert!(ticks >= 24, "drained in {ticks} ticks");
+        assert!(max_step <= 4 << 20, "a tick read {max_step} bytes");
+        assert_eq!(residuals, lines);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
