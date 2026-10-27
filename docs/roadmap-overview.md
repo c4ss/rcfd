@@ -2,6 +2,8 @@
 
 This page is the short, plain-language version of the plan. The full list of 175 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
 
+It is for anyone who wants to know what rcfd can do today and what comes next. To learn how to use rcfd, start at [the documentation home](index.md) instead.
+
 ## What rcfd is
 
 rcfd is a finite-volume CFD (computational fluid dynamics) solver written in Rust. It is built clean-room: every algorithm comes from published literature or first principles, with no vendor code, binaries or documentation. The long-term goal is an open-source toolset that covers what commercial simulation packages do, starting with CFD, so that small teams can build cheap products on top of it.
@@ -73,3 +75,9 @@ A full test run takes over an hour. We are adding per-test time limits and a bet
 | Done | Every acceptance criterion in the item is met and tested. |
 | Partly done | Some of it works. The item's note says what is missing. |
 | Not started | Nothing usable exists. |
+
+## Where to go next
+
+- [The documentation home](index.md) maps every page by what you want to do.
+- [The quick-start tutorial](tutorials/quick-start-cli.md) runs a first case from the command line.
+- [The fan milestone](milestone-fan.md) gives the detail behind the reference fan status above.

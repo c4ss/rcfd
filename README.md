@@ -1,14 +1,40 @@
 # rcfd
 
 Clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust.
-See `docs/ROADMAP.md` for the plan, `CONTRIBUTING.md` for the clean-room
-policy and `docs/architecture.md` for the crate layout.
+It has a command-line solver, a solver service, an MCP server that lets an AI
+assistant drive the solver, and a desktop app. Clean-room means every
+algorithm comes from published literature or first principles, with no vendor
+code, binaries or documentation; [CONTRIBUTING.md](CONTRIBUTING.md) sets out
+the policy.
+
+## Status and main limits
+
+rcfd is early-stage software. It has not been validated for engineering
+decisions, and nothing in it is certified for safety-critical use. The main
+gaps today:
+
+* The steady rotating-frame solve of the reference fan case does not reach
+  its expected operating point, and the diagnosis is open.
+* There is no structural solver.
+* Sliding-mesh transient solves are not available.
+* The desktop app is being rebuilt; the new one does not have a window yet.
+
+[The roadmap overview](docs/roadmap-overview.md) says what works today, what
+does not and what comes next. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
+plan.
+
+## Build and test
 
     cargo build --workspace
     cargo test --workspace
 
-Documentation, tutorials and the example gallery start at `docs/index.md`; the
-tutorials are executed by the test suite.
+## Where to go next
+
+* Documentation, tutorials and the example gallery start at
+  [docs/index.md](docs/index.md); the tutorials are executed by the test suite.
+* [CONTRIBUTING.md](CONTRIBUTING.md) is the clean-room policy you must agree
+  to before you submit a change, and the workflow commands.
+* [docs/architecture.md](docs/architecture.md) describes the crate layout.
 
 ## Licence
 
