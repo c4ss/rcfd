@@ -129,29 +129,42 @@ def tests_in(src):
         yield f.group(1), attrs, m[f.end(): b], b, close(m, b, "{", "}"), m
 
 
+def names_used(body):
+    """Identifiers in body (macros as name + "!"): a helper counts when it is called or passed, e.g. `.map(check)`."""
+    return {x + "!" if bang else x for x, bang in re.findall(r"\b([A-Za-z_]\w*)(\s*!(?!=))?", body)}
+
+
 def checking_fns(srcs):
     """Names of the functions and macros (name + "!") in srcs that check something, directly or through another such one."""
-    called = {}
+    used = {}
     for src in srcs:
         m = mask(src)
-        for f in re.finditer(r"\b(?:fn\s+(\w+)|macro_rules!\s*(\w+))[^{;]*\{", m):
-            b = f.end() - 1
+        for f in re.finditer(r"\bfn\s+(\w+)[^(]*\(|\bmacro_rules!\s*(\w+)\s*\{", m):
+            if f.group(1):
+                b, d = close(m, f.end() - 1), 0
+                while b < len(m) and not (d == 0 and m[b] in "{;"):
+                    d += (m[b] in "([<") - (m[b] in ")]>" and m[b - 1] != "-")
+                    b += 1
+                if b >= len(m) or m[b] == ";":
+                    continue
+                name = f.group(1)
+            else:
+                b, name = f.end() - 1, f.group(2) + "!"
             body = m[b: close(m, b, "{", "}")]
-            name = f.group(1) or f.group(2) + "!"
-            c = called.setdefault(name, set())
-            c |= {x + "!" if bang else x for x, bang in re.findall(r"\b(\w+)\s*(?:::<[^>]*>)?\s*(!)?\s*\(", body)}
+            u = used.setdefault(name, set())
+            u |= names_used(body) - {name}
             if CHECKS.search(body):
-                c.add("assert!")
+                u.add("assert!")
     good = {"assert!"}
     while True:
-        more = {n for n, c in called.items() if n not in good and c & good}
+        more = {n for n, u in used.items() if n not in good and u & good}
         if not more:
             return good
         good |= more
 
 
 def calls_any(body, helpers):
-    return any((x + "!" if bang else x) in helpers for x, bang in re.findall(r"\b(\w+)\s*(?:::<[^>]*>)?\s*(!)?\s*\(", body))
+    return bool(names_used(body) & helpers)
 
 
 def scan(path, src, helpers=frozenset()):
