@@ -84,6 +84,17 @@ jobs:
       # No -D warnings: lint names newer than 1.90 would warn here without anything being wrong.
       - run: cargo check --workspace --all-targets --locked
 
+  deny:
+    name: dependency licences and sources (cargo deny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Advisories are left out: a new RustSec entry must not fail an unrelated pull request.
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check licenses bans sources
+
   scripts:
     name: gate and release script self-tests
     runs-on: ubuntu-latest
