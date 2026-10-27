@@ -112,8 +112,8 @@ Nominal labels (25, 31.5, 40, ... 20000) are the preferred numbers nearest f_c.
   (2 pi f_c)^2 p'_rms^2), correlation area A_c. Steady RANS supplies none of these directly; modelling constants are
   user inputs (typical wall-pressure fluctuation p'_rms ~ a few times the wall shear stress is a literature rule, not read here).
 * Proudman: P_A = alpha rho0 eps M_t^5 per unit volume, M_t = sqrt(2k)/c0, alpha = 0.1 (Sarkar and Hussaini calibration
-  by DNS of isotropic turbulence). alpha and the M_t definition come from a vendor documentation page and a search
-  snippet only (secondary, original papers not read). Assumes high Reynolds number, low Mach number, isotropic
+  by DNS of isotropic turbulence). alpha and the M_t definition come from secondary sources only (original papers not read; UNVERIFIED;
+  see [provenance](../provenance.md)). Assumes high Reynolds number, low Mach number, isotropic
   turbulence, no mean flow: a fan blade passage violates the last two.
 * Trailing edge: only the exponent is sourced (Ffowcs Williams and Hall 1970: scattered power ~ U^5, from a search
   snippet and a review; the paper was not read). Scaling form W_TE = K_TE rho0 u_t^5 L_e l_t / c0^2 with u_t the
@@ -230,7 +230,7 @@ registered and its test moved to a known miss, and a corrected formula is added 
 
 Farassat 1A and the permeable terms: as in ADR 0013. Gutin (1936), Lowson (1965): not read; the formula is derived here. Curle
 (1955), Proudman (1952), Lilley, Sarkar and Hussaini (NASA/ICASE report, a scanned PDF that could not be read): not read;
-alpha = 0.1 and M_t = sqrt(2k)/c0 from vendor documentation (secondary). Ffowcs Williams and Hall (1970): exponent from a
+alpha = 0.1 and M_t = sqrt(2k)/c0 from secondary sources only, UNVERIFIED. Ffowcs Williams and Hall (1970): exponent from a
 review snippet. IEC 61672-1 and IEC 61260-1: not read; A-weighting constants from Wikipedia and metricgate.com.
 
 ## Addendum 1: results, misses and deviations (written after the runs)

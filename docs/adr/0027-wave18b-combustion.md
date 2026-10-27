@@ -352,8 +352,8 @@ All numbers are from `cargo test --release --nocapture` on the final tree of thi
   (1e-4 s) comparable to the NO growth time (1.4e-4 s), so the quasi-steady premise does not hold and the closed form deviates by
   3.8e-3. Diagnosis, not tuning: the model is correct under its premise. The registered test is kept ignored as a known miss; a
   corrected set-up (k1f = 1e-1, [NO]_0 = 1e-1, relaxation 1e-5 s against NO times of seconds) is a new test and meets the limit.
-  The rate constants in the test are invented, not literature values; no literature set is bundled (the only confirmation found was
-  a vendor document, which the clean-room rule excludes; the primary evaluation was not accessed): UNVERIFIED, named gap.
+  The rate constants in the test are invented, not literature values; no literature set is bundled (no published confirmation was
+  found; the primary evaluation was not accessed): UNVERIFIED, named gap.
 * K4 stop rule: the ADR does not register a stop rule for K4; my first test used `res_A < 1e-12`, at which the residual stalled at
   5e-12 on one mesh, and the test stops at `res_A < 1e-11` (the convention of `tests/scalars.rs`). Not a registered criterion. The checks compare discrete/analytic solutions, so a residual floor of 1e-11 is far below
   the tolerances used.
