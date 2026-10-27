@@ -6,7 +6,7 @@ Rule: no criterion below is changed, widened, replaced or deleted after results 
 `docs/reference-data.md` and the roadmap note.
 
 All formats are written from their public specifications (STL, Tecplot ASCII data format, Plot3D, XDMF, glTF 2.0).
-No vendor install, binary or unpacked archive is read. Where a third-party reader is used to check conformance it is
+No vendor install or binary is read. Where a third-party reader is used to check conformance it is
 named below; if it cannot be run, that is stated, not assumed.
 
 ## 1. Hostile-input rules (all new parsers: STL, Tecplot, Plot3D, XDMF reader helpers, GLB validator, registers)

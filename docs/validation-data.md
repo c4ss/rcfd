@@ -27,7 +27,8 @@ Rules
   (`crates/rcfd-io/tests/datapack.rs`, `crates/rcfd-cli/tests/data.rs`) check the manifest structure,
   that every dataset has a licence record, citation and checksums, that in-repo tables match their
   checksums, that sources are public hosts, and that nothing mentions a proprietary install.
-- Data come from public upstream sources only; copies of datasets distributed with commercial software are never used.
+- Data come from public upstream sources only; copies of datasets distributed with commercial software
+  are never used.
 - Files under GPL (the OpenFOAM damBreak set-up) are fetched on the user's machine and never vendored.
 - Cross-check done when the pack was pinned (2026-10-13): the independent SHA-256 implementation in Rust
   (`rcfd-io::datapack`) agrees with Python's hashlib on all 32 listed files (`rcfd data verify`).
