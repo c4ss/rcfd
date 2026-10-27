@@ -1,6 +1,13 @@
 # Mesh quality report and mesh editing (F-233, F-231)
 
-Definitions, closed forms and registered checks are in `docs/adr/0018-mesh-quality.md`; this page is the user view.
+This page explains what the mesh quality report contains, how its poor-mesh list relates to the pass/fail result, and which
+mesh editing operations the library offers. It is for users who check a mesh before a run and for library users who build or
+repair meshes in code. Status in short: the extended measures are reported by the command line, the service and MCP, but the GUI
+does not show them and their limits cannot be set from a case; the editing operations exist in the library only, with no command
+line, case-tree or GUI entry point. The quality and editing sections each end with what is not done.
+
+Definitions, closed forms and registered checks are in `docs/adr/0018-mesh-quality.md`; this page is the user view. For the
+exact case keys of the mesh section, see [case-schema.md](case-schema.md).
 
 ## The quality report
 
@@ -65,3 +72,8 @@ is not edited: its results text records the miss as it was at the time.
 (first and last layer heights, thickness, growth, and the quality report of the resulting mesh) together with the cell counts; the service
 method `mesh.inflate` returns the same document. Details and options are in [case-schema.md](case-schema.md), section "Wave 16W". The exit
 code is 4 when the inflated mesh has quality errors. Mesh partitioning reports (`rcfd partition`) are described there as well.
+
+## Where to go next
+
+* [meshing.md](meshing.md): the mesh generators and their measured quality.
+* [mesh-import.md](mesh-import.md): reading meshes from other formats.

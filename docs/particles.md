@@ -1,8 +1,23 @@
 # Lagrangian particle tracking (F-056, ADR 0028)
 
+This page explains how rcfd tracks particles through a computed flow: the force model, the time integration, how a particle is
+followed from cell to cell, what happens at boundaries, and what is not modelled. It is for users who add a particles section to a
+case or call the tracker from code. For the exact keys and defaults see the "particles" section of [case-schema.md](case-schema.md);
+for the full decision record and the measured checks read the ADR named in the title and its addendum.
+
 One-way coupled point-particle tracking in the new crate `rcfd-particles` (layer 2: depends on `rcfd-core` and `rcfd-mesh` only)
 and the settings-tree section `particles` (`rcfd-api::particles`). The particles never act on the flow, so existing flow results
 and the baseline hashes are unchanged. Status: `partial`, see "Not delivered".
+
+## Not delivered (F-056 stays partial; F-128 partial)
+
+Cyclone separation case (the roadmap acceptance names settling and cyclone sanity cases; only closed-form settling-type checks exist),
+droplet / combusting / multicomponent particle types, group / file injections, feedback of the two-way sources inside `Simulation::step`
+(the exchange is a library record only), dispersion from the turbulence-model k and epsilon fields (constants only), turbulent dispersion
+of the heat transfer, evaporation and mass transfer, breakup, wall film, erosion, periodic patches, tracking through unjoined
+non-conformal pairs, gradient limiting in the interpolation, checkpointing of the tracker state, compressible and variable-density flows,
+a time-dependent sequence of
+VTK files tied to the flow time (only every n tracking steps), a pure-walk guarantee on non-convex domains (see ADR 0028 results).
 
 ## Model
 
@@ -84,12 +99,7 @@ ASCII VTK PolyData (`.vtp`): points and point data `id`, `diameter`, `velocity`,
   form `sigma_p^2 = sigma^2 T_L/(T_L + tau_p)`. Homogeneous isotropic turbulence of given k and epsilon only.
 * Injection: `uniform` diameters, equal-mass parcels from `mass_flow`, cone injections (`ConeSpec`, `InjectorExt`).
 
-## Not delivered (F-056 stays partial; F-128 partial)
+## Where to go next
 
-Cyclone separation case (the roadmap acceptance names settling and cyclone sanity cases; only closed-form settling-type checks exist),
-droplet / combusting / multicomponent particle types, group / file injections, feedback of the two-way sources inside `Simulation::step`
-(the exchange is a library record only), dispersion from the turbulence-model k and epsilon fields (constants only), turbulent dispersion
-of the heat transfer, evaporation and mass transfer, breakup, wall film, erosion, periodic patches, tracking through unjoined
-non-conformal pairs, gradient limiting in the interpolation, checkpointing of the tracker state, compressible and variable-density flows,
-a time-dependent sequence of
-VTK files tied to the flow time (only every n tracking steps), a pure-walk guarantee on non-convex domains (see ADR 0028 results).
+* [case-schema.md](case-schema.md): the particle keys, defaults and output files of the run path.
+* [architecture.md](architecture.md): where the particle crate sits in the crate graph.

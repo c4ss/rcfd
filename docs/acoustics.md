@@ -1,5 +1,9 @@
 # Aeroacoustics for fan noise (wave 32B, ADR 0066)
 
+This page is for users who want a fan-noise estimate from a CFD run and for anyone judging such an estimate: it explains what
+each part of the chain assumes and how far its numbers can be trusted. For the older permeable-surface command and its input file read [reactor-and-acoustics.md](reactor-and-acoustics.md); for every check
+with its limit and measured value read the ADR named in the title.
+
 This document describes the library chain added for fan noise: a time-domain Ffowcs Williams-Hawkings (FW-H) solver
 for moving impermeable surfaces, a closed-form rotor tonal estimate (Gutin type) as an independent check, three
 steady-RANS broadband proxies, noise metrics, and file readers and writers. It extends the permeable-surface solver
@@ -10,16 +14,13 @@ Status of the numbers. The FW-H solver and the metrics are verified against clos
 check with its limit and the measured value). The RANS-based broadband proxies are NOT validated against any measured
 noise and must not be read as predictions (section "Broadband proxies"). No comparison with a measured fan was made.
 
-## Modules and entry points
+## Limits of the whole chain
 
-| Item | Where |
-|---|---|
-| FW-H 1A, moving impermeable surface, medium-frame (uniform flow) evaluation | `crates/rcfd-post/src/fwh.rs` (`Surface::impermeable`, `into_medium_frame`, `signal_moving`, `valid_window_moving`, `medium_frame_observer`) |
-| Metrics (SPL, OASPL, A weighting, spectrum, 1/3-octave, sphere power, JSON/CSV) | `crates/rcfd-post/src/acoustics.rs` |
-| Rotor harmonics (Gutin type) | `crates/rcfd-post/src/rotor.rs` |
-| Proxies (Proudman, Curle, trailing edge) | `crates/rcfd-post/src/noise_proxies.rs` |
-| Surface-series reader, builder, adapter from `surfaces::Surface` | `crates/rcfd-post/src/surface_series.rs` |
-| CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
+Subsonic surfaces only; no quadrupole; no refraction or scattering by the body or casing (free field); the uniform flow
+is the only mean flow; no installation effects, ducted propagation, or modal content; pressure data sampled by the CFD
+run must resolve the blade-passing frequency and its harmonics (the FW-H result is only as good as the sampled surface
+pressure); a steady RANS run gives no tonal pressure history. F-243 remains partial: an acoustic impedance boundary,
+quiet boundary and acoustic wave solver are not part of this wave.
 
 ## FW-H solver
 
@@ -49,37 +50,6 @@ thickness-only closed form; compact dipole; moving observer in uniform flow of a
 The registered impermeable-sphere-in-flow checks W5a/W5b were MISSED (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3): the test
 construction used constant face areas and omitted the steady-flow loading the exact field implies, so the error is
 proportional to U (M = 0.01 gives 2.4e-3). They are kept as ignored `*_known_miss` tests; W5d is a separate new check.
-
-### Surface-series input (`rcfd-surface-series` v1)
-
-JSON (written by `SeriesSpec::to_json`, read by the CLI):
-
-```json
-{"format": "rcfd-surface-series", "version": 1, "rho0": 1.2, "c0": 340.0, "t0": 0.0, "dt": 1e-4,
- "mode": "impermeable", "flow": [0, 0, 20.0],
- "motion": {"type": "rotation", "axis": [0, 0, 1], "origin": [0, 0, 0], "omega": 150.0, "angle0": 0.0,
-            "velocity": [0, 0, 0]},
- "faces": [{"area": 1e-3, "x": [0.2, 0, 0], "n": [0, 0, 1], "p": [ ... ]}]}
-```
-
-`x` and `n` are the body-frame values at `t0`; `p` is the pressure minus the reference pressure. Instead of `p` per
-face, `"pressure_csv": "p.csv"` (path relative to the JSON) refers to a table `t,f0,f1,...` with a uniform time column
-(non-uniform steps are rejected with `pressure_csv row N`). The adapter `faces_from_post_surface` turns a
-`rcfd-post` triangulated surface (area, centroid, normal, optional flip) into faces so that a pressure sampled on it
-can be written to this format. Errors carry JSON paths (`faces[2].p`, `$.format`) or CSV row/column.
-
-### CLI
-
-```
-rcfd fwh series.json --observer x,y,z [--observer ...] [--flow ux,uy,uz] [--times t0:t1:n]
-         [--out signal.csv] [--spectrum bands.csv|spectrum.json] [--narrowband file.csv]
-         [--fmin 20] [--fmax 20000] [--window hann|rect]
-```
-
-Output CSV: `observer,t,p_thickness,p_loading,p_total`. Exit codes: 0 success, 1 I/O, 2 usage, 3 invalid input.
-The default time grid is the full valid window at the file sampling step. A `.json` spectrum target writes an
-`rcfd-spectra` v1 document (one `rcfd-spectrum` report per observer), anything else writes the 1/3-octave band CSV.
-The OASPL and dB(A) per observer are printed to stderr.
 
 ## Rotor tonal harmonics (Gutin type)
 
@@ -136,10 +106,51 @@ comparison on a held-out second data set, with a reported error band. Until then
   intensity p^2/(rho0 c0) assumption needs the far field for dipoles (dipole check in the far field only).
 * Output: `Report::to_json` (`rcfd-spectrum` v1), `bands_csv`, `narrowband_csv`.
 
-## Limits of the whole chain
+## Reference: code locations, input format and command line
 
-Subsonic surfaces only; no quadrupole; no refraction or scattering by the body or casing (free field); the uniform flow
-is the only mean flow; no installation effects, ducted propagation, or modal content; pressure data sampled by the CFD
-run must resolve the blade-passing frequency and its harmonics (the FW-H result is only as good as the sampled surface
-pressure); a steady RANS run gives no tonal pressure history. F-243 remains partial: an acoustic impedance boundary,
-quiet boundary and acoustic wave solver are not part of this wave.
+### Modules and entry points
+
+| Item | Where |
+|---|---|
+| FW-H 1A, moving impermeable surface, medium-frame (uniform flow) evaluation | `crates/rcfd-post/src/fwh.rs` (`Surface::impermeable`, `into_medium_frame`, `signal_moving`, `valid_window_moving`, `medium_frame_observer`) |
+| Metrics (SPL, OASPL, A weighting, spectrum, 1/3-octave, sphere power, JSON/CSV) | `crates/rcfd-post/src/acoustics.rs` |
+| Rotor harmonics (Gutin type) | `crates/rcfd-post/src/rotor.rs` |
+| Proxies (Proudman, Curle, trailing edge) | `crates/rcfd-post/src/noise_proxies.rs` |
+| Surface-series reader, builder, adapter from `surfaces::Surface` | `crates/rcfd-post/src/surface_series.rs` |
+| CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
+
+### Surface-series input (`rcfd-surface-series` v1)
+
+JSON (written by `SeriesSpec::to_json`, read by the CLI):
+
+```json
+{"format": "rcfd-surface-series", "version": 1, "rho0": 1.2, "c0": 340.0, "t0": 0.0, "dt": 1e-4,
+ "mode": "impermeable", "flow": [0, 0, 20.0],
+ "motion": {"type": "rotation", "axis": [0, 0, 1], "origin": [0, 0, 0], "omega": 150.0, "angle0": 0.0,
+            "velocity": [0, 0, 0]},
+ "faces": [{"area": 1e-3, "x": [0.2, 0, 0], "n": [0, 0, 1], "p": [ ... ]}]}
+```
+
+`x` and `n` are the body-frame values at `t0`; `p` is the pressure minus the reference pressure. Instead of `p` per
+face, `"pressure_csv": "p.csv"` (path relative to the JSON) refers to a table `t,f0,f1,...` with a uniform time column
+(non-uniform steps are rejected with `pressure_csv row N`). The adapter `faces_from_post_surface` turns a
+`rcfd-post` triangulated surface (area, centroid, normal, optional flip) into faces so that a pressure sampled on it
+can be written to this format. Errors carry JSON paths (`faces[2].p`, `$.format`) or CSV row/column.
+
+### CLI
+
+```text
+rcfd fwh series.json --observer x,y,z [--observer ...] [--flow ux,uy,uz] [--times t0:t1:n]
+         [--out signal.csv] [--spectrum bands.csv|spectrum.json] [--narrowband file.csv]
+         [--fmin 20] [--fmax 20000] [--window hann|rect]
+```
+
+Output CSV: `observer,t,p_thickness,p_loading,p_total`. Exit codes: 0 success, 1 I/O, 2 usage, 3 invalid input.
+The default time grid is the full valid window at the file sampling step. A `.json` spectrum target writes an
+`rcfd-spectra` v1 document (one `rcfd-spectrum` report per observer), anything else writes the 1/3-octave band CSV.
+The OASPL and dB(A) per observer are printed to stderr.
+
+## Where to go next
+
+* [reactor-and-acoustics.md](reactor-and-acoustics.md): the older permeable-surface command and its input file.
+* [milestone-fan.md](milestone-fan.md): the fan milestone this chain serves.

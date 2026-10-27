@@ -1,9 +1,21 @@
 # Reactor cases (`rcfd reactor`, F-112) and FW-H acoustics (`rcfd acoustics`, F-136)
 
+This page describes two stand-alone commands that read their own JSON input rather than a CFD case: a zero-dimensional
+chemical reactor and a far-field acoustic calculation from a permeable data surface. It is for users who want to run either
+command; it gives what each computes, its limits, and the input file with every key. The reactor work is partial (it has no
+flame-speed solver); the acoustic command works from a permeable surface in a medium at rest and leaves out the volume
+quadrupole. For moving blade surfaces, uniform flow, rotor tones and noise metrics read [acoustics.md](acoustics.md)
+instead.
+
 Checks, limits and results: `docs/adr/0013-reactor-and-fwh.md`. Both commands read JSON, print a summary or CSV and
 report every problem with its JSON path (exit code 3 for an invalid input, 1 for I/O failures, 2 for usage).
 
 ## `rcfd reactor <case.json> [--out <file.csv>]`
+
+Limits: ideal gas only, constant-area constant-pressure plug flow without pressure drop, no heat exchange model, no
+surface chemistry, no 1D flame speed (so F-112 stays partial), no sensitivity analysis.
+
+### Reactor case file
 
 ```json
 {
@@ -41,15 +53,14 @@ report every problem with its JSON path (exit code 3 for an invalid input, 1 for
   Jacobian, dense LU); this costs about 80 right-hand-side evaluations per step, adequate for mechanisms of tens of
   species. Large mechanisms (hundreds of species) would need sparse algebra.
 
-Limits: ideal gas only, constant-area constant-pressure plug flow without pressure drop, no heat exchange model, no
-surface chemistry, no 1D flame speed (so F-112 stays partial), no sensitivity analysis.
-
 ## `rcfd acoustics <surface.json> --observer x,y,z [--observer ...] [--times t0:t1:n] [--out <file.csv>]`
 
 Far field of the Ffowcs Williams-Hawkings analogy, Farassat/Brentner formulation 1A, from a permeable data surface
 in a medium at rest. Output columns: observer index, observer time, thickness, loading and total acoustic pressure.
 Without `--times` the whole valid window (the span of observer times whose retarded times lie inside the record) is
 written at the sample interval. The volume quadrupole is not included.
+
+### Surface file
 
 Surface file (`rcfd-fwh-surface` version 1):
 
@@ -67,3 +78,8 @@ Per element: `area`; the position either as `x0` (fixed) or `x` (one `[x,y,z]` p
 p', Pa) per sample; `rho` (density perturbation) and `u` (fluid velocity) per sample, zero if omitted. All series have
 the same number of samples (at least 8) on the uniform axis `t0 + i dt`. Observer times must keep every retarded time
 three samples inside the record; the error message names the valid window.
+
+## Where to go next
+
+* [acoustics.md](acoustics.md): the moving-surface FW-H solver, rotor tones and noise metrics for fans.
+* [validation-data.md](validation-data.md): how to fetch reference data such as the mechanism files.

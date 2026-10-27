@@ -1,11 +1,20 @@
-# Surface meshing and tetrahedral volume meshing (wave 19B, ADR 0030)
+# Meshing: surfaces, volume meshes, adaptation and fan passages
 
-Library-level tools in `rcfd-mesh`; there is no CLI or case-file hook yet. F-232, F-131 and F-132 are `partial`.
+This page explains the mesh generators and mesh tools of rcfd: how each one builds its mesh, what it assumes, and the quality
+that was measured. It is for users who generate a mesh inside rcfd or from code, and for anyone judging the fan passage meshes.
+Status in short: most tools are partial and several exist in the library only; many sections record registered quality gates
+that were missed, and none of the fan meshes is validated for fan performance prediction. For the case keys of the generators
+read [case-schema.md](case-schema.md); for the quality report and the meaning of its measures read
+[mesh-quality.md](mesh-quality.md); for a first mesh and run read the tutorial
+[tutorials/quick-start-cli.md](tutorials/quick-start-cli.md).
+
+Surface meshing and tetrahedral volume meshing (wave 19B, ADR 0030): library-level tools in `rcfd-mesh`; there is no CLI or
+case-file hook for these yet. F-232, F-131 and F-132 are `partial`.
 All literature attributions below are from memory and unverified (see the ADR).
 
 ## Pipeline
 
-```
+```text
 TriSurface (soup or generator)  ->  diagnose / repair   (surface.rs, F-232)
                                 ->  remesh with a size field   (surface_remesh.rs, F-131)
                                 ->  tetrahedralize   (tetmesh.rs, F-132)
@@ -267,3 +276,9 @@ oscillates without converging (continuity 7.96e-4 at iteration 10, up to 7.46e-3
 the poor faces (an F-block cell above the hub stack and a mid-span wake cell), persists at a tenth of the Reynolds number, and does not occur on the
 x0.75, x1.25 and x1.5 count sets. Of the ADR 0079 scan, 22 of 39 in-range FAN-01 combinations build (G: 20; one of the two gained meshes is above
 the 85 deg error threshold of `check_mesh`). A' 66.2 / 0.89 / 394 and B' 80.9 / 8.9 / 8805 with the H mesh options (gates still MISSED).
+
+## Where to go next
+
+* [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
+* [mesh-import.md](mesh-import.md): meshes read from files instead of generated.
+* [milestone-fan.md](milestone-fan.md): how the fan passage meshes fit the fan milestone.
