@@ -4,7 +4,9 @@ description = "Solver service API"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+# The dependency closure needs Rust 1.85 (toml 1.1; cargo metadata rust_version fields).
+rust-version = "1.85"
+publish = false
 
 [lints]
 workspace = true

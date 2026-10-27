@@ -1310,8 +1310,8 @@ impl Lin {
         let sf = self.sim.geom.mesh.face_area_vectors();
         let area = self.faces.iter().map(|&f| vec3::norm(sf[f])).fold(0.0, f64::max);
         let mut d = vec![u; 3 * n];
-        d.extend(std::iter::repeat(p).take(n));
-        d.extend(std::iter::repeat(u * area).take(nf));
+        d.extend(std::iter::repeat_n(p, n));
+        d.extend(std::iter::repeat_n(u * area, nf));
         d
     }
 }

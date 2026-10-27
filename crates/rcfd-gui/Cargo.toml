@@ -4,7 +4,9 @@ description = "rcfd desktop app: eframe/egui shell with dockable panels, setting
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version = "1.88"
+# The dependency closure needs Rust 1.89 (uuid 1.28; cargo metadata rust_version fields).
+rust-version = "1.89"
+publish = false
 
 [lints]
 workspace = true

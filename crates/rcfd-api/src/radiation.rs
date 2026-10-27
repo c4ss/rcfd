@@ -109,7 +109,7 @@ impl Radiation {
                 .iter()
                 .enumerate()
                 .filter(|(i, p)| {
-                    p.kind != rcfd_mesh::PatchKind::Empty && geom.periodic_partner.get(*i).map_or(true, |x| x.is_none())
+                    p.kind != rcfd_mesh::PatchKind::Empty && geom.periodic_partner.get(*i).is_none_or(|x| x.is_none())
                 })
                 .map(|(_, p)| WallRadiation {
                     patch: p.name.clone(),

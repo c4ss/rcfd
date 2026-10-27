@@ -481,11 +481,11 @@ pub struct Filter {
 impl Filter {
     /// Whether `e` passes.
     pub fn matches(&self, e: &Entry) -> bool {
-        self.kind.as_ref().map_or(true, |k| *k == e.kind)
-            && self.verdict.map_or(true, |v| v == e.verdict)
-            && self.study.as_ref().map_or(true, |s| *s == e.study)
-            && self.evaluator.as_ref().map_or(true, |s| *s == e.evaluator)
-            && self.fidelity.map_or(true, |f| f == e.fidelity)
+        self.kind.as_ref().is_none_or(|k| *k == e.kind)
+            && self.verdict.is_none_or(|v| v == e.verdict)
+            && self.study.as_ref().is_none_or(|s| *s == e.study)
+            && self.evaluator.as_ref().is_none_or(|s| *s == e.evaluator)
+            && self.fidelity.is_none_or(|f| f == e.fidelity)
     }
 
     /// Indices of the matching entries.
@@ -579,7 +579,7 @@ pub fn best_so_far(entries: &[Entry], idx: &[usize], metric: &str, sense: Sense)
     let mut trace = Vec::new();
     for i in keep {
         let v = entries[i].metric(metric).expect("comparable").value;
-        let better = best.map_or(true, |(_, b)| if sense == Sense::Min { v < b } else { v > b });
+        let better = best.is_none_or(|(_, b)| if sense == Sense::Min { v < b } else { v > b });
         if better {
             best = Some((i, v));
         }

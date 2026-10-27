@@ -270,7 +270,7 @@ pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<
         let top = s[0].clone();
         if best
             .as_ref()
-            .map_or(true, |bv| top.1.better(&bv.1) || !bv.1.better(&top.1))
+            .is_none_or(|bv| top.1.better(&bv.1) || !bv.1.better(&top.1))
         {
             best = Some(top);
         }

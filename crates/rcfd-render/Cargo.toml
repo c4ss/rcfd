@@ -4,8 +4,9 @@ description = "Studio render core (L4): wgpu offscreen rendering of surface mesh
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-# wgpu 30 needs Rust 1.87 (its declared rust-version); the rest of the workspace keeps 1.75. ADR 0125.
-rust-version = "1.87"
+# The dependency closure needs Rust 1.90 (ordered-float 5.5 via wgpu 30; cargo metadata rust_version fields).
+rust-version = "1.90"
+publish = false
 
 [lints]
 workspace = true

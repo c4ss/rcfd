@@ -198,7 +198,7 @@ impl EventLog {
         loop {
             let found: Vec<Value> =
                 g.1.iter()
-                    .filter(|e| e.seq > after && session.map_or(true, |s| e.value["session"] == s))
+                    .filter(|e| e.seq > after && session.is_none_or(|s| e.value["session"] == s))
                     .take(limit)
                     .map(|e| e.value.clone())
                     .collect();
@@ -633,7 +633,7 @@ impl Service {
                     .map(|a| a.iter().filter_map(Value::as_str).collect());
                 let mut doc = sim.monitors.to_json();
                 if let (Some(series), true) = (doc["series"].as_object_mut(), names.is_some() || since.is_some()) {
-                    series.retain(|k, _| names.as_ref().map_or(true, |n| n.contains(&k.as_str())));
+                    series.retain(|k, _| names.as_ref().is_none_or(|n| n.contains(&k.as_str())));
                     if let Some(after) = since {
                         for (k, v) in series.iter_mut() {
                             if let Some(sl) = sim.monitors.since(k, after) {
@@ -931,7 +931,7 @@ impl Service {
                     }
                 }
                 let hash = self.call("journal.get", &json!({"session": id}))?["case_hash"].clone();
-                let matches = j.get("case_hash").map_or(true, |h| *h == hash);
+                let matches = j.get("case_hash").is_none_or(|h| *h == hash);
                 Ok(json!({"session": id, "case_hash": hash, "matches": matches}))
             }
             "log.tail" => {

@@ -580,7 +580,7 @@ impl Renderer {
         let mut out = self.draw(mesh, view, true, &[wgpu::Color::TRANSPARENT; 2])?;
         let values = out.pop().unwrap_or_default();
         let ids = out.pop().unwrap_or_default();
-        let words = |b: &[u8]| -> Vec<[u8; 4]> { b.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect() };
+        let words = |b: &[u8]| -> Vec<[u8; 4]> { b.as_chunks::<4>().0.to_vec() };
         Ok(PickImage {
             width: view.width,
             height: view.height,
