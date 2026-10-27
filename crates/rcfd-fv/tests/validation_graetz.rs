@@ -1,5 +1,5 @@
 //! Wave 30C (ADR 0061, section C): laminar thermal entry (Graetz) problem on a prescribed, exactly fully developed flow, parallel
-//! plates (local Nu table of NPTEL ME-662 lecture 19, `validation-data/reference/w30c_graetz_parallel_plates_nptel.csv`) and circular
+//! plates (local Nu table computed by `validation-data/generate_graetz.py`, `validation-data/reference/graetz_parallel_plates.csv`) and circular
 //! pipe (fully developed limits 3.66 and 4.36 and the Hausen mean-Nu correlation as printed in BYU ME340 table 8.4).
 //!
 //! The velocity is an analytic face-flux field, so only the energy discretisation (`EnergySolver`) is tested; the momentum solver is
@@ -14,7 +14,7 @@ use rcfd_mesh::gen::{box_2d_graded, Grading};
 use rcfd_mesh::sweep::pipe_mesh;
 use std::sync::Arc;
 
-const TABLE: &str = include_str!("../../../validation-data/reference/w30c_graetz_parallel_plates_nptel.csv");
+const TABLE: &str = include_str!("../../../validation-data/reference/graetz_parallel_plates.csv");
 
 /// Table rows `(x_plus, theta_b (NaN when absent), Nu_x)` for the boundary condition tag `bc` ("Tw" or "q").
 fn table(bc: &str) -> Vec<(f64, f64, f64)> {

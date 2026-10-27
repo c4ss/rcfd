@@ -83,27 +83,14 @@ sod-exact-marzouk2020
   Source: A. Marzouk, Sci. Afr. 10 (2020) e00573, arXiv:2108.01709
   Attribution: A. Marzouk, Sci. Afr. 10 (2020) e00573, arXiv:2108.01709
 
-graetz-parallel-plates-nptel
-  Files: validation-data/reference/w30c_graetz_parallel_plates_nptel.csv
-  Source: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
-  Attribution: NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)
-  Licence status: UNRESOLVED. The lecture PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked
-    2026-10-27). The footer of https://nptel.ac.in/ (raw page read 2026-10-27) reads "Distributed under", "Creative Commons
-    Attribution-ShareAlike", "CC BY - NC - SA" next to a by-nc-sa badge image, and "[copyright sign] - 2026 All rights reserved"; the
-    text names two different licences, and whether that site-wide footer covers this archived lecture PDF is not stated.
-    If CC BY-NC-SA applied to the table, its non-commercial and share-alike terms would not fit this repository's
-    AGPL-3.0 terms. Only numeric values are transcribed; they are solutions of the classical
-    Graetz problem for parallel plates. Whether this table may be redistributed is an open question for the maintainer.
-
 laminar-internal-flow-limits
-  Files: validation-data/reference/w30c_laminar_internal_flow_limits.csv
-  Source: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)
-  Attribution: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19
-    (parallel-plate limits)
-  Licence status: the two parallel-plate values come from the NPTEL lecture above and share its unresolved status. The
-    BYU sheet carries no licence statement; its only credit line ("Used with permission from W. M. Kays and M. E. Crawford,
-    Convection Heat and Mass Transfer, 3rd ed. McGraw-Hill, New York, 1993.", read 2026-10-27) belongs to its Table 8.1,
-    from which no value was taken.
+  Files: validation-data/reference/laminar_internal_flow_limits.csv
+  Source: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); the two parallel-plate limits are computed
+    by validation-data/generate_graetz.py
+  Attribution: BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation)
+  Licence status: the BYU sheet carries no licence statement; its only credit line ("Used with permission from W. M. Kays and
+    M. E. Crawford, Convection Heat and Mass Transfer, 3rd ed. McGraw-Hill, New York, 1993.", read 2026-10-27) belongs to its
+    Table 8.1, from which no value was taken.
 
 tmr-2dzp-coles-uplus-retheta10000
   Files: validation-data/reference/w30c_tmr_coles_uplus_yplus_retheta10000.csv
@@ -129,11 +116,6 @@ w31c-dean1978-channel-friction-table
   Files: validation-data/reference/w31c_dean1978_channel_friction_table.csv
   Source: R. B. Dean, J. Fluids Eng. 100 (1978) 215-223 (original not read); relation and Table 1 as printed in Appendix A of arXiv:1405.1750
   Attribution: arXiv:1405.1750 Appendix A (alpha = 0.0614, Re_tau = 0.1752 Re_b^(7/8), Table 1)
-
-w31c-graetz-tube-eigenvalues-clarkson
-  Files: validation-data/reference/w31c_graetz_tube_cwt_eigenvalues_clarkson.csv
-  Source: Clarkson University CH490 notes, Graetz Problem (R. Subramanian)
-  Attribution: Clarkson University CH490 lecture notes, Graetz Problem
 
 w31c-naca0012-tmr-subsets
   Files: validation-data/reference/w31c_naca0012_ladson1988_80grit_cl_cd.csv, validation-data/reference/w31c_naca0012_gregory1970_cp_upper_alpha0.csv
@@ -202,6 +184,16 @@ differs only in the last copyright line, which reads "2011-2023":
   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+------------------------------------------------------------------------------------------------------------------------
+Computed by rcfd
+------------------------------------------------------------------------------------------------------------------------
+graetz-parallel-plates, graetz-tube-eigenvalues, and the two parallel-plate rows of laminar-internal-flow-limits
+  Files: validation-data/reference/graetz_parallel_plates.csv, graetz_tube_cwt_eigenvalues.csv, laminar_internal_flow_limits.csv
+  Generator: validation-data/generate_graetz.py (finite-volume eigen-solve of the classical Graetz problem; needs numpy)
+  Licence: AGPL-3.0-only, as the rest of rcfd. These tables were first transcribed from lecture material whose
+    redistribution terms could not be established, then recomputed; they agree with the transcription to the printed
+    digits except one value noted in validation-data/manifest.json. No text or table layout of the lecture material is kept.
 
 ------------------------------------------------------------------------------------------------------------------------
 Fetched only, never committed

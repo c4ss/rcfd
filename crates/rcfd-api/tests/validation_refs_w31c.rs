@@ -285,7 +285,7 @@ fn first_eigenvalues(n: usize) -> Vec<f64> {
 
 #[test]
 fn graetz_tube_eigenvalues_match_the_printed_values_and_nu_inf() {
-    let rows = w31c("w31c_graetz_tube_cwt_eigenvalues_clarkson.csv");
+    let rows = w31c("graetz_tube_cwt_eigenvalues.csv");
     let ours = first_eigenvalues(rows.len());
     for (r, l) in rows.iter().zip(&ours) {
         // printed to 5 significant digits
