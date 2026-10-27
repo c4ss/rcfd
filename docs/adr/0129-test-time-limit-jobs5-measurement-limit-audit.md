@@ -146,11 +146,13 @@ systems was not exercised. The cargo exclusion of the tree kill was not exercise
 | A1 | 5 of 5 planted classes found, clean example not flagged | 5 of 5 (7 planted hits), clean test not flagged (`scripts/test_limit_audit.py`) | **met** |
 | A2 | every hit classified, 0 unclassified | 80 hits: 2 real weaknesses, 53 documented skips or report-only tests, 25 false positives; 0 unclassified | **met** |
 | A3 | each real weakness fixed with a shown break, or listed for a decision | 0 fixed; listed: L1 sleep control (fix registered by `wfix`, ADR 0128 finding 12), schemes_wave13 T2 vacuous pass; also listed: 12 data-gated tests that always skip in a `git archive` gate, 7 child-entry tests counted as passed | **met** (all handled; no assertion-only fix was possible) |
-| A4 | 12 of 12 detected, or each miss reported | 11 of 12; miss: ADR 0123 S7 `s7_cancel_leaves_a_consistent_folder` (5 s limit, 0.116 s measured, 10x slower passes), reported as a finding, limit unchanged | **missed** (1 finding) |
+| A4 | 12 of 12 detected, or each miss reported | 10 of 12; misses reported as findings, nothing changed: ADR 0123 S7 `s7_cancel_leaves_a_consistent_folder` (5 s limit, 0.116 s measured, 10x slower passes); ADR 0119 R3 `r3_stall_is_located` (asserts only "stall"; with the slope stall check off the strip check still reports "stalled", so the slope check is unguarded) | **missed** (2 findings) |
 | A5 | test list only grows | no test edited, list unchanged | **met** |
 | A6 | own target per scratch copy; `Compiling <crate>` in every counted run | `target-wtp-mut`; shown in all 12 counted runs | **met** |
 
 Deviations: the scanner's helper resolution and constant rules were tightened after its first run on the repo (871 hits, mostly
 `let mut worst = 0.0` taken as a constant and helper calls not followed); the self-test was written for the final rules. The scanner
 covers the registered paths only, not the 99 inline `#[cfg(test)]` modules of other `src/` files. Three mutation runs were
-repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a result.
+repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a result. The first R3
+mutation (strip stall check off) failed the test at the R3b line, a separate id; on review it did not break R3's own path, so it
+was replaced by the slope-check mutation, which R3 does not detect. The replacement lowered the count from 11 to 10.
