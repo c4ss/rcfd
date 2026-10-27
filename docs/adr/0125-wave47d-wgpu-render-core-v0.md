@@ -209,11 +209,12 @@ image); volume-capped cut planes; Metal, GLES and WebGPU back ends.
 ## Files
 
 `crates/rcfd-render/` (`src/lib.rs`, `src/camera.rs`, `src/surface.rs`, `src/gpu.rs`, `src/shader.wgsl`, `tests/render.rs`,
-`tests/cpu_ref/mod.rs`, `examples/adapters.rs`); workspace member in the root `Cargo.toml`; `Cargo.lock`.
+`tests/cpu_ref/mod.rs`, `examples/adapters.rs`); workspace member in the root `Cargo.toml`; `Cargo.lock`. Added at the gate
+(see Final gate): `rcfd-render` at layer 5 in `crates/rcfd-cli/tests/workspace_graph.rs` and in `docs/architecture.md`.
 
 ## Addendum: measured values (gate machine = this machine, the five adapters of step 0)
 
-First registered run: debug build, commit 599c517, all tests except T1. A1 and A2 then ran on 810fd54. T1 ran once, in a release build
+First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto main e314bca), all tests except T1. A1 and A2 then ran on 810fd54 (a1df12f after the rebase). T1 ran once, in a release build
 (see the T1 row). Every value below is the same on all five adapters unless the row says otherwise.
 
 | Id | Measured | Limit | Status |
@@ -242,3 +243,23 @@ First registered run: debug build, commit 599c517, all tests except T1. A1 and A
 * G2 c (smooth lighting with a point field) differs by 1 in one pixel on AMD Vulkan, one on AMD DX12 and two on WARP; NVIDIA Vulkan is
   identical.
 * So on this machine the back ends differ only by single-step rounding in lit, interpolated pixels.
+
+## Final gate
+
+* **First gate: failed.** It ran on a git archive of 19999b5, the tree rebased onto main cc0a8cb. fmt was clean.
+  * The first clippy run failed on the C3 test value 1.5707963 (`approx_constant`). Fixed with a scoped allow; the registered value is
+    unchanged.
+  * The test stage gave 2088 passed / 1 failed / 658 ignored. `rcfd-cli` `workspace_graph::layering_matches_architecture_doc`
+    panicked with `unknown crate rcfd-render`, because a new crate with rcfd dependencies must be given a layer.
+  * Fix: `rcfd-render` is placed at layer 5, next to `rcfd-api`, in that test and in `docs/architecture.md`. This edits an existing
+    test, additively.
+  * A clippy rerun after a later rebase failed on two lints in `rcfd-api` design tests that came from main. Main fixed them in e314bca.
+* **Final gate: passed** on a git archive of **33e9266**, rebased onto main e314bca, with one release slot held per stage:
+  * fmt clean;
+  * clippy (`--workspace --all-targets -D warnings`) clean;
+  * `cargo test --workspace --release --no-fail-fast`: **2153 passed / 0 failed / 664 ignored**.
+
+  Against main's last recorded gate (2137 / 0 / 662, ADR 0122), this branch adds exactly 16 passing tests (5 unit, 11 integration) and
+  2 ignored tests (the A1 and A2 known misses).
+* **Every GPU test ran in the gate** on the five adapters of step 0; none took the SKIP branch.
+* **Lockfile:** after both rebases, `git diff main -- Cargo.lock` removes no `name` or `version` line. No existing locked version moved.
