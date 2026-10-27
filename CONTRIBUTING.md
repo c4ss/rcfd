@@ -56,7 +56,12 @@ Run these commands before you submit:
 
 * `cargo fmt --all`
 * `cargo clippy --workspace --all-targets -- -D warnings`
-* `cargo test --workspace`
+* `cargo test --workspace --release --lib --bins` (the unit tests, as CI runs them)
+* `cargo test --release -p <crate>` for every crate you changed, which runs its integration tests
+
+CI on a pull request runs the first three and a build check with the oldest supported Rust, but no integration test, and the full test suite takes over an hour, so the maintainer runs the full gate
+on a schedule and before every release. [docs/releasing.md](docs/releasing.md) says what each check proves. If your change is
+something a user would notice, add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) saying what changed for them.
 
 These rules apply to the code itself:
 
