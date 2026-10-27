@@ -335,6 +335,6 @@ Fresh `git archive` in `<scratch dir>`, `scripts/gate_test.py` (docs/test-proces
 | 3 | b8cf6eb (finding 17 added) | 0 | 0 | **2216 / 0 / 666** (61 min) |
 
 Run 3 is the final gate. The ADR 0124 gate on main's code (8e1d2a3) recorded 2158 / 0 / 663 with the old `cargo test` stage; the
-difference is not broken down here (the new tests of this ADR are 31 non-ignored tests, none ignored).
+difference is not broken down here (this ADR adds 26 tests, none ignored).
 Main had not moved (cb61148) when the work ended, so the rebase was a no-op; fmt, clippy and the touched crates' debug tests were re-run
 on the branch head.
