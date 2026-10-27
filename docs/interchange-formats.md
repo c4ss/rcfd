@@ -1,5 +1,12 @@
 # Interchange formats, registers and GLB validation (F-119, F-124, F-117; ADR 0011)
 
+This page lists the interchange formats rcfd converts, reads and writes, the library entry points for them, what is not done or
+not verified for each, and related library features: registers (named cell sets), the GLB checker, the format registry and a
+structural load-deck writer. It is for people who
+move meshes and results between rcfd and other tools, or call the readers and writers from Rust. Some formats are only partly
+delivered; the section "What is NOT done or not verified" comes right after the conversion table. For importing a mesh into a case,
+see [mesh import](mesh-import.md); for the case keys that use registers, see the [case schema](case-schema.md).
+
 All parsers share the hostile-input rules of ADR 0011 section 1: no panic on any byte sequence (tested with every
 prefix of a valid file plus 3000 deterministic mutations), no allocation sized from an untrusted header count (counts
 are checked against the bytes that remain before anything is reserved), hard caps (file 1 GiB, 50 million items,
@@ -109,3 +116,9 @@ bearing and mount loads of a rotor-dynamics response: two static load sets per h
 
 `rcfd_post::structural` maps wall pressure by conservative parameter-space overlap (x,y for planes, theta,z for cylinders
 with 2 pi periodicity) and temperature through `remap` followed by a linear nodal recovery.
+
+## Where to go next
+
+- [Mesh import](mesh-import.md): reading external mesh files into a case.
+- [Case schema](case-schema.md): the register and initial-patch keys of the case file.
+- [Reference data](reference-data.md): where the public grid sample read above comes from.

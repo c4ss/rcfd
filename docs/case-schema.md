@@ -1,4 +1,52 @@
-# Case schema: turbulence, compressible flow and solver controls
+# Case schema: sections and keys of the case file
+
+This page is the reference for the case file: every section and key, with its default, its allowed values, the combinations that
+are refused and what is not delivered. It is for people who write or edit a case and need to know what a key does or why it was
+rejected. Sections follow the order of the list below; to find one key, search the page for its dotted path. For a first case
+step by step, follow the [command-line quick start](tutorials/quick-start-cli.md); to start from a ready-made case, pick one in the
+[example gallery](tutorials/gallery.md); for running, restarting and exit codes, see [run control](run-control.md).
+
+On this page:
+
+- Turbulence: models, coefficients, live switching, turbulence boundary keys, outputs and reports
+- Mesh generators and boundary-layer inflation
+- Compressible density-based solver
+- Variable-density solver: ideal gas and real gas
+- Other solver and physics settings
+- Schemes, wall motion, solution limits
+- Tables and profile inputs
+- Statistics and output policy
+- SIMPLEC non-orthogonal compensation
+- Adaptive time stepping
+- Rheology viscosity laws
+- Block-coupled solver
+- Scalars, species and properties, with the material library
+- Momentum sources
+- Finite-rate and turbulent combustion chemistry
+- Lumped zone components
+- Grey radiation
+- User functions
+- Caveats
+- Registers and initial patches
+- Initialisation methods, zone sources, user transport equations
+- Decomposition and postprocessing, with the partition, sample and inflate commands
+- Boundary-condition catalogue
+- Reactor cases and FW-H surface files
+- Conjugate heat transfer: solids, thermal interfaces, electric conduction, phase change, frozen flow, convection boundaries
+- Particles
+- Mixing plane
+- Restart, chain, setup rules
+- Study
+- Dynamic mesh
+- Regions
+- Linear solver
+- Viscoelastic models and structural load export
+- Multiphase, then its mass transfer, waves and reference point, then mixture and cavitation
+- Divergence guards of the transient and the steady solvers
+- Pressure-lag check of PIMPLE
+- Least-squares velocity gradient on periodic faces, and momentum convection on high-aspect wall cells
+- Limited linear-upwind extrapolation
+- Design-loop files (not part of the case schema)
 
 The case file (TOML or JSON) is a settings tree. `rcfd schema` prints its JSON Schema, the
 service returns it from `settings.schema`, and the GUI settings editor and the assistant tools
@@ -174,6 +222,48 @@ non-editable coefficient, a case the model cannot run) are returned with their p
 from or to `laminar` needs a rebuild (other settings still reset the simulation as before). The session's
 `run.status` reports `simulation.turbulence.key`.
 
+### Turbulence boundary keys, outputs and reports
+
+Per-boundary keys (`boundaries.<patch>.`):
+
+* `turbulence` = `auto` (default) | `wall` | `inlet` | `zero_gradient`. `auto` treats a fixed
+  zero-velocity patch as a wall, any other fixed-velocity patch as an inlet, the rest as zero
+  gradient.
+* Inlet specification `turbulence_spec`:
+  * `intensity_length` (default): `k = 3/2 (I U)^2`, `epsilon = Cmu^(3/4) k^(3/2) / l`, with
+    `turbulence_intensity` (0.05) and `turbulence_length` (required, m). `U` is the local inlet
+    speed per face, so expression profiles work.
+  * `intensity_viscosity_ratio`: same `k`, `epsilon = Cmu k^2 / (ratio nu)` with
+    `turbulence_viscosity_ratio` (10).
+  * `values`: `k_value`, `epsilon_value`.
+  `Cmu` is the constant of the chosen variant (0.09; 0.0845 for `rng`).
+
+Outputs: fields `k`, `epsilon`, `nut`, `wall_distance`, `y_plus` (cell field, non-zero in the
+wall-adjacent cells; boundary value `y_plus` on wall faces for reports), VTU arrays with the same
+names, a `Turbulence` row in the HTML report, a `turbulence` object in the service status
+(model, variant, wall patches, y+ range, eddy-viscosity change) and the monitor `res_nut`
+(maximum relative change of the eddy viscosity per iteration, also required to fall below
+`solver.tolerance_u` for the run to count as converged).
+
+`y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area
+weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent
+cells, the quantity the wall functions use.
+
+For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
+
+Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
+unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field
+(population form `sqrt(sum w (x - mean)^2 / sum w)`, two-pass with a mean-correction term so a large offset does not cancel);
+`area_std`, `area_min` and `area_max` are the area-weighted standard deviation and the smallest / largest face value of a boundary
+field over `patch`; `mass_weighted_average` is `sum phi q / sum phi` over `patch` (the signed face flux is the weight, so the
+value is the same on an inflow and an outflow patch; a patch whose net flux cancels is an error); `vector_flux` is the net
+momentum flux `sum phi (u . d)` through `patch` along the unit vector of `direction` (unit N; incompressible fluxes are scaled by
+`physics.rho`, the compressible flux is already a mass flux; not available with the variable-density solver). Surfaces (plane,
+sphere, cylinder, cone and general quadric cuts, iso-clip, offset, rotational / translated instances), rakes, point clouds and
+case difference fields are library objects (`rcfd_post::surfaces`, `rcfd_post::compare`) without case-tree keys.
+
+## Mesh generators and boundary-layer inflation
+
 ### Mesh generator parameters
 
 `cavity_2d` is an `nx` x `ny` uniform grid on `lx` x `ly` (patches `lid` = ymax, `walls`, `frontAndBack`); it is
@@ -319,43 +409,6 @@ Impossible stacks (too many layers, layers thicker than the domain, no height in
 rejected with located diagnostics. Block meshes only: inflation on unstructured wall patches is
 not implemented.
 
-Per-boundary keys (`boundaries.<patch>.`):
-
-* `turbulence` = `auto` (default) | `wall` | `inlet` | `zero_gradient`. `auto` treats a fixed
-  zero-velocity patch as a wall, any other fixed-velocity patch as an inlet, the rest as zero
-  gradient.
-* Inlet specification `turbulence_spec`:
-  * `intensity_length` (default): `k = 3/2 (I U)^2`, `epsilon = Cmu^(3/4) k^(3/2) / l`, with
-    `turbulence_intensity` (0.05) and `turbulence_length` (required, m). `U` is the local inlet
-    speed per face, so expression profiles work.
-  * `intensity_viscosity_ratio`: same `k`, `epsilon = Cmu k^2 / (ratio nu)` with
-    `turbulence_viscosity_ratio` (10).
-  * `values`: `k_value`, `epsilon_value`.
-  `Cmu` is the constant of the chosen variant (0.09; 0.0845 for `rng`).
-
-Outputs: fields `k`, `epsilon`, `nut`, `wall_distance`, `y_plus` (cell field, non-zero in the
-wall-adjacent cells; boundary value `y_plus` on wall faces for reports), VTU arrays with the same
-names, a `Turbulence` row in the HTML report, a `turbulence` object in the service status
-(model, variant, wall patches, y+ range, eddy-viscosity change) and the monitor `res_nut`
-(maximum relative change of the eddy viscosity per iteration, also required to fall below
-`solver.tolerance_u` for the run to count as converged).
-
-`y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area
-weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent
-cells, the quantity the wall functions use.
-Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
-unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field
-(population form `sqrt(sum w (x - mean)^2 / sum w)`, two-pass with a mean-correction term so a large offset does not cancel);
-`area_std`, `area_min` and `area_max` are the area-weighted standard deviation and the smallest / largest face value of a boundary
-field over `patch`; `mass_weighted_average` is `sum phi q / sum phi` over `patch` (the signed face flux is the weight, so the
-value is the same on an inflow and an outflow patch; a patch whose net flux cancels is an error); `vector_flux` is the net
-momentum flux `sum phi (u . d)` through `patch` along the unit vector of `direction` (unit N; incompressible fluxes are scaled by
-`physics.rho`, the compressible flux is already a mass flux; not available with the variable-density solver). Surfaces (plane,
-sphere, cylinder, cone and general quadric cuts, iso-clip, offset, rotational / translated instances), rakes, point clouds and
-case difference fields are library objects (`rcfd_post::surfaces`, `rcfd_post::compare`) without case-tree keys.
-
-For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
-
 ## `compressible` and `solver.algorithm = "compressible"`
 
 Selecting the algorithm switches to the explicit density-based Euler solver (no viscosity, no
@@ -476,7 +529,7 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test); no shock-tube or choked transient
   benchmark is claimed (ADR 0009).
 
-## Other solver and physics settings now in the schema
+## Other solver and physics settings
 
 * `physics.body_force` (m/s^2); steady incompressible algorithms only (rejected with piso, pimple and compressible).
 * `solver.bulk_velocity` and `solver.bulk_direction`: mean-velocity driver for periodic channels (steady algorithms only).
@@ -1670,3 +1723,10 @@ interior extrema of a velocity component, where the limiter clips. Opt-in becaus
 Operating maps (`rcfd map`), design studies and the `design_*` tools do not add a section to the case: a map or a study is a driver
 that overrides settings of a base case (`rcfd map <case> --axis path=v1,v2,...`; `study.json` next to `evaluations.jsonl` in a study
 directory). Their formats are described in `docs/design-loop.md`. The existing `study` section (ADR 0034) is unchanged.
+
+## Where to go next
+
+- [Run control](run-control.md): launching a case, exit codes, checkpoints, chains and output.
+- [Service protocol](service-protocol.md): reading and changing these settings in a live session.
+- [User-function ABI](udf-abi.md): the module contract behind the user-function keys.
+- [Parametric studies](studies.md): running the study section.

@@ -1,8 +1,24 @@
 # rcfd parity matrix: Ansys Fluent / CFX class capabilities versus the rcfd roadmap
 
+This page compares the capability lists of the two commercial CFD products named in the title with the rcfd roadmap, one row per
+capability, and ranks the largest gaps. It is for people who plan roadmap work or want to check whether rcfd covers a given
+capability. It is a first-pass inventory: the rcfd statuses are read from the roadmap, not guessed, and the sources section says
+exactly what was read. For a short summary of what rcfd does today,
+read the [roadmap overview](roadmap-overview.md); for the acceptance text of each item, see the [detailed roadmap](ROADMAP.md).
+
 Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
 
 Status: first-pass inventory, 2026-10-17. Roadmap statuses are read mechanically from `docs/roadmap.json` (158 items); the matrix does not guess them. Clean-room: every capability name and description below is a short paraphrase of public feature lists; no vendor text or code was copied, no vendor binary or install was inspected or read.
+
+On this page:
+
+- Sources actually read
+- Coverage statement
+- Roadmap statistics by area
+- Ranked gap list
+- Candidate new roadmap items
+- Matrix, by area: geometry and meshing; turbulence modelling; heat transfer, CHT and radiation; species, combustion and chemistry; multiphase and discrete phase; compressible and high-speed; moving and dynamic mesh, rotation; FSI and co-simulation; turbomachinery; acoustics, electromagnetics and other physics; numerics and solvers; setup, UX and workflow; post-processing and reporting; validation and infrastructure
+- Declined and not done
 
 ## Sources actually read (legend used in the "Source read" column)
 
@@ -124,7 +140,7 @@ Proposed ids only; docs/roadmap.json is not edited. "Decision" = needs a user ch
 
 Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" is the aggregate (done if all done, todo if all todo, partial for any other mix, none if no id). Priority: P1 core, P2 common, P3 niche; the sentence after the colon is the one-line reason.
 
-## Geometry and meshing
+### Geometry and meshing
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -160,7 +176,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 30 | Blade-passage template mesher | Generate turbomachinery passage meshes from curves. | S2,GK | F-133:todo | todo |  | P3: Turbomachinery-specific. |
 | 31 | Mesh format registry and conformance tests | Registry of supported formats with a test per format. | GK | F-237:partial | partial |  | P3: Housekeeping. |
 
-## Turbulence modelling
+### Turbulence modelling
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -186,7 +202,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 51 | Turbulence in multiphase flow | Per-phase and mixture turbulence. | S6(7.12),S4 | F-127:todo | todo |  | P2: Follows multiphase. |
 | 52 | Turbulence model plugin interface | Extensible model API. | GK | F-044:partial | partial |  | P2: Extensibility. |
 
-## Heat transfer, CHT and radiation
+### Heat transfer, CHT and radiation
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -207,7 +223,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 67 | Wall condensation model | Condensation on cold walls. | S6(1.7) | F-226:partial | partial |  | P3: Specialised. |
 | 68 | PCB / ECAD thermal import | Electronics board thermal setup. | S7(16.6) | - | none | No item. | P3: Electronics niche. |
 
-## Species, combustion and chemistry
+### Species, combustion and chemistry
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -233,7 +249,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 88 | Non-Newtonian viscosity laws | Power law, Carreau, Cross and others. | S6(ch.1) | F-110:done | done |  | P2: Polymers, blood. |
 | 89 | Viscoelastic models | Oldroyd-B, Giesekus and similar. | GK | F-135:partial | partial |  | P3: Beyond vendor core. |
 
-## Multiphase and discrete phase
+### Multiphase and discrete phase
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -263,7 +279,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 113 | Macroscopic particle model | Resolved large particles. | S4(ch.13),S7(ch.25) | - | none | No item. | P3: Niche. |
 | 114 | Continuous fibre model | Fibre spinning. | S4(ch.22),S7(ch.34) | - | none | No item. | P3: Specialised. |
 
-## Compressible and high-speed
+### Compressible and high-speed
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -275,7 +291,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 120 | Compressible BCs (total conditions, non-reflecting) | Standard compressible BCs. | S6(2.10) | F-062:partial | partial |  | P1: Needed for well-posed compressible runs. |
 | 121 | Hypersonic numerics | Shock handling and high-temperature models. | S7(ch.17) | - | none | Nothing beyond F-060. | P3: Niche. |
 
-## Moving and dynamic mesh, rotation
+### Moving and dynamic mesh, rotation
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -289,7 +305,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 129 | Motion definitions (profiles, zone motion) | Prescribed motion data. | S7(ch.11) | F-063:partial, F-105:done | partial |  | P2: Prescribed motion. |
 | 130 | Immersed solids | Non-conforming solid domain. | S6(1.2) | F-219:todo | todo |  | P3: Alternative to remeshing. |
 
-## FSI and co-simulation
+### FSI and co-simulation
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -299,7 +315,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 134 | FMI co-simulation | Functional mock-up coupling. | S6(14.2),S7(ch.3) | F-242:todo | todo |  | P3: Systems integration. |
 | 135 | System coupling to other tools | Cross-product coupling. | S6(14.1) | F-139:todo | todo |  | P2: Multiphysics workflows. |
 
-## Turbomachinery
+### Turbomachinery
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -311,7 +327,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 141 | Blade film cooling | Cooling hole models. | S6(6.2),S2 | - | none | No item. | P3: Hot-section niche. |
 | 142 | Aeromechanics forced-response coupling | Generalised modal force. | S2 | - | none | No item. | P3: Specialised. |
 
-## Acoustics, electromagnetics and other physics
+### Acoustics, electromagnetics and other physics
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -324,7 +340,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 149 | Reduced-order models | Export of surrogate models. | S7(ch.35) | - | none | No item. | P3: Systems use. |
 | 150 | User-defined scalar transport | Extra transport equations. | S4(ch.1) | F-202:partial | partial |  | P2: Extensibility. |
 
-## Numerics and solvers
+### Numerics and solvers
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -351,7 +367,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 171 | Run-time statistics and sampling | Transient means and RMS. | S8 | F-116:done | done |  | P2: LES and unsteady post. |
 | 172 | Checkpoint and restart | Case and data files. | S7(ch.3) | F-030:done | done |  | P1: Core. |
 
-## Setup, UX and workflow
+### Setup, UX and workflow
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -380,7 +396,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 195 | Simulation reports | Auto-generated documents. | S7(ch.45) | F-074:done | done |  | P2: Deliverables. |
 | 196 | Assistant (LLM) workflows | Natural-language setup. | rcfd-unique, not in vendor sources | F-094:partial, F-145:done, F-090:done | partial |  | P3: Differentiator, not parity. |
 
-## Post-processing and reporting
+### Post-processing and reporting
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|
@@ -398,7 +414,7 @@ Columns: rcfd ids are listed with the roadmap status of each id. "rcfd status" i
 | 208 | Transient export during run | Automatic export. | S1 | F-116:done | done |  | P2: Pipeline. |
 | 209 | Case comparison and difference fields | Compare runs. | GK | F-238:partial | partial |  | P3: Convenience. |
 
-## Validation and infrastructure
+### Validation and infrastructure
 
 | # | Capability | What it is | Source read | rcfd ids | rcfd status | Gap note | Priority and reason |
 |---|---|---|---|---|---|---|---|

@@ -1,11 +1,22 @@
 # rcfd solver service protocol, version 1
 
+This page specifies the solver service: the transport, the error codes, the session states and every method with its
+parameters. It is for people who write a client for the service or check what a tool of the MCP server does underneath. If
+you use an assistant rather than write a client, the [MCP tool list](mcp-tools.md) is the shorter page; for exit codes, the
+status stream and checkpoints shared with the command line, see [run control](run-control.md).
+
 Identifier: `rcfd-service/1` (returned by `service.info`).
 
 Transport: JSON-RPC 2.0, one JSON object per line (newline-delimited), over TCP
 (`rcfd serve --addr 127.0.0.1:7878`) or stdio (`rcfd serve --stdio`). Requests
 without an `id` are notifications and get no response. Each TCP connection is
 served by its own thread; sessions are shared between connections.
+
+## Limits and sandbox
+
+`ServiceConfig` bounds cell count, steps per call, case runs per `design.*` call (`max_design_evaluations`) and event-log size, and
+`--root` confines every client-supplied file path (no `..`, no escape through
+symbolic links).
 
 ## Errors
 
@@ -54,8 +65,8 @@ All session methods take `session`.
   Event kinds: `created initialized started iteration paused resumed stopped
   chunk_done finished error setting_changed closed workflow_created workflow_task`. Pass `next` as the next `after`.
 
-## Limits and sandbox
+## Where to go next
 
-`ServiceConfig` bounds cell count, steps per call, case runs per `design.*` call (`max_design_evaluations`) and event-log size, and
-`--root` confines every client-supplied file path (no `..`, no escape through
-symbolic links).
+- [MCP tools](mcp-tools.md): which tool calls which method, and the access class of each.
+- [Case schema](case-schema.md): the dotted settings paths that the settings methods take.
+- [Run control](run-control.md): the headless run, exit codes and workflows behind the run and workflow methods.

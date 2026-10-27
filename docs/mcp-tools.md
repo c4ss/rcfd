@@ -1,5 +1,12 @@
 # MCP and API tools
 
+This page lists every tool of the MCP server: its access class, the service method it calls and what it does, and the
+rules all tools share (access classes, policy, errors, sandbox and limits). It is for people who connect a client or an assistant
+to the server, or who add a tool. For a guided first session, follow the [MCP design-loop tutorial](tutorials/mcp-design-loop.md);
+for the parameters and results of the methods behind the tools, see the [service protocol](service-protocol.md).
+
+## Conventions for every tool
+
 The MCP server (`rcfd-mcp`, crate `rcfd-mcp`) exposes the solver service (`docs/service-protocol.md`) as tools. The assistant crate
 lists the same tools, so a tool added to the server is available to the assistant without further wiring. Conventions (F-090, F-091,
 F-147, F-148):
@@ -15,6 +22,8 @@ F-147, F-148):
 * File paths are resolved by the service against its sandbox root (`rcfd-mcp --root`): `..` and absolute paths outside the root are
   refused with code 1004 and create nothing. The limits `--max-cells`, `--max-steps`, `--max-run-seconds` and
   `--max-design-evaluations` apply to every tool that starts runs.
+
+## Tool list
 
 | Tool | Access | Service method(s) | Purpose |
 |---|---|---|---|
@@ -80,3 +89,9 @@ the history of one parameter; Pareto and best refuse a set that mixes evaluators
 and `fidelity` first. `design_ledger_export` writes CSV or JSON, and `design_ledger_rerun_check` compares the metrics of a re-run with an
 entry (tolerances default to 0, bit-identical). A line torn by a killed writer is reported in `skipped_lines` and never joins the next
 entry.
+
+## Where to go next
+
+- [Design loop](design-loop.md): the study, map and ledger formats the design tools read and write.
+- [Run control](run-control.md): exit codes and the status stream behind the headless tools.
+- [Service protocol](service-protocol.md): the methods, error codes and sandbox rules of the service.
