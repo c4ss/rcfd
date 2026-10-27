@@ -77,7 +77,8 @@ def tube_eigs(n):
 
 
 def write(name, text):
-    with open(OUT / name, "w") as f:  # LF on every platform so the checksums agree
+    with open(OUT / name, "w", newline="
+") as f:  # LF on every platform so the checksums agree
         f.write(text)
 
 
