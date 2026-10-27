@@ -152,3 +152,31 @@ one-line addition.
 * Not yet run: the final gate on the rebased HEAD, which includes the registered release run of C7/C8 (typeperf) and C1-C6, C9-C12 in
   release. The hung processes of the first gate run (the C7/C8 test and its child) hold a release slot and could not be stopped
   from this session.
+
+## Addendum (final, 2026-10-27): registered runs, all checks pass
+
+Gate on a fresh archive of 8e1d2a3 (rebased onto main e314bca, which includes wave 47A and the main clippy fix):
+fmt clean, clippy clean, tests **2158 passed, 0 failed, 663 ignored**. A second gate run on 09a52da (base cc0a8cb) gave tests
+2131 / 0 / 662; its clippy stage failed only on two lints in main's `design/*_tests.rs`, fixed on main by e314bca.
+
+Measured in release (separate `--nocapture` run of the same code in the worktree, values printed by the tests):
+
+| Id | Measured | Limit |
+|---|---|---|
+| C1 | bit-exact, both codecs | bit-exact |
+| C2 | worst error / bound 0.9996 (both codecs); 1e39 refused | <= 1; > 0.5 (control) |
+| C3 | ratio 0.647 (83 060 / 128 417 bytes) | <= 0.9 |
+| C4 | 8439-byte file, 4201 truncation lengths reopened and appended, all correct | all |
+| C5 | 3 snapshots recovered, tail 8224 bytes, appended to 4 | 3, tail > 0 |
+| C5b | 5 / 12 / 19 recovered, tails 0 / 8095 / 8092 bytes | all bit-exact |
+| C6 | raw 8248 and deflate 8439 bytes x 2 masks: 0 undetected (204 flagged each: footer payload and trailer) | 0 outside the (empty) unchecked list |
+| C6b | refused | refused |
+| C7 | open footer 0.0001 s, scan 0.0024 s, nearest 0.0095 s, linear 0.0195 s, subset 0.0096 s; 2000 snapshots: footer 0.0002 s, scan 0.0123 s, access 0.00004 s | 0.05 / 0.5 / 0.1 / 0.2 / 0.1; 0.05 / 0.5 / 0.005 s |
+| C8 | scrub peak 28.7 MB; whole-snapshot control 158.3 MB (typeperf probe, amendment 1) | <= 64 MiB; control > cap |
+| C9 | dyadic error 0; random worst 0.055 of the bound; controls violated 196/196 and 200/200 | <= 1 |
+| C10-C12 | pass | |
+| H1 | piso: steps [7,14,21,28,30], simple: [7,...,56,60]; on/off bit-identical; final snapshot bit-exact | as registered |
+| H2 | 6 snapshots at 0.05 ... 0.3 (round-off only) | 6, within 1e-6 |
+| H3, H4 | pass | |
+
+Misses: none. Deviations: amendment 1 (C8 probe). The `baseline_hashes` test passed unchanged.
