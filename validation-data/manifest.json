@@ -567,25 +567,25 @@
       ]
     },
     {
-      "id": "graetz-parallel-plates-nptel",
-      "title": "Graetz problem between parallel plates: local Nu and bulk temperature tables (NPTEL ME-662 lecture 19)",
+      "id": "graetz-parallel-plates",
+      "title": "Graetz problem between parallel plates: local Nu and bulk temperature tables, computed by rcfd",
       "case": "channel",
-      "citation": "NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)",
+      "citation": "Computed by validation-data/generate_graetz.py (finite-volume eigen-solve of the classical Graetz problem; D_h based, x+ = x / (D_h Re Pr))",
       "status": "available",
       "licence": {
-        "spdx": "LicenseRef-published-numeric-data",
-        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
-        "url": "https://archive.nptel.ac.in/content/storage2/courses/112101002/downloads/l19.pdf",
-        "attribution": "NPTEL ME-662 Convective Heat Transfer, lecture 19 (tables of theta_b and Nu_x versus x+)",
-        "notes": "Tables of slides 11 to 19 read on 2026-10-17 (constant wall temperature theta_b and Nu_x, constant flux Nu_x; D_h based, x+ = x / (D_h Re Pr)). Used by validation_graetz.rs (ADR 0061). Shah and London were not read. Licence status UNRESOLVED: the PDF (A. W. Date, IIT Bombay) carries no licence or copyright statement (checked 2026-10-27); the footer of https://nptel.ac.in/ (raw page read 2026-10-27) reads 'Distributed under', 'Creative Commons Attribution-ShareAlike', 'CC BY - NC - SA' next to a by-nc-sa badge, and whether that site-wide footer covers this archived PDF is not stated; CC BY-NC-SA terms, if they applied to the table, would not fit MIT OR Apache-2.0; only numeric values are transcribed; whether the table may be redistributed is open for the maintainer (see NOTICE)."
+        "spdx": "MIT OR Apache-2.0",
+        "name": "Computed by rcfd from first principles with validation-data/generate_graetz.py; licensed like the rest of rcfd",
+        "url": "validation-data/generate_graetz.py",
+        "attribution": "rcfd contributors; the problem is the classical Graetz problem (Shah and London, Convective heat transfer in ducts, 1978)",
+        "notes": "Replaces a table first transcribed from a lecture PDF whose redistribution terms could not be established; the rows were recomputed and agree with the transcription to the printed digits, except the constant-flux Nu at x+ = 1e-4 (32.1558 converged against 32.153 printed). Used by validation_graetz.rs (ADR 0061). Rerun the generator to reproduce the file."
       },
       "files": [
         {
-          "local": "validation-data/reference/w30c_graetz_parallel_plates_nptel.csv",
-          "retrieved": "2026-10-17",
-          "source_url": "https://archive.nptel.ac.in/content/storage2/courses/112101002/downloads/l19.pdf",
-          "sha256": "5275ec4cca61721c2e9d3798bcf34f09ceadab750dbbe406639439cc91b308d3",
-          "bytes": 398
+          "local": "validation-data/reference/graetz_parallel_plates.csv",
+          "retrieved": "2026-10-27",
+          "source_url": "validation-data/generate_graetz.py (computed, numpy, N = 3000 cells)",
+          "sha256": "be9bf4fd1b4904eb0a7b21ce8a58966c64f9ce2c960733d38a0f2bbccf765db6",
+          "bytes": 423
         }
       ]
     },
@@ -593,22 +593,22 @@
       "id": "laminar-internal-flow-limits",
       "title": "Fully developed laminar internal flow Nusselt limits and Hausen mean-Nu correlation",
       "case": "channel",
-      "citation": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)",
+      "citation": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); parallel-plate limits computed by validation-data/generate_graetz.py",
       "status": "available",
       "licence": {
         "spdx": "LicenseRef-published-numeric-data",
         "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
         "url": "https://www.et.byu.edu/~vps/ME340/TABLES/8.4.pdf",
-        "attribution": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); NPTEL ME-662 lecture 19 (parallel-plate limits)",
-        "notes": "Eight values read on 2026-10-17 from BYU ME340 table 8.4 and NPTEL ME-662 lecture 19 (see the source column of the file). The original sources of the correlations (Hausen, Shah and London, Incropera) were not read. Used by validation_graetz.rs (ADR 0061)."
+        "attribution": "BYU ME340 table 8.4 (circular tube limits 3.66, 4.36 and the Hausen correlation); parallel-plate limits computed by validation-data/generate_graetz.py",
+        "notes": "Six values read on 2026-10-17 from BYU ME340 table 8.4 (circular tube and the Hausen correlation); the two parallel-plate limits (7.5407, from the slowest decaying mode, and 140/17 = 8.2353) are computed by the generator, which rewrites this file and keeps the BYU rows. The original sources of the correlations (Hausen, Shah and London, Incropera) were not read. Used by validation_graetz.rs (ADR 0061)."
       },
       "files": [
         {
-          "local": "validation-data/reference/w30c_laminar_internal_flow_limits.csv",
+          "local": "validation-data/reference/laminar_internal_flow_limits.csv",
           "retrieved": "2026-10-17",
           "source_url": "https://www.et.byu.edu/~vps/ME340/TABLES/8.4.pdf",
-          "sha256": "d124e20e91b432903381ced4a609fdfc1eb6023d29b67d2478f8ff75ca7b5ea0",
-          "bytes": 525
+          "sha256": "304919b5636008e3ddf751e00826169dd497139cc5942a94c7eedbc9d71420b0",
+          "bytes": 526
         }
       ]
     },
@@ -734,25 +734,25 @@
       ]
     },
     {
-      "id": "w31c-graetz-tube-eigenvalues-clarkson",
-      "title": "Graetz problem, circular tube, constant wall temperature: first five eigenvalues",
+      "id": "graetz-tube-eigenvalues",
+      "title": "Graetz problem, circular tube, constant wall temperature: first five eigenvalues, computed by rcfd",
       "case": "channel",
-      "citation": "Clarkson University CH490 notes, Graetz Problem (R. Subramanian)",
+      "citation": "Computed by validation-data/generate_graetz.py (Richardson extrapolation from 1000 and 2000 cells)",
       "status": "available",
       "licence": {
-        "spdx": "LicenseRef-published-numeric-data",
-        "name": "Numerical values from a published paper or public web page, transcribed; no copyright claimed on the numbers",
-        "url": "https://lin-web.clarkson.edu/projects/subramanian/ch490/notes/Graetz%20Problem.pdf",
-        "attribution": "Clarkson University CH490 lecture notes, Graetz Problem",
-        "notes": "Eigenvalues of phi'' + phi'/Y + lambda^2 (1 - Y^2) phi = 0 with phi'(0) = 0, phi(1) = 0, and the printed Nu_inf = 3.656. The local-Nu table of the tube was not obtained."
+        "spdx": "MIT OR Apache-2.0",
+        "name": "Computed by rcfd from first principles with validation-data/generate_graetz.py; licensed like the rest of rcfd",
+        "url": "validation-data/generate_graetz.py",
+        "attribution": "rcfd contributors; the problem is the classical Graetz problem (Shah and London, Convective heat transfer in ducts, 1978)",
+        "notes": "Eigenvalues of (Y phi')' + lambda^2 Y (1 - Y^2) phi = 0 with phi'(0) = 0, phi(1) = 0. Replaces a transcription from lecture notes; the five values agree with it to the printed digits. The local-Nu table of the tube was not obtained."
       },
       "files": [
         {
-          "local": "validation-data/reference/w31c_graetz_tube_cwt_eigenvalues_clarkson.csv",
-          "retrieved": "2026-10-18",
-          "source_url": "https://lin-web.clarkson.edu/projects/subramanian/ch490/notes/Graetz%20Problem.pdf",
-          "sha256": "9e683c245a836cf6a769a52977e7ace2cca8175cee6afdbf181a553a5c42a6fd",
-          "bytes": 108
+          "local": "validation-data/reference/graetz_tube_cwt_eigenvalues.csv",
+          "retrieved": "2026-10-27",
+          "source_url": "validation-data/generate_graetz.py (computed, numpy)",
+          "sha256": "36c65a29a0ec065f28b96e0e2e519e8936d79b6d745d772aea5b07818107b843",
+          "bytes": 119
         }
       ]
     },
