@@ -398,7 +398,7 @@ Further disclosures:
 
 ## Addendum 2: hygiene results
 
-On a `git archive` of commit 21d4d7c (HEAD at that time, which includes the wave 15A commits then committed): `cargo fmt --check` clean,
+On a `git archive` of commit 8909f2c (HEAD at that time, which includes the wave 15A commits then committed): `cargo fmt --check` clean,
 `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: 138 test binaries
 reported `ok`, no FAILED line, no panic. `baseline_hashes`: 3 passed, 1 ignored (the pre-existing ignored rotating-channel test), unmodified
 and not re-recorded. Later commits touch only this ADR.

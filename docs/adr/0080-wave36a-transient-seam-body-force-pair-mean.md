@@ -12,7 +12,7 @@ Parent: ADR 0076 (wave 35A; Y5 and its open item), ADR 0071 (steady `coupled_bod
 * ADR 0076 numbers (quoted, not re-measured). Y5 measured the seam body-force term with the coupled mean `rAU` **on top of K = F-G + F-S + F-R**:
   R2 (SECT-M PISO) 7.7563e-4 / 1.8884e-4, order 2.038; R2b (SECT-M PIMPLE-4) 2.4919e-5 / 6.1413e-6, order 2.021. K alone: R2 1.717, R2b 0.593,
   R3 SECT-M 1.773 / 1.773, R4 SECT-M velocity ratio 1.0651 at dt 0.05; C-O2 1.332; N1 TG-S pressure ratios 1.0952 / 1.0521.
-* **K is not in the code.** Commit 5b36209 removed F-G, F-S and F-R by the registered rule of ADR 0076. HEAD c89495f is the default kernel. The term of
+* **K is not in the code.** Commit c86154f removed F-G, F-S and F-R by the registered rule of ADR 0076. HEAD 697ebe6 is the default kernel. The term of
   this ADR therefore lands on the default kernel, not on K, and Y5 does not predict its effect there.
 * Code reading (no run). In `PimpleSolver::step_with` the body-force face term is `phi_hby_a[f] += gamma_p[f] * bf.face[f]` with
   `gamma_p = face_interpolate(rAU)`, i.e. the OWNER's `rAU` on every boundary face, including periodic ones; the pressure term of the same faces uses
@@ -79,7 +79,7 @@ tolerances 1e-14 / 1e-12, fine pair 0.025 / 0.0125 on 16 x 16 against the same-s
   reported as MISS and gets a `*_known_miss` test. **Registered in advance (rule b exception): a miss of B-R2, B-R2b or B-R3 does not remove the key**, because
   the predicted causes (seam convection lag, face-consistency floor) are defects outside F-BP that the default kernel keeps; F-BP's own job is P1.
 
-### Part K: information with K (scratch tree at 79e838d plus the same term; K stays removed, no verdict on K)
+### Part K: information with K (scratch tree at 2f5a9dd plus the same term; K stays removed, no verdict on K)
 
 * **IC (implementation check, binding for keeping B)**: R2 and R2b with K + term reproduce the Y5 errors 7.7563e-4 / 1.8884e-4 and 2.4919e-5 / 6.1413e-6 to three
   significant digits. A failure means this code is not what Y5 measured: B is then removed.
@@ -102,9 +102,9 @@ No literature. The pair-conservation bound is analytic (antisymmetry of each flu
 
 ## Final addendum (measured values, verdicts, deviations; nothing above was changed)
 
-Order of work: smoke (default code), registration (commit 4d99686), F-BP written (scratch tree of HEAD), P1 + N2b + `w33b_default_bits`, the B rows (B-R2,
-B-R2b, B-R3, B-R4; one process, each row once), then the scratch K tree (79e838d plus the same term, never committed): IC (the ADR 0076 R1/R2 test, once) and
-the R3/R4 information rows (once). Code and tests: commit a6229a3.
+Order of work: smoke (default code), registration (commit f1f91a7), F-BP written (scratch tree of HEAD), P1 + N2b + `w33b_default_bits`, the B rows (B-R2,
+B-R2b, B-R3, B-R4; one process, each row once), then the scratch K tree (2f5a9dd plus the same term, never committed): IC (the ADR 0076 R1/R2 test, once) and
+the R3/R4 information rows (once). Code and tests: commit 87f6562.
 
 ### Part B (the key on HEAD)
 
@@ -163,7 +163,7 @@ body-force mismatch is a small part of the default error, which is dominated by 
 
 None used.
 
-### Final gate (fresh `git archive` of 4a8f552)
+### Final gate (fresh `git archive` of b141728)
 
 `cargo fmt --all --check` clean; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test --workspace --release --no-fail-fast`:
 **1856 passed, 0 failed, 499 ignored** (wave 35: 1853 / 0 / 494; this ADR adds 3 default tests, P1 and the two N2b checks, and 5 ignored ones, the smoke,

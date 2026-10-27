@@ -1,6 +1,6 @@
 # ADR 0127: A faster release test stage with the same tests (process per test, one pool)
 
-Status: **ACCEPTED 2026-10-26** (goals registered before the first run of the new runner). Written at main cc0a8cb on branch `weff`,
+Status: **ACCEPTED 2026-10-26** (goals registered before the first run of the new runner). Written at main fa341bb on branch `weff`,
 worktree `<scratch dir>`, target `<target dir>`. Measurements and the full option list are in
 [`docs/test-process.md`](../test-process.md).
 
@@ -46,9 +46,9 @@ beyond today's three test threads.
 
 | Id | Goal | Measured how |
 |---|---|---|
-| G1 | Equivalence: the multiset of (binary stem, test name, outcome) from the new runner on a `git archive` of 21557f6 equals the one from the original `cargo test` log of the wave 47E gate on the same commit (2093 passed, 0 failed, 659 ignored): **0 differences** | `diff` of both sorted lists |
+| G1 | Equivalence: the multiset of (binary stem, test name, outcome) from the new runner on a `git archive` of 63fad82 equals the one from the original `cargo test` log of the wave 47E gate on the same commit (2093 passed, 0 failed, 659 ignored): **0 differences** | `diff` of both sorted lists |
 | G2 | Negative controls in a throwaway copy: a panicking integration test, a panicking unit test and a `std::process::abort()` in a test are each reported FAILED, the stage summary shows them in `failed`, exit status non-zero: **3 of 3** | runner on the changed crate |
-| G3 | Wall time of the test stage (build + tests + doc-tests) at 21557f6 with `--jobs 3`: **at most 51 min**, half of the original 102 min on the same commit | timestamps of the run |
+| G3 | Wall time of the test stage (build + tests + doc-tests) at 63fad82 with `--jobs 3`: **at most 51 min**, half of the original 102 min on the same commit | timestamps of the run |
 | G4 | Memory: never more than `jobs` test processes at once, and the summed working set of the runner's test processes **at most 1.5 GB** at every 5 s sample; build phase unchanged | `tasklist` sampler, per-test peak working set in the TSV |
 | G5 | After rebasing on main: the set of tests the runner executed and ignored equals the union of `--list` of the built binaries: **0 differences**; fmt and clippy clean | runner output vs listing |
 
@@ -67,7 +67,7 @@ A missed goal is reported as missed in the addendum with the measured value; the
 
 ## Addendum 2026-10-27: measured against the registered goals
 
-Run 1 on `git archive 21557f6` (`<scratch dir>`), `--jobs 3`, slot 1 from 23:25 to 00:32, another agent's gate in the
+Run 1 on `git archive 63fad82` (`<scratch dir>`), `--jobs 3`, slot 1 from 23:25 to 00:32, another agent's gate in the
 other slot. Details and logs: [`docs/test-process.md`](../test-process.md) section 5.
 
 | Id | Goal | Measured | Verdict |

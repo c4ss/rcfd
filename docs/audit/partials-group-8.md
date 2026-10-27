@@ -1,6 +1,6 @@
 # Partials audit, group 8
 
-Read-only audit of ten roadmap items with status `partial` (HEAD e7cead9, 2026-10-21). Each item is graded against its
+Read-only audit of ten roadmap items with status `partial` (HEAD be68b84, 2026-10-21). Each item is graded against its
 `acceptance` field in docs/roadmap.json only. Wider scope from the title, from a "SCOPE (merged review)" addition or from
 "acceptance additions" in the note is listed separately with the prefix "scope-only". It does not lower the grade, but the
 paragraph says how to record it.
@@ -9,7 +9,7 @@ Grades: DONE = the acceptance text, as written, is met by a passing non-ignored 
 tested slice exists, with the unmet clause named; TODO = nothing usable; OVERSTATED = the roadmap note claims more than the
 tests show.
 
-How the runs were made: a clean `git archive e7cead9` copy, Windows 11,
+How the runs were made: a clean `git archive be68b84` copy, Windows 11,
 `cargo test --release -p <crate> --test <name> -- --include-ignored --nocapture`, with a private target directory, on a
 machine shared with other agents. Every failing test in these runs is an `#[ignore]`d known-miss or superseded record. Each
 one fails as its note says, and no default test failed. F-149 was also run on Linux (WSL2 Ubuntu 20.04, ext4 home

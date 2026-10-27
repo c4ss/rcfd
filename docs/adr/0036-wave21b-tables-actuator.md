@@ -154,7 +154,7 @@ Registered limits above are unchanged. Everything below is what happened.
 3. D2 sentence "an `error` extrapolation law stops the run" is NOT delivered: the error mode returns NaN (as the schema documentation says); the run is not stopped.
 4. A4 was split into the registered (ignored known miss) and corrected tests as described.
 5. F-216 was implemented through a face-viscosity mask in the turbulence state (`TurbState::nu_face`); turbulence transport equations are still solved inside laminar regions.
-6. **Commit hygiene incident.** Commit 679b24b accidentally contained other waves' uncommitted hunks of `crates/rcfd-api/src/schema.rs` (time_advance, electric fields) and `crates/rcfd-fv/src/lib.rs` (`pub mod electric;`) because the shared working tree was staged with `git add` of a shared file. History was not rewritten. The wave 21A electric files were uncommitted at the time, so 679b24b alone did not build; a clean build of a given commit therefore depends on wave 21A having committed its electric files (at the time of writing they were staged but not committed).
+6. **Commit hygiene incident.** Commit 47389c4 accidentally contained other waves' uncommitted hunks of `crates/rcfd-api/src/schema.rs` (time_advance, electric fields) and `crates/rcfd-fv/src/lib.rs` (`pub mod electric;`) because the shared working tree was staged with `git add` of a shared file. History was not rewritten. The wave 21A electric files were uncommitted at the time, so 47389c4 alone did not build; a clean build of a given commit therefore depends on wave 21A having committed its electric files (at the time of writing they were staged but not committed).
 
 ### Not delivered (in addition to the list above)
 

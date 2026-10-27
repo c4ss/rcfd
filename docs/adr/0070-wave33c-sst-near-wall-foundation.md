@@ -1,7 +1,7 @@
 # ADR 0070: Wave 33C, SST near-wall foundation (term audit, flat-plate and channel checks, grid convergence)
 
 Status: registered before any rcfd run or code change of this wave (this file is committed first; results go into an addendum, limits are never widened).
-Branch main, written at HEAD 38ccbaa.
+Branch main, written at HEAD c7e44ea.
 
 ## Open items from ADR 0061, 0063, 0064
 

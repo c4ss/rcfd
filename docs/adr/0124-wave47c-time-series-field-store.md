@@ -1,6 +1,6 @@
 # ADR 0124: Wave 47C, the time-series field store (`rcfd-tsstore`, Studio plan L3) and its opt-in run-path hook
 
-Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main f307f59 on branch `w47c`, target
+Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main 7fcdf9c on branch `w47c`, target
 `<target dir>`. House rules: limits fixed before the registered runs; a missed limit becomes an ignored
 `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults are
 bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles only (IEEE 754 rounding,
@@ -141,10 +141,10 @@ one-line addition.
 
 ## Addendum (partial, 2026-10-26): measured so far
 
-* First gate run (archive of e344301, before the rebase onto cc0a8cb): fmt and clippy clean. Tests, until the run hung in C7/C8
+* First gate run (archive of e344301, before the rebase onto fa341bb): fmt and clippy clean. Tests, until the run hung in C7/C8
   (amendment 1): 1999 passed, 1 failed (`layering_matches_architecture_doc`, fixed in a3e43fd), 577 ignored; `baseline_hashes`
   passed; H1-H4 passed in release. `store.rs` (C1-C6, C9-C12) and the crates after `rcfd-tsstore` had not run when the run hung.
-* Debug runs after the rebase onto cc0a8cb (0295b9f): C1-C6, C9-C12 and H1-H4 pass; `workspace_graph` passes. Measured values equal
+* Debug runs after the rebase onto fa341bb (0295b9f): C1-C6, C9-C12 and H1-H4 pass; `workspace_graph` passes. Measured values equal
   the smoke values above (deterministic data).
 * C7/C8 with the corrected probe, debug build (smoke of amendment 1, not the registered release run): scrub 29.3 MB, whole-snapshot
   reader 159.0 MB (cap 64 MiB); debug times 0.0001 / 0.0052 / 0.0772 / 0.1683 / 0.0718 / 0.0026 / 0.0382 / 0.0001 s, all inside the
@@ -155,9 +155,9 @@ one-line addition.
 
 ## Addendum (final, 2026-10-27): registered runs, all checks pass
 
-Gate on a fresh archive of 8e1d2a3 (rebased onto main e314bca, which includes wave 47A and the main clippy fix):
-fmt clean, clippy clean, tests **2158 passed, 0 failed, 663 ignored**. A second gate run on 09a52da (base cc0a8cb) gave tests
-2131 / 0 / 662; its clippy stage failed only on two lints in main's `design/*_tests.rs`, fixed on main by e314bca.
+Gate on a fresh archive of 8e1d2a3 (rebased onto main f170925, which includes wave 47A and the main clippy fix):
+fmt clean, clippy clean, tests **2158 passed, 0 failed, 663 ignored**. A second gate run on 09a52da (base fa341bb) gave tests
+2131 / 0 / 662; its clippy stage failed only on two lints in main's `design/*_tests.rs`, fixed on main by f170925.
 
 Measured in release (separate `--nocapture` run of the same code in the worktree, values printed by the tests):
 

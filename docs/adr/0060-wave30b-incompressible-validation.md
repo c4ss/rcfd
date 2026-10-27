@@ -8,7 +8,7 @@ record. Addenda (exact numbers, deviations, diagnosis findings) may be appended 
 Clean-room: published literature and public data only; no vendor code, binaries or outputs; nothing from vendor material.
 No solver code is changed by this wave; if a defect is proven the work stops at the diagnosis (ignored known-miss test, addendum).
 
-## Audit of what was validated before this wave (HEAD 9d06638)
+## Audit of what was validated before this wave (HEAD 249d3a7)
 
 | Benchmark | Existing test | Reference | Status |
 |---|---|---|---|

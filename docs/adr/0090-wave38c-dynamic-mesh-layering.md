@@ -19,7 +19,7 @@ removal and addition?
   ghost states and face states assume a fixed mesh. An isentrope cannot be tested on the incompressible path, so this wave must add ALE to the
   compressible solver. `smoothing.rs` already has `Laplacian` and `InverseDistance(k)` diffusivities; nothing in the code base matches exhaustively on
   `SmoothingMethod` outside that file and `rcfd-api/src/dynmesh.rs` (an `if`, not a `match`).
-* Set-up smoke (scratch test on bf2aa83, existing code only, release): `box_mesh([40, 2, 2], [1.0, 0.1, 0.1])` with the x coordinates re-mapped
+* Set-up smoke (scratch test on fbbd487, existing code only, release): `box_mesh([40, 2, 2], [1.0, 0.1, 0.1])` with the x coordinates re-mapped
   through `warp` builds (160 cells, six wall patches). The existing `CompressibleSolver` (defaults: HLLC, van Leer, SSP-RK3, CFL 0.4) on this closed
   box (all patches slip walls) at rest (`rho = 1`, `p = 1`, `gamma = 1.4`) stays at rest for 100 steps: `max |u| = 0`, mass and energy drift 0.
   `max_dt = 4.23e-3`.
@@ -107,7 +107,7 @@ Decision rules: A1, A2, B1-B5, C1, C2 all met -> F-230 slice accepted, but the r
 (in the feature title) and the case-tree wiring are not delivered (registered now). Any A or B miss -> `partial` with the miss reported, or `todo` if
 no ALE step works at all. S1-S3 are a separate registered check; their outcome does not change the F-230 status.
 
-## Addendum: measured (release build, scratch tree on 2f84f63 plus this wave's files)
+## Addendum: measured (release build, scratch tree on 84d23c2 plus this wave's files)
 
 Files as planned in D1: `rcfd-mesh/src/layering.rs` (`LayerStack`, `LayerChange`, `LayerEvent`, `remap`, one unit test), `pub mod layering` in
 `rcfd-mesh/src/lib.rs`, `CompressibleSolver::step_ale` and `replace_mesh` in `rcfd-fv/src/compressible.rs` (the fixed-mesh residual is split
@@ -149,8 +149,8 @@ rule, because remeshing and case-tree wiring are missing even though every regis
 
 Defaults bit-identical, verified: a scratch test ran the fixed-mesh `CompressibleSolver` with default settings and each of Euler, RK2 and
 RK3 (300 steps, Sod data with a y shear, `box_2d(100, 3)`). The FNV hash of every conserved value's bits is identical between `compressible.rs`
-at 2f84f63 and at 7de9a54 (`cea94485dbaa04c4`, `c78a1c90bc62d177`, `b798be9366eedace`). `baseline_hashes.rs` hashes no compressible case.
+at 84d23c2 and at 094d45e (`cea94485dbaa04c4`, `c78a1c90bc62d177`, `b798be9366eedace`). `baseline_hashes.rs` hashes no compressible case.
 
-Final gate (fresh `git archive 0763acf`, `CARGO_TARGET_DIR=target-w38c`): `cargo fmt --all -- --check` clean, `cargo clippy --workspace
+Final gate (fresh `git archive 178d49b`, `CARGO_TARGET_DIR=target-w38c`): `cargo fmt --all -- --check` clean, `cargo clippy --workspace
 --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1887 passed / 0 failed / 531 ignored. Wave 37 closed at
 1881 / 0 / 531; the difference is this wave's 6 new tests. No LNK1201. This gate-totals paragraph is docs only and was not re-gated.

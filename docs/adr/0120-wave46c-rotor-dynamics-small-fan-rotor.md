@@ -6,7 +6,7 @@ house rules of ADRs 0110-0117 apply:
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
-Written at main 8bd609a (worktree `<scratch dir>`, branch `w46c`, target `<target dir>`). Clean-room: first
+Written at main 9fbedff (worktree `<scratch dir>`, branch `w46c`, target `<target dir>`). Clean-room: first
 principles (rigid-body mechanics, harmonic analysis) and our own ADRs only. Parent plan: [fan-project-breakdown.md](../fan-project-breakdown.md)
 parts E1, E2, E3 (interface only) and E4 (F-237, [ADR 0051](0051-wave27c-viscoelastic-structural-export.md)).
 
@@ -249,8 +249,8 @@ other checks sit at round-off.
 
 ## Final gate
 
-On a fresh `git archive` of 0c8385e (branch `w46c` rebased onto main 98a4903; the measured runs above were on f235b7d, which is
-86d3ce2 after the rebase), in `<scratch dir>`:
+On a fresh `git archive` of c7f9049 (branch `w46c` rebased onto main 53e1fac; the measured runs above were on f235b7d, which is
+ea7f712 after the rebase), in `<scratch dir>`:
 * `cargo fmt --check`: clean;
 * `cargo clippy --workspace --all-targets -- -D warnings`: clean;
 * `cargo test --workspace --release --no-fail-fast`: **2040 passed / 0 failed / 651 ignored**. That is the wave-45 baseline

@@ -13,9 +13,9 @@ removal), ADR 0081 part L (`solver.linear_upwind_limiter = "barth_jespersen"`), 
   flux -1.42e-5 N m (inertial control B(M1) 1.63e-4 N m, relative frame R(M1) 2.2544 N m); Y(M0) did not converge (8000 iterations, res_u 0.78,
   L 0.068 N m, Delta p_tt +981 Pa) while B(M0) converged in 124 and R(M0) in 247 iterations; Y(M2) and B(M2) did not converge within 60 minutes
   (B(M2): 7 063 iterations, two runs sharing the machine); the bladed F1 smoke had continuity about 0.4 for 300 iterations.
-* The removed F-RP patch (`w36c_frp_removed.patch`, cut against c89495f) applies cleanly to 6f97dcb (`git apply --check`). It is re-applied unchanged
+* The removed F-RP patch (`w36c_frp_removed.patch`, cut against 697ebe6) applies cleanly to 86145b9 (`git apply --check`). It is re-applied unchanged
   as the starting point of every arm of this wave.
-* Code read on 6f97dcb (read-only): `CoupledSolver::with_solids` refuses periodic patches ("the coupled solver does not support periodic patches");
+* Code read on 86145b9 (read-only): `CoupledSolver::with_solids` refuses periodic patches ("the coupled solver does not support periodic patches");
   `Simulation::new` refuses `turbulence.model`, `sources` (and others) with `solver.algorithm = "coupled"`; the coupled engine has no counterpart of
   `conv_flux_offset`; its momentum blocks are one matrix per component (no cross-component block). In `sim.rs` an MRF zone switches
   `component_diag_correction` on, while `wall_pressure_trapezoid` and with it `coupled_body_pair_mean` stay off (they are set only for `rotating_frame` and
@@ -112,7 +112,7 @@ Smokes (rule (d) of wave 35): every arm's Y and B on M0 get construction plus a 
   plus this wave's tests, and `crates/rcfd-api/tests/baseline_hashes.rs` is unchanged; (ii) ADR 0082 X2a-36 re-run on the final code reproduces outlet
   L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit; (iii) the ADR 0082 A0 (iii) test (ADR 0008 annulus `mrf`, 20 iterations, the key
   absent and `rotor_passage = false`) bit-identical; (iv) if arm C is kept: the coupled lid cavity (`crates/rcfd-api/tests/w36b_coupled_guard.rs`
-  set-up without the NaN start: 12 x 12, nu 0.01, 20 iterations) gives bit-identical u, p and flux on the final code and on 6f97dcb (the 6f97dcb values
+  set-up without the NaN start: 12 x 12, nu 0.01, 20 iterations) gives bit-identical u, p and flux on the final code and on 86145b9 (the 86145b9 values
   are recorded in amendment 1 before any coupled code is written).
 * **A1 construction.** The F-RP closure check passes (1e-10) on M0-M2 and the E0 mesh; at iteration 1 of Y_A(M1) the periodic pairs satisfy
   `|phi_rel,f + phi_rel,g| <= 1e-12 Omega r |S|`.
@@ -202,7 +202,7 @@ the cross blocks are exactly zero, so it is the inertial formulation on the coup
 
 ## Addendum (2026-10-20): measured values, verdicts, removal of F-RP and of every arm, misses and deviations
 
-All runs: release builds of 6f97dcb plus this wave's working copy, single thread per run, at most two of my runs at a time on a machine shared with
+All runs: release builds of 86145b9 plus this wave's working copy, single thread per run, at most two of my runs at a time on a machine shared with
 the other wave-37 agents, one run per set-up, tolerance 1e-5 unless stated. Full-annulus values, `rho` = 1.2. Logs and the removed code are kept
 outside the repository (`w37b_logs`, `w37b_frp_and_arm_c_removed.patch`, `w37b_fan01_rotor_passage_w37b.rs` in the session scratchpad).
 
@@ -227,7 +227,7 @@ removed; F1 (FAN-01 with the fix) was NOT RUN, so no torque or Delta p_ts change
 | A1 F-RP closure (`Simulation::new`) on M0, M1, M2 | 1e-10 | built on all three | pass |
 | A1 F-RP closure on the E0 mesh | 1e-10 | not built (F1 not run); not measured in this wave (ADR 0082: 1.2e-15) | not measured |
 | A0 (iii) key absent = `false` (20 iterations) | bit-identical | bit-identical | pass (code then removed) |
-| A0 (iv) coupled cavity hashes after the arm C code | 6f97dcb hashes | reproduced | pass (code then removed) |
+| A0 (iv) coupled cavity hashes after the arm C code | 86145b9 hashes | reproduced | pass (code then removed) |
 | Screen I: Y_I(M0) converges; A2, A3 on M0 | converged; 10 x 5.880e-4 N m; 0.2 Pa; 0 Pa | 476 it; 1.201e-4 N m; 0.0000 Pa; -1.648 Pa | pass |
 | Screen L: Y_L(M0) converges | converged | NOT CONVERGED (8000 it, res_u 0.36; B_L(M0) also not, res_u 2.5e-3) | MISS |
 | Screen C: Y_C(M0) converges; A2, A3 on M0 | converged; 10 x 5.406e-4 N m; 0.2 Pa; 0 Pa | 476 it; 7.467e-5 N m; 0.0000 Pa; -1.648 Pa | pass |
@@ -283,7 +283,7 @@ Nothing of this wave changes the solver. F1 was not run.
   rotor-passage source.
 * The arm C code scope grew by two parse-time exceptions and by a refusal of periodic patches on the coupled solver without a rotor-passage source
   (the extension was verified only on the rotor passage); all removed with arm C.
-* The A0 (iv) hashes were recorded on the working copy with only the F-RP patch applied, not on a clean 6f97dcb checkout (F-RP touches no code of the
+* The A0 (iv) hashes were recorded on the working copy with only the F-RP patch applied, not on a clean 86145b9 checkout (F-RP touches no code of the
   coupled path).
 * The outlet-backflow print was added to the harness after D0, DS, DT and DP had run (it is read from DK, which is bit-identical to D0).
 * The arm runs shared the machine with each other and with other agents; the M2 runs of arm I ran two at a time for the full hour, Y_C(M2) shared the
@@ -296,7 +296,7 @@ None. Every limit is derived here, measured, or a decision threshold of this pro
 
 ### Final gate
 
-Fresh `git archive` of 38e87a8 (main, which contains the wave-37A, 37C and 37D commits up to 759d980; this wave committed documentation only):
+Fresh `git archive` of 82967e6 (main, which contains the wave-37A, 37C and 37D commits up to 53688b3; this wave committed documentation only):
 `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`
 1881 passed, 0 failed, 531 ignored (no LNK1201). `crates/rcfd-api/tests/baseline_hashes.rs` is untouched by this wave. This paragraph is a docs-only
 commit and was not re-gated.

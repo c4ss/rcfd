@@ -12,7 +12,7 @@ vendor material. Other waves (26A transient solver, 26B meshing) work in the sam
 of two crates, `sim.rs` report kinds, `schema.rs` report enum, `case-schema.md`, `reference-data.md`, `roadmap.json`), committed
 through a temporary index.
 
-## Audit (HEAD 51f1980)
+## Audit (HEAD c8405be)
 
 * `rcfd-post::integrals`: patch area/integral/average, volume flux, mass flux, scalar flux, force and moment (`wall_force_and_moment`),
   force/moment coefficients; `registers::stats` (volume-weighted min/max/mean/rms of a register); `derived::sample_line/plane`

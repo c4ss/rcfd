@@ -6,7 +6,7 @@ house rules of ADRs 0110-0117 apply:
 * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
-Written at main 8bd609a (worktree `<scratch dir>`, branch `w46d`, target `<target dir>`). Clean-room: first
+Written at main 9fbedff (worktree `<scratch dir>`, branch `w46d`, target `<target dir>`). Clean-room: first
 principles and published statistics only. Parents: ADR 0067 (design loop, store, MCP design tools), `docs/fan-project-breakdown.md`
 parts H4 and F1.
 

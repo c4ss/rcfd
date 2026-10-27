@@ -111,7 +111,7 @@ above: READ (opened and the relevant content read), seen (citation, record page 
 not checked against a primary text). Numbers below are quoted from the text of the sources or derived here (said so); values that exist
 only in figures were not read off the plots. No data tables are copied into the repository; nothing was added to `manifest.json`.
 Reynolds numbers derived here use nu = 1.5e-5 m^2/s. The generator these sources are judged against is `rcfd_mesh::fan` as of main
-8bd609a: one NACA 4-digit or double-circular-arc family per rotor, sections on cylinders given at radial stations (chord, stagger, camber,
+9fbedff: one NACA 4-digit or double-circular-arc family per rotor, sections on cylinders given at radial stations (chord, stagger, camber,
 thickness, sweep, lean), cylindrical hub, cylindrical shroud with a tip gap, no stator row, no import of measured section coordinates.
 
 Ranking criteria (written after reading, not before): (1) regime match (size, tip speed, chord Reynolds number, tip gap); (2) complete

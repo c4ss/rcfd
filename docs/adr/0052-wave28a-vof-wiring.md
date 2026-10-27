@@ -14,7 +14,7 @@ and F-228 (population balance, only if time remains). One defect is carried over
 broke down in the 120 x 40 dam break at step 120 (ADR 0049 addendum, "not investigated"). Other waves (28B, 28C) work in the same
 tree; this wave edits `vof.rs` (rcfd-fv and rcfd-api), `pressure.rs` (one additive function), the schema and docs, and adds new files.
 
-## Audit (HEAD 9c75732)
+## Audit (HEAD ef6a144)
 
 * `solve_pressure_parts` assembles `laplacian(gamma_eff) p = -div(phiHbyA)` with `gamma = interpolate(V / a_p)`; with the mixture
   density inside `a_p = rho/dt + ...` the coefficient spans about 1000:1 between water and air cells. With no Dirichlet pressure
@@ -215,8 +215,8 @@ AMG-CG converging well below the cap; A4 (the AMG dam break, registered above) p
 
 ## Addendum 2 (written after the runs): results, misses, deviations
 
-Commits: ADR (ba3ec3d), AMG fix and reproducer (e4fffb7), A4 test, mass-transfer / wave / relaxation library and M tests (9aa5d53),
-wave-tank tests (b677781), tree wiring and documents (3b965fb). No registered limit was widened, replaced or deleted.
+Commits: ADR (3effd08), AMG fix and reproducer (df1ee5b), A4 test, mass-transfer / wave / relaxation library and M tests (892e6fb),
+wave-tank tests (64b1d16), tree wiring and documents (bc27ff9). No registered limit was widened, replaced or deleted.
 
 AMG (A4, fix of addendum 1). `weak_row_has_finite_hierarchy` passes; A4 on the 120 x 40 dam break with AMG: finite, mean 12.4
 pressure iterations per corrector (plain CG 157.9; limit: at most half), at most 41 per step (cap 3 x 60), wall 13.0 s against 23.5 s

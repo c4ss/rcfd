@@ -11,7 +11,7 @@ vendor material. Waves 29B/29C/29D work in the same tree: this wave adds new fil
 (`rcfd-fv/src/lib.rs`, `outlets.rs`, `rcfd-api` schema and bc_cat for the one new enum value, docs), committed through a temporary
 index. The baseline hashes and all existing tests are unchanged by construction (re-verified at the end).
 
-## Audit (HEAD 67dc5d3)
+## Audit (HEAD 60a5375)
 
 * F-031/ADR 0008 already deliver a steady frozen-rotor zone: `sources.<name>.type = "mrf"` in the ABSOLUTE-velocity formulation.
   In that formulation the frame change at a zone interface is the identity for the solved variable (the absolute velocity is
@@ -225,6 +225,6 @@ F-204 items, time-varying mass flow, compressible mass-flow/total-pressure inlet
   `A_b/A'_b` (up to 27 % on that mesh pair). A uniform state passes unchanged only if the band edges line up with the radial face layers on both sides (or the band areas agree); mass is conserved exactly regardless.
 * R4 first attempt was rejected by MRF validation because the test's zone box ended at z = 0.2 instead of the interface z = 0.4 (test-code bug, no measurement); corrected in the same file before any result.
 * R5 compares the three frame choices against each other and against the single-frame (Omega = 0 in the lower zone) run on the SAME non-conformal mesh, not against a separate single-block mesh.
-* `docs/roadmap.json` gained a trailing newline in commit 49a9f06 (the file had none); removed again in the next docs commit.
-* `17a9e3f` reorders the `pub mod mixture;` line that wave 29B added in `rcfd-fv/src/lib.rs` to satisfy rustfmt.
+* `docs/roadmap.json` gained a trailing newline in commit b00c39c (the file had none); removed again in the next docs commit.
+* `bd4b356` reorders the `pub mod mixture;` line that wave 29B added in `rcfd-fv/src/lib.rs` to satisfy rustfmt.
 * F-200: no new BC kind was added; the closed-form checks asked for already exist as ADR 0022 A1, A5, D2, C2, C5; only `guarded_secant` is new. F-204 was not touched.

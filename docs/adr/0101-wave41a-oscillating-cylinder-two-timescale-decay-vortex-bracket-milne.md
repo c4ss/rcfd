@@ -15,7 +15,7 @@ F-052 note did not count.
 
 ## What was run before this ADR was written (disclosed)
 
-Test code was written first. Only these runs were made (release, HEAD a2e0bfd plus these test files):
+Test code was written first. Only these runs were made (release, HEAD 2eb65ee plus these test files):
 
 * `e1_shear_wave_setup_smoke`: rates 0.999197 and 128.0968 (ratio 128.20); one PISO step of dt = 0.01 reproduces the
   implicit-Euler factors of both modes to 1.66e-15 (relative L2).
@@ -157,7 +157,7 @@ discrete ordinates stay in F-130. The note's "still partial until the thick Miln
 
 ## Results
 
-Addendum written after the runs: release build, HEAD 4a94ca6 (this ADR) plus the test files. Each registered test was run once,
+Addendum written after the runs: release build, HEAD 7f3e130 (this ADR) plus the test files. Each registered test was run once,
 except E1, see the deviation below.
 
 | Check | Measured | Limit | Result |

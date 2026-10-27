@@ -2,7 +2,7 @@
 
 Status: registered before any solver code of this wave was written. Limits and decision rules below are not changed after a run; a
 missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here
-as an amendment before it runs. Written at HEAD 2f1a3ce, target `<target dir>`. Clean-room: first principles only
+as an amendment before it runs. Written at HEAD 3ac9a0e, target `<target dir>`. Clean-room: first principles only
 (exact solutions of the Navier-Stokes equations, rigid-rotation kinematics); no literature value enters a limit.
 
 ## Context
@@ -271,7 +271,7 @@ Changes, registered now:
 | K3c band effect (F1 on all sector arms) | 1.8e-11 U | 4.3e-4 | pass |
 | K3i inertial sector with F1 against the inertial annulus (reported) | 2.2e-12 U (4.6e-3 U without F1) | none | reported |
 | K4 exact state: max u - (0,0,U); max p | 1.1e-15 U; 0 | 1e-8 | pass |
-| K5 error (controls 6.76e-3, 1.107e-2); net interface flux; seam balance | 1.27e-2 V_i (0.76 of the bound); 2.0e-17 (5e-18 on the scratch tree at 2f1a3ce); 8.1e-12 | 2e-2 and 1.5x; 1e-8; 1e-8 | pass |
+| K5 error (controls 6.76e-3, 1.107e-2); net interface flux; seam balance | 1.27e-2 V_i (0.76 of the bound); 2.0e-17 (5e-18 on the scratch tree at 3ac9a0e); 8.1e-12 | 2e-2 and 1.5x; 1e-8; 1e-8 | pass |
 | K5 sum of absolute interface fluxes (reported) | 5.8e-3 V_i A | none (ADR 0109 known miss) | reported |
 | K6 fan empty passage (library level, 300 iterations) | 7.4e-4 U, worst cell on hub/shroud, not on a seam; seam pair 5.4e-14 | 1e-8 | MISS (ignored known miss, as predicted) |
 | A1 key absent / false / true on the M2 annulus, 20 iterations | bit-identical | bit-identical | pass |
@@ -309,7 +309,7 @@ Status: F-126 stays partial (acceptance, a published compressor case, not attemp
 
 ## Final gate
 
-Fresh `git archive` of HEAD 5998ca2 (which includes the wave-44B commits made meanwhile): `cargo fmt --check` clean, `cargo clippy
+Fresh `git archive` of HEAD 8c2c8f0 (which includes the wave-44B commits made meanwhile): `cargo fmt --check` clean, `cargo clippy
 --workspace --all-targets -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 2006 passed, 1 failed, 627 ignored. The
 failure was `rules_w19c::e2_no_error_level_false_positives_and_warnings_are_only_sv103`: it extracts case texts from test sources, and the
 fan mesh section of `crates/rcfd-api/tests/mrf_cyclic_seams_w44c.rs`, written as a standalone constant, parsed as a case whose sheared

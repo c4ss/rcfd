@@ -9,7 +9,7 @@ without touching a registered limit.
 Scope. F-214 (size S) and F-217 (size M) are `todo`. Each gets a vertical slice and stops at `partial` unless every acceptance point
 is met; the gaps are named at the end. Clean-room: published literature and first principles only; no vendor code, text, data or
 names; nothing from vendor material. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and
-are not re-recorded (3 passed, 1 ignored on HEAD 9da6e7d before any change of this wave, run with `CARGO_TARGET_DIR=<target dir>`).
+are not re-recorded (3 passed, 1 ignored on HEAD 7cf948f before any change of this wave, run with `CARGO_TARGET_DIR=<target dir>`).
 Schema additions are additive with explicit unset sentinels. Parallel waves 23B and 23C work in the same tree: shared files
 (`schema.rs`, `sim.rs`, `lib.rs`, `case.rs`) get small targeted edits and are committed through a temporary index with only this
 wave's hunks.
