@@ -1,6 +1,6 @@
 # Roadmap overview
 
-This page is the short, plain-language version of the plan. The full list of 175 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
+This page is the short, plain-language version of the plan. The full list of 184 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
 
 It is for anyone who wants to know what rcfd can do today and what comes next. To learn how to use rcfd, start at [the documentation home](index.md) instead.
 
@@ -12,7 +12,7 @@ It is early-stage software. It has not been validated for engineering decisions,
 
 ## Where it stands
 
-Of the 175 roadmap items, 95 are done, 56 are partly done and 24 have not started. Counting each partly done item as half gives about 70%. That figure measures how many planned items have landed, not how accurate the solver is. A partly done item usually works for some cases and has a stated gap.
+Of the 184 roadmap items, 95 are done, 63 are partly done and 26 have not started. Counting each partly done item as half gives about 69%. That figure measures how many planned items have landed, not how accurate the solver is. A partly done item usually works for some cases and has a stated gap.
 
 | Area | Done | Partly done | Not started |
 | --- | --- | --- | --- |
@@ -24,8 +24,8 @@ Of the 175 roadmap items, 95 are done, 56 are partly done and 24 have not starte
 | Compressible flow | 3 | 2 | 1 |
 | Post-processing and VTK output | 11 | 4 | 0 |
 | Scripting API, CLI and settings tree | 8 | 1 | 0 |
-| AI assistant and desktop app integration | 16 | 5 | 1 |
-| Advanced physics and scale (stretch) | 8 | 18 | 20 |
+| AI assistant and desktop app integration | 16 | 10 | 3 |
+| Advanced physics and scale (stretch) | 8 | 20 | 20 |
 
 ## What works today
 
