@@ -317,6 +317,13 @@ after the fix. Debug runs unless noted; one commit per finding on branch `wfix`.
   5 s and `ensure_runner` falls back to the direct start. The PowerShell route itself is not observed; the round trip through the
   real argv parser is the evidence.
 * **Finding 16a:** `service.rs::sandbox_path` (falls back to the raw root) is untouched.
+* **Finding 17, limits of the checks:** the negative control inside the two flag tests is a constant (flags 0 of a command built
+  without the helper); the discriminating evidence is the seam-only run, where every site read 0x0. The source scan (c) reads each
+  file only up to its first `#[cfg(test)]`; `case::sandbox_contains` (finding 16a) sits after `case.rs`'s existing test module, so a
+  direct spawn added below that point would not be seen (known limit, code not moved after the gate).
+* **`scripts/limit_audit.py` (from main, ADR 0129) on the rebased tree:** three hits in this ADR's tests, none makes a test unable to
+  fail: `driver_init_wfix.rs:75` (a `return` inside a `map` closure), `upload_limit_wfix.rs:44` (the registered no-adapter SKIP),
+  `runner_wfix.rs:284` (a set-up timeout guard in F4).
 * **Finding 17 (e):** outside the suite (Python, standard library): from a parent started with `DETACHED_PROCESS` (no console, like the
   runner), a child console program without flags got a console window (`GetConsoleWindow` = 31656568) and with `CREATE_NO_WINDOW`
   none (0). From this agent's own shell the check does not discriminate (no flag also read 0). This verifies the flag's effect, not
@@ -334,8 +341,8 @@ Fresh `git archive` in `<scratch dir>`, `scripts/gate_test.py` (docs/test-proces
 | 2 | e646d2d (clippy fixed) | 0 | 0 | 2213 / 0 / 666 |
 | 3 | b8cf6eb (finding 17 added) | 0 | 0 | **2216 / 0 / 666** (61 min) |
 
-Run 3 is the final gate. The ADR 0124 gate on main's code (8e1d2a3) recorded 2158 / 0 / 663 with the old `cargo test` stage; the
-difference is not broken down here (this ADR adds 26 tests, none ignored).
+Run 3 is the final gate. ADR 0129's final gate on ea77b91 recorded 2190 / 0 / 666; `cb61148..ea77b91` changes no file under
+`crates/`, so that is the same crate code as this branch's base: 2216 - 2190 = 26, the tests this ADR adds (none ignored).
 After the gate the branch was rebased onto main 5ce492c (ADR 0129: scripts and docs only, no crate code; no conflict). On the
 rebased head: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, debug tests of the touched
 crates: rcfd-runner, rcfd-claude, rcfd-project, rcfd-render 101 passed / 0 failed / 7 ignored; rcfd-tsstore (lib, store, tail_wfix)
