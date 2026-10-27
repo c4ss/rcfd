@@ -35,8 +35,8 @@ fn nonneg(name: &str, v: f64) -> Result<(), ProxyError> {
     }
 }
 
-/// Proudman constant used by Sarkar and Hussaini's DNS calibration as quoted by vendor documentation (secondary
-/// source; the original papers were not read).
+/// Proudman constant, attributed to Sarkar and Hussaini's DNS calibration (UNVERIFIED: secondary sources only, the original
+/// papers were not read; see docs/provenance.md).
 pub const PROUDMAN_ALPHA: f64 = 0.1;
 /// Reference acoustic power density for the dB value, W/m^3.
 pub const POWER_DENSITY_REF: f64 = 1e-12;

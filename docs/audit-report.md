@@ -263,8 +263,9 @@ Grep of tracked files (253) for vendor and product names and for install-path pa
   OpenFOAM-11 tutorial, GPL, fetched not vendored), `docs/case-schema.md` (Fluent profile syntax not implemented),
   `sim.rs` doc comment (counterpart of a vendor interpolate-file command and initial-file option), `schema.rs`
   (accepted mesh file formats). Acceptable.
-- Vendor documentation cited as a source of constants: `kepsilon.rs` header and `docs/reference-data.md` (RNG constants and
-  the wall-function constants). These are textbook constants, but the citations were of a vendor manual, not of papers, and
+- Constants cited from a non-published source: `kepsilon.rs` header and `docs/reference-data.md` (RNG constants and
+  the wall-function constants). These are textbook constants, but the citations were not of papers (see
+  [provenance](provenance.md)), and
   the CONTRIBUTING rule is "textbooks/papers only". Low risk, worth a second source. (Later edit: the entries now name a
   published source where one exists and are otherwise labelled unverified; see `docs/reference-data.md`.)
 - Guard code: `rcfd-io/src/datapack.rs` rejects manifest URLs that point at a proprietary install or a local path; its test
