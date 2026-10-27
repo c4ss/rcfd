@@ -142,10 +142,12 @@ struct Pending {
     check: Option<Child>,
 }
 
-struct Runner {
-    store: FsStore,
+struct Runner<S: RunStore = FsStore> {
+    store: S,
     cfg: Config,
     cfg_src: String,
+    /// The solver binary, fixed at runner start.
+    solver: PathBuf,
     known: HashSet<String>,
     pending: Vec<Pending>,
     active: Vec<Active>,
@@ -174,15 +176,7 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     let info = json!({"pid": std::process::id(), "started": records::now_iso(), "config": cfg,
                       "config_source": cfg_src, "rcfd_bin": cfg.solver()});
     records::atomic_write(&dot.join("runner.json"), info.to_string().as_bytes()).map_err(|e| e.to_string())?;
-    let mut r = Runner {
-        store: FsStore::new(project),
-        cfg,
-        cfg_src,
-        known: HashSet::new(),
-        pending: Vec::new(),
-        active: Vec::new(),
-        launch_seq: 0,
-    };
+    let mut r = Runner::new(FsStore::new(project), cfg, cfg_src);
     let poll = Duration::from_millis(r.cfg.poll_ms);
     loop {
         if dot.join("shutdown").exists() {
@@ -207,7 +201,20 @@ fn read_last_line(p: &Path) -> Option<String> {
     text.lines().rev().find(|l| !l.trim().is_empty()).map(String::from)
 }
 
-impl Runner {
+impl<S: RunStore> Runner<S> {
+    fn new(store: S, cfg: Config, cfg_src: String) -> Self {
+        Runner {
+            store,
+            solver: cfg.solver(),
+            cfg,
+            cfg_src,
+            known: HashSet::new(),
+            pending: Vec::new(),
+            active: Vec::new(),
+            launch_seq: 0,
+        }
+    }
+
     fn dir(&self, id: &str) -> PathBuf {
         self.store.run_dir(id)
     }
@@ -265,6 +272,19 @@ impl Runner {
                 continue; // retried next tick
             };
             self.known.insert(id.clone());
+            let launched = match (st.state, st.pid) {
+                (RunState::Queued, _) | (RunState::Paused, None) => self.launched_pid(&id),
+                _ => None,
+            };
+            if let Some(pid) = launched {
+                // launched, but the running status never reached the disk: adopt (the probe settles it), never relaunch
+                let mut run = st.clone();
+                run.state = RunState::Running;
+                run.pid = Some(pid);
+                self.set_state(&id, &run, "adopted: a launched event without a running status");
+                self.adopt(id, &run, pid, &rec);
+                continue;
+            }
             match (st.state, st.pid) {
                 (RunState::Queued, _) | (RunState::Paused, None) => self.pending.push(Pending {
                     paused: st.state == RunState::Paused,
@@ -281,6 +301,18 @@ impl Runner {
                 _ => {}
             }
         }
+    }
+
+    /// Pid of the last `launched` event of run `id`.
+    fn launched_pid(&self, id: &str) -> Option<u32> {
+        std::fs::read_to_string(self.dir(id).join("events.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter(|v| v["event"] == "launched")
+            .last()
+            .and_then(|v| v["pid"].as_u64())
+            .and_then(|p| u32::try_from(p).ok())
     }
 
     fn adopt(&mut self, id: String, st: &RunStatus, pid: u32, rec: &RunRecord) {
@@ -394,7 +426,7 @@ impl Runner {
             sys::no_window(&mut cmd);
             let child = cmd
                 .spawn()
-                .map_err(|e| format!("cannot start the solver {}: {e}", self.cfg.solver().display()))?;
+                .map_err(|e| format!("cannot start the solver {}: {e}", self.solver.display()))?;
             p.check = Some(child);
             *checking = true;
             return Ok(None);
@@ -472,7 +504,7 @@ impl Runner {
     }
 
     fn solver_cmd(&self, rec: &RunRecord, dir: &Path) -> Command {
-        let mut cmd = Command::new(self.cfg.solver());
+        let mut cmd = Command::new(&self.solver);
         cmd.arg("run")
             .arg(dir.join("case.snapshot"))
             .arg("--case-dir")
@@ -541,19 +573,43 @@ impl Runner {
         cmd.stdout(log.map_or_else(|_| Stdio::null(), Stdio::from));
         sys::no_window(&mut cmd);
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
                 drop(cmd); // the runner keeps no handle on log.txt
                 self.launch_seq += 1;
                 let pid = child.id();
                 let mut st = RunStatus::new(RunState::Running);
                 st.pid = Some(pid);
-                self.set_state(&id, &st, "launched");
+                // the launched event first: a later runner adopts a run that has one instead of launching it again
+                let recorded = self
+                    .store
+                    .append_event(
+                        &id,
+                        json!({"event": "launched", "pid": pid, "launch_seq": self.launch_seq,
+                               "threads": rec.settings.threads, "mem_mb": mem_mb}),
+                    )
+                    .map_err(|e| (dir.join("events.jsonl"), e))
+                    .and_then(|()| {
+                        self.store
+                            .write_status(&id, &st)
+                            .map_err(|e| (dir.join("status.json"), e))
+                    });
+                if let Err((file, e)) = recorded {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    self.fail_pending(
+                        &id,
+                        format!(
+                            "cannot record the launched solver {pid} in {}: {e}; the solver was stopped so that no second one starts",
+                            file.display()
+                        ),
+                    );
+                    return;
+                }
                 note(
                     "event",
                     self.store.append_event(
                         &id,
-                        json!({"event": "launched", "pid": pid, "launch_seq": self.launch_seq,
-                               "threads": rec.settings.threads, "mem_mb": mem_mb}),
+                        json!({"event": "state", "state": st.state, "reason": "launched", "pid": pid}),
                     ),
                 );
                 self.active.push(Active {
@@ -574,7 +630,7 @@ impl Runner {
                 });
             }
             Err(e) => {
-                let why = format!("cannot start the solver {}: {e}", self.cfg.solver().display());
+                let why = format!("cannot start the solver {}: {e}", self.solver.display());
                 self.fail_pending(&id, why);
             }
         }
@@ -794,5 +850,151 @@ impl Runner {
                 ),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::records::RunSettings;
+    use std::io;
+
+    const CASE: &str = "title = \"runner unit\"\n[mesh]\ngenerator = \"cavity_2d\"\nnx = 12\nny = 12\n[physics]\nnu = 0.01\n\
+        [boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n\
+        [solver]\nalgorithm = \"simplec\"\nconvection = \"upwind\"\nmax_iterations = 400\ntolerance_u = 1e-14\ntolerance_p = 1e-14\n";
+
+    /// `rcfd` of the same target directory (`target/<profile>/deps/<test>` -> `target/<profile>/rcfd`).
+    fn rcfd() -> PathBuf {
+        let exe = std::env::current_exe().unwrap();
+        let p = exe
+            .parent()
+            .and_then(Path::parent)
+            .unwrap()
+            .join(format!("rcfd{}", std::env::consts::EXE_SUFFIX));
+        assert!(p.exists(), "{} missing (cargo build -p rcfd-cli)", p.display());
+        p
+    }
+
+    fn project(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("rcfd_runner_unit_{}_{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("cases")).unwrap();
+        std::fs::write(d.join("cases/cavity.toml"), CASE).unwrap();
+        d
+    }
+
+    fn runner<S: RunStore>(store: S) -> Runner<S> {
+        let cfg = Config {
+            max_runs: 1,
+            cpu_threads: 8,
+            mem_budget_mb: 100_000,
+            poll_ms: 50,
+            adopt_probe_ms: 0,
+            ..Config::default()
+        };
+        let mut r = Runner::new(store, cfg, "test".into());
+        r.solver = rcfd();
+        r
+    }
+
+    fn tick<S: RunStore>(r: &mut Runner<S>) {
+        r.scan();
+        r.tick_pending();
+        r.tick_active();
+        r.schedule();
+    }
+
+    fn launched_pids(store: &FsStore, id: &str) -> Vec<u32> {
+        std::fs::read_to_string(store.run_dir(id).join("events.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter(|v| v["event"] == "launched")
+            .filter_map(|v| v["pid"].as_u64().map(|p| p as u32))
+            .collect()
+    }
+
+    /// A store whose write of a `running` status fails (ADR 0128 finding 3).
+    struct FailRunning(FsStore);
+
+    impl RunStore for FailRunning {
+        fn project(&self) -> &Path {
+            self.0.project()
+        }
+        fn list_runs(&self) -> io::Result<Vec<String>> {
+            self.0.list_runs()
+        }
+        fn create_run(&self, case: &Path, settings: &RunSettings, v: Option<String>) -> io::Result<String> {
+            self.0.create_run(case, settings, v)
+        }
+        fn read_record(&self, id: &str) -> io::Result<RunRecord> {
+            self.0.read_record(id)
+        }
+        fn read_status(&self, id: &str) -> io::Result<RunStatus> {
+            self.0.read_status(id)
+        }
+        fn write_status(&self, id: &str, status: &RunStatus) -> io::Result<()> {
+            if status.state == RunState::Running {
+                return Err(io::Error::other("injected write failure"));
+            }
+            self.0.write_status(id, status)
+        }
+        fn append_event(&self, id: &str, event: Value) -> io::Result<()> {
+            self.0.append_event(id, event)
+        }
+        fn append_residual(&self, id: &str, line: &Value) -> io::Result<()> {
+            self.0.append_residual(id, line)
+        }
+        fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()> {
+            self.0.write_metrics(id, metrics)
+        }
+    }
+
+    /// F3: a failed `running` write kills the solver and fails the run; a later runner launches nothing.
+    #[test]
+    fn f03_failed_running_write_kills_the_solver_and_fails_the_run() {
+        let dir = project("f03");
+        let fs = FsStore::new(&dir);
+        let settings = RunSettings {
+            mem_mb: Some(10),
+            set: vec!["solver.max_iterations=100000".into()],
+            ..RunSettings::default()
+        };
+        let id = fs.create_run(&dir.join("cases/cavity.toml"), &settings, None).unwrap();
+        let mut r1 = runner(FailRunning(fs.clone()));
+        for _ in 0..3 {
+            tick(&mut r1);
+        }
+        let first = launched_pids(&fs, &id);
+        let gone = first.first().is_some_and(|&p| {
+            let t0 = Instant::now();
+            while sys::pid_alive(p, "rcfd") && t0.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            !sys::pid_alive(p, "rcfd")
+        });
+        let st1 = fs.read_status(&id).unwrap();
+        let mut r2 = runner(fs.clone());
+        for _ in 0..3 {
+            tick(&mut r2);
+        }
+        let all = launched_pids(&fs, &id);
+        let spawns = r1.launch_seq + r2.launch_seq;
+        for &p in &all {
+            if sys::pid_alive(p, "rcfd") {
+                sys::kill(p);
+            }
+        }
+        eprintln!(
+            "F3: spawns {spawns}, launched events {all:?}, first solver gone {gone}, status after the first runner {:?}: {:?}",
+            st1.state, st1.reason
+        );
+        assert_eq!(spawns, 1, "solver processes started");
+        assert_eq!(all.len(), 1, "launched events");
+        assert!(gone, "the solver of the failed write still runs");
+        assert_eq!(st1.state, RunState::Failed);
+        assert!(st1.reason.unwrap_or_default().contains("status.json"));
+        std::thread::sleep(Duration::from_millis(200));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
