@@ -584,8 +584,8 @@
           "local": "validation-data/reference/graetz_parallel_plates.csv",
           "retrieved": "2026-10-27",
           "source_url": "validation-data/generate_graetz.py (computed, numpy, N = 3000 cells)",
-          "sha256": "be9bf4fd1b4904eb0a7b21ce8a58966c64f9ce2c960733d38a0f2bbccf765db6",
-          "bytes": 423
+          "sha256": "e9a60e4af4bb1986fa660c0912bd16ba982d66d3d410848245fac6b4386e0512",
+          "bytes": 403
         }
       ]
     },
@@ -607,8 +607,8 @@
           "local": "validation-data/reference/laminar_internal_flow_limits.csv",
           "retrieved": "2026-10-17",
           "source_url": "https://www.et.byu.edu/~vps/ME340/TABLES/8.4.pdf",
-          "sha256": "304919b5636008e3ddf751e00826169dd497139cc5942a94c7eedbc9d71420b0",
-          "bytes": 526
+          "sha256": "057237dcdfd36ecefe7cb38701d2d18af3d0e518ff8df1522f0723b52daf276b",
+          "bytes": 517
         }
       ]
     },
@@ -751,8 +751,8 @@
           "local": "validation-data/reference/graetz_tube_cwt_eigenvalues.csv",
           "retrieved": "2026-10-27",
           "source_url": "validation-data/generate_graetz.py (computed, numpy)",
-          "sha256": "36c65a29a0ec065f28b96e0e2e519e8936d79b6d745d772aea5b07818107b843",
-          "bytes": 119
+          "sha256": "cd27b93053fd868603af31abe24c6006f870d542e945445f8c00a5eda2638b61",
+          "bytes": 113
         }
       ]
     },
