@@ -331,3 +331,71 @@ fn f11_bad_wait_timeouts_are_clean_errors() {
     assert!(bad.is_empty(), "not a clean error: {bad:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// F15: the command line built for the detached (PowerShell) start parses back, by the real argv rules of the runner
+/// binary, into exactly the arguments given: trailing backslashes, `C:\`, quotes, spaces, an empty argument.
+#[cfg(windows)]
+#[test]
+fn f15_command_line_round_trips_through_the_real_argv_parser() {
+    use std::os::windows::process::CommandExt;
+    let dir = project("f15", json!({}));
+    let proj = dir.display().to_string();
+    let mut bad = Vec::new();
+    for arg in [
+        r"C:\tmp\a b\",
+        r"C:\",
+        r"C:\x\\",
+        r#"a"b"#,
+        r#"a\"b"#,
+        r#"a\\"b c\"#,
+        "it's",
+        "",
+        "plain",
+    ] {
+        let args: Vec<String> = vec![
+            "start".into(),
+            arg.into(),
+            "--no-runner".into(),
+            "--project".into(),
+            proj.clone(),
+        ];
+        let line = rcfd_runner::sys::command_line(&args);
+        let o = Command::new(RUNNER).raw_arg(&line).output().unwrap();
+        let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+        // `start` reads the case file first; its error names the case path exactly as parsed
+        let ok = o.status.code() == Some(1) && err.starts_with(&format!("rcfd-runner: {arg}: "));
+        eprintln!("F15 {arg:?}: command line {line}: {err} ({ok})");
+        if !ok {
+            bad.push(arg);
+        }
+    }
+    assert!(bad.is_empty(), "arguments that do not round-trip: {bad:?}");
+    let script = rcfd_runner::sys::start_script(
+        Path::new(r"C:\o'k\rcfd-runner.exe"),
+        &["serve".into(), r"C:\it's\".into()],
+    );
+    eprintln!("F15 script: {script}");
+    assert_eq!(
+        script,
+        r#"Start-Process -FilePath 'C:\o''k\rcfd-runner.exe' -ArgumentList '"serve" "C:\it''s\\"' -WindowStyle Hidden"#
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// F15: `ensure_runner` starts the runner for a project path that ends in a backslash.
+#[cfg(windows)]
+#[test]
+fn f15_runner_starts_with_a_trailing_backslash_project_path() {
+    let dir = project("f15start", json!({}));
+    let with_sep = PathBuf::from(format!("{}\\", dir.display()));
+    let client = Client::new(&with_sep, RUNNER);
+    let started = client.ensure_runner();
+    let running = client.runner_running();
+    let stopped = client.shutdown(Duration::from_secs(10));
+    eprintln!(
+        "F15 start with {}: {started:?}, running {running}, shutdown {stopped:?}",
+        with_sep.display()
+    );
+    assert!(started.is_ok() && running, "{started:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
