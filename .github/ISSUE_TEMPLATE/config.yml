@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/c4ss/rcfd/security/policy
+    about: Report it privately as SECURITY.md describes; do not open a public issue.
+  - name: Documentation
+    url: https://github.com/c4ss/rcfd/blob/main/docs/index.md
+    about: Tutorials, reference pages and the glossary; your question may already be answered there.
