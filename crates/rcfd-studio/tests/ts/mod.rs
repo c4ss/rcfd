@@ -22,9 +22,17 @@ pub fn quick_start_cases() -> PathBuf {
     repo_root().join("example-projects/quick-start/cases")
 }
 
+/// An example file's text with LF line ends (the example projects keep their bytes, `* -text`; a CRLF copy reads the
+/// same here).
+fn read(path: PathBuf) -> String {
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+        .replace("\r\n", "\n")
+}
+
 /// The wind tunnel's `cylinder-re100.toml` with `mesh.nx` and `mesh.ny` set (64 x 48: the file as shipped).
 pub fn cylinder(nx: usize, ny: usize) -> String {
-    let t = std::fs::read_to_string(wind_tunnel_cases().join("cylinder-re100.toml")).unwrap();
+    let t = read(wind_tunnel_cases().join("cylinder-re100.toml"));
     assert!(
         t.contains("\nnx = 64\n") && t.contains("\nny = 48\n"),
         "the example's mesh counts moved"
@@ -45,7 +53,8 @@ fn piso(text: &str, end_time: f64) -> String {
 
 /// The quick start's `cavity-re100.toml` as a PISO run to `end_time`, `nx` x `nx` cells (32: as shipped).
 pub fn cavity_piso(nx: usize, end_time: f64) -> String {
-    let t = std::fs::read_to_string(quick_start_cases().join("cavity-re100.toml")).unwrap();
+    let t = read(quick_start_cases().join("cavity-re100.toml"));
+    assert!(t.contains("nx = 32\nny = 32"), "the example's mesh counts moved");
     piso(
         &t.replace("nx = 32\nny = 32", &format!("nx = {nx}\nny = {nx}")),
         end_time,
@@ -54,10 +63,7 @@ pub fn cavity_piso(nx: usize, end_time: f64) -> String {
 
 /// The wind tunnel's `step-re400.toml` as a PISO run to `end_time`.
 pub fn step_piso(end_time: f64) -> String {
-    piso(
-        &std::fs::read_to_string(wind_tunnel_cases().join("step-re400.toml")).unwrap(),
-        end_time,
-    )
+    piso(&read(wind_tunnel_cases().join("step-re400.toml")), end_time)
 }
 
 /// The quick start's cavity as PISO to `end_time` with its lid ramped from rest: `velocity_expression_x = "min(1 [m/s],
@@ -74,15 +80,20 @@ pub fn cavity_ramp_piso(end_time: f64) -> String {
 /// The quick start's `heated-cavity-ra1e4.toml` as a PISO run to `end_time`: a flow at rest, driven by buoyancy only
 /// (no inflow, moving wall or initial velocity; gravity 7100 m/s^2 in a 1 m box).
 pub fn heated_piso(end_time: f64) -> String {
-    piso(
-        &std::fs::read_to_string(quick_start_cases().join("heated-cavity-ra1e4.toml")).unwrap(),
-        end_time,
-    )
+    piso(&read(quick_start_cases().join("heated-cavity-ra1e4.toml")), end_time)
 }
 
-/// The columns of a `monitors.csv` (`time`, `dt`, `courant`, `cd`, `cl`, residuals, reports) by name.
+/// The columns of a `monitors.csv` (`time`, `dt`, `courant`, `cd`, `cl`, residuals, reports) by name. A missing file (a
+/// run that wrote no results) gives the columns `time`, `dt`, `courant`, `cd`, `cl` empty, so that the limits fail with
+/// their own messages.
 pub fn monitors(csv: &Path) -> BTreeMap<String, Vec<f64>> {
-    let text = std::fs::read_to_string(csv).unwrap_or_else(|e| panic!("{}: {e}", csv.display()));
+    let Ok(text) = std::fs::read_to_string(csv) else {
+        eprintln!("{}: not found", csv.display());
+        return ["time", "dt", "courant", "cd", "cl"]
+            .iter()
+            .map(|n| (n.to_string(), Vec::new()))
+            .collect();
+    };
     let mut lines = text.lines();
     let names: Vec<String> = lines.next().unwrap_or_default().split(',').map(String::from).collect();
     let mut cols: BTreeMap<String, Vec<f64>> = names.iter().map(|n| (n.clone(), Vec::new())).collect();

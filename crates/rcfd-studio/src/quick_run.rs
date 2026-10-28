@@ -519,8 +519,12 @@ pub fn facts_of<'a>(st: &'a Studio, case: &str) -> Option<&'a Result<Facts, Stri
     st.quick.facts.get(&(b.rel.clone(), b.case_hash.clone()))
 }
 
-/// The latest facts computed for `case` (any text of it): the Start run dialog's estimate (ADR 0153 D9).
+/// The facts of `case` for the Start run dialog's estimate (ADR 0153 D12): those of the text the Mesh side shows when it
+/// shows `case`, else the latest computed for any text of it.
 pub fn latest_facts<'a>(st: &'a Studio, case: &str) -> Option<&'a Facts> {
+    if let Some(r) = facts_of(st, case) {
+        return r.as_ref().ok();
+    }
     st.quick
         .facts_order
         .iter()

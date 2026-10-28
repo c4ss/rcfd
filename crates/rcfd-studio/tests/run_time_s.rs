@@ -181,12 +181,13 @@ fn a_cylinder_256_automatic_step_is_stable_and_sheds() {
     assert!(a.wall_s <= 3.0 * 3600.0, "wall {} s", a.wall_s);
 }
 
-/// (a) control: the same case with its own `solver.dt = 0.0625` (Advanced: the automatic step off), 5 s: the first
-/// Courant number is above the target (predicted 6.3), and (predicted) the Courant number passes 10 within the 5 s.
+/// (a) control: the same case with its own `solver.dt = 0.0625` (Advanced: the automatic step off), 1.25 s (20 steps, as
+/// probe P2): the first Courant number is above the target (predicted 6.3), and (predicted) the Courant number passes 10
+/// within the 1.25 s.
 #[test]
 fn a_control_the_case_step_on_256_is_far_above_the_target() {
-    let a = a_run("actl", 5.0, 2.5, StepMode::Case, Duration::from_secs(1800));
-    assert_eq!(a.set, vec!["solver.end_time=5".to_string()], "the case's own step");
+    let a = a_run("actl", 1.25, 0.625, StepMode::Case, Duration::from_secs(1800));
+    assert_eq!(a.set, vec!["solver.end_time=1.25".to_string()], "the case's own step");
     assert!(
         a.co_first > time_step::COURANT_TARGET,
         "control: first Courant number {}",
@@ -747,6 +748,170 @@ fn f_control_the_route_before_draws_none() {
     assert!(!drawn(&r.hover, &time_step::hover(&f, &p80)), "control: hover");
     let line = time_step::mesh_line(&f, &time_step::RunTime::default()).unwrap();
     assert!(!drawn(&r.mesh, &line), "control: Mesh line");
+}
+
+// ---------------------------------------------------------------- (f2) Refine x2 and the Start run dialog, drawn
+
+/// What (f2) drew and saw.
+#[derive(Debug, Default)]
+struct F2 {
+    refine_hover: Vec<String>,
+    refined: Vec<String>,
+    blocked: Option<String>,
+    dialog: Vec<String>,
+    dialog_override: Vec<String>,
+}
+
+/// (f2)'s procedure: a served project with the shipped cylinder (64 x 48), drawn frames of 1280 x 800, tooltips at once:
+/// (i) the cylinder selected, the pointer on "Refine x2" (30 frames at most); (ii) a drawn click on it, frames until the
+/// refined text is shown and its facts are known, a frame, Run's state; (iii) the edits discarded, frames until the file's
+/// mesh is shown again; the Start run dialog opened on the cylinder, frames until its plan is drawn (30 s at most); (iv)
+/// its overrides `solver.dt=0.02`, a frame.
+fn f2_run(tag: &str, before: bool) -> F2 {
+    let p = project(tag, &[("cases/cyl.toml", ts::cylinder(64, 48))]);
+    let mut st = studio(&p, before);
+    select(&mut st, "cases/cyl.toml");
+    let mut app = StudioApp::new(st, None);
+    let ctx = egui::Context::default();
+    ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+    let mut r = F2::default();
+    let _ = frame(&mut app, &ctx, Vec::new());
+    // (i)
+    let refine = *app
+        .st
+        .preview
+        .rects
+        .get(rcfd_studio::preview_ui::REFINE)
+        .expect("Refine x2 not drawn");
+    for _ in 0..30 {
+        r.refine_hover = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(refine.center())]);
+        if r.refine_hover.iter().any(|t| t.contains("mesh.nx 64 -> 128")) {
+            break;
+        }
+    }
+    // (ii)
+    lj::click_at(&mut app, &ctx, refine.center());
+    let _ = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(5.0, 795.0))]);
+    let shown_refined = |a: &StudioApp| {
+        lj::settled(&a.st)
+            && a.st
+                .preview
+                .displayed()
+                .is_some_and(|b| b.from_editor && b.cells == 128 * 96)
+            && (before || quick_run::facts_of(&a.st, "cases/cyl.toml").is_some())
+    };
+    assert!(
+        common::frames_until(&mut app, &ctx, WAIT, shown_refined),
+        "(f2) the refined mesh was not shown"
+    );
+    r.refined = frame(&mut app, &ctx, Vec::new());
+    r.blocked = quick_run::blocked(&app.st);
+    // (iii)
+    app.st.discard_edits().unwrap();
+    assert!(
+        common::frames_until(&mut app, &ctx, WAIT, |a| lj::settled(&a.st)
+            && a.st
+                .preview
+                .displayed()
+                .is_some_and(|b| !b.from_editor && b.cells == 64 * 48)),
+        "(f2) the file's mesh was not shown again"
+    );
+    app.ui_state.start_dialog = Some(rcfd_studio::ui::StartDialog {
+        case: "cases/cyl.toml".into(),
+        ..Default::default()
+    });
+    let end = Instant::now() + Duration::from_secs(30);
+    loop {
+        r.dialog = frame(&mut app, &ctx, Vec::new());
+        if r.dialog.iter().any(|t| t.starts_with("rcfd run --set:")) || Instant::now() > end {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // (iv)
+    if let Some(d) = app.ui_state.start_dialog.as_mut() {
+        d.overrides = "solver.dt=0.02".into();
+    }
+    let _ = frame(&mut app, &ctx, Vec::new());
+    r.dialog_override = frame(&mut app, &ctx, Vec::new());
+    eprintln!("(f2) {tag}: {r:#?}");
+    r
+}
+
+/// (f2): (i) "Refine x2"'s hover draws its text and `time_step::refine_note` (`The time step is not edited: Run sets it
+/// from the finer cells when it starts (about half of the 0.00602 s it starts with now); the case's solver.dt is
+/// overridden at run time.`); (ii) after the click the Mesh line of the 128 x 96 text (`time_step::mesh_line` of
+/// `ts::cylinder(128, 96)`'s facts) and the toolbar's `dt auto: 0.00307 s at the start, then adaptive (Courant 0.5)` are
+/// drawn, and Run is refused with ADR 0141's "save it first" text exactly; (iii) the Start run dialog draws `Time step:
+/// this dialog's run takes solver.dt = 0.0625 s to solver.end_time = 80 s (the case's, unless an override sets them); Run
+/// on the toolbar sets the time step for you (Simulate for, Advanced).` and the warning `cases/cyl.toml: solver.dt = 0.0625
+/// s gives an estimated Courant number of 5.184 (1.116 m/s through the thinnest cell, 0.01346 m): above 2, the run may
+/// become unstable or noisy. Fix: Run on the toolbar (automatic time step), or an override solver.dt of at most 0.0241 s.`;
+/// (iv) with the override `solver.dt=0.02` the line says `solver.dt = 0.02 s` and no warning is drawn.
+#[test]
+fn f2_refine_and_the_start_dialog_say_the_step() {
+    let r = f2_run("f2", false);
+    let note =
+        "The time step is not edited: Run sets it from the finer cells when it starts (about half of the 0.00602 \
+                s it starts with now); the case's solver.dt is overridden at run time.";
+    assert!(drawn(&r.refine_hover, note), "(i) the Refine x2 note");
+    let fine = time_step::facts(&ts::cylinder(128, 96), &ts::wind_tunnel_cases()).unwrap();
+    let line = time_step::mesh_line(&fine, &time_step::RunTime::default()).unwrap();
+    assert!(drawn(&r.refined, &line), "(ii) the refined Mesh line: {line}");
+    assert!(
+        drawn(
+            &r.refined,
+            "dt auto: 0.00307 s at the start, then adaptive (Courant 0.5)"
+        ),
+        "(ii) the toolbar"
+    );
+    assert_eq!(
+        r.blocked.as_deref(),
+        Some("cases/cyl.toml has unsaved edits: save it first (Case > Save); a run uses the file on disk"),
+        "(ii) Run"
+    );
+    let note =
+        "Time step: this dialog's run takes solver.dt = 0.0625 s to solver.end_time = 80 s (the case's, unless an \
+                override sets them); Run on the toolbar sets the time step for you (Simulate for, Advanced).";
+    let warn =
+        "cases/cyl.toml: solver.dt = 0.0625 s gives an estimated Courant number of 5.184 (1.116 m/s through the \
+                thinnest cell, 0.01346 m): above 2, the run may become unstable or noisy. Fix: Run on the toolbar \
+                (automatic time step), or an override solver.dt of at most 0.0241 s.";
+    assert!(drawn(&r.dialog, note) && drawn(&r.dialog, warn), "(iii) the dialog");
+    assert!(
+        drawn(
+            &r.dialog_override,
+            "Time step: this dialog's run takes solver.dt = 0.02 s to solver.end_time = 80 s (the case's, unless an \
+             override sets them); Run on the toolbar sets the time step for you (Simulate for, Advanced)."
+        ),
+        "(iv) the dialog with the override"
+    );
+    assert!(
+        !r.dialog_override
+            .iter()
+            .any(|t| t.contains("gives an estimated Courant number")),
+        "(iv) a warning"
+    );
+}
+
+/// (f2) control: the route before draws neither the Refine x2 note, nor a Mesh line, nor the dialog's lines.
+#[test]
+fn f2_control_the_route_before_draws_none() {
+    let r = f2_run("f2ctl", true);
+    assert!(
+        !r.refine_hover
+            .iter()
+            .any(|t| t.starts_with("The time step is not edited")),
+        "control (i)"
+    );
+    assert!(
+        !r.refined.iter().any(|t| t.starts_with("Courant estimate")),
+        "control (ii)"
+    );
+    assert!(
+        !r.dialog.iter().any(|t| t.starts_with("Time step: this dialog's run")),
+        "control (iii)"
+    );
 }
 
 /// Where the test binaries' run folders are (for the record).
