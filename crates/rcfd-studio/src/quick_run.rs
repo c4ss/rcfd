@@ -46,6 +46,9 @@ pub struct Switches {
     /// Reopen a closed Viewport in the focused place (`layout::show`), as G1's registered run did (its known-miss test,
     /// amendment 1).
     pub reopen_in_focused_leaf: bool,
+    /// The route before ADR 0144: a run explained once is not explained again when the viewport opens its store again
+    /// (the Mesh / Run toggle), so the viewport keeps ADR 0140's text then.
+    pub no_reexplain: bool,
 }
 
 /// A start in flight.
@@ -483,6 +486,14 @@ fn follow_selected(st: &mut Studio) {
                     wake();
                 }
             });
+        } else if !st.quick.switches.no_reexplain {
+            // ADR 0144: the store was opened again (the Mesh / Run toggle): the same explanation again
+            if let Some((_, text)) = st.quick.notice.clone().filter(|(nid, _)| *nid == id) {
+                let status = notice_status(&row, text);
+                if st.viewport.status != status {
+                    st.viewport.status = status;
+                }
+            }
         }
     } else if matches!(st.viewport.status, Status::NoStore(_)) {
         let hint = Status::NoStore(waiting_text(st, &id, &row));
@@ -593,12 +604,17 @@ fn explain_end(st: &mut Studio, id: &str, snapshots: Result<usize, String>) {
     }
     let Some(row) = st.runs.row(id).cloned() else { return };
     let text = end_text(st, id, &row, snapshots.as_ref().err().map(String::as_str));
-    st.viewport.status = if row.state == RunState::Finished {
-        Status::NoStore(text.clone())
-    } else {
-        Status::Failed(text.clone())
-    };
+    st.viewport.status = notice_status(&row, text.clone());
     st.quick.notice = Some((id.to_string(), text));
+}
+
+/// How the viewport shows the explanation of a run that ended before its first stored snapshot.
+fn notice_status(row: &RunRow, text: String) -> Status {
+    if row.state == RunState::Finished {
+        Status::NoStore(text)
+    } else {
+        Status::Failed(text)
+    }
 }
 
 // ---------------------------------------------------------------- the status strip

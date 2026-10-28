@@ -297,9 +297,13 @@ pub fn create(project: &Project, rel: &str, bytes: &[u8]) -> Result<(), String> 
 }
 
 /// What the Studio does with [`crate::watch::Event::Created`] (called from `Studio::apply`): a message. When `opened`,
-/// the `Loaded` event that follows opens the file in the editor.
+/// the `Loaded` event that follows opens the file in the editor, and the preview shows it on the Viewport's Mesh side
+/// (ADR 0144: the file exists now; `Studio::open_case` itself would load it a second time).
 pub(crate) fn on_created(st: &mut Studio, rel: &str, opened: bool) {
     if opened {
+        if !st.view.switches.starter_skips_preview {
+            st.show_case_mesh(rel);
+        }
         st.say(format!("created {rel}"));
     } else {
         st.say(format!(

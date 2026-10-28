@@ -281,6 +281,22 @@ Not run: the "Not in CI" items (a person at the window); Linux (none of the new 
 build of the new tests; the workspace gate and workspace-wide clippy (the maintainer runs them); `cargo deny` (not
 installed; no dependency changed); the CI scripts job with the new script test (not added, question 9).
 
+## Amendment 2 (2026-10-28, with ADR 0144's registration, before the corrected run)
+
+ADR 0138 (the mesh preview of a case) and ADR 0140 (store fields by default) were merged after this ADR's registered
+runs. ADR 0144's baseline run of the `rcfd-studio` suite on main e11c656 (before any ADR 0144 change; release,
+`--test-threads 1`, output to a file) failed three of this ADR's tests. Limits unchanged.
+
+1. **G1 control** (`oneclick_g4.rs`): "a frame within 5.0 s" is read from `viewport.frame`, which since ADR 0138 also
+   holds the preview frame of the open case (every face at 0): true at once (0.000 s). Set-up defect. Corrected: a
+   frame of a run, `viewport.run.is_some() && viewport.frame.is_some()`; registered as part of ADR 0144's J14.
+2. **G1b** (`oneclick_e2e_g4.rs`): (g) failed with 2 uploads (the preview's surface, then the run's) and shown indices
+   beginning with 0. Not a set-up defect: ADR 0144 decision 1 switches the viewport to the run in the drain that
+   selects it, so the preview is not drawn in between. Rerun unchanged with ADR 0144.
+3. **G4 control** (`oneclick_g4.rs`): with the explanation off the viewport still contains the reason, now through ADR
+   0140's empty-state text (`Run <id> failed before it stored its first snapshot: <reason>`). It does not involve the
+   preview or the toggle and is not changed here: ADR 0144 question 8.
+
 ## Not in CI (by hand)
 
 The real window: the toolbar, the strip and the "follow latest" box on DX12 and Vulkan, at high DPI; F5 while a text field

@@ -1,6 +1,7 @@
-//! Drawing of the case preview (ADR 0138) in the Viewport panel: status, counts and controls, the image through the run
-//! viewport's own [`crate::viewport_ui::image`] (texture, mouse, pick), the 2D overlay of cell edges and boundary
-//! patches, the patch legend and the hover readout. State and decisions are in [`crate::preview`].
+//! Drawing of the case preview (ADR 0138; live from the case editor, ADR 0144) on the Viewport panel's Mesh side: status,
+//! counts and controls, the image through the run viewport's own [`crate::viewport_ui::image`] (texture, mouse, pick),
+//! the 2D overlay of cell edges and boundary patches, the patch legend and the hover readout. State and decisions are
+//! in [`crate::preview`].
 
 use crate::preview::{self, kind_name, Built, Colouring, Status, FRONT_2D, SINGLE};
 use crate::studio::Studio;
@@ -21,12 +22,23 @@ pub const HOVER_PT: f32 = 6.0;
 pub const EDGE_COLOUR: Color32 = Color32::from_rgb(90, 90, 90);
 /// Lines of a failure message shown before the rest is folded away.
 const SHOWN_LINES: usize = 4;
+/// Source line of a mesh built from the case file (ADR 0144).
+pub const FROM_DISK: &str = "(built from the case file on disk; the solver is not run)";
+/// Source line of a mesh built from the case editor's unsaved text (ADR 0144).
+pub const FROM_EDITOR: &str = "(built from the unsaved edits in the case editor; the solver is not run)";
+/// Shown while the case editor holds unsaved edits of the previewed case (ADR 0144; Run still refuses them).
+pub const UNSAVED: &str =
+    "The mesh follows the unsaved edits in the case editor; a run uses the file on disk, so save the case before Run.";
+/// Start of the line shown while the picture is stale (ADR 0144); the reason follows.
+pub const STALE: &str = "Stale: the picture is the last mesh that built";
+/// The badge painted on a stale picture (ADR 0144).
+pub const STALE_BADGE: &str = "stale";
 
 fn rgb(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
-/// Draw the preview part of the Viewport panel (no run selected).
+/// Draw the preview part of the Viewport panel (the Mesh side).
 pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
     let Some(case) = st.preview.case.clone() else {
         ui.weak(
@@ -37,22 +49,34 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
         }
         return;
     };
+    let shown = st.preview.displayed().cloned();
     ui.horizontal(|ui| {
         ui.strong(format!("Mesh of {case}"));
-        ui.weak("(no run selected; built from the case file on disk, the solver is not run)");
+        ui.weak(if shown.as_ref().is_some_and(|b| b.from_editor) {
+            FROM_EDITOR
+        } else {
+            FROM_DISK
+        });
         if ui
             .add_enabled(!st.preview.building(), egui::Button::new("Rebuild"))
-            .on_hover_text("read the case and its mesh file again (a mesh file outside the project is not watched)")
+            .on_hover_text(
+                "read the case (or the editor's unsaved edits) and its mesh file again (a mesh file outside the project \
+                 is not watched)",
+            )
             .clicked()
         {
             st.preview.rebuild();
         }
     });
-    if st.editor.as_ref().is_some_and(|e| e.rel == case && e.is_dirty()) {
-        ui.colored_label(
-            WARN,
-            "Unsaved edits are not shown: save the case to update the preview.",
-        );
+    if st
+        .editor
+        .as_ref()
+        .is_some_and(|e| e.rel == case && (e.draft.is_some() || e.is_dirty()))
+    {
+        ui.colored_label(WARN, UNSAVED);
+    }
+    if let Some(why) = st.preview.stale_reason() {
+        ui.colored_label(WARN, format!("{STALE}: {why}."));
     }
     match st.preview.status.clone() {
         Status::Idle => {
@@ -65,9 +89,6 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
                 ui.label(format!("Building the mesh... {:.1} s", since.elapsed().as_secs_f64()));
             });
             ui.ctx().request_repaint_after(Duration::from_millis(100));
-            if st.viewport.surface.is_none() {
-                return; // a rebuild of the same case keeps showing the last image
-            }
         }
         Status::TooLarge { message, rebuild } => {
             ui.colored_label(WARN, message);
@@ -77,15 +98,12 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
             {
                 st.preview.anyway();
             }
-            return;
         }
-        Status::Failed(m) => {
-            failure(ui, &m);
-            return;
-        }
+        Status::Failed(m) => failure(ui, &m),
         Status::Ready => {}
     }
-    let Some(b) = st.preview.built.clone() else { return };
+    // the last mesh that built stays on screen (stale) while a newer text builds, fails or is over a limit
+    let Some(b) = shown else { return };
     ui.monospace(counts(&b));
     controls(ui, st, &b);
     let avail = ui.available_size();
@@ -95,6 +113,11 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
         crate::viewport_ui::image(ui, &mut st.viewport, img, dark);
         if b.two_d {
             outline = overlay(ui, st, &b);
+        }
+        if st.preview.stale() {
+            if let Some(r) = st.viewport.image_rect {
+                badge(ui, r);
+            }
         }
         legend(ui, st, &b, img.y);
     });
@@ -107,6 +130,23 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
             "hover over the surface for its patch"
         }),
     };
+}
+
+/// The "stale" badge in the image's top-left corner (ADR 0144).
+fn badge(ui: &mut egui::Ui, image: Rect) {
+    let p = ui.painter_at(image);
+    let back = p.add(egui::Shape::Noop); // the background goes under the text, sized by it
+    let r = p.text(
+        image.min + egui::vec2(10.0, 8.0),
+        egui::Align2::LEFT_TOP,
+        STALE_BADGE,
+        egui::FontId::proportional(13.0),
+        Color32::BLACK,
+    );
+    p.set(
+        back,
+        egui::Shape::rect_filled(r.expand2(egui::vec2(5.0, 2.0)), 3.0, WARN),
+    );
 }
 
 /// Counts of the built mesh.

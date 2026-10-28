@@ -405,9 +405,10 @@ fn g4e_no_adapter_still_lists_the_mesh() {
     eprintln!("G4e: 20 frames: '{e}', '{counts}' and the 3 patch names drawn");
 }
 
-/// G5: a newer selection discards an older build. Case A (a 1000 x 1000 box, slow) is asked for, then case B (the
-/// cavity) while A builds: B is shown, A is never shown and its result is dropped. Negative control: applying every
-/// result (generation check off) shows A after B.
+/// G5: a newer selection discards an older build. Case A (a 500 x 500 box, slow; ADR 0138 amendment 3, the
+/// maintainer's question 8: was 1000 x 1000) is asked for, then case B (the cavity) while A builds: B is shown, A is
+/// never shown and its result is dropped. Negative control: applying every result (generation check off) shows A after
+/// B.
 #[test]
 fn g5_a_newer_selection_discards_the_older_build() {
     if cfg!(debug_assertions) {
@@ -415,7 +416,7 @@ fn g5_a_newer_selection_discards_the_older_build() {
         return;
     }
     for control in [false, true] {
-        let root = pv::project("g5", &[("cases/big.toml", pv::box_case(1000, 1000).as_bytes())]);
+        let root = pv::project("g5", &[("cases/big.toml", pv::box_case(500, 500).as_bytes())]);
         let mut st = pv::studio(&root);
         st.preview.switches.ignore_generation = control;
         let t_a = Instant::now();
@@ -541,8 +542,10 @@ fn g9_2d_boundary_hover_names_the_patch() {
     eprintln!("G9: 64 of 64 outline midpoints name their patch (lid on y = 1, walls elsewhere); 'patch lid (wall), boundary' drawn; none at the centre");
 }
 
-/// Unregistered: an unsaved edit leaves the preview on the file; a save from the case editor rebuilds it (the editor's
-/// base hash changed); an external replacement of the file seen by the watcher rebuilds it too.
+/// Unregistered: an unsaved edit is shown from the case editor's text after the debounce (ADR 0144, the maintainer's
+/// decision on ADR 0138 question 2; this test asserted the opposite before); a save from the case editor rebuilds it
+/// from the file (the editor's base hash changed) with the same mesh, kept without a new upload; an external
+/// replacement of the file seen by the watcher rebuilds it too.
 #[test]
 fn rebuilds_after_a_save_and_an_external_change() {
     let root = pv::project("rebuild", &[]);
@@ -559,20 +562,30 @@ fn rebuilds_after_a_save_and_an_external_change() {
         .set_value("mesh.nx", serde_json::json!(20))
         .unwrap();
     let requests = st.preview.stats.requests;
-    for _ in 0..20 {
-        st.drain();
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    assert_eq!(
-        (pv::built(&st).cells, st.preview.stats.requests),
-        (256, requests),
-        "unsaved edit"
+    assert!(
+        st.drain_until(pv::WAIT, |s| s.preview.due_in().is_none()
+            && s.preview
+                .built
+                .as_ref()
+                .is_some_and(|b| b.cells == 320 && b.from_editor)),
+        "the unsaved edit was not shown: {:?}",
+        st.preview.status
     );
+    assert_eq!(st.preview.stats.requests, requests + 1, "unsaved edit: one build");
+    let installs = st.preview.stats.installs;
     st.save_case().unwrap();
     assert!(
-        st.drain_until(pv::WAIT, |s| s.preview.built.as_ref().is_some_and(|b| b.cells == 320)),
+        st.drain_until(pv::WAIT, |s| s
+            .preview
+            .built
+            .as_ref()
+            .is_some_and(|b| b.cells == 320 && !b.from_editor)),
         "no rebuild after the save: {:?}",
         st.preview.status
+    );
+    assert_eq!(
+        st.preview.stats.installs, installs,
+        "the save uploaded the same mesh again"
     );
     std::fs::write(root.join("cases/cavity.toml"), pv::CAVITY.replace("nx = 16", "nx = 24")).unwrap();
     assert!(
@@ -581,7 +594,8 @@ fn rebuilds_after_a_save_and_an_external_change() {
         st.preview.status
     );
     eprintln!(
-        "rebuild: unsaved edit kept 256 cells; save -> 320; external change -> 384 ({} requests)",
+        "rebuild: unsaved edit -> 320 cells from the editor; save -> 320 from the file, no new upload; external change \
+         -> 384 ({} requests)",
         st.preview.stats.requests
     );
 }

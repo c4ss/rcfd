@@ -109,6 +109,10 @@ pub struct CaseEditor {
     pub diagnostics: Vec<String>,
     /// A save was handed to the worker and its answer has not come back.
     pub saving: bool,
+    /// The field being typed in and not committed yet, `(path, text)` (ADR 0144): the case preview builds the settings
+    /// with this text in place. A commit of that field ends it; a refused commit keeps it (the field keeps the text).
+    pub draft: Option<(String, String)>,
+    revision: u64,
 }
 
 impl Drop for CaseEditor {
@@ -150,10 +154,35 @@ impl CaseEditor {
             field_errors: BTreeMap::new(),
             diagnostics: Vec::new(),
             saving: false,
+            draft: None,
+            revision: 0,
         };
         ed.refresh();
         ed.saved = ed.settings.clone();
         Ok(ed)
+    }
+
+    /// A number that changes whenever the settings or the draft change (ADR 0144: the preview builds again after it).
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The text of field `path` as it is being typed (its whole text, on every change; not committed, the settings are
+    /// unchanged). The case preview builds the settings with this text in place (ADR 0144).
+    pub fn type_text(&mut self, path: &str, text: &str) {
+        let d = (path.to_string(), text.to_string());
+        if self.draft.as_ref() != Some(&d) {
+            self.draft = Some(d);
+            self.revision += 1;
+        }
+    }
+
+    /// Typing in `path` ended without a change to commit (the field holds the stored value's text again).
+    pub fn end_draft(&mut self, path: &str) {
+        if self.draft.as_ref().is_some_and(|(p, _)| p == path) {
+            self.draft = None;
+            self.revision += 1;
+        }
     }
 
     fn call(&self, method: &str, mut p: Value) -> Result<Value, RpcError> {
@@ -163,7 +192,11 @@ impl CaseEditor {
 
     fn refresh(&mut self) {
         if let Ok(v) = self.call("settings.get", json!({})) {
-            self.settings = v["value"].clone();
+            let v = v["value"].clone();
+            if v != self.settings {
+                self.settings = v;
+                self.revision += 1;
+            }
         }
     }
 
@@ -193,7 +226,11 @@ impl CaseEditor {
             return Err(self.refuse(path, "unknown setting".into()));
         };
         match parse_input(&node.kind, text) {
-            Ok(v) => self.set_value(path, v),
+            Ok(v) => {
+                self.set_value(path, v)?;
+                self.end_draft(path); // committed: the field's text is the setting now (ADR 0144)
+                Ok(())
+            }
             Err(m) => Err(self.refuse(path, m)),
         }
     }
@@ -329,6 +366,8 @@ impl CaseEditor {
         self.conflict = None;
         self.field_errors.clear();
         self.diagnostics.clear();
+        self.draft = None;
+        self.revision += 1;
         self.refresh();
         self.saved = self.settings.clone();
         Ok(())

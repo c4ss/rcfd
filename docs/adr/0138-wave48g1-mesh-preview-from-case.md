@@ -146,6 +146,17 @@ Found in review after the addendum's runs, not by a failing run. Limits unchange
    process per test, five at once, the gate's way) and `scripts/limit_audit.py` on the final commit. A timing limit
    missed only under that parallel load is reported as a finding; the limits stay.
 
+## Amendment 3 (2026-10-28, the maintainer's answer to question 8; written with ADR 0144's registration, before the reruns)
+
+G3 and G5 built a 1,000,000-cell box, about 2.7 GB and 27-32 s each under `gate_test.py --jobs 5` (addendum below).
+The maintainer decided to shrink them: both use a 500 x 500 `box_2d` (250,000 cells) instead of 1000 x 1000. Limits
+and set-up preconditions are unchanged (G3: at least 20 frames and a build of at least 0.5 s, median at most 8 ms, no
+frame above 250 ms, control above 250 ms; G5: A still building when B is asked, A's thread at least 0.5 s, B shown
+within 2 s, at least 1 result discarded, control: A shown after B). The 500 x 500 surface (500,000 triangles) is over
+the triangle limit like the 1000 x 1000 one, so G3 ends "too large (show anyway)" as before. The other answers of
+2026-10-28 (questions 1-7) are implemented by [ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md); its
+addendum reports these reruns (check J13) with their time and memory.
+
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a1e32b5483f27b132` on main f3bf005. Registered runs: release, `--test-threads 1`, output to files,

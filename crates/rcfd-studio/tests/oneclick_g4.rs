@@ -368,8 +368,10 @@ fn g1_control_without_select_and_focus_no_frame_and_no_front() {
         "no snapshot was written"
     );
     let t = Instant::now();
+    // ADR 0141 amendment 2 (registered in ADR 0144): a frame of a run; since ADR 0138 the Mesh side's preview of the
+    // open case holds a frame of its own (every face at 0)
     let framed = common::frames_until(&mut app, &ctx, Duration::from_secs(5), |a| {
-        a.st.viewport.frame.is_some()
+        a.st.viewport.run.is_some() && a.st.viewport.frame.is_some()
     });
     eprintln!(
         "G1 control: frame within 5 s of the first snapshot {framed} ({:.3} s); selected {:?}; viewport open {}, \
