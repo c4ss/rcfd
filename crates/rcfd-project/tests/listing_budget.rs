@@ -32,6 +32,8 @@ fn l1_listing_hundreds_of_runs_within_budget() {
                     time: 1.0,
                     pid: None,
                     updated: rcfd_project::time::now(),
+                    reason: None,
+                    exit_code: None,
                 },
             )
             .unwrap();

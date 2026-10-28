@@ -49,6 +49,8 @@ fn r1_every_record_round_trips() {
         solver_version: "0.1.0".into(),
         settings: json!({"threads": 4, "tol": 1e-8, "nested": {"a": [1, 2.5, null]}}),
         created: "2026-10-26T10:00:00.123Z".into(),
+        case_source: None,
+        case_dir: None,
     };
     round_trip(&rec);
     round_trip(&RunRecord {
@@ -63,16 +65,20 @@ fn r1_every_record_round_trips() {
             time: 0.1 + i as f64 / 3.0,
             pid: (i % 2 == 0).then_some(4242),
             updated: "x".into(),
+            reason: None,
+            exit_code: None,
         });
     }
     for kind in [
         EventKind::State {
             from: None,
             to: RunState::Queued,
+            reason: None,
         },
         EventKind::State {
             from: Some(RunState::Running),
             to: RunState::Finished,
+            reason: None,
         },
         EventKind::Warning {
             message: "line\nbreak \"quoted\"".into(),
@@ -112,7 +118,9 @@ fn r1_every_record_round_trips() {
 
 #[test]
 fn r1_negative_controls_refuse_broken_records() {
-    // Missing required field, unknown state, wrong type, unknown event kind.
+    // Missing required field, unknown state, wrong type, an event line without a kind. (ADR 0130 amendment 1: an
+    // unknown event kind is read as `EventKind::Other` now; a line with no tag and a state change to an unknown
+    // state are refused instead.)
     assert!(serde_json::from_value::<RunStatus>(json!({"step": 1, "time": 0.0, "pid": null, "updated": "u"})).is_err());
     assert!(serde_json::from_value::<RunStatus>(
         json!({"state": "done", "step": 1, "time": 0.0, "pid": null, "updated": "u"})
@@ -122,7 +130,10 @@ fn r1_negative_controls_refuse_broken_records() {
         json!({"state": "queued", "step": "1", "time": 0.0, "pid": null, "updated": "u"})
     )
     .is_err());
-    assert!(serde_json::from_value::<RunEvent>(json!({"t": "t", "kind": "exploded"})).is_err());
+    assert!(serde_json::from_value::<RunEvent>(json!({"t": "t"})).is_err());
+    assert!(
+        serde_json::from_value::<RunEvent>(json!({"t": "t", "kind": "state", "from": null, "to": "done"})).is_err()
+    );
     assert!(serde_json::from_value::<RunRecord>(
         json!({"id": "x", "case": "c", "solver_version": "v", "settings": {}, "created": "c"})
     )
@@ -287,6 +298,8 @@ fn q1_query_api_sorts_filters_and_finds_latest_finished() {
                 time: 0.5,
                 pid: None,
                 updated: rcfd_project::time::now(),
+                reason: None,
+                exit_code: None,
             },
         )
         .unwrap();
@@ -336,7 +349,8 @@ fn q1_query_api_sorts_filters_and_finds_latest_finished() {
         ev.items[0].kind,
         EventKind::State {
             from: None,
-            to: RunState::Queued
+            to: RunState::Queued,
+            reason: None,
         }
     );
     // A run id cannot be used to name another path.

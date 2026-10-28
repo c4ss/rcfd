@@ -1,0 +1,18 @@
+title = "legacy runner fixture cavity"
+[mesh]
+generator = "cavity_2d"
+nx = 12
+ny = 12
+[physics]
+nu = 0.01
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+[boundaries.walls]
+velocity = "fixed"
+[solver]
+algorithm = "simplec"
+convection = "upwind"
+max_iterations = 400
+tolerance_u = 1e-14
+tolerance_p = 1e-14

@@ -14,6 +14,8 @@ fn finish(p: &Project, id: &str) {
             time: 1.0,
             pid: None,
             updated: rcfd_project::time::now(),
+            reason: None,
+            exit_code: None,
         },
     )
     .unwrap();

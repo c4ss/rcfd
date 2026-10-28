@@ -2754,6 +2754,7 @@ dependencies = [
 name = "rcfd-runner"
 version = "0.1.0"
 dependencies = [
+ "rcfd-project",
  "serde",
  "serde_json",
 ]

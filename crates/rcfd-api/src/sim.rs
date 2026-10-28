@@ -3872,6 +3872,25 @@ impl Simulation {
         out
     }
 
+    /// Values of the case's reports at the last step, as `step` appended them to the monitor store (the series
+    /// `monitors.json` is written from), without evaluating anything (ADR 0130 D5). A report whose evaluation failed
+    /// at that step is left out.
+    pub fn step_report_values(&self) -> Vec<(String, f64)> {
+        let Some(x) = self.monitors.get("res_u").and_then(|s| s.x.last().copied()) else {
+            return Vec::new();
+        };
+        self.reports
+            .iter()
+            .filter_map(|r| {
+                let s = self.monitors.get(&r.name)?;
+                if s.x.last().map(|v| v.to_bits()) != Some(x.to_bits()) {
+                    return None;
+                }
+                s.y.last().map(|y| (r.name.clone(), *y))
+            })
+            .collect()
+    }
+
     /// Evaluate every report of the case.
     pub fn report_values(&self) -> Vec<(String, std::result::Result<ReportValue, String>)> {
         self.reports

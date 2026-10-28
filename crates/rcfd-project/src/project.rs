@@ -282,14 +282,13 @@ impl Project {
             solver_version: solver_version.into(),
             settings,
             created: crate::time::rfc3339_ms(now),
+            case_source: None,
+            case_dir: None,
         };
         atomic::write_json_new(&dir.join("run.json"), &record)?;
         let status = RunStatus {
-            state: RunState::Queued,
-            step: 0,
-            time: 0.0,
-            pid: None,
             updated: record.created.clone(),
+            ..RunStatus::new(RunState::Queued)
         };
         atomic::write_json(&dir.join("status.json"), &status)?;
         let ev = RunEvent {
@@ -297,6 +296,7 @@ impl Project {
             kind: EventKind::State {
                 from: None,
                 to: RunState::Queued,
+                reason: None,
             },
         };
         jsonl::append_one(&dir.join("events.jsonl"), &ev)?;
@@ -331,8 +331,8 @@ impl Project {
         let st: RunStatus = atomic::read_json(&dir.join("status.json"))?;
         let mpath = dir.join("metrics.json");
         let metrics = if mpath.exists() {
-            let m: BTreeMap<String, Value> = atomic::read_json(&mpath)?;
-            m.into_iter().filter_map(|(k, v)| v.as_f64().map(|x| (k, x))).collect()
+            // numbers, and `null` (a non-finite value) as NaN (ADR 0130 D2)
+            crate::records::metrics_from_json(&atomic::read_json::<Value>(&mpath)?)
         } else {
             BTreeMap::new()
         };
@@ -433,7 +433,8 @@ impl Project {
                     }
                     match atomic::read(&dir.join("case.snapshot")) {
                         Err(e) => issue(dir.join("case.snapshot"), e.to_string()),
-                        Ok(b) if hash_bytes(&b) != rec.case_snapshot_hash => issue(
+                        // `fnv1a64:` is the run service's legacy spelling of the same hash (ADR 0130 D2)
+                        Ok(b) if !crate::records::hash_matches(&rec.case_snapshot_hash, &b) => issue(
                             dir.join("case.snapshot"),
                             format!(
                                 "hash {} does not match run.json {}",

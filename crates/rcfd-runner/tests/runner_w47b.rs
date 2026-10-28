@@ -760,8 +760,9 @@ fn s10_json_case_snapshot_runs() {
     assert_eq!(s.state, RunState::Finished, "{s:?}");
     assert_eq!(s.step, 30);
     let rec = std::fs::read_to_string(p.run_dir(&id).join("run.json")).unwrap();
+    // ADR 0130 amendment 1: the same FNV-1a 64 value, in the `fnv64:` spelling of rcfd-project (D2)
     let hash = format!(
-        "fnv1a64:{:016x}",
+        "fnv64:{:016x}",
         rcfd_runner::records::fnv1a64(&std::fs::read(&case).unwrap())
     );
     assert!(rec.contains(&hash), "{rec}");

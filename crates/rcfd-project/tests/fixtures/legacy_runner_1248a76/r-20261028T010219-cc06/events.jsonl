@@ -1,0 +1,8 @@
+{"event":"state","reason":"created","state":"queued","t":"2026-10-28T01:02:19.897517000Z"}
+{"cells":144,"event":"estimate","mem_mb":65.0,"rule":"64 MB + 4 KB per cell","t":"2026-10-28T01:02:30.086498000Z"}
+{"event":"launched","launch_seq":1,"mem_mb":65,"pid":38572,"t":"2026-10-28T01:02:30.090968300Z","threads":1}
+{"event":"state","pid":38572,"reason":"launched","state":"running","t":"2026-10-28T01:02:30.094278900Z"}
+{"event":"solver","solver":{"algorithm":"simplec","case_hash":"45fdd962a5f52a41","cells":144,"event":"start","format":"rcfd-status","info":{"case":"E:\\projects\\cfd\\target-w48a\\a4\\proj\\runs\\r-20261028T010219-cc06\\case.snapshot","continue_from":null,"driver":"cli","precision":"double","threads":1,"warnings":[]},"seq":1,"start_iteration":0,"steady":true,"version":1,"wall_s":0.0},"solver_seq":1,"t":"2026-10-28T01:02:30.195075500Z"}
+{"event":"solver","solver":{"event":"checkpoint","format":"rcfd-status","iteration":20,"path":"E:\\projects\\cfd\\target-w48a\\a4\\proj\\runs\\r-20261028T010219-cc06\\output\\restart.rcfd","seq":22,"version":1,"wall_s":0.0089162,"why":"not_converged"},"solver_seq":22,"t":"2026-10-28T01:02:30.198000800Z"}
+{"event":"solver","solver":{"elapsed_s":0.0081068,"event":"finish","exit_code":5,"format":"rcfd-status","iterations":20,"ok":false,"reason":"iteration limit 20 reached without meeting the residual targets","seq":23,"state":"not_converged","time":0.0,"version":1,"wall_s":0.0081068},"solver_seq":23,"t":"2026-10-28T01:02:30.198124300Z"}
+{"event":"state","reason":"not_converged: iteration limit 20 reached without meeting the residual targets","state":"finished","t":"2026-10-28T01:02:30.208596100Z"}

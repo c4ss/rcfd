@@ -81,9 +81,9 @@ fn graph_is_acyclic() {
 fn layering_matches_architecture_doc() {
     let g = graph();
     let layer = |n: &str| match n {
-        "rcfd-core" => 0,
+        "rcfd-core" | "rcfd-claude" => 0,
         "rcfd-mesh" | "rcfd-linalg" | "rcfd-reactor" | "rcfd-project" => 1,
-        "rcfd-gpu" | "rcfd-dist" => 2,
+        "rcfd-gpu" | "rcfd-dist" | "rcfd-runner" => 2,
         "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 3,
         "rcfd-turb" | "rcfd-post" | "rcfd-tsstore" => 4,
         "rcfd-api" | "rcfd-render" => 5,

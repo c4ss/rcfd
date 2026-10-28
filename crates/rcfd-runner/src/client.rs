@@ -199,9 +199,9 @@ fn sibling_of(exe: &Path, name: &str) -> PathBuf {
     exe.with_file_name(format!("{name}{}", std::env::consts::EXE_SUFFIX))
 }
 
-/// Run ids come from users and become path components: only `r-` plus ASCII letters, digits and `-`.
+/// Run ids come from users and become path components: only the run-id form (`rcfd_project::runid::is_run_id`).
 fn check_id(id: &str) -> Result<(), String> {
-    if id.starts_with("r-") && id.len() < 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+    if rcfd_project::runid::is_run_id(id) {
         Ok(())
     } else {
         Err(format!("'{id}' is not a run id"))

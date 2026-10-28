@@ -1,0 +1,5 @@
+E:\projects\cfd\target-w48a\a4\proj\runs\r-20261028T010219-cc06\case.snapshot: ok, 144 cells
+144 cells, algorithm simplec
+checkpoint written to E:\projects\cfd\target-w48a\a4\proj\runs\r-20261028T010219-cc06\output\restart.rcfd
+results written to E:\projects\cfd\target-w48a\a4\proj\runs\r-20261028T010219-cc06\output
+warning: stopped after 20 iterations without meeting the tolerances
