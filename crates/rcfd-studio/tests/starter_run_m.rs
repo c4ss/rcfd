@@ -246,6 +246,12 @@ fn count(hay: &str, needle: &str) -> usize {
 /// project's lock; ...`) with the runner's line exactly once, and that text is drawn. Negative control: the route before
 /// (`tail_always`): the line twice.
 #[test]
+#[cfg_attr(
+    not(windows),
+    ignore = "ADR 0147 amendment 2: the fixture (a folder at the lock path) gives an early exit on Windows only; on Unix \
+              the runner takes the folder for a held lock and exits 3, which is not an early exit (M7 (a) covers the \
+              rule on every platform)"
+)]
 fn m7_the_run_buttons_early_exit_shows_the_runner_line_once() {
     for always in [false, true] {
         let p = common::RunnerProject::new(if always { "m7bc" } else { "m7b" }, 3);

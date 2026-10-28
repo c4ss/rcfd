@@ -1,8 +1,8 @@
 # ADR 0147: Job 48M, follow-ups of the live preview: Run waits for a typed field, the camera stays on a rebuild, an identical text is not built again, the starter copies a case's data file, runs ordered by creation, and the runner's log tail shown once
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
-first; what had run before is listed under "What I already knew"); results in the addendum; not yet accepted by the
-maintainer. Job 48M: the maintainer's answers to the questions of
+first; what had run before is listed under "What I already knew"); amendment 1 (M1's hover set-up) before its corrected
+run, amendment 2 (M7 (b) a Windows fixture); results in the addendum, no known miss; not yet accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
 [ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md) (the Mesh / Run toggle and the live preview), and the extra
 scope of [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) question 5. On main ec6a443 (48J,
 ADR 0144, and 48L, ADR 0146, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are
@@ -230,6 +230,19 @@ Corrected set-up (the same test names; limits and controls unchanged): after the
 until the hover text is drawn or 30 frames (0.5 s of egui's clock) have passed, and every drawn text of those frames is
 kept. What I knew when writing this: the numbers above and egui's code; the corrected helper had not run.
 
+## Amendment 2 (2026-10-28, M7 (b) is a Windows fixture; after its Windows run, before any run elsewhere)
+
+Found in review after M7 (b)'s registered run on Windows, not by a failing run. Its fixture, a folder at
+`.rcfd/runner.lock`, ends the runner early only on Windows: opening a folder as the lock file fails there with error 5,
+so `serve` exits 1 with `rcfd-runner: runner lock: ...`. On Unix `acquire_lock` creates the lock with `create_new`; the
+folder answers "already exists", `unix_takeover` reads no pid from it and leaves a fresh one alone, and after its 10 tries
+`serve` exits 3 (another runner holds the lock), which the client awaits for 10 s and does not report as an early exit
+(read from `crates/rcfd-runner/src/sys.rs`, `acquire_lock` and `unix_takeover`; not run). M7 (b) would then miss its 5.0 s
+limit and its marker on Linux by its set-up, not by the change. The CI (`ci.yml`) runs the Studio's library tests only;
+the gate (`gate.yml`) runs on Windows unless another system is asked for. Change: `#[cfg_attr(not(windows), ignore =
+"...")]` on M7 (b), naming this amendment; on Windows the test, its limits and its control are unchanged. M7 (a) checks the
+rule with the runner's own early exit (a bad budgets file) on every platform.
+
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
@@ -274,7 +287,8 @@ the starter's dialog line and the data file in the Project panel, the strip's er
 3. Orbit, pan or zoom the mesh, then type a new `nx`: after the pause the mesh changes and the view stays. Type a new `lx`
    (or `ly`): the view is fitted to the new box, in the same direction.
 4. With a large case open, type a new value into a field and wait until its mesh is shown; then press Enter (the value is
-   committed, the text the same): no second "Building the mesh..." follows.
+   committed, the text the same): the mesh is not built again (the "Building the mesh..." line may flash for a frame
+   while the text is compared on the build thread).
 5. Case > New case from example..., pick "channel with a profile-file inlet": the line says it also creates
    `cases/profile_inlet.csv`; create it, then Run: the run finishes and its fields show. The Project panel lists the table
    too (question 3).
