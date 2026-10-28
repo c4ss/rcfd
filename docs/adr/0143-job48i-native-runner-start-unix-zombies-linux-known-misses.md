@@ -1,7 +1,7 @@
 # ADR 0143: Job 48I, the runner started natively (no PowerShell), dead Unix runners read as dead, two Linux known misses
 
 Status: **registered** 2026-10-28, before any run of the checks below (set-ups and limits are fixed here; nothing of this job
-has run). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
+had run); results in the addendum; not yet accepted by the maintainer. House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
 runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
 before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
 re-recorded. Parents: [ADR 0123](0123-wave47b-run-service.md) (decision 2, amendments 2 and 3), [ADR 0133](0133-wave48d-run-control-and-live-monitoring.md)
@@ -192,6 +192,121 @@ the container before its build.
 * Docker and the `rust:1.99-bookworm` image are present on this host.
 * Nothing of this job was built or run before this registration. The tests are written after it, and the code change after the
   N1c, Z1c and S4Lc runs.
+
+## Addendum: results against the registered limits (2026-10-28)
+
+Commits: registration 43f1f89; tests N1, N2 and Z1 48ef903 (no non-test code changed: the "before" runs); the change
+87605aa (code, the other tests, the notes). Windows: this host (16 threads, 93.6 GB, other agents building at the same
+time), release, `--test-threads 1`, output to files. Linux: Docker `rust:1.99-bookworm` (glibc 2.36, rustc 1.99.1),
+`--init --cpuset-cpus 0-3 --memory 16g`, `git archive` of 48ef903 (before) and 87605aa (after), extracted with `tar -m`.
+No new third-party crate, no new workspace edge, `Cargo.lock` unchanged, no numerics changed.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| N1 | solver started within 1.5 s of the click; finished, step 2000 | **0.389 s** (run folder 0.152 s, `runner.json` 0.272 s, `check.json` 0.272 s, `status.json` running with pid 0.389 s, model shows it running 0.501 s); finished, step 2000. Again in the crate re-run: 0.247 s | pass |
+| N1c | the code before the change: above 1.5 s | **5.341 s** (run folder 0.082 s, `runner.json` 5.223 s: the PowerShell route did not take the lock in its 5 s, the direct start followed; model 5.509 s); finished, step 2000 | fails as required |
+| N2 | child exits 0; runner alive after its exit, the run not terminal; finished; runner alive after the run; probe false before and after the shutdown | child exit 0 after 0.557 s; after it: runner true, run `running`; finished, step 15 000; runner true after the run; probe false before the start and after the shutdown. Crate re-run: the same, child exit after 0.311 s | pass |
+| N3 | both `Ok`, both started; 1.5 s later one alive, `runner.json`'s; one "started" line; lock probe true | Windows: `Ok(Some(41664))`, `Ok(Some(53568))`; alive [41664] = `runner.json`; 1 line; probe true. Linux: pass | pass |
+| N3 control | two projects: both alive, each its `runner.json` | Windows: [10556, 48252] both alive, each its project's `runner.json`. Linux: pass | as required |
+| N4 | (a) started pid = `runner.json`'s, alive; (b) program = the runner, flags; (c) no shell names | Windows: (a) 62276 = `runner.json`, alive (also asserted, not registered: a second call returns `Ok(None)`); (b) `C:\x y\rcfd-runner.exe`, arguments `serve --project p`, flags 0x8000208; (c) 35 source files, none. Linux: (a), (b) (flags 0), (c) pass | pass |
+| N4 (c) control | the pre-change launcher line is found, not after `#[cfg(test)]` | found at its line 2; ignored after `#[cfg(test)]` | as required |
+| Z0 | the registered verdicts | 7 outputs read alive, 8 dead, 0 wrong (Windows and Linux) | pass |
+| Z0 control | the old rule reads the zombie alive | it does | as required |
+| Z1 | (a) both probes false within 2.0 s; (b) `Ok`, another pid | Windows before: 0.277 s, (b) met; Windows after: 0.199 s, (b) met; Linux after: **0.0025 s**, (b) met | pass |
+| Z1c | Linux, before the change: fails at (a) | (true, true) still 10.011 s after the kill | fails as required |
+| S4L | ADR 0123's S4a and S4b limits, Linux, after | S4a met; S4b failed 0.504 s after the start (limit 2.5 s) | pass |
+| S4Lc | Linux, before the change: S4a and S4b fail | both fail at their `wait_until(5 s, !runner_running())` (`runner_w47b.rs` 351 and 379), as ADR 0137 recorded; the same in both "before" runs (deviation 2) | fail as required |
+| K1 | Linux: listed ignored; `--ignored` fails at the bound; Windows: runs and passes | Linux: `ignored, known miss on Linux, ADR 0143 ...`; with `--ignored`: `0.000000000001 0.0001 1: 0.00009999999999999998 < 0.0001` (`cavitation.rs` 87, ADR 0137's value). Windows: `cavitation` 4 passed | as registered |
+| K2 | the same for P1 | Linux: listed ignored; with `--ignored` it fails at `assert!(check_mesh(&m).is_ok())` (`tetmesh.rs` 233). Windows: `tetmesh` 10 passed, 1 ignored (`t5_torus_known_miss`, as before) | as registered |
+| F15' | 9 of 9 parse back | 9 of 9 (Windows) | pass |
+| F17' | as ADR 0128 | `tasklist` 0x8000000, `taskkill` 0x8000000, runner start 0x8000208, `rcfd --version` 0x8000000; control holds | pass |
+| RR | earlier tests pass unchanged | see below | pass, except three failures that are on main already (below) |
+
+RR in detail:
+* `rcfd-runner`, Windows: 34 passed, 1 ignored (S5). S1 max 2 by status (125 samples) and by OS, control 3 and 3; S2
+  [2, 0, 1, 3] and [0, 1, 2, 3]; S3 0.068 s; S4b 0.866 s; S4c 0.103 s; S6 paused after 0.049 s, 0 steps held, bitwise;
+  S7 0.137 s; S8 one runner, loser exit 3; S9, S10, S11, S5a, the F-tests and the contract tests pass. Linux: 31 passed,
+  1 ignored (S5; the F15 tests and F17 are Windows-only).
+* `rcfd-mcp` `project_runs_w48f` 3 passed, `project_w48f` 10 passed (they start runs through `ensure_runner`).
+* `rcfd-studio`, Windows, the whole crate: 153 passed, **3 failed**, 3 ignored (the known misses G1, B9 tutorials, R6).
+  R9 passed (0.92 s for its binary). The three failures are G1b, the G1 control and the G4 control of ADR 0141. They are
+  not from this change: run on the code before the change (a separate `git archive` of 48ef903 with its own target folder),
+  all three fail in the same way:
+  * G1b, limit (g): `renders 10 uploads 2` before (running 5.330 s after the click), `renders 9 uploads 2` after.
+  * G1 control: "frame within 5 s of the first snapshot true (0.000 s)" before, 0.001 s after.
+  * G4 control: `assertion failed: !vp.contains(&reason)` before and after.
+  * Read from the code, not run separately: ADR 0138's case preview (`Viewport::show_surface`, merged in e11c656) shows the
+    selected case's mesh in the viewport. That is a frame without a run (the G1 control) and a first mesh upload before the
+    run's (G1b (g)). ADR 0140's empty states explain a failed run in the viewport ("failed before it stored its first
+    snapshot"), which 48G4's `no_explain` switch does not turn off (the G4 control). ADR 0141's checks were registered and
+    run before those merges. Question 3.
+* `cargo fmt -p rcfd-runner -p rcfd-studio -p rcfd-fv -p rcfd-mesh -- --check` clean (Windows; Linux for runner, fv,
+  mesh). `cargo clippy --workspace --all-targets -- -D warnings` clean on Windows; `cargo clippy -p rcfd-runner
+  --all-targets -- -D warnings` clean on Linux (the Unix code paths).
+* Leftover processes after the Linux runs: none (`ps`).
+
+### Deviations and notes
+
+1. The first Windows build of the "before" code failed at link (`LNK1181: cannot open input file 'dbghelp.lib'`). The
+   Visual Studio Installer was modifying the installation from 15:13 to 15:27, and the Windows SDK's `Lib` folder was
+   missing in that time. Nothing ran on that build; it was built again after the installer had finished.
+2. The first Linux "before" run stopped after `runner_w47b` failed (cargo stops at the first failing test binary without
+   `--no-fail-fast`), so Z1c did not run in it. The script got `--no-fail-fast`, and the same archive ran again: S4a and S4b
+   failed in the same way both times, and Z1c failed at (a).
+3. Z1 and N3/N4 read `runner.json` until it exists or changes (at most 5 s): the runner writes it just after it takes the
+   lock, which is when `ensure_runner` may return. Written into the tests before any run; the limits are unchanged.
+4. After their "before" runs, N1, N2 and Z1 were reformatted by `cargo fmt` (line breaks only, `git diff -w` shows none
+   else).
+5. The coordinator's correction during the job: memory is not short (36 GB free at the time), so jobs ran side by side
+   where they did not touch a timing check: N1's registered run ran with no other job of mine; the Linux "after" run
+   overlapped the Windows `rcfd-runner` crate run and the `rcfd-studio` crate re-run; both have generous time limits
+   (above).
+6. Not in the table, from N1's breakdown: of the 0.389 s, 0.15 s pass before the run folder exists (the program search,
+   `rcfd --help` and `rcfd --version` on the Studio's control thread), 0.12 s until the runner holds the lock, 0.12 s for the
+   pre-launch check and the launch.
+
+### Not run
+
+* A real window by hand: the first Run of a fresh Studio session, closing the Studio window while a run runs (Task
+  Manager), F5 pressed twice quickly.
+* Linux CI (`ci.yml` unit tests and `gate.yml` on `ubuntu-latest`, Ubuntu 24.04): Docker bookworm stood in; no push.
+* The `rcfd-studio` tests on Linux (N1 and N2 have run only on Windows), macOS, debug builds of the new tests, the full gate
+  (`scripts/gate_test.py`) and `cargo deny`.
+
+### Questions for the maintainer
+
+1. **Inherited handles on Windows (S5).** The direct start hands the runner every inheritable handle of its starter.
+   Options:
+   * (a) Accept and document it. On Windows, do not capture the output of `rcfd-runner start` or `ensure` through a pipe:
+     redirect it to a file, or use `start --no-runner` and then `ensure`.
+   * (b) Keep an opt-in ShellExecute route for the CLI client only. It would be PowerShell again, which fails on this host.
+   * (c) `CommandExt::inherit_handles(false)` once it is stable (issue 146407): no unsafe code.
+   * (d) Allow one reviewed unsafe function (clear the inherit flag of the std handles, or a handle list); this conflicts
+     with `unsafe_code = "forbid"`.
+
+   For `rcfd-mcp`, the effect on Claude Code of its stdio pipes staying open in the runner after the server exits is not
+   verified. **Recommendation:** (a) now, (c) when it is stable.
+2. **Unix "setsid-style".** Options: (a) keep `process_group(0)` with null stdio; (b) `setsid` once
+   `CommandExt::setsid` is stable (issue 105376); (c) start through the `setsid` program (util-linux; an extra program in the
+   start path, not on macOS). **Recommendation:** (a), then (b).
+3. **Three ADR 0141 checks fail on main e11c656** (G1b (g), the G1 control, the G4 control; RR above). Options:
+   * (a) Their owners register amendments: count uploads and frames from the run's selection on, and exclude ADR 0140's
+     empty-state text from the G4 control.
+   * (b) Make them known misses with their limits intact (the house rule).
+   * (c) Change the code so that the preview and ADR 0140's text follow 48G4's switches.
+
+   **Recommendation:** (a). The failures come from newer features that the older checks count, not from a regression of
+   the run display. Not done here, because these are another ADR's checks.
+4. **C3 and P1 are ignored on `not(windows)`.** The other option is `target_os = "linux"`, under which other platforms
+   would run them without evidence. **Recommendation:** keep `not(windows)` (no other platform is built).
+5. **Tests removed with the PowerShell code:** the base64 vectors and F15's `start_script` text assertion. F15's round trip
+   now runs through `detached_command`, and F17 lost its PowerShell site. **Recommendation:** accept.
+6. **Early exit.** Now that the client owns the started process, `ensure_runner` could report a runner that exits before it
+   takes the lock (for example on a bad budgets file) at once, with its exit code, instead of after 10 s. The Studio
+   checks the budgets first; `rcfd-mcp` and the CLI do not. **Recommendation:** yes, as a small follow-up with a registered
+   check.
+7. **Linux CI.** Run the Full gate on `ubuntu-latest` and the CI unit tests after the merge, since Docker bookworm stood in
+   for Ubuntu 24.04. **Recommendation:** yes.
 
 ## Files
 
