@@ -1,6 +1,8 @@
 # ADR 0145: Job 48K, the end-time remainder step: a fixed-step transient run ends on a whole step
 
-Status: **PROPOSED 2026-10-28** (set-up, limits and the order of runs registered here before any run of this job).
+Status: **PROPOSED 2026-10-28** (set-up, limits and the order of runs registered here before any run of this job;
+amendments 1 and 2 before the corrected runs; results in the addendum: every registered limit met, the control
+reproduced the defect on the unfixed tree as predicted, 3 rcfd-studio failures found to be pre-existing on main).
 Written at main 0a69af4 (wave 48H merged, ADR 0142). Job 48K fixes the defect ADR 0142 found and did not fix (its
 addendum "Found, not fixed" and question 6). House rules of ADRs 0110-0142 apply: the set-up and the limits below are
 fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
@@ -203,9 +205,10 @@ is about 1.3, the last stored snapshot is at t = 100. With `solver.end_time = 10
 ## Addendum: results (2026-10-28, branch `worktree-agent-a4bbf65b8948d69c9`, release builds)
 
 Commits: d2decfd (registration: this ADR and the test file), 52c5620 (R2: the pre-fix states recorded, no other change),
-1ab5a65 (the fix, D1-D4, and the `docs/case-schema.md` paragraph), 88936fe (amendment 1), then this addendum. R1-R3 and
-F1 ran in this worktree, `--test-threads 1`, output to files; B4 ran in a scratch copy (amendment 1). The machine was
-shared with other agents' builds.
+1ab5a65 (the fix, D1-D4, and the `docs/case-schema.md` paragraph), 88936fe (amendment 1), f7d8804 (this addendum, B4
+pending), de636d3 (amendment 2), then the B4 results. R1-R3 and F1 ran in this worktree, `--test-threads 1`, output to
+files; B4 ran in a scratch copy `E:\projects\cfd\w48k-probe` (amendments 1 and 2). The machine was shared with other
+agents' builds.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -222,8 +225,24 @@ shared with other agents' builds.
 | B2, R2 (unfixed, again) | E, J, N, W reproduce; T fails its "differs" check | 17 of 17 reproduce; T fails on all 5 paths | as predicted |
 | B2, R3 (fixed) | E, J, N, W equal their pre-fix values (Windows x86_64); T differs | 17 of 17 equal; T differs on all 5 paths (3 steps instead of 4) | pass |
 | B3 | `timectl_tree.rs` passes | 4 passed | pass |
-| B4 | (a) 0 D1 lines from processes other than the new test file; (b) 0 failed | (pending) | (pending) |
+| B4 (a) | 0 D1 lines from processes other than the new test file | 164 probe lines from 29 programs, 14 of them from `rcfd` solver processes that CLI, runner and Studio tests started (the variable reaches child processes); D1 fired 12 times, all in the new test file (the 11 T runs, stretch 9.0e-7, and C1, stretch 7.07e-11 at t 99.95); 0 elsewhere | pass |
+| B4 (b) | 0 failed; a failure alone on the unfixed tree too is pre-existing | 16:31 to 17:20 (build included): 1116 passed, 18 failed, 267 ignored. 15 failed for want of `fake-claude` (amendment 2); their corrected run: 15 of 15 pass, no probe line. 3 rcfd-studio tests failed: `oneclick_g4` `g1_control_without_select_and_focus_no_frame_and_no_front` ("a frame without the auto-select": a frame 0.001 s after the first snapshot), `g4_control_without_the_explanation_the_reason_is_not_shown` (`!vp.contains(&reason)`: the viewport shows the pre-launch reason), `oneclick_e2e_g4` `g1b_one_click_from_case_to_picture` ("renders 10 uploads 2"); each alone on the unfixed tree (the copy with d2decfd's `sim.rs`, rebuilt with B4's selection: the same test binaries, `rcfd` and `rcfd-runner` rebuilt) fails at the same assertion ("renders 12 uploads 2" for the last) | pass: 0 failures from the fix; 3 pre-existing |
 | F1 | fmt and clippy clean; `limit_audit.py` 0 hits in the new file | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `limit_audit.py` (exit 0): 118 hits in the repository ((i) 23, (ii) 2, (iii) 25, (iv) 68, (v) 0), none in the new file | pass |
+
+**Reported without a limit.** Remainder steps of the existing tests (B4, processes other than the new test file): 119;
+their fraction of the proposed step from 0.1304 to 1 (median 1; 115 within 1e-9 of 1, the ordinary last step a
+rounding hair under dt); 2 below 0.5, both in `w36b_lag_known::p_one_corrector_warning_iff_unstable` (Courant-controlled
+runs, 0.1304 and 0.3333); none below 0.05, so no existing test gets the D4 warning (that test, which reads the run-time
+warnings, sees none); none below 1e-6. Together with B4 (a) this shows that in every process of B4's selection the fixed
+code took the same steps, set the same done flags and handed out the same warnings as the unfixed code. C1: 21.1 s
+(unfixed), 20.6 s (fixed).
+
+**Found, not fixed: three rcfd-studio tests fail on main.** `oneclick_g4::g1_control_without_select_and_focus_no_frame_and_no_front`,
+`oneclick_g4::g4_control_without_the_explanation_the_reason_is_not_shown` and
+`oneclick_e2e_g4::g1b_one_click_from_case_to_picture` (ADR 0141) fail on the unfixed tree (main 0a69af4's code) as on
+the fixed one, alone and in B4, at the same assertions (B4 (b)). Not investigated (not this job's code); possibly an
+interaction of the 48G merges (a frame and a second upload before the run is selected could come from the mesh preview of
+ADR 0138). Question 6.
 
 **Observations.** The PISO and PISO Courant set-ups give identical states for every variant: with `max_courant = 1e6`
 the legacy controller proposes exactly `solver.dt`, so both paths do the same arithmetic. The largest abs `p` of the
@@ -250,9 +269,9 @@ remainder step did.
    `events.jsonl` holds it in full (question 5).
 
 **Not run.** The workspace gate over the crates outside B4's selection (they do not link rcfd-api and do not start the
-`rcfd` binary); workspace-wide clippy (`-p rcfd-api` only); Linux (B2 only prints there; the landing, warning and C1
-limits do not depend on the platform's last bits); the real Studio binary and the "Not in CI" checklist; `cargo deny`
-(no new dependency).
+`rcfd` binary; `rcfd-claude` only had its `fake-claude` built, amendment 2); doc-tests; workspace-wide clippy and fmt
+(`-p rcfd-api` only); Linux (B2 only prints there; the landing, warning and C1 limits do not depend on the platform's
+last bits); the real Studio binary and the "Not in CI" checklist; `cargo deny` (no new dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 
@@ -278,6 +297,8 @@ construction).
 4. The compressible engine has the same kind of landing (relative tolerance) but no projection. Leave it?
 5. The Studio's event list cuts a solver event's JSON at 160 characters, so the warning's message may be cut there.
    Show solver warning messages in full (a Studio change)?
+6. (Addendum) Three rcfd-studio one-click tests of ADR 0141 fail on main (found by B4, "Found, not fixed"). Who looks
+   at them: the 48G owner, or a separate job?
 
 Recommendations (addendum): 1 keep 1e-6 (it covers every rounding remainder up to 1.3e5 steps in the worst case and
 changes no deliberate remainder); 2 no check-time rule for now (the run-time warning names the remedy; a new rule
@@ -285,7 +306,9 @@ operator changes the rule output of existing cases, `rules_w19c` E2); 3 yes, use
 `store_plan.rs` `ceil_eps`, so the estimate counts the steps the solver takes (one constant, its tests decide); 4 leave
 the compressible engine (explicit steps, no projection to spoil); 5 yes: render a `solver` event whose `solver.event`
 is `warning` as `warning: <message>` in `ui.rs` `event_text` (one match arm), which also makes the field-store and
-pressure-lag warnings readable in the Studio, where today every solver warning shows as cut JSON (deviation 3).
+pressure-lag warnings readable in the Studio, where today every solver warning shows as cut JSON (deviation 3); 6 a
+separate job with its own registration, starting from the three failing assertions (they fail alone, so they are not
+load effects), before the next Studio merge.
 
 ## Files
 
