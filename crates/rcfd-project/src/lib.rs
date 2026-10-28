@@ -74,6 +74,22 @@ pub enum ProjectError {
         /// The file.
         path: PathBuf,
     },
+    /// A compare-and-replace found the file changed since its base was read (ADR 0135 W48-15).
+    #[error("{}: changed since it was read (now {})", path.display(), current.as_deref().unwrap_or("absent"))]
+    Conflict {
+        /// The file.
+        path: PathBuf,
+        /// Its hash now (`None`: the file does not exist).
+        current: Option<String>,
+    },
+    /// Another cooperating writer held the file's edit lock for the whole wait.
+    #[error("{}: edit lock {} is held by another writer", path.display(), lock.display())]
+    LockBusy {
+        /// The file.
+        path: PathBuf,
+        /// The lock file.
+        lock: PathBuf,
+    },
     /// Anything else, with its location.
     #[error("{}: {msg}", path.display())]
     Invalid {
