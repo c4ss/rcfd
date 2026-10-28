@@ -75,8 +75,8 @@ The budget and the speedup band are claims for a case class. Each holds only aft
 until then a run says "tier applied, claim not validated".
 
 The knobs fall on two axes:
-* **Numerical axis**: mesh counts of generator meshes, time step, scheme order, linear and outer tolerances, precision mode. These
-  are relative transforms that apply to any case.
+* **Numerical axis**: mesh counts of generator meshes, time step, linear and outer tolerances, precision mode. These are relative
+  transforms that apply to any case. Schemes stay as written (Table B1 notes).
 * **Model axis**: closure, steady or transient, passage or full annulus, CFD or reduced-order. These are absolute presets per case
   class [F-1 (c)].
 
@@ -105,11 +105,18 @@ Table B1, the numerical axis (class S), relative to the case as written (cell si
 | Cell size, generator counts | h/2 | h/sqrt 2 | h | sqrt 2 h | counts by `--set`; imported mesh: not applied (D3) |
 | First cell | refined with h only where y+ <= 1 | as xhigh | as written | as written, never scaled | keys exist |
 | Time step, transient | dt/2 | dt/sqrt 2 | dt | sqrt 2 dt | keys exist |
-| Space scheme | bounded second order required | as xhigh | as written | as written; first order only as a start-up | exists |
-| Time scheme | bdf2 | bdf2 | as written | as written | exists |
 | Inner linear tolerance | `pressure_rel_tol` 1e-6 steady, 1e-10 transient | as xhigh | as written | 1e-2 steady | keys exist |
 | Outer stop | `tolerance_u`, `tolerance_p` 1e-9 and a relative `change` monitor below 1e-7 on each report | as xhigh | as written | 1e-4 and a relative `change` monitor at 1e-3 | keys exist |
 | Time means | until each mean's SE <= budget/12 (D8) | as xhigh | as written | as written | `statistics`, `piso` and `pimple` only |
+
+Notes on Table B1:
+* **Schemes stay as written at every tier.** Space and time schemes are not tier knobs. Medium, high and xhigh therefore differ in h
+  and dt only, and form a refinement family.
+* **First-order cases.** A case written with a first-order scheme keeps it at every tier. Its xhigh then rarely meets the D8
+  uncertainty rule, so its checks are reported as non-discriminating.
+* **Scheme upgrades.** An upgrade, for example euler to bdf2, would be a separate step outside this ladder; none is proposed here.
+* **Tolerances.** They change the iteration error only. D8 checks that every member's iteration error is below a tenth of the
+  differences between members.
 
 Table B2, class F presets (absolute, delivered in T5, definitions per F-9):
 
@@ -119,6 +126,7 @@ Table B2, class F presets (absolute, delivered in T5, definitions per F-9):
 | Time dependence | transient | transient | steady | steady | algebraic | sliding interface missing (F-250) |
 | Domain | full annulus, struts, inlet | full annulus | one periodic passage | one passage | B blades, no mesh | annulus mesh partial (part B3) |
 | Wall resolution | y+ <= 1 | y+ <= 1 | y+ <= 1 (the passage generator defaults to `y_plus` 30, `fan_case.rs` line 64) | medium's counts, wall-function first cell | | `mesh.fan.*` keys exist |
+| Schemes | bounded second order in space, bdf2 in time | same | same in space (steady) | same in space (steady) | | exist (ADR 0086 used limited `linear_upwind`) |
 | Precision, tolerances, time means | as B1 xhigh | as B1 high | as B1 medium | as B1 low | | |
 
 Table C, error budgets: TARGETS against the xhigh run of the same case, in percent of the xhigh value unless a unit is given:
@@ -143,7 +151,8 @@ Table C, error budgets: TARGETS against the xhigh run of the same case, in perce
 Reasons for the numbers:
 * **Class S, numerical axis only.** Take error `C h^p`, p in [1, 2], and sqrt 2 steps. The differences to xhigh of high, medium and
   low are then 0.33-0.41, 1 and 1.8-2.3 times the medium difference. (For p = 1: 0.207, 0.5, 0.914 of `C h`; for p = 2: 0.25, 0.75,
-  1.75 of `C h^2`.) The budgets 1, 3 and 7 % follow the p = 2 ratios; at p = 1 they would be 1.24 % and 5.5 %.
+  1.75 of `C h^2`.) The budgets 1, 3 and 7 % follow the p = 2 ratios; at p = 1 they would be 1.24 % and 5.5 %. The ratios hold
+  only for runs that differ in h and dt alone (Table B1 notes).
 * **Class F, flow against pressure.**
   * Take a system curve `dp = k Q^2 + l Q` (the form of ADR 0119 D-M8) with slope `S`, crossed by a fan curve of slope
     `s <= 0`. Then `dQ/Q = (d dp/dp) / (S Q/dp - s Q/dp)`, with `S Q/dp` between 1 (`k = 0`) and 2 (`l = 0`).
@@ -159,9 +168,10 @@ Reasons for the numbers:
   * At the design point, with 33 of 40 strips stalled: -64 %.
 * **Laminar Nusselt number and drag.** The fine-mesh GCI of heated-cavity Nu is 0.014-0.053 % (MEASURED: ADR 0061 lines 257-259; ADR
   0062 line 118, which supersedes ADR 0061's 0.13 % at Ra 1e6). The 1 % high budget is therefore discriminating for Nu under the D8
-  rule. It is not discriminating for cylinder C_D (GCI 0.96 %) or St (GCI 1.62 %, about 0.0026 absolute), both from ADR 0062 lines
-  165-166. C_D is borderline at medium (1 % against 0.96 %). Those checks are reported as non-discriminating unless a finer reference
-  is run.
+  rule. It is not discriminating at high for cylinder C_D (GCI 0.96 %) or St (GCI 1.62 %, about 0.0026 absolute), both from ADR 0062
+  lines 165-166. At medium, C_D passes the rule only if the time-mean SE is below 0.02 %: the allowance is 1 %, the GCI takes 0.96 %,
+  and twice the SE must fit in the rest. Otherwise it is non-discriminating there too. Such checks are reported as
+  non-discriminating unless a finer reference is run.
 
 Table D, speedup TARGETS against xhigh: products of Table E's factors. Fixed costs lower the upper ends (Limits 6).
 
@@ -314,6 +324,8 @@ Delivery:
 * **Per-run estimate from cheap runs.** When a case runs at medium and high only, the two runs give an estimate of medium's
   difference from xhigh: `abs(f_m - f_h) (1 - 2^-p) / (1 - 2^(-p/2))`, a factor of 1.5 to 1.7 for p in [1, 2]. It is reported as
   "estimated difference from xhigh". (The difference from the exact solution would use `r^p / (r^p - 1)`, a factor of 2 to 3.4.)
+  The estimate holds only when the two runs use the same schemes. For a transient pair, which scales h and dt together, p is the
+  smaller of the space and time orders: 1 for euler.
   Model-axis error (closure, reduced-order) cannot be estimated this way; it is reported as the class's calibration result, "largest
   difference over N calibration cases".
 * **Report.** A run at tier T reports the tier's budget, the class's calibration result and status, the per-run estimate when a pair
@@ -333,7 +345,9 @@ Delivery:
   * High, medium and low run last.
 * **When a check is discriminating.** The xhigh reference's uncertainty, U = GCI_fine plus 2 SE for time means, must be at most a third
   of the budget. Hence SE <= budget/12 in Table B1, which leaves budget/6 for the GCI. Otherwise the check is reported as
-  non-discriminating. Each family member's iteration error must be below 0.1 of the differences between members (the ADR 0086 rule,
+  non-discriminating.
+  * For a transient case the GCI combines two separate studies: a space study at xhigh's dt and a time study on xhigh's mesh.
+    Refining h and dt together mixes the two errors, a set-up defect ADR 0062 corrected (lines 65-67). Each family member's iteration error must be below 0.1 of the differences between members (the ADR 0086 rule,
   line 101), because medium keeps its own tolerances.
 * **Speedups.**
   * Reported as medians of 3 runs: release build, gate host, `--threads 1`, no other run on the machine.
@@ -376,11 +390,13 @@ T5 class F: needs a converging fan route (ADRs 0110-0117), F-250, a wall-bounded
 
 ### T2: calibration of class S (no solver change)
 
-* **Set-up.** Medium is each case's coarsest registered mesh.
-  * In the ratio-2 families (h, h/2, h/4: cavity, step, Blasius, heated cavity, Graetz, SST plate), the middle member is xhigh and the
-    finest member gives xhigh's uncertainty. High and low are new runs.
-  * The cylinder study meshes (64x50, 90x70, 128x100, ADR 0062 line 60) are already a sqrt 2 family: medium, high and xhigh exist,
-    and low is new.
+* **Set-up.** Medium is each case's coarsest registered mesh. The meshes of the existing families are reused. Every member is re-run
+  at the T2 commit with its tier's settings, because the recorded results used other tolerances and time steps (the cylinder sequence,
+  for example, a common dt of 0.025).
+  * In the ratio-2 families (h, h/2, h/4: cavity, step, Blasius, heated cavity, Graetz, SST plate), the middle mesh is xhigh's and
+    the finest gives xhigh's uncertainty. High and low need new meshes.
+  * The cylinder study meshes (64x50, 90x70, 128x100, ADR 0062 line 60) are already a sqrt 2 family: they give medium, high and
+    xhigh, and low needs a new mesh.
   * The SA plate has no refinement family (140 x 110 cells, `crates/rcfd-turb/tests/flat_plate_sa.rs` line 6), so all its members
     are new.
   * The calibration therefore measures the ladder on each case's registered coarse mesh, not on a case written at another
