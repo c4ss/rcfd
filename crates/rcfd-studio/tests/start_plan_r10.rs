@@ -14,6 +14,41 @@ fn cavity(alg: &str, extra: &str) -> String {
     )
 }
 
+/// `piston("", "")` of `crates/rcfd-api/tests/dynamic_mesh.rs`.
+const PISTON: &str = r#"
+[mesh]
+generator = "box_2d"
+nx = 20
+ny = 2
+lx = 1.0
+ly = 0.2
+[physics]
+nu = 0.01
+rho = 1.0
+[boundaries.xmin]
+velocity = "fixed"
+[boundaries.xmax]
+velocity = "zero_gradient"
+pressure = "fixed"
+pressure_value = 0.0
+[boundaries.ymin]
+velocity = "zero_gradient"
+[boundaries.ymax]
+velocity = "zero_gradient"
+[solver]
+algorithm = "piso"
+convection = "central"
+dt = 0.005
+end_time = 0.5
+
+[dynamic_mesh]
+enabled = true
+moving_patches = ["xmin"]
+deformation = "smoothing"
+displacement_expression_x = "1 [m/s^2] * t^2"
+fixed_patches = ["xmax"]
+"#;
+
 fn plan(text: &str) -> StartPlan {
     StartPlan::new("cases/x.toml", text, Path::new(".")).unwrap()
 }
@@ -72,8 +107,8 @@ fn r10_store_proposal_of_the_start_plan() {
         ["output.store_time_interval=0.003", "output.store_precision=f32"]
     );
     parses_with_set(&e_text, &e);
-    // (f) a moving mesh: no store, a note naming the key
-    let f_text = format!("{}[dynamic_mesh]\nenabled = true\n", cavity("piso", ""));
+    // (f) a moving mesh: no store, a note naming the key (amendment 3: the piston case of rcfd-api's dynamic_mesh.rs)
+    let f_text = PISTON.to_string();
     let f = plan(&f_text);
     eprintln!("R10 (f): set {:?}, note {:?}", f.set(), f.note);
     assert!(f.set().is_empty());

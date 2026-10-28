@@ -220,6 +220,15 @@ its tests compile; a rule-d smoke outside any test: `rcfd run` of the 12 x 12 li
    `Cargo.lock` gains two dependency lines, no package. `Browser` gains `summaries_read` (R12's counter).
 3. R2's "first snapshot" is the model's state when it first holds the browser and a worker tick after opening.
 
+## Amendment 3 (2026-10-28, 48D, R10 set-up defect, before the corrected run)
+
+The first R10 run failed before reaching any limit: case (f) of the test (the cavity plus `[dynamic_mesh] enabled = true`
+alone) is not a valid case (`dynamic_mesh.moving_patches: name at least one moving patch`), so `StartPlan::new` refused it.
+A test-code defect: (f) must be a valid moving-mesh case. Corrected: (f) is the piston case of
+`crates/rcfd-api/tests/dynamic_mesh.rs` (`box_2d` 20 x 2, `piso`, `end_time = 0.5`, moving patch `xmin`, smoothing,
+fixed patch `xmax`). Limits unchanged (nothing added, a note naming `dynamic_mesh.enabled`). Cases (a)-(e) had passed in that
+run (printed before the failure) and are not changed.
+
 ## Files
 
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,
