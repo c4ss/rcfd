@@ -233,11 +233,17 @@ fn s2_the_preview_shows_the_rotated_mesh() {
     );
     assert_eq!(from_editor.mesh_hash, want.content_hash());
     assert_eq!(saved.mesh_hash, want.content_hash());
-    assert_eq!(
-        format!("{:016x}", saved.mesh_hash),
-        run,
-        "the mesh the rotated example run used"
-    );
+    // the committed run was made on Windows; the rotated coordinates come from the platform's sin and cos, whose last
+    // bits may differ elsewhere (ADR 0137): compared on Windows, printed elsewhere
+    if cfg!(windows) {
+        assert_eq!(
+            format!("{:016x}", saved.mesh_hash),
+            run,
+            "the mesh the rotated example run used"
+        );
+    } else {
+        println!("S2: not Windows, the committed run's mesh hash {run} is not compared (ADR 0137)");
+    }
     assert_eq!(typed.mesh_hash, want2.content_hash());
     for b in [&from_editor, &saved] {
         let gap = bounds_gap(b.bounds, bounds(&want));

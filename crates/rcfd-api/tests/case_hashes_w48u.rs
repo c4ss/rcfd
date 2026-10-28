@@ -184,11 +184,23 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     }
     let rec = std::fs::read_to_string(&path).expect("the R0 record");
     let want: Vec<&str> = rec.lines().filter(|l| !l.starts_with('#')).collect();
+    // R0 was recorded on Windows. A generator's mesh calls the platform's libm (sin, cos, ...), whose last bits differ
+    // between platforms (ADR 0137), so elsewhere the mesh hashes are printed, not compared; every other field is.
+    let compare_meshes = cfg!(windows);
+    let without_mesh = |l: &str| -> String {
+        l.split('\t')
+            .filter(|f| !f.starts_with("mesh "))
+            .collect::<Vec<_>>()
+            .join("\t")
+    };
     let mut problems = Vec::new();
     for w in &want {
         let src = w.split('\t').next().unwrap();
         match lines.iter().find(|l| l.split('\t').next() == Some(src)) {
             Some(l) if l == w => {}
+            Some(l) if !compare_meshes && without_mesh(l) == without_mesh(w) => {
+                println!("H1 {src}: mesh differs from the Windows record, not compared here (ADR 0137): {l}");
+            }
             Some(l) => problems.push(format!("{src}: now\n  {l}\nrecorded\n  {w}")),
             None => problems.push(format!("{src}: recorded, not found now")),
         }
