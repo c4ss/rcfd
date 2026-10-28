@@ -71,25 +71,29 @@ machine, and much longer in debug mode. The project's gate runs it with
 
 * Documentation, tutorials and the example gallery start at
   [docs/index.md](docs/index.md); the tutorials are executed by the test suite.
-* [CONTRIBUTING.md](CONTRIBUTING.md) is the clean-room policy you must agree
-  to before you submit a change, and the workflow commands.
+* [CONTRIBUTING.md](CONTRIBUTING.md) has the clean-room rule and the commands
+  to run before you submit a change.
 * [The glossary](docs/glossary.md) explains the project's own terms (wave,
   gate, ADR, F-xxx ids, FAN-01 and others) that appear throughout the docs.
 * [docs/architecture.md](docs/architecture.md) describes the crate layout.
 * [The provenance record](docs/provenance.md) says where rcfd's knowledge
   comes from.
 * [SECURITY.md](SECURITY.md) says how to report a vulnerability and which
-  parts run programs or listen for requests; [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-  and [CHANGELOG.md](CHANGELOG.md) are next to it.
+  parts run programs or listen for requests; [CHANGELOG.md](CHANGELOG.md) is
+  next to it.
 
 ## Questions and bug reports
 
-Open a GitHub issue; [SUPPORT.md](SUPPORT.md) says which template to use.
+Open a GitHub issue.
 Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Licence
 
-rcfd is licensed under the [GNU AGPL v3](LICENSE). Third-party
+rcfd is free software under the [GNU AGPL v3](LICENSE): use and change it
+for any purpose, including commercial use; if you distribute it or run a
+modified version as a network service, you must offer your users the source.
+For use without those conditions, a [commercial licence](COMMERCIAL-LICENSE.md)
+is available. Third-party
 data shipped in `validation-data/` and `cases/*/reference/` keep their own
 terms and attributions; see `NOTICE` and `validation-data/manifest.json`.
 The licences of the third-party Rust packages rcfd depends on are listed in

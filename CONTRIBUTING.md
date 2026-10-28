@@ -1,62 +1,28 @@
 # Contributing to rcfd
 
-This page is for anyone who wants to submit a change to rcfd. It sets out the
-clean-room policy you must agree to, then the commands and rules for preparing
-a change. For what rcfd is and its current limits, read
-[README.md](README.md) first; to find work, see "How you can help" in
+rcfd is licensed under the AGPL-3.0 (see [LICENSE](LICENSE)) and is also offered under a
+[commercial licence](COMMERCIAL-LICENSE.md). By submitting a change you confirm it is yours to submit and you grant the
+maintainer a perpetual, worldwide, royalty-free right to distribute it under the AGPL-3.0 and under commercial licences,
+including future versions of either. For what rcfd
+is and its current limits, read [README.md](README.md); to find work, see "How you can help" in
 [the roadmap overview](docs/roadmap-overview.md).
 
-rcfd is licensed under the GNU AGPL v3 (`LICENSE`). Every contribution is licensed the same way, without additional terms.
+## Clean-room rule
 
-## Clean-room policy (mandatory)
+rcfd is a clean-room implementation. Do not copy, translate, decompile or otherwise derive anything from proprietary CFD
+software (source, binaries, help files, manuals, undocumented formats), and do not add vendor code or text to the
+repository. Take algorithms, correlations, coefficients and benchmark data from open literature (textbooks, papers, public
+standards and file-format specifications) and cite the source in the doc comment, for example `// Patankar (1980), Eq. 5.62`.
+Knowing that a commercial tool has a feature is fine; how it works inside is not a source. If you cannot name a public source
+for a non-trivial algorithm, say so in the PR.
 
-rcfd is a clean-room implementation. By submitting a change you confirm that:
-
-1. You used no proprietary code or text. You did not copy, translate,
-   decompile, disassemble or otherwise derive anything from proprietary CFD
-   software (source, binaries, installers, help files, UI strings,
-   undocumented file formats, or its documentation text). Do not decompile,
-   disassemble or inspect vendor binaries. Do not use vendor manuals, help
-   pages or theory guides (including unofficial copies) as a source for
-   anything, not even as a secondary check of a value, and do not add vendor
-   binaries, code or documentation text to the repository.
-2. Your sources are textbooks and papers only. Algorithms, correlations,
-   model coefficients and benchmark data come from publicly published
-   literature (textbooks, peer-reviewed papers, public standards, public
-   file-format specifications). Cite the source in the doc comment, for
-   example `// Patankar (1980), Eq. 5.62` or `// Ghia, Ghia & Shin (1982)`.
-3. Feature lists are not implementations. Knowing that a commercial tool
-   offers a capability is fine; how it does it internally is not a source.
-4. File formats are implemented only from public specifications or from
-   files you are licensed to examine as black-box sample data you created.
-5. Benchmark reference data must be from open literature with citation.
-
-PRs that cannot state a public source for a non-trivial algorithm will be
-asked to add one before merge.
-
-Declare provenance in the pull request: for every algorithm, constant, data
-file or table you add, name the published source (or say it is derived from
-first principles), and say where any data came from and under which licence.
-Mark a value you could not check against its source as UNVERIFIED. The
-project's own record of what was consulted while it was built is
-[docs/provenance.md](docs/provenance.md).
-
-## How to make a change
-
-Run these commands before you submit:
+## Before you submit
 
 * `cargo fmt --all`
 * `cargo clippy --workspace --all-targets -- -D warnings`
-* `cargo test --workspace --release --lib --bins` (the unit tests, as CI runs them)
-* `cargo test --release -p <crate>` for every crate you changed, which runs its integration tests
+* `cargo test --workspace --release --lib --bins` (what CI runs)
+* `cargo test --release -p <crate>` for each crate you changed, to run its integration tests
 
-CI on a pull request runs the first three and a build check with the oldest supported Rust, but no integration test, and the full test suite takes over an hour, so the maintainer runs the full gate
-(`python scripts/gate_test.py`, see [docs/test-process.md](docs/test-process.md)) on a schedule and before every release. [docs/releasing.md](docs/releasing.md) says what each check proves. If your change is
-something a user would notice, add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) saying what changed for them.
-Write commits as [docs/commit-rules.md](docs/commit-rules.md) describes.
-
-These rules apply to the code itself:
-
-* Every roadmap item needs unit tests that exercise its acceptance criteria.
-* Keep crates small and focused; see `docs/architecture.md` for the allowed
-  dependency directions (the graph must stay acyclic).
+The full suite takes over an hour; the maintainer runs it (`python scripts/gate_test.py`, see
+[docs/test-process.md](docs/test-process.md)). Roadmap items need unit tests for their acceptance criteria, and the crate
+dependency graph must stay acyclic (see [docs/architecture.md](docs/architecture.md)).

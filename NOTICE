@@ -1,8 +1,6 @@
 rcfd
-Copyright (c) 2026 The rcfd contributors
-
-rcfd is licensed under the GNU Affero General Public License, version 3 (LICENSE). The licence covers the rcfd source code and documentation. The third-party data listed below keep their own
-terms. The full licence record of every dataset (SPDX id, URL, attribution, notes, checksums) is in
+rcfd is licensed under the GNU Affero General Public License, version 3 (LICENSE). A commercial licence is available as an
+alternative (COMMERCIAL-LICENSE.md). This covers the rcfd source code and documentation. The third-party data listed below keep their own terms. The full licence record of every dataset (SPDX id, URL, attribution, notes, checksums) is in
 validation-data/manifest.json; `rcfd data provenance` prints it. Licences of third-party Rust packages are listed in
 THIRD_PARTY_LICENSES.md. What was consulted while rcfd was built is recorded in docs/provenance.md.
 
