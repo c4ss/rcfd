@@ -67,6 +67,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      # The runner unit tests start the real `rcfd` binary from the same target directory, and `--lib --bins` does
+      # not build it for a library test.
+      - run: cargo build --release --locked -p rcfd-cli
       # Release, like the gate: numeric limits and timing checks were measured in release.
       # --lib --bins is cargo's own selection (the tests inside src/), not a hand-picked list.
       - run: cargo test --workspace --release --locked --lib --bins --no-fail-fast
