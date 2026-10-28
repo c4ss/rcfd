@@ -79,6 +79,134 @@ pause file, ADR 0123 limits); design-study runs from the UI (wave 50, design led
 * The parity check "report monitors" fails if W48-6 is declined; then R8 is not registered and the parity test is an ignored known
   miss with its reason.
 
+## Amendment 1 (2026-10-28, 48D, before any registered run): set-up, the store-precision key and three new checks
+
+Written by the 48D implementer at main 64732bb (48A, 48B, 48C library part, 48E library part and 48F merged) after reading the
+code and before any 48D code was written or run. What I knew: the code reading below; no 48D test had run. Decisions applied as
+accepted: W48-4 (b) (the runner already passes `--store-dir runs/<id>/fields`), W48-5 (a) (the start dialog proposes the store),
+W48-6 (a) (the runner already passes `--status-monitors`). Maintainer decision of 2026-10-28: the opt-in `output.store_precision`
+key lands with the start dialog, in this sub-wave (the question of ADR 0130 amendment 1 item 10). The limits of R1-R9 are
+unchanged; this section fixes what the table leaves open and registers R10-R12.
+
+**Placement (changed).** `rcfd-studio -> rcfd-runner` is a new workspace edge (layers 9 over 2; `workspace_graph.rs` unchanged,
+`docs/architecture.md` updated). `rcfd-api` gets the opt-in case key `output.store_precision` (`schema.rs`, `fieldstore.rs`,
+`docs/case-schema.md`, `docs/run-control.md`); "No change to `rcfd-runner`" holds. No new third-party crate.
+
+**`output.store_precision`.** An enumeration `"f64"` (default) or `"f32"`. Absent or `"f64"`: the hook writes `Precision::F64`
+exactly as before (the same code path). `"f32"`: every stored field is written with `Precision::F32` (ADR 0124 D4: rounded to the
+nearest single, bound `f32_error_bound`). The solver is unchanged by the key (the hook only reads it). A continued run appends with
+the precision of its own case. Consequence read from code, not changed here: like every schema addition (ADR 0124's three keys),
+the new default enters `SettingsTree::content_hash`, so the settings hash of a case container (`rcfd-io` `save_case`) saved before
+this commit no longer matches on `load_case`; no such file is committed in the repository.
+
+**Model and threads (D1, D2 as implemented).**
+1. Modules: `runs.rs` (run rows, queue order, start plan and store proposal, runner budgets), `poll.rs` (the run worker: one
+   `tick`, the incremental tail reader), `monitors.rs` (an additive `push` and `segments`; the copied functions are unchanged).
+2. The run worker is a second thread per open project, started when the project worker reports the project open (its canonical
+   root). The 48B project worker keeps its 500 ms watcher. Control calls that start processes or wait (`Client::start`, which runs
+   `rcfd --version`, and `ensure_runner`, up to 15 s) run on a short-lived thread each, never on the UI thread or the tick loop;
+   closing the project does not wait for them. Pause, resume and cancel (request files) and budget writes run on the worker.
+3. One `tick`, in this order: list `runs/` (`read_dir`); read `run.json` once per new run (cached); read `status.json` of every run
+   not yet seen terminal (a run seen terminal is read once more for its final record and `metrics.json`, then not again); a read
+   error keeps the last known state and is counted, not shown as a state; the lock probe `runner_running`; for each **shown** run
+   (the runs the UI asks for: the selected run, or several), the new bytes of `residuals.jsonl` and `events.jsonl` from kept
+   offsets, read after its `status.json` (so lines the runner wrote before a state change are read in the same tick); the last 200
+   lines of `log.txt` when its length changed. Status is read per run (not `Client::list`, which fails the whole list on one
+   transient read error). Bytes after the last `\n` are held back (the offset stops at the last newline). A complete line that does
+   not parse is skipped with a warning and the offset moves past it. A file shorter than the kept offset (replaced) is read again
+   from 0 and the UI's series of that run are reset.
+4. The worker sends deltas, not copies: new residual and monitor points of the shown runs, new events, and the run rows when any
+   row changed; it calls the UI's repaint only when it sent something other than its tick marker. The UI thread merges deltas into
+   its stores (`push`, which ignores a step at or before the series' last, like `merge`) and reads nothing from disk.
+5. Plots keep residuals and monitors apart: the selected run's residuals go to `Studio::plots` as `res_<equation>` (the runner's
+   `u`, `p`; `continuity` kept), so `residual_names` and the ported M6 hold; its monitors go to a second store `Studio::monitors` under
+   their report names. A non-finite value (`null` in the file) is kept as NaN; the drawn lines are split into segments at
+   non-finite values (`segments`, each segment decimated by the unchanged `decimate_minmax`), so a gap is a gap and not a joined line;
+   the first non-finite step of each series is a warning of the run.
+6. The run list stays the 48B browser list (`Browser::runs`, which B7 measures) with the worker's rows laid over it by run id for
+   the rows drawn (state, step, time, reason, queue position, last residuals); a run the worker knows and the browser does not yet
+   list is appended until the browser lists it. B7's injected rows have ids no worker row has, so B7 draws exactly as before.
+7. The worker's runner client is `Client::new(<canonical root>, runner_exe)`; the Studio's `runner_exe` is `RCFD_RUNNER_BIN`, else
+   `rcfd-runner` next to the Studio binary (`Client::with_default_runner`'s rule); tests set it to `target/<profile>/rcfd-runner`,
+   found next to the test's `rcfd-studio` binary, and assert that `rcfd --help` there names `--status-monitors` (a stale binary
+   fails loudly).
+8. Budgets are read with `rcfd_runner::runner::Config::load` and written by serialising `Config` (the reader has
+   `deny_unknown_fields`) through `rcfd_project::atomic::atomic_write`, after checking `max_runs`, `cpu_threads`, `poll_ms` are
+   positive; a restart notice is shown when a runner holds the lock.
+9. Queue position: the queued runs that are not held (no `pause` file), sorted by (priority descending, `created`, id) as the
+   runner's `schedule`; position 1 is next. Held queued runs show "held".
+10. Paths under `runs/` that the watcher reports are kept out of the project's "changed on disk" list (streaming runs would push
+    the other entries out of its 50 places); the run panels show them.
+
+**Set-up of R1-R9.** All process tests are release or debug builds of this crate's tests with `rcfd` and `rcfd-runner` of the same
+profile, the 12 x 12 cavity of ADR 0123 (with the `lid_drag` report of `rcfd-mcp`'s template for R8), `--set
+solver.max_iterations=<steps>`, `mem_mb` 10 (no pre-launch estimate wait), threads 1, and `.rcfd/runner-config.json` with
+`max_runs` 2 (R1) or 3 (others), `cpu_threads` 8, `poll_ms` 100. R1-R8 start `rcfd-runner serve --project <dir>` directly and wait
+for `runner_running()` before the model starts runs, so the model's `ensure_runner` returns at once. Every test kills, at the end,
+only solver pids taken from the `launched` events of its own runs. Step counts are fixed by the rule-d smoke, disclosed in the
+addendum before the counted runs.
+* **R1.** The model starts 5 runs. Snapshot check, repeated until all 5 are terminal: the test reads every `status.json` (A) at
+  `t_a`, drains the model until it holds a tick that started after `t_a`, reads every `status.json` again (B), and reads each run's
+  `events.jsonl`. For each run the shown state must lie in the run's state sequence (the `to` of its state events, in order) between
+  the state of A and the state of B, inclusive; when A and B agree it must equal them. At most 2 runs shown running or paused at
+  every snapshot. "Equals `status.json`" is defined this way because the runner replaces the file every 100 ms. Negative control: the
+  same with the worker's test switch that reads each `status.json` only once: after all five are finished on disk, at least one is
+  shown non-terminal (the check fails).
+* **R2.** Model A starts 2 runs and waits until both are shown running; the solver pids from `status.json`. Model A (worker and
+  project) is dropped at `t0`; for 2.0 s the test probes both pids with `sys::pid_alive` every 100 ms (all alive). Model B opens the
+  project: both runs shown running in its first snapshot, then finished; each run has exactly one `launched` event. Negative control
+  (the probe discriminates): `pid_alive` is false for both pids after they finished.
+* **R3.** The model starts one run, waits until step >= 5 is shown, then `pause`: the first snapshot showing `paused` within 2.0 s of
+  the call; the largest residual step shown at that snapshot is S0, and for 2.0 s of snapshots after it the largest step stays S0
+  ("0 new residual steps"). Then `resume`: the step check is that the largest step shown exceeds S0 within 5.0 s. Then `cancel`:
+  `cancelled` shown within 5.0 s of the call. Negative control: the model's test switch that sends `pause` for `resume`; the step
+  check fails (no step beyond S0 within 5.0 s); the run is then cancelled.
+* **R4.** No runner: a fixture run made with `Project::create_run`, status `running`, shown by the model, worker period 20 ms (the
+  limit is about content, not time). The test thread writes 20 000 runner-shaped lines to `residuals.jsonl` in bursts of 1-500
+  lines (LCG seed 48004); every second burst ends with a torn tail, alternating between a prefix of the next line cut at an LCG byte
+  position and the complete JSON of the next line without its `\n` (valid JSON, not committed). After each burst it waits for two
+  completed ticks and checks: the model's steps are exactly 1..=k (k the last committed step), each once, in order, and the torn
+  line's step is absent. The next burst first completes the torn line. **Negative control (changed):** the table's "whole-file
+  re-read per tick that drops the torn line" cannot lose a step with the store's merge rule (a line dropped once is read again on
+  the next re-read; read from code). The control that discriminates is the reader that moves its offset to the end of the file,
+  over a torn tail (worker test switch): it loses at least one step.
+* **R5.** M1, M2, M3 and M6 of `tests/monitors_plot.rs` unchanged. Not registered, reported: `segments` splits at every non-finite
+  value and each segment's decimation keeps the M3 properties.
+* **R6.** Release only (the B7 skip line in debug). `RunPoller::tick` called directly (no thread, no UI, no project worker: the
+  500 ms watcher and `Browser::load` are not part of the tick). 4 fixture runs, status `running`, all 4 shown, each
+  `residuals.jsonl` of at least 100 000 000 bytes of runner-shaped lines (with a `lid_drag` monitor); one untimed tick reads them;
+  then 50 timed ticks, each after 10 lines were appended to each file (untimed); the tick's deltas are dropped. Limit: median of the
+  50 <= 5 ms. Negative control: the worker's test switch that re-reads every shown file from byte 0 each tick (parsing every line,
+  sending only steps beyond the last): median of 5 ticks > 5 ms.
+* **R7.** A fixture run (no runner), state `failed` with a reason, `time` null in `status.json`; `residuals.jsonl` steps 1-10, `u`
+  null at step 6, finite at 7 and 8, every value null at 9 and 10. Limits: listed by the browser and the worker with state `failed`;
+  the segments of `res_u` are steps [1..5] and [7, 8]; the run's warnings name step 6 of `u`; the Plots panel draws (headless
+  frame) with the warning text in its output. Negative control: the pre-48A residual reader (strict `f64`, copied in the test)
+  refuses step 6's line.
+* **R8.** The model starts the lid cavity through the start plan with the store proposal on (R10) and shows it; after `finished`,
+  undecimated `Studio::monitors` `lid_drag`: one point per step 1..=N, each y bit-equal to that line's `monitors.lid_drag` in
+  `residuals.jsonl`, and the last bit-equal to the last y of `output/monitors.json` `series.lid_drag` and to `metrics.json`
+  `last_residuals.monitors.lid_drag` (the runner's `metrics.json` keeps monitors only there). Negative control: the series fed from
+  `res_p` differs at the last point. Also checked (R10 end to end): the store is at `runs/<id>/fields`, at most 100 snapshots,
+  every field `f32`.
+* **R9.** The model queues one run (`Client::submit`) with no runner alive and shows "runner not running" (lock probe false, the
+  negative control); then the model's start-runner action (`ensure_runner`, either route). Limit: within 15.0 s of the call the model
+  shows the runner running and the run running or terminal. The test's output goes to a file (S5a) and a drop guard asks the runner
+  to shut down and kills only the run's solver.
+
+**New checks.**
+
+| Id | Check | Limit | Reason | Negative control |
+|---|---|---|---|---|
+| R10 | Start plan (W48-5 (a)), pure logic: the 12 x 12 cavity text (a) without store keys, max_iterations 400; (b) with `output.store_interval = 7` in its text; (c) the store switched off; (d) f64 picked; (e) a transient `piso` case with `end_time = 0.3`; (f) `dynamic_mesh.enabled = true` | `set` exactly: (a) `output.store_interval=4`, `output.store_precision=f32`; (b) nothing added; (c) nothing; (d) `output.store_interval=4` only; (e) `output.store_time_interval=0.003`, `output.store_precision=f32`; (f) nothing, with a note naming `dynamic_mesh.enabled`; (a) estimated size 144 cells x 4 fields x 100 x 4 bytes = 230 400 bytes; every planned case still parses with its `set` applied | the decision's text; at most 100 snapshots (`ceil(M / ceil(M/100)) <= 100`) | a plan that reads the resolved tree instead of the text adds a store to (b) only if the case sets 0; checked by (b) |
+| R11 | `output.store_precision` (new key): the lid cavity, `store_interval = 7`, through `runctl::drive` | key absent: store files byte-equal to `"f64"`; `"f32"`: every stored value equals `f64::from(v as f32)` of the f64 store's value (bit-exact) and lies within `f32_error_bound`; the solver fields bit-equal with and without the key; `"f16"` refused naming `output.store_precision`; H1-H4, A6, A7 and `baseline_hashes` pass unchanged | defaults bit-identical; ADR 0124 D4 bound | the f32 store differs from the f64 store in at least one value |
+| R12 | Browser refresh on a run change (the 48B known limit "every change re-reads all run summaries"): a project with 500 runs; one run's `status.json` replaced | the project worker re-summarises exactly 1 run; the browser it sends equals `Browser::load` of the folder | worker cost O(changed runs) while runs stream | the 48B full reload re-summarises 500 |
+
+B1-B9 of ADR 0131 are re-run unchanged. B9's live-monitor item becomes a real test (R8 through the drawn app) instead of an
+ignored `*_known_miss`.
+
 ## Files
 
-`crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR.
+`crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,
+project_view}.rs`, `crates/rcfd-studio/Cargo.toml`, `crates/rcfd-api/src/{schema,fieldstore}.rs`, `crates/rcfd-api/tests/` (R11),
+`docs/case-schema.md`, `docs/run-control.md`, `docs/architecture.md`, `Cargo.lock`.
