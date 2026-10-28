@@ -216,3 +216,147 @@ builds. Not run on Linux here (UNVERIFIED on a Linux host); nothing in the new c
   meshes at the V7 rate; the limit is registered for discrete GPUs only, as T1.
 * Question for the maintainer: the Files section puts V2 in `crates/rcfd-render/tests/`, but V2 needs egui-wgpu, which Placement does
   not allow as an `rcfd-render` dependency. Proposal: V2 lives in `rcfd-studio`'s tests (the crate that has egui-wgpu anyway).
+
+## Integration part: amendment 1, set-up registered before the first registered run (2026-10-28)
+
+Written by the 48C integration implementer at main 7486ecb (48A, 48B, 48C library part, 48D, 48E library part, 48F merged)
+after reading the code and before any integration code was written or run. The limits of V2-V5, V8 and V9 are unchanged; this
+section fixes what the table leaves open, replaces two negative controls that cannot be built or cannot fail as written, and
+registers V10, V11 and the B9 parity item. Maintainer answers of 2026-10-28 applied: V2 lives in `rcfd-studio`'s tests; the host
+copy of the surface face list in `GpuMesh` (about 10 MB at 1M triangles) is accepted; the hidden test-only
+`render_ignoring_scalar_buffer` is accepted.
+
+**Step 0, merge condition (read 2026-10-28, `Cargo.lock` at 7486ecb).** One wgpu 30.x package, **30.0.1**; `egui-wgpu 0.36.2` and
+`eframe 0.36.2` both depend on `wgpu 30.0.1` (the other wgpu is the frozen GUI's 0.19.4). eframe's render state therefore hands
+the Studio a `wgpu::Device` of the same crate version as `rcfd-render`'s, and `Renderer::from_device` takes it. Read from
+eframe 0.36.2 and egui-wgpu 0.36.2 sources: the window device is requested with `wgpu::Limits::default()` (plus
+`max_texture_dimension_2d` 8192) on DX12/Vulkan, no features; eframe's egui renderer is made with `RendererOptions { msaa_samples:
+0, depth_stencil_format: None, dithering: true, .. }` (the `NativeOptions` defaults); the swap-chain format is the first of
+`Rgba8Unorm` or `Bgra8Unorm` that the surface offers (`preferred_framebuffer_format`), so both are possible; a user texture is
+registered with `register_native_texture`, which needs `Rgba8Unorm`, and egui's `fs_main_gamma_framebuffer` writes the sampled
+bytes unconverted (multiplied by white, plus dithering of at most half a step).
+
+**Design as it will be implemented.**
+* Modules: `viewport.rs` (model, camera mapping, store worker, GPU holder; no drawing) and `viewport_ui.rs` (drawing only). Hooks:
+  one field `Studio::viewport` plus calls in `close_project` and `drain` (`studio.rs`); the `Panel::Viewport` arm (`ui.rs`); the GPU
+  attached from `cc.wgpu_render_state` in `main.rs`. `Studio::new` attaches no GPU (B4, B7 and every model test stay GPU-free).
+* Threads: a viewport worker thread per open project (started at the first run selection) owns the `rcfd_tsstore::Reader` of
+  `runs/<id>/fields/` (the ADR 0130 D3 contract; no other location is looked at), builds the surface, reads fields and maps them to
+  faces (`face_values_from_cells`), and every 250 ms (`poll::PERIOD`) calls `refresh()` while the index is scanned (a live run) or
+  tries to open a store that does not exist yet. Requests are latest-wins (only the newest pending sample request is served). The
+  UI thread does one `Renderer::upload` per run and surface, then `Renderer::update_scalar` for every change of time or field, and
+  `render_into` only when the camera, field, time, range, size or theme changed. Counters `uploads`, `scalar_updates`, `renders` are
+  kept for the tests.
+* Surface: a mesh with an `Empty` patch is a 2D case: the surface is the faces of its `Empty` patches whose area vector has a
+  positive z component (the front of a one-cell-thick mesh), drawn unlit with an orthographic camera at yaw 0, pitch 0
+  (`Camera::fit`). Any other mesh: every patch, flat shading, perspective `fovy` 0.8 at yaw 0.6, pitch 0.4 (`Camera::fit`).
+  Only cell fields are listed (the run hook writes only cell fields); the default field is `p` when stored, else the first.
+* Time axis: when the stored times are strictly increasing the slider is over time `t` in [first, last] and the snapshot is
+  `Reader::by_time(t, Pick::Nearest)` (snapped: the slider then shows that snapshot's time); with "linear" on the values are
+  `field_at_time(field, t, Mode::Linear)`, shown as "interpolated" when the sample says so. Otherwise (steady runs store time 0 at
+  every snapshot, read from `Simulation::time`) the slider is over the step and the snapshot is `Reader::by_step(step,
+  Pick::Nearest)`; linear is off. Play advances one stored snapshot per 100 ms (V7's 10 per second) and stops at the last;
+  step back and forward move one snapshot.
+* Colour range: auto per snapshot (`View::range = None`, the min and max of the shown face values), auto over the run (the min
+  and max of the face values of every stored snapshot of the field, read by the worker), or fixed (typed; refused unless finite with
+  max > min). A degenerate auto range (max = min) is passed as `None` (the render core then uses a span of 1). Non-finite stored
+  values: `update_scalar` refuses them; the located message is shown and the last image is kept.
+* Hover: one `PickImage` is cached per rendered image (made lazily when the pointer is over the view after a change); the pixel
+  is the pointer position in points times `pixels_per_point`, floored. The readout is face, owner cell and the shown face value
+  (the store's cell value, f64, printed with `{}`), not the pick value (P2 known miss); "interpolated" is added in linear mode.
+* Legend: an egui colour bar of `ColorMap::viridis()` with 5 ticks at `lo + k (hi - lo) / 4`, `k = 0..4`, each labelled
+  `format!("{:.4e}", v)`, where `(lo, hi)` is the range the image was drawn with.
+* Texture: `Rgba8Unorm`, the panel's size in pixels (`round(points x pixels_per_point)`, clamped to 1..=8192), usage
+  `RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC`; registered once with `register_native_texture(.., FilterMode::Nearest)` and
+  re-pointed with `update_egui_texture_from_wgpu_texture` (same id) after a resize. Background `[255; 4]` in the light theme and
+  `[38, 38, 38, 255]` in the dark one.
+* `Studio::plot_marker` follows the viewport: the shown snapshot's step, or `s0 + w (s1 - s0)` in linear mode (`w` the sample
+  weight, `s0`, `s1` the steps of `lower`, `upper`); `None` when no snapshot is shown.
+
+**Mouse mapping (V3), constants in `viewport.rs`.** `R`, `U`, `B` are `Camera::basis()` (right, up, back); `H` the texture height
+in pixels; drag deltas are converted from points to pixels (times `pixels_per_point`).
+* Orbit (primary drag `dx`, `dy` pixels): `yaw' = yaw - 0.01 dx`, `pitch' = clamp(pitch + 0.01 dy, -pi/2, pi/2)`.
+* Pan (secondary or middle drag): `s = 2 d tan(fovy / 2) / H` (perspective) or `s = 2 h / H` (orthographic, `h` the half height);
+  `target' = target - s dx R + s dy U`.
+* Dolly (wheel, `n` notches = scroll points / egui's `line_scroll_speed`, positive away from the user): `f = 0.9^n`;
+  perspective `distance' = f distance`, orthographic `half_height' = f half_height` (distance kept).
+* Fit (double click): `Camera::fit(lo, hi, yaw, pitch, projection)` of the surface bounds with the current yaw, pitch and
+  projection kind (`fovy` 0.8).
+* After every one of these, near and far are recomputed around the surface's bounding sphere (centre `c = (lo + hi) / 2`, radius
+  `r = max(|hi - lo| / 2, 1e-30)`, as `Camera::fit`): `zc = -(c - eye) . B`, `near = max(zc - 1.01 r, 1e-3 r)`,
+  `far = max(zc + 1.01 r, 2 near)`; for a camera from `fit` with the target at `c` this equals `fit`'s own near and far.
+
+**Set-up of the registered checks.** GPU checks run on every adapter of `rcfd_render::adapters()` with ADR 0125's SKIP rule; all in
+release with `--test-threads 1`, output to a file. "Rel. 1e-12" means `|a - b| <= 1e-12 max(1, |b|)` per f64 component.
+* **V2** (`tests/viewport_v2.rs`). Per adapter: a device from the adapter (`DeviceDescriptor::default()`), a Studio `ViewGpu` built on
+  it with `from_device` (the app's code path), its texture drawn by the Studio code with two contents: (i) the cube of ADR 0125 G2
+  scene (b) (4 x 4 x 4 box, per-face field, flat, yaw 35 degrees, 320 x 240); (ii) a grey ramp, 256 x 16, column `x` holding
+  `(x, x, x, 255)`, written with `queue.write_texture` into a texture of the same descriptor. egui-wgpu's `Renderer::new(device,
+  format, RendererOptions::default())` (eframe's options) for `format` in {`Rgba8Unorm`, `Bgra8Unorm`}; the texture registered with
+  `register_native_texture(.., Nearest)`; one headless egui frame (`Context::run`, screen 400 x 300 points) painting
+  `layer_painter(..).image(id, rect, [0,0]-[1,1], WHITE)` with `rect` at (16, 16) points of the texture's size in points;
+  tessellated with egui's `tessellate`, font textures uploaded with `update_texture`, `update_buffers`, one render pass cleared
+  to black, read back. For `pixels_per_point` 1 and 2. Limit: for every pixel inside the image rectangle every channel (`Bgra8Unorm`
+  swizzled to RGBA) differs from the texture's by <= 1. **Negative control (replaced):** egui-wgpu cannot draw into an sRGB target
+  without converting (for an sRGB output format it picks its `fs_main_linear_framebuffer`, which converts, and a pipeline of a
+  linear format cannot render into an sRGB view), so the table's control cannot be built from its public API. The equivalent
+  colour-shift fault is built on the sampling side: the same ramp texture made with `view_formats: [Rgba8UnormSrgb]` and
+  registered through an `Rgba8UnormSrgb` view (the bytes decoded as sRGB, written unconverted to the gamma target). It must differ by
+  more than 1 in at least 50 % of the pixels of the mid-grey columns 64..=191.
+* **V3** (`tests/viewport_model.rs`, no GPU). Cameras: `Camera::fit` of the box [-1, 3] x [0, 1] x [2, 2.5] in perspective (`fovy`
+  0.8) and orthographic, at (yaw, pitch) (0.6, 0.3) and (-2.0, 1.2); texture 800 x 600. Operations: orbit (37, -12) and (-5, 300)
+  (the second clamps the pitch); pan (37, -12) and (-5, 80), also after a dolly; dolly 1, -2.5 and 0.25 notches; fit after an orbit
+  and a pan. Limit: every camera component (target, distance, yaw, pitch, half height, near, far) equals the closed forms above,
+  written out in the test, within rel. 1e-12. Also registered: after a pan, the old target projects to (400 + dx, 300 + dy)
+  within 1e-9 pixels (the scene follows the pointer). Negative control: the pan closed form with the `dy` sign flipped differs from
+  the model's target by more than rel. 1e-12 (the comparison fails), and its projected target misses by more than 1 pixel.
+* **V4** (`tests/viewport_store.rs`). Fixture written in the test with `rcfd_tsstore::Writer`: `cavity_2d(8, 1.0)` (patches `lid`,
+  `walls`, `frontAndBack`), 3 snapshots at steps 10, 20, 30 and times 0.1, 0.2, 0.3, cell fields `p` = `sin(0.37 c + k) + 0.1 k`
+  and `ux` = `cos(0.11 c) k`, `F64`. Into a project as the store of a run (`Project::create_run`, status finished, store at
+  `runs/<id>/fields`). Through the Studio model (`select_run`, `drain`): the viewport surface has 64 faces with distinct owner
+  cells 0..63; for each snapshot `k` (slider at its time, nearest), the shown face values equal `read_field(k, "p")` mapped through
+  the surface's owner cells (`face_values_from_cells`) bit for bit. GPU part, per adapter: view 400 x 400, the pixel of each face is
+  the floor of its projected centroid (mean of its points); `pick` at that pixel returns that face, the pick value equals the stored
+  cell value as f32 bit for bit, and the hover readout's value equals the stored f64 bit for bit with the owner cell. Negative
+  control: snapshot `k`'s shown values compared with snapshot `k + 1`'s expected values differ.
+* **V5** (`tests/viewport_store.rs`, no GPU). The same mesh, 6 snapshots at steps 1..6 and irregular times 0.0, 0.1, 0.35, 0.4, 0.9,
+  1.6. Slider positions: every snapshot time, every midpoint of two neighbours (ties), both ends and 200 positions from an LCG (seed
+  48005) in [0, 1.6]. Through the worker's sampling code (`StoreView::sample`, which the worker thread calls) and once per position
+  class through the Studio model: nearest: the index equals `Reader::by_time(t, Pick::Nearest)` and the values equal that
+  snapshot's mapped values bit for bit; linear: the values equal `face_values_from_cells(field_at_time("p", t, Mode::Linear))` bit
+  for bit, the flag equals the sample's `interpolated` (false exactly at snapshot times) and is drawn. **Negative control
+  (replaced):** "a floor lookup gives a different index at a tie" cannot fail: at an exact midpoint `Pick::Nearest` returns the
+  earlier snapshot (`choose` in `rcfd-tsstore`), which is also the floor. The control is a round-half-up lookup (the later
+  snapshot at a tie), which must give a different index at at least one midpoint.
+* **V8** (`tests/viewport_store.rs`, no GPU). Fixture: the V4 mesh with 3 snapshots whose `p` grows (`0.5 + 0.01 c + k`, k = 0, 1, 2).
+  Limit: for each snapshot and each range mode the legend's end labels equal `format!("{:.4e}", lo)` and `format!("{:.4e}", hi)`
+  of the range computed in the test (per snapshot: min and max of that snapshot's mapped values; over the run: min and max over all
+  three); the over-run range is exact (bit equal); the labels are in a headless frame's drawn text. Negative control: the
+  per-snapshot range differs from the over-run range at snapshots 0 and 2.
+* **V9** (`tests/viewport_model.rs`). `ViewGpu::headless(Backends::empty())` returns an error starting with `viewport: ` and
+  containing `no adapter`; a Studio given that error draws 20 headless frames with the Viewport panel shown, without a panic, and
+  the error text is among the drawn shapes. No control.
+* **V10** (new, `tests/viewport_store.rs`, GPU): the slider uses the scalar-only update. The V4 project in the drawn app with a
+  `ViewGpu` per adapter: after the first image of the run, steps to snapshots 1, 2, 0: `uploads` stays 1, `scalar_updates` grows by
+  one per step, and after each step the viewport texture (read back) equals `Renderer::render` of a fresh `upload` of the same
+  surface and that snapshot's mapped values under the model's `View`, byte for byte. Negative control: before the step, the texture
+  differs from the image of the snapshot about to be shown.
+* **V11** (new, `tests/viewport_store.rs`, no GPU): the plot marker. With the V4 project: after each step `Studio::plot_marker`
+  equals the shown snapshot's step (10, 20, 30); in linear mode at t = 0.125 it equals `10 + w (20 - 10)` bit for bit, `w` the weight of
+  `Reader::field_at_time("p", 0.125, Mode::Linear)` (about 12.5); after closing the project it is `None`; a headless frame with the Plots panel floated draws. Negative control: a
+  marker taken from the snapshot index (0, 1, 2) instead of its step differs.
+* **B9 parity** (ADR 0131): `parity_2d_field_view_with_colour_map_legend_and_hover` replaces the ignored known miss. Through the drawn
+  app with the first adapter (SKIP rule): the V4 project, the run selected, frames until the image is rendered; the legend labels
+  and, after a pointer move onto face 0's pixel, the hover readout with that face's stored value are among the drawn text.
+
+**Unregistered (reported only).** A launch smoke of the real binary on this host: `rcfd-studio <project>` with the test hook
+`RCFD_STUDIO_SMOKE=<frames>` (selects the newest run, draws that many frames, prints adapter, back end, swap-chain format and the
+viewport's counters to stderr, then closes the window). Whether the hook is acceptable in the shipped binary is a question.
+
+**Dependencies.** `rcfd-studio` gains `rcfd-render` (path; layer 5) and `rcfd-mesh` (layer 1, for `PatchKind`), and `rcfd-tsstore`
+moves from dev to normal dependency (layer 4); all below layer 9, as ADR 0131 Placement planned. egui-wgpu is used through eframe's
+re-export `eframe::egui_wgpu` (already locked as eframe's dependency). No third-party crate is added; wgpu stays `=30.0.1`.
+`docs/architecture.md` line of `rcfd-studio` is updated; `workspace_graph` is run.
+
+**What I already knew (rule d).** The code reading above and the `Cargo.lock` reading. No integration code existed and no test
+of this part had run.
