@@ -406,3 +406,101 @@ breaks (each `\n` replaced by a space, items separated by `" | "`), which egui l
 changes, as every frame of the streaming turn does. The corrected run is the whole crate again, with `--no-fail-fast` so
 that every test binary runs. Run 1's values of the other checks are reported in the addendum as run 1; the corrected run's
 values are the registered results.
+
+## Addendum 3: integration results (2026-10-28)
+
+Branch of the 48E integration worktree on main 7486ecb. Commits: b870cf1 (panel, model, worker, tests), 0d85f78 (Amendment
+3), ca03916 (Amendment 4 and the control fix), then, after the registered runs, 18550ae (closing the window cancels a turn)
+and df9aa00 (a collapsed "turn details" section: `system/init`, the argument list, stderr). Runs: release,
+`CARGO_TARGET_DIR` of the worktree, `CARGO_BUILD_JOBS=3`, Windows 11, one cargo job at a time; clippy `-p rcfd-studio
+--all-targets --locked -D warnings` and `cargo fmt -p rcfd-studio --check` clean before each run. Run 1 at 0d85f78
+(Amendment 4); **run 2 at ca03916 is the registered run**: `cargo test --release -p rcfd-studio --no-fail-fast --
+--test-threads 1`, every test binary of the crate, all pass (the ignored known misses of 48B/48C and R6's of 48D,
+unchanged). After 18550ae, `chat_e`, `frames_b4`, `parity` and `prefs_b8` were run again, and after df9aa00 `chat_e`,
+`frames_b4`, `frame_cost_b7` and `parity`: all pass; the values after df9aa00 are in brackets below.
+
+| Check | Limit | Result (run 2; run 1; [after df9aa00]) |
+|---|---|---|
+| E1 | rows S2 open/disabled, S1 closed/enabled, S3 open/disabled; failing listing: unknown, disabled, warning | **pass**: exactly those 3 rows, S2 and S3 "open in process <test pid> (mirror only)", S1 "closed", all drawn; failing listing: S2, S1 "state unknown", disabled, warning "claude agents --json: exit Some(3): fake-claude: agents listing failed" drawn, send to S1 refused. Control: S4's transcript present and not listed |
+| E2 | open session refused in the model; no process | **pass**: "this session is open in process <pid>; it is mirrored read-only until that process ends", no turn, 0 `-p` calls after 1 s. Control: S1 started exactly 1 `-p` process, exit 0 (fake calls 1 -> 4: the others are `agents --json` of discovery and of `resume`) |
+| E3 | argv equals `Chat::args`; text from deltas equals the result; cost shown | **pass**: 1 `-p` call, argv equal, `--strict-mcp-config --mcp-config <config folder>\claude-mcp\<hex>.json` before the permission flags, 11 rules, `--resume S2` last; text = result = the recorded 121-character string; cost 0.00381852; drawn "cost $0.003819" and "session total here $0.003819". Control: `Aborted("the CLI did not apply --permission-mode dontAsk (system/init reports Some(\"default\"))")` drawn, feed note, both fake pids gone |
+| E4 (panel part) | suggestion shown with a button; file +1 rule; next argv has it after the permission flags; `.mcp.json`: no button | **pass**: denial drawn with `Edit(./other.txt)` and "Allow", input names `other.txt`; "Allow" created `.rcfd/claude-allow.json` with 11 -> 12 rules and the folder stayed confirmed; argv rules 11 -> 12 with `--permission-mode dontAsk --permission-prompts none` before `--allowedTools`. Control: suggestion `None`, "no rule can allow this call" drawn, no "Allow" |
+| E6 | both pids gone within 5 s of cancel from the panel | **pass**: 0.717 s (run 1: 2.231 s; [0.640 s]); turn `Cancelled` |
+| E7 | appended message within 2.0 s; partial line only once completed | **pass**: marker 1 after 0.503 s (run 1: 0.507 s; [0.504 s]); partial line: no change for 2.0 s; completed: 0.511 s (run 1: 0.027 s; [0.041 s]); each marker exactly once, 0 unrecognised items. Control: the whole-file reader showed the partial line after 0.524 s (run 1: 0.511 s) |
+| E10 | median frame <= 8 ms while the P4 stream streams | **pass**: 34 000 events in 100 frames, median 0.178 ms (min 0.160, p90 0.271, max 3.695), 26 000 feed rows (run 1: 0.390 ms; [0.256 ms]). Control (Amendment 4): median 52.914 ms (min 1.968, max 122.120) [52.187 ms]: fails as required. Run 1's control (with line breaks) did not fail: 2.303 ms, see Amendment 4 |
+| E11 | dialog gates the first chat; a change asks again | **pass**: pending exactly `.claude/settings.json`, `.mcp.json`, `.rcfd/claude-allow.json`, all 3 changed, the 12 rules of the file, 3 previews matching; send refused, dialog open, 0 `-p` calls; heading, paths, "new or changed", `Bash(echo hi)` and the hash drawn; confirm: folder confirmed, record in `<config>/claude-trust.json` names `.mcp.json`, no `.rcfd/claude-trust.json`; 1 process; after one byte changed: turn `Refused` by the driver, changed `[".mcp.json"]`, dialog open, still 1 process. Control: plain project confirmed at open, 1 process |
+| B9 assistant access | a real test | **pass**: `parity_assistant_access` (new chat on the fake, text "All three steps ...", 1 process) |
+| E5, E8, E9 | library | passed in the library addenda; `rcfd-claude` is not changed here and was not re-run |
+| `workspace_graph` | 3 tests | pass (`rcfd-studio` 9 -> `rcfd-claude` 2) |
+| Not registered | closing the window during a turn leaves no process | pass: the close frame took 0.219 s [0.218 s], nothing listed right after it |
+
+No known miss. Every other `rcfd-studio` test passed in run 2 (B1-B9, R1-R12 with R6 ignored as before, M*); B7 median
+0.354 ms [0.323 ms].
+
+Deviations and notes:
+* Amendment 4: the E10 negative control's first set-up was defective (egui caches each paragraph); corrected and re-run as
+  registered. The panel itself was not changed by it.
+* Run 1 stopped after `chat_e` (the first failing test binary stops `cargo test`); run 2 used `--no-fail-fast`.
+* The mirror does not call `transcript::tail`: it needs the offset where `read_new` continues, which `tail` does not
+  return. It finds a line boundary near the end and calls `read_new` from there (doubling the window like `tail`), then
+  keeps the last 50 entries. Same entries, exact continuation.
+* The "Allow", "Cancel" and "Confirm these files" buttons are exercised through the model methods they call
+  (`allow_rule`, `cancel`, `confirm`), not by simulated clicks; what the panel draws is checked from the frame's text.
+* E10 feeds the stream through `ChatModel::apply` (the driver aborts this default-mode stream, as Amendment 3 says).
+* New, not named in the ADR: the environment variable `RCFD_MCP_BIN` (as `RCFD_RUNNER_BIN` of 48D); the "turn details"
+  section; at most the last 10 denials listed; a model field.
+* `Bridge::from_env` looks for `claude.exe` on PATH: Rust's `Command` starts only `.exe` files on Windows, so a
+  `claude.cmd` installed by npm is reported as "not found" instead of failing at the first message.
+* Dependencies: no new third-party crate; `Cargo.lock` gains only the `rcfd-claude` line under `rcfd-studio`. New
+  workspace edge `rcfd-studio -> rcfd-claude` (layer 9 -> 2), `docs/architecture.md` updated.
+* Merge note for 48C (merged first): this part touches `ui.rs` (the `Panel::Chat` arm, one dialog call, one line on window
+  close), `studio.rs` (one field, open, close, drain), `lib.rs`, `main.rs`, `Cargo.toml`, `tests/parity.rs` (the assistant
+  item only) and the `rcfd-studio` line of `docs/architecture.md`.
+
+Not run: a real window; any real Claude Code session (H1-H5); the full gate and workspace clippy (only `-p rcfd-studio`
+and the graph test); Linux; `rcfd-claude`'s tests (unchanged code).
+
+**View-and-report checklist and H1-H5 (for the maintainer; billable calls: put `haiku` in the panel's model field).**
+Build once: `cargo build --release -p rcfd-studio -p rcfd-mcp -p rcfd-runner -p rcfd-cli` (the chat's MCP config names
+`rcfd-mcp` next to `rcfd-studio.exe`), check that `claude --version` works in a terminal, then start
+`target\release\rcfd-studio.exe <project folder>`. The Chat tab sits behind "Case editor" in the right column.
+* V1: the Chat tab lists the folder's Claude Code sessions within about 2 s, with their state, and shows the Claude Code
+  version once a turn ran (with a warning when it is not 2.1.310). Report the version.
+* V2: in a folder with `.mcp.json`, `.claude/` or a `CLAUDE.md` (the rcfd repository itself, for example), a banner says the
+  files are not confirmed; "Send" opens the dialog with the files, sizes, hashes, "new or changed" and previews; "Confirm
+  these files" closes it; `%APPDATA%\rcfd\studio\claude-trust.json` now names the folder and nothing new is in the project.
+  Edit one of those files: the next message is refused and the dialog lists only that file as changed.
+* V3: "New chat", type "say pong", Send: the text streams in, the cost of the turn and the session total appear; "turn
+  details" shows `permissionMode dontAsk` and the argument list.
+* H1: open `claude` in a terminal in the project folder and type there: the session shows "open in process N (mirror only)",
+  the Send button is disabled with that reason, and the terminal's messages appear in the panel within about 2 s. Close the
+  terminal: within about 2 s the row says "closed"; select it and send: the turn resumes that session (`--resume` in turn
+  details) and the answer appears.
+* H2: ask "create the file h2.txt containing x": the Write is denied, the panel lists it with `Edit(./h2.txt)` and "Allow";
+  click it: `.rcfd/claude-allow.json` appears with that rule and no confirmation is asked; send the same message again: the
+  file is created.
+* H3: turn details show `--strict-mcp-config --mcp-config %APPDATA%\rcfd\studio\claude-mcp\<hex>.json`. The panel does not
+  show `system/init`'s `mcp_servers`; to see them, run that argument list by hand in a terminal in the project folder with
+  `--model haiku "hi"` appended (no `--resume`/`--session-id`) and read the first line: only `rcfd_project` is expected.
+* H4: ask for a long answer (for example a 2000-word essay) and click Cancel while it streams: Task Manager shows no
+  `claude.exe` (other than your own terminals) and no tool shell left. Repeat and close the Studio window instead of
+  cancelling: the same.
+* H5: ask "call the project_info and list_runs tools": both `mcp__rcfd_project__...` calls run without a denial under the
+  first allow-list.
+Record per item: pass or fail, the Claude Code version, and anything the panel showed that looked wrong.
+
+**Open questions (not decided here).**
+1. Still open from the library addenda: should `check_args` itself refuse the project-independent MCP forms; should the scan
+   include `CLAUDE.local.md` and `CLAUDE.md` files in folders above the project; should `--plugin-dir` (and similar) be
+   refused; how the E5 rerun is treated (Amendment 1).
+2. The chat is off when the Studio has no config folder (no place for the trust record and the MCP config). Accept, or
+   allow chats without MCP pinning in that case?
+3. The allow-list file is written at the first "Allow" or "remove", not at the first chat (a missing file means the first
+   list). Accept?
+4. Discovery runs `claude agents --json` (plus one `tasklist` per listed pid) every 2 s while a project is open and the chat
+   is on, whether or not the Chat tab is shown. Keep, or only while the tab is visible?
+5. After a turn, its streamed items are replaced by the transcript's lines once the mirror reads them (the transcript is
+   the record). Keep, or keep the streamed view?
+6. A `claude.cmd` (npm install) is reported as not found. Support it (it would need `cmd /c`, with its own quoting rules),
+   or require the native `claude.exe`?
+
