@@ -127,3 +127,10 @@ control as before: worst listing 80.6 ms, the listing 10 times 844 ms > 500 ms. 
 * The Windows values and the Windows behaviour of every changed test are unchanged.
 * The next `Full gate` run on `ubuntu-latest` is the real check: the container is Debian bookworm (glibc 2.36), the CI image Ubuntu
   24.04 (glibc 2.39); condition 3 covers only the first value of each test that CI printed.
+
+## Note 2026-10-28: follow-up in ADR 0143
+
+The maintainer decided S4a and S4b, C3 and P1 of "Reported, not changed", and they were done in
+[ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md): S4a and S4b by a production fix (a client
+reaps the runners it started, and on Unix `pid_alive` reads the process states `Z` and `X` as dead); C3 and P1 are ignored on
+every platform but Windows as Linux known misses, their test bodies and limits unchanged.

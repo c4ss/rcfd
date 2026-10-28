@@ -303,3 +303,12 @@ After the gate: rebased on main 624f228, which merges `rcfd-project` and `rcfd-c
 * In debug, this crate (13 passed, 1 ignored) and the rcfd-cli tests `run_control`, `cli`, `docs_site` and `workspace_graph` pass.
 
 `rcfd-runner` still does not depend on `rcfd-project`; the switch is the lead's merge step.
+
+## Note 2026-10-28: the start route of decision 2 replaced (ADR 0143)
+
+By the maintainer's decision of 2026-10-28, [ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md)
+replaced the Windows start route of decision 2 and amendment 2. `ensure_runner` now starts `rcfd-runner serve` directly on every
+platform (Windows: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW`, null stdio; Unix: `process_group(0)`, null
+stdio) and waits 10 s for the lock; PowerShell is no longer run, so the last item of Limits ("Windows detached start needs
+`powershell.exe`") no longer applies. S5 stays an ignored known miss: on Windows the direct start hands the runner the client's
+inheritable handles. A client also reaps the runners it started, and on Unix `pid_alive` reads a zombie as dead.
