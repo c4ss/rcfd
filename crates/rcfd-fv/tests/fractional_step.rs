@@ -516,11 +516,21 @@ fn fingerprint(s: &PimpleSolver) -> u64 {
 fn a1_euler_and_non_periodic_bdf2_unchanged_bitwise() {
     let mut s = tg_fs(32, 0.05, TimeScheme::ImplicitEuler, true);
     s.run_fixed(1.0, 0.02);
-    assert_eq!(
-        format!("{:016x}", fingerprint(&s)),
-        "8c2d50e6a8e9b9ee",
-        "Euler Taylor-Green"
-    );
+    // The Taylor-Green initial field calls the platform's libm (sin, cos), so its fingerprint differs per platform: the value
+    // recorded on Windows, and the x86_64 Linux value proven equal at the pre-fix code (7b2d092) and at HEAD (ADR 0137); other
+    // platforms print it and skip. The cavity fingerprint below is the same on both.
+    let euler = if cfg!(windows) {
+        Some("8c2d50e6a8e9b9ee")
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some("b91593f04078212e")
+    } else {
+        None
+    };
+    let got = format!("{:016x}", fingerprint(&s));
+    match euler {
+        Some(want) => assert_eq!(got, want, "Euler Taylor-Green"),
+        None => eprintln!("Euler Taylor-Green: no recorded fingerprint for this platform; {got}"),
+    }
 
     let mesh = Arc::new(cavity_2d(16, 1.0).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
