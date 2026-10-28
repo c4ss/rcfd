@@ -7,8 +7,8 @@ use rcfd_studio::{Studio, StudioApp};
 use std::path::PathBuf;
 
 /// Test hook (ADR 0132 integration, unregistered launch smoke): with `RCFD_STUDIO_SMOKE=<frames>` the window selects the
-/// newest run once the project is open, draws that many frames, prints the adapter, the swap-chain format and the
-/// viewport's state to stderr, and closes.
+/// newest run (by `created`, then id: ADR 0147) once the project is open, draws that many frames, prints the adapter,
+/// the swap-chain format and the viewport's state to stderr, and closes.
 struct Smoke {
     app: StudioApp,
     frames: u64,
@@ -22,7 +22,8 @@ impl eframe::App for Smoke {
                 .app
                 .st
                 .browser()
-                .and_then(|b| b.runs.iter().map(|r| r.id.clone()).max());
+                .and_then(rcfd_studio::project_view::newest_run)
+                .map(String::from);
             if let Some(id) = newest {
                 self.app.st.select_run(&id);
             }

@@ -7,12 +7,16 @@
 //!
 //! A start runs on a short-lived control thread: find `rcfd-runner` and `rcfd` together ([`crate::bins`]), refuse a
 //! solver older than the runner's flags, check the runner budgets when no runner is alive (`rcfd-runner serve` refuses
-//! a bad budgets file before it has a log, so the reason would otherwise be lost), read the case and make the plan,
-//! `Client::submit` (the run id is reported at once), then `Client::ensure_runner`: ADR 0133's start route
+//! a bad budgets file; checked here, the start is refused before a run is queued, while a runner that exits on it is
+//! reported by `Client::ensure_runner` with its output, ADR 0146, after the run was queued), read the case and make the
+//! plan, `Client::submit` (the run id is reported at once), then `Client::ensure_runner`: ADR 0133's start route
 //! (`Client::start`) in its two steps, so that neither result is lost. Every failure is a located message. After the
 //! start, the run worker's rows say how the run goes; a selected run that ends before its first stored snapshot gets a
 //! message naming its state, the reason in its `status.json` and the last line of its log, in the viewport and in the
 //! strip, instead of the viewport's generic "no stored fields" text.
+//!
+//! Run is refused while a field of the case editor is being typed and not committed (ADR 0147, the maintainer's answer
+//! to ADR 0144 question 2): the mesh preview shows the typed text, a run would use the file on disk.
 //!
 //! No UI code here ([`crate::quick_run_ui`] draws); the UI thread does no file I/O (the store check after a run ended
 //! runs on a control thread too).
@@ -49,6 +53,12 @@ pub struct Switches {
     /// The route before ADR 0144: a run explained once is not explained again when the viewport opens its store again
     /// (the Mesh / Run toggle), so the viewport keeps ADR 0140's text then.
     pub no_reexplain: bool,
+    /// The route before ADR 0147: a field of the case editor being typed does not refuse Run (only committed, unsaved
+    /// edits do).
+    pub run_while_typing: bool,
+    /// The route before ADR 0147: the last lines of `runner.log` are appended to every error of `ensure_runner`, also to
+    /// an early-exit report that already carries the runner's output (ADR 0146), so those lines show twice.
+    pub tail_always: bool,
 }
 
 /// A start in flight.
@@ -192,7 +202,10 @@ pub fn selected_case(st: &Studio) -> Option<String> {
         .or_else(|| st.pending_case.clone())
 }
 
-/// Why Run cannot start now (`None`: it can).
+/// The words of Run's refusal while a field of the case editor is being typed (ADR 0147); the field's path follows.
+pub const FINISH_EDITING: &str = "finish editing the field";
+
+/// Why Run cannot start now (`None`: it can). The Run button is greyed out with this as its hover text.
 pub fn blocked(st: &Studio) -> Option<String> {
     if st.browser().is_none() {
         return Some(if st.project.is_some() {
@@ -207,6 +220,13 @@ pub fn blocked(st: &Studio) -> Option<String> {
     if let Some(ed) = st.editor.as_ref().filter(|e| e.rel == case) {
         if ed.in_conflict() {
             return Some(format!("{case}: resolve the conflict in the case editor first"));
+        }
+        // ADR 0147: the preview shows a field's text while it is typed; a run would not use it
+        if let Some((path, _)) = ed.draft.as_ref().filter(|_| !st.quick.switches.run_while_typing) {
+            return Some(format!(
+                "{case}: {FINISH_EDITING} {path} (press Enter or click elsewhere); the mesh shows the typed text, but \
+                 a run uses the file on disk"
+            ));
         }
         if ed.is_dirty() {
             return Some(format!(
@@ -241,6 +261,7 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
         root,
         case,
         search: q.search.clone(),
+        tail_always: q.switches.tail_always,
     };
     let (tx, wake) = (q.tx.clone(), st.wake.clone());
     spawn("rcfd-studio-quick-start", move || start_job(job, tx, wake));
@@ -252,15 +273,34 @@ struct Job {
     root: PathBuf,
     case: String,
     search: Search,
+    tail_always: bool,
 }
 
-/// The last lines of `.rcfd/runner.log` (the runner has no console), for a failed runner start.
+/// The last lines of `.rcfd/runner.log` (the runner has no console; since ADR 0146 its standard output and error go
+/// there too), for a failed runner start.
 fn runner_log_tail(root: &Path) -> String {
     let p = rcfd_runner::runner::dot_dir(root).join("runner.log");
     match crate::poll::tail_lines(&p, 3) {
         Ok((_, lines)) if !lines.is_empty() => format!("; last lines of {}: {}", p.display(), lines.join(" | ")),
         _ => String::new(),
     }
+}
+
+/// True when an error of `Client::ensure_runner` already reports the runner's output: ADR 0146's early-exit report
+/// (`the runner (pid N) exited with ... before it held the project's lock; ` followed by its output's end, or that it
+/// wrote nothing, or where its output went).
+pub fn reports_runner_output(e: &str) -> bool {
+    e.contains(" before it held the project's lock; ")
+}
+
+/// The text of a failed runner start: `ensure_runner`'s error with the last lines of `runner.log` appended, unless the
+/// error already reports the runner's output (an early exit, ADR 0146), so that those lines show once (ADR 0147). With
+/// `always` (the route before), they are appended in every case.
+pub fn runner_error(e: &str, root: &Path, always: bool) -> String {
+    if !always && reports_runner_output(e) {
+        return e.to_string();
+    }
+    format!("{e}{}", runner_log_tail(root))
 }
 
 fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
@@ -284,7 +324,8 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
     }
     let client = Client::new(&job.root, &found.runner);
     if !client.runner_running() {
-        // `rcfd-runner serve` reads the budgets before it opens its log; a bad file would end it without a trace
+        // `rcfd-runner serve` refuses a bad budgets file and exits; `ensure_runner` reports that with its output (ADR
+        // 0146), but only after the run was queued: checked here, nothing is queued
         if let Err(e) = Config::load(&job.root) {
             return fail(format!(
                 "{} was not started: the runner cannot start with its budgets file: {e} (fix the file or use Runs > \
@@ -319,7 +360,7 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
     });
     let result = client
         .ensure_runner()
-        .map_err(|e| format!("{e}{}", runner_log_tail(&job.root)));
+        .map_err(|e| runner_error(&e, &job.root, job.tail_always));
     send(Msg::Runner { gen, result });
 }
 

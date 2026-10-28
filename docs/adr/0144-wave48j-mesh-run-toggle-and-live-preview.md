@@ -474,6 +474,10 @@ editor's fields with the preview following (the feel of the 500 ms pause), DX12 
     name" can be wrong in any tool or test that assumes it. Options: (a) keep, and order by the run's `created` time
     where order matters; (b) add sub-second digits to new run ids (an ADR 0130 contract change). Recommendation: (a).
 
+Answered 2026-10-28 (the maintainer): questions 2, 4, 5, 6 and 12 as recommended; 11: the starter offers the profile case
+and copies its table (the Cases listing is not part of the answer); 1, 3, 7 and 9 kept as implemented here. Implemented in
+[ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md) (job 48M).
+
 ## Files
 
 This ADR; `crates/rcfd-studio/src/view_toggle.rs` (new); hunks in `crates/rcfd-studio/src/{lib,studio,preview,

@@ -62,6 +62,8 @@ pub struct Switches {
     /// The case starter's route before ADR 0144: a case it makes and opens in the editor is not handed to the preview
     /// (and the view does not switch).
     pub starter_skips_preview: bool,
+    /// The case starter's route before ADR 0147: a case is written alone, without the data files of its example.
+    pub starter_no_companions: bool,
 }
 
 /// The toggle's state, a field of [`Studio`].

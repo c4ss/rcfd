@@ -1,5 +1,6 @@
-//! ADR 0139 (wave 48G item 2): the case starter. CS1-CS13 as registered there; CS14 is the rest of the crate's tests,
-//! clippy and fmt. Release build, `--test-threads 1`.
+//! ADR 0139 (wave 48G item 2): the case starter. CS1-CS13 as registered there, with ADR 0139 amendment 2 (written with
+//! ADR 0147's registration: `channel/profile_inlet.toml` offered with its data file); CS14 is the rest of the crate's
+//! tests, clippy and fmt. Release build, `--test-threads 1`.
 
 mod common;
 
@@ -23,6 +24,15 @@ const WAIT: Duration = Duration::from_secs(30);
 fn repo_cases() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cases")
 }
+
+/// The example's folder in the repository's `cases/`, where its data files are (ADR 0139 amendment 2: the editor opens a
+/// case with its folder, ADR 0144 amendment 3).
+fn folder_of(e: &Example) -> PathBuf {
+    repo_cases().join(Path::new(e.source).parent().unwrap())
+}
+
+/// Offered examples (ADR 0139 amendment 2: 10, `channel/profile_inlet.toml` with its data file).
+const OFFERED: usize = 10;
 
 fn example(source: &str) -> &'static Example {
     EXAMPLES
@@ -68,7 +78,8 @@ fn cs1_every_offered_example_opens_and_validates_in_the_editors_service() {
     for e in EXAMPLES {
         let rel = format!("cases/{}.{}", e.stem(), e.ext());
         let t = Instant::now();
-        let mut ed = CaseEditor::from_bytes(st.svc.clone(), &rel, e.bytes())
+        // amendment 2: with its folder, as the Studio's editor opens a case (its data files are there)
+        let mut ed = CaseEditor::from_bytes_in(st.svc.clone(), &rel, &folder_of(e), e.bytes())
             .unwrap_or_else(|m| panic!("{}: does not open: {m}", e.source));
         let ok = ed.validate();
         eprintln!(
@@ -80,7 +91,7 @@ fn cs1_every_offered_example_opens_and_validates_in_the_editors_service() {
         assert!(ok && ed.diagnostics.is_empty(), "{}: {:?}", e.source, ed.diagnostics);
         passed += 1;
     }
-    assert_eq!(passed, 9);
+    assert_eq!(passed, OFFERED);
 }
 
 #[test]
@@ -133,8 +144,27 @@ fn cs2_created_files_are_byte_equal_to_the_shipped_examples() {
             hash_bytes(&written),
             e.source
         );
+        // amendment 2: its data files next to it, byte-equal too
+        for c in e.companions {
+            let crel = format!("cases/{}", c.name());
+            let got = std::fs::read(root.join(&crel)).unwrap_or_else(|err| panic!("{crel}: {err}"));
+            assert_eq!(got, c.bytes(), "{crel}: differs from the embedded text");
+            assert_eq!(
+                got,
+                std::fs::read(repo_cases().join(c.source)).unwrap(),
+                "{crel}: differs from cases/{}",
+                c.source
+            );
+            eprintln!(
+                "cs2 {crel}: {} bytes, {} = cases/{}",
+                got.len(),
+                hash_bytes(&got),
+                c.source
+            );
+        }
     }
-    assert_eq!(st.browser().unwrap().cases.len(), 9);
+    let companions: usize = EXAMPLES.iter().map(|e| e.companions.len()).sum();
+    assert_eq!(st.browser().unwrap().cases.len(), OFFERED + companions);
 }
 
 #[test]
@@ -142,7 +172,8 @@ fn cs2_control_the_editors_save_bytes_are_not_byte_equal() {
     let st = Studio::in_memory();
     let mut differ = 0;
     for e in EXAMPLES {
-        let mut ed = CaseEditor::from_bytes(st.svc.clone(), &format!("cases/{}.toml", e.stem()), e.bytes()).unwrap();
+        let rel = format!("cases/{}.toml", e.stem());
+        let mut ed = CaseEditor::from_bytes_in(st.svc.clone(), &rel, &folder_of(e), e.bytes()).unwrap();
         let saved = ed.to_bytes().unwrap();
         eprintln!(
             "cs2 control {}: source {} bytes, editor save {} bytes",
@@ -154,7 +185,7 @@ fn cs2_control_the_editors_save_bytes_are_not_byte_equal() {
             differ += 1;
         }
     }
-    assert_eq!(differ, 9);
+    assert_eq!(differ, OFFERED);
 }
 
 // ---------------------------------------------------------------- CS3
@@ -340,15 +371,21 @@ fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
 }
 
 /// ADR 0139 CS5: every file under `dir` is an offered example with equal bytes, an `EXCLUDED` path, or under a
-/// `reference` folder; every offered and every excluded path exists.
+/// `reference` folder; every offered and every excluded path exists. Amendment 2: or a data file of an offered example
+/// (a companion) with equal bytes; every companion exists.
 fn sync_problems(dir: &Path) -> Vec<String> {
     let mut files = Vec::new();
     walk(dir, dir, &mut files);
     files.sort();
     let mut out = Vec::new();
+    let companion = |f: &str| EXAMPLES.iter().flat_map(|e| e.companions).find(|c| c.source == f);
     for f in &files {
         if let Some(e) = EXAMPLES.iter().find(|e| e.source == f) {
             if std::fs::read(dir.join(f)).unwrap() != e.bytes() {
+                out.push(format!("{f}: the embedded copy differs from the file"));
+            }
+        } else if let Some(c) = companion(f) {
+            if std::fs::read(dir.join(f)).unwrap() != c.bytes() {
                 out.push(format!("{f}: the embedded copy differs from the file"));
             }
         } else if !EXCLUDED.iter().any(|(p, _)| p == f) && !is_reference(f) {
@@ -358,6 +395,11 @@ fn sync_problems(dir: &Path) -> Vec<String> {
     for e in EXAMPLES {
         if !files.iter().any(|f| f == e.source) {
             out.push(format!("{}: offered but not in cases/", e.source));
+        }
+        for c in e.companions {
+            if !files.iter().any(|f| f == c.source) {
+                out.push(format!("{}: data file of {} but not in cases/", c.source, e.source));
+            }
         }
     }
     for (p, _) in EXCLUDED {
@@ -407,6 +449,21 @@ fn cs5_the_list_is_in_step_with_cases() {
             "{} twice",
             e.source
         );
+        // amendment 2: a data file is in its example's folder and neither offered nor excluded itself
+        for c in e.companions {
+            assert_eq!(
+                Path::new(c.source).parent(),
+                Path::new(e.source).parent(),
+                "{}: not in the folder of {}",
+                c.source,
+                e.source
+            );
+            assert!(
+                EXAMPLES.iter().all(|x| x.source != c.source) && EXCLUDED.iter().all(|(p, _)| *p != c.source),
+                "{}: a data file also offered or excluded",
+                c.source
+            );
+        }
     }
 }
 
@@ -416,7 +473,7 @@ type Drift = (&'static str, Box<dyn Fn(&Path)>, &'static str);
 #[test]
 fn cs5_controls_each_kind_of_drift_is_one_problem() {
     let base = temp("cs5c");
-    let cases: [Drift; 4] = [
+    let cases: [Drift; 6] = [
         (
             "added",
             Box::new(|d: &Path| {
@@ -430,9 +487,25 @@ fn cs5_controls_each_kind_of_drift_is_one_problem() {
             Box::new(|d: &Path| std::fs::remove_file(d.join("sod/sod.toml")).unwrap()),
             "sod/sod.toml",
         ),
+        // amendment 2: the stale exclusion is a descriptor now (the table became a data file of an offered example)
         (
             "stale",
+            Box::new(|d: &Path| std::fs::remove_file(d.join("cavity/case.json")).unwrap()),
+            "cavity/case.json",
+        ),
+        (
+            "data file deleted",
             Box::new(|d: &Path| std::fs::remove_file(d.join("channel/profile_inlet.csv")).unwrap()),
+            "channel/profile_inlet.csv",
+        ),
+        (
+            "data file changed",
+            Box::new(|d: &Path| {
+                let p = d.join("channel/profile_inlet.csv");
+                let mut b = std::fs::read(&p).unwrap();
+                b[0] ^= 0x20;
+                std::fs::write(&p, b).unwrap();
+            }),
             "channel/profile_inlet.csv",
         ),
         (
@@ -475,19 +548,18 @@ fn cs6_the_excluded_case_files_do_not_open_in_the_editor() {
             .unwrap_or_else(|| panic!("{p} opens in the editor; its exclusion reason no longer holds: {why}"));
         let short: String = m.chars().take(160).collect();
         eprintln!("cs6 {p}: {short}...");
-        if *p == "channel/profile_inlet.toml" {
-            assert!(m.contains("tables.inlet_u.file"), "{m}");
-        }
         n += 1;
     }
-    assert_eq!(n, 7);
+    // amendment 2: the 6 descriptors (channel/profile_inlet.toml is offered with its data file)
+    assert_eq!(n, 6);
 }
 
 // ---------------------------------------------------------------- CS7
 
-/// ADR 0139 CS7's comparison: the curated cell count and dimension against the mesh build.
+/// ADR 0139 CS7's comparison: the curated cell count and dimension against the mesh build (amendment 2: the text parsed
+/// with its folder, where its data files are).
 fn facts_match(e: &Example) -> Result<(), String> {
-    let c = Case::parse_toml(e.text).map_err(|d| format!("{}: {d:?}", e.source))?;
+    let c = Case::parse_toml_in(e.text, &folder_of(e)).map_err(|d| format!("{}: {d:?}", e.source))?;
     let m = rcfd_api::sim::build_mesh(&c).map_err(|d| format!("{}: {d:?}", e.source))?;
     let dim = if m.patches().iter().any(|p| p.kind == PatchKind::Empty) {
         "2D"
@@ -658,10 +730,11 @@ fn cs10_control_the_two_boundary_tables_make_it_validate() {
 
 // ---------------------------------------------------------------- CS11
 
-/// ADR 0139 CS11's rule over `(source, bytes)` pairs.
-fn embed_problems(list: &[(&str, usize)]) -> Vec<String> {
+/// ADR 0139 CS11's rule over `(source, bytes)` pairs of the offered examples and (amendment 2) of their data files:
+/// all of it counts to the size; an offered example is a `.toml` case file; nothing is reference data.
+fn embed_problems(list: &[(&str, usize)], data: &[(&str, usize)]) -> Vec<String> {
     let mut out = Vec::new();
-    let total: usize = list.iter().map(|x| x.1).sum();
+    let total: usize = list.iter().chain(data).map(|x| x.1).sum();
     if total > 32_768 {
         out.push(format!("{total} bytes embedded, more than 32768"));
     }
@@ -669,6 +742,8 @@ fn embed_problems(list: &[(&str, usize)]) -> Vec<String> {
         if !s.ends_with(".toml") {
             out.push(format!("{s}: not a .toml case file"));
         }
+    }
+    for (s, _) in list.iter().chain(data) {
         if is_reference(s) {
             out.push(format!("{s}: reference data"));
         }
@@ -676,14 +751,25 @@ fn embed_problems(list: &[(&str, usize)]) -> Vec<String> {
     out
 }
 
+/// The embedded data files of the offered examples.
+fn embedded_data() -> Vec<(&'static str, usize)> {
+    EXAMPLES
+        .iter()
+        .flat_map(|e| e.companions)
+        .map(|c| (c.source, c.text.len()))
+        .collect()
+}
+
 #[test]
 fn cs11_embedded_size_and_content() {
     let list: Vec<(&str, usize)> = EXAMPLES.iter().map(|e| (e.source, e.text.len())).collect();
-    let total: usize = list.iter().map(|x| x.1).sum();
-    let problems = embed_problems(&list);
+    let data = embedded_data();
+    let total: usize = list.iter().chain(&data).map(|x| x.1).sum();
+    let problems = embed_problems(&list, &data);
     eprintln!(
-        "cs11: {} examples, {total} bytes embedded; problems {problems:?}",
-        list.len()
+        "cs11: {} examples and {} data files, {total} bytes embedded; problems {problems:?}",
+        list.len(),
+        data.len()
     );
     assert!(problems.is_empty());
 }
@@ -692,8 +778,8 @@ fn cs11_embedded_size_and_content() {
 fn cs11_control_reference_data_and_size_fail_the_rule() {
     let mut list: Vec<(&str, usize)> = EXAMPLES.iter().map(|e| (e.source, e.text.len())).collect();
     list.push(("cavity/reference/ghia1982_u_centerline.csv", 541));
-    let a = embed_problems(&list);
-    let b = embed_problems(&[("a.toml", 32_000), ("b.toml", 769)]);
+    let a = embed_problems(&list, &embedded_data());
+    let b = embed_problems(&[("a.toml", 32_000), ("b.toml", 769)], &[]);
     eprintln!("cs11 control: {a:?} / {b:?}");
     assert_eq!(a.len(), 2);
     assert_eq!(b.len(), 1);
@@ -716,12 +802,12 @@ fn cs12_the_dialog_draws_every_example_in_headless_frames() {
         }
         let out = frame(&mut app, &ctx);
         let d = app.ui_state.starter.as_ref().expect("the dialog is open");
-        assert_eq!(d.rows_drawn, 9, "frame {i}");
+        assert_eq!(d.rows_drawn, OFFERED, "frame {i}");
         shapes = shapes.min(out.shapes.len());
     }
     let d = app.ui_state.starter.as_ref().unwrap();
     eprintln!(
-        "cs12: 60 frames, 9 rows each, at least {shapes} shapes per frame, proposed name {:?}",
+        "cs12: 60 frames, {OFFERED} rows each, at least {shapes} shapes per frame, proposed name {:?}",
         d.name
     );
     assert_eq!(d.name, EXAMPLES[0].stem());
@@ -759,7 +845,7 @@ fn panel_button_request_repaints_and_opens_the_dialog_next_frame() {
     assert!(app.ui_state.starter.is_none());
     assert_eq!(delay(&out), Duration::ZERO);
     let _ = frame(&mut app, &ctx);
-    assert_eq!(app.ui_state.starter.as_ref().map(|d| d.rows_drawn), Some(9));
+    assert_eq!(app.ui_state.starter.as_ref().map(|d| d.rows_drawn), Some(OFFERED));
 }
 
 // ---------------------------------------------------------------- CS13
@@ -775,7 +861,7 @@ fn cs13_building_the_description_list_is_cheap() {
         let t = Instant::now();
         let d = case_starter::build_descriptions();
         worst = worst.max(t.elapsed());
-        assert_eq!(d.len(), 9);
+        assert_eq!(d.len(), OFFERED);
     }
     eprintln!("cs13: largest of 5 builds {:.3} ms", worst.as_secs_f64() * 1e3);
     assert!(worst <= Duration::from_millis(100));
@@ -791,12 +877,12 @@ fn cs13_control_deriving_the_mesh_facts_through_validation_exceeds_the_limit() {
     let t = Instant::now();
     let d = case_starter::build_descriptions();
     for e in EXAMPLES {
-        let mut ed = CaseEditor::from_bytes(st.svc.clone(), "cases/x.toml", e.bytes()).unwrap();
+        let mut ed = CaseEditor::from_bytes_in(st.svc.clone(), "cases/x.toml", &folder_of(e), e.bytes()).unwrap();
         assert!(ed.validate());
     }
     let dt = t.elapsed();
     eprintln!(
-        "cs13 control: {} descriptions plus 9 validations {:.3} ms",
+        "cs13 control: {} descriptions plus {OFFERED} validations {:.3} ms",
         d.len(),
         dt.as_secs_f64() * 1e3
     );

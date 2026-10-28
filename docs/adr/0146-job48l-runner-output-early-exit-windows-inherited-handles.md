@@ -374,6 +374,8 @@ Set-up:
      can stay: it refuses before anything is queued.
 
    **Recommendation:** (b), as a separate Studio change. It was not done here because it is outside the runner start.
+   Decided 2026-10-28: (b), done in [ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md)
+   decision 7 (check M7).
 6. **Linux CI.** Run the CI unit tests and the Full gate on `ubuntu-latest` after the merge. **Recommendation:** yes.
 
 ## Files

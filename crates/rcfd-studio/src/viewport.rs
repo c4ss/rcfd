@@ -120,6 +120,32 @@ pub enum Input {
     Fit,
 }
 
+/// Bounds that differ by at most this fraction of the box's size are the same bounds for
+/// [`Viewport::replace_surface`] (ADR 0147): at most 1/100 of a pixel when the box fills the largest texture
+/// ([`MAX_SIDE`]), and far above the rounding of a generator's coordinates (`len * i / n`).
+pub const SAME_BOUNDS: f64 = 1e-6;
+
+/// True when the box `b` has the bounds of the box `a` within [`SAME_BOUNDS`] of the larger box's size: in 2D the x and
+/// y extents (a 2D case's front lies at the z of its one-cell thickness, which a generator makes depend on the cell size,
+/// `lx / nx`, and which the face-on view does not show), in 3D all three.
+pub fn same_bounds(a: (Vec3, Vec3), b: (Vec3, Vec3), two_d: bool) -> bool {
+    let size = norm(sub(a.1, a.0)).max(norm(sub(b.1, b.0)));
+    let tol = SAME_BOUNDS * size;
+    let axes = if two_d { 2 } else { 3 };
+    (0..axes).all(|k| (a.0[k] - b.0[k]).abs() <= tol && (a.1[k] - b.1[k]).abs() <= tol)
+}
+
+/// What [`Viewport::replace_surface`] did with the camera (ADR 0147).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CameraChange {
+    /// The start camera of the new surface ([`CameraState::start`]): no surface was shown, or the 2D flag changed.
+    Start,
+    /// The camera kept (target, distance, yaw, pitch and projection); only near and far follow the new box.
+    Kept,
+    /// Fitted to the new bounds with the camera's yaw, pitch and projection kind (the double click's [`fit`]).
+    Refit,
+}
+
 /// The camera and the box it frames (the surface bounds).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraState {
@@ -1056,6 +1082,30 @@ impl Viewport {
         self.part_styles = parts;
         self.status = Status::Ready;
         self.field_dirty = true;
+    }
+
+    /// Show a rebuilt surface of the case already shown (ADR 0147, the maintainer's answer to ADR 0144 question 5):
+    /// as [`Viewport::show_surface`], but the camera of the surface shown before is kept when the bounds are the same
+    /// ([`same_bounds`]; near and far follow the new box), fitted to the new bounds keeping its yaw, pitch and projection
+    /// kind when they changed ([`fit`], the double click), and the start camera when no surface with a camera was shown
+    /// or the 2D flag changed. Ignored while a run is shown (as `show_surface`).
+    pub fn replace_surface(&mut self, surface: Arc<SurfaceMesh>, two_d: bool, parts: Vec<PartStyle>) -> CameraChange {
+        if self.run.is_some() {
+            return CameraChange::Start;
+        }
+        let old = self.camera.filter(|_| self.surface.is_some() && self.two_d == two_d);
+        self.show_surface(surface, two_d, parts);
+        let (Some(old), Some(new)) = (old, self.camera) else {
+            return CameraChange::Start;
+        };
+        let (lo, hi) = (new.lo, new.hi);
+        let (cam, change) = if same_bounds((old.lo, old.hi), (lo, hi), two_d) {
+            (clip_planes(&old.cam, lo, hi), CameraChange::Kept)
+        } else {
+            (fit(&old.cam, lo, hi), CameraChange::Refit)
+        };
+        self.camera = Some(CameraState { cam, lo, hi });
+        change
     }
 
     /// Change the part styles of the shown surface (a redraw when they differ).

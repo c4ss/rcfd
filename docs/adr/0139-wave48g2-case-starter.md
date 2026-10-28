@@ -1,6 +1,6 @@
 # ADR 0139: Wave 48G item 2, case starter: new case files from the shipped examples
 
-Status: **PROPOSED 2026-10-28, implemented; results in the addendum** (sub-wave 48G, "first run to first picture", item 2 of 4;
+Status: **PROPOSED 2026-10-28, implemented; results in the addendum; amendment 2 with ADR 0147** (sub-wave 48G, "first run to first picture", item 2 of 4;
 the other three items are the mesh preview from a case, the store-fields default and one-click start-and-follow, done on other
 branches). Checks registered below before any run of them. Written at main f3bf005. House rules as in ADR 0130: limits are fixed before
 the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected
@@ -152,6 +152,33 @@ Corrected set-up (the limits and the open-stage control are unchanged): the vali
 must be false with a diagnostic on `boundaries.ymax`. That diagnostic comes from the boundary-coverage loop of `Simulation::new`
 (`crates/rcfd-api/src/sim.rs` lines 1053-1064). The loop skips cyclic and empty patches, so of this mesh's patches only `ymin` and
 `ymax` need a boundary entry. What I knew when writing this: the message above and that code. The corrected text had not been run.
+
+## Amendment 2 (2026-10-28, the maintainer's decision; written with ADR 0147's registration, before the reruns)
+
+The maintainer decided (answering question 3 here and ADR 0144 question 11) that the starter also offers
+`channel/profile_inlet.toml`, copying its table alongside; the copy mechanism is registered in
+[ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md) decision 4: the table
+`channel/profile_inlet.csv` is the example's data file (a companion), embedded too and written next to the new case as
+`cases/profile_inlet.csv` (never replaced; an existing file with the example's bytes is used, one with other bytes refuses
+the creation). D1 changes accordingly: 10 examples offered, `EXCLUDED` holds the 6 descriptors. The registered checks
+change as follows (limits unchanged in kind; none had run when this was written):
+
+* **CS1**: each example opened through the editor's service with its folder in the repository's `cases/` (the Studio's
+  editor opens a case with its folder since ADR 0144 amendment 3; the data file is there): 10 of 10 open and validate with
+  no diagnostic. Controls unchanged.
+* **CS2**: 10 of 10 byte-equal; each data file written byte-equal to its embedded text and to the repository's file; the
+  browser then lists 11 files under `cases/` (10 cases and the table). **CS2 control**: the editors (with the folder) save
+  other bytes, 10 of 10.
+* **CS5**: a data file of an offered example with equal bytes is in step too, and every data file must exist; the lists'
+  check adds that a data file is in its example's folder and neither offered nor excluded. Controls: "stale" now deletes
+  `cavity/case.json` (a stale exclusion; the table is no longer excluded); two more, a deleted
+  `channel/profile_inlet.csv` and a changed byte in it, each exactly 1 problem naming that file.
+* **CS6**: the 6 descriptors do not open (6, the profile case is offered).
+* **CS7**: the text parsed with its folder; 10 of 10.
+* **CS11**: the data files count to the embedded size and must not be reference data; an offered example is still a
+  `.toml` case file. Controls unchanged.
+* **CS12** and the unregistered `panel_button_request_repaints_and_opens_the_dialog_next_frame`: 10 rows.
+* **CS13**: 10 descriptions; its control validates each example with its folder.
 
 ## Not in CI (by hand, recorded in the addendum)
 
