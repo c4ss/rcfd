@@ -91,9 +91,16 @@ impl StudioApp {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.st.drain();
-        // ADR 0144: the preview builds an edit when typing pauses; that frame must come without further input
+        // ADR 0144: the preview builds an edit when typing pauses; that frame must come without further input. egui
+        // takes its predicted frame time off a requested delay (amendment 2), so that much more is asked for: the frame
+        // starts when the debounce ends.
         if let Some(d) = self.st.preview.due_in() {
-            ctx.request_repaint_after(d);
+            let frame = if self.st.preview.switches.uncompensated_repaint {
+                Duration::ZERO
+            } else {
+                Duration::try_from_secs_f32(ctx.input(|i| i.predicted_dt)).unwrap_or_default()
+            };
+            ctx.request_repaint_after(d + frame);
         }
         self.st.theme.apply(&ctx);
         egui::Panel::top("rcfd-studio-menu").show(ui, |ui| self.menu_bar(ui));

@@ -357,15 +357,26 @@ fn j3_an_editor_burst_builds_once_after_the_debounce() {
     assert!(n >= 2, "control: {n} build(s) without a debounce");
 }
 
-/// J3 (b), corrected by amendment 1: the frame drawn after a keystroke asks for the next frame at most the debounce
-/// later; frames then drawn as the window draws them (each after the repaint delay the previous one asked for, no
-/// input) ask for the build within 3 frames, 0.50 to 0.75 s after the keystroke, every frame before it asking for a
-/// repaint. Control: an idle frame asks for no frame within 1 s.
-#[test]
-fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame() {
-    let root = pv::project("j3b", &[]);
+/// What [`debounced_frames`] saw.
+struct Chain {
+    /// Repaint delay of an idle frame (before the keystroke).
+    idle: Duration,
+    /// Repaint delay of the frame after the keystroke.
+    d0: Duration,
+    /// Repaint delay of each frame drawn after it, in order.
+    delays: Vec<Duration>,
+    /// Seconds from the keystroke to the frame that asked for the build.
+    asked: Option<f64>,
+}
+
+/// The cavity open in the drawn app; after 30 idle frames `nx` typed `24` and one frame drawn; then frames drawn as the
+/// window draws them (each after the repaint delay the previous one asked for, at most 2 s, no input) until one asks for
+/// the build or 2 s pass. `uncompensated`: the code of J3b's known miss (amendment 2).
+fn debounced_frames(tag: &str, uncompensated: bool) -> Chain {
+    let root = pv::project(tag, &[]);
     let mut st = lj::studio(&root, false);
     assert_eq!(lj::open(&mut st, "cases/cavity.toml"), Status::Ready);
+    st.preview.switches.uncompensated_repaint = uncompensated;
     let mut app = StudioApp::new(st, None);
     let ctx = egui::Context::default();
     let mut idle = Duration::ZERO;
@@ -376,7 +387,6 @@ fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame() {
     let t_key = Instant::now();
     let d0 = lj::repaint_delay(&lj::frame_with(&mut app, &ctx, Vec::new()));
     let r0 = app.st.preview.stats.requests;
-    // the window's way: the next frame when the last one asked for it, no input
     let (mut d, mut delays, mut asked) = (d0, Vec::new(), None);
     while t_key.elapsed() < Duration::from_secs(2) {
         std::thread::sleep(d.min(Duration::from_secs(2)));
@@ -387,28 +397,63 @@ fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame() {
             break;
         }
     }
-    let n = delays.len();
     eprintln!(
-        "J3 (b): idle frame repaint delay {idle:?}; after the keystroke {d0:?}; then {n} frame(s) asking for \
-         {delays:?}; the build asked {asked:?} s after the keystroke"
+        "{tag}: idle frame repaint delay {idle:?}; after the keystroke {d0:?}; then {} frame(s) asking for {delays:?}; \
+         the build asked {asked:?} s after the keystroke",
+        delays.len()
     );
-    assert!(
-        idle > Duration::from_secs(1),
-        "control/set-up: an idle frame asks for a frame after {idle:?}"
-    );
-    assert!(
-        d0 <= preview::DEBOUNCE,
-        "the frame after the keystroke asks for the next after {d0:?}"
-    );
-    let t = asked.expect("no frame asked for the build within 2 s");
+    Chain {
+        idle,
+        d0,
+        delays,
+        asked,
+    }
+}
+
+/// J3b with amendment 1's procedure and limits, missed (amendment 2): the frames before the debounce's end came back to
+/// back (each asking for a repaint at once), more than 3. Kept with its limits, measuring the code that missed.
+#[test]
+#[ignore = "ADR 0144 amendment 2: J3b missed its limit of 3 frames (44 frames back to back before the debounce ended); J3c checks the change"]
+fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame_known_miss() {
+    let c = debounced_frames("j3b", true);
+    assert!(c.idle > Duration::from_secs(1), "control/set-up: idle {:?}", c.idle);
+    assert!(c.d0 <= preview::DEBOUNCE, "after the keystroke {:?}", c.d0);
+    let t = c.asked.expect("no frame asked for the build within 2 s");
+    let n = c.delays.len();
     assert!(n <= 3, "{n} frames after the keystroke frame");
     assert!(
         (0.5..=0.75).contains(&t),
         "the build asked {t:.3} s after the keystroke"
     );
     assert!(
-        delays[..n - 1].iter().all(|d| *d < Duration::MAX),
+        c.delays[..n - 1].iter().all(|d| *d < Duration::MAX),
         "a frame before the build asked for no repaint"
+    );
+}
+
+/// J3c (amendment 2): the frame after a keystroke asks for the next at most the debounce later, and the first frame
+/// drawn at the delay it asked for (no input) asks for the build, 0.50 to 0.75 s after the keystroke. Controls: an idle
+/// frame asks for no frame within 1 s; with the code of J3b's known miss the first frame drawn at the asked delay does
+/// not ask for the build.
+#[test]
+fn j3c_the_frame_asked_for_comes_when_the_debounce_ends() {
+    let c = debounced_frames("j3c", false);
+    assert!(c.idle > Duration::from_secs(1), "control/set-up: idle {:?}", c.idle);
+    assert!(c.d0 <= preview::DEBOUNCE, "after the keystroke {:?}", c.d0);
+    assert_eq!(
+        c.delays.len(),
+        1,
+        "the first frame drawn at the asked delay did not ask for the build"
+    );
+    let t = c.asked.unwrap();
+    assert!(
+        (0.5..=0.75).contains(&t),
+        "the build asked {t:.3} s after the keystroke"
+    );
+    let k = debounced_frames("j3c-control", true);
+    assert!(
+        k.delays.len() > 1,
+        "control: the first frame asked for the build without the change"
     );
 }
 

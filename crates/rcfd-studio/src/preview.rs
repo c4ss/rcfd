@@ -755,6 +755,9 @@ pub struct Switches {
     pub disk_only: bool,
     /// ADR 0138's rule: a build that fails or is over a limit takes the shown mesh away (no last good mesh).
     pub drop_on_failure: bool,
+    /// The frame asked for when typing pauses is not lengthened by egui's predicted frame time, so it comes one frame
+    /// before the debounce ends (the code of ADR 0144 J3b's known miss, amendment 2).
+    pub uncompensated_repaint: bool,
 }
 
 /// Counters for the tests.

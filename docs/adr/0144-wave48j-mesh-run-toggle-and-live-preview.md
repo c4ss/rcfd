@@ -218,6 +218,26 @@ chain asks for the build; at most 3 frames after the keystroke frame; 0.50 to 0.
 every frame before it asked for a repaint. Control unchanged: an idle frame asks for no repaint within 1 s. What I knew
 when writing this: the numbers above and egui's code; the corrected test had not run.
 
+## Amendment 2 (2026-10-28, J3b missed its corrected limit; a change and J3c, before J3c ran)
+
+J3b with amendment 1's procedure ran on 7b1d532 (output to a file) and **missed** its limit of at most 3 frames: after
+the frame drawn at 483.33 ms, 44 frames followed, each asking for a repaint at once (delay 0) and drawn back to back,
+until the debounce had ended; the build was asked 0.5009 s after the keystroke, every frame asked for a repaint. A
+window with vsync draws such frames one per 1/60 s, but without it the app redraws without pause for up to one frame
+time before every debounced build: a defect of the code, not of the set-up. Amendment 1's reading of the first failure
+holds for egui's design, but the app can do better. The test becomes the ignored
+`j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame_known_miss` with amendment 1's limits intact; it measures
+the code that missed through the test switch `preview::Switches::uncompensated_repaint`.
+
+Change: `StudioApp::ui` asks for the debounce's remaining time plus egui's predicted frame time (`input.predicted_dt`),
+which egui takes off again, so the frame asked for starts when the debounce ends.
+
+**J3c** (`j3c_the_frame_asked_for_comes_when_the_debounce_ends`, registered here, before it ran): J3b's fixture and
+procedure (frames drawn as the window draws them). Limits: the frame after the keystroke asks for the next at most
+`DEBOUNCE` later; the first frame drawn at the delay it asked for (no input) asks for the build (one frame); 0.50 to
+0.75 s after the keystroke. Controls: an idle frame asks for no frame within 1 s; with the switch (the code that
+missed) the first frame drawn at the asked delay does not ask for the build.
+
 ## Not in CI (by hand)
 
 A person at the real window: the toggle's look and its disabled tooltips, the stale line and badge, typing into the
