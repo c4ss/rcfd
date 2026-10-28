@@ -38,7 +38,7 @@ thiserror = "1"
 toml = { version = "1", default-features = false, features = ["parse", "display", "serde"] }
 png = "0.18"
 rayon = "1"
-wasmi = "0.31"
+wasmi = "2.0"
 rcfd-core = { path = "crates/rcfd-core" }
 rcfd-mesh = { path = "crates/rcfd-mesh" }
 rcfd-linalg = { path = "crates/rcfd-linalg" }
