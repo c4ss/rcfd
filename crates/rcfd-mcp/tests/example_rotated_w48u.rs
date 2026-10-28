@@ -68,8 +68,15 @@ fn compare(rot: &str, flow: &str) -> Vec<Cmp> {
             let (xa, ya) = series(&a, name);
             let (xb, yb) = series(&b, name);
             assert_eq!(xa, xb, "{name}: the two runs report at the same iterations");
-            let (fa, fb) = (ma["reports"][name].as_f64().unwrap(), mb["reports"][name].as_f64().unwrap());
-            assert_eq!(fa, *ya.last().unwrap(), "{rot}: {name} metric is the last monitor value");
+            let (fa, fb) = (
+                ma["reports"][name].as_f64().unwrap(),
+                mb["reports"][name].as_f64().unwrap(),
+            );
+            assert_eq!(
+                fa,
+                *ya.last().unwrap(),
+                "{rot}: {name} metric is the last monitor value"
+            );
             let late = xa
                 .iter()
                 .zip(ya.iter().zip(&yb))
@@ -119,13 +126,20 @@ fn e2_rotated_mesh_matches_rotated_flow() {
         "E2 control (4 deg rotated against 2 deg flow): cl {:.3e}, cd {:.3e}",
         control[0].final_rel, control[1].final_rel
     );
-    assert!(control.iter().all(|c| c.final_rel > 1e-6), "the control must fail the limit");
+    assert!(
+        control.iter().all(|c| c.final_rel > 1e-6),
+        "the control must fail the limit"
+    );
 }
 
 /// E3: the rotated runs lift along +y, more at 4 than at 2 degrees; control: swapped, the order fails.
 #[test]
 fn e3_rotated_runs_lift_upward_more_at_the_larger_angle() {
-    let cl = |case: &str| read_json(&run_of(case).join("metrics.json"))["reports"]["cl"].as_f64().unwrap();
+    let cl = |case: &str| {
+        read_json(&run_of(case).join("metrics.json"))["reports"]["cl"]
+            .as_f64()
+            .unwrap()
+    };
     let (c4, c2) = (cl(PAIRS[0].0), cl(PAIRS[1].0));
     println!("E3 cl: 4 deg (rotated mesh) {c4}, 2 deg (rotated mesh) {c2}");
     assert!(0.0 < c2 && c2 < c4, "{c2} {c4}");

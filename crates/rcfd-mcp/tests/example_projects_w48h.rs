@@ -457,7 +457,11 @@ fn s4_aerofoil_angle_of_attack_is_consistent() {
             assert_eq!(uf, [1.0, 0.0, 0.0], "{rel}: far field");
             assert_eq!(lift, [0.0, 1.0, 0.0], "{rel}: lift direction");
             assert_eq!(drag, [1.0, 0.0, 0.0], "{rel}: drag direction");
-            assert_eq!(v("mesh.transform.rotate_origin"), [0.25, 0.0, 0.0], "{rel}: quarter chord");
+            assert_eq!(
+                v("mesh.transform.rotate_origin"),
+                [0.25, 0.0, 0.0],
+                "{rel}: quarter chord"
+            );
             (-mesh_turn).to_radians()
         } else {
             let alpha = u0[1].atan2(u0[0]);

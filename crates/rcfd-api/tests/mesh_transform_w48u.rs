@@ -336,6 +336,26 @@ fn u5_exact_angles() {
     }
 }
 
+/// U2 on the aerofoil mesh (the generator meshes are checked by `rcfd-mesh`'s unit tests): rotated by each angle about
+/// (0.25, -0.5, 0) through the case and back by `rcfd_mesh::transform::rotate_z`, every point within 1e-12 of its size.
+#[test]
+fn u2_round_trip_on_the_aerofoil_mesh() {
+    let text = aerofoil_mesh();
+    let m0 = mesh(&text);
+    let o = [0.25, -0.5, 0.0];
+    let mut worst: f64 = 0.0;
+    for a in ANGLES {
+        let m = mesh(&format!("{text}{}", table(a, o)));
+        let back = rcfd_mesh::transform::rotate_z(&m, -a, o).unwrap();
+        for (p, q) in back.points().iter().zip(m0.points()) {
+            let d = vec3::norm(vec3::sub(*p, *q)) / scale(*q);
+            worst = worst.max(d);
+            assert!(d <= 1e-12, "{a}: {d:e}");
+        }
+    }
+    println!("U2 aerofoil: round trip within {worst:.2e}");
+}
+
 /// U6: wall distance and the quality report of the aerofoil mesh rotated by -4 about the quarter chord.
 #[test]
 fn u6_invariants_on_the_aerofoil_mesh() {
