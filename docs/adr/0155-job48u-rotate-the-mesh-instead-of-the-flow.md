@@ -212,3 +212,47 @@ a finer aerofoil mesh; Linux-built stores of the new runs (job 48P's set; the AD
    consistent geometrically, but a rotating frame given in world coordinates no longer matches it)?
 4. Show set-up warnings such as MT101 in the Studio's Case > Validate (today errors only)?
 
+## Amendment 1 (2026-10-28, after the R0 record and a disclosed smoke run, before the counted runs)
+
+What had run when this was written, and what it gave:
+
+1. **R0 on the base code 6867e40**, before any code change: the H1 record (41 sources: 30 valid case files and doc blocks
+   with their settings hash, written texts and mesh hash, 11 refused with their diagnostic paths; commit c2a8d72); the
+   base answer to `[mesh.transform]`: "mesh.transform: unknown setting 'transform' (known: fan, source, generator, ...)";
+   the case-level test file `crates/rcfd-api/tests/mesh_transform_w48u.rs` (K1-K3, U3-U6, P1, W1, E3) on the base
+   code: **9 of 9 failed**, each at "unknown setting 'transform'" (K3 at the missing schema entry), the control that the
+   key did not exist; `--rerun-check --project wind-tunnel` with the base binaries: the reproducible files of all 6
+   committed runs byte-equal (30 of 30), so the committed aerofoil runs are what the current solver gives.
+2. **The code**, then the unit and case-level tests (not counted runs; they are re-run with the counted set): H1 0 of 41
+   sources differ; the 9 case-level tests pass (U3's largest per-cell volume difference 2.1e-13 relative, face area
+   4.3e-13, normal 2.2e-13, all meshes; U6 wall distance 9.6e-14, non-orthogonality 1.5e-14 relative).
+3. **Smoke (disclosed, not counted)**: `rcfd run` of `naca0012-aoa4-rotated.toml` and `naca0012-aoa2-rotated.toml` with
+   this branch's binary, one thread each, outside the project (scratch output). Against the committed flow-rotated runs
+   at iteration 2000:
+
+   | alpha | `cl` rotated mesh | `cl` rotated flow | relative difference | `cd` relative difference | largest `cl` difference over 2000 iterations | largest relative difference over iterations 1001-2000 (`cl`, `cd`) |
+   |---|---|---|---|---|---|---|
+   | 4 | 0.3481949506 | 0.3481949567 | 1.8e-8 | 1.6e-8 | 3.0e-4 at iteration 24 | 5.0e-8, 3.9e-8 |
+   | 2 | 0.1988332970 | 0.1988332781 | 9.5e-8 | 5.6e-8 | 6.5e-4 at iteration 19 | 3.3e-7, 1.7e-7 |
+
+   The two problems are one problem turned rigidly (D9): the far-field circle turns with the aerofoil, so there is no
+   discretisation difference of the far-field boundary at all. What differs is numerics that are not invariant under a
+   rotation: the rounded coordinates, and (probably, not investigated) the per-component inner solves of the momentum
+   equations, whose effect is largest in the first iterations (up to 6.5e-4 in `cl` near iteration 20) and decays as
+   the outer iteration settles.
+
+**E2's tolerance (registered here):** at iteration 2000, `|cl_rot - cl_flow| <= 1e-6 |cl_flow|` and
+`|cd_rot - cd_flow| <= 1e-6 cd_flow` for both angles (the smoke's largest is 9.5e-8, a factor of 10 below; the runs'
+own drift of `cl` over their last 1000 iterations is 3e-3, ADR 0142); and over iterations 1001-2000 of the monitor
+series the same comparison at every iteration within `1e-5` (the smoke's largest 3.3e-7). The largest difference over
+all 2000 iterations is reported, not limited. The control is unchanged (the 4-degree rotated run against the 2-degree
+flow run fails). The counted runs are the script's `--add-missing` runs (E1); with the same binary and one thread they
+are expected to reproduce the smoke's values exactly, which E4 does not check (the smoke is not committed).
+
+**Deviations of the set-up found while writing the tests (before any counted run):**
+
+1. U2 on `annulus_3d_sector` uses an origin on its periodic axis, (0, 0, 0.7), not (0.25, -0.5, 0): D5 refuses the
+   registered origin for that mesh (P1 is the check of that refusal). The other meshes use (0.25, -0.5, 0).
+2. U5's "(x, y, z) to (-y, x, z) bit for bit" is checked as exact values: `0 - 0` is `+0` in floating point, so a
+   coordinate 0 may come back as `+0` where `-y` is `-0`; every other bit is exact, z bit for bit.
+
