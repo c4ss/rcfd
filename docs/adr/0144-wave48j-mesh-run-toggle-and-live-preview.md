@@ -303,6 +303,17 @@ runs had ascending suffixes. A set-up defect, not a double start: a throwaway di
 made one run per click in 26 of 26 attempts. Corrected (registered here, before the corrected run): the new run is the
 run id that was not there before the click. Limits and controls unchanged.
 
+## Amendment 6 (2026-10-28, found in review after the addendum's runs; before J19 ran)
+
+No registered check covers a build asked for while both build threads run: it waits (decision 3) and must then build the
+editor's text as it was when it was asked for, not the file. J4 never queues (A runs alone when B is asked for); J10
+queues but checks nothing of what the last build read. **J19** (`j19_a_queued_build_builds_the_text_it_was_asked_for`,
+release, `--test-threads 1 --nocapture`, output to a file): the 500 x 500 box; `nx` typed `501` (A); once A's thread
+runs, `502` (B); once two threads run, `503` (C). Limits: the final build has 503 x 500 cells and is of the editor's
+text; never more than 2 build threads. Set-up: two threads alive when C is asked for. Negative control: with ADR 0138's
+rule (`disk_only`) the same keystrokes end with the file's 250,000 cells. What I knew: the code (`Preview::queued` keeps
+the request's source, `Preview::drain` spawns it when a thread is free); J19 had not run.
+
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a5dd4bf5202a803c8`. Commits: registration 0922e73 (on main e11c656); amendment 1 7b1d532;

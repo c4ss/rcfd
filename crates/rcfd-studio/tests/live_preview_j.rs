@@ -1114,3 +1114,73 @@ fn j15_the_case_editor_resolves_paths_against_the_case_folder() {
     eprintln!("J15 control (base .): profile_inlet refused: {refused}");
     assert!(refused.contains("tables.inlet_u.file"), "control: {refused}");
 }
+
+// ---------------------------------------------------------------- J19: a queued build
+
+/// J19 (amendment 6): a build asked for while two build threads run waits for one, and then builds the editor's text
+/// it was asked for. The 500 x 500 box; `nx` typed `501` (A), once A's thread runs `502` (B), once two threads run
+/// `503` (C, asked for while A and B run, so it waits). Limits: the final build has 503 x 500 cells and is of the editor's
+/// text; never more than 2 build threads. Set-up: two threads alive when C is asked for. Negative control: with ADR
+/// 0138's rule (`disk_only`) the same keystrokes end with the file's 250,000 cells.
+#[test]
+fn j19_a_queued_build_builds_the_text_it_was_asked_for() {
+    if cfg!(debug_assertions) {
+        eprintln!("SKIP j19 (crates/rcfd-studio/tests/live_preview_j.rs): registered for release builds");
+        return;
+    }
+    for control in [false, true] {
+        let root = pv::project("j19", &[("cases/big.toml", pv::box_case(500, 500).as_bytes())]);
+        let mut st = lj::studio(&root, false);
+        st.preview.switches.disk_only = control;
+        let _ = lj::open(&mut st, "cases/big.toml");
+        let e0 = st.preview.stats.editor_requests;
+        let mut running_at_c = None;
+        for (k, nx) in ["501", "502", "503"].into_iter().enumerate() {
+            lj::type_text(&mut st, "mesh.nx", nx);
+            if control {
+                lj::drain_for(&mut st, Duration::from_millis(600));
+                continue;
+            }
+            let want = e0 + k as u64 + 1;
+            assert!(
+                st.drain_until(lj::WAIT, |s| s.preview.stats.editor_requests == want),
+                "set-up: {nx} was not asked for"
+            );
+            if k < 2 {
+                assert!(
+                    st.drain_until(lj::WAIT, |s| s.preview.running() == k + 1),
+                    "set-up: {} build thread(s) not running after {nx}",
+                    k + 1
+                );
+            } else {
+                running_at_c = Some(st.preview.running());
+            }
+        }
+        assert!(
+            st.drain_until(lj::WAIT, |s| s.preview.running() == 0 && lj::settled(s)),
+            "the builds did not end"
+        );
+        let b = st.preview.built.clone().expect("a build");
+        eprintln!(
+            "J19{}: threads when 503 was asked for {running_at_c:?}; final build {} cells, from the editor {}; editor \
+             builds {}, discarded {}, most threads {}",
+            if control { " control" } else { "" },
+            b.cells,
+            b.from_editor,
+            st.preview.stats.editor_requests - e0,
+            st.preview.stats.discarded,
+            st.preview.stats.most_running
+        );
+        assert!(st.preview.stats.most_running <= 2, "more than 2 build threads");
+        if control {
+            assert_eq!(b.cells, 250_000, "control: the file's cells");
+        } else {
+            assert_eq!(
+                running_at_c,
+                Some(2),
+                "set-up: 503 was not asked for while two threads ran"
+            );
+            assert_eq!((b.cells, b.from_editor), (503 * 500, true), "the queued build");
+        }
+    }
+}
