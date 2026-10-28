@@ -22,4 +22,4 @@ defines them.
 | MRF | Multiple reference frame (frozen rotor): a steady solve in which a rotating zone is computed in its own rotating frame. | [ADR 0008](adr/0008-mrf.md) |
 | FAN-01 | The reference fan case: a 500 mm low-pressure axial fan from the FAU / EAA open data set (CAD and measured characteristic, CC BY 4.0). Its steady rotating-frame solve does not yet reach the measured operating point. | [Fan milestone](milestone-fan.md), [validation data](validation-data.md) |
 | MCP | Model Context Protocol: the interface through which an AI assistant calls rcfd's tools. | [MCP tools](mcp-tools.md) |
-| Studio | The new desktop application, being rebuilt on wgpu. It has no window yet. | [Studio plan](ui-restart-plan.md) |
+| Studio | The new desktop application on wgpu (`rcfd-studio`). Its window opens a project folder, lists cases, meshes and runs, and edits case files; the 3D view, run control and the chat are still being added. | [Studio plan](ui-restart-plan.md) |
