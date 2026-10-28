@@ -199,6 +199,25 @@ changed ones (`preview_g1`, `preview_cost_g1`, `oneclick_g4`, `oneclick_e2e_g4`)
   `manual_contains` findings in `tests/live_preview_j.rs` were fixed; `cargo fmt -p rcfd-studio` applied. No test of
   this ADR, and none of the changed earlier tests, had run.
 
+## Amendment 1 (2026-10-28, J3b set-up defect, before the corrected run)
+
+The registered run of `tests/live_preview_j.rs` on 0922e73 (release, `--test-threads 1 --nocapture`, output to a
+file) failed J3b; its other twelve tests passed (addendum). J3b measured: an idle frame asked for no repaint
+(`Duration::MAX`); the frame after the keystroke asked for the next one after 483.33 ms; the one frame drawn then
+asked for no build. Cause, read from egui 0.36.2 (`context.rs`, `request_repaint_after`, lines 149-152): egui shortens
+every requested delay by its predicted frame time (`input.predicted_dt`, 1/60 s in these headless frames) "to make it
+less likely we over-shoot the target", so 500 ms became 483.33 ms and the frame drawn then came about 16.7 ms before
+the debounce ended. That frame asks again for the time left (less 1/60 s, so at once), and the next frame asks for the
+build. The registered limit presumed that a frame drawn at the reported delay is past the deadline: a set-up defect of
+the check (like ADR 0138 amendment 1), not a miss of its property, a build that starts without further input.
+
+Corrected set-up and limits (same test name): after the keystroke frame, frames are drawn as the window draws them,
+each after the repaint delay the previous frame asked for (at most 2 s), no input, until a frame asks for the build or
+2 s pass. Limits: the frame after the keystroke asks for the next at most `DEBOUNCE` later (unchanged); a frame of that
+chain asks for the build; at most 3 frames after the keystroke frame; 0.50 to 0.75 s after the keystroke (J3's window);
+every frame before it asked for a repaint. Control unchanged: an idle frame asks for no repaint within 1 s. What I knew
+when writing this: the numbers above and egui's code; the corrected test had not run.
+
 ## Not in CI (by hand)
 
 A person at the real window: the toggle's look and its disabled tooltips, the stale line and badge, typing into the

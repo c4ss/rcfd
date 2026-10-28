@@ -357,8 +357,10 @@ fn j3_an_editor_burst_builds_once_after_the_debounce() {
     assert!(n >= 2, "control: {n} build(s) without a debounce");
 }
 
-/// J3 (b): the frame drawn after a keystroke asks for the next frame at most the debounce later, and the frame drawn
-/// then asks for the build (without any input). Control: an idle frame asks for no frame within 1 s.
+/// J3 (b), corrected by amendment 1: the frame drawn after a keystroke asks for the next frame at most the debounce
+/// later; frames then drawn as the window draws them (each after the repaint delay the previous one asked for, no
+/// input) ask for the build within 3 frames, 0.50 to 0.75 s after the keystroke, every frame before it asking for a
+/// repaint. Control: an idle frame asks for no frame within 1 s.
 #[test]
 fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame() {
     let root = pv::project("j3b", &[]);
@@ -371,24 +373,43 @@ fn j3b_the_frame_after_a_keystroke_asks_for_the_debounced_frame() {
         idle = lj::repaint_delay(&lj::frame_with(&mut app, &ctx, Vec::new()));
     }
     lj::type_text(&mut app.st, "mesh.nx", "24");
-    let d = lj::repaint_delay(&lj::frame_with(&mut app, &ctx, Vec::new()));
+    let t_key = Instant::now();
+    let d0 = lj::repaint_delay(&lj::frame_with(&mut app, &ctx, Vec::new()));
     let r0 = app.st.preview.stats.requests;
-    std::thread::sleep(d.min(Duration::from_secs(2)));
-    let _ = lj::frame_with(&mut app, &ctx, Vec::new());
-    let r1 = app.st.preview.stats.requests;
+    // the window's way: the next frame when the last one asked for it, no input
+    let (mut d, mut delays, mut asked) = (d0, Vec::new(), None);
+    while t_key.elapsed() < Duration::from_secs(2) {
+        std::thread::sleep(d.min(Duration::from_secs(2)));
+        d = lj::repaint_delay(&lj::frame_with(&mut app, &ctx, Vec::new()));
+        delays.push(d);
+        if app.st.preview.stats.requests > r0 {
+            asked = Some(t_key.elapsed().as_secs_f64());
+            break;
+        }
+    }
+    let n = delays.len();
     eprintln!(
-        "J3 (b): idle frame repaint delay {idle:?}; after a keystroke {d:?}; builds asked by the frame then {}",
-        r1 - r0
+        "J3 (b): idle frame repaint delay {idle:?}; after the keystroke {d0:?}; then {n} frame(s) asking for \
+         {delays:?}; the build asked {asked:?} s after the keystroke"
     );
     assert!(
         idle > Duration::from_secs(1),
         "control/set-up: an idle frame asks for a frame after {idle:?}"
     );
     assert!(
-        d <= preview::DEBOUNCE,
-        "the frame after the keystroke asks for the next after {d:?}"
+        d0 <= preview::DEBOUNCE,
+        "the frame after the keystroke asks for the next after {d0:?}"
     );
-    assert_eq!(r1, r0 + 1, "the frame at the asked time did not ask for the build");
+    let t = asked.expect("no frame asked for the build within 2 s");
+    assert!(n <= 3, "{n} frames after the keystroke frame");
+    assert!(
+        (0.5..=0.75).contains(&t),
+        "the build asked {t:.3} s after the keystroke"
+    );
+    assert!(
+        delays[..n - 1].iter().all(|d| *d < Duration::MAX),
+        "a frame before the build asked for no repaint"
+    );
 }
 
 /// J4: an older build of the editor's text still running when a newer edit's build is asked for is discarded. The
