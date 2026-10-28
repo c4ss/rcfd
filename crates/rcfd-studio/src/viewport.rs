@@ -10,7 +10,7 @@ use crate::watch::Wake;
 use rcfd_core::vec3::{add, dot, norm, scale, sub, Vec3};
 use rcfd_mesh::{Mesh, PatchKind};
 use rcfd_render::{
-    wgpu, Camera, ColorMap, Field, GpuMesh, PickImage, Projection, Renderer, Shading, SurfaceMesh, View,
+    wgpu, Camera, ColorMap, Field, GpuMesh, PartStyle, PickImage, Projection, Renderer, Shading, SurfaceMesh, View,
 };
 use rcfd_tsstore::{IndexSource, Location, Mode, Pick, Reader};
 use std::path::{Path, PathBuf};
@@ -939,6 +939,9 @@ pub struct Viewport {
     pub empty: Option<crate::run_fields::EmptyState>,
     /// A note on where the store was found (the pre-48A location, ADR 0140 D7).
     pub store_note: Option<String>,
+    /// Style per surface part (empty for a run: every part coloured by the field; ADR 0138 case preview: one solid
+    /// colour per patch).
+    pub part_styles: Vec<PartStyle>,
     gen: u64,
     shown_gen: u64,
     pending: bool,
@@ -975,6 +978,7 @@ impl Default for Viewport {
             image_rect: None,
             empty: None,
             store_note: None,
+            part_styles: Vec::new(),
             gen: 0,
             shown_gen: 0,
             pending: false,
@@ -1020,9 +1024,53 @@ impl Viewport {
         self.error = None;
         self.hover = None;
         self.pending = false;
+        self.part_styles.clear();
         self.dirty = true;
         self.empty = None;
         self.store_note = None;
+    }
+
+    /// Show a surface with no run (ADR 0138, the mesh preview of a case): the start camera of the surface, every face
+    /// at value 0 coloured by `parts`, drawn by the same [`Viewport::prepare`] as a run's field. Ignored while a run is
+    /// shown.
+    pub fn show_surface(&mut self, surface: Arc<SurfaceMesh>, two_d: bool, parts: Vec<PartStyle>) {
+        if self.run.is_some() {
+            return;
+        }
+        self.reset_run();
+        let (lo, hi) = surface.bounds();
+        self.camera = Some(CameraState::start(lo, hi, two_d));
+        self.frame = Some(Frame {
+            field: String::new(),
+            index: 0,
+            upper: 0,
+            weight: 0.0,
+            interpolated: false,
+            step: 0.0,
+            time: 0.0,
+            faces: Arc::new(vec![0.0; surface.n_faces()]),
+            range: Some((0.0, 0.0)),
+        });
+        self.surface = Some(surface);
+        self.two_d = two_d;
+        self.part_styles = parts;
+        self.status = Status::Ready;
+        self.field_dirty = true;
+    }
+
+    /// Change the part styles of the shown surface (a redraw when they differ).
+    pub fn set_part_styles(&mut self, parts: Vec<PartStyle>) {
+        if parts != self.part_styles {
+            self.part_styles = parts;
+            self.dirty = true;
+        }
+    }
+
+    /// Take a surface shown by [`Viewport::show_surface`] away (no effect on a run).
+    pub fn clear_surface(&mut self) {
+        if self.run.is_none() {
+            self.reset_run();
+        }
     }
 
     /// Close: stop the worker and forget the run (the GPU stays).
@@ -1294,8 +1342,9 @@ impl Viewport {
         }
     }
 
-    /// The step the plots mark.
+    /// The step the plots mark (none without a run).
     pub fn marker(&self) -> Option<f64> {
+        self.run.as_ref()?;
         self.frame.as_ref().map(|f| f.step)
     }
 
@@ -1341,6 +1390,7 @@ impl Viewport {
         v.shading = if self.two_d { Shading::Unlit } else { Shading::Flat };
         // a degenerate range is left to the render core (span 1), which `Some((c, c))` would refuse
         v.range = self.drawn_range().filter(|(a, b)| b > a);
+        v.parts = self.part_styles.clone();
         Some(v)
     }
 

@@ -13,17 +13,15 @@ const LEGEND_W: f32 = 120.0;
 /// Draw the Viewport panel.
 pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
     let dark = st.theme == crate::theme::Theme::Dark;
-    let vp = &mut st.viewport;
-    if let Some(e) = vp.gpu_error() {
+    if let Some(e) = st.viewport.gpu_error() {
         ui.colored_label(ERR, e.to_string());
     }
-    if vp.run.is_none() {
-        ui.weak("Select a run in the Runs panel to see its stored fields.");
-        if vp.gpu.is_none() {
-            ui.weak("(no GPU attached: headless)");
-        }
+    if st.viewport.run.is_none() {
+        // ADR 0138: no run selected: the mesh of the open case
+        crate::preview_ui::panel(ui, st, dark);
         return;
     }
+    let vp = &mut st.viewport;
     match vp.status.clone() {
         Status::Idle | Status::Loading => {
             ui.weak("Reading the run's field store...");
@@ -230,7 +228,8 @@ fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
     }
 }
 
-fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark: bool) {
+/// The rendered texture with mouse input and hover (also used by the case preview, ADR 0138).
+pub(crate) fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark: bool) {
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click_and_drag());
     vp.image_rect = Some(rect);
     let ppp = ui.ctx().pixels_per_point();
