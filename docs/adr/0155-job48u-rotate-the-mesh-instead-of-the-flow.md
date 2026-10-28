@@ -351,10 +351,51 @@ dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 
-**Questions added by the addendum.**
-5. The wind-tunnel folder is 173 707 bytes under its 35 MB cap and `example-projects/` 919 564 under 40 MB; job
-   48P's Linux stores will not fit without a cap decision. Raise the caps, or move the stores out (ADR 0142 question 1)?
-6. Add a `CHANGELOG.md` entry for `[mesh.transform]` (and the other 48x changes), or leave "Unreleased" to the release?
-7. Investigate the early-iteration difference (up to 6.5e-4 in `cl` near iteration 20, gone by the end), or accept it?
-8. Give the existing degree keys (`ramp_angle`, `sector_angle`, the fan's angles) the display unit "deg" too (the JSON
-   schema changes, the case hashes do not)?
+**Unregistered checks (after the counted runs, reported, no limit of this ADR).**
+
+| Id | What | Result |
+|---|---|---|
+| X1 | `docs/case-schema.md` says a study can sweep the angle: `[study.parameters.a] path = "mesh.transform.rotate_z_deg"`, values -2 and -4, on a cavity | `study::plan` gives 2 points; each point's case builds the mesh the table written in the case builds (`c29bcc7fee53e81e`, `54bbc10d24df50e6`) |
+| X2 | the docs say a rotationally periodic generator only turns about its axis: `cases/axial_fan_sector/axial_fan_sector.toml` | rotated 10 about (0, 0, 0.3): builds, `FvGeometry::new` matches 1288 periodic faces; about (1, 0, 0): refused at `mesh.transform.rotate_origin` naming `seam_lo`/`seam_hi` |
+| S1b | the drawn editor (S1 checks the model): one headless frame of the app, the cavity open, the filter `transform` | both fields drawn (`field_rects`), with the texts `mesh`, `transform`, `rotate_z_deg`, `deg`, `[-360, 360]`, `rotate_origin`, `m` |
+
+**Merging with the other 48x branches (read from their commits, not merged here).**
+* **48R (ADR 0152)**: its DV6 (`crates/rcfd-studio/tests/saved_store_r.rs`, `dv6_unedited_plans_are_bit_identical`, commit
+  6fbdbb7) enumerates `example-projects/*/cases/*.toml` at run time and asserts 22 cases equal to its record made on
+  6867e40. With this branch merged there are 24 (the two rotated cases), so DV6 fails on the count and the label list.
+  The fix at the merge: DV6 takes the cases its record names (the two new cases have no plan recorded on 6867e40), with a
+  note in ADR 0152; the record itself stays as it is.
+* **ADR 0133**: 48R adds a dated note at its end too; both branches append there, so the merge has a textual conflict to
+  resolve by keeping both notes.
+* **48P (the Linux-built stores)**: the files both branches touch are `example-projects/manifest.json`, the wind-tunnel
+  ledger and the run table of its `notes/README.md`, `crates/rcfd-mcp/tests/example_projects_w48h.rs`,
+  `crates/rcfd-studio/tests/example_projects_h.rs` and the size caps (wind-tunnel 173 707 bytes under its cap with the
+  two new runs). The two new runs have no Linux set (ADR 0137 rule); they need one made like 48P's.
+
+**Recommendations for the questions** (registration 1-4, addendum 5-9), each with its options; none is decided here.
+1. Optional settings tables in `rcfd-core` (D2) as the way a new table keeps every existing case hash. Options: (a) accept
+   it as the pattern for new tables; (b) make `content_hash` and the writers skip every key at its default (changes every
+   existing hash once, ADR 0133 question 5); (c) accept that a new key changes all hashes. **Recommendation (a)**: no
+   existing hash, text or test moves; (b) is the general answer for keys added to existing tables, a separate change.
+2. Translation and scale in `[mesh.transform]`. Options: (a) leave out until a use needs them; (b) add `translate` now
+   (rigid, safe for the mesh, same world-coordinate warnings); (c) add a uniform scale (overlaps `mesh.scale`).
+   **Recommendation (a)**; (b) is cheap when a use appears.
+3. A rotationally periodic mesh turned about another axis. Options: (a) refuse, as now; (b) move the stored periodic
+   rotation with the mesh (the pair stays matched, but a rotating frame given in world coordinates no longer matches it).
+   **Recommendation (a)**: a fan or sector turned off its axis is almost always a mistake, and the error says the fix.
+4. MT101 in the Studio. Options: (a) Case > Validate also lists the set-up rule warnings (`rules::check_case`); (b) keep
+   errors only. **Recommendation (a)**: a small Studio change, and the warnings are exactly what a rotated case needs.
+5. Size caps with 48P's Linux stores. Options: (a) raise the caps per project; (b) keep one platform's stores in git and
+   build the other's on demand; (c) move the stores to a release asset or Git LFS (ADR 0142 question 1).
+   **Recommendation (b)** for now (the CI can rebuild the Linux set), (c) before the examples grow further.
+6. `CHANGELOG.md`. Options: (a) one Unreleased entry for the 48x waves at the next release; (b) an entry per job now (every
+   48x branch edits the same line, so merges conflict). **Recommendation (a)**.
+7. The early-iteration difference of the two forms (up to 6.5e-4 in `cl` near iteration 20, 1e-7 at the end). Options:
+   (a) accept; (b) find its cause (per-component inner solve tolerances are the likely one). **Recommendation (a)**: it is
+   gone long before a result is read.
+8. The display unit "deg" for the existing degree keys (`ramp_angle`, `sector_angle`, the fan's angles). Options: (a) add
+   it (the JSON schema changes, no case hash or text does); (b) leave them. **Recommendation (a)**, in a later job.
+9. A rotated channel with translational periodic patches keeps `solver.bulk_direction` and `physics.body_force` in world
+   coordinates, so the driver no longer runs along the channel, and MT101 does not warn (D6 counts them as world
+   quantities by intent). Options: (a) warn (MT102) when the mesh has periodic pairs and a driver is set; (b) leave it to
+   the docs. **Recommendation (a)**: cheap, and the mistake would otherwise be silent.
