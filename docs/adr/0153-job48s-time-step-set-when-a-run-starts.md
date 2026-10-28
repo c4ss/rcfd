@@ -266,6 +266,27 @@ All on one build of this registration's commit (`rcfd`, `rcfd-runner`, `fake-cla
 2. `time_step_s` (S-E, S-G, S-H, S-K), then `run_time_s` (all but (a)).
 3. W.
 
+## Amendment 1 (2026-10-28, after the first registered run of `run_time_s`, before the corrected run of (f))
+
+The registered run of `run_time_s.rs` on bfc2600 (23:16-23:20) passed 12 of its 13 tests that are not ignored ((a)'s
+control, (b) and its control, (c)/(d) and its control, (f)'s control, (f2) and its control, (g1), (g2), (h) and its
+control); **(f) failed at its first assertion**, `(i) not drawn: Simulate for`. The texts of its frame (i), printed by the
+test, held `80.0` and `Advanced` of the time row but not its labels. A throwaway probe (`tests/zz_diag_f.rs`, run once,
+deleted, never committed) drew three frames of the same set-up: in the first frame of a fresh egui context the top panel
+is laid out at its height of the frame before (one row: clip rectangle y 23-46), so the labels of the second row (y 46-64)
+are not painted, while the field and the button are; from the second frame on the panel has its height (y 23-67) and every
+text of the row is drawn (`Simulate for`, `80.0`, `Advanced`, the step line, the indicator, and the Mesh line). In the
+window a second frame follows at once, so this is a defect of (f)'s procedure, which read the first frame of a new
+context. The same frames show the field drawn as `80.0` where (f) registered `80`.
+
+Corrected, before the corrected run (the same test names; every limit and control unchanged): (f)'s procedure draws one
+frame before it reads (i); and the code formats the "Simulate for" and "Largest step" fields with the Studio's number
+format (`viewport::fmt_num`, ADR 0148 decision 6: `80`, `7.3`, no trailing zeros) instead of egui's, so that the field
+reads as every other time on the Run page; the registered `80` stays. The corrected (f) and its control run on a build of
+this amendment's commit in a target folder of their own (`target-48s-a1`), because (a) and D2 still run from the test
+binaries of the registration's build; (a) and D2 do not draw the field. What I knew when writing this: the output of the
+first run (the passing tests' values are in the addendum) and the probe; the corrected (f) had not run.
+
 ## Changes to earlier tests
 
 None: Run of a steady case, the Start run dialog's plan and `StartPlan::new` are unchanged. Earlier tests that draw the

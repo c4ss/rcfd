@@ -576,7 +576,8 @@ fn frame(app: &mut StudioApp, ctx: &egui::Context, events: Vec<egui::Event>) -> 
 }
 
 /// (f)'s procedure: a served project with the cylinder (64 x 48) and the quick start's steady cavity; drawn frames of
-/// 1280 x 800, tooltips at once. (i) the cylinder selected, a frame; (ii) the pointer on Run (30 frames at most); (iii)
+/// 1280 x 800, tooltips at once. (i) the cylinder selected, two frames, the second read (amendment 1); (ii) the pointer on
+/// Run (30 frames at most); (iii)
 /// "Simulate for" 7.3 s (the model's call the field makes), a frame; (iv) a drawn click on Advanced, a frame, a drawn click
 /// on its checkbox (the automatic step off), Escape (the popover closes), frames; (v) a drawn click on the warning's fix, a
 /// frame; (vi) the steady cavity selected, a frame.
@@ -593,6 +594,9 @@ fn f_run(tag: &str, before: bool) -> F {
     let mut app = StudioApp::new(st, None);
     let ctx = egui::Context::default();
     ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
+    // amendment 1: a fresh context lays the top panel out at its previous (one-row) height in its first frame, which
+    // clips the second row's labels; the panel takes its height from that frame on
+    let _ = frame(&mut app, &ctx, Vec::new());
     let mut r = F {
         row: frame(&mut app, &ctx, Vec::new()),
         ..F::default()

@@ -147,7 +147,9 @@ fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
                 egui::DragValue::new(&mut n)
                     .range(1e-9..=1e12)
                     .speed(speed)
-                    .max_decimals(9),
+                    .max_decimals(9)
+                    // the Studio's number format (ADR 0148 decision 6): 80, 7.3, no trailing zeros (ADR 0153 amendment 1)
+                    .custom_formatter(|v, _| crate::viewport::fmt_num(v)),
             )
             .on_hover_text(format!(
                 "Seconds of simulated time this run ends at (solver.end_time of the run; the case says {} s). The run \
@@ -260,7 +262,8 @@ fn advanced(
                 egui::DragValue::new(&mut m)
                     .range(1e-12..=1e12)
                     .speed(speed)
-                    .max_decimals(9),
+                    .max_decimals(9)
+                    .custom_formatter(|v, _| crate::viewport::fmt_num(v)),
             );
             if r.changed() && m.is_finite() && m > 0.0 {
                 rt.max_dt = Some(m);
