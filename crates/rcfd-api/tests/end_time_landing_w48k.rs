@@ -563,7 +563,30 @@ fn w1_short_last_step_warning_is_a_run_event() {
 
 /// (variant, steps, hash) of the final state on the unfixed tree, recorded by run R1 of ADR 0145 on Windows x86_64 and
 /// written here before any fix code (R2). Other platforms print (bit-identity is per platform, ADR 0137).
-const PRE_FIX: &[(&str, usize, u64)] = &[];
+const PRE_FIX: &[(&str, usize, u64)] = &[
+    ("piso-E", 3, 0x311aed3df1158964),
+    ("piso-T", 4, 0x01f98d890f4d0ebd),
+    ("piso-J", 4, 0x40f7c7404c3ae2f8),
+    ("piso-N", 4, 0x1f630542a2b74fcf),
+    ("piso-W-", 4, 0x1fe8a48c457d1e20),
+    ("piso-W+", 4, 0x8780c099cb836647),
+    ("piso_courant-E", 3, 0x311aed3df1158964),
+    ("piso_courant-T", 4, 0x01f98d890f4d0ebd),
+    ("piso_courant-J", 4, 0x40f7c7404c3ae2f8),
+    ("piso_courant-N", 4, 0x1f630542a2b74fcf),
+    ("frozen-E", 3, 0x63676cfc5953f9d8),
+    ("frozen-T", 4, 0x3bc1517691771c5e),
+    ("frozen-J", 4, 0x80176db8fb42f4ad),
+    ("frozen-N", 4, 0x46252b23e5531c31),
+    ("variable_density-E", 3, 0xf3b7338710ebdffe),
+    ("variable_density-T", 4, 0x738dbd15049f2063),
+    ("variable_density-J", 4, 0x62911882de788a97),
+    ("variable_density-N", 4, 0x8aefb8f9adb16758),
+    ("vof-E", 3, 0x75ea9b9e2ea73dd7),
+    ("vof-T", 4, 0xff4cd23857524e32),
+    ("vof-J", 4, 0x70e5191d8baaa2af),
+    ("vof-N", 4, 0x3c97d09f38ec2228),
+];
 
 #[test]
 fn b2_final_states_equal_the_pre_fix_hashes_where_no_step_is_absorbed() {
