@@ -110,6 +110,17 @@ and 160 were not run on Linux, so the ignored series test prints and skips them 
 X0 Linux pair passes the same 1e-9 limit against the Linux run of the ADR 0108 X code, as the Windows pair does against the Windows
 log.
 
+## Addendum: results with the change (2026-10-28)
+
+Docker (same image and limits), `git archive` of the branch head a2dfecf, the 16 tests of the CI failure list: 12 pass (G6, P5,
+`cavity_paths_match_registered_hashes`, T4, L1, A1, W33B, the three B1, W0, X0 40 x 80); 4 fail as reported above (S4a, S4b,
+C3, P1). L1 printed `10 w = 90.9 ms <= budget: the budget catches a listing 55x slower than measured`.
+
+Windows (this machine, release, `git archive` of a2dfecf, own target dir): the 14 changed tests (the three B1, W0, A1, W33B, L1,
+the three `baseline_hashes` tests, T4, G6, P5, X0 40 x 80) pass and print the registered Windows values (for example G6
+8471bf9a1aef1dd4 / be64f588a252d0b4 / 04fbabedbad41768, T4 0x6eca7279950f43c3, X0 diff 0 to the 43A values). L1 asserted the
+control as before: worst listing 80.6 ms, the listing 10 times 844 ms > 500 ms. No production code changed.
+
 ## Consequences
 
 * The Linux full gate tests the same claims as the Windows gate for the tests above, against Linux values with the same provenance.
