@@ -264,6 +264,50 @@ time-series store (F-263 note), the Unix code paths of the runner on a Unix host
 * Opt-in per-step report monitors in the status stream (W48-6 (a)).
 * Studio toolchain minimum (W48-1, ADR 0131).
 
+## Amendment 1 (2026-10-28, 48A, before any registered run): set-up corrections
+
+Written by the 48A implementer after reading the code and before running A1-A8. What I knew: the code reading below; one real run
+made with main 3492c75's `rcfd-runner` for the A4 fixture; the status stream of the A7 case recorded once with main 3492c75's
+`rcfd`. `git diff 1248a76 3492c75` touches no file of `rcfd-runner`, `rcfd-project`, `rcfd-cli`, `runctl.rs` or `fieldstore.rs`, so
+those binaries are 1248a76's code. No 48A code had run. Limits are unchanged.
+
+1. A5 says the earlier tests pass unchanged; D2 and D1 make that impossible for the lines below, which are edited (pre-declared, as in
+   ADR 0128):
+   * ADR 0122 R1 negative control "an unknown event kind is refused" (`{"t": "t", "kind": "exploded"}`) contradicts D2's catch-all
+     `Other`. Replaced by two controls that the open reader still refuses: a line with neither `kind` nor `event`, and a `state` line
+     with an unknown state (`"to": "done"`). R1's other controls are kept.
+   * Struct literals of `RunRecord` (R1), `RunStatus` (R1, Q1, `listing_budget.rs` L1, `case_path_wfix.rs` R9) and
+     `EventKind::State` (R1, Q1) gain the new optional fields as `None`. No assertion changes.
+   * ADR 0123 S10 asserts the `fnv1a64:<hex>` spelling in `run.json`; D2 has the runner write `fnv64:`. S10 asserts
+     `fnv64:<the same 16 hex digits>`. `rcfd_runner::records::fnv1a64` stays as a function, now calling `rcfd_core::hash::fnv64`.
+   * ADR 0123 unit test `civil_dates_and_id_format` calls the runner's private `civil`, a copy that D1 removes. It calls
+     `rcfd_project::time::civil_from_days` with the same three dates.
+2. S1-S11, F3 and F4 read runner events by their `event` key (`launched`, `adopted`, `runner_shutdown`, `estimate`, and `state` with
+   a `state` field), and F3 writes a `launched` line that has only `event`. So that they stay unchanged, the runner writes both tag
+   forms for one release, as D2 does for `case` and `case_source`: every line has `kind` and `event` with the same name, and state
+   lines have `from`, `to` and `state`. The reader takes `kind` when present, else `event`. The runner reads both.
+3. `#[serde(alias = "case_source")]` fails with "duplicate field" on a record that holds both `case` and `case_source`, which D2 has
+   the runner write. The alias is implemented with a wire struct instead: `case` if present, else `case_source`.
+4. D2 does not say what the runner writes into `case`. It writes the project-relative path (`cases/a.toml`) when the case file is
+   inside the project, else the absolute path; `case_source` keeps the absolute path as before. Reason: `latest_finished` matches
+   project-relative paths.
+5. A2's "runner `state` lines into `State { from: None, to, reason }`" is the legacy `event` form. The new `kind` form carries
+   `from` (the state read before the change). The 3 `rcfd-project` kinds parse into their variants in both tag forms.
+6. A4 fixture: 20 steps of the 12 x 12 cavity, submitted by a copy of `rcfd-runner` with no `rcfd` next to it, so `solver_version`
+   is null as A4's limit expects ("unknown"), and run by `serve`. Copied: the run folder without `output/` (solver results, which
+   no reader of the contract reads).
+7. A7 "without the flag the stream equals the old one": compared once on this host with the recorded pre-change stream (same case,
+   path and flags) after removing `wall_s`. The CI test compares the streams without and with the flag after removing `wall_s` and
+   `monitors`, and checks that the stream without the flag has no `monitors` key.
+8. A1's negative control runs on main 3492c75 with only the new test file and a dev-dependency on `rcfd-project` added (the seam).
+   The test reads `reason` from `status.json` as JSON so that it compiles there.
+9. D5: the solver already evaluates every report after each step and appends it to its monitor store (`sim.rs`, end of `step`),
+   which `monitors.json` is written from. `--status-monitors` copies the current step's value from that store, so it adds no report
+   evaluation. The per-step cost is still measured and reported.
+10. D4 asks to check whether the hook exposes the precision: it does not (`fieldstore.rs` writes `Precision::F64`, no key). An
+    `output.store_precision` key is not added in 48A, because the Studio applies W48-5 later; recorded as a question for the
+    maintainer.
+
 ## Files
 
 This ADR. Implementation (48A): `crates/rcfd-project/src/records.rs`, `crates/rcfd-runner/src/{records,store,runner,client}.rs`,
