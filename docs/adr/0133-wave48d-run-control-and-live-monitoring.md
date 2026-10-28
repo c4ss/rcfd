@@ -257,6 +257,94 @@ replaces these two files).
 only. Negative control: R6's whole-file re-read control, unchanged. Not registered, reported: the same 50 ticks when the
 appended lines also change every run's `status.json` (as a moving run does), to show the remaining per-run open cost.
 
+## Addendum: 48D results (2026-10-28, branch `worktree-agent-a5ba74d44afbc1aaf`, release builds on the gate host)
+
+Decisions applied as accepted: W48-4 (b), W48-5 (a), W48-6 (a); the maintainer's `output.store_precision` decision. Commits
+e704a79 (amendment 1) to the commit of this addendum, on main 64732bb. All Studio tests ran in release with
+`--test-threads 1`, `rcfd` and `rcfd-runner` of the same build; the whole `rcfd-studio` suite ran once more at the end with its
+output going to a file (R9's rule), and the numbers below are from that final run unless a first run is named. Leftover
+processes after the runs: none (`rcfd`, `rcfd-runner`). The workspace gate was not run (the maintainer runs it).
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| R1 | shown state within the state sequence between the reads before and after the tick; at most 2 running or paused | 14 snapshots checked over 5 runs of 2000 steps, 0 failures, at most 2 shown running or paused, all 5 finished | pass |
+| R1 control | status read once: a finished run shown non-terminal | 5 of 5 finished runs shown queued or running | fails as required |
+| R2 | both solvers alive over the 2 s gap; reopened model lists them running, then finished; one `launched` each | alive in all 5 probe rounds; first snapshot after reopening running, running; both finished; 1 `launched` each | pass |
+| R2 control | `pid_alive` false after the solvers finished | false for both | discriminates |
+| R3 | `paused` within 2.0 s; 0 new steps while paused; moves after resume; `cancelled` within 5.0 s | paused shown after 0.261 s at step 800, still 800 after 2 s; resumed to 881; cancelled shown after 0.268 s | pass |
+| R3 control | resume mapped to pause fails the step check | no step beyond 392 within 5 s | fails as required |
+| R4 | steps 1..=20 000 exactly once, in order, after every burst; a torn line not shown before completed | 85 bursts, 42 torn tails (21 cut prefixes, 21 complete JSON without newline), 0 problems, 20 000 steps and 20 000 `lid_drag` points | pass |
+| R4 control (amendment 1) | offset moved over the torn tail loses a step | 42 of 20 000 lost | fails as required |
+| R5 | M1, M2, M3, M6 unchanged | pass (M1 worst inverse relative error 4.219e-15); M4 and the merge test pass too | pass |
+| R6 | median of 50 ticks <= 5 ms | **45.7 ms** (min 37.4, max 84.0), registered run before amendment 4; 38.9 ms when its known-miss test ran again | **miss**: `r6_..._known_miss`, ignored, limit intact |
+| R6b (amendment 4) | the same, kept read handles | median 0.710 ms (min 0.529, max 2.319); 4 files of 100 000 129 bytes, 542 470 lines each, read in 3 untimed ticks (2.3 s) | pass |
+| R6 control | whole-file re-read > 5 ms | median 1829 ms of 5 ticks (first run 2016 ms) | fails as required |
+| R7 | listed `failed`; segments of `res_u` [1..5], [7, 8]; warning naming step 6 of `u`; drawn | browser and worker `failed`, 0 skipped; segments exactly [1..5], [7, 8]; "residual u is not finite at step 6 (shown as a gap)" (and the same for `p`, `continuity` at step 9); the warning text is in the floated Plots panel's drawn shapes | pass |
+| R7 control | the pre-48A reader refuses step 6 | "invalid type: null, expected f64 at line 1 column 43" | fails as required |
+| R8 | `lid_drag` at each step bit-equal to `residuals.jsonl`; last bit-equal to `monitors.json` and `metrics.json` | 400 points (steps 1..400), 0 differ; last -1.0255672839856542e-2 in the plot, `monitors.json` and `metrics.json` | pass |
+| R8 control | `res_p` differs | last `res_p` 3.75940151343793e-13 | fails as required |
+| R9 | runner and run shown within 15.0 s | 5.166 s (runner running, run running); the time is consistent with the PowerShell wait of 5 s and the direct start (which route was taken is not recorded) | pass |
+| R9 control | no runner before the start | lock probe false; the model showed "runner not running" with the run queued | as required |
+| R10 | the `set` of (a)-(f) exactly; (a) 230 400 bytes; plans parse with their `set` | (a) `output.store_interval=4`, `output.store_precision=f32`, 100 snapshots, 230 400 bytes; (b) nothing (an explicit 0 also nothing); (c) nothing; (d) `output.store_interval=4`, 460 800 bytes; (e) `output.store_time_interval=0.003`, `output.store_precision=f32`; (f) nothing, note naming `dynamic_mesh.enabled`; at most 100 snapshots for M = 1..3000, 9 999-10 001, 10^6 | pass (after amendment 3) |
+| R10 end to end (in R8) | store at `runs/<id>/fields`, <= 100 snapshots, f32 | 100 snapshots, every field `F32`, no `output/fields` | pass |
+| R11 | absent byte-equal to `"f64"`; f32 bit-exact rounding within the bound; solver unchanged; `"f16"` refused; H1-H4, A6, A7, `baseline_hashes` unchanged | store files byte-equal; 6 snapshots, 3456 values, every f32 value equal to `f64::from(x as f32)`, worst error 0.984 of the bound; fields bit-equal with and without the key; `f16` refused at `output.store_precision`; H1-H4 4 passed, A6 and A7 pass, `baseline_hashes` 3 passed (1 ignored as before) | pass |
+| R11 control | the f32 store differs | 2592 of 3456 values differ (`store.rts` 71 355 bytes f64, 57 531 f32) | fails as required |
+| R12 | 1 run re-summarised; the browser equals `Browser::load` | 1; equal | pass |
+| R12 control | the full reload reads 500 | 500 (open and `Browser::load`) | discriminates |
+
+Before amendment 4 (the kept read handles) R1-R4, R7, R8, R10 (after amendment 3), R12 and the live parity test had run once
+and passed with the same results in kind (R1 14 snapshots, R3 paused after 0.264 s, R4 42 lost in the control, R8 the same
+bits); every one was run again on the final code (the table).
+
+ADR 0131 checks re-run on the final code, limits unchanged: B1 (8 runs, 1 skipped), B2, B3, B4 (200 frames), B5 (569 leaves,
+one more than 48B: `output.store_precision`; 477 defaults parsed), B6 (clean 0.296 s, dirty 0.302 s, control no report in 5 s),
+B7 (median 0.339 ms, control 14.5 ms), B8, B9: all pass. B9's live-monitor item is now
+`parity_run_with_live_residual_and_report_monitors` (3000 steps through the drawn app; residuals and `lid_drag` plotted while
+running; last `lid_drag` bit-equal to `monitors.json`): pass; the other three items stay ignored as in 48B.
+
+Also run: `rcfd-cli` `workspace_graph` (3), `run_flags_w48a` (A6, A7), `cli` (8), `w19c_run_control` (7); `rcfd-api` lib
+(104 passed, 2 ignored as before), `physics_schema` (11), `rules_w19c` (5, 1 ignored as before), `runctl` (6); `rcfd-mcp`
+`default_f1` (2), `project_w48f` (8); `rcfd-gui` `logic` (10; the frozen GUI reads the schema with the new key). `cargo clippy
+-p rcfd-studio -p rcfd-api --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -p rcfd-api -- --check` clean;
+`scripts/third_party_licenses.py --check` up to date.
+
+Reported, not limited:
+* R6b with every run's `status.json` replaced before each tick (as moving runs): median 6.700 ms (min 5.552, max 8.680). The
+  fresh `status.json` of each moving run is still opened every tick (about 1.5 ms each here).
+* R2 probed every about 0.4 s, not every 100 ms: each `pid_alive` runs `tasklist` (about 0.15-0.2 s), so the 2 s gap had 5
+  probe rounds of both pids.
+
+Deviations and notes:
+* R6 missed; amendment 4 changed the reader and registered R6b (same limit) before it ran. The known-miss test keeps the
+  missed set-up through the `reopen_files` switch.
+* Amendment 3: R10 case (f) was not a valid case (test-code defect), corrected before the counted run.
+* Amendment 2 said `Cargo.lock` gains two dependency lines: it gains three (`rcfd-runner`, `rcfd-tsstore`, `toml` under
+  `rcfd-studio`), no package.
+* Code beyond the Files list of the table: `project_view.rs` and `watch.rs` (R12, the incremental browser refresh), and the
+  run panels in `ui.rs` (start dialog, budgets dialog, run list with live columns, Plots with gaps and a marker hook
+  `Studio::plot_marker` for the viewport, log tail and events table, outputs with `metrics.json`).
+* The start dialog knows the cell count only for generator meshes with plain counts (`cavity_2d`, `box_2d`, `channel_2d`,
+  `wedge_2d`, `nozzle_2d`, `cylinder_ogrid`, `annulus_3d`, `annulus_3d_sector`); otherwise it shows the snapshot count and
+  "cell count unknown". Algorithms other than `piso` and `pimple` (for example `compressible`, transient or not) get the
+  step rule from `max_iterations`.
+
+Not run: the "Not in CI" items (a real window: smooth plots with two streaming runs, responsiveness with 4 runs; closing the
+Studio by hand and checking Task Manager); the Studio tests in a debug build (R6 skips there; the process tests use a quarter
+of the steps); Linux; the workspace gate and workspace-wide clippy; `cargo deny` (not installed).
+
+Questions for the maintainer:
+1. Is the R6 handling accepted: the registered R6 stays an ignored known miss, and R6b (kept read handles, registered in
+   amendment 4 after the miss) stands for the implementation?
+2. Each moving run's replaced `status.json` still costs an open per tick (about 1.5 ms here). Accept, or read the step from
+   the residual tail instead and `status.json` less often (a later change)?
+3. `rcfd-studio` uses the workspace's `toml` to find which store keys a case text sets. Accepted (no new crate), or should
+   `rcfd-api` expose that test instead?
+4. For `compressible` and other non-`piso`/`pimple` algorithms the store proposal uses `max_iterations` as the step count.
+   Should the Studio ask the solver (a check run) for the step budget instead?
+5. Adding a schema key changes `SettingsTree::content_hash`, so case containers saved before (`rcfd-io` `save_case`) fail
+   `load_case` with "settings hash mismatch" (read from code, the same for ADR 0124's keys). Leave, or make the container
+   hash ignore keys at their default (a separate change)?
+
 ## Files
 
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,
