@@ -127,6 +127,71 @@ snapshots (steps 1 and 2, from `output.store_interval=1`); the mesh-hash and sur
 in that run G1a, G1b, G4 (a-e), G5, G7, G9 and the estimate test passed (the addendum reports them); G1c's stderr was
 "checkpoint written to ...; warning: stopped after 2 iterations without meeting the tolerances".
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a1e32b5483f27b132` on main f3bf005. Registered runs: release, `--test-threads 1`, output to files,
+this machine while other agents built in parallel (timings include that load), the five adapters of ADR 0125 step 0
+(NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no GPU test took the SKIP branch.
+`tests/preview_g1.rs` ran on ce0e7b5 (G1c failed on its set-up: amendment 1) and G1c again on b010776;
+`tests/preview_cost_g1.rs` and `tests/preview_gpu_g1.rs` ran on b010776. Then 1e7e691 changed code after the registered
+runs (below), and the whole `rcfd-studio` suite, these tests included, ran again on 1e7e691: 93 passed, 0 failed, 2
+ignored (the two known misses that were ignored before: the tutorials parity item and R6). Every G check passed there
+with the same results; its timings: G3 1,891 frames during an 11.31 s build, median 0.624 ms, max 7.1 ms (control one
+frame of 10,622.7 ms); G5 B shown after 0.007 s, A's thread 12.22 s, A never shown (control: shown in 2 drains); G8
+median 1.752 ms (control 73.030 ms); G10 NVIDIA 36.3 / 43.3 ms (Vulkan / DX12), AMD 40.6 / 53.5 ms, WARP 35.3 ms
+(control 218.9 / 241.6, 185.1 / 193.5, 176.1 ms). The table gives the registered runs.
+
+| Id | Measured | Limit | Status |
+|---|---|---|---|
+| G1a | 10 of 10 TOML cases identical to `Simulation::new`'s mesh (hash, counts, patches, surface bit for bit, 2D flag, start camera); `Simulation::new` set up every case (no `build_mesh` fallback). Cells / surface triangles / 2D: `axial_fan_cgrid` 11,536 / 6,660 / 3D, `axial_fan_sector` 13,332 / 7,692 / 3D, `kepsilon_channel` 56 / 112 / 2D, `kepsilon_inlet` 288 / 576 / 2D, `profile_inlet` 480 / 960 / 2D, `sst_channel` 240 / 480 / 2D, `packed_bed` 320 / 640 / 2D, `rotating_channel` 160 / 320 / 2D, `sod` 100 / 200 / 2D, `wedge` 1,200 / 2,400 / 2D; preview build 0.002-0.095 s (the fan cases 0.091 and 0.095 s) | equal | pass |
+| G1a controls | `profile_inlet.toml` with base `.`: "line 28: tables.inlet_u.file: cannot read table file .\profile_inlet.csv ..."; wedge `nx` 60 to 61 changes the hash | refused; differs | fail as required |
+| G1b | cavity (256 cells, 2D, orthographic start camera) and hex box (64 cells, 3D, perspective): equal to `Simulation::new` and to the store surface (256 and 96 faces); the viewport shows the preview's `Arc` with the store surface's start camera | equal | pass |
+| G1b control | hex case with base `.`: "mesh.file: .\../meshes/hex.msh: io error: The system cannot find the path specified." | does not build | fails as required |
+| G1c (amendment 1) | `rcfd run` as the runner starts it: exit 5 (not_converged) for both, stored steps [1, 2]; mesh hashes 7008c46b788655b3 (cavity) and 81176da887c0f68b (hex) equal to the preview's, store surfaces equal bit for bit | exit 0 or 5; equal | pass |
+| G1c first run | exit 5 refused by the registered "exit 0" (set-up defect) | | superseded |
+| G2 | every adapter: 96 of 96 faces visible in one of the two views name their patch (inlet 16, outlet 16, walls 64); the 3 readouts drawn in the app | as registered | pass |
+| G2 control | 80 wrong names through the reversed part list, every adapter | >= 1 | fails as required |
+| G3 | 2,586 frames over 18.20 s while 1,000,000 cells built (build 18.16 s); median 1.291 ms, max 46.1 ms | median <= 8 ms, max <= 250 ms; >= 20 frames, build >= 0.5 s | pass |
+| G3 control | build on the UI thread: one frame of 16,901.8 ms | > 250 ms | fails as required |
+| G4a | "cases/bad.toml: line 2: unclosed table, expected `]`"; nothing shown | as registered | pass |
+| G4b | "cases/nofile.toml: mesh.file: <project>\cases\../meshes/missing.msh: io error: The system cannot find the file specified. (os error 2)"; "cases/sector.toml: mesh.r_out: annulus_3d_sector needs r_out > r_in (r_in = 1, r_out = 0.5)" | as registered | pass |
+| G4c | "cases/huge.toml: about 900,000,000 cells (from the mesh.n* counts of generator "box_2d"), more than the preview limit of 2,000,000" in 0.006 s, no mesh built; limit 100: the cavity refused, built once after "build anyway" (256 cells) | as registered | pass |
+| G4d | "cases/hex.toml: the surface has 192 triangles, more than the preview limit of 100 (uploading it pauses the window)", not shown; shown after "show anyway", no rebuild (builds and requests unchanged) | as registered | pass |
+| G4e | "viewport: no adapter (wgpu: no adapter for back ends Backends(0x0))", the counts line, `inlet`, `outlet`, `walls` and "no GPU attached" drawn in 20 of 20 frames | as registered | pass |
+| G5 | B shown 0.007 s after its request; A's thread ended 10.68 s after A's request (stopped after `build_mesh`); A shown after B in 0 drains; 1 result discarded; the viewport shows B | 0 drains; <= 2 s; >= 1 | pass |
+| G5 control | generation check off: A shown after B in 2 drains (A's thread 10.78 s) | A shown | fails as required |
+| G6 | every adapter: texture 461 x 364 byte-identical to the offscreen render for the hex box and the cavity; cavity: 64 of 64 outline midpoints have the front colour 3 px inside and the background 3 px outside | byte-identical; 64 of 64 | pass |
+| G6 controls | other part styles: 54,460 (hex) and 66,306 (cavity) pixels differ; 3 px outside is not the front colour at 64 of 64 | differ | fail as required |
+| G7 | 10 TOML cases build (G1a); the 6 descriptors refused, 7-9 located diagnostics each, the first an "unknown setting" (`description` or `boundary_conditions`) | as registered | pass |
+| G8 | 19,999 cell edges and 398 outline segments rebuilt every frame: median 2.210 ms (max 3.4 ms) over 100 frames; overlay mesh 81,588 vertices | <= 8 ms | pass |
+| G8 control | 1,001,500 edges and 3,000 outline segments: median 75.303 ms over 10 frames | > 8 ms | fails as required |
+| G9 | 64 of 64 outline midpoints name `lid` (y = 1) or `walls`; "patch lid (wall), boundary" drawn | as registered | pass |
+| G9 control | no outline and no "..., boundary" readout at the image centre | none | fails as required |
+| G10 | upload frame at 250,000 triangles: NVIDIA Vulkan 39.5 ms, NVIDIA DX12 50.3 ms; AMD Vulkan 54.0 ms, AMD DX12 45.7 ms, WARP 39.3 ms (reported) | <= 100 ms on `DiscreteGpu` | pass |
+| G10 control | 1,000,000 triangles: NVIDIA Vulkan 231.9 ms, DX12 264.4 ms; AMD 196.6 / 221.2 ms, WARP 200.3 ms | > 100 ms on `DiscreteGpu` | fails as required |
+| G11 | on 1e7e691: the ADR 0131-0134 checks of the suite pass with their earlier values (B7 median 0.366 ms, control 14.678 ms; V2 max difference 1, control 2048 of 2048; V9 drawn in 20 of 20 frames; V10 531 x 379 byte-identical, uploads 1, scalar updates 3, renders 4; the B9 parity hover `value 1.1092974268256817  (face 0, cell 0)`; every other B, V, R and E test and the parity tests pass, R6 and the tutorials item stay ignored); `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean; `scripts/third_party_licenses.py --check`: up to date; `git diff f3bf005` touches no `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` or `docs/architecture.md` | pass unchanged | pass |
+
+No known miss. Unregistered: `estimate_equals_the_built_cells` (the estimate equals the built cells for the 10 listed
+generators; a missing mesh file is `Unknown`) passed; `rebuilds_after_a_save_and_an_external_change` (1e7e691, watcher
+on) passed: an unsaved edit of `mesh.nx` left the preview at 256 cells with no request, the save rebuilt it (320 cells),
+an external replacement of the file rebuilt it again (384 cells), 3 requests in all.
+
+**Deviations and notes.**
+* Amendment 1 (G1c set-up). After the registered runs, in 1e7e691 (found in review, not by a test): watcher changes seen
+  while no case is asked for no longer count when a case is asked for later (they could cause one superfluous rebuild),
+  a "Rebuild" button (a mesh file outside the project is not watched), and the unregistered rebuild test. The whole
+  suite ran again on 1e7e691 (above).
+* Building 1,000,000 cells took 10.7-12.2 s up to the end of `build_mesh` (G5) and 11.3-18.2 s in all (G3) on this
+  machine while other builds ran, so the registered 2,000,000-cell limit admits builds of tens of seconds (the window
+  stays responsive, G3); see question 6.
+* Not run: a real window (the view-and-report checklist is the maintainer's), so the overlay and legend on a real swap
+  chain and high-DPI are unchecked; Linux and the CI skip branch of the new GPU tests; debug builds of the new tests (G3,
+  G5, G8 and G10 print `SKIP` in debug); the workspace gate and workspace-wide clippy; `cargo deny` (not installed; no
+  dependency changed).
+* The existing chat tests (ADR 0134) need `fake-claude` of this profile (`cargo build --release -p rcfd-claude --bin
+  fake-claude`); the first suite run on b010776 stopped at them for that reason only (a set-up of that suite, not a
+  failure of this change). It was built before the suite run on 1e7e691.
+
 ## Not in CI
 
 * A person looking at the real window: colours, the overlay on a real swap chain, high-DPI, the feel of orbiting a fan
@@ -146,7 +211,8 @@ in that run G1a, G1b, G4 (a-e), G5, G7, G9 and the estimate test passed (the add
 4. Click a 3D case (`axial_fan_sector`, `axial_fan_cgrid`): patch colours with flat shading, orbit with the left drag,
    hide a patch with its legend checkbox, try "single colour"; hover names the patch. Note how long the first picture
    takes.
-5. Edit `mesh.nx` in the case editor: the panel says unsaved edits are not shown; save: the preview rebuilds.
+5. Edit `mesh.nx` in the case editor: the panel says unsaved edits are not shown; save: the preview rebuilds. "Rebuild"
+   reads the case and its mesh file again (a mesh file outside the project is not watched).
 6. Write a case with `[mesh] source = "file"` and a missing file, or `nx = 3000`, `ny = 3000` on `box_2d`: the located
    error, or the "too large" message with "Build anyway" (only click it with memory to spare).
 7. Select a run: the viewport shows its fields as before. (Getting back to the case mesh needs a project reopen; see
