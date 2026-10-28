@@ -95,21 +95,45 @@ fn cases() -> Vec<(&'static str, PimpleSolver)> {
 
 #[test]
 fn defaults_are_bit_identical_to_the_code_before_wave_33b() {
-    let expected: [(&str, &str); 5] = [
+    // Recorded on Windows. The Taylor-Green initial fields call the platform's libm (sin, cos), so their fingerprints differ
+    // per platform: x86_64 Linux values proven equal at the amendment-1 code (c4a593d) and at HEAD (ADR 0137); other platforms
+    // print and skip. The cavity fingerprints are the same on both.
+    let windows: [(&str, &str); 5] = [
         ("tg piso bdf2", "e9dca234e513bec8"),
         ("tg pimple2 euler", "72d935a8d4993955"),
         ("tg frac bdf2", "e46fbe511183e9fc"),
         ("cavity piso bounded", "c21a6553acb2a7a6"),
         ("cavity pimple2 bdf2", "2c71144215f1d245"),
     ];
+    let linux_x86_64: [(&str, &str); 5] = [
+        ("tg piso bdf2", "793cc167a5c8dce3"),
+        ("tg pimple2 euler", "7a9cd18ebf2fcbc2"),
+        ("tg frac bdf2", "275aa31d35e717ff"),
+        ("cavity piso bounded", "c21a6553acb2a7a6"),
+        ("cavity pimple2 bdf2", "2c71144215f1d245"),
+    ];
+    let expected = if cfg!(windows) {
+        Some(windows)
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some(linux_x86_64)
+    } else {
+        None
+    };
     let mut bad = Vec::new();
-    for ((name, s), (ename, efp)) in cases().iter().zip(expected) {
-        assert_eq!(*name, ename);
+    for (i, (name, s)) in cases().iter().enumerate() {
         let fp = format!("{:016x}", fingerprint(s));
         println!("FINGERPRINT {name} {fp}");
+        let Some(expected) = expected else {
+            continue;
+        };
+        let (ename, efp) = expected[i];
+        assert_eq!(*name, ename);
         if fp != efp {
             bad.push(format!("{name}: {fp} != {efp}"));
         }
+    }
+    if expected.is_none() {
+        eprintln!("no recorded fingerprints for this platform (printed above)");
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }

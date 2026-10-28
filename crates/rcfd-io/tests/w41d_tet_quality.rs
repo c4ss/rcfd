@@ -66,42 +66,89 @@ fn fingerprint(tm: &TetMesh) -> (usize, u64) {
     (tm.cells.len(), tm.to_mesh(&BTreeMap::new()).unwrap().content_hash())
 }
 
+/// The expected fingerprint on this platform (ADR 0137). The registered values were recorded on Windows; the surfaces call the
+/// platform's libm (`sin`, `cos`), so coordinates, cell counts and hashes differ per platform. The x86_64 Linux value was proven
+/// equal at the reference commit and at HEAD in one container (ADR 0137); other platforms print the fingerprint and skip.
+fn on_platform(windows: (usize, u64), linux_x86_64: (usize, u64)) -> Option<(usize, u64)> {
+    if cfg!(windows) {
+        Some(windows)
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some(linux_x86_64)
+    } else {
+        None
+    }
+}
+
 /// W0: default options give the fingerprints (cell count, `Mesh::content_hash`) recorded at HEAD a2e0bfd before any library
 /// change (the ADR 0104 smoke table), so the default output is bit-identical.
 #[test]
 fn w0_default_output_bit_identical() {
     let cases = [
-        ("cube", cube(2.0, 2), None, (108, 2507394269494118308)),
-        ("sphere", icosphere(1.0, 2), None, (320, 15939201240145194707)),
-        ("torus", torus(2.0, 0.5, 24, 12), None, (899, 826700040160655771)),
-        ("cyl_in_box", in_code(), None, (1137, 9960403326714801105)),
+        (
+            "cube",
+            cube(2.0, 2),
+            None,
+            on_platform((108, 2507394269494118308), (108, 2507394269494118308)),
+        ),
+        (
+            "sphere",
+            icosphere(1.0, 2),
+            None,
+            on_platform((320, 15939201240145194707), (320, 15939201240145194707)),
+        ),
+        (
+            "torus",
+            torus(2.0, 0.5, 24, 12),
+            None,
+            on_platform((899, 826700040160655771), (910, 9410422296272373650)),
+        ),
+        (
+            "cyl_in_box",
+            in_code(),
+            None,
+            on_platform((1137, 9960403326714801105), (1134, 10856385456967318595)),
+        ),
         (
             "p1_in_code",
             curvature_remesh(&in_code()),
             None,
-            (1061, 1192961234831520497),
+            on_platform((1061, 1192961234831520497), (1100, 8442970156282097805)),
         ),
         (
             "s2_stl",
             curvature_remesh(&from_stl_file()),
             None,
-            (1115, 7631245200477700787),
+            on_platform((1115, 7631245200477700787), (1022, 10466773633785522690)),
         ),
-        ("sphere_h0.3", icosphere(1.0, 2), Some(0.3), (823, 4586941130221034709)),
+        (
+            "sphere_h0.3",
+            icosphere(1.0, 2),
+            Some(0.3),
+            on_platform((823, 4586941130221034709), (823, 4586941130221034709)),
+        ),
         (
             "sphere_h0.25",
             icosphere(1.0, 2),
             Some(0.25),
-            (1277, 9750081027263524416),
+            on_platform((1277, 9750081027263524416), (1277, 9750081027263524416)),
         ),
-        ("cube4_h0.5", cube(2.0, 4), Some(0.5), (597, 11005660464813738162u64)),
+        (
+            "cube4_h0.5",
+            cube(2.0, 4),
+            Some(0.5),
+            on_platform((597, 11005660464813738162u64), (597, 11005660464813738162)),
+        ),
     ];
     for (n, s, size, want) in cases {
         let o = TetOptions {
             size,
             ..Default::default()
         };
-        assert_eq!(fingerprint(&tetrahedralize(&s, &o).unwrap()), want, "{n}");
+        let got = fingerprint(&tetrahedralize(&s, &o).unwrap());
+        match want {
+            Some(w) => assert_eq!(got, w, "{n}"),
+            None => eprintln!("{n}: no recorded fingerprint for this platform; {got:?}"),
+        }
     }
 }
 

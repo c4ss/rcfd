@@ -302,29 +302,37 @@ fn b1(full: bool, cd: bool, hf: bool, exact: bool) {
 const X43A_EY: [f64; 3] = [0.002053058745789871, 0.0012840785484355965, 0.0018457966779672486];
 const X43A_EV: [f64; 3] = [0.0015273890756644926, 0.0007790117810689556, 8.49155348201236e-5];
 
+/// The ADR 0108 X errors (e_y, e_v) on grid `i` for this platform (ADR 0137). The registered values above are from the Windows
+/// log. The bubble's initial field and mesh call the platform's libm, so the last digits differ per platform: on x86_64 Linux the
+/// 40 x 80 values are those of the ADR 0108 X run made at its code (132c0da) in a Linux container, bit-identical to the HEAD default
+/// run there; 80 and 160 were not run on Linux. `None`: no recorded value for this platform and grid (print and skip).
+fn x43a(i: usize) -> Option<(f64, f64)> {
+    if cfg!(windows) {
+        Some((X43A_EY[i], X43A_EV[i]))
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) && i == 0 {
+        Some((0.002053061866984063, 0.0015273879501069287))
+    } else {
+        None
+    }
+}
+
 /// ADR 0114 (3): the X set-up with no option flag assigned (the library defaults) on grid `i` of 40, 80, 160; asserts the
 /// ADR 0108 X errors to 1e-9.
 fn default_matches_x43a(i: usize) -> (f64, f64, f64, f64, f64) {
     let n = [40, 80, 160][i];
     let r = run_solver(n, 3.0, bubble_with(n, true, &|_| {}));
     let (ey, ev) = ((r.0 - YC_REF).abs(), (r.1 - V_REF).abs());
+    let Some((x_ey, x_ev)) = x43a(i) else {
+        println!("X0 {n}: e_y {ey:?}, e_v {ev:?}; no recorded ADR 0108 X value for this platform and grid");
+        return r;
+    };
     println!(
-        "X0 {n}: e_y {ey:?} (43A {:?}, diff {:.2e}), e_v {ev:?} (43A {:?}, diff {:.2e}) (limit 1e-9)",
-        X43A_EY[i],
-        (ey - X43A_EY[i]).abs(),
-        X43A_EV[i],
-        (ev - X43A_EV[i]).abs()
+        "X0 {n}: e_y {ey:?} (43A {x_ey:?}, diff {:.2e}), e_v {ev:?} (43A {x_ev:?}, diff {:.2e}) (limit 1e-9)",
+        (ey - x_ey).abs(),
+        (ev - x_ev).abs()
     );
-    assert!(
-        (ey - X43A_EY[i]).abs() <= 1e-9,
-        "X0 {n} y_c(3) error {ey} vs {}",
-        X43A_EY[i]
-    );
-    assert!(
-        (ev - X43A_EV[i]).abs() <= 1e-9,
-        "X0 {n} V_c,max error {ev} vs {}",
-        X43A_EV[i]
-    );
+    assert!((ey - x_ey).abs() <= 1e-9, "X0 {n} y_c(3) error {ey} vs {x_ey}");
+    assert!((ev - x_ev).abs() <= 1e-9, "X0 {n} V_c,max error {ev} vs {x_ev}");
     r
 }
 
