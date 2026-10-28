@@ -158,7 +158,7 @@ impl Studio {
     }
 
     /// Hand the editor's content to the worker for a save with the base-hash rule. Refused in the conflict state (resolve
-    /// it first) and while a save is in flight.
+    /// it first), while a save is in flight, and when there is nothing to save.
     pub fn save_case(&mut self) -> Result<(), String> {
         let (Some(p), Some(ed)) = (&self.project, &mut self.editor) else {
             return Err("no case is open".into());
@@ -168,6 +168,9 @@ impl Studio {
         }
         if ed.saving {
             return Err(format!("{}: a save is in progress", ed.rel));
+        }
+        if !ed.is_dirty() {
+            return Err(format!("{}: nothing to save", ed.rel));
         }
         let bytes = ed.to_bytes()?;
         ed.saving = true;

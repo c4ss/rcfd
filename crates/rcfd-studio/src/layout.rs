@@ -107,9 +107,12 @@ pub fn float(s: &mut DockState<Panel>, p: Panel) {
     s.add_window(vec![p]);
 }
 
-/// Serialise the layout.
+/// Serialise the layout. Positions that are not laid out yet (NaN or infinite, written as `null`) are written as 0, as
+/// [`from_json`] reads them, so a saved layout reads back to the same text (Studio change to the copied module).
 pub fn to_json(s: &DockState<Panel>) -> Result<String, String> {
-    serde_json::to_string(s).map_err(|e| e.to_string())
+    let mut v = serde_json::to_value(s).map_err(|e| e.to_string())?;
+    repair_positions(&mut v);
+    serde_json::to_string(&v).map_err(|e| e.to_string())
 }
 
 /// Restore a layout. Rejects layouts that are empty, contain a panel twice, or fail to parse;
