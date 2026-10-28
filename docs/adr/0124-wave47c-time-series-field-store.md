@@ -227,3 +227,7 @@ Corrected runs (2026-10-28, release, this machine, after commit d4f4ba4; local r
 Not verified: the CI runner. Its next gate run prints the 5 opens right after the write and after the flush, which tells whether
 the 0.126 s was transient after the write (corrected test passes) or a property of the runner (it misses again, and is then a known
 miss as stated above).
+
+Correction to the line above (2026-10-28): `scripts/gate_test.py` prints a test's output only when it fails, so the gate shows these
+diagnostics only on a miss. A pass in CI says that the opens of a flushed store are inside the limit; it does not say whether the
+0.126 s was transient after the write. That needs a `--nocapture` run of `..._at_rest` (or of the known miss) on the runner.
