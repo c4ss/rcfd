@@ -364,10 +364,12 @@ fn d1_cylinder_64x48() {
     d_limits("D1", 80.0, &a, &f, 0.03);
 }
 
-/// D2: the cylinder at 256 x 256 (the maintainer's refinement) to 3 s; metric: `cd` at the end.
+/// D2: the cylinder at 256 x 256 (the maintainer's refinement) to 3 s; metric: `cd` at the end. A known miss (ADR 0153
+/// amendment 3): the fixed run F ended at 2.999999999999983, not 3 bit for bit (its 2,567 steps fall short by 1.7e-14,
+/// within the solver's 1e-12 end tolerance, where ADR 0145 stretches nothing); the adaptive run met every limit of its own.
 #[test]
-#[ignore = "heavy: ADR 0153 D2 (about 20 minutes)"]
-fn d2_cylinder_256x256() {
+#[ignore = "heavy, and a known miss: ADR 0153 D2 (about 25 minutes; F's end time, amendment 3)"]
+fn d2_cylinder_256x256_known_miss() {
     let (text, dir) = (ts::cylinder(256, 256), ts::wind_tunnel_cases());
     let a = d_run("d2", &text, &dir, 3.0, StepMode::Adaptive, &last("cd"));
     let f = d_run("d2", &text, &dir, 3.0, StepMode::Fixed, &last("cd"));

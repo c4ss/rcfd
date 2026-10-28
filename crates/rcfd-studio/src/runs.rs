@@ -188,7 +188,7 @@ pub struct StorePlan {
 }
 
 /// Everything the start dialog passes to [`rcfd_runner::client::Client::start`].
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct StartPlan {
     /// Project-relative case path (`cases/...`).
     pub case: String,
@@ -210,6 +210,26 @@ pub struct StartPlan {
     /// store keys and before the user's overrides. `None` for every plan but Run's of a transient case. Boxed so that
     /// the run worker's updates stay small.
     pub time: Option<Box<crate::time_step::TimePlan>>,
+}
+
+impl std::fmt::Debug for StartPlan {
+    /// The derived form, with `time` only when it is set: a plan without Run's time settings prints as before ADR 0153
+    /// (ADR 0152 DV6 compares the text of unedited plans with its record; ADR 0153 amendment 3).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut d = f.debug_struct("StartPlan");
+        d.field("case", &self.case)
+            .field("facts", &self.facts)
+            .field("store", &self.store)
+            .field("note", &self.note)
+            .field("priority", &self.priority)
+            .field("threads", &self.threads)
+            .field("mem_mb", &self.mem_mb)
+            .field("extra_set", &self.extra_set);
+        if let Some(t) = &self.time {
+            d.field("time", t);
+        }
+        d.finish()
+    }
 }
 
 fn steady(alg: &str) -> bool {

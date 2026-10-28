@@ -305,6 +305,27 @@ before) and the known-miss test itself (the registration's layout misses (iv)). 
 this amendment's commit in `target-48s-a1`, as do W's suite and lints. What I knew when writing this: the output of that run
 (its values are in the addendum); f3 had not run.
 
+## Amendment 3 (2026-10-28, after W's first run and D2, before W's corrected run)
+
+1. **W** on 31ba296 (amendment 2's build, 23:29-23:41): 59 test binaries, 268 passed, **1 failed**, 11 ignored. The failure
+   is ADR 0152's `saved_store_r::dv6_unedited_plans_are_bit_identical` (a): it compares the `Debug` text of the start plans
+   of 22 unedited cases with its record made on 6867e40, and this job's new field `StartPlan::time` (`None` in every such
+   plan) appears in the derived text (`..., extra_set: [], time: None }`), so the text differs while the plan does not
+   (its `set()`, settings and every field the record holds are equal). A defect of this job's code against an earlier
+   registered limit. Fix (the code of this amendment): `StartPlan` prints as the derived form did and adds `time` only when
+   it is set (a `Debug` impl written out); DV6 and its record are not touched. W runs again, whole, on this amendment's
+   commit (the corrected run), in `target-48s-a1`.
+2. **D2** (bfc2600, 23:13-23:39): the adaptive run met every limit of its own (it ended at 3 bit for bit, its step grew from
+   0.00116 to 0.00354 s, Courant 0.147 at step 1 and at most 0.4501 after step 10, `cd` 1.46727 against F's 1.46430, 0.20 %),
+   but **F missed R1**: it ended at 2.999999999999983, not 3 bit for bit: 2,567 additions of 3/2567 fall short by 1.7e-14,
+   which the solver's end test takes as reached (its absolute tolerance 1e-12), so ADR 0145's stretching, which acts on
+   remainders above that tolerance, does not fire. By the house rule D2 is the ignored `d2_cylinder_256x256_known_miss`
+   with its limits intact. The registered decision rule ("A when D1-D4 all meet their limits") let F's own end-time limit
+   gate A; read literally it falls through to "neither is the default", since F misses R1 on D2. This job keeps A as the
+   code's default, as at registration: A met every limit of its own on D1-D4, and F's miss is a further reason against F
+   (a fixed step need not end on N bit for bit, while A's landing snaps the time onto it). The maintainer is asked to
+   confirm (question 7). No run follows from this point.
+
 ## Changes to earlier tests
 
 None: Run of a steady case, the Start run dialog's plan and `StartPlan::new` are unchanged. Earlier tests that draw the
