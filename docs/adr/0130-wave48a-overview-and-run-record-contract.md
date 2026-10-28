@@ -324,6 +324,63 @@ those binaries are 1248a76's code. No 48A code had run. Limits are unchanged.
    has its store at `runs/<id>/fields` and the step's `lid_drag` in every `residuals.jsonl` line, the last bit-equal to
    `monitors.json`).
 
+## Addendum: 48A results (2026-10-28, branch `worktree-agent-a7343ce2cb3186342`, release builds on the gate host)
+
+Decisions taken as accepted: D3 (b) `--store-dir`, D5 (a) `--status-monitors`, D4 (a) is applied by the Studio later (nothing
+here). Commits 7f0555b..7168e80 on main 3492c75; the Windows numbers below are from afb8efc and were re-run on 7168e80
+(rcfd-runner and rcfd-project: same results, A1 6/0/0, S7 0.143 s). No new third-party dependency; new workspace edge `rcfd-runner -> rcfd-project`.
+The workspace gate was not run (the maintainer runs it); each touched crate was built, tested and linted alone.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| A1 | 6 listed, 0 skipped; `validate()` empty; states equal `status.json`; failed and cancelled carry `reason` | 6 listed, 0 skipped, 0 issues; finished (60 steps), failed (killed at step 669, "solver process ... ended without a finish event (exit code 1) ..."), cancelled queued ("cancelled before launch"), cancelled running ("... stopped cleanly after step 935"), paused (step 1204), running (step 1372); every summary state equals `status.json` | pass |
+| A1 control | pre-change reader: skipped = 6 | on 3492c75 plus the test file and the dev-dependency: listed 0, skipped 6 ("run.json: missing field `case`"), `validate()` 12 issues (`case` in `run.json`, `kind` in `events.jsonl`) | fails as required |
+| A2 | 9 runner kinds and 3 `rcfd-project` kinds in both tag forms parse as mapped; re-serialised lines equal | 32 lines (8 kinds x 3 tag forms, 2 runner `state` lines, 3 kinds x 2 forms) parse and round-trip; the JSONL reader reads the file | pass |
+| A2 control | closed reader fails on a runner line | the copy of the pre-change `EventKind` refuses 28 of 32 lines and the file | fails as required |
+| A3 | `null` reads as NaN; listed; finite lines bit-exact | status time, `metrics.dp`, residual `time`, `p` and monitor `m` NaN; listed 1, skipped 0; the two finite lines (`-0.0`, `5e-324`, `1e300`, `0.30000000000000004`, `2.2250738585072014e-308`) bit-equal to the pre-change reader's | pass |
+| A3 control | pre-change reader: skipped | on 3492c75: listed 0, skipped 1 ("status.json: invalid type: null, expected f64") | fails as required |
+| A4 | listed, `case` from `case_source`, `solver_version` unknown, `validate()` 0 issues | listed 1 (finished, 20 steps), `case` = the absolute `case_source`, `solver_version` "unknown", 0 issues, 8 events read | pass |
+| A4 control | without the alias skipped; without the legacy spelling one snapshot issue | on 3492c75: skipped 1 ("run.json: invalid type: null, expected a string", the null `solver_version` fails first, so the pre-change `validate()` never reached the hash check); in the test the pre-change record type refuses `run.json`, and the pre-change hash comparison (`hash_bytes(snapshot) != recorded`) differs although the 16 hex digits are equal. The "one snapshot issue" of the pre-change `validate()` is therefore shown by that comparison, not by a `validate()` run | alias control fails as required; hash control approximated |
+| A5 | earlier tests pass unchanged (amendment 1 edits) | rcfd-project 34 passed, 1 ignored (ADR 0122 amendment 1); rcfd-runner S1-S11 13 passed, S5 ignored (known miss); F1, F3, F4, F6, F11, F15, F17 and the unit tests pass (S1 max 2/2, control 3/3; S2 [2,0,1,3]/[0,1,2,3]; S3 0.063 s; S4b 0.730 s; S4c 0.103 s; S6 paused in 0.053 s, 0 steps held, bitwise; S7 0.141 s; S8 one runner, exit 3; F6 24 ticks, 99,624 lines); rcfd-project R9, W2, root wfix pass; rcfd-api `baseline_hashes` 3 passed (1 ignored as before), `fieldstore_w47c` H1-H4 pass, `runctl` 6, `rules_w19c` 5 (1 ignored as before); rcfd-cli `run_control`, `cli`, `w19c_run_control` pass. Not run here: rcfd-claude, rcfd-tsstore, rcfd-render (untouched) and the rest of rcfd-api (findings 14 and 16a) | pass (touched crates) |
+| A6 | H1-H4 unchanged; store at the flag's folder, bit-exact; without the flag byte-identical | H1-H4 pass; `index.json` and `store.rts` (66,309 bytes) byte-equal to `<out>/fields`, the 5 other output files byte-equal, no `<out>/fields` with the flag; once against 3492c75's `rcfd`: all 7 output files byte-equal without the flag | pass |
+| A6 control | the store is not at the folder without the flag | without the flag the folder does not exist | fails as required |
+| A7 | last `monitors.lid_drag` equals `monitors.json` bit-exactly; without the flag the stream equals the old one; `baseline_hashes` passes | 88 iteration events, every one with `lid_drag`; last -8.53727970341123e-3 bit-equal to `monitors.json`; the stream without the flag equals the flagged one without `monitors`; once against 3492c75's `rcfd`: 91 of 91 lines text-equal without `wall_s` and `elapsed_s`; `baseline_hashes` passes | pass |
+| A7 control | no `monitors` key without the flag | none in 91 lines | fails as required |
+| A8 | 3 tests pass with the new layers | 3 passed | pass |
+| A8 control | `rcfd-runner` at layer 1 fails `layering_matches_architecture_doc` | throwaway edit: "rcfd-runner must not depend on rcfd-project", restored | fails as required |
+
+No known miss. Reported, not limited:
+* D5 cost: the 96 x 96 lid case (9,216 cells), 300 steps, 1 thread, 3 runs each: 8.25, 8.23, 8.38 s without the flag, 8.55,
+  8.28, 8.24 s with it; mean +0.07 s, about 0.24 ms per step (0.9 %), within the run-to-run spread. The flag reads stored values.
+* Through the run service (amendment 2 item 4): 88 residual lines each with `lid_drag`, the last bit-equal to `monitors.json`;
+  the store at `runs/<id>/fields/store.rts`, no `output/fields`.
+
+Deviations and notes:
+* The first test run of the switched runner (before it counted) put each residual line through `jsonl::Appender::open`: F6 took
+  523 s and S3, S4a, S4b, S4c, S6 and S7 failed because the runner fell behind its solvers (opening a growing file for reading
+  costs about 15 ms here). Fixed before the run above: one open per drain (`RunStore::append_residuals`, a default method), no
+  fsync, as before. The unit-test binary, F6 included, then took 0.75 s.
+* The first pre-change A1 attempt used 50,000,000 steps for the endless runs, above the solver's cap of 10,000,000 (exit 3); a
+  test-code defect, corrected before every A1 run counted here.
+* Linux (Docker `rust:1.99-bookworm` with `--init`, debug build, git-archive copy of 7168e80): rcfd-project all pass except L1;
+  rcfd-runner unit, `contract_w48a` (A1, D3/D5), `runner_wfix` and `no_window_scan` pass; `runner_w47b` 11 passed, S4a and S4b
+  failed in 4 of 4 runs; rcfd-cli `run_flags_w48a` (A6, A7) and `workspace_graph` pass. L1, S4a and S4b fail the same way on
+  3492c75 in the same container (pre-change copy), so they are not caused by 48A; not investigated further (GitHub CI is the
+  reference for Linux). S7 failed in 2 of 3 Linux runs of an intermediate commit (ba7e834): the final `status.json` became
+  visible before its state event and before the request files were removed, because `rcfd-project`'s atomic write fsyncs the
+  file and then the directory after the rename. Fixed in 7168e80 by `atomic::atomic_write_unsynced` (new, additive) for the
+  runner's `status.json`, and events appended without fsync: the runner's write timing is as before the switch. S7 then passed
+  4 of 4 on Linux and on Windows.
+* Behaviour of the runner that changed with the switch, besides the contract: `run.json`, `case.snapshot`, the creation event and
+  `metrics.json` are written with fsync (`rcfd-project`'s helpers); `status.json`, later events and `residuals.jsonl` are not,
+  as before (ADR 0123 limit); temp files are `.<name>.<pid>.<n>.tmp`; JSON files end with a newline; a missing record is reported at once instead of after 1 s of
+  retries; run ids are checked by `runid::is_run_id` (22 characters, lowercase hex), which refuses ids of other shapes that
+  `check_id` let through.
+* Found, not fixed (present at 1248a76): `rcfd-runner serve --project <relative path>` fails every run, because the solver
+  runs in the run folder and is given relative paths. Seen while making the A4 fixture (which then used an absolute path).
+* Question for the maintainer (amendment 1 item 10): add an opt-in `output.store_precision` key now, or with the Studio start
+  dialog (48C/48D)?
+
 ## Files
 
 This ADR. Implementation (48A): `crates/rcfd-project/src/records.rs`, `crates/rcfd-runner/src/{records,store,runner,client}.rs`,
