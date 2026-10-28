@@ -3,6 +3,7 @@
 
 use rcfd_claude::allow::{check_args, check_args_in, pinned_mcp_config, suggest, PINNED_SERVER, PROJECT_READ_TOOLS};
 use rcfd_claude::stream::StreamEvent;
+use rcfd_claude::trust::{TrustState, TrustStore};
 use rcfd_claude::{AllowList, AllowRule, Claude, Error};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -145,13 +146,21 @@ fn e0_chat_args_without_pinning_are_unchanged() {
 #[test]
 fn e4_allow_grows_the_file_by_one_rule_and_the_next_argv_has_it() {
     let s = setup("e4", "stream_denied_dontask.jsonl");
+    // Amendment 2: the allow file is a control file, so the folder is confirmed in a per-user record first
+    let mut claude = s.claude.clone();
+    claude.trust_store = Some(s.root.join("studio-config").join("claude-trust.json"));
+    let store = TrustStore::new(claude.trust_store.clone().unwrap());
     let file = AllowList::file_of(&s.project);
     let mut first = AllowList::project_initial();
     first.add(AllowRule::Edit("note.txt".into())).unwrap();
     first.to_file(&file).unwrap();
+    match claude.check_folder(&s.project).unwrap() {
+        TrustState::Pending(p) => store.confirm(&s.project, &p.files).unwrap(),
+        TrustState::Confirmed => panic!("the allow file must ask for a confirmation"),
+    }
     let before = AllowList::from_file(&file).unwrap();
     assert_eq!(before, first);
-    let ev = collect(&s.claude.resume(&s.project, S1, &before, "write other.txt").unwrap());
+    let ev = collect(&claude.resume(&s.project, S1, &before, "write other.txt").unwrap());
     let suggestion = ev
         .iter()
         .find_map(|e| match e {
@@ -162,16 +171,16 @@ fn e4_allow_grows_the_file_by_one_rule_and_the_next_argv_has_it() {
         })
         .expect("a Write denial");
     assert_eq!(suggestion, Some(AllowRule::Edit("other.txt".into())));
-    // "allow": read the file, add exactly the suggested rule, write it back
+    // "allow": read the file, add exactly the suggested rule, write it back through the trust record
     let mut l = AllowList::from_file(&file).unwrap();
     l.add(suggestion.clone().unwrap()).unwrap();
-    l.to_file(&file).unwrap();
+    store.save_allow_list(&s.project, &l).unwrap();
     let after = AllowList::from_file(&file).unwrap();
     assert_eq!(after.rules().len(), before.rules().len() + 1);
     assert_eq!(after.rules()[..before.rules().len()], *before.rules());
     assert_eq!(after.rules().last(), suggestion.as_ref());
     // the next message
-    let ev = collect(&s.claude.resume(&s.project, S1, &after, "again").unwrap());
+    let ev = collect(&claude.resume(&s.project, S1, &after, "again").unwrap());
     assert!(matches!(ev.last(), Some(StreamEvent::Exited { code: Some(0), .. })));
     let argvs = chat_argvs(&s.project);
     assert_eq!(argvs.len(), 2, "{argvs:?}");
