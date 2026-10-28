@@ -621,7 +621,12 @@ impl<S: RunStore> Runner<S> {
             .arg("--stop-file")
             .arg(dir.join(extra::CANCEL))
             .arg("--pause-file")
-            .arg(dir.join(extra::PAUSE));
+            .arg(dir.join(extra::PAUSE))
+            // ADR 0130 D3, D5: the field store at runs/<id>/fields (used only when the case turns it on), and the
+            // report values of every step in the status stream
+            .arg("--store-dir")
+            .arg(dir.join(extra::FIELDS))
+            .arg("--status-monitors");
         let log = OpenOptions::new().create(true).append(true).open(dir.join("log.txt"));
         cmd.stdout(log.map_or_else(|_| Stdio::null(), Stdio::from));
         sys::no_window(&mut cmd);
@@ -726,7 +731,8 @@ impl<S: RunStore> Runner<S> {
                 if idx > a.step {
                     residuals.push(json!({"step": idx, "time": v["time"],
                         "residuals": {"u": v["res_u"], "p": v["res_p"], "continuity": v["continuity"]},
-                        "monitors": {}}));
+                        // `rcfd run --status-monitors` (ADR 0130 D5); empty from a stream without them
+                        "monitors": v.get("monitors").filter(|m| m.is_object()).cloned().unwrap_or_else(|| json!({}))}));
                     a.step = idx;
                     a.time = v["time"].as_f64().unwrap_or(a.time);
                     moved = true;
