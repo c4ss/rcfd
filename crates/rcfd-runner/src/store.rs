@@ -183,9 +183,10 @@ impl RunStore for FsStore {
 
     fn append_event(&self, id: &str, mut event: Value) -> io::Result<()> {
         event["t"] = json!(records::now_iso());
-        jsonl::append_one(&self.run_dir(id).join("events.jsonl"), &event)
-            .map(|_| ())
-            .map_err(io_error)
+        // without an fsync, as before the switch: the state event follows the status write closely (a reader that
+        // sees the final status.json finds the event and no request files a moment later, ADR 0123 S7)
+        let (mut a, _) = jsonl::Appender::open(&self.run_dir(id).join("events.jsonl")).map_err(io_error)?;
+        a.append(&event).map_err(io_error)
     }
 
     fn append_residual(&self, id: &str, line: &Value) -> io::Result<()> {
