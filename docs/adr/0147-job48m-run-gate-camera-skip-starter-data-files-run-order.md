@@ -244,6 +244,40 @@ the gate (`gate.yml`) runs on Windows unless another system is asked for. Change
 "...")]` on M7 (b), naming this amendment; on Windows the test, its limits and its control are unchanged. M7 (a) checks the
 rule with the runner's own early exit (a bad budgets file) on every platform.
 
+## Amendment 3 (2026-10-28, two more Studio items, the maintainer's decision; registered before their runs)
+
+Relayed after the addendum's runs: 48K ([ADR 0145](0145-job48k-end-time-remainder-step.md), the end-time remainder
+step) merged into local main; main was merged into this branch first (55e4531; 48K changed `rcfd-api`'s `sim.rs`, its
+tests, `docs/case-schema.md` and its ADR, no Studio file). The maintainer approved ADR 0145's recommendations 3 and 5:
+
+* **Decision 9, the step count** (`store_plan::count`, `STEP_REMAINDER`, `count_with`). The Studio's estimate of the
+  steps of a fixed-step transient run was `ceil(end_time / dt - 1e-9)`; since ADR 0145 the solver takes no separate step
+  for a remainder below 1e-6 of a step (`REMAINDER_ABSORB`, D1, D2), so for a remainder between 1e-9 and 1e-6 of a step
+  the estimate counted one step (and with a store every step one snapshot) more than the run takes. The step count is now
+  `ceil(end_time / dt - 1e-6)` (`STEP_REMAINDER`, the same number as the solver's private constant). The count of
+  time-interval snapshots keeps its slack of 1e-9 interval (`ceil_eps`): it is not a step count, and it follows the
+  store's own time slots (`floor(t / interval + 1e-9)`, `fieldstore.rs`), so a remainder tiny against the interval but not
+  against the step still gives a separate last step whose final state is stored. `count_with(effective, slack)` keeps
+  the slack before (`OLD_STEP_SLACK`, 1e-9) for the control.
+* **Decision 10, solver warnings in full** (`ui::event_text`, now public, and `event_text_with`). A `solver` event whose
+  `solver.event` is `warning` and that has a `message` is shown in the Log panel's event list as `warning: <message>`,
+  whole; every other event the run service records stays its JSON cut at 160 characters. Before, a warning was cut
+  inside its `kind` (ADR 0145 deviation 3), so neither `short_last_step` nor its message could be read in the Studio.
+  `event_text_with(kind, false)` is the route before, for the control.
+
+**Registered checks** (limits fixed here, before any run; release, `--test-threads 1 --nocapture`, output to files;
+`crates/rcfd-studio/tests/solver_followups_m.rs`; `rcfd-runner` and `rcfd` of the same build, `rcfd` with 48K's solver):
+
+| Id | Check | Limit | Negative control |
+|---|---|---|---|
+| M9 | `cases/tiny.toml`: the 12 x 12 lid cavity with PISO, `solver.dt = 0.01`, `solver.end_time = 0.100000005` (10 steps and a remainder of 5e-7 of a step) and `[output] store_interval = 1`; the Studio's plan (`StartPlan::new`, as Run and the Start dialog make it), its effective store and its count; the run started through the project's runner (served) with the plan's settings | the plan proposes no store (the case sets its own); the run finished at step 10 with 10 stored snapshots and no `short_last_step` warning; the count is `Exact` and equals the stored snapshots | the slack before (`count_with(.., 1e-9)`) counts one more (11) |
+| M10 | `cases/short.toml`: the same cavity with `solver.end_time = 0.0302` (a 4th step of 2e-4 s, 0.02 of a step: ADR 0145 D4 warns), run through the runner; then the drawn app (`g4::app_on`) with the run selected, the Log panel put in front and its event list opened by a click on its header | the run finished; its `events.jsonl` holds exactly one `short_last_step` warning, whose message is longer than 160 characters; the Studio's event list of the run holds it; `event_text` gives exactly `warning: <message>`; that text is drawn | the route before (`event_text_with(.., false)`): `solver {...` cut at 160 characters (ending `...`), without the message |
+| M8 (again) | after M9 and M10, the whole `rcfd-studio` suite once more on the final code (`store_plan_sf.rs`'s counts among it), clippy, fmt and `workspace_graph` | as M8 | (their own) |
+
+What I knew when writing this: ADR 0145 and the code read above; the code and the test file were written and compiled
+(`cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean, `cargo fmt -p rcfd-studio` applied); neither
+check had run.
+
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
