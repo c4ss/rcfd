@@ -92,7 +92,13 @@ fn sf1_every_shipped_case_plans_a_store() {
         let text = std::fs::read_to_string(path).unwrap();
         let err = StartPlan::new(rel, &text, path.parent().unwrap()).unwrap_err();
         eprintln!("SF1 {rel}: refused: {err}");
-        assert!(err.starts_with(&format!("{rel}: not TOML")), "{err}");
+        // ADR 0149 (registered change): the plan reads JSON as `rcfd run` does and refuses a benchmark descriptor with
+        // ADR 0147's one line (before: the TOML parser's `<rel>: not TOML: ...`)
+        assert_eq!(
+            Some(err.clone()),
+            rcfd_studio::preview::descriptor_message(rel, &text),
+            "{err}"
+        );
     }
     // negative control: the 48D rule gives sod the step rule
     let (rel, path) = &cases[8];

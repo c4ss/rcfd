@@ -115,6 +115,14 @@ pub enum Event {
         /// Current content (`None`: no file).
         disk: Option<Vec<u8>>,
     },
+    /// A save could not be done (ADR 0149: the failure names its file, so that the editor waiting for it is told, also
+    /// one kept with its unsaved state while another case is selected).
+    SaveFailed {
+        /// Project-relative path.
+        rel: String,
+        /// Located message.
+        message: String,
+    },
     /// A file was created for [`Command::Create`]; the lists that hold it were sent just before.
     Created {
         /// Project-relative path.
@@ -249,7 +257,7 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                             Event::Saved { rel, hash }
                         }
                         Ok(SaveOutcome::Conflict(disk)) => Event::SaveConflict { rel, disk },
-                        Err(m) => Event::Failed(m),
+                        Err(message) => Event::SaveFailed { rel, message },
                     },
                     Command::Create {
                         rel,

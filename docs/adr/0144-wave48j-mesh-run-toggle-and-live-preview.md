@@ -478,6 +478,11 @@ Answered 2026-10-28 (the maintainer): questions 2, 4, 5, 6 and 12 as recommended
 and copies its table (the Cases listing is not part of the answer); 1, 3, 7 and 9 kept as implemented here. Implemented in
 [ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md) (job 48M).
 
+Note (2026-10-28, [ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md)): a click on a case now also
+selects its newest run, and a click on a run in the Runs panel its case (the maintainer's answer to ADR 0148 question
+1); the toggle itself is unchanged. J1, the J1 controls and J11 run with the test switch `case_run_unlinked` (ADR 0148's
+selection rules, under which their limits were registered); ADR 0149's O1 and O2 check the linked selection.
+
 ## Files
 
 This ADR; `crates/rcfd-studio/src/view_toggle.rs` (new); hunks in `crates/rcfd-studio/src/{lib,studio,preview,

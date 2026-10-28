@@ -208,7 +208,7 @@ fn steady(alg: &str) -> bool {
     matches!(alg, "simple" | "simplec" | "coupled")
 }
 
-fn text_sets(raw: &toml::Value, path: &[&str]) -> bool {
+fn text_sets(raw: &Value, path: &[&str]) -> bool {
     let mut v = raw;
     for p in path {
         match v.get(p) {
@@ -219,12 +219,34 @@ fn text_sets(raw: &toml::Value, path: &[&str]) -> bool {
     true
 }
 
+/// The keys a case text sets, as a tree (no defaults, nothing resolved): JSON when the text starts with `{`, else TOML
+/// ([`crate::preview::is_json_text`], the rule of `rcfd run`, ADR 0149). With `toml_only` (the route before ADR 0149),
+/// TOML whatever the text.
+fn text_tree(text: &str, toml_only: bool) -> Result<Value, String> {
+    if !toml_only && crate::preview::is_json_text(text) {
+        return serde_json::from_str(text).map_err(|e| format!("not JSON: {e}"));
+    }
+    toml::from_str::<Value>(text).map_err(|e| format!("not TOML: {}", e.message()))
+}
+
 /// Read the facts of a case text (`base_dir`: where its relative data files are). The store keys are looked for in the
 /// text, not in the resolved settings: an explicit `0` is the case's own choice, and the resolved tree cannot tell it
-/// from the default.
+/// from the default. The text is read as `rcfd run` reads it (ADR 0149): JSON when it starts with `{`, else TOML
+/// ([`crate::preview::parse_case`]).
 pub fn case_facts(text: &str, base_dir: &Path) -> Result<CaseFacts, String> {
-    let raw: toml::Value = toml::from_str(text).map_err(|e| format!("not TOML: {}", e.message()))?;
-    let case = Case::parse_toml_in(text, base_dir).map_err(|errs| {
+    case_facts_with(text, base_dir, false)
+}
+
+/// [`case_facts`]; with `toml_only`, the route before ADR 0149: the text is read as TOML only (a JSON case is refused
+/// with `not TOML: ...`).
+pub fn case_facts_with(text: &str, base_dir: &Path, toml_only: bool) -> Result<CaseFacts, String> {
+    let raw = text_tree(text, toml_only)?;
+    let parsed = if toml_only {
+        Case::parse_toml_in(text, base_dir)
+    } else {
+        crate::preview::parse_case(text, base_dir)
+    };
+    let case = parsed.map_err(|errs| {
         errs.iter()
             .map(|d| format!("{}: {}", d.path, d.message))
             .collect::<Vec<_>>()
@@ -289,9 +311,21 @@ pub fn propose_store(facts: &CaseFacts) -> (Option<StorePlan>, Option<String>) {
 
 impl StartPlan {
     /// The dialog's first state for the case at `rel` with `text` (defaults: priority 0, 1 thread, memory estimated by
-    /// the runner, the store proposal on).
+    /// the runner, the store proposal on). A `.json` case is read as `rcfd run` reads it; a benchmark descriptor
+    /// (`cases/<id>/case.json` of the repository) is refused with ADR 0147's one line
+    /// ([`crate::preview::descriptor_message`]), not with the list of its unknown keys (ADR 0149).
     pub fn new(rel: &str, text: &str, base_dir: &Path) -> Result<StartPlan, String> {
-        let facts = case_facts(text, base_dir).map_err(|e| format!("{rel}: {e}"))?;
+        Self::new_with(rel, text, base_dir, false)
+    }
+
+    /// [`StartPlan::new`]; with `toml_only`, the route before ADR 0149 (the text read as TOML only, no descriptor line).
+    pub fn new_with(rel: &str, text: &str, base_dir: &Path, toml_only: bool) -> Result<StartPlan, String> {
+        let facts = case_facts_with(text, base_dir, toml_only).map_err(|e| {
+            let short = (!toml_only)
+                .then(|| crate::preview::descriptor_message(rel, text))
+                .flatten();
+            short.unwrap_or_else(|| format!("{rel}: {e}"))
+        })?;
         let (store, note) = propose_store(&facts);
         Ok(StartPlan {
             case: rel.to_string(),

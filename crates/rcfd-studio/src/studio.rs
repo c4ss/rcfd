@@ -15,13 +15,75 @@ use crate::watch::{Command, Event, ProjectWorker, Start, Wake, POLL};
 use egui_dock::DockState;
 use rcfd_api::service::{Service, ServiceConfig};
 use rcfd_runner::runner::Config;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Messages kept for the log panel.
 pub const MAX_MESSAGES: usize = 200;
+
+/// The most case editors the Studio keeps with their unsaved state while other cases are selected (ADR 0149, the
+/// maintainer's answer to ADR 0148 question 2). Each holds the settings of one case and an in-process session of it
+/// (tens of kB to a few hundred kB); a switch that would keep one more is refused with a message.
+pub const MAX_PARKED: usize = 32;
+
+/// What follows the close of the project once the question about unsaved edits is answered (ADR 0149).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AfterClose {
+    /// Nothing more (Project > Close project).
+    Nothing,
+    /// Open this project folder (Project > Open project, Recent, Open typed path).
+    Open(PathBuf),
+    /// Create a project folder, then open it (Project > New project).
+    Create {
+        /// Folder.
+        root: PathBuf,
+        /// Manifest name.
+        name: String,
+        /// Solver version recorded in the manifest.
+        solver_version: String,
+    },
+    /// Close the window.
+    Exit,
+}
+
+/// The question asked before the project closes while cases hold unsaved state (ADR 0149): save all, discard, or
+/// cancel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CloseAsk {
+    /// What follows the close.
+    pub then: AfterClose,
+    /// The cases with unsaved state when it was asked.
+    pub cases: Vec<String>,
+    /// The cases whose save "Save all and close" is waiting for.
+    pub saving: BTreeSet<String>,
+    /// Why "Save all and close" stopped (shown in the question; nothing closed).
+    pub error: Option<String>,
+}
+
+/// The answers to [`CloseAsk`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseAnswer {
+    /// Save every case with unsaved state, then close (a typed field is committed first).
+    SaveAll,
+    /// Close; the unsaved edits are dropped.
+    Discard,
+    /// Do not close.
+    Cancel,
+}
+
+/// True when a case editor holds something not in its file (ADR 0149): an edit not saved, a field being typed, a
+/// conflict, or a save in flight.
+pub fn has_unsaved(ed: &CaseEditor) -> bool {
+    ed.is_dirty() || ed.draft.is_some() || ed.in_conflict() || ed.saving
+}
+
+/// Why the Run side has nothing to show while `case` is selected and has no run (ADR 0149: the Run side shows the
+/// selected case's runs).
+pub fn no_run_of(case: &str) -> String {
+    format!("{case} has no run yet: press Run (F5) to start one, or select a run in the Runs panel.")
+}
 
 /// One open (or opening) project.
 pub struct OpenProject {
@@ -53,15 +115,29 @@ pub struct Studio {
     pub theme: Theme,
     /// The open project.
     pub project: Option<OpenProject>,
-    /// The selected case (project-relative): set by a click in the Project panel ([`Studio::open_case`]) or by a case
-    /// the case starter made and opened. Run, F5, the toolbar label, the Project panel's highlight, the Mesh side and
-    /// the case editor follow it (ADR 0148); a run uses its file on disk.
+    /// The selected case (project-relative): set by a click in the Project panel ([`Studio::open_case`]), by a click on a
+    /// run of it in the Runs panel ([`Studio::open_run`], ADR 0149) or by a case the case starter made and opened. Run,
+    /// F5, the toolbar label, the Project panel's highlight, the Mesh side and the case editor follow it (ADR 0148), and
+    /// the selected run is one of its runs (ADR 0149); a run uses its file on disk.
     pub selected_case: Option<String>,
     /// The case file open in the editor: the selected case once loaded, else none (ADR 0148).
     pub editor: Option<CaseEditor>,
     /// The selected case when the case editor could not open it, and why (ADR 0148): the editor shows this for that
     /// case, while the Mesh side and Run use its file on disk.
     pub editor_error: Option<(String, String)>,
+    /// Case editors kept with their unsaved state (an edit not saved, a field being typed, a conflict, a save in
+    /// flight) while another case is selected, by case (ADR 0149, the maintainer's answer to ADR 0148 question 2). The
+    /// case editor takes one back, as it was, when its case is selected again; at most [`Studio::max_parked`].
+    pub parked: BTreeMap<String, CaseEditor>,
+    /// The most editors [`Studio::parked`] keeps ([`MAX_PARKED`]; tests may lower it).
+    pub max_parked: usize,
+    /// The selected case when its read showed a benchmark descriptor, with ADR 0147's one line (ADR 0149): Run is
+    /// greyed out with that line.
+    pub not_a_case: Option<(String, String)>,
+    /// The question asked before the project closes while cases hold unsaved state (ADR 0149).
+    pub close_ask: Option<CloseAsk>,
+    /// Set when the question answered for a window close let the window go: the UI closes it.
+    pub exit_now: bool,
     /// A case file asked for and not loaded yet.
     pub pending_case: Option<String>,
     /// Selected run id.
@@ -122,6 +198,11 @@ impl Studio {
             selected_case: None,
             editor: None,
             editor_error: None,
+            parked: BTreeMap::new(),
+            max_parked: MAX_PARKED,
+            not_a_case: None,
+            close_ask: None,
+            exit_now: false,
             pending_case: None,
             selected_run: None,
             plots: MonitorStore::default(),
@@ -200,11 +281,16 @@ impl Studio {
         );
     }
 
-    /// Close the project (and the case open in the editor; unsaved edits are dropped).
+    /// Close the project (and the case open in the editor; unsaved edits, also those kept for other cases, are dropped).
+    /// The window's Project menu, opening another project and the window's close ask first ([`Studio::request_close`],
+    /// ADR 0149); this call does not.
     pub fn close_project(&mut self) {
         self.selected_case = None;
         self.editor = None;
         self.editor_error = None;
+        self.parked.clear();
+        self.not_a_case = None;
+        self.close_ask = None;
         self.pending_case = None;
         self.selected_run = None;
         self.project = None;
@@ -220,23 +306,384 @@ impl Studio {
         self.view.close();
     }
 
-    /// Select a case (a click in the Project panel): it is the selected case from now on (ADR 0148), the case editor
-    /// lets go of the case it held (its unsaved edits are dropped, as a load of the new case always did) and opens this
-    /// one when the worker has read it, the preview builds it and the Viewport switches to its mesh (ADR 0144).
+    /// Select a case (a click in the Project panel): it is the selected case from now on (ADR 0148); the case editor
+    /// lets go of the case it held, keeping its unsaved state in memory (ADR 0149), and holds this case: as it was left,
+    /// with its unsaved state, else from its file once the worker has read it; the selected run is this case's newest
+    /// run, or none (ADR 0149); the preview builds the case and the Viewport switches to its mesh (ADR 0144). Refused,
+    /// with a message and nothing changed, when keeping the unsaved state of the case left would keep more than
+    /// [`Studio::max_parked`] editors.
     pub fn open_case(&mut self, rel: &str) {
-        let Some(p) = &self.project else { return };
-        if let Some(old) = &self.editor {
+        if self.project.is_none() {
+            return;
+        }
+        if let Err(m) = self.select_case(rel) {
+            self.say(m);
+            return;
+        }
+        if self.linked() {
+            // ADR 0149: the Run side shows the selected case's newest run (the side stays on Mesh: show_case_mesh)
+            self.selected_run = self.newest_run_of(rel);
+            self.sync_shown();
+        }
+        self.show_case_mesh(rel);
+    }
+
+    /// A click on run `id` in the Runs panel (ADR 0149, the maintainer's answer to ADR 0148 question 1): its case (from
+    /// its `run.json`) becomes the selected case, as a click in the Project panel makes it, but the Viewport goes to the
+    /// Run side and shows this run (not the case's newest). When the run's case is no longer among the project's case
+    /// files (deleted or renamed; the listing says so), the selected case is not changed, the status bar says why and
+    /// the Run side's caption names the missing case. Refused like [`Studio::open_case`] when the case left's unsaved
+    /// state cannot be kept. With [`crate::quick_run::Switches::case_run_unlinked`], [`Studio::select_run`] (ADR 0144).
+    pub fn open_run(&mut self, id: &str) {
+        if self.linked() {
+            match self.run_case(id) {
+                Some(c) if self.case_listed(&c) => {
+                    if self.selected_case.as_deref() != Some(c.as_str()) {
+                        if let Err(m) = self.select_case(&c) {
+                            self.say(m);
+                            return;
+                        }
+                        // the Mesh side shows the run's case when toggled; the side switches to Run below
+                        self.preview.select(&c);
+                    }
+                }
+                Some(c) => self.say(format!(
+                    "run {id}: its case {c} is not in the project any more (deleted or renamed), so the selected case \
+                     is unchanged"
+                )),
+                None => {}
+            }
+        }
+        self.select_run(id);
+    }
+
+    /// True while a click on a case selects its newest run and a click on a run selects its case (ADR 0149).
+    pub fn linked(&self) -> bool {
+        !self.quick.switches.case_run_unlinked && !self.quick.switches.selection_from_editor
+    }
+
+    /// True while the unsaved state of a case left is kept (ADR 0149).
+    pub fn keeps_drafts(&self) -> bool {
+        !self.quick.switches.drop_drafts && !self.quick.switches.selection_from_editor
+    }
+
+    /// The newest run of `case` by `created`, then id (ADR 0147's order), among the runs listed and the runs the run
+    /// worker knows; the run Run queued last counts as the newest of its case until it is listed (the run worker lists a
+    /// new run at its next tick); `None` when the case has none.
+    pub fn newest_run_of(&self, case: &str) -> Option<String> {
+        let listed = self
+            .browser()
+            .into_iter()
+            .flat_map(|b| b.runs.iter())
+            .filter(|r| r.case == case)
+            .map(|r| (r.created.as_str(), r.id.as_str()));
+        let rows = self
+            .runs
+            .rows
+            .values()
+            .filter(|r| r.case == case)
+            .map(|r| (r.created.as_str(), r.id.as_str()));
+        let known = listed.chain(rows).max().map(|(_, id)| id.to_string());
+        match self
+            .quick
+            .run
+            .as_ref()
+            .filter(|(id, plan)| plan.case == case && !self.run_listed(id))
+        {
+            Some((id, _)) => Some(id.clone()),
+            None => known,
+        }
+    }
+
+    /// True when run `id` is listed or known to the run worker.
+    fn run_listed(&self, id: &str) -> bool {
+        self.runs.rows.contains_key(id) || self.browser().is_some_and(|b| b.runs.iter().any(|r| r.id == id))
+    }
+
+    /// The case of run `id` as its `run.json` names it (the run worker's row, else the listing, else the plan of the run
+    /// Run queued last).
+    pub fn run_case(&self, id: &str) -> Option<String> {
+        self.runs
+            .row(id)
+            .map(|r| r.case.clone())
+            .or_else(|| {
+                self.browser()
+                    .and_then(|b| b.runs.iter().find(|r| r.id == id))
+                    .map(|r| r.case.clone())
+            })
+            .or_else(|| self.quick.plan_of(id).map(|p| p.case.clone()))
+    }
+
+    /// True when `case` is one of the project's case files as last listed (ADR 0148's `.toml` / `.json` rule). The
+    /// listing follows the watcher (or Project > Refresh): a case removed while the watcher is off is listed until then.
+    pub fn case_listed(&self, case: &str) -> bool {
+        crate::project_view::is_case_file(case) && self.browser().is_some_and(|b| b.cases.iter().any(|c| c == case))
+    }
+
+    /// The case editor of `rel`, wherever it is: the open one, or one kept with its unsaved state (ADR 0149).
+    pub fn case_editor(&self, rel: &str) -> Option<&CaseEditor> {
+        match &self.editor {
+            Some(e) if e.rel == rel => Some(e),
+            _ => self.parked.get(rel),
+        }
+    }
+
+    fn case_editor_mut(&mut self, rel: &str) -> Option<&mut CaseEditor> {
+        match &mut self.editor {
+            Some(e) if e.rel == rel => Some(e),
+            _ => self.parked.get_mut(rel),
+        }
+    }
+
+    /// The cases whose editor holds unsaved state (the open case's and the kept ones), sorted (ADR 0149; the Project
+    /// panel marks them).
+    pub fn unsaved_cases(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.parked.keys().cloned().collect();
+        if let Some(e) = self.editor.as_ref().filter(|e| has_unsaved(e)) {
+            if !v.contains(&e.rel) {
+                v.push(e.rel.clone());
+            }
+        }
+        v.sort();
+        v
+    }
+
+    /// Make `rel` the selected case (ADR 0148) and the case editor's, without touching the selected run or the
+    /// Viewport's side: the editor of the case left is kept with its unsaved state ([`Studio::parked`], ADR 0149) or
+    /// let go when clean; the editor of `rel` is taken back as it was, else `rel` is read (the editor is empty until it
+    /// arrives). The file is read in both cases; for an editor taken back, the bytes are compared when they arrive
+    /// ([`CaseEditor::returned`]). With [`crate::quick_run::Switches::drop_drafts`], ADR 0148's rule (dropped).
+    fn select_case(&mut self, rel: &str) -> Result<(), String> {
+        let route_before = self.quick.switches.selection_from_editor;
+        if self.keeps_drafts() {
+            self.leave_case(rel)?;
+        } else if let (Some(p), Some(old)) = (&self.project, &self.editor) {
             p.worker.send(Command::Untrack(old.rel.clone()));
         }
         self.selected_case = Some(rel.to_string());
         self.editor_error = None;
-        if !self.quick.switches.selection_from_editor {
-            // ADR 0148: the editor follows the selection at once ("Loading..." until the file arrives)
-            self.editor = None;
+        self.not_a_case = None;
+        if !route_before {
+            // ADR 0148: the editor follows the selection at once ("Loading..." until the file arrives); ADR 0149: an
+            // editor kept with its unsaved state comes back at once
+            self.editor = if self.keeps_drafts() { self.take_back(rel) } else { None };
         }
         self.pending_case = Some(rel.to_string());
-        p.worker.send(Command::Load(rel.to_string()));
-        self.show_case_mesh(rel);
+        if let Some(p) = &self.project {
+            p.worker.send(Command::Load(rel.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Let go of the case editor before `next` is selected (ADR 0149): an editor with unsaved state is kept in
+    /// [`Studio::parked`] (refused, the editor left as it is, when that would keep more than [`Studio::max_parked`]); a
+    /// clean one is dropped. Its file is no longer watched either way; the editor of `next` itself stays open when it has
+    /// unsaved state ([`Studio::take_back`] keeps it).
+    fn leave_case(&mut self, next: &str) -> Result<(), String> {
+        let Some(ed) = self.editor.take() else {
+            return Ok(());
+        };
+        if ed.rel == next && has_unsaved(&ed) {
+            self.editor = Some(ed);
+            return Ok(());
+        }
+        if has_unsaved(&ed) && ed.rel != next && !self.parked.contains_key(next) && self.parked.len() >= self.max_parked
+        {
+            let n = self.parked.len();
+            self.editor = Some(ed);
+            return Err(format!(
+                "{next} was not opened: {n} other cases hold unsaved edits, the most the Studio keeps; save or discard \
+                 the edits of one of them first (marked * in the Project panel)"
+            ));
+        }
+        if let Some(p) = &self.project {
+            p.worker.send(Command::Untrack(ed.rel.clone()));
+        }
+        if has_unsaved(&ed) && ed.rel != next {
+            self.parked.insert(ed.rel.clone(), ed);
+        }
+        Ok(())
+    }
+
+    /// The editor of `rel` with its unsaved state: the open one (the same case selected again) or the one kept for it.
+    fn take_back(&mut self, rel: &str) -> Option<CaseEditor> {
+        match self.editor.take() {
+            Some(ed) if ed.rel == rel => Some(ed),
+            _ => self.parked.remove(rel),
+        }
+    }
+
+    /// "Discard edits" in the case editor (ADR 0149): the unsaved edits, the field being typed and the conflict of the
+    /// open case are dropped and its file is read again. Refused while a save of it is in flight.
+    pub fn discard_edits(&mut self) -> Result<(), String> {
+        let ed = self.editor.as_ref().ok_or("no case is open in the case editor")?;
+        if ed.saving {
+            return Err(format!("{}: a save is in progress", ed.rel));
+        }
+        let rel = ed.rel.clone();
+        self.editor = None;
+        self.parked.remove(&rel);
+        self.pending_case = Some(rel.clone());
+        if let Some(p) = &self.project {
+            p.worker.send(Command::Load(rel.clone()));
+        }
+        // the mesh shown may be the edits': build the file again
+        self.preview.rebuild();
+        self.say(format!("{rel}: edits discarded; read again from the file"));
+        Ok(())
+    }
+
+    /// Close the project, asking first while any case holds unsaved state (ADR 0149): `then` follows the close (open or
+    /// create another project, close the window). True when nothing had to be asked and `then` was done (for
+    /// [`AfterClose::Exit`]: the window may close, nothing else is done); false when the question is asked
+    /// ([`Studio::close_ask`], answered by [`Studio::answer_close`]). With
+    /// [`crate::quick_run::Switches::drop_drafts`], never asks (the route before: unsaved edits are dropped).
+    pub fn request_close(&mut self, then: AfterClose) -> bool {
+        let cases = self.unsaved_cases();
+        if cases.is_empty() || !self.keeps_drafts() {
+            if then != AfterClose::Exit {
+                self.close_then(then);
+            }
+            return true;
+        }
+        self.close_ask = Some(CloseAsk {
+            then,
+            cases,
+            saving: BTreeSet::new(),
+            error: None,
+        });
+        false
+    }
+
+    fn close_then(&mut self, then: AfterClose) {
+        self.close_project();
+        match then {
+            AfterClose::Nothing => {}
+            AfterClose::Open(p) => self.open_project(&p),
+            AfterClose::Create {
+                root,
+                name,
+                solver_version,
+            } => self.create_project(&root, &name, &solver_version),
+            AfterClose::Exit => self.exit_now = true,
+        }
+    }
+
+    /// Answer the close question (ADR 0149). Save all: in every case with unsaved state a field being typed is
+    /// committed first (a refused commit stops, with its message, and nothing closes), a case in conflict stops the close
+    /// (resolve it first), the others are saved with the base-hash rule; when every save is written the project closes
+    /// and the action asked for follows; a save that meets a conflict or fails stops the close (the question stays with
+    /// the reason). Discard: the project closes, the edits are dropped. Cancel: nothing closes.
+    pub fn answer_close(&mut self, a: CloseAnswer) {
+        let Some(ask) = self.close_ask.take() else {
+            return;
+        };
+        match a {
+            CloseAnswer::Cancel => self.say("the project stays open (close cancelled)"),
+            CloseAnswer::Discard => {
+                let n = ask.cases.len();
+                self.close_then(ask.then);
+                self.say(format!("closed; the unsaved edits of {n} case(s) were discarded"));
+            }
+            CloseAnswer::SaveAll => {
+                let mut ask = ask;
+                ask.error = None;
+                match self.save_all() {
+                    Err(m) => {
+                        ask.error = Some(m.clone());
+                        self.say(m);
+                        self.close_ask = Some(ask);
+                    }
+                    Ok(saving) if saving.is_empty() => self.close_then(ask.then),
+                    Ok(saving) => {
+                        ask.saving = saving;
+                        self.close_ask = Some(ask);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Save every case with unsaved state for the close question: the cases whose saves are now in flight, or why it
+    /// stopped (nothing is saved after a refusal; a typed field committed before it stays committed).
+    fn save_all(&mut self) -> Result<BTreeSet<String>, String> {
+        let mut rels: Vec<String> = self.parked.keys().cloned().collect();
+        if let Some(e) = self.editor.as_ref().filter(|e| has_unsaved(e)) {
+            rels.push(e.rel.clone());
+        }
+        for r in &rels {
+            if self.case_editor(r).is_some_and(CaseEditor::in_conflict) {
+                return Err(format!(
+                    "{r}: resolve the conflict in the case editor first (Keep my edits or Take the disk version), or \
+                     close with Discard"
+                ));
+            }
+        }
+        let schema = self.schema.clone();
+        for r in &rels {
+            let Some(ed) = self.case_editor_mut(r) else { continue };
+            if let Some((path, text)) = ed.draft.clone() {
+                ed.edit_text(&schema, &path, &text)
+                    .map_err(|m| format!("{r}: {m}: correct the field, or close with Discard"))?;
+            }
+        }
+        // the bytes of every save first, so that a refusal leaves no editor waiting for a save never sent
+        let mut saving = BTreeSet::new();
+        let mut sends = Vec::new();
+        for r in &rels {
+            let Some(ed) = self.case_editor_mut(r) else { continue };
+            if ed.saving {
+                saving.insert(r.clone());
+            } else if ed.is_dirty() {
+                let bytes = ed.to_bytes().map_err(|m| format!("{r}: {m}"))?;
+                sends.push((r.clone(), ed.base_hash.clone(), bytes));
+            }
+        }
+        for (rel, base, bytes) in sends {
+            if let Some(ed) = self.case_editor_mut(&rel) {
+                ed.saving = true;
+            }
+            if let Some(p) = &self.project {
+                p.worker.send(Command::Save {
+                    rel: rel.clone(),
+                    base,
+                    bytes,
+                });
+            }
+            saving.insert(rel);
+        }
+        // editors whose typed field was the value already are clean now
+        self.release_clean();
+        Ok(saving)
+    }
+
+    /// Let go of kept editors that hold nothing unsaved any more (a save of them written).
+    fn release_clean(&mut self) {
+        let clean: Vec<String> = self
+            .parked
+            .iter()
+            .filter(|(_, e)| !has_unsaved(e))
+            .map(|(r, _)| r.clone())
+            .collect();
+        for r in clean {
+            self.parked.remove(&r);
+        }
+    }
+
+    /// A save for the close question ended: written (`None`) or not (the reason).
+    fn close_save_done(&mut self, rel: &str, error: Option<String>) {
+        let Some(ask) = self.close_ask.as_mut() else { return };
+        if !ask.saving.remove(rel) {
+            return;
+        }
+        if let Some(e) = error {
+            ask.error = Some(e);
+        }
+        if ask.saving.is_empty() && ask.error.is_none() {
+            if let Some(ask) = self.close_ask.take() {
+                self.close_then(ask.then);
+            }
+        }
     }
 
     /// Hand the editor's content to the worker for a save with the base-hash rule. Refused in the conflict state (resolve
@@ -589,6 +1036,20 @@ impl Studio {
                     return;
                 }
                 self.pending_case = None;
+                // ADR 0149: an editor taken back with its unsaved state keeps it; the file read again is compared with
+                // what it was opened from (ADR 0131's rule, a field being typed counted as an edit)
+                if self.keeps_drafts() {
+                    if let Some(ed) = self.editor.as_mut().filter(|e| e.rel == rel) {
+                        match ed.returned(Some(bytes)) {
+                            External::Same => {}
+                            External::Reloaded => self.say(format!("{rel}: changed on disk, reloaded")),
+                            External::Conflict => self.say(format!(
+                                "{rel}: changed on disk while its edits were kept; resolve the conflict"
+                            )),
+                        }
+                        return;
+                    }
+                }
                 // ADR 0144: relative data paths against the case's own folder, as a run resolves them
                 let dir = self
                     .browser()
@@ -606,10 +1067,17 @@ impl Studio {
                     Err(m) => {
                         // ADR 0147 (the maintainer's answer to ADR 0144 question 4): a benchmark descriptor gets the
                         // preview's one-line "not a case file" message, not the list of its unknown keys
-                        let short = std::str::from_utf8(&bytes)
+                        let descriptor = std::str::from_utf8(&bytes)
                             .ok()
-                            .and_then(|t| crate::preview::descriptor_message(&rel, t))
-                            .filter(|_| !self.preview.switches.editor_lists_descriptor_keys);
+                            .and_then(|t| crate::preview::descriptor_message(&rel, t));
+                        // ADR 0149: a benchmark descriptor is never startable; Run says ADR 0147's one line
+                        if let Some(d) = descriptor
+                            .as_ref()
+                            .filter(|_| self.selected_case.as_deref() == Some(&rel))
+                        {
+                            self.not_a_case = Some((rel.clone(), d.clone()));
+                        }
+                        let short = descriptor.filter(|_| !self.preview.switches.editor_lists_descriptor_keys);
                         let m = short.unwrap_or(m);
                         self.editor_cannot_open(&rel, &m);
                         self.say(m);
@@ -620,7 +1088,16 @@ impl Studio {
                 // ADR 0148: only the failure of the file asked for last ends the wait (the route before: any failure)
                 if self.quick.switches.selection_from_editor || self.pending_case.as_deref() == Some(rel.as_str()) {
                     self.pending_case = None;
-                    self.editor_cannot_open(&rel, &message);
+                    // ADR 0149: an editor taken back with its unsaved state keeps it: the file is gone, ADR 0131's
+                    // conflict state (keep the edits to write it again)
+                    let kept = self.keeps_drafts() && self.editor.as_ref().is_some_and(|e| e.rel == rel);
+                    if kept {
+                        if let Some(ed) = self.editor.as_mut() {
+                            ed.returned(None);
+                        }
+                    } else {
+                        self.editor_cannot_open(&rel, &message);
+                    }
                 }
                 self.say(message);
             }
@@ -634,18 +1111,35 @@ impl Studio {
                 self.say(m);
             }
             Event::Saved { rel, hash } => {
-                if let Some(ed) = self.editor.as_mut().filter(|ed| ed.rel == rel) {
+                // ADR 0149: the save of a kept editor (the close question's "Save all") reaches it too
+                let kept = self.parked.contains_key(&rel);
+                if let Some(ed) = self.case_editor_mut(&rel) {
                     ed.saved(hash);
                 }
+                if kept {
+                    if let Some(p) = &self.project {
+                        p.worker.send(Command::Untrack(rel.clone()));
+                    }
+                    self.release_clean();
+                }
                 self.say(format!("saved {rel}"));
+                self.close_save_done(&rel, None);
             }
             Event::SaveConflict { rel, disk } => {
-                if let Some(ed) = self.editor.as_mut().filter(|ed| ed.rel == rel) {
+                if let Some(ed) = self.case_editor_mut(&rel) {
                     ed.save_conflict(disk);
                 }
-                self.say(format!(
-                    "{rel}: not saved, the file changed on disk; resolve the conflict"
-                ));
+                let m = format!("{rel}: not saved, the file changed on disk; resolve the conflict");
+                self.say(m.clone());
+                self.close_save_done(&rel, Some(m));
+            }
+            Event::SaveFailed { rel, message } => {
+                if let Some(ed) = self.case_editor_mut(&rel) {
+                    ed.saving = false;
+                }
+                // the status bar as before ADR 0149 (the message of the failed write); the close question names the case
+                self.say(message.clone());
+                self.close_save_done(&rel, Some(format!("{rel}: not saved: {message}")));
             }
             Event::Created {
                 rel,

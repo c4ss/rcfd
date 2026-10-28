@@ -14,6 +14,13 @@
 //! The selected run stays selected on the Mesh side: the plots, the log and the run strip keep following it. The
 //! viewport is synchronised at once on every switch, so no frame shows one side's picture under the other side's
 //! label. No drawing here ([`crate::viewport_ui`] draws the toggle).
+//!
+//! ADR 0149 (the maintainer's answer to ADR 0148 question 1) links the two selections so that the toggle, Run and the
+//! Project panel name one case: a click on a case ([`Studio::open_case`]) also selects that case's newest run (none:
+//! the Run side is disabled and says that the case has no run yet) and stays on the Mesh side; a click on a run in the
+//! Runs panel ([`Studio::open_run`]) also selects its case and goes to the Run side (a run whose case file is gone keeps
+//! the selected case, and the Run side's caption says so); a run that Run queued after another case was selected is
+//! not selected.
 
 use crate::studio::Studio;
 use std::collections::BTreeMap;
@@ -47,6 +54,11 @@ impl Side {
             Side::Run => "the stored fields of the selected run",
         }
     }
+}
+
+/// The Run side's readout for a run whose case is no longer among the project's case files (ADR 0149).
+pub fn gone_case_text(case: &str) -> String {
+    format!("case {case} (not in the project any more: deleted or renamed; the selected case is unchanged)")
 }
 
 /// Why the Mesh side cannot be shown (the toggle's disabled hover text).
@@ -116,11 +128,22 @@ impl Studio {
         Toggle::unavailable(side, self.preview.case.is_some(), self.selected_run.is_some())
     }
 
-    /// The toggle: show the open case's mesh or the selected run's fields. Refused, with the reason, when that side has
-    /// nothing to show; the selection is not changed either way.
+    /// The words of [`Studio::view_unavailable`] as the toggle says them: with a case selected that has no run, the Run
+    /// side says so for that case (ADR 0149: the Run side shows the selected case's runs), else [`NO_CASE`] or
+    /// [`NO_RUN`].
+    pub fn view_refusal(&self, side: Side) -> Option<String> {
+        let why = self.view_unavailable(side)?;
+        match (&self.selected_case, side) {
+            (Some(c), Side::Run) if self.linked() => Some(crate::studio::no_run_of(c)),
+            _ => Some(why.to_string()),
+        }
+    }
+
+    /// The toggle: show the open case's mesh or the selected run's fields. Refused, with the reason
+    /// ([`Studio::view_refusal`]), when that side has nothing to show; the selection is not changed either way.
     pub fn set_view(&mut self, side: Side) -> Result<(), String> {
-        if let Some(why) = self.view_unavailable(side) {
-            return Err(why.to_string());
+        if let Some(why) = self.view_refusal(side) {
+            return Err(why);
         }
         self.view.side = side;
         self.sync_viewport();
@@ -136,20 +159,21 @@ impl Studio {
     }
 
     /// The Run side's readout beside its caption (ADR 0148): the run's case, the size of its domain and its cells, from
-    /// the run's own stored mesh (not from the selected case); `None` on the Mesh side.
+    /// the run's own stored mesh (not from the selected case); `None` on the Mesh side. A run whose case is no longer
+    /// among the project's case files says so (ADR 0149: the selected case did not change for it).
     pub fn run_readout(&self) -> Option<String> {
         if self.viewport.switches.no_scale {
             return None;
         }
         let id = self.viewport.run.as_deref()?;
-        let case = self.runs.row(id).map(|r| r.case.clone()).or_else(|| {
-            self.browser()
-                .and_then(|b| b.runs.iter().find(|r| r.id == id))
-                .map(|r| r.case.clone())
-        });
+        let case = self.run_case(id);
         let mut parts = Vec::new();
         if let Some(c) = case {
-            parts.push(format!("case {c}"));
+            if self.linked() && self.browser().is_some() && !self.case_listed(&c) {
+                parts.push(gone_case_text(&c));
+            } else {
+                parts.push(format!("case {c}"));
+            }
         }
         if let Some(d) = self.viewport.domain() {
             parts.push(d);

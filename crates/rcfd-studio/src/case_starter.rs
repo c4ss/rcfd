@@ -172,7 +172,8 @@ pub fn is_reference(source: &str) -> bool {
 pub struct Description {
     /// The file's `title` (its file stem when it has none).
     pub title: String,
-    /// How long it runs, from the case: `<algorithm>, at most N iterations` or `<algorithm>, to t = T`.
+    /// How long it runs, from the case: `<algorithm>, at most N iterations` or `<algorithm>, to simulated time T s`
+    /// (ADR 0149; `to t = T` before).
     pub run: String,
     /// The line under the title: what it shows, dimension, cells and run length.
     pub line: String,
@@ -215,8 +216,14 @@ impl Example {
     }
 
     /// Describe it: the title and the run length are read from the text (the defaults of keys it does not set come from
-    /// the schema); [`descriptions`] keeps the result for the dialog.
+    /// the schema); [`descriptions`] keeps the result for the dialog. A transient example runs `to simulated time T s`
+    /// (ADR 0149: the words of the Run page, ADR 0148 decision 6).
     pub fn describe(&self) -> Description {
+        self.describe_with(false)
+    }
+
+    /// [`Example::describe`]; with `bare_time`, the words before ADR 0149 (`to t = T`).
+    pub fn describe_with(&self, bare_time: bool) -> Description {
         let (title, run) = match self.parse().ok_or(()) {
             Ok(c) => {
                 let text = |k: &str| c.get(k).ok().and_then(|v| v.as_str().map(str::to_string));
@@ -231,7 +238,12 @@ impl Example {
                 };
                 let run = if transient {
                     let t = c.get("solver.end_time").ok().and_then(|v| v.as_f64());
-                    format!("{algorithm}, to t = {}", t.map_or("?".to_string(), |t| t.to_string()))
+                    let t = t.map_or("?".to_string(), |t| t.to_string());
+                    if bare_time {
+                        format!("{algorithm}, to t = {t}")
+                    } else {
+                        format!("{algorithm}, to simulated time {t} s")
+                    }
                 } else {
                     let n = c.get("solver.max_iterations").ok().and_then(|v| v.as_u64());
                     format!(
@@ -452,12 +464,26 @@ pub(crate) fn on_created(st: &mut Studio, rel: &str, opened: bool, companions: &
         }
     }
     if opened {
+        // ADR 0149: the case left keeps its unsaved state (the starter opens over a field being typed only, ADR 0139
+        // D5: not over unsaved edits or a conflict); the worker no longer watches its file
+        if st.keeps_drafts() {
+            if let Some(ed) = st.editor.take() {
+                if crate::studio::has_unsaved(&ed) && ed.rel != rel {
+                    st.parked.insert(ed.rel.clone(), ed);
+                }
+            }
+        }
         // ADR 0148: the new case is the selected case; the editor follows it (the `Loaded` that follows opens it)
         st.selected_case = Some(rel.to_string());
         st.editor_error = None;
+        st.not_a_case = None;
         st.pending_case = Some(rel.to_string());
         if !st.quick.switches.selection_from_editor {
             st.editor = None;
+        }
+        // ADR 0149: the Run side shows the new case's runs (normally none)
+        if st.linked() {
+            st.selected_run = st.newest_run_of(rel);
         }
         if !st.view.switches.starter_skips_preview {
             st.show_case_mesh(rel);
@@ -485,10 +511,13 @@ impl Studio {
                 .ok_or_else(|| "no project is open (or it is still opening)".to_string())?;
             check_name(name, example.ext(), &b.cases)?
         };
+        // ADR 0149: a field being typed is kept for its case when the new case opens, unless as many cases as the Studio
+        // keeps hold unsaved edits already
+        let full = self.keeps_drafts() && self.parked.len() >= self.max_parked;
         let busy = self
             .editor
             .as_ref()
-            .is_some_and(|e| e.is_dirty() || e.in_conflict() || e.saving);
+            .is_some_and(|e| e.is_dirty() || e.in_conflict() || e.saving || (full && e.draft.is_some()));
         let untrack = if busy {
             None
         } else {

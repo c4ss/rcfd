@@ -390,6 +390,12 @@ Refine x2 button and its hover, the "Data files" list, the Start dialog's greyed
 
 ## Questions for the maintainer (not decided here)
 
+Answered 2026-10-28 (the maintainer, relayed): question 1 (d) (link both ways), question 2 (keep the unsaved edits of
+each case until saved or discarded, closing asks), question 6 (b); questions 3, 4 and 5 as recommended (a). Implemented
+in [ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md) (job 48O), which also changes decision 1 (a)
+(the edits are no longer dropped at the click) and decision 1 (d) (a run that Run queued after another case was
+selected is no longer selected), and the limits of N1 (c), N3 (c), N4 and the set-up of N11 (registered there).
+
 1. **The Run side and the case** (R5). The Run side shows the run selected in the Runs panel, whatever case is selected;
    selecting a run does not select its case. Options: (a) keep, with the run's case named beside the Run side's caption
    (done here); (b) selecting a run also selects its case (the case editor, the Mesh side and Run follow it; a case with

@@ -383,6 +383,22 @@ impl CaseEditor {
         External::Conflict
     }
 
+    /// The file read again when the case is selected again and this editor comes back with its unsaved state (ADR
+    /// 0149; `None`: the file is gone). ADR 0131's rule ([`CaseEditor::external_change`]) with a field being typed counted
+    /// as an unsaved edit, so that the typed text is never dropped by a reload: the same bytes change nothing; other bytes
+    /// (or no file) while the editor holds an edit, a typed field or a conflict put it in the conflict state with
+    /// everything kept; a clean editor reloads.
+    pub fn returned(&mut self, disk: Option<Vec<u8>>) -> External {
+        if self.draft.is_some() && self.conflict.is_none() && !self.is_dirty() {
+            if disk.as_deref().map(hash_bytes).as_deref() == Some(self.base_hash.as_str()) {
+                return External::Same;
+            }
+            self.conflict = Some(disk);
+            return External::Conflict;
+        }
+        self.external_change(disk)
+    }
+
     fn reload(&mut self, bytes: &[u8]) -> Result<(), String> {
         let session = create_session(&self.svc, &self.rel, self.dir.as_deref(), bytes)?;
         let old = std::mem::replace(&mut self.session, session);

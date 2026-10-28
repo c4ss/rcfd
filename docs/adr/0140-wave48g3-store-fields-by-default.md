@@ -358,6 +358,11 @@ Not run: the "Not in CI" checklist (a person looking at the window); Linux (the 
 there: a CI risk, as ADR 0133's); debug builds of the new tests; the workspace gate and workspace-wide clippy; `cargo deny` (not
 installed).
 
+Note (2026-10-28, [ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md)): the start plan reads a `.json`
+case as `rcfd run` does (the maintainer's answer to ADR 0148 question 6), so SF1's six `case.json` are refused with ADR
+0147's one line (`<case>: not a case file: this is a benchmark descriptor ...`) instead of `<case>: not TOML: ...`; SF1's
+limit for them is changed accordingly there (registered before its run).
+
 ## Files
 
 This ADR. `crates/rcfd-studio/src/{store_plan,run_fields,fields_ui}.rs` (new), `crates/rcfd-studio/src/{runs,poll,studio,viewport,

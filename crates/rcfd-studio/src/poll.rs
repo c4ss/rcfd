@@ -50,6 +50,9 @@ pub struct Switches {
     /// R6 known miss (amendment 4): open every file again in every tick and read every `status.json` each tick, as the
     /// registered R6 set-up did.
     pub reopen_files: bool,
+    /// The route before ADR 0149: the Start run dialog's plan reads a case as TOML only (a `.json` case is refused with
+    /// `not TOML: ...`, a benchmark descriptor with the TOML parser's message).
+    pub cases_as_toml: bool,
 }
 
 /// New samples of one run's series (column form): name -> (steps, values).
@@ -844,7 +847,8 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
                 .and_then(|path| {
                     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
                     let base = path.parent().unwrap_or(&p.root).to_path_buf();
-                    let mut plan = StartPlan::new(&rel, &text, &base)?;
+                    // ADR 0149: JSON as `rcfd run` reads it, a benchmark descriptor's one line
+                    let mut plan = StartPlan::new_with(&rel, &text, &base, p.switches.cases_as_toml)?;
                     if plan.facts.cells.is_none() {
                         // ADR 0140 D5: the mesh is built on a control thread, never in the tick loop
                         plan.facts.extra.cells_state = crate::store_plan::CellsState::Counting;

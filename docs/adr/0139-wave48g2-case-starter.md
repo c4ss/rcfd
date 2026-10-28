@@ -180,6 +180,23 @@ change as follows (limits unchanged in kind; none had run when this was written)
 * **CS12** and the unregistered `panel_button_request_repaints_and_opens_the_dialog_next_frame`: 10 rows.
 * **CS13**: 10 descriptions; its control validates each example with its folder.
 
+## Amendment 3 (2026-10-28, the maintainer's decision; written with ADR 0149's registration, before CS7's rerun)
+
+The maintainer decided that the starter's dialog stops writing a bare `t`: a transient example's run length says
+"simulated time", the words of the Run page (ADR 0148 decision 6;
+[ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md) decision 4). D6 changes accordingly: a transient
+example (`piso`, `pimple`, transient compressible) runs `<algorithm>, to simulated time T s` (T as Rust prints the
+case's `solver.end_time`), a steady one `<algorithm>, at most N iterations` as before. CS7 read the description line but
+did not limit the run length; it now does (ADR 0149's O12):
+
+* **CS7**: as before, and each example's run length exactly the one above (computed from its text parsed with its
+  folder), the line holding it followed by `.`; no line holds ` t = `; at least one transient example. **Control** (new,
+  `cs7_control_the_words_before_say_t`): the words before (`Example::describe_with(.., true)`) give each transient
+  example a run length holding ` t = `, which differs from the limit.
+
+What I knew when writing this: the code of `Example::describe` and CS7's test; neither the changed CS7 nor its control
+had run.
+
 ## Not in CI (by hand, recorded in the addendum)
 
 The real window: the menu entry and the Project panel button, the dialog's layout at 1280 x 800 and high-DPI, keyboard focus in the
