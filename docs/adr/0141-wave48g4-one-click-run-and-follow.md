@@ -177,6 +177,32 @@ the store proposal). Debug builds run a quarter of the steps (G1, G6, G1 control
   in release, so 3000 steps run about 2.6 s and the 1 000 000-step case writes its first snapshot (step 10 000) about 9 s
   after launch.
 
+## Amendment 1 (2026-10-28, after the G1 miss, before G1b ran)
+
+**G1 missed limit (h)** in its registered run (commit ae3e85f, release, output to a file, NVIDIA RTX 5080 Vulkan): right
+after the run was listed the Viewport was open and in front, but Plots was not in front ((true, true, false) against
+(true, true, true)). Every other G1 limit was met in that run: (a) listed 0.314 s after the click; (b) running 5.339 s;
+(c) first snapshot committed at 5.333 s, shown at 5.361 s (0.028 s); (d) slider lengths 0, 2, 17, 35, 55, 70, 71, 90, 100
+(8 while running), shown snapshots 2, 17, 35, 55, 71, 90, 100, the newest shown in the frame that first held the final
+length; (e) no marker difference, final marker 3000; (f) `status.json` finished, step 3000, time 0, equal in the model, the
+strip "... finished  step 3000 ... snapshot 100/100 (following the latest)", shown step 3000; (g) one upload, one render at
+the first shown snapshot, nine at the end, no error. The test becomes the ignored
+`g1_one_click_from_case_to_picture_known_miss` with its limits intact; the reopening it measured stays reachable through the
+test switch `QuickRun::switches.reopen_in_focused_leaf`, so the known-miss test measures what missed.
+
+Diagnosis (read from egui_dock 0.21.1, `dock_state/tree/mod.rs`; not a separate run): `Tree::split` makes the new node the
+focused one, so in the default layout the focused leaf is the last one split off, the leaf of Plots, Log and Outputs;
+`remove_leaf` (closing the Viewport) passes the focus to the sibling, that same leaf; `layout::show` pushes a closed panel
+into the focused leaf. The Viewport then shares the Plots' place, and decision 4 rightly does not put Plots in front of it.
+In the app the focused leaf is the one last clicked, so the same can happen with any layout.
+
+**Change (registered here before its run).** A closed Viewport is reopened in a new place above the Plots' place, as in the
+default layout (`split_above` of the Plots' leaf, the Plots keeping 0.34 of the height, on the Plots' surface, docked or
+floating); when Plots is closed too, where `layout::show` puts it (unchanged). Decision 4 otherwise unchanged.
+
+**G1b** (new check id, `tests/oneclick_e2e_g4.rs`): the fixture, procedure and limits (a)-(h) of G1 with the change. The
+G1 control (auto-select and focus off) is unchanged and is not run again.
+
 ## Not in CI (by hand)
 
 The real window: the toolbar, the strip and the "follow latest" box on DX12 and Vulkan, at high DPI; F5 while a text field

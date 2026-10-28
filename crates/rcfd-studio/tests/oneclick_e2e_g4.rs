@@ -39,12 +39,26 @@ struct Seen {
     newest_after: Option<f64>,
 }
 
+/// G1 missed (h) in its registered run (amendment 1): the reopened Viewport took the Plots' place. Kept with the
+/// reopening it measured (`reopen_in_focused_leaf`) and its limits intact.
 #[test]
-fn g1_one_click_from_case_to_picture() {
+#[ignore = "ADR 0141 amendment 1: G1 missed limit (h) (Plots not in front after Run reopened the Viewport); G1b checks the change"]
+fn g1_one_click_from_case_to_picture_known_miss() {
+    g1("g1", true);
+}
+
+/// G1b (amendment 1): G1's fixture, procedure and limits with a closed Viewport reopened above the Plots.
+#[test]
+fn g1b_one_click_from_case_to_picture() {
+    g1("g1b", false);
+}
+
+fn g1(tag: &str, reopen_in_focused_leaf: bool) {
     let n = steps(3000);
-    let p = project("g1", "live.toml", &cavity(n), false);
+    let p = project(tag, "live.toml", &cavity(n), false);
     let ctx = egui::Context::default();
     let mut app = app_on(&p, "live.toml", &ctx);
+    app.st.quick.switches.reopen_in_focused_leaf = reopen_in_focused_leaf;
     let gpu = vp::adapter_list().first();
     match gpu {
         Some(a) => {

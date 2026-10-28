@@ -43,6 +43,9 @@ pub struct Switches {
     /// Do not explain a run that ended before its first stored snapshot (the viewport keeps its own text) and leave the
     /// run's reason out of the strip.
     pub no_explain: bool,
+    /// Reopen a closed Viewport in the focused place (`layout::show`), as G1's registered run did (its known-miss test,
+    /// amendment 1).
+    pub reopen_in_focused_leaf: bool,
 }
 
 /// A start in flight.
@@ -332,6 +335,25 @@ fn place_of(dock: &DockState<Panel>, p: Panel) -> Option<NodePath> {
     dock.find_tab(&p).map(|t| t.node_path())
 }
 
+/// Open a closed Viewport in a new place above the Plots' place, as the default layout has it (the Plots keep 0.34 of
+/// the height, on their surface, docked or floating); without Plots, where `layout::show` puts a panel. ADR 0141
+/// amendment 1: `layout::show` uses the focused place, which is often the Plots' own.
+pub fn reopen_viewport(dock: &mut DockState<Panel>) {
+    if layout::is_open(dock, Panel::Viewport) {
+        return;
+    }
+    match dock.find_tab(&Panel::Plots) {
+        Some(p) => {
+            let [_, v] = dock[p.surface].split_above(p.node, 0.34, vec![Panel::Viewport]);
+            dock.set_focused_node_and_surface(NodePath {
+                surface: p.surface,
+                node: v,
+            });
+        }
+        None => layout::show(dock, Panel::Viewport),
+    }
+}
+
 /// Show `p` in front of its place when it is open and does not share the Viewport's place ("as the layout allows":
 /// a hidden panel stays hidden and the viewport stays visible); the focus goes back to the Viewport.
 fn front_beside_viewport(dock: &mut DockState<Panel>, p: Panel) {
@@ -387,6 +409,9 @@ fn apply(st: &mut Studio, m: Msg) {
                 st.select_run(&id);
             }
             if !st.quick.switches.no_focus {
+                if !st.quick.switches.reopen_in_focused_leaf {
+                    reopen_viewport(&mut st.dock);
+                }
                 bring_to_front(&mut st.dock, Panel::Viewport);
                 front_beside_viewport(&mut st.dock, Panel::Plots);
             }
