@@ -180,6 +180,14 @@ proposes `"f32"` for the runs it starts. A fresh run replaces a store left in th
 Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown
 field name gives a warning and no store. Library callers that step a `Simulation` themselves are not covered.
 
+Runs the Studio starts (Run, F5, Runs > Start run...) store fields unless the case sets its own store, and a store key
+counts as the case's own only when its value differs from its default: `store_interval` 0, `store_time_interval` 0.0,
+`store_fields` `[]`, `store_precision` `"f64"` (ADR 0152). A case saved by the Studio, or written by `rcfd-api`'s writer,
+spells out every key at its default, so an explicit `store_interval = 0` cannot be told from the default and does not
+turn the Studio's store off. To start a run without stored fields, untick "Store fields" in Runs > Start run... (or give
+the override `output.store_interval=0` there); for an explicit `"f64"`, pick "f64 (exact)" there. Run and F5 always store.
+`rcfd run`, `rcfd-runner submit` and Claude Code's `start_run` read the case as written: 0 is off.
+
 ## Workflows
 
 A workflow is an ordered list of tasks with dependencies over a session (`workflow.*` service

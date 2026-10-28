@@ -23,7 +23,7 @@
 
 use crate::bins::{self, Found, Search};
 use crate::layout::{self, Panel};
-use crate::runs::{RunRow, StartPlan, StoreEvery};
+use crate::runs::{PlanRoute, RunRow, StartPlan, StoreEvery};
 use crate::studio::Studio;
 use crate::viewport::Status;
 use crate::watch::Wake;
@@ -77,6 +77,10 @@ pub struct Switches {
     /// The route before ADR 0149 (the maintainer's answer to ADR 0148 question 6): Run and its plan read a case as TOML
     /// only (a `.json` case is refused with `not TOML: ...`) and Run is not greyed out for a benchmark descriptor.
     pub cases_as_toml: bool,
+    /// The route before ADR 0152 (the maintainer's answer to ADR 0149 question 9): Run's plan takes a store key in the
+    /// case text as the case's own whatever its value, so a case saved by the Studio (`store_interval = 0` spelled out)
+    /// is run without stored fields ([`crate::runs::PlanRoute::default_store_keys_set`]).
+    pub default_store_keys_set: bool,
 }
 
 /// A start in flight.
@@ -313,7 +317,10 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
         case,
         search: q.search.clone(),
         tail_always: q.switches.tail_always,
-        toml_only: q.switches.cases_as_toml,
+        route: PlanRoute {
+            toml_only: q.switches.cases_as_toml,
+            default_store_keys_set: q.switches.default_store_keys_set,
+        },
     };
     let (tx, wake) = (q.tx.clone(), st.wake.clone());
     spawn("rcfd-studio-quick-start", move || start_job(job, tx, wake));
@@ -326,8 +333,8 @@ struct Job {
     case: String,
     search: Search,
     tail_always: bool,
-    /// [`Switches::cases_as_toml`].
-    toml_only: bool,
+    /// [`Switches::cases_as_toml`] and [`Switches::default_store_keys_set`].
+    route: PlanRoute,
 }
 
 /// The last lines of `.rcfd/runner.log` (the runner has no console; since ADR 0146 its standard output and error go
@@ -396,7 +403,7 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
         .map_err(|e| format!("{}: {e}", job.case))
         .and_then(|path| {
             let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            StartPlan::new_with(&job.case, &text, path.parent().unwrap_or(&job.root), job.toml_only)
+            StartPlan::new_route(&job.case, &text, path.parent().unwrap_or(&job.root), job.route)
         });
     let plan = match plan {
         Ok(p) => p,

@@ -477,6 +477,12 @@ descriptor.
    0131's canonical form changes, files shrink). Recommendation: (b) soon, as a small job of its own with its own check;
    (c) later, together with ADR 0135's question on edits that rewrite a case in its canonical form.
 
+Note (2026-10-28, [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md)): question 9 was answered
+(b) and is implemented there (for the four store keys; its question 1 offers the two interval keys only): Run and the
+Start run dialog plan the store for a case saved by the Studio, so deviation 4 and the notes of checklist items 5 and 7
+no longer hold for runs the Studio starts; O10 (b)'s reported text now reads `sets its store false; --set
+["output.store_interval=1", "output.store_precision=f32"]` (its limit unchanged).
+
 ## Files
 
 This ADR; hunks in `crates/rcfd-studio/src/{studio,case_edit,quick_run,view_toggle,viewport_ui,case_starter,runs,

@@ -7,7 +7,7 @@ use rcfd_api::case::Case;
 use rcfd_api::chain::apply_set;
 use rcfd_api::runctl::{drive, RunOptions};
 use rcfd_api::sim::Simulation;
-use rcfd_studio::runs::StartPlan;
+use rcfd_studio::runs::{PlanRoute, StartPlan};
 use rcfd_studio::store_plan;
 use rcfd_studio::ui::StartDialog;
 use rcfd_studio::{Studio, StudioApp};
@@ -57,11 +57,44 @@ fn sf9_j_the_case_s_own_interval_is_kept() {
     assert_eq!(p.estimated_bytes(), None);
 }
 
+/// SF9 (k) as ADR 0152 changed it (registered there): `"f64"` is the schema default, which a case saved by the Studio
+/// spells out, so it is not the case's own: the precision is the proposal's f32 and the plan is SF9 (a)'s.
 #[test]
-fn sf9_k_the_case_s_own_precision_is_kept() {
+fn sf9_k_adr0152_f64_at_its_default_is_not_the_case_s_own() {
     let p = plan(&with_output("store_precision = \"f64\""));
     eprintln!(
-        "SF9 (k): set {:?}, {:?}, estimate {:?}, lines {:?}, warnings {:?}",
+        "SF9 (k), ADR 0152: set {:?}, {:?}, estimate {:?}, lines {:?}, warnings {:?}",
+        p.set(),
+        store_plan::store_line(&p),
+        store_plan::estimate(&p),
+        store_plan::case_lines(&p),
+        store_plan::warnings(&p)
+    );
+    assert_eq!(p.set(), ["output.store_interval=4", "output.store_precision=f32"]);
+    assert!(store_plan::store_line(&p).unwrap().ends_with(", f32."));
+    assert_eq!(store_plan::estimate(&p), Some(342_016));
+    assert!(store_plan::case_lines(&p).is_empty());
+    assert!(store_plan::warnings(&p).is_empty());
+    // negative control (its value unchanged): the 48D estimate, now of an f32 store, is not D4's
+    eprintln!("SF9 (k) control, ADR 0152: estimated_bytes() {:?}", p.estimated_bytes());
+    assert_eq!(p.estimated_bytes(), Some(230_400));
+}
+
+/// The registered SF9 (k), with the route before ADR 0152 (a store key in the text is the case's own whatever its value).
+#[test]
+fn sf9_k_the_case_s_own_precision_is_kept() {
+    let p = StartPlan::new_route(
+        "cases/cavity.toml",
+        &with_output("store_precision = \"f64\""),
+        Path::new("."),
+        PlanRoute {
+            default_store_keys_set: true,
+            ..PlanRoute::default()
+        },
+    )
+    .unwrap();
+    eprintln!(
+        "SF9 (k), the route before ADR 0152: set {:?}, {:?}, estimate {:?}, lines {:?}, warnings {:?}",
         p.set(),
         store_plan::store_line(&p),
         store_plan::estimate(&p),

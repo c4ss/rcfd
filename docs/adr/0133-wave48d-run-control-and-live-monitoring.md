@@ -355,6 +355,12 @@ Questions for the maintainer:
    can still be continued (read from code, not run). Leave as with ADR 0124, or make these hashes ignore keys at their
    default (a separate change)?
 
+Note (2026-10-28, [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md)): R10 (b0)'s "an explicit 0
+is the case's own choice too" no longer holds: a store key at its schema default is not the case's own (the maintainer's
+answer to ADR 0149 question 9), so the cavity with `store_interval = 0` gets the proposal (`output.store_interval=4`,
+`output.store_precision=f32`); the registered "nothing" is checked with ADR 0152's route before (a registered change
+there).
+
 ## Files
 
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,

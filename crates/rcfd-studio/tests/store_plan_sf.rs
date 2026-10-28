@@ -4,7 +4,7 @@
 mod common;
 
 use rcfd_api::case::Case;
-use rcfd_studio::runs::StartPlan;
+use rcfd_studio::runs::{PlanRoute, StartPlan};
 use rcfd_studio::store_plan::{self, Fix, Warning};
 use rcfd_studio::ui::StartDialog;
 use rcfd_studio::{Studio, StudioApp};
@@ -252,9 +252,26 @@ fn sf9_start_dialog_lines_warnings_and_fixes() {
     );
     store_plan::apply_fix(&mut b, Fix::StoreOn);
     assert_eq!(b.set(), a.set());
-    // (c) the case turns the store off
+    // (c) the case with `store_interval = 0`. ADR 0152 (a registered change): the 0 is the schema default, which a case
+    // saved by the Studio spells out, so it is not the case's own: the plan of (a), no warning, no case line
     let c_text = format!("{}\n[output]\nstore_interval = 0\n", common::RUN_CASE);
-    let mut c = cavity_plan(&c_text);
+    let c_new = cavity_plan(&c_text);
+    eprintln!(
+        "SF9 (c), ADR 0152: set {:?}, warnings {:?}, case lines {:?}",
+        c_new.set(),
+        store_plan::warnings(&c_new),
+        store_plan::case_lines(&c_new)
+    );
+    assert!(c_new.store.as_ref().is_some_and(|s| s.on));
+    assert_eq!(c_new.set(), ["output.store_interval=4", "output.store_precision=f32"]);
+    assert!(store_plan::warnings(&c_new).is_empty());
+    assert!(store_plan::case_lines(&c_new).is_empty());
+    // the registered (c), with the route before ADR 0152: the case turns the store off
+    let before = PlanRoute {
+        default_store_keys_set: true,
+        ..PlanRoute::default()
+    };
+    let mut c = StartPlan::new_route("cases/cavity.toml", &c_text, Path::new("."), before).unwrap();
     assert!(c.set().is_empty(), "{:?}", c.set());
     let w = store_plan::warnings(&c);
     eprintln!("SF9 (c): {:?}", w);
