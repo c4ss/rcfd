@@ -273,6 +273,9 @@ pub fn run_chain_cli(case: &Case, args: &[String], label: &str) -> u8 {
         checkpoint_every: ckpt_every.unwrap_or(0),
         out_dir: None,
         info: json!({"driver": "cli", "case": label, "chain": true}),
+        // chains keep their own stream; `--store-dir` and `--status-monitors` apply to single runs (ADR 0130)
+        store_dir: None,
+        status_monitors: false,
     };
     say(&format!(
         "chain of {} stages: {}",

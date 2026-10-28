@@ -1135,6 +1135,9 @@ impl Service {
             checkpoint_every: u_param(p, "checkpoint_every", 0)? as usize,
             out_dir: out_dir.clone(),
             info: json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())}),
+            // `rcfd run` flags (ADR 0130); the service keeps its defaults
+            store_dir: None,
+            status_monitors: false,
         };
         let mut file = match &status_path {
             Some(f) => {

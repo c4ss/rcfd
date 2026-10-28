@@ -60,6 +60,11 @@ pub struct RunOptions {
     pub out_dir: Option<PathBuf>,
     /// Informational fields copied into the `start` event (threads, continue-from, ...).
     pub info: Value,
+    /// Directory of the opt-in time-series field store (`rcfd run --store-dir`, ADR 0130 D3); `None`: `<out_dir>/fields`.
+    pub store_dir: Option<PathBuf>,
+    /// Add `monitors: {report: value}` of the step to every `iteration` event (`rcfd run --status-monitors`,
+    /// ADR 0130 D5). Off: the events are unchanged.
+    pub status_monitors: bool,
 }
 
 /// Final result of a launch.
@@ -202,14 +207,15 @@ pub fn drive(
         ));
     }
     // ADR 0124: opt-in field store; None (and nothing else happens) unless output.store_* is set
-    let mut store = match crate::fieldstore::Hook::open(&lock_sim(sim), opts.out_dir.as_deref()) {
-        Some(Ok(h)) => Some(h),
-        Some(Err(m)) => {
-            sink(&event("warning", &mut seq, 0.0, json!({ "message": m })));
-            None
-        }
-        None => None,
-    };
+    let mut store =
+        match crate::fieldstore::Hook::open(&lock_sim(sim), opts.out_dir.as_deref(), opts.store_dir.as_deref()) {
+            Some(Ok(h)) => Some(h),
+            Some(Err(m)) => {
+                sink(&event("warning", &mut seq, 0.0, json!({ "message": m })));
+                None
+            }
+            None => None,
+        };
     // setup warnings found before solving (rule engine), passed in `info.warnings` as objects with
     // `message`, `rule` and `path`
     if let Some(ws) = opts.info.get("warnings").and_then(Value::as_array) {
@@ -404,10 +410,19 @@ pub fn drive(
                 }
             }
         }
-        let body = json!({
+        let mut body = json!({
             "index": step.index, "time": step.time, "res_u": step.res_u, "res_p": step.res_p,
             "continuity": step.continuity, "done": step.done,
         });
+        if opts.status_monitors {
+            // opt-in (ADR 0130 D5): the report values this step appended to the monitor store
+            let m: serde_json::Map<String, Value> = lock_sim(sim)
+                .step_report_values()
+                .into_iter()
+                .map(|(k, v)| (k, json!(v)))
+                .collect();
+            body["monitors"] = Value::Object(m);
+        }
         if step.index <= 5 || step.index % every == 0 || step.done {
             pending = None;
             sink(&event("iteration", &mut seq, t0.elapsed().as_secs_f64(), body));

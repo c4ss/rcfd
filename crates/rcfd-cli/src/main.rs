@@ -62,6 +62,9 @@ COMMANDS:
                                  iteration while held; the stop file ends the hold)
         --case-dir <dir>         read the case from its text (TOML, or JSON when it starts with '{')
                                  and resolve its relative paths against <dir> (run snapshots)
+        --store-dir <dir>        time-series field store directory when output.store_interval or
+                                 output.store_time_interval is set (default: <out>/fields)
+        --status-monitors        add the report values of each step (monitors) to the iteration events
         --max-elapsed <seconds>  stop cleanly (exit 8) after this wall-clock time
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
@@ -326,6 +329,7 @@ const RUN_VALUE_OPTS: &[&str] = &[
     "--stop-file",
     "--pause-file",
     "--case-dir",
+    "--store-dir",
     "--max-elapsed",
     "--threads",
     "--precision",
@@ -566,6 +570,8 @@ fn cmd_run(args: &[String]) -> u8 {
             "threads": threads.or_else(|| std::thread::available_parallelism().ok().map(|n| n.get())),
             "precision": "double", "warnings": rule_warnings,
         }),
+        store_dir: opt(args, "--store-dir").map(PathBuf::from),
+        status_monitors: flag(args, "--status-monitors"),
     };
     say(&format!(
         "{} cells, algorithm {}",

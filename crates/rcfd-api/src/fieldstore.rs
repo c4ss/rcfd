@@ -36,8 +36,13 @@ fn bucket(time: f64, dt: f64) -> f64 {
 }
 
 impl Hook {
-    /// `None` when the store is off (both keys 0) or there is no output directory; `Err` is a warning message.
-    pub(crate) fn open(sim: &Simulation, out_dir: Option<&Path>) -> Option<Result<Hook, String>> {
+    /// `None` when the store is off (both keys 0) or there is no directory for it; `Err` is a warning message. The
+    /// store goes to `store_dir` when given (`rcfd run --store-dir`, ADR 0130 D3), else to `<out_dir>/fields`.
+    pub(crate) fn open(
+        sim: &Simulation,
+        out_dir: Option<&Path>,
+        store_dir: Option<&Path>,
+    ) -> Option<Result<Hook, String>> {
         let every = sim
             .case
             .get("output.store_interval")
@@ -53,7 +58,10 @@ impl Hook {
         if every == 0 && dt <= 0.0 {
             return None;
         }
-        let dir = out_dir?.join("fields");
+        let dir = match store_dir {
+            Some(d) => d.to_path_buf(),
+            None => out_dir?.join("fields"),
+        };
         Some(Self::open_in(sim, &dir, every, dt).map_err(|e| format!("field store disabled: {e}")))
     }
 

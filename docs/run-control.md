@@ -28,7 +28,8 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--check-only]
          [--status-json] [--status-file file] [--status-every n]
          [--continue-from checkpoint] [--checkpoint file] [--checkpoint-every n]
-         [--stop-file file] [--pause-file file] [--case-dir dir] [--max-elapsed seconds]
+         [--stop-file file] [--pause-file file] [--case-dir dir] [--store-dir dir] [--status-monitors]
+         [--max-elapsed seconds]
          [--threads n] [--precision double] [--journal file]
          [--set path=json]... [--print-settings] [--restart-from file] [--source-case case] [--method m] [--no-chain]
 rcfd restart <case> --from file [--mesh mesh] [--source-case case] [--method m]   (plus every run flag)
@@ -48,6 +49,8 @@ rcfd check <case> [--json] [--set path=json]...
 | `--stop-file f` | the run stops cleanly before the next step when this file exists |
 | `--pause-file f` | hold between two steps while `f` exists, writing `f.ack` (the iteration count) while held; the stop file ends the hold. Paused time counts towards `--max-elapsed` and `wall_s`. Plain runs only (not chains). Used by the run service (ADR 0123) |
 | `--case-dir d` | read the case from its text whatever the file name (JSON when the text starts with `{`, TOML otherwise) and resolve its relative paths against `d`; the run service runs `runs/<id>/case.snapshot` this way |
+| `--store-dir d` | write the field store (Field store, below) to `d` instead of `<out>/fields`; only used when the case turns the store on. The run service passes `runs/<id>/fields` (ADR 0130) |
+| `--status-monitors` | add `monitors`, the value of every report of the case at that step (`{"lid_drag": 0.31}`), to each `iteration` event; the values are the ones `monitors.json` records, a report that could not be evaluated at that step is left out. Without the flag the events are unchanged. Plain runs only (not chains). The run service passes it and forwards the values into `residuals.jsonl` (ADR 0130) |
 | `--max-elapsed s` | stop cleanly after s wall-clock seconds |
 | `--threads n` | number of worker threads (`RAYON_NUM_THREADS`); results are bit-identical for any thread count (measured, see below) |
 | `--precision double` | the only supported value; `single` is rejected with exit 2 |
@@ -82,7 +85,8 @@ Every line is a JSON object with `format: "rcfd-status"`, `version: 1`, `event`,
 within one launch) and `wall_s`. Events:
 
 - `start`: `cells`, `algorithm`, `steady`, `start_iteration`, `case_hash`, `info` (`driver`, `threads`, `precision`, `continue_from`)
-- `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`
+- `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`; with `--status-monitors` also `monitors` (report name to
+  value, `null` when not finite)
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
 - `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`; a
@@ -164,7 +168,7 @@ statistics for the compressible solver or steady runs, no cumulative time-averag
 Off by default. With `output.store_interval = N` (steps or iterations) or `output.store_time_interval = dt`
 (simulated seconds, transient runs only) and an output directory, `rcfd run` and `run.headless` (any caller of
 `runctl::drive` that passes an output directory) add a snapshot of the cell fields `output.store_fields` (default
-`ux uy uz p`) to `<out>/fields/store.rts`, and the final state when the run ends. `store_time_interval` stores the
+`ux uy uz p`) to `<out>/fields/store.rts` (`--store-dir d`: `d/store.rts`), and the final state when the run ends. `store_time_interval` stores the
 first step at or after each multiple of `dt`; it does not change the time steps (unlike `output.write_time_interval`).
 The store keeps the mesh once (with its hash), each snapshot field by field in blocks with checksums; a run that is
 killed leaves every earlier snapshot readable. The Rust reader is `rcfd_tsstore::Reader` (by step or time, nearest,
