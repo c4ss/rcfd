@@ -283,3 +283,109 @@ treatment of the E5 rerun (code fix kept). Also open from the first addendum: `C
 project are not scanned; `--plugin-dir` is not refused. Stated limits: the store is replaced without a lock (two Studio
 processes confirming at once can lose one confirmation, which then asks again); the gap between the folder check and the
 spawn is not covered, as for the open check (ADR 0126).
+
+## Amendment 3 (2026-10-28, integration part, registered before any panel check ran)
+
+Written by the 48E integration implementer on main 7486ecb (48A, 48B, 48C library, 48D, 48E library and 48F merged). What I
+knew: the code reading, the library results above and a compile of the new code; no panel test had run. The limits of E1-E10
+are unchanged. The maintainer's decisions applied: W48-10 (a) and (b), W48-11 (a), Amendment 2 (trust record per user,
+outside the project, the allow file confirmed with its rules), `fnv64` kept.
+
+**Design as built** (`crates/rcfd-studio/src/chat.rs`: model, worker and turn threads; `src/chat_ui.rs`: drawing and the
+confirmation dialog; hooks: the `Studio::chat` field, opened with the browser's root on `Event::Opened`, closed in
+`close_project`, drained in `Studio::drain`; the `Panel::Chat` arm and one dialog call in `ui.rs`; the bridge set in
+`main.rs`).
+1. The chat is off unless a bridge is set: `Studio::new` and `Studio::in_memory` start no process (B1-B9 and R1-R12 are
+   untouched by it). `main` sets `Bridge::from_env(config_dir())`, which needs the Studio's config folder, Claude Code's home
+   (`Claude::from_env`) and `claude.exe` (Windows; `claude` elsewhere) on PATH; otherwise the panel says why, and how to
+   install, and the rest of the Studio works. `rcfd-mcp` is taken from `RCFD_MCP_BIN`, else next to the Studio binary.
+2. Per-user files, both in the config folder, never in the project: the trust record `claude-trust.json`
+   (`Claude::trust_store`), and the app-owned MCP config `claude-mcp/<fnv64 hex of the project path>.json`
+   (`Claude::mcp_config`), written by the chat worker with `allow::pinned_mcp_config` when the project opens. Without a config
+   folder neither can exist, so the chat is off (W48-10 (a) cannot be applied without it).
+3. Allow-list: read on the turn thread just before each spawn; a missing file means `AllowList::project_initial()` (the 11
+   read-class project tools). The file is first written when the user clicks "Allow", "remove" or "Reset to the first list",
+   always through `TrustStore::save_allow_list`. Opening a project writes nothing into it.
+4. Sessions: `Claude::discover` every 2 s on a thread of the chat worker. OPEN: input disabled with the pid and the reason;
+   CLOSED: enabled; UNKNOWN: disabled. A pid of this Studio's own turn counts as closed, so a listing taken during the turn
+   does not block the next message.
+5. Send: refused in the model from its cached state, with no process and no listing, when the bridge is off, no project is
+   open, a turn runs, the MCP config is not written, the folder is pending or unreadable, the allow file is refused, or the
+   selected session is OPEN, UNKNOWN or no longer listed. Otherwise a turn thread calls `Claude::resume` or
+   `Claude::new_session`, which check the arguments, the folder and (for resume) the open state again before any process.
+   A refusal with `FolderNotConfirmed` opens the dialog with that `Pending`.
+6. Mirror: on selection the last 50 entries (read from the end; the offset is set after the last complete line), then
+   `transcript::read_new` every 500 ms. During this Studio's own turn in that session the mirror pauses (the turn is shown
+   from its stream); after the turn the transcript's lines replace the stream's items when they arrive.
+7. Turn: text assembled from the deltas, tool calls, denials with their input (from the matching tool call) and the
+   driver's suggestion, cost of the result (summed per session over the turns run here); after `Aborted` only the exit is
+   applied. Cancel sets a flag that the turn thread checks every 20 ms and then calls `Chat::cancel`.
+8. Transcript area: items hard-wrapped (greedy word wrap) at the panel width in monospace characters, drawn with
+   `ScrollArea::show_rows`; appending text redoes only the last row; at most the last 10 denials are listed.
+9. The CLI version of `system/init` is shown, with a warning when it is not 2.1.310 (Risks). The floor caveat of ADR 0126 is
+   shown with the allow-list. A model field passes `--model` (empty: the user's default); `--model haiku` is how H1-H5 are
+   meant to be run.
+10. Confirmation dialog (`egui::Modal`, nothing behind it can be clicked): the project path; per file its path (links
+    marked), size, hash and "new or changed"; the paths removed since the last confirmation; the allow file's rules or why
+    it is refused; the first 4 KiB of each file, marked when it changed after the list was made. "Confirm these files"
+    records `Pending::files` with `TrustStore::confirm` on the worker and checks again; "Not now" closes it.
+
+**Set-up of the checks** (`crates/rcfd-studio/tests/chat_e.rs`, `tests/chat_common/mod.rs`; release, `--test-threads 1`):
+1. The replay double is `fake-claude` of `rcfd-claude`, built by `cargo build --release -p rcfd-claude --bin fake-claude`
+   into the same target folder and found next to the `rcfd-studio` binary (the 48D pattern for `rcfd-runner`); a missing
+   double fails the test. Its fixtures are read in place from `crates/rcfd-claude/tests/fixtures/v2.1.310`. The fake
+   records `agents --json` calls as well, so "no process" is counted as recorded `-p` calls.
+2. Common set-up: a project made by `Project::create` at `<tmp>/my-proj` (canonical path), Claude Code home `<tmp>/home`,
+   config folder `<tmp>/studio-config` (outside the project); `Studio::in_memory` with the watcher and run worker off and
+   the bridge set to the fake; drained until the project is open, the MCP config written, the allow-list read, the first
+   discovery and the first folder check received. "Shown" means present in the text shapes of a headless frame of the
+   whole app (1280 x 800, the case editor hidden so that Chat is the visible tab of its area; the 4th frame).
+3. E1: the D7 fixture of ADR 0126 (S2 open with this test's pid, S1 with a dead pid, S3 open without a transcript, a
+   non-UUID id, S4's transcript of the colliding folder `my_proj`). Limit: rows exactly S2 (disabled), S1 (enabled), S3
+   (disabled), drawn "open in process <pid> (mirror only)" and "closed"; then the fake's listing fails, a refresh: S2 and
+   S1 unknown and disabled, a warning naming `claude agents --json` (drawn), "state unknown" drawn, sending to S1 refused.
+   Control: S4's file is in the directory and not listed.
+4. E2: the same fixture. Selecting S2 and sending is refused in the model ("open in process"), no turn exists, and 1 s
+   later no `-p` call is recorded. Control: S1 with the dontAsk stream (its session id set to S1) starts exactly one `-p`
+   process, which finishes with exit code 0.
+5. E3: an empty listing and S2's transcript (S2 closed). The stream is `stream_allowlist_dontask.jsonl`: the only recorded
+   dontAsk stream with text deltas (`stream_resume.jsonl` reports mode `default`, which the driver aborts). Limit: one `-p`
+   call whose argument list equals `Chat::args` (forwarded by the turn), ends in `--resume S2` and has
+   `--strict-mcp-config --mcp-config <a file outside the project>`; the text from the deltas equals the result text and the
+   recorded string; cost 0.00381852; drawn "cost $0.003819" and "session total here $0.003819". Control (D4 set-up):
+   `stream_denied_default.jsonl` with `hang`: the turn is `Aborted` naming `dontAsk`, the feed has the note, "aborted: the CLI
+   did not apply --permission-mode dontAsk" is drawn, and both fake pids are gone within 5 s.
+6. E4, panel part (the library part passed above): the call-5 stream `stream_denied_dontask.jsonl`, no allow file at
+   first. Limit: the denial is drawn with `Edit(./other.txt)` and an "Allow" button, its input names `other.txt`, the
+   suggestion is `Edit(other.txt)`; `ChatModel::allow_rule` (what the button calls) creates the file with the first list
+   plus that rule (11 -> 12), the folder stays confirmed; the next message's argument list has exactly one rule more, and
+   the four permission flags before `--allowedTools`. Control: the same stream with `other.txt` replaced by `.mcp.json`:
+   suggestion `None`, "no rule can allow this call" drawn, no "Allow" button.
+7. E6 (D5 set-up): `stream_allowlist_dontask.jsonl` with `hang` and a pid file, a new chat; both pids alive 300 ms after
+   the turn runs; `ChatModel::cancel` (what the Cancel button calls); limit: both gone within 5 s; the turn ends
+   `Cancelled`. The D6 control is the library's (ADR 0126), not re-run.
+8. E7: S2 open (this test's pid) with its transcript; S2 selected (mirror only) and its tail shown. A complete user line
+   "E7 marker 1" is appended: limit, in the model's feed within 2.0 s of the append. The first half of a second marker line
+   is appended: the feed does not change for 2.0 s (4 periods); the line is completed: in the feed within 2.0 s, exactly
+   once, and no unrecognised item. Control: `Switches::whole_file_mirror` (the whole file each period, the unterminated
+   last line included) shows the partial line as an unrecognised item within 5 s.
+9. E10: release only (a debug run prints a located SKIP, as B7). The P4 stream of ADR 0126 (1000 copies of the call-3
+   stream, 34 000 events: the table's "30 000"), parsed by `stream::parse_line` and fed through `ChatModel::apply` after
+   one `Started` (the driver would abort this default-mode stream; the panel's cost is measured, not the driver's), in 100
+   equal chunks: each timed frame is one chunk applied plus one frame of the whole app (project open, discovery running).
+   5 warm-up frames; limit: the median wall time of the 100 frames <= 8 ms. Control: `Switches::whole_text` draws the whole
+   feed as one label each frame: median > 8 ms.
+10. E11 (new: the panel side of E8 and the dialog; registered here). A project holding `.mcp.json`,
+    `.claude/settings.json` (a `hooks` key) and `.rcfd/claude-allow.json` (first list plus `Bash(echo hi)`) when it opens.
+    Limits: the folder is pending with exactly those 3 files, all 3 changed, the allow rules exactly the file's, 3 previews
+    whose hashes match; sending is refused in the model and opens the dialog, and 0.5 s later no `-p` call is recorded; the
+    dialog is drawn with its heading, the 3 paths, "new or changed", `Bash(echo hi)` and the `.mcp.json` hash; "Confirm"
+    (`ChatModel::confirm`) gives a confirmed folder, a trust record in the config folder naming `.mcp.json` and nothing at
+    `.rcfd/claude-trust.json`; a message then starts exactly one `-p` process. One byte of `.mcp.json` changes; a message
+    (the model's state is stale) is refused by the driver, the turn is `Refused`, the folder pending with `changed` exactly
+    `.mcp.json`, the dialog open again, still one `-p` process. Control: a project without control files is confirmed at
+    open, no dialog, a message starts one process.
+11. B9: `parity_assistant_access_known_miss` becomes `parity_assistant_access` (the fake; a new chat's turn finishes with
+    the recorded text; one process).
+12. Also run, unchanged: every other `rcfd-studio` test and `workspace_graph` (3 tests; `rcfd-studio` at 9 depends on
+    `rcfd-claude` at 2). `rcfd-claude` is not changed by this part.
