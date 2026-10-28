@@ -1,6 +1,7 @@
 //! ADR 0131 B9: the parity map of plan section 6 (docs/ui-restart-plan.md), one named test per item. Items that belong to a
 //! later sub-wave are ignored `*_known_miss` tests that name it; they are not limits that were missed.
 
+mod chat_common;
 mod common;
 
 use common::{b1_project, frame, frames_until, temp};
@@ -136,10 +137,24 @@ fn parity_2d_field_view_with_colour_map_legend_and_hover_known_miss() {
     panic!("the viewport arrives with 48C");
 }
 
+/// Plan section 6, "assistant access" (48E, ADR 0134): the Claude Code sidebar of the open project runs a turn and shows
+/// its text, through the replay double `fake-claude` (never the real CLI).
 #[test]
-#[ignore = "48E (ADR 0134): assistant access is the Claude Code sidebar; not in 48B"]
-fn parity_assistant_access_known_miss() {
-    panic!("the Claude Code chat arrives with 48E");
+fn parity_assistant_access() {
+    let s = chat_common::ChatSetup::new(
+        "parity",
+        Some("stream_allowlist_dontask.jsonl"),
+        Some(json!([])),
+        json!({}),
+    );
+    let mut st = s.studio();
+    st.chat.send("hello").unwrap();
+    assert_eq!(
+        chat_common::finish_turn(&mut st),
+        rcfd_studio::chat::TurnState::Finished { code: Some(0) }
+    );
+    assert!(st.chat.turn.as_ref().unwrap().text.starts_with("All three steps"));
+    assert_eq!(s.chat_argvs().len(), 1);
 }
 
 #[test]

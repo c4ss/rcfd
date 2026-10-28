@@ -3597,6 +3597,7 @@ dependencies = [
  "egui_dock 0.21.1",
  "egui_plot 0.37.0",
  "rcfd-api",
+ "rcfd-claude",
  "rcfd-core",
  "rcfd-project",
  "rcfd-runner",

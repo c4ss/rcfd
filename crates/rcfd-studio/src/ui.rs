@@ -287,6 +287,7 @@ impl StudioApp {
         }
         start_dialog(ctx, &mut self.st, &mut self.ui_state);
         budgets_dialog(ctx, &mut self.st, &mut self.ui_state);
+        crate::chat_ui::confirm_dialog(ctx, &mut self.st);
         if let Some(mut path) = self.ui_state.open_dialog.take() {
             let mut open = true;
             let mut done = false;
@@ -352,9 +353,7 @@ impl TabViewer for Viewer<'_> {
             }
             Panel::Plots => plots_panel(ui, self.st),
             Panel::Log => log_panel(ui, self.st),
-            Panel::Chat => {
-                ui.weak("The Claude Code chat for this project arrives with the sidebar (48E, ADR 0134).");
-            }
+            Panel::Chat => crate::chat_ui::chat_panel(ui, self.st),
             Panel::Outputs => outputs_panel(ui, self.st),
         }
     }

@@ -31,7 +31,9 @@ fn main() -> eframe::Result {
             ),
         },
     };
-    let mut st = Studio::new(loaded.prefs, loaded.dock, dir);
+    let mut st = Studio::new(loaded.prefs, loaded.dock, dir.clone());
+    // the Claude Code sidebar (ADR 0134): trust record and MCP config in the same per-user folder
+    st.chat.bridge = rcfd_studio::chat::Bridge::from_env(dir);
     if let Some(m) = loaded.message {
         st.say(m);
     }

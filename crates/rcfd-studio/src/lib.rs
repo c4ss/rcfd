@@ -4,9 +4,12 @@
 //! State and decisions live in the non-UI modules ([`studio`], [`project_view`], [`case_edit`], [`watch`], [`layout`],
 //! [`prefs`], [`runs`], [`poll`]); [`ui`] only draws. File work runs on worker threads per open project: the project
 //! worker ([`watch`]) and the run worker ([`poll`], ADR 0133), which talks to the project's `rcfd-runner`. Tests drive
-//! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI").
+//! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
+//! sidebar ([`chat`], ADR 0134) has its own worker and turn threads.
 
 pub mod case_edit;
+pub mod chat;
+pub mod chat_ui;
 pub mod layout;
 pub mod monitors;
 pub mod poll;
