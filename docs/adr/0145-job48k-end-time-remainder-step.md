@@ -2,7 +2,8 @@
 
 Status: **PROPOSED 2026-10-28** (set-up, limits and the order of runs registered here before any run of this job;
 amendments 1 and 2 before the corrected runs; results in the addendum: every registered limit met, the control
-reproduced the defect on the unfixed tree as predicted, 3 rcfd-studio failures found to be pre-existing on main).
+reproduced the defect on the unfixed tree as predicted; 3 rcfd-studio tests fail on main's code in the scratch copy,
+pre-existing).
 Written at main 0a69af4 (wave 48H merged, ADR 0142). Job 48K fixes the defect ADR 0142 found and did not fix (its
 addendum "Found, not fixed" and question 6). House rules of ADRs 0110-0142 apply: the set-up and the limits below are
 fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
@@ -237,12 +238,14 @@ warnings, sees none); none below 1e-6. Together with B4 (a) this shows that in e
 code took the same steps, set the same done flags and handed out the same warnings as the unfixed code. C1: 21.1 s
 (unfixed), 20.6 s (fixed).
 
-**Found, not fixed: three rcfd-studio tests fail on main.** `oneclick_g4::g1_control_without_select_and_focus_no_frame_and_no_front`,
+**Found, not fixed: three rcfd-studio tests fail on main's code in B4's scratch copy on this machine.**
+`oneclick_g4::g1_control_without_select_and_focus_no_frame_and_no_front`,
 `oneclick_g4::g4_control_without_the_explanation_the_reason_is_not_shown` and
 `oneclick_e2e_g4::g1b_one_click_from_case_to_picture` (ADR 0141) fail on the unfixed tree (main 0a69af4's code) as on
-the fixed one, alone and in B4, at the same assertions (B4 (b)). Not investigated (not this job's code); possibly an
-interaction of the 48G merges (a frame and a second upload before the run is selected could come from the mesh preview of
-ADR 0138). Question 6.
+the fixed one, alone and in B4, at the same assertions (B4 (b)). Where: the scratch copy `E:\projects\cfd\w48k-probe`
+(its own target folder, TEMP on E:, a GPU present, B4's package selection); not run in the main checkout or in a gate.
+Not investigated (not this job's code). An untested idea: the 48G merges interact (a frame and a second upload before
+the run is selected could come from the mesh preview of ADR 0138). Question 6.
 
 **Observations.** The PISO and PISO Courant set-ups give identical states for every variant: with `max_courant = 1e6`
 the legacy controller proposes exactly `solver.dt`, so both paths do the same arithmetic. The largest abs `p` of the
@@ -297,8 +300,9 @@ construction).
 4. The compressible engine has the same kind of landing (relative tolerance) but no projection. Leave it?
 5. The Studio's event list cuts a solver event's JSON at 160 characters, so the warning's message may be cut there.
    Show solver warning messages in full (a Studio change)?
-6. (Addendum) Three rcfd-studio one-click tests of ADR 0141 fail on main (found by B4, "Found, not fixed"). Who looks
-   at them: the 48G owner, or a separate job?
+6. (Addendum) Three rcfd-studio one-click tests of ADR 0141 fail on main's code in B4's scratch copy on this machine
+   (found by B4, "Found, not fixed"; not run in the main checkout or a gate). Confirm in the next gate, then who looks at
+   them: the 48G owner, or a separate job?
 
 Recommendations (addendum): 1 keep 1e-6 (it covers every rounding remainder up to 1.3e5 steps in the worst case and
 changes no deliberate remainder); 2 no check-time rule for now (the run-time warning names the remedy; a new rule
