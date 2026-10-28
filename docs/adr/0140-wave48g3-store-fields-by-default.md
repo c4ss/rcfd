@@ -258,6 +258,28 @@ Build: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then `
 6. The cell count builds the mesh inside the Studio process (a short memory peak for a large mesh file). Accept, or count in a
    child process (`rcfd check-mesh --json`)?
 
+## Amendment 1 (2026-10-28, before any registered run): set-up details found while writing the code and tests
+
+Written after the code and the tests were written and compiled as a library, before any test of this ADR was built or run.
+Limits unchanged.
+
+1. Texts beyond the registered table, for situations no registered fixture reaches: `{count}` `at most {n} snapshots` (a fixed
+   step whose snapshots do not line up with the interval) and `an unknown number of snapshots` (a step interval on a run whose
+   step count is not known, or a time interval on a steady run); `every {k} iterations and every {dt} s of simulated time` (both
+   keys set); size lines `Estimated size unknown: the cell count is not known before the run.` and `Estimated size unknown: the
+   number of snapshots is not known before the run.`
+2. SF3's control: the fan cases set no `mesh.nx`, `mesh.ny`, so their resolved values are the schema defaults (20) and
+   `nx * ny` is 400, not 0 as the table says; the control asserts that it differs from the count.
+3. SF7's legacy fixture: its `run.json` `case_source` names a folder of the 48A implementer's host
+   (`E:\projects\cfd\target-w48a\a4\proj\cases\cavity.toml`), which exists on this host (seen while writing the test, before any
+   run), so "case not found" would depend on the host. The copy in the test points `case_source` and `case_dir` at a missing
+   folder of the temporary project; the record keeps its legacy form (no `case`, the `fnv1a64:` hash, a null solver version).
+4. SF4 and SF5: the plans are made through the run worker (`Studio::plan_start`, as the start dialog makes them); then
+   `mem_mb` 10 as registered. SF8 uses ADR 0133's `RunnerProject::plan(400, false)` as registered.
+5. SF9 (i): the dialog is opened by setting `UiState::start_dialog` with the case; "drawn" means among the texts of the frame's
+   shapes; the control is the first frame (the plan is asked for during it).
+6. D8 as implemented: an unreadable `run.json` is read again on the next poll (a run folder still being written), not cached.
+
 ## Files
 
 This ADR. `crates/rcfd-studio/src/{store_plan,run_fields,fields_ui}.rs` (new), `crates/rcfd-studio/src/{runs,poll,studio,viewport,

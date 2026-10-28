@@ -408,10 +408,17 @@ enum Event {
         two_d: bool,
         snaps: Vec<Snap>,
         fields: Vec<String>,
+        note: Option<String>,
     },
     NoStore {
         run: String,
         message: String,
+        empty: crate::run_fields::EmptyState,
+    },
+    /// Why a store without snapshots has nothing to show (ADR 0140 D8).
+    Empty {
+        run: String,
+        empty: crate::run_fields::EmptyState,
     },
     Snaps {
         run: String,
@@ -475,6 +482,9 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
     let mut run: Option<(String, PathBuf)> = None;
     let mut view: Option<StoreView> = None;
     let mut missing: Option<String> = None;
+    // ADR 0140 D8: why the run has nothing to show, and the last such text sent for a store without snapshots
+    let mut why = crate::run_fields::Explainer::default();
+    let mut empty_sent: Option<String> = None;
     let send = |e: Event| {
         let _ = tx.send(e);
         wake();
@@ -500,8 +510,9 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
                 Command::Open { run: id, dir } => {
                     view = None;
                     missing = None;
+                    empty_sent = None;
                     run = Some((id.clone(), dir.clone()));
-                    try_open(&id, &dir, &mut view, &mut missing, &send);
+                    try_open(&id, &dir, &mut view, &mut missing, &mut why, &send);
                 }
                 Command::Sample {
                     gen,
@@ -545,7 +556,7 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
         // live runs: a store that appears, or new snapshots of a scanned index
         let Some((id, dir)) = &run else { continue };
         match view.as_mut() {
-            None => try_open(id, dir, &mut view, &mut missing, &send),
+            None => try_open(id, dir, &mut view, &mut missing, &mut why, &send),
             Some(v) if v.live() => match v.refresh() {
                 Ok(0) => {}
                 Ok(_) => {
@@ -563,25 +574,49 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
             },
             Some(_) => {}
         }
+        // a store without snapshots says why, by the run's state, until its first snapshot (ADR 0140 D8)
+        if view.as_ref().is_some_and(|v| v.snaps().is_empty()) {
+            let empty = why.explain(&project_of(dir), id, true);
+            if empty_sent.as_deref() != Some(empty.text.as_str()) {
+                empty_sent = Some(empty.text.clone());
+                send(Event::Empty { run: id.clone(), empty });
+            }
+        }
     }
 }
 
-fn try_open(id: &str, dir: &Path, view: &mut Option<StoreView>, missing: &mut Option<String>, send: &impl Fn(Event)) {
-    if !dir.join(rcfd_tsstore::STORE_FILE).is_file() {
-        let message = format!(
-            "no stored fields: {} not found (start the run with \"Store fields\" on)",
-            dir.join(rcfd_tsstore::STORE_FILE).display()
-        );
+/// The project folder of a run's `runs/<id>/fields` folder.
+fn project_of(fields_dir: &Path) -> PathBuf {
+    fields_dir
+        .ancestors()
+        .nth(3)
+        .map_or_else(PathBuf::new, Path::to_path_buf)
+}
+
+fn try_open(
+    id: &str,
+    dir: &Path,
+    view: &mut Option<StoreView>,
+    missing: &mut Option<String>,
+    why: &mut crate::run_fields::Explainer,
+    send: &impl Fn(Event),
+) {
+    // ADR 0140 D7: the contract location `runs/<id>/fields/`, else the pre-48A `runs/<id>/output/fields/`
+    let run_dir = dir.parent().map_or_else(PathBuf::new, Path::to_path_buf);
+    let Some((store_dir, legacy)) = crate::run_fields::locate(&run_dir) else {
+        let empty = why.explain(&project_of(dir), id, false);
+        let message = empty.message();
         if missing.as_deref() != Some(message.as_str()) {
             *missing = Some(message.clone());
             send(Event::NoStore {
                 run: id.to_string(),
                 message,
+                empty,
             });
         }
         return;
-    }
-    match StoreView::open(dir) {
+    };
+    match StoreView::open(&store_dir) {
         Ok(mut v) => {
             let fields = v.fields().unwrap_or_default();
             send(Event::Opened {
@@ -590,6 +625,7 @@ fn try_open(id: &str, dir: &Path, view: &mut Option<StoreView>, missing: &mut Op
                 two_d: v.two_d,
                 snaps: v.snaps(),
                 fields,
+                note: legacy.then(|| crate::run_fields::legacy_note(&run_dir)),
             });
             *view = Some(v);
         }
@@ -896,6 +932,10 @@ pub struct Viewport {
     pub dark: bool,
     /// Where the image was last drawn (points; set by the UI).
     pub image_rect: Option<egui::Rect>,
+    /// Why the run has nothing to show (no store, or a store without snapshots; ADR 0140 D8).
+    pub empty: Option<crate::run_fields::EmptyState>,
+    /// A note on where the store was found (the pre-48A location, ADR 0140 D7).
+    pub store_note: Option<String>,
     gen: u64,
     shown_gen: u64,
     pending: bool,
@@ -929,6 +969,8 @@ impl Default for Viewport {
             size: [640, 480],
             dark: true,
             image_rect: None,
+            empty: None,
+            store_note: None,
             gen: 0,
             shown_gen: 0,
             pending: false,
@@ -974,6 +1016,8 @@ impl Viewport {
         self.hover = None;
         self.pending = false;
         self.dirty = true;
+        self.empty = None;
+        self.store_note = None;
     }
 
     /// Close: stop the worker and forget the run (the GPU stays).
@@ -1030,7 +1074,10 @@ impl Viewport {
                 two_d,
                 snaps,
                 fields,
+                note,
             } if self.mine(&run) => {
+                self.store_note = note;
+                self.empty = None;
                 let (lo, hi) = surface.bounds();
                 self.camera = Some(CameraState::start(lo, hi, two_d));
                 self.surface = Some(surface);
@@ -1044,10 +1091,19 @@ impl Viewport {
                     self.request();
                 }
             }
-            Event::NoStore { run, message } if self.mine(&run) => {
+            Event::NoStore { run, message, empty } if self.mine(&run) => {
                 self.status = Status::NoStore(message);
+                self.empty = Some(empty);
+            }
+            Event::Empty { run, empty } if self.mine(&run) => {
+                if self.snaps.is_empty() {
+                    self.empty = Some(empty);
+                }
             }
             Event::Snaps { run, snaps, fields } if self.mine(&run) => {
+                if !snaps.is_empty() {
+                    self.empty = None;
+                }
                 // a live run grew; follow the newest snapshot when the last one (or none yet) was shown
                 let at_end = self.frame.as_ref().is_none_or(|f| f.index + 1 == self.snaps.len());
                 self.snaps = snaps;

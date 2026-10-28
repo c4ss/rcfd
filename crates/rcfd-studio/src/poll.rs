@@ -106,6 +106,13 @@ pub enum Update {
     Config(Result<Config, String>),
     /// A start plan for the dialog.
     Plan(Result<StartPlan, String>),
+    /// The cell count of a plan's case whose mesh the plan could not count (ADR 0140 D5): cells and mesh bytes.
+    PlanCells {
+        /// The plan's case (project-relative).
+        case: String,
+        /// Cells and D4 mesh bytes, or why the mesh could not be built.
+        result: Result<(u64, u64), String>,
+    },
     /// A run was queued (`Ok(id)`), or the start failed (located message).
     Started(Result<String, String>),
     /// `ensure_runner` returned.
@@ -152,6 +159,8 @@ pub enum Command {
     Queue(StartPlan),
     /// Start the project's runner (`Client::ensure_runner`).
     EnsureRunner,
+    /// Queue a new run of a run's unchanged case with the field store on (ADR 0140 D9).
+    Rerun(String),
 }
 
 #[derive(Debug, Clone)]
@@ -826,6 +835,7 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
             }))
         }
         Command::Plan(rel) => {
+            let mut count = None;
             let r = p
                 .root
                 .join(&rel)
@@ -833,9 +843,41 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
                 .map_err(|e| format!("{rel}: {e}"))
                 .and_then(|path| {
                     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-                    StartPlan::new(&rel, &text, path.parent().unwrap_or(&p.root))
+                    let base = path.parent().unwrap_or(&p.root).to_path_buf();
+                    let mut plan = StartPlan::new(&rel, &text, &base)?;
+                    if plan.facts.cells.is_none() {
+                        // ADR 0140 D5: the mesh is built on a control thread, never in the tick loop
+                        plan.facts.extra.cells_state = crate::store_plan::CellsState::Counting;
+                        count = Some((rel.clone(), text, base));
+                    }
+                    Ok(plan)
                 });
-            Some(Update::Plan(r))
+            // the plan first, so that its cell count (sent later on the same channel) finds it
+            if tx.send(Update::Plan(r)).is_ok() {
+                wake();
+            }
+            if let Some((case, text, base)) = count {
+                spawn_control(
+                    "rcfd-studio-cells",
+                    move || Update::PlanCells {
+                        case,
+                        result: crate::store_plan::count_cells(&text, &base),
+                    },
+                    tx.clone(),
+                    wake.clone(),
+                );
+            }
+            None
+        }
+        Command::Rerun(id) => {
+            let (client, root) = (p.client.clone(), p.root.clone());
+            spawn_control(
+                "rcfd-studio-rerun",
+                move || Update::Started(crate::store_plan::rerun(&client, &root, &id)),
+                tx.clone(),
+                wake.clone(),
+            );
+            None
         }
         Command::Start(plan) | Command::Queue(plan) if plan.case.is_empty() => {
             let _ = plan;

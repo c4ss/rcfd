@@ -325,6 +325,12 @@ impl Studio {
         self.send_runs(poll::Command::Queue(plan))
     }
 
+    /// Queue a new run of run `id`'s case, unchanged since that run, with the field store on, and make sure a runner
+    /// is alive (ADR 0140 D9, on a control thread). The id, or why it was not started, arrives as a message.
+    pub fn rerun_with_fields(&mut self, id: &str) -> Result<(), String> {
+        self.send_runs(poll::Command::Rerun(id.to_string()))
+    }
+
     /// Start the project's runner (`Client::ensure_runner`, on a control thread; not retried on failure).
     pub fn start_runner(&mut self) -> Result<(), String> {
         if self.runs.starting_runner {
@@ -447,6 +453,14 @@ impl Studio {
             }
             Update::Config(c) => self.runs.config = Some(c),
             Update::Plan(p) => self.runs.plan = Some(p),
+            Update::PlanCells { case, result } => {
+                // ADR 0140 D5: only into the plan of the same case (the dialog may have moved on)
+                if let Some(Ok(p)) = self.runs.plan.as_mut() {
+                    if p.case == case {
+                        crate::store_plan::set_cells(p, result);
+                    }
+                }
+            }
             Update::Started(r) => self.say(match r {
                 Ok(id) => format!("queued run {id}"),
                 Err(e) => format!("the run was not started: {e}"),

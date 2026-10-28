@@ -6,18 +6,22 @@
 //! run's stored fields with `rcfd-render` on eframe's own wgpu device into a texture that egui shows. File work runs on worker threads per open project: the project
 //! worker ([`watch`]) and the run worker ([`poll`], ADR 0133), which talks to the project's `rcfd-runner`. Tests drive
 //! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
-//! sidebar ([`chat`], ADR 0134) has its own worker and turn threads.
+//! sidebar ([`chat`], ADR 0134) has its own worker and turn threads. Studio-started runs store fields by default, and
+//! a run without fields to show says why ([`store_plan`], [`run_fields`], [`fields_ui`], ADR 0140).
 
 pub mod case_edit;
 pub mod chat;
 pub mod chat_ui;
+pub mod fields_ui;
 pub mod layout;
 pub mod monitors;
 pub mod poll;
 pub mod prefs;
 pub mod project_view;
+pub mod run_fields;
 pub mod runs;
 pub mod schema_model;
+pub mod store_plan;
 pub mod studio;
 pub mod theme;
 pub mod ui;
