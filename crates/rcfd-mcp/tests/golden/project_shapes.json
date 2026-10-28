@@ -1,0 +1,54 @@
+{
+  "start_run": {"case": "string", "run": "string", "state": "string"},
+  "wait_run": {
+    "changed": "bool", "from": "string", "run": "string", "state": "string", "terminal": "bool", "waited_s": "number",
+    "status": {"exit_code": "number", "pid": "null", "reason": "string", "state": "string", "step": "number", "time": "number", "updated": "string"}
+  },
+  "project_info": {
+    "counts": {"cases": "number", "designs": "number", "meshes": "number", "notes": "number", "runs": "number", "skipped_runs": "number"},
+    "created": "string", "issues": [], "issues_total": "number", "migrated_from": "null", "name": "string", "root": "string",
+    "runs_by_state": {"*": "number"}, "schema_version": "number", "solver_version_created": "string"
+  },
+  "list_runs": {
+    "next_offset": "null", "offset": "number",
+    "runs": [{"case": "string", "created": "string", "id": "string", "metrics": {"*": "number"}, "state": "string", "step": "number", "time": "number"}],
+    "skipped": [], "skipped_total": "number", "total": "number"
+  },
+  "run_status": {
+    "case": "string", "created": "string", "events": ["object"], "last_residual": "object", "run": "string", "settings": "object",
+    "solver_version": "string",
+    "status": {"exit_code": "number", "pid": "null", "reason": "string", "state": "string", "step": "number", "time": "number", "updated": "string"}
+  },
+  "read_metrics": {"metrics": {"*": "object"}, "omitted": []},
+  "read_residuals": {
+    "decimated": "bool", "lines": "number", "max_points": "number", "run": "string",
+    "series": {"*": {"x": ["number"], "y": ["number"]}}, "skipped_lines": "number", "unknown_names": []
+  },
+  "field_summary": {
+    "field": "string", "finite": "number", "interpolated": "bool", "location": "string", "max": "number", "mean": "number", "min": "number",
+    "n": "number", "precision": "string", "run": "string", "snapshot": {"index": "number", "step": "number", "time": "number"},
+    "unit": "string", "weighting": "string"
+  },
+  "render_field": {
+    "content": [{"data": "string", "mimeType": "string", "type": "string"}],
+    "isError": "bool",
+    "structuredContent": {
+      "field": "string", "height": "number", "interpolated": "bool", "max": "number", "min": "number", "png_bytes": "number",
+      "run": "string", "snapshot": {"index": "number", "step": "number", "time": "number"}, "width": "number"
+    }
+  },
+  "compare_runs": {
+    "baseline": "string", "differences": {"*": {"*": "number"}}, "metrics": {"*": {"*": "number"}}, "metrics_omitted": "number",
+    "metrics_total": "number",
+    "runs": [{"case": "string", "id": "string", "residual_lines": "number", "state": "string", "step": "number", "time": "number"}]
+  },
+  "list_changes_token": {"changes": [], "token": "number", "total": "number", "truncated": "bool"},
+  "list_changes": {"changes": ["string"], "since": "number", "token": "number", "total": "number", "truncated": "bool"},
+  "read_project_file": {"hash": "string", "next_offset": "null", "offset": "number", "path": "string", "size": "number", "text": "string"},
+  "edit_case_dry_run": {"form": "string", "new_hash": "string", "old_hash": "string", "path": "string", "valid": "bool", "values": {"*": "number"}, "written": "bool"},
+  "edit_case": {"form": "string", "new_hash": "string", "old_hash": "string", "path": "string", "valid": "bool", "values": {"*": "number"}, "written": "bool"},
+  "write_note": {"created": "bool", "new_hash": "string", "old_hash": "null", "path": "string"},
+  "pause_run": {"requested": "string", "run": "string", "state": "string"},
+  "resume_run": {"requested": "string", "run": "string", "state": "string"},
+  "cancel_run": {"requested": "string", "run": "string", "state": "string"}
+}
