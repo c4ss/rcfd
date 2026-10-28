@@ -212,6 +212,8 @@ impl Drop for Mcp {
 /// `run.headless` with `output.store_interval` set (the hook writes every 10 steps and the final state). Returns
 /// the service, the session (holding the final state) and the store folder.
 pub fn service_store(root: &Path, n: usize, steps: u64) -> (std::sync::Arc<Service>, String, PathBuf) {
+    // the sandbox root must exist (the service resolves paths against its canonical form)
+    std::fs::create_dir_all(root).unwrap();
     let svc = Service::new(ServiceConfig {
         root: Some(root.to_path_buf()),
         ..Default::default()
