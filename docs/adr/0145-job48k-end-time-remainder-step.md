@@ -177,6 +177,22 @@ only. Corrected B4 command, with the same selection, options and probe: `python 
 <file> -- -p rcfd-api -p rcfd-cli -p rcfd-mcp -p rcfd-studio -p rcfd-runner -p rcfd-gui -p rcfd-assistant` (`--` ends the
 script's options; `--tsv` only records the per-test times). B4's limits are unchanged.
 
+## Amendment 2 (2026-10-28, after B4 ran, before any rerun of its failures)
+
+What I knew when writing this: B4 ran from 16:31 to 17:20 (results in the addendum): 1116 passed, 18 failed, 267
+ignored; no D1 line outside this job's test file. 15 of the 18 failures are rcfd-studio chat tests
+(`parity::parity_assistant_access` and 14 tests of `chat_e`) that start the `fake-claude` binary of `rcfd-claude`; each
+stopped at once with "fake-claude.exe missing: cargo build -p rcfd-claude --bin fake-claude with this profile". B4's
+selection did not include `rcfd-claude`, so the binary was not built (the workspace gate builds it): the set-up was
+defective for these 15 tests. Corrected run: in the same scratch copy (the fixed tree with the probe), `cargo build
+--release -p rcfd-claude --bin fake-claude`, then each of the 15 tests alone (`<test binary> <name> --exact`) with the
+probe on. Limits unchanged: none fails, and no D1 line comes from them. The other 3 failures (`oneclick_g4`
+`g1_control_without_select_and_focus_no_frame_and_no_front` and `g4_control_without_the_explanation_the_reason_is_not_shown`,
+`oneclick_e2e_g4` `g1b_one_click_from_case_to_picture`) follow the registered rule: each alone on the unfixed tree (the
+scratch copy with the unfixed `sim.rs` of d2decfd, the only code file that differs), pre-existing if it fails there too.
+Reported in addition, without a limit: the same 3 tests alone on the fixed tree, to tell a failure under load from a
+failure of the tree.
+
 ## Not in CI (for the maintainer)
 
 `cargo build --release -p rcfd-cli`, then `rcfd run` the cylinder case with `--set solver.dt=0.05 --set
@@ -211,8 +227,9 @@ shared with other agents' builds.
 
 **Observations.** The PISO and PISO Courant set-ups give identical states for every variant: with `max_courant = 1e6`
 the legacy controller proposes exactly `solver.dt`, so both paths do the same arithmetic. The largest abs `p` of the
-fixed run's last snapshot (0.5856598, stored in f32) equals that of the unfixed run's snapshot of step 2000 (t = 100 -
-3.5e-12): stretching the last step by 3.5e-12 s changes the state far below the resolution of the f32 store.
+fixed run's last snapshot (stored in f32) agrees in all 7 printed digits (0.5856598) with that of the unfixed run's
+snapshot of step 2000 (t = 100 - 3.5e-12): stretching the last step by 3.5e-12 s changes the state by far less than the
+remainder step did.
 
 **Deviations.**
 1. Amendment 1: B4's registered command line was rejected by the script's argument parser; corrected with `--` before
@@ -261,6 +278,14 @@ construction).
 4. The compressible engine has the same kind of landing (relative tolerance) but no projection. Leave it?
 5. The Studio's event list cuts a solver event's JSON at 160 characters, so the warning's message may be cut there.
    Show solver warning messages in full (a Studio change)?
+
+Recommendations (addendum): 1 keep 1e-6 (it covers every rounding remainder up to 1.3e5 steps in the worst case and
+changes no deliberate remainder); 2 no check-time rule for now (the run-time warning names the remedy; a new rule
+operator changes the rule output of existing cases, `rules_w19c` E2); 3 yes, use the fraction 1e-6 in place of 1e-9 in
+`store_plan.rs` `ceil_eps`, so the estimate counts the steps the solver takes (one constant, its tests decide); 4 leave
+the compressible engine (explicit steps, no projection to spoil); 5 yes: render a `solver` event whose `solver.event`
+is `warning` as `warning: <message>` in `ui.rs` `event_text` (one match arm), which also makes the field-store and
+pressure-lag warnings readable in the Studio, where today every solver warning shows as cut JSON (deviation 3).
 
 ## Files
 
