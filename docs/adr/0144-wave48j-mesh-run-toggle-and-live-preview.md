@@ -290,6 +290,18 @@ the viewport without ADR 0140's empty-state text; the G1 control as before (a fr
 G4 control is withdrawn: J14 is the whole `rcfd-studio` suite passing (the known misses ignored as before: ADR 0131 B9,
 ADR 0133 R6, ADR 0141 G1, and this ADR's J3b), with ADR 0143's new `native_start_w48i` among them.
 
+## Amendment 5 (2026-10-28, J2 set-up defect; before the corrected run)
+
+J2 passed in its registered run (0922e73) and failed in the whole-suite run on 392d9d7 (output to a file), and once in
+two diagnostic reruns of the unchanged test: "the run was not selected within 60 s", in the wait after the **second**
+click. Each failing project holds two runs, one per click, created about 53 ms apart (the steps between the clicks are
+fast). The test took the new run as the last run id in name order; run ids are `r-<second>-<random hex>`, so two runs
+of the same second sort by their random suffix, and when the second run sorted first (`...-371b` before `...-3324`,
+`...-d9d5` before `...-2705`) the test waited for the first run to be selected again, which it never is. The passing
+runs had ascending suffixes. A set-up defect, not a double start: a throwaway diagnostic (not committed) with J2's steps
+made one run per click in 26 of 26 attempts. Corrected (registered here, before the corrected run): the new run is the
+run id that was not there before the click. Limits and controls unchanged.
+
 ## Not in CI (by hand)
 
 A person at the real window: the toggle's look and its disabled tooltips, the stale line and badge, typing into the

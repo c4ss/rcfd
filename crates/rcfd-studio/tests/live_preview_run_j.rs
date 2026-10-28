@@ -29,15 +29,18 @@ fn mesh_shown(app: &StudioApp) -> bool {
 }
 
 /// Click Run and wait until a new run (`n` in all) is queued, selected and shown on the Run side; the seconds from the
-/// click's release and the run's id.
+/// click's release and the run's id. The new run is the id that was not there before the click (amendment 5: ids of the
+/// same second sort by their random suffix, so the last id in name order need not be the newest).
 fn run_and_follow(app: &mut StudioApp, ctx: &egui::Context, p: &common::RunnerProject, n: usize) -> (f64, String) {
+    let before = p.ids();
     let t0 = click(app, ctx, "Run");
     let deadline = t0 + Duration::from_secs(60);
     loop {
         let _ = common::frame(app, ctx);
         let ids = p.ids();
-        if ids.len() == n {
-            let id = ids.last().unwrap().clone();
+        let new: Vec<&String> = ids.iter().filter(|i| !before.contains(i)).collect();
+        if ids.len() == n && new.len() == 1 {
+            let id = new[0].clone();
             let st = &app.st;
             if st.selected_run.as_deref() == Some(id.as_str())
                 && st.view.side == Side::Run
