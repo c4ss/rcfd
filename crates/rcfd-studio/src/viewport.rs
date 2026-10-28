@@ -110,14 +110,198 @@ pub fn fit(c: &Camera, lo: Vec3, hi: Vec3) -> Camera {
 /// One mouse action on the view.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Input {
-    /// Primary drag, pixels.
+    /// Primary (left) or middle drag, pixels: rotate the camera about its target (ADR 0148: the middle drag orbits).
     Orbit(f64, f64),
-    /// Secondary or middle drag, pixels.
+    /// Secondary (right) drag, pixels: the surface follows the pointer.
     Pan(f64, f64),
     /// Wheel notches (positive away from the user).
     Dolly(f64),
     /// Double click.
     Fit,
+}
+
+/// A pointer button that drags on the view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragButton {
+    /// The primary (left) button.
+    Primary,
+    /// The secondary (right) button.
+    Secondary,
+    /// The middle button (the wheel pressed).
+    Middle,
+}
+
+/// What the view does with a drag of `button` by `dx`, `dy` pixels (ADR 0148, the maintainer's request): the primary and
+/// the middle button orbit, the secondary button pans; in a 2D view too (the primary drag orbited there before, and
+/// still does). With `middle_pans`, ADR 0132's mapping (the middle drag panned).
+pub fn drag_input(button: DragButton, dx: f64, dy: f64, middle_pans: bool) -> Input {
+    match button {
+        DragButton::Primary => Input::Orbit(dx, dy),
+        DragButton::Middle if !middle_pans => Input::Orbit(dx, dy),
+        DragButton::Middle | DragButton::Secondary => Input::Pan(dx, dy),
+    }
+}
+
+/// The mouse controls of the view, in words (the hint under the image).
+pub const MOUSE_HINT: &str = "left or middle drag: rotate; right drag: pan; wheel: zoom; double click: fit";
+
+/// Negative-control switches of the viewport (tests only; all off in the app).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Switches {
+    /// ADR 0132's mouse mapping: the middle drag pans.
+    pub middle_pans: bool,
+    /// The words before ADR 0148: a run's time is shown as a bare `t` without its unit, the slider says "time" or
+    /// "step", and a steady run's time 0 is shown too.
+    pub bare_time: bool,
+    /// Before ADR 0148: no scale bar on a 2D view and no domain size beside the captions.
+    pub no_scale: bool,
+}
+
+// ---------------------------------------------------------------- units and words (ADR 0148)
+
+/// The unit of simulated time: the case settings carry SI units (`docs/case-schema.md`), so seconds.
+pub const TIME_UNIT: &str = "s";
+/// The unit of length (SI): metres. A mesh file is read in its own numbers, scaled by `mesh.scale`.
+pub const LENGTH_UNIT: &str = "m";
+
+/// Whether a run advances in simulated time (ADR 0148).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunKind {
+    /// Time steps of `solver.dt`; snapshots carry their simulated time.
+    Transient,
+    /// Iterations towards the converged state; the solver records time 0 throughout.
+    Steady,
+}
+
+/// The kind of a run from its stored snapshots: transient when any snapshot has a simulated time other than 0 (a
+/// steady run stores time 0 at every snapshot). A transient run whose only snapshot is at time 0 reads as steady.
+pub fn run_kind(snaps: &[Snap]) -> RunKind {
+    if snaps.iter().any(|s| s.time != 0.0) {
+        RunKind::Transient
+    } else {
+        RunKind::Steady
+    }
+}
+
+/// The kind of a run from its last simulated time (`status.json`): transient when it is finite and not 0 (also a
+/// transient run before its first step reads as steady).
+pub fn run_kind_of_time(t: f64) -> RunKind {
+    if t.is_finite() && t != 0.0 {
+        RunKind::Transient
+    } else {
+        RunKind::Steady
+    }
+}
+
+/// A number for a caption: at most 4 significant digits, no trailing zeros (`2`, `0.0625`, `1.667e-7`).
+pub fn fmt_num(v: f64) -> String {
+    if !v.is_finite() {
+        return format!("{v}");
+    }
+    if v == 0.0 {
+        return "0".into();
+    }
+    let a = v.abs();
+    let trim = |s: String| -> String {
+        if s.contains('.') {
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            s
+        }
+    };
+    if (1e-3..1e5).contains(&a) {
+        let decimals = (3 - a.log10().floor() as i32).clamp(0, 6) as usize;
+        trim(format!("{v:.decimals$}"))
+    } else {
+        let s = format!("{v:.3e}");
+        match s.split_once('e') {
+            Some((m, e)) => format!("{}e{e}", trim(m.to_string())),
+            None => s,
+        }
+    }
+}
+
+/// The slider's label (ADR 0148): "simulated time (s)" on a time axis; on a step axis "time step" for a transient run
+/// (fewer than two snapshots) and "iteration" for a steady run. With `bare` (the route before), "time" or "step".
+pub fn slider_words(axis: Axis, kind: RunKind, bare: bool) -> String {
+    match (axis, kind, bare) {
+        (Axis::Time, _, true) => "time".into(),
+        (Axis::Step, _, true) => "step".into(),
+        (Axis::Time, _, false) => format!("simulated time ({TIME_UNIT})"),
+        (Axis::Step, RunKind::Transient, false) => "time step".into(),
+        (Axis::Step, RunKind::Steady, false) => "iteration".into(),
+    }
+}
+
+/// The step and time of a snapshot or a run, in words (ADR 0148): `time step 16  simulated time 1 s` for a transient
+/// run, `iteration 2000` for a steady one (no time: it has none). With `bare` (the route before), `step 16  t = 1`.
+pub fn step_time_text(kind: RunKind, step: &str, time: f64, bare: bool) -> String {
+    match (kind, bare) {
+        (_, true) => format!("step {step}  t = {time}"),
+        (RunKind::Transient, false) => format!("time step {step}  simulated time {} {TIME_UNIT}", fmt_num(time)),
+        (RunKind::Steady, false) => format!("iteration {step}"),
+    }
+}
+
+/// The hover text of the slider and the snapshot line (ADR 0148).
+pub fn time_hover(kind: RunKind) -> &'static str {
+    match kind {
+        RunKind::Transient => {
+            "Simulated time of the stored snapshots, in seconds: the case settings are SI units, so solver.dt and \
+             solver.end_time are seconds. A time step is one solver step of solver.dt."
+        }
+        RunKind::Steady => {
+            "A steady run has no simulated time: each iteration is one solver iteration towards the converged state \
+             (solver.max_iterations at most); the snapshots are stored every output.store_interval iterations."
+        }
+    }
+}
+
+/// The domain of a mesh in words (ADR 0148): `domain 2 x 1 m` (2D: the x and y extents of its front) or
+/// `domain 2 x 1 x 1 m` (3D), from its bounding box.
+pub fn domain_text(lo: Vec3, hi: Vec3, two_d: bool) -> String {
+    let n = if two_d { 2 } else { 3 };
+    let sides: Vec<String> = (0..n).map(|k| fmt_num(hi[k] - lo[k])).collect();
+    format!("domain {} {LENGTH_UNIT}", sides.join(" x "))
+}
+
+/// A scale bar of a 2D (orthographic) view (ADR 0148).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScaleBar {
+    /// Its length in the scene, metres: 1, 2 or 5 times a power of ten.
+    pub metres: f64,
+    /// Its length on screen, points.
+    pub points: f32,
+    /// The label (`0.2 m`).
+    pub label: String,
+}
+
+/// The scale bar of an orthographic camera drawn `height_pt` points high: the longest bar of 1, 2 or 5 times a power of
+/// ten metres that is at most `max_pt` points long (`None` for a perspective camera, whose scale changes with depth).
+pub fn scale_bar(cam: &Camera, height_pt: f32, max_pt: f32) -> Option<ScaleBar> {
+    let Projection::Orthographic { half_height } = cam.projection else {
+        return None;
+    };
+    if !(height_pt > 0.0 && max_pt > 0.0 && half_height > 0.0) {
+        return None;
+    }
+    let per_pt = 2.0 * half_height / height_pt as f64; // metres per point
+    let longest = per_pt * max_pt as f64;
+    if !(longest.is_finite() && longest > 0.0) {
+        return None;
+    }
+    // the power of ten at or below the longest length: 1 times it always fits
+    let p = 10f64.powf(longest.log10().floor());
+    let metres = [5.0, 2.0, 1.0]
+        .iter()
+        .map(|k| k * p)
+        .find(|m| *m <= longest * (1.0 + 1e-12))
+        .unwrap_or(p);
+    Some(ScaleBar {
+        metres,
+        points: (metres / per_pt) as f32,
+        label: format!("{} {LENGTH_UNIT}", fmt_num(metres)),
+    })
 }
 
 /// Bounds that differ by at most this fraction of the box's size are the same bounds for
@@ -291,6 +475,8 @@ pub struct StoreView {
     pub surface: Arc<SurfaceMesh>,
     /// True for a 2D case ([`surface_of`]).
     pub two_d: bool,
+    /// Cells of the stored mesh (ADR 0148: the run caption's count).
+    pub cells: usize,
 }
 
 impl StoreView {
@@ -307,6 +493,7 @@ impl StoreView {
             reader,
             surface: Arc::new(surface),
             two_d,
+            cells: mesh.n_cells(),
         })
     }
 
@@ -432,6 +619,7 @@ enum Event {
         run: String,
         surface: Arc<SurfaceMesh>,
         two_d: bool,
+        cells: usize,
         snaps: Vec<Snap>,
         fields: Vec<String>,
         note: Option<String>,
@@ -649,6 +837,7 @@ fn try_open(
                 run: id.to_string(),
                 surface: v.surface.clone(),
                 two_d: v.two_d,
+                cells: v.cells,
                 snaps: v.snaps(),
                 fields,
                 note: legacy.then(|| crate::run_fields::legacy_note(&run_dir)),
@@ -925,6 +1114,10 @@ pub struct Viewport {
     pub surface: Option<Arc<SurfaceMesh>>,
     /// True for a 2D case.
     pub two_d: bool,
+    /// Cells of the run's stored mesh (ADR 0148; `None` for a case preview, whose counts the preview has).
+    pub cells: Option<usize>,
+    /// Negative-control switches (tests only).
+    pub switches: Switches,
     /// Stored snapshots.
     pub snaps: Vec<Snap>,
     /// Stored cell fields.
@@ -984,6 +1177,8 @@ impl Default for Viewport {
             status: Status::Idle,
             surface: None,
             two_d: false,
+            cells: None,
+            switches: Switches::default(),
             snaps: Vec::new(),
             fields: Vec::new(),
             field: None,
@@ -1039,6 +1234,7 @@ impl Viewport {
         self.run = None;
         self.status = Status::Idle;
         self.surface = None;
+        self.cells = None;
         self.snaps.clear();
         self.fields.clear();
         self.field = None;
@@ -1175,6 +1371,7 @@ impl Viewport {
                 run,
                 surface,
                 two_d,
+                cells,
                 snaps,
                 fields,
                 note,
@@ -1185,6 +1382,7 @@ impl Viewport {
                 self.camera = Some(CameraState::start(lo, hi, two_d));
                 self.surface = Some(surface);
                 self.two_d = two_d;
+                self.cells = Some(cells);
                 self.snaps = snaps;
                 self.field = fields.iter().find(|f| f.as_str() == "p").or(fields.first()).cloned();
                 self.fields = fields;
@@ -1252,6 +1450,26 @@ impl Viewport {
     /// The slider axis.
     pub fn axis(&self) -> Axis {
         axis_of(&self.snaps)
+    }
+
+    /// The kind of the shown run, from its stored snapshots ([`run_kind`], ADR 0148).
+    pub fn kind(&self) -> RunKind {
+        run_kind(&self.snaps)
+    }
+
+    /// The domain of the shown surface in words ([`domain_text`], ADR 0148), from the camera's box (the surface
+    /// bounds); `None` before a surface is shown.
+    pub fn domain(&self) -> Option<String> {
+        self.camera.map(|c| domain_text(c.lo, c.hi, self.two_d))
+    }
+
+    /// The scale bar of the view drawn `height_pt` points high ([`scale_bar`], at most a quarter of `width_pt`): a 2D
+    /// view only (ADR 0148).
+    pub fn scale_bar(&self, width_pt: f32, height_pt: f32) -> Option<ScaleBar> {
+        if !self.two_d || self.switches.no_scale {
+            return None;
+        }
+        scale_bar(&self.camera?.cam, height_pt, 0.25 * width_pt)
     }
 
     /// The slider position of snapshot `i`.

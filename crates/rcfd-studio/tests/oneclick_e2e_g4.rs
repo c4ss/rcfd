@@ -226,13 +226,14 @@ fn g1(tag: &str, reopen_in_focused_leaf: bool) {
         (row.state, row.step, row.time.to_bits()),
         (disk.state, disk.step, disk.time.to_bits())
     );
+    // ADR 0148: a steady run's step reads "iteration N" (registered there as a change of this check's text)
     assert!(
-        strip.contains("finished") && strip.contains(&format!("step {}", disk.step)),
+        strip.contains("finished") && strip.contains(&format!("iteration {}", disk.step)),
         "{strip}"
     );
     assert!(drawn
         .iter()
-        .any(|t| t.contains(&format!("step {}", disk.step)) && t.contains("finished")));
+        .any(|t| t.contains(&format!("iteration {}", disk.step)) && t.contains("finished")));
     assert_eq!(frame.step, disk.step as f64);
     // (g), counted from the frame where the run is first listed (ADR 0141 amendment 3)
     if gpu.is_some() {

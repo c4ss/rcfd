@@ -51,6 +51,8 @@ pub struct UiState {
     pub starter: Option<crate::case_starter_ui::StarterDialog>,
     /// Where each text field of the case editor was drawn last, by settings path (tests click them; ADR 0144).
     pub field_rects: BTreeMap<String, egui::Rect>,
+    /// Where the Start run dialog drew its Start button last, and why it was greyed out (ADR 0148; tests).
+    pub start_button: Option<(egui::Rect, Option<String>)>,
 }
 
 /// UI fields of the start dialog; the plan itself is in the model ([`crate::runs::RunsView::plan`]).
@@ -405,21 +407,40 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
     }
     crate::case_starter_ui::browser_entry(ui, st);
     let mut open_case: Option<String> = None;
-    let current = st.editor.as_ref().map(|e| e.rel.clone()).or(st.pending_case.clone());
+    // ADR 0148: the highlight is the selected case (what Run, the Mesh side and the editor follow)
+    let current = crate::quick_run::selected_case(st);
+    // ADR 0148 (the maintainer's answer to ADR 0147 question 3): case files under Cases, other files under Data files
+    let (cases, data) = crate::project_view::split_cases(&b.cases, st.view.switches.data_files_as_cases);
     egui::ScrollArea::vertical()
         .id_salt("browser")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            egui::CollapsingHeader::new(format!("Cases ({})", b.cases.len()))
+            egui::CollapsingHeader::new(format!("Cases ({})", cases.len()))
                 .id_salt("cases")
                 .default_open(true)
                 .show(ui, |ui| {
-                    for c in &b.cases {
-                        if ui.selectable_label(current.as_deref() == Some(c), c).clicked() {
-                            open_case = Some(c.clone());
+                    for c in &cases {
+                        if ui
+                            .selectable_label(current.as_deref() == Some(c.as_str()), c.as_str())
+                            .clicked()
+                        {
+                            open_case = Some(c.to_string());
                         }
                     }
                 });
+            if !data.is_empty() {
+                egui::CollapsingHeader::new(format!("Data files ({})", data.len()))
+                    .id_salt("data-files")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        for d in &data {
+                            ui.label(d.as_str()).on_hover_text(
+                                "a file a case reads (a table, a profile); not a case file: only .toml and .json \
+                                 files under cases/ are cases",
+                            );
+                        }
+                    });
+            }
             egui::CollapsingHeader::new(format!("Meshes ({})", b.meshes.len()))
                 .id_salt("meshes")
                 .show(ui, |ui| {
@@ -467,29 +488,39 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
 
 /// One drawn row of the run list: the browser's summary with the run worker's row laid over it (ADR 0133 amendment 1
 /// item 6).
-fn row_line(r: &rcfd_project::RunSummary, live: Option<&crate::runs::RunRow>) -> String {
+fn row_line(r: &rcfd_project::RunSummary, live: Option<&crate::runs::RunRow>, bare: bool) -> String {
     match live {
-        Some(l) => live_line(l),
+        Some(l) => live_line(l, bare),
         None => format!(
-            "{:<23} {:<9} {:>8} {:>11.4e}  {}",
+            "{:<23} {:<9} {:>8} {}  {}",
             r.id,
             format!("{:?}", r.state).to_lowercase(),
             r.step,
-            r.time,
+            time_cell(r.time, bare),
             r.case
         ),
     }
 }
 
-fn live_line(l: &crate::runs::RunRow) -> String {
+/// The run list's time column (11 wide): the simulated time in seconds of a transient run, `-` for a steady run (whose
+/// time is 0) or one without a time (ADR 0148); with `bare` (the route before), the number in every case.
+fn time_cell(t: f64, bare: bool) -> String {
+    if bare || crate::viewport::run_kind_of_time(t) == crate::viewport::RunKind::Transient {
+        format!("{t:>11.4e}")
+    } else {
+        format!("{:>11}", "-")
+    }
+}
+
+fn live_line(l: &crate::runs::RunRow, bare: bool) -> String {
     let res = |k: &str| l.last_residuals.get(k).map_or("-".to_string(), |v| format!("{v:.2e}"));
     let queue = l.queue_pos.map_or(String::new(), |q| format!(" #{q}"));
     format!(
-        "{:<23} {:<9} {:>8} {:>11.4e}  {:>9} {:>9}  {}{queue}",
+        "{:<23} {:<9} {:>8} {}  {:>9} {:>9}  {}{queue}",
         l.id,
         l.state_label(),
         l.step,
-        l.time,
+        time_cell(l.time, bare),
         res("res_u"),
         res("res_p"),
         l.case
@@ -505,10 +536,21 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let Some(b) = st.browser() else { return };
     let (n_b, n_x) = (b.runs.len(), st.runs.extra.len());
     ui.label(format!("{} runs; {} running or paused", n_b + n_x, st.runs.active()));
+    // ADR 0148: the time column is simulated time in seconds ("-" for a steady run)
+    let bare = st.viewport.switches.bare_time;
     ui.monospace(format!(
         "{:<23} {:<9} {:>8} {:>11}  {:>9} {:>9}  case",
-        "id", "state", "step", "time", "res u", "res p"
-    ));
+        "id",
+        "state",
+        "step",
+        if bare { "time" } else { "time (s)" },
+        "res u",
+        "res p"
+    ))
+    .on_hover_text(
+        "step: the solver's iterations (a steady run) or time steps (a transient run); time: the simulated time of a \
+         transient run in seconds (- for a steady run, which has none)",
+    );
     let row_h = ui.text_style_height(&egui::TextStyle::Monospace);
     let mut select: Option<String> = None;
     let selected = st.selected_run.clone();
@@ -528,12 +570,12 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
                 }
                 let (id, line) = if i < n_b {
                     let r = &b.runs[i];
-                    (r.id.as_str(), row_line(r, st.runs.row(&r.id)))
+                    (r.id.as_str(), row_line(r, st.runs.row(&r.id), bare))
                 } else {
                     let Some(l) = st.runs.row(&st.runs.extra[i - n_b]) else {
                         continue;
                     };
-                    (l.id.as_str(), live_line(l))
+                    (l.id.as_str(), live_line(l, bare))
                 };
                 let text = RichText::new(line).monospace();
                 if ui.selectable_label(selected.as_deref() == Some(id), text).clicked() {
@@ -551,8 +593,9 @@ fn runs_toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let mut act: Option<&str> = None;
     ui.horizontal(|ui| {
         if ui.button("Start run...").clicked() {
+            // ADR 0148: the selected case
             us.start_dialog = Some(StartDialog {
-                case: st.editor.as_ref().map(|e| e.rel.clone()).unwrap_or_default(),
+                case: crate::quick_run::selected_case(st).unwrap_or_default(),
                 ..Default::default()
             });
         }
@@ -619,7 +662,11 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
     let Some(mut d) = us.start_dialog.take() else { return };
     let mut open = true;
     let mut done = false;
-    let cases = st.browser().map(|b| b.cases.clone()).unwrap_or_default();
+    // ADR 0148: case files only (a data file is not a case)
+    let cases = st
+        .browser()
+        .map(|b| crate::project_view::split_cases(&b.cases, st.view.switches.data_files_as_cases).0)
+        .unwrap_or_default();
     egui::Window::new("Start run")
         .open(&mut open)
         .collapsible(false)
@@ -641,6 +688,9 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
                     st.say(m);
                 }
             }
+            // ADR 0148 (the maintainer's answer to ADR 0147 question 4): Start is greyed out as Run is, while the case
+            // editor holds this case with a field being typed, unsaved edits or a conflict
+            let start_why = crate::quick_run::start_blocked(st, &d.case);
             let mut start = false;
             match st.runs.plan.as_mut() {
                 None if !d.case.is_empty() => {
@@ -682,7 +732,12 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
                         .collect();
                     plan.mem_mb = d.mem.trim().parse().ok();
                     ui.weak(format!("rcfd run --set: {}", plan.set().join(" ")));
-                    start = ui.button("Start").clicked();
+                    let why = start_why.clone();
+                    let r = ui
+                        .add_enabled(why.is_none(), egui::Button::new("Start"))
+                        .on_disabled_hover_text(why.clone().unwrap_or_default());
+                    us.start_button = Some((r.rect, why));
+                    start = r.clicked();
                 }
                 Some(Ok(_)) => {
                     ui.weak("reading the case...");
@@ -753,12 +808,22 @@ fn outputs_panel(ui: &mut egui::Ui, st: &mut Studio) {
         return;
     };
     let live = st.runs.row(id);
+    // ADR 0148: the step and time in words (simulated time in seconds; a steady run's iterations)
+    let bare = st.viewport.switches.bare_time;
+    let words = |step: u64, time: f64| {
+        let t = crate::viewport::step_time_text(crate::viewport::run_kind_of_time(time), &step.to_string(), time, bare);
+        if bare {
+            format!("step {step}, time {time}")
+        } else {
+            t.replace("  ", ", ")
+        }
+    };
     let Some(r) = b.runs.iter().find(|r| r.id == id) else {
         match live {
             Some(l) => {
                 ui.label(RichText::new(&l.id).strong());
                 ui.label(format!("case {}  created {}", l.case, l.created));
-                ui.label(format!("{}, step {}, time {}", l.state_label(), l.step, l.time));
+                ui.label(format!("{}, {}", l.state_label(), words(l.step, l.time)));
             }
             None => {
                 ui.weak("The selected run is no longer listed.");
@@ -769,8 +834,12 @@ fn outputs_panel(ui: &mut egui::Ui, st: &mut Studio) {
     ui.label(RichText::new(&r.id).strong());
     ui.label(format!("case {}  created {}", r.case, r.created));
     match live {
-        Some(l) => ui.label(format!("{}, step {}, time {}", l.state_label(), l.step, l.time)),
-        None => ui.label(format!("{:?}, step {}, time {}", r.state, r.step, r.time).to_lowercase()),
+        Some(l) => ui.label(format!("{}, {}", l.state_label(), words(l.step, l.time))),
+        None => ui.label(format!(
+            "{}, {}",
+            format!("{:?}", r.state).to_lowercase(),
+            words(r.step, r.time)
+        )),
     };
     if let Some(reason) = live.and_then(|l| l.reason.as_deref()) {
         ui.label(format!("reason: {reason}"));
@@ -815,36 +884,49 @@ fn plots_panel(ui: &mut egui::Ui, st: &mut Studio) {
     }
     let marker = st.plot_marker;
     let h = (ui.available_height() / 2.0 - 8.0).max(80.0);
+    // ADR 0148: the x axis is the solver step: a steady run's iterations or a transient run's time steps
+    let x_words = match st.selected_run.as_deref().and_then(|id| st.runs.row(id)) {
+        _ if st.viewport.switches.bare_time => "",
+        Some(r) if crate::viewport::run_kind_of_time(r.time) == crate::viewport::RunKind::Transient => "time step",
+        Some(_) => "iteration",
+        None => "step",
+    };
     ui.label("Residuals (log10)");
-    egui_plot::Plot::new("residuals").height(h).show(ui, |p| {
-        for (i, n) in m.residual_names().into_iter().enumerate() {
-            let colour = series_colour(i);
-            for seg in m.plot_segments(&n, true, MAX_PLOT_POINTS) {
-                p.line(egui_plot::Line::new(n.clone(), seg).color(colour));
-            }
-        }
-        if let Some(x) = marker {
-            p.vline(egui_plot::VLine::new("viewport step", x));
-        }
-    });
-    ui.label("Monitors");
-    egui_plot::Plot::new("reports").height(h).show(ui, |p| {
-        // monitors of the run, then any non-residual series put into the residual store
-        let mut k = 0;
-        let all: Vec<String> = mon.series.keys().cloned().collect();
-        for (store, names) in [(mon, all), (m, m.report_names())] {
-            for n in names {
-                let colour = series_colour(k);
-                k += 1;
-                for seg in store.plot_segments(&n, false, MAX_PLOT_POINTS) {
+    egui_plot::Plot::new("residuals")
+        .height(h)
+        .x_axis_label(x_words)
+        .show(ui, |p| {
+            for (i, n) in m.residual_names().into_iter().enumerate() {
+                let colour = series_colour(i);
+                for seg in m.plot_segments(&n, true, MAX_PLOT_POINTS) {
                     p.line(egui_plot::Line::new(n.clone(), seg).color(colour));
                 }
             }
-        }
-        if let Some(x) = marker {
-            p.vline(egui_plot::VLine::new("viewport step", x));
-        }
-    });
+            if let Some(x) = marker {
+                p.vline(egui_plot::VLine::new("viewport step", x));
+            }
+        });
+    ui.label("Monitors");
+    egui_plot::Plot::new("reports")
+        .height(h)
+        .x_axis_label(x_words)
+        .show(ui, |p| {
+            // monitors of the run, then any non-residual series put into the residual store
+            let mut k = 0;
+            let all: Vec<String> = mon.series.keys().cloned().collect();
+            for (store, names) in [(mon, all), (m, m.report_names())] {
+                for n in names {
+                    let colour = series_colour(k);
+                    k += 1;
+                    for seg in store.plot_segments(&n, false, MAX_PLOT_POINTS) {
+                        p.line(egui_plot::Line::new(n.clone(), seg).color(colour));
+                    }
+                }
+            }
+            if let Some(x) = marker {
+                p.vline(egui_plot::VLine::new("viewport step", x));
+            }
+        });
 }
 
 fn series_colour(i: usize) -> Color32 {
@@ -962,12 +1044,31 @@ enum Edit {
     EndDraft(String),
 }
 
+/// The first line of the case editor when it could not open the selected case (ADR 0148); its reason follows.
+pub const CANNOT_OPEN: &str = "cannot be opened in the case editor:";
+
 fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let Some(ed) = &mut st.editor else {
-        ui.weak(match &st.pending_case {
-            Some(c) => format!("Loading {c}..."),
-            None => "Select a case in the Project panel.".into(),
-        });
+        // ADR 0148: the editor follows the selected case, also when it cannot open it
+        let selected = crate::quick_run::selected_case(st);
+        match (&selected, &st.editor_error) {
+            (Some(c), Some((r, why))) if r == c => {
+                ui.colored_label(ERR, format!("{c} {CANNOT_OPEN}"));
+                for l in why.lines() {
+                    ui.colored_label(ERR, l);
+                }
+                ui.weak("The Mesh side and Run use the file on disk.");
+            }
+            (Some(c), _) => {
+                ui.weak(format!("Loading {c}..."));
+            }
+            (None, _) => {
+                ui.weak(match &st.pending_case {
+                    Some(c) => format!("Loading {c}..."),
+                    None => "Select a case in the Project panel.".into(),
+                });
+            }
+        }
         return;
     };
     let mut save = false;

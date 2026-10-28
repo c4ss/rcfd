@@ -400,6 +400,11 @@ the starter's dialog line and the data file in the Project panel, the strip's er
 
 ## Questions for the maintainer (not decided here)
 
+Note (2026-10-28, relayed): the maintainer accepted (b) for questions 2, 3 and 4 and left questions 1 and 5 as they are
+(the camera's orientation kept on a refit; the runner list's order unchanged);
+[ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md) decisions 4, 3 and 5 do 2 (b), 3 (b) and 4 (b).
+Questions 6 and 7 were not answered in that message.
+
 1. **"Refit"** was read as the double click's Fit: the camera keeps its yaw, pitch and projection kind and frames the new
    box. Options: (a) keep; (b) the start camera of the new mesh when the bounds change (what ADR 0138 did on every
    rebuild). Recommendation: (a): a view the user turned stays turned, and a 2D case looks the same either way unless it was

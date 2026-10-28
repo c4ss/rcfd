@@ -278,6 +278,8 @@ in pixels; drag deltas are converted from points to pixels (times `pixels_per_po
 * Orbit (primary drag `dx`, `dy` pixels): `yaw' = yaw - 0.01 dx`, `pitch' = clamp(pitch + 0.01 dy, -pi/2, pi/2)`.
 * Pan (secondary or middle drag): `s = 2 d tan(fovy / 2) / H` (perspective) or `s = 2 h / H` (orthographic, `h` the half height);
   `target' = target - s dx R + s dy U`.
+  Note (2026-10-28, [ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md), the maintainer's request): the
+  middle drag orbits now, as the primary drag does; only the secondary drag pans.
 * Dolly (wheel, `n` notches = scroll points / egui's `line_scroll_speed`, positive away from the user): `f = 0.9^n`;
   perspective `distance' = f distance`, orthographic `half_height' = f half_height` (distance kept).
 * Fit (double click): `Camera::fit(lo, hi, yaw, pitch, projection)` of the surface bounds with the current yaw, pitch and
@@ -451,6 +453,7 @@ deny` (not installed).
 3. Select the run in the Runs panel: the Viewport shows field `p` coloured (viridis) with the legend at the right; check another
    field in the "field" box.
 4. Mouse: left drag orbits, right or middle drag pans (the surface follows the pointer), the wheel zooms, a double click fits.
+   (Since ADR 0148: left or middle drag orbits, right drag pans.)
    Check that nothing clips while zooming and panning, and that a 2D cavity is seen face-on in an orthographic view.
 5. Time: drag the slider, use `|<`, `<`, play, `>`, `>|`; the read-out shows snapshot, step and time; with "linear" (transient
    only) it shows "interpolated" between snapshots. Check that the Plots panel's vertical "viewport step" line follows.

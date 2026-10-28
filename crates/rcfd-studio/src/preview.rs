@@ -20,13 +20,17 @@
 //! * A build that fails or is over a limit leaves the last mesh that built for the case on screen, marked stale
 //!   ([`Preview::stale`]), with the located reason (ADR 0144).
 //! * A build the debounce asks for is skipped when the editor's text is byte-identical to the text of the mesh on screen
-//!   and that mesh's file (if any) is unchanged ([`Refusal::Unchanged`], ADR 0147); a rebuild of the same case keeps the
-//!   camera while the bounds stay the same ([`crate::viewport::Viewport::replace_surface`], ADR 0147).
+//!   and that mesh's file (if any) is unchanged ([`Refusal::Unchanged`], ADR 0147); so is the build after a save of the
+//!   text on screen, when the file's bytes are that text (ADR 0148); a rebuild of the same case keeps the camera while
+//!   the bounds stay the same ([`crate::viewport::Viewport::replace_surface`], ADR 0147).
+//! * The Mesh side says the size of the domain and the cell counts, and offers "Refine x2" for a generator mesh
+//!   ([`resolution_text`], [`refine_offer`], [`refine`], ADR 0148).
 //! * Drawing reuses the run viewport ([`crate::viewport::Viewport::show_surface`]): the same `ViewGpu`, texture, camera
 //!   mapping and pick pass, every face at value 0 and one solid colour per patch (`PartStyle::Solid`). A 2D case's
 //!   boundary patches are edges in its face-on view; they are drawn as coloured segments over the image by
 //!   [`crate::preview_ui`], with the cell edges of the front when there are at most [`Limits::overlay_edges`].
 
+use crate::case_edit::CaseEditor;
 use crate::schema_model::{parse_input, Kind};
 use crate::studio::Studio;
 use crate::viewport::{surface_of, CameraChange};
@@ -155,8 +159,71 @@ pub struct Built {
     /// a regular file, such as an OpenFOAM folder). An identical text is not built again only while this holds (ADR
     /// 0147).
     pub mesh_stamp: Option<FileStamp>,
+    /// Bounding box of the volume mesh's points, metres (ADR 0148: the domain readout).
+    pub bounds: (Vec3, Vec3),
+    /// How the mesh's resolution is set (ADR 0148: the cell counts and "Refine x2").
+    pub resolution: Resolution,
     /// Wall time of the build, seconds.
     pub build_s: f64,
+}
+
+/// How a previewed mesh's resolution is set (ADR 0148).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Resolution {
+    /// A generator whose cells are counted by `mesh.nx`, `mesh.ny` (and `mesh.nz` in 3D): (settings path, value), in
+    /// that order, then the counts of a second block (`mesh.nx_right` ...) that are set (0 means "the same as the
+    /// first block" and is left out).
+    Counts(Vec<(String, u64)>),
+    /// A mesh file (or folder): the resolution is the file's.
+    File(PathBuf),
+    /// A generator whose counts are other settings (`axial_fan_sector`: `mesh.fan.n_*`): its name.
+    Other(String),
+}
+
+/// The count settings of a generator whose cells are the products (or sums of products) of its counts (ADR 0148): 2D
+/// generators count x and y (theta and radial for `cylinder_ogrid`), 3D ones also z; a second block's `_right` counts
+/// follow. `None` for a generator counted otherwise.
+pub fn count_keys(generator: &str) -> Option<&'static [&'static str]> {
+    Some(match generator {
+        "cavity_2d" | "box_2d" | "channel_2d" | "wedge_2d" | "nozzle_2d" | "cylinder_ogrid" => &["nx", "ny"],
+        "channel_2d_interface" => &["nx", "ny", "nx_right", "ny_right"],
+        "annulus_3d" | "annulus_3d_sector" | "pipe_sweep" => &["nx", "ny", "nz"],
+        "annulus_3d_interface" => &["nx", "ny", "nz", "ny_right", "nz_right"],
+        "annulus_3d_stage" | "annulus_3d_cylindrical_interface" => {
+            &["nx", "ny", "nz", "nx_right", "ny_right", "nz_right"]
+        }
+        _ => return None,
+    })
+}
+
+/// How `case`'s mesh resolution is set ([`Resolution`]).
+pub fn resolution_of(case: &Case) -> Resolution {
+    if let Some(f) = mesh_file_of(case) {
+        return Resolution::File(f);
+    }
+    let g = text(case, "mesh.generator");
+    match count_keys(&g) {
+        Some(keys) => Resolution::Counts(
+            keys.iter()
+                .map(|k| (format!("mesh.{k}"), int(case, &format!("mesh.{k}"))))
+                .filter(|(p, v)| !(p.ends_with("_right") && *v == 0))
+                .collect(),
+        ),
+        None => Resolution::Other(g),
+    }
+}
+
+/// Bounding box of a mesh's points.
+fn mesh_bounds(mesh: &Mesh) -> (Vec3, Vec3) {
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for p in mesh.points() {
+        for k in 0..3 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    (lo, hi)
 }
 
 /// Size in bytes and modification time of a regular file.
@@ -188,7 +255,8 @@ pub enum Refusal {
     /// A newer request came first.
     Cancelled,
     /// Not built: the text is byte-identical to the text of the mesh on screen, whose `case_hash` this is, and that
-    /// mesh's file is unchanged (ADR 0147, the maintainer's answer to ADR 0144 question 6).
+    /// mesh's file is unchanged: the editor's text (ADR 0147, the maintainer's answer to ADR 0144 question 6) or, after
+    /// a save of the shown text, the file (ADR 0148, the maintainer's answer to ADR 0147 question 2).
     Unchanged(String),
 }
 
@@ -391,7 +459,8 @@ fn plain(rel: &str) -> bool {
     !rel.is_empty() && Path::new(rel).components().all(|c| matches!(c, Component::Normal(_)))
 }
 
-fn with_commas(n: u64) -> String {
+/// `n` with thousands separators (`2,000,000`).
+pub fn with_commas(n: u64) -> String {
     let s = n.to_string();
     let mut out = String::new();
     for (i, ch) in s.chars().enumerate() {
@@ -489,12 +558,40 @@ pub fn overlay_2d(
 /// Build the preview of the case file `root/rel` from disk (the code a build thread runs for [`Source::Disk`]).
 /// `cancelled` is polled between phases; `force` skips the cell and file-size limits.
 pub fn build(root: &Path, rel: &str, limits: &Limits, force: bool, cancelled: &dyn Fn() -> bool) -> Outcome {
+    build_unless(root, rel, limits, force, cancelled, None)
+}
+
+/// [`build`], unless the file's bytes are the text of `shown`, the mesh on screen: when they hash to `shown.case_hash`
+/// and `shown`'s mesh file is unchanged ([`mesh_input_unchanged`]), nothing is parsed or built and the result is
+/// [`Refusal::Unchanged`] with the hash read (ADR 0148, the maintainer's answer to ADR 0147 question 2: a save of the
+/// text on screen is not built again).
+pub fn build_unless(
+    root: &Path,
+    rel: &str,
+    limits: &Limits,
+    force: bool,
+    cancelled: &dyn Fn() -> bool,
+    shown: Option<&Built>,
+) -> Outcome {
     if !plain(rel) {
         return refused(rel, false);
     }
     let file = root.join(rel);
     match std::fs::read(&file) {
-        Ok(bytes) => build_text(root, rel, &bytes, false, limits, force, cancelled),
+        Ok(bytes) => {
+            if let Some(s) = shown.filter(|s| s.rel == rel) {
+                let hash = rcfd_project::records::hash_bytes(&bytes);
+                if hash == s.case_hash && mesh_input_unchanged(s) {
+                    return Outcome {
+                        read_hash: Some(hash.clone()),
+                        called_build_mesh: false,
+                        from_editor: false,
+                        result: Err(Refusal::Unchanged(hash)),
+                    };
+                }
+            }
+            build_text(root, rel, &bytes, false, limits, force, cancelled)
+        }
         Err(e) => Outcome {
             read_hash: None,
             called_build_mesh: false,
@@ -517,9 +614,10 @@ pub fn build_source(
     build_source_unless(root, rel, source, limits, force, cancelled, None)
 }
 
-/// [`build_source`], unless the editor's text is the text of `shown`, the mesh on screen: when the bytes the build
-/// would parse hash to `shown.case_hash` and `shown`'s mesh file is unchanged ([`mesh_input_unchanged`]), nothing is
-/// parsed or built and the result is [`Refusal::Unchanged`] (ADR 0147). `shown` applies to the editor's text only.
+/// [`build_source`], unless the text is the text of `shown`, the mesh on screen: when the bytes the build would parse
+/// hash to `shown.case_hash` and `shown`'s mesh file is unchanged ([`mesh_input_unchanged`]), nothing is parsed or
+/// built and the result is [`Refusal::Unchanged`]: the editor's text (ADR 0147) or the file on disk ([`build_unless`],
+/// ADR 0148). The caller passes `shown` only for the requests that may be skipped.
 pub fn build_source_unless(
     root: &Path,
     rel: &str,
@@ -530,7 +628,7 @@ pub fn build_source_unless(
     shown: Option<&Built>,
 ) -> Outcome {
     let e = match source {
-        Source::Disk => return build(root, rel, limits, force, cancelled),
+        Source::Disk => return build_unless(root, rel, limits, force, cancelled, shown),
         Source::Editor(e) => e,
     };
     if !plain(rel) {
@@ -686,9 +784,203 @@ fn build_text(
             outlines: Arc::new(outlines),
             mesh_file,
             mesh_stamp,
+            bounds: mesh_bounds(&mesh),
+            resolution: resolution_of(&case),
             build_s: t0.elapsed().as_secs_f64(),
         }),
     )
+}
+
+// ---------------------------------------------------------------- resolution (ADR 0148)
+
+/// A finer mesh offered by "Refine x2" (ADR 0148): every cell count of a generator doubled, so that the cell size
+/// halves in each direction.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Refinement {
+    /// (settings path, count now, count after), in the generator's order.
+    pub edits: Vec<(String, u64, u64)>,
+    /// Cells of the mesh shown.
+    pub cells: u64,
+    /// Cells after refining: 4 times (2D) or 8 times (3D) the cells shown, exact for the generators of
+    /// [`count_keys`] (every count doubles, and their cells are products or sums of products of the counts).
+    pub cells_after: u64,
+    /// The runner's memory estimate of a run of the refined case, MB (`mem_base_mb + mem_kb_per_cell` per cell of its
+    /// default budgets, `rcfd_runner::runner::Config`).
+    pub mem_mb: f64,
+    /// The preview's cell limit ([`Limits::cells`]) the refined mesh would be over, if it is.
+    pub over_limit: Option<u64>,
+}
+
+/// What "Refine x2" offers for a mesh (ADR 0148).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RefineOffer {
+    /// Doubling the counts.
+    Refine(Refinement),
+    /// A mesh file: the resolution is the file's (the line says so; no button).
+    MeshFile(PathBuf),
+    /// A generator counted by other settings: why not.
+    NotOffered(String),
+}
+
+/// The runner's memory estimate of a run of `cells` cells, MB, with its default budgets (ADR 0133).
+pub fn runner_mem_mb(cells: u64) -> f64 {
+    let c = rcfd_runner::runner::Config::default();
+    c.mem_base_mb + c.mem_kb_per_cell * cells as f64 / 1024.0
+}
+
+/// What "Refine x2" offers for the mesh `b` with the preview limits `limits`.
+pub fn refine_offer(b: &Built, limits: &Limits) -> RefineOffer {
+    match &b.resolution {
+        Resolution::File(f) => RefineOffer::MeshFile(f.clone()),
+        Resolution::Other(g) => RefineOffer::NotOffered(format!(
+            "generator \"{g}\" counts its cells with other settings (mesh.fan.n_* for axial_fan_sector): edit them in \
+             the case editor"
+        )),
+        Resolution::Counts(counts) => {
+            let cells = b.cells as u64;
+            let cells_after = cells.saturating_mul(if b.two_d { 4 } else { 8 });
+            RefineOffer::Refine(Refinement {
+                edits: counts
+                    .iter()
+                    .map(|(p, v)| (p.clone(), *v, v.saturating_mul(2)))
+                    .collect(),
+                cells,
+                cells_after,
+                mem_mb: runner_mem_mb(cells_after),
+                over_limit: (cells_after > limits.cells).then_some(limits.cells),
+            })
+        }
+    }
+}
+
+/// The resolution line of the Mesh side (ADR 0148): the domain, then the cell counts (`16 x 16 = 256 cells`, or the
+/// total with the counts of every block), or the mesh file that sets them.
+pub fn resolution_text(b: &Built) -> String {
+    let domain = crate::viewport::domain_text(b.bounds.0, b.bounds.1, b.two_d);
+    let cells = with_commas(b.cells as u64);
+    match &b.resolution {
+        Resolution::Counts(c) => {
+            let product: u64 = c.iter().map(|(_, v)| *v).product();
+            if c.iter().all(|(p, _)| !p.ends_with("_right")) && product == b.cells as u64 {
+                let factors: Vec<String> = c.iter().map(|(_, v)| v.to_string()).collect();
+                format!("{domain}; {} = {cells} cells", factors.join(" x "))
+            } else {
+                let named: Vec<String> = c
+                    .iter()
+                    .map(|(p, v)| format!("{} {v}", p.trim_start_matches("mesh.")))
+                    .collect();
+                format!("{domain}; {cells} cells ({})", named.join(", "))
+            }
+        }
+        Resolution::File(_) => format!("{domain}; {cells} cells; the resolution is set by the mesh file"),
+        Resolution::Other(g) => format!("{domain}; {cells} cells (generator {g})"),
+    }
+}
+
+/// Why "Refine x2" cannot edit the case now (`None`: it can), for the mesh shown of the previewed case: the case editor
+/// must hold that case (no conflict, no field being typed) and the mesh shown must be its current text, so that the
+/// counts doubled are the ones shown.
+pub fn refine_blocked(st: &Studio) -> Option<String> {
+    let case = st.preview.case.as_deref()?;
+    let Some(ed) = st.editor.as_ref().filter(|e| e.rel == case) else {
+        return Some(match &st.editor_error {
+            Some((r, m)) if r == case => format!("the case editor could not open {case}: {m}"),
+            _ => format!("{case} is not open in the case editor yet"),
+        });
+    };
+    if ed.in_conflict() {
+        return Some(format!("{case}: resolve the conflict in the case editor first"));
+    }
+    if let Some((path, _)) = &ed.draft {
+        return Some(format!(
+            "{case}: {} {path} first (press Enter or click elsewhere)",
+            crate::quick_run::FINISH_EDITING
+        ));
+    }
+    if st.preview.stale() {
+        return Some("the mesh shown is not the case's current text yet: wait until it is built".into());
+    }
+    None
+}
+
+/// "Refine x2" (ADR 0148): every cell count of the shown generator mesh doubled in the case editor, as an unsaved edit
+/// (the preview builds it after the debounce; Run asks for a save first, ADR 0141). Refused, with the reason, by
+/// [`refine_blocked`], for a mesh file or a generator counted otherwise, and when a doubled count would be over its
+/// schema maximum (nothing is changed then). Returns the message (also said in the status bar).
+pub fn refine(st: &mut Studio) -> Result<String, String> {
+    if let Some(why) = refine_blocked(st) {
+        return Err(format!("Refine x2: {why}"));
+    }
+    let b = st.preview.displayed().cloned().ok_or("Refine x2: no mesh is shown")?;
+    let r = match refine_offer(&b, &st.preview.limits) {
+        RefineOffer::Refine(r) => r,
+        RefineOffer::MeshFile(f) => {
+            return Err(format!(
+                "Refine x2: {}: the resolution is set by the mesh file {}",
+                b.rel,
+                f.display()
+            ))
+        }
+        RefineOffer::NotOffered(why) => return Err(format!("Refine x2: {}: {why}", b.rel)),
+    };
+    for (path, _, after) in &r.edits {
+        let max = st.schema.find(path).and_then(|n| match n.kind {
+            Kind::Int { max, .. } => max,
+            _ => None,
+        });
+        if let Some(m) = max.filter(|m| *after as f64 > *m) {
+            return Err(format!(
+                "Refine x2: {}: {path} would be {after}, more than its maximum {m}",
+                b.rel
+            ));
+        }
+    }
+    let ed = st.editor.as_mut().ok_or("Refine x2: no case is open")?;
+    for (path, _, after) in &r.edits {
+        ed.set_value(path, Value::from(*after))
+            .map_err(|m| format!("Refine x2: {}: {m}", b.rel))?;
+    }
+    let edits: Vec<String> = r.edits.iter().map(|(p, a, b)| format!("{p} {a} -> {b}")).collect();
+    let mut m = format!(
+        "{}: refined x2 ({}): {} -> {} cells, unsaved (save the case before Run)",
+        b.rel,
+        edits.join(", "),
+        with_commas(r.cells),
+        with_commas(r.cells_after)
+    );
+    if let Some(l) = r.over_limit {
+        m.push_str(&format!(
+            "; over the preview limit of {} cells, the preview asks before building it",
+            with_commas(l)
+        ));
+    }
+    st.say(m.clone());
+    Ok(m)
+}
+
+/// The hover text of "Refine x2" (ADR 0148): the counts before and after, the cells, the runner's memory estimate and,
+/// over the preview's cell limit, the warning that the preview asks before building it.
+pub fn refine_hover(r: &Refinement) -> String {
+    let edits: Vec<String> = r.edits.iter().map(|(p, a, b)| format!("{p} {a} -> {b}")).collect();
+    let mut s = format!(
+        "Halve the cell size: {} ({} -> {} cells, {} times as many; each iteration does about that much more work). \
+         An unsaved edit of the case: the mesh follows it, a run needs the case saved first. A run of it needs about \
+         {} MB (the runner's estimate: {} MB + {} KB per cell).",
+        edits.join(", "),
+        with_commas(r.cells),
+        with_commas(r.cells_after),
+        r.cells_after / r.cells.max(1),
+        with_commas(r.mem_mb.round() as u64),
+        rcfd_runner::runner::Config::default().mem_base_mb,
+        rcfd_runner::runner::Config::default().mem_kb_per_cell
+    );
+    if let Some(l) = r.over_limit {
+        s.push_str(&format!(
+            " Over the preview limit of {} cells: the preview asks before building it (\"Build anyway\").",
+            with_commas(l)
+        ));
+    }
+    s
 }
 
 // ---------------------------------------------------------------- picking and overlay geometry
@@ -826,6 +1118,9 @@ pub struct Switches {
     /// The case editor's message for a benchmark descriptor lists its unknown keys, as before ADR 0147 (the status bar
     /// then shows that long message instead of [`descriptor_message`]).
     pub editor_lists_descriptor_keys: bool,
+    /// ADR 0147's rule: a save (or the watcher's notice of it) builds the file again, also when its bytes are the text
+    /// of the mesh on screen.
+    pub no_save_skip: bool,
 }
 
 /// Counters for the tests.
@@ -850,6 +1145,9 @@ pub struct Stats {
     pub camera_kept: u64,
     /// Installs of a rebuilt surface of the same case that fitted the camera to new bounds (ADR 0147).
     pub camera_refit: u64,
+    /// Results of builds of the file skipped because its bytes were the shown mesh's text and its mesh file unchanged
+    /// (a save of the shown text, or the watcher's notice of it; ADR 0148).
+    pub skipped_saved: u64,
 }
 
 struct Msg {
@@ -887,11 +1185,17 @@ pub struct Preview {
     pub switches: Switches,
     /// Counters.
     pub stats: Stats,
+    /// Where the Mesh side drew its buttons last (by label, "Refine x2"), so tests can click them.
+    pub rects: std::collections::BTreeMap<&'static str, egui::Rect>,
     want: bool,
+    /// A build of the file asked for by a save of the shown text or the watcher's notice of it: compared with the shown
+    /// mesh on the build thread first (ADR 0148).
+    want_check: bool,
     force_cells: bool,
     force_triangles: bool,
-    /// A request waiting for a build thread: its source, and whether only the debounce asked for it (ADR 0147).
-    queued: Option<(Source, bool)>,
+    /// A request waiting for a build thread: its source, whether only the debounce asked for it (ADR 0147), and whether
+    /// only a save of the shown text asked for it (ADR 0148).
+    queued: Option<(Source, bool, bool)>,
     due: Option<Instant>,
     gen: Arc<AtomicU64>,
     running: Arc<AtomicUsize>,
@@ -921,7 +1225,9 @@ impl Default for Preview {
             debounce: DEBOUNCE,
             switches: Switches::default(),
             stats: Stats::default(),
+            rects: Default::default(),
             want: false,
+            want_check: false,
             force_cells: false,
             force_triangles: false,
             queued: None,
@@ -958,6 +1264,7 @@ impl Preview {
         self.read_hash = None;
         self.hidden.clear();
         self.want = false;
+        self.want_check = false;
         self.queued = None;
         self.due = None;
         self.force_cells = false;
@@ -1040,18 +1347,21 @@ impl Preview {
         self.stats.most_running = self.stats.most_running.max(self.running());
     }
 
-    /// The mesh on screen that a build of the editor's text is compared with before building (ADR 0147): only for a
-    /// request the debounce alone asked for (not a new case, a change on disk, a save or reload, "Rebuild" or
-    /// "anyway"), and not with [`Switches::no_skip`].
-    fn compare_with(&self, skippable: bool, source: &Source) -> Option<Arc<Built>> {
-        if skippable && !self.switches.no_skip && matches!(source, Source::Editor(_)) {
+    /// The mesh on screen that a build is compared with before building: the editor's text for a request the debounce
+    /// alone asked for (not a new case, a change on disk, a save or reload, "Rebuild" or "anyway"; ADR 0147; not with
+    /// [`Switches::no_skip`]), the file for a request only a save of the shown text (or the watcher's notice of it)
+    /// asked for (ADR 0148; not with [`Switches::no_save_skip`]).
+    fn compare_with(&self, skippable: bool, saved: bool, source: &Source) -> Option<Arc<Built>> {
+        let editor = skippable && !self.switches.no_skip && matches!(source, Source::Editor(_));
+        let disk = saved && !self.switches.no_save_skip && matches!(source, Source::Disk);
+        if editor || disk {
             self.shown.clone()
         } else {
             None
         }
     }
 
-    fn request(&mut self, wake: &Wake, source: Source, skippable: bool) {
+    fn request(&mut self, wake: &Wake, source: Source, skippable: bool, saved: bool) {
         let (Some(root), Some(rel)) = (self.root.clone(), self.case.clone()) else {
             return;
         };
@@ -1062,7 +1372,7 @@ impl Preview {
         }
         self.status = Status::Building { since: Instant::now() };
         if self.switches.build_on_ui_thread {
-            let shown = self.compare_with(skippable, &source);
+            let shown = self.compare_with(skippable, saved, &source);
             let outcome = build_source_unless(
                 &root,
                 &rel,
@@ -1076,20 +1386,21 @@ impl Preview {
             return;
         }
         if self.running() >= MAX_BUILDS {
-            self.queued = Some((source, skippable));
+            self.queued = Some((source, skippable, saved));
             return;
         }
         self.queued = None;
-        self.spawn(root, rel, gen, source, skippable, wake.clone());
+        self.spawn(root, rel, gen, source, skippable, saved, wake.clone());
         self.note_running();
     }
 
-    fn spawn(&self, root: PathBuf, rel: String, gen: u64, source: Source, skippable: bool, wake: Wake) {
+    #[allow(clippy::too_many_arguments)]
+    fn spawn(&self, root: PathBuf, rel: String, gen: u64, source: Source, skippable: bool, saved: bool, wake: Wake) {
         let (latest, running, tx) = (self.gen.clone(), self.running.clone(), self.tx.clone());
         let (limits, force) = (self.limits, self.force_cells);
         let checked = !self.switches.ignore_generation;
         let from_editor = matches!(source, Source::Editor(_));
-        let shown = self.compare_with(skippable, &source);
+        let shown = self.compare_with(skippable, saved, &source);
         running.fetch_add(1, Ordering::SeqCst);
         let spawned = std::thread::Builder::new()
             .name("rcfd-studio-preview".into())
@@ -1139,10 +1450,25 @@ impl Preview {
             match result {
                 Err(Refusal::Cancelled) => {}
                 Err(Refusal::Unchanged(hash)) => {
-                    // ADR 0147: the editor's text is the shown mesh's; nothing was built and the picture is current
-                    self.stats.skipped_identical += 1;
+                    // ADR 0147: the editor's text is the shown mesh's; ADR 0148: the saved file is. Nothing was built
+                    // and the picture is current
+                    if from_editor {
+                        self.stats.skipped_identical += 1;
+                    } else {
+                        self.stats.skipped_saved += 1;
+                    }
                     match self.shown.clone() {
                         Some(s) if s.case_hash == hash => {
+                            // the file holds the shown text now: the mesh shown is the file's (same surface, no upload)
+                            let s = if !from_editor && s.from_editor {
+                                Arc::new(Built {
+                                    from_editor: false,
+                                    ..(*s).clone()
+                                })
+                            } else {
+                                s
+                            };
+                            self.shown = Some(s.clone());
                             self.built = Some(s);
                             self.status = Status::Ready;
                         }
@@ -1190,11 +1516,11 @@ impl Preview {
             }
         }
         if self.running() < MAX_BUILDS {
-            if let (Some((source, skippable)), Some(root), Some(rel)) =
+            if let (Some((source, skippable, saved)), Some(root), Some(rel)) =
                 (self.queued.take(), self.root.clone(), self.case.clone())
             {
                 let gen = self.gen.load(Ordering::SeqCst);
-                self.spawn(root, rel, gen, source, skippable, wake.clone());
+                self.spawn(root, rel, gen, source, skippable, saved, wake.clone());
                 self.note_running();
             }
         }
@@ -1290,6 +1616,15 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
     let now = Instant::now();
     let p = &mut st.preview;
     if let Some(case) = p.case.clone() {
+        // ADR 0148 (the maintainer's answer to ADR 0147 question 2): the editor's base is the text of the mesh on
+        // screen (a save of the shown text): its rebuild, and the watcher's notice of the file, compare the file with
+        // the shown mesh on the build thread before building
+        let base_is_shown = |ed: &CaseEditor, p: &Preview| {
+            !p.switches.no_save_skip
+                && p.shown
+                    .as_ref()
+                    .is_some_and(|s| s.rel == case && s.case_hash == ed.base_hash)
+        };
         if let Some(ed) = st.editor.as_ref().filter(|ed| ed.rel == case) {
             // the editor loaded, saved or reloaded other bytes of the file: rebuild once per change of its base hash
             // (not on inequality, which a conflict keeps forever)
@@ -1298,7 +1633,11 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
                 _ => p.read_hash.as_ref().is_some_and(|h| *h != ed.base_hash),
             };
             if changed {
-                p.want = true;
+                if base_is_shown(ed, p) {
+                    p.want_check = true;
+                } else {
+                    p.want = true;
+                }
             }
             p.editor_seen = Some((case.clone(), ed.base_hash.clone()));
             // ADR 0144: an edit or a keystroke in the editor asks for a build DEBOUNCE after the last one
@@ -1318,12 +1657,25 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
                 .filter_map(|f| f.strip_prefix(root).ok())
                 .map(|r| r.to_string_lossy().replace('\\', "/"))
                 .collect();
+            let clean_shown = st
+                .editor
+                .as_ref()
+                .filter(|ed| ed.rel == case && !ed.is_dirty() && ed.draft.is_none() && !ed.in_conflict())
+                .is_some_and(|ed| base_is_shown(ed, p));
             for (t, path) in &op.changes {
                 if p.changes_seen.is_some_and(|s| *t <= s) {
                     continue;
                 }
-                if *path == case || mesh_rels.iter().any(|m| m == path) {
+                if mesh_rels.iter().any(|m| m == path) {
                     p.want = true;
+                } else if *path == case {
+                    // ADR 0148: the file of a clean editor whose base is the shown text (this Studio's own save, seen
+                    // by the watcher) is compared first; any other change of it builds
+                    if clean_shown {
+                        p.want_check = true;
+                    } else {
+                        p.want = true;
+                    }
                 }
             }
         }
@@ -1333,15 +1685,18 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
         p.changes_seen = op.changes.last().map(|(t, _)| *t).or(p.changes_seen);
     }
     let debounced = p.due.is_some_and(|d| now >= d);
-    if p.want || debounced {
+    if p.want || debounced || p.want_check {
         // a newer request supersedes a running build (its result is dropped); it builds the current text, so an edit
         // still waiting for its debounce is built by it too. Only a request the debounce alone asked for may find the
-        // text unchanged and skip the build (ADR 0147).
-        let skippable = !p.want;
+        // editor's text unchanged and skip the build (ADR 0147); only one that a save of the shown text alone asked for
+        // may find the file unchanged (ADR 0148).
+        let skippable = !p.want && !p.want_check;
+        let saved = p.want_check && !p.want;
         p.want = false;
+        p.want_check = false;
         p.due = None;
         let source = current_source(st);
-        st.preview.request(wake, source, skippable);
+        st.preview.request(wake, source, skippable, saved);
     }
     let n = st.preview.drain(wake);
     install(st);

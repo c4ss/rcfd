@@ -43,6 +43,22 @@ pub fn newest_run(b: &Browser) -> Option<&str> {
     b.runs.iter().max_by(|x, y| run_order(x, y)).map(|r| r.id.as_str())
 }
 
+/// True for a case file: a `.toml` or `.json` file (any case of the extension). Other files under `cases/` (a table,
+/// a profile the cases read) are data files (ADR 0148, the maintainer's answer to ADR 0147 question 3; the Studio's
+/// lists only: `Project::cases` still lists every file).
+pub fn is_case_file(rel: &str) -> bool {
+    Path::new(rel)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("toml") || e.eq_ignore_ascii_case("json"))
+}
+
+/// The files under `cases/` split into case files ([`is_case_file`]) and data files, each in the listing's order. With
+/// `all_cases` (the route before ADR 0148), every file is a case file.
+pub fn split_cases(files: &[String], all_cases: bool) -> (Vec<String>, Vec<String>) {
+    files.iter().cloned().partition(|f| all_cases || is_case_file(f))
+}
+
 /// The run id of a project-relative path under `runs/<id>/`, if it names a run folder.
 pub fn run_of(path: &str) -> Option<&str> {
     let rest = path.strip_prefix("runs/")?;

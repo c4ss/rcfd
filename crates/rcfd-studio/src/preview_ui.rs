@@ -5,6 +5,7 @@
 
 use crate::preview::{self, kind_name, Built, Colouring, Status, FRONT_2D, SINGLE};
 use crate::studio::Studio;
+use crate::viewport::MOUSE_HINT;
 use egui::{Color32, Pos2, Rect, Sense};
 use std::sync::Arc;
 use std::time::Duration;
@@ -104,6 +105,9 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
     }
     // the last mesh that built stays on screen (stale) while a newer text builds, fails or is over a limit
     let Some(b) = shown else { return };
+    if !st.viewport.switches.no_scale {
+        resolution(ui, st, &b);
+    }
     ui.monospace(counts(&b));
     controls(ui, st, &b);
     let avail = ui.available_size();
@@ -114,6 +118,8 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
         if b.two_d {
             outline = overlay(ui, st, &b);
         }
+        // ADR 0148: the scale of a 2D view, over the outlines
+        crate::viewport_ui::scale_bar_over(ui, &st.viewport);
         if st.preview.stale() {
             if let Some(r) = st.viewport.image_rect {
                 badge(ui, r);
@@ -147,6 +153,49 @@ fn badge(ui: &mut egui::Ui, image: Rect) {
         back,
         egui::Shape::rect_filled(r.expand2(egui::vec2(5.0, 2.0)), 3.0, WARN),
     );
+}
+
+/// The label of the Mesh side's refine button (ADR 0148).
+pub const REFINE: &str = "Refine x2";
+
+/// The resolution line of the Mesh side (ADR 0148): the domain and the cell counts ([`preview::resolution_text`]),
+/// with "Refine x2" for a generator mesh (its hover text gives the counts after, the cells and the runner's memory
+/// estimate, and the preview's cell limit when the finer mesh is over it). Greyed out, with the reason, while the case
+/// editor does not hold the case as shown ([`preview::refine_blocked`]).
+fn resolution(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
+    let mut go = false;
+    ui.horizontal(|ui| {
+        ui.monospace(preview::resolution_text(b));
+        match preview::refine_offer(b, &st.preview.limits) {
+            preview::RefineOffer::Refine(r) => {
+                let why = preview::refine_blocked(st);
+                let label = if r.over_limit.is_some() {
+                    egui::RichText::new(REFINE).color(WARN)
+                } else {
+                    egui::RichText::new(REFINE)
+                };
+                let resp = ui
+                    .add_enabled(why.is_none(), egui::Button::new(label))
+                    .on_hover_text(preview::refine_hover(&r))
+                    .on_disabled_hover_text(why.clone().unwrap_or_default());
+                st.preview.rects.insert(REFINE, resp.rect);
+                go = resp.clicked();
+            }
+            preview::RefineOffer::MeshFile(_) => {
+                st.preview.rects.remove(REFINE);
+            }
+            preview::RefineOffer::NotOffered(why) => {
+                st.preview.rects.remove(REFINE);
+                ui.weak("(no Refine x2)").on_hover_text(why);
+            }
+        }
+    });
+    if go {
+        // the message goes to the status bar either way
+        if let Err(m) = preview::refine(st) {
+            st.say(m);
+        }
+    }
 }
 
 /// Counts of the built mesh.
@@ -195,7 +244,9 @@ fn controls(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
                     b.n_edges, st.preview.limits.overlay_edges
                 ));
             }
-            ui.weak("face-on orthographic view; the boundary patches are the coloured outlines");
+            ui.weak(format!(
+                "face-on orthographic view; the boundary patches are the coloured outlines; {MOUSE_HINT}"
+            ));
         } else {
             let c = st.preview.colouring;
             if ui.radio(c == Colouring::Patches, "patch colours").clicked() {
@@ -204,7 +255,8 @@ fn controls(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
             if ui.radio(c == Colouring::Single, "single colour").clicked() {
                 st.preview.colouring = Colouring::Single;
             }
-            ui.weak("drag: orbit; right drag: pan; wheel: zoom; double click: fit");
+            // ADR 0148: the middle drag orbits too
+            ui.weak(MOUSE_HINT);
         }
     });
     // the colours follow the controls at once (the model hands them to the viewport in the next drain too)
