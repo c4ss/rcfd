@@ -6,8 +6,8 @@
 //! the runner and a later runner adopts it. Pause and cancel are request files in the run folder that the
 //! solver itself watches (`--pause-file`, `--stop-file`). ADR 0123.
 
-use crate::records::{self, RunRecord, RunState, RunStatus};
-use crate::store::{extra, FsStore, RunStore};
+use crate::records::{self, RunRecord, RunSettings, RunState, RunStatus};
+use crate::store::{event_kind, extra, state_event, FsStore, RunStore};
 use crate::sys;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -142,6 +142,8 @@ struct Active {
 struct Pending {
     id: String,
     rec: RunRecord,
+    /// `rec.settings`, typed.
+    settings: RunSettings,
     paused: bool,
     mem_mb: Option<u64>,
     check: Option<Child>,
@@ -213,6 +215,15 @@ fn next_misses(misses: u8, alive: bool) -> u8 {
     }
 }
 
+/// An event line of kind `kind` in both tag forms (see [`crate::store::event`]) with the fields of `fields`.
+fn event_line(kind: &str, fields: Value) -> Value {
+    let mut v = crate::store::event(kind);
+    if let (Some(o), Value::Object(f)) = (v.as_object_mut(), fields) {
+        o.extend(f);
+    }
+    v
+}
+
 fn read_last_line(p: &Path) -> Option<String> {
     let text = std::fs::read_to_string(p).ok()?;
     text.lines().rev().find(|l| !l.trim().is_empty()).map(String::from)
@@ -242,8 +253,9 @@ impl<S: RunStore> Runner<S> {
     }
 
     fn set_state(&self, id: &str, st: &RunStatus, why: &str) {
+        let from = self.store.read_status(id).ok().map(|s| s.state);
         note("status", self.store.write_status(id, st));
-        let mut ev = json!({"event": "state", "state": st.state, "reason": why});
+        let mut ev = state_event(from, st.state, why);
         if let Some(p) = st.pid {
             ev["pid"] = json!(p);
         }
@@ -308,6 +320,8 @@ impl<S: RunStore> Runner<S> {
                     paused: st.state == RunState::Paused,
                     mem_mb: None,
                     check: None,
+                    // read_record refuses settings that do not parse
+                    settings: RunSettings::of(&rec).unwrap_or_default(),
                     id,
                     rec,
                 }),
@@ -328,13 +342,14 @@ impl<S: RunStore> Runner<S> {
             .lines()
             .rev()
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .find(|v| v["event"] == "launched")
+            .find(|v| event_kind(v) == Some("launched"))
             .and_then(|v| v["pid"].as_u64())
             .and_then(|p| u32::try_from(p).ok())
     }
 
     fn adopt(&mut self, id: String, st: &RunStatus, pid: u32, rec: &RunRecord) {
         let dir = self.dir(&id);
+        let settings = RunSettings::of(rec).unwrap_or_default();
         // already forwarded solver events and residual steps are not forwarded twice
         let events: Vec<Value> = std::fs::read_to_string(dir.join("events.jsonl"))
             .unwrap_or_default()
@@ -350,9 +365,9 @@ impl<S: RunStore> Runner<S> {
         let mem_mb = events
             .iter()
             .rev()
-            .find(|v| v["event"] == "launched")
+            .find(|v| event_kind(v) == Some("launched"))
             .and_then(|v| v["mem_mb"].as_u64())
-            .unwrap_or(rec.settings.mem_mb.unwrap_or(0));
+            .unwrap_or(settings.mem_mb.unwrap_or(0));
         let step = read_last_line(&dir.join("residuals.jsonl"))
             .and_then(|l| serde_json::from_str::<Value>(&l).ok())
             .and_then(|v| v["step"].as_u64())
@@ -361,14 +376,17 @@ impl<S: RunStore> Runner<S> {
             "event",
             self.store.append_event(
                 &id,
-                json!({"event": "adopted", "pid": pid, "note": "solver found by a new runner; probed for liveness"}),
+                event_line(
+                    "adopted",
+                    json!({"pid": pid, "note": "solver found by a new runner; probed for liveness"}),
+                ),
             ),
         );
         self.active.push(Active {
             id,
             child: None,
             pid,
-            threads: rec.settings.threads,
+            threads: settings.threads,
             mem_mb,
             offset: 0,
             step,
@@ -431,7 +449,7 @@ impl<S: RunStore> Runner<S> {
     /// The memory need of a pending run: declared, or from the cell count of a pre-launch check
     /// (`Ok(None)` while the check runs; one check at a time).
     fn estimate(&self, p: &mut Pending, checking: &mut bool) -> Result<Option<u64>, String> {
-        if let Some(m) = p.rec.settings.mem_mb {
+        if let Some(m) = p.settings.mem_mb {
             return Ok(Some(m));
         }
         let dir = self.dir(&p.id);
@@ -440,7 +458,7 @@ impl<S: RunStore> Runner<S> {
                 return Ok(None);
             }
             let out = std::fs::File::create(dir.join(extra::CHECK)).map_err(|e| format!("check.json: {e}"))?;
-            let mut cmd = self.solver_cmd(&p.rec, &dir);
+            let mut cmd = self.solver_cmd(&p.rec, &p.settings, &dir);
             cmd.args(["--check-only", "--status-json"]).stdout(out);
             sys::no_window(&mut cmd);
             let child = cmd
@@ -467,8 +485,11 @@ impl<S: RunStore> Runner<S> {
                 "event",
                 self.store.append_event(
                     &p.id,
-                    json!({"event": "estimate", "cells": cells, "mem_mb": mb.ceil(),
-                           "rule": format!("{} MB + {} KB per cell", self.cfg.mem_base_mb, self.cfg.mem_kb_per_cell)}),
+                    event_line(
+                        "estimate",
+                        json!({"cells": cells, "mem_mb": mb.ceil(),
+                               "rule": format!("{} MB + {} KB per cell", self.cfg.mem_base_mb, self.cfg.mem_kb_per_cell)}),
+                    ),
                 ),
             );
             return Ok(Some(mb.ceil() as u64));
@@ -499,7 +520,7 @@ impl<S: RunStore> Runner<S> {
     }
 
     fn refusal(&self, p: &Pending, mem: u64) -> Result<(), String> {
-        let s = &p.rec.settings;
+        let s = &p.settings;
         if s.threads == 0 || s.threads > self.cfg.cpu_threads {
             return Err(format!(
                 "CPU budget: the run asks for threads = {} (run.json settings.threads), the whole budget is cpu_threads = {} ({})",
@@ -522,13 +543,26 @@ impl<S: RunStore> Runner<S> {
         Ok(())
     }
 
-    fn solver_cmd(&self, rec: &RunRecord, dir: &Path) -> Command {
+    /// The directory the case's relative paths resolve against: `case_dir` of `run.json`, else (a run created by
+    /// `rcfd-project`, whose `case` is project-relative) the folder of the case in the project.
+    fn case_dir(&self, rec: &RunRecord) -> PathBuf {
+        match &rec.case_dir {
+            Some(d) => PathBuf::from(d),
+            None => {
+                let case = self.store.project().join(&rec.case);
+                case.parent()
+                    .map_or_else(|| self.store.project().to_path_buf(), Path::to_path_buf)
+            }
+        }
+    }
+
+    fn solver_cmd(&self, rec: &RunRecord, settings: &RunSettings, dir: &Path) -> Command {
         let mut cmd = Command::new(&self.solver);
         cmd.arg("run")
             .arg(dir.join("case.snapshot"))
             .arg("--case-dir")
-            .arg(&rec.case_dir);
-        for s in &rec.settings.set {
+            .arg(self.case_dir(rec));
+        for s in &settings.set {
             cmd.arg("--set").arg(s);
         }
         let log = OpenOptions::new().create(true).append(true).open(dir.join("log.txt"));
@@ -546,14 +580,14 @@ impl<S: RunStore> Runner<S> {
         }
         let mut order: Vec<usize> = (0..self.pending.len()).filter(|&i| !self.pending[i].paused).collect();
         order.sort_by(|&a, &b| {
-            let (x, y) = (&self.pending[a].rec, &self.pending[b].rec);
-            (y.settings.priority, &x.created, &x.id).cmp(&(x.settings.priority, &y.created, &y.id))
+            let (x, y) = (&self.pending[a], &self.pending[b]);
+            (y.settings.priority, &x.rec.created, &x.id).cmp(&(x.settings.priority, &y.rec.created, &y.id))
         });
         let mut launched = Vec::new();
         for i in order {
             let p = &self.pending[i];
             let mem = p.mem_mb.unwrap_or(0);
-            let threads = p.rec.settings.threads;
+            let threads = p.settings.threads;
             let used_t: usize = self.active.iter().map(|a| a.threads).sum();
             let used_m: u64 = self.active.iter().map(|a| a.mem_mb).sum();
             if self.active.len() >= self.cfg.max_runs
@@ -572,18 +606,18 @@ impl<S: RunStore> Runner<S> {
     }
 
     fn launch(&mut self, i: usize) {
-        let (id, rec, mem_mb) = {
+        let (id, rec, settings, mem_mb) = {
             let p = &self.pending[i];
-            (p.id.clone(), p.rec.clone(), p.mem_mb.unwrap_or(0))
+            (p.id.clone(), p.rec.clone(), p.settings.clone(), p.mem_mb.unwrap_or(0))
         };
         let dir = self.dir(&id);
-        let mut cmd = self.solver_cmd(&rec, &dir);
+        let mut cmd = self.solver_cmd(&rec, &settings, &dir);
         cmd.arg("--out")
             .arg(dir.join(extra::OUTPUT))
             .arg("--status-file")
             .arg(dir.join(extra::SOLVER_STREAM))
             .args(["--status-every", "1", "--quiet", "--threads"])
-            .arg(rec.settings.threads.to_string())
+            .arg(settings.threads.to_string())
             .arg("--stop-file")
             .arg(dir.join(extra::CANCEL))
             .arg("--pause-file")
@@ -603,8 +637,11 @@ impl<S: RunStore> Runner<S> {
                     .store
                     .append_event(
                         &id,
-                        json!({"event": "launched", "pid": pid, "launch_seq": self.launch_seq,
-                               "threads": rec.settings.threads, "mem_mb": mem_mb}),
+                        event_line(
+                            "launched",
+                            json!({"pid": pid, "launch_seq": self.launch_seq,
+                                   "threads": settings.threads, "mem_mb": mem_mb}),
+                        ),
                     )
                     .map_err(|e| (dir.join("events.jsonl"), e))
                     .and_then(|()| {
@@ -624,18 +661,14 @@ impl<S: RunStore> Runner<S> {
                     );
                     return;
                 }
-                note(
-                    "event",
-                    self.store.append_event(
-                        &id,
-                        json!({"event": "state", "state": st.state, "reason": "launched", "pid": pid}),
-                    ),
-                );
+                let mut launched = state_event(Some(RunState::Queued), st.state, "launched");
+                launched["pid"] = json!(pid);
+                note("event", self.store.append_event(&id, launched));
                 self.active.push(Active {
                     id,
                     child: Some(child),
                     pid,
-                    threads: rec.settings.threads,
+                    threads: settings.threads,
                     mem_mb,
                     offset: 0,
                     step: 0,
@@ -674,7 +707,7 @@ impl<S: RunStore> Runner<S> {
                     "event",
                     self.store.append_event(
                         &a.id,
-                        json!({"event": "skipped_line", "offset": a.offset, "bytes": buf.len()}),
+                        event_line("skipped_line", json!({"offset": a.offset, "bytes": buf.len()})),
                     ),
                 );
                 a.offset += DRAIN_CHUNK;
@@ -683,6 +716,7 @@ impl<S: RunStore> Runner<S> {
         };
         a.offset += end as u64 + 1;
         let mut moved = false;
+        let mut residuals = Vec::new();
         for line in String::from_utf8_lossy(&buf[..end]).lines() {
             let Ok(v) = serde_json::from_str::<Value>(line) else {
                 continue;
@@ -690,10 +724,9 @@ impl<S: RunStore> Runner<S> {
             if v["event"] == "iteration" {
                 let idx = v["index"].as_u64().unwrap_or(0);
                 if idx > a.step {
-                    let r = json!({"step": idx, "time": v["time"],
+                    residuals.push(json!({"step": idx, "time": v["time"],
                         "residuals": {"u": v["res_u"], "p": v["res_p"], "continuity": v["continuity"]},
-                        "monitors": {}});
-                    note("residuals", self.store.append_residual(&a.id, &r));
+                        "monitors": {}}));
                     a.step = idx;
                     a.time = v["time"].as_f64().unwrap_or(a.time);
                     moved = true;
@@ -709,10 +742,11 @@ impl<S: RunStore> Runner<S> {
                 note(
                     "event",
                     self.store
-                        .append_event(&a.id, json!({"event": "solver", "solver_seq": seq, "solver": v})),
+                        .append_event(&a.id, event_line("solver", json!({"solver_seq": seq, "solver": v}))),
                 );
             }
         }
+        note("residuals", self.store.append_residuals(&a.id, &residuals));
         moved
     }
 
@@ -773,7 +807,8 @@ impl<S: RunStore> Runner<S> {
                         a.cancel_at = Some(Instant::now());
                         note(
                             "event",
-                            self.store.append_event(&a.id, json!({"event": "cancel_requested"})),
+                            self.store
+                                .append_event(&a.id, event_line("cancel_requested", json!({}))),
                         );
                     }
                     Some(t) if t.elapsed() > grace && !a.killed_for_cancel => {
@@ -782,7 +817,7 @@ impl<S: RunStore> Runner<S> {
                             "event",
                             self.store.append_event(
                                 &a.id,
-                                json!({"event": "killed", "pid": a.pid, "why": "cancel grace elapsed"}),
+                                event_line("killed", json!({"pid": a.pid, "why": "cancel grace elapsed"})),
                             ),
                         );
                     }
@@ -883,8 +918,10 @@ impl<S: RunStore> Runner<S> {
                 "event",
                 self.store.append_event(
                     &a.id,
-                    json!({"event": "runner_shutdown", "pid": a.pid,
-                           "note": "the solver keeps running; the next runner adopts it"}),
+                    event_line(
+                        "runner_shutdown",
+                        json!({"pid": a.pid, "note": "the solver keeps running; the next runner adopts it"}),
+                    ),
                 ),
             );
         }

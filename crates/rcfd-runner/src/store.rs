@@ -1,9 +1,10 @@
 //! The trait boundary between the run service and the project folder (ADR 0123, "Switching to rcfd-project").
 //!
 //! The runner and the client reach the run records only through [`RunStore`]; [`FsStore`] implements it on
-//! the section-8 folder layout with the local types of [`crate::records`].
+//! the section-8 folder layout with `rcfd-project`'s records and helpers (`atomic`, `jsonl`, `runid`; ADR 0130 D1).
 
-use crate::records::{self, RunRecord, RunSettings, RunState, RunStatus};
+use crate::records::{self, io_error, RunRecord, RunSettings, RunState, RunStatus};
+use rcfd_project::{atomic, jsonl, paths, runid};
 use serde_json::{json, Value};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -23,6 +24,8 @@ pub mod extra {
     pub const OUTPUT: &str = "output";
     /// Output of the pre-launch check (`rcfd run --check-only --status-json`).
     pub const CHECK: &str = "check.json";
+    /// The time-series field store of the run (`rcfd run --store-dir`, ADR 0130 D3).
+    pub const FIELDS: &str = "fields";
 }
 
 /// Access to the run records of one project.
@@ -47,6 +50,10 @@ pub trait RunStore {
     fn append_event(&self, id: &str, event: Value) -> io::Result<()>;
     /// Append to `residuals.jsonl`.
     fn append_residual(&self, id: &str, line: &Value) -> io::Result<()>;
+    /// Append several lines to `residuals.jsonl` (one drain of the solver stream); by default one at a time.
+    fn append_residuals(&self, id: &str, lines: &[Value]) -> io::Result<()> {
+        lines.iter().try_for_each(|l| self.append_residual(id, l))
+    }
     /// Write `metrics.json` atomically.
     fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()>;
 }
@@ -68,9 +75,35 @@ fn bad(e: impl std::fmt::Display) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, e.to_string())
 }
 
-fn read_json<T: serde::de::DeserializeOwned>(p: &Path) -> io::Result<T> {
-    let text = records::retry(|| std::fs::read_to_string(p))?;
-    serde_json::from_str(&text).map_err(|e| bad(format!("{}: {e}", p.display())))
+/// An event line in both tag forms: `kind` (rcfd-project) and `event` (read by clients of the 1248a76 runner),
+/// for one release (ADR 0130 amendment 1).
+pub fn event(kind: &str) -> Value {
+    json!({"kind": kind, "event": kind})
+}
+
+/// The tag of an event line: `kind`, else the legacy `event`.
+pub fn event_kind(v: &Value) -> Option<&str> {
+    v["kind"].as_str().or_else(|| v["event"].as_str())
+}
+
+/// A state-change event line in both forms (`from`, `to`; legacy `state`), with its reason.
+pub fn state_event(from: Option<RunState>, to: RunState, reason: &str) -> Value {
+    let mut ev = event("state");
+    ev["from"] = json!(from);
+    ev["to"] = json!(to);
+    ev["state"] = json!(to);
+    ev["reason"] = json!(reason);
+    ev
+}
+
+/// `case` of `run.json`: the project-relative path when the case file is inside the project, else the absolute
+/// path (ADR 0130 amendment 1).
+fn case_in_project(root: &Path, case_abs: &Path) -> String {
+    match (paths::canonicalize(root), paths::canonicalize(case_abs)) {
+        (Ok(r), Ok(c)) => paths::rel_string(&r, &c),
+        _ => None,
+    }
+    .unwrap_or_else(|| case_abs.display().to_string())
 }
 
 impl RunStore for FsStore {
@@ -87,7 +120,7 @@ impl RunStore for FsStore {
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
             .filter_map(|e| e.file_name().into_string().ok())
-            .filter(|n| n.starts_with("r-"))
+            .filter(|n| runid::is_run_id(n))
             .collect();
         v.sort();
         Ok(v)
@@ -100,63 +133,76 @@ impl RunStore for FsStore {
         let runs = self.root.join("runs");
         std::fs::create_dir_all(&runs)?;
         let mut id = records::new_run_id();
-        while runs.join(&id).exists() {
+        while runs.join(&id).exists() || runs.join(format!(".tmp-{id}")).exists() {
             id = records::new_run_id();
         }
         let tmp = runs.join(format!(".tmp-{id}"));
         std::fs::create_dir(&tmp)?;
         let rec = RunRecord {
             id: id.clone(),
-            created: records::now_iso(),
-            case_source: case_abs.display().to_string(),
-            case_dir: case_dir.display().to_string(),
-            case_snapshot_hash: format!("fnv1a64:{:016x}", records::fnv1a64(&text)),
+            case: case_in_project(&self.root, &case_abs),
+            case_snapshot_hash: rcfd_project::records::hash_bytes(&text),
+            mesh: None,
             mesh_hash: None,
-            solver_version,
-            settings: settings.clone(),
+            solver_version: solver_version.unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.into()),
+            settings: serde_json::to_value(settings).map_err(bad)?,
+            created: records::now_iso(),
+            case_source: Some(case_abs.display().to_string()),
+            case_dir: Some(case_dir.display().to_string()),
         };
-        std::fs::write(tmp.join("case.snapshot"), &text)?;
-        std::fs::write(tmp.join("run.json"), serde_json::to_vec_pretty(&rec).map_err(bad)?)?;
-        let st = RunStatus::new(RunState::Queued);
-        std::fs::write(tmp.join("status.json"), serde_json::to_vec_pretty(&st).map_err(bad)?)?;
-        records::append_line(
-            &tmp.join("events.jsonl"),
-            &json!({"t": rec.created, "event": "state", "state": "queued", "reason": "created"}).to_string(),
-        )?;
+        atomic::write_new(&tmp.join("case.snapshot"), &text).map_err(io_error)?;
+        atomic::write_json_new(&tmp.join("run.json"), &rec).map_err(io_error)?;
+        let st = RunStatus {
+            updated: rec.created.clone(),
+            ..RunStatus::new(RunState::Queued)
+        };
+        atomic::write_json(&tmp.join("status.json"), &st).map_err(io_error)?;
+        let mut ev = state_event(None, RunState::Queued, "created");
+        ev["t"] = json!(rec.created);
+        jsonl::append_one(&tmp.join("events.jsonl"), &ev).map_err(io_error)?;
         records::retry(|| std::fs::rename(&tmp, runs.join(&id)))?;
         Ok(id)
     }
 
     fn read_record(&self, id: &str) -> io::Result<RunRecord> {
-        read_json(&self.run_dir(id).join("run.json"))
+        let rec: RunRecord = atomic::read_json(&self.run_dir(id).join("run.json")).map_err(io_error)?;
+        // a record whose settings the runner cannot schedule is not read, as before the switch
+        RunSettings::of(&rec).map_err(|e| bad(format!("{}: {e}", self.run_dir(id).join("run.json").display())))?;
+        Ok(rec)
     }
 
     fn read_status(&self, id: &str) -> io::Result<RunStatus> {
-        read_json(&self.run_dir(id).join("status.json"))
+        atomic::read_json(&self.run_dir(id).join("status.json")).map_err(io_error)
     }
 
     fn write_status(&self, id: &str, status: &RunStatus) -> io::Result<()> {
         let mut s = status.clone();
         s.updated = records::now_iso();
-        records::atomic_write(
-            &self.run_dir(id).join("status.json"),
-            &serde_json::to_vec_pretty(&s).map_err(bad)?,
-        )
+        atomic::write_json(&self.run_dir(id).join("status.json"), &s).map_err(io_error)
     }
 
     fn append_event(&self, id: &str, mut event: Value) -> io::Result<()> {
         event["t"] = json!(records::now_iso());
-        records::append_line(&self.run_dir(id).join("events.jsonl"), &event.to_string())
+        jsonl::append_one(&self.run_dir(id).join("events.jsonl"), &event)
+            .map(|_| ())
+            .map_err(io_error)
     }
 
     fn append_residual(&self, id: &str, line: &Value) -> io::Result<()> {
-        records::append_line(&self.run_dir(id).join("residuals.jsonl"), &line.to_string())
+        self.append_residuals(id, std::slice::from_ref(line))
+    }
+
+    fn append_residuals(&self, id: &str, lines: &[Value]) -> io::Result<()> {
+        if lines.is_empty() {
+            return Ok(());
+        }
+        // one line per solver step, one open per drain: appended without an fsync, as before (a killed process
+        // loses nothing; a torn last line left by a crash is cut by the next open)
+        let (mut a, _) = jsonl::Appender::open(&self.run_dir(id).join("residuals.jsonl")).map_err(io_error)?;
+        lines.iter().try_for_each(|l| a.append(l).map_err(io_error))
     }
 
     fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()> {
-        records::atomic_write(
-            &self.run_dir(id).join("metrics.json"),
-            &serde_json::to_vec_pretty(metrics).map_err(bad)?,
-        )
+        atomic::write_json(&self.run_dir(id).join("metrics.json"), metrics).map_err(io_error)
     }
 }

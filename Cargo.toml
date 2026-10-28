@@ -54,6 +54,7 @@ rcfd-api = { path = "crates/rcfd-api" }
 rcfd-mcp = { path = "crates/rcfd-mcp" }
 rcfd-assistant = { path = "crates/rcfd-assistant" }
 rcfd-tsstore = { path = "crates/rcfd-tsstore" }
+rcfd-project = { path = "crates/rcfd-project" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
