@@ -234,10 +234,13 @@ with its exit code and the end of its output. Before ADR 0146 the start waited 1
 
 **Windows: a capturing caller still waits.** std starts every process with handle inheritance on, and the workspace allows no
 unsafe code. So the started runner, and the solvers it starts, also hold every inheritable handle of the program that started
-the runner, whatever the output option. Measured (ADR 0146 C1, C2):
-* a program that reads the output of `rcfd-runner start` or `ensure` through a pipe to the end (a shell that stores it, a CI
-  step) waits until the runner exits; so does a program that reads the output of a process that runs them;
-* a runner that `rcfd-mcp` started keeps the server's standard output pipe open after the server has exited.
+the runner, whatever the output option. Measured with a program that reads the output through pipes (std's `Command`;
+ADR 0146 C1, C2, I1-I3):
+* the reader of `rcfd-runner start`'s output waits until the runner exits, although the command itself exits at once;
+* a runner that `rcfd-mcp` started keeps the server's standard output pipe open after the server has exited;
+* the handles pass through intermediate processes too, so the same holds for the reader of a process that runs the command.
+
+A shell that stores the command's output, or a CI step, reads it the same way; this was not run.
 
 On Linux the capturing caller returns as soon as the command exits.
 

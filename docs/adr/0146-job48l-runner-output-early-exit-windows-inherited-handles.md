@@ -204,8 +204,8 @@ Commits:
 * 7b5b309: the tests, with no non-test code changed. The "before" runs used it.
 * fa69632: the change.
 * 65f9228: the known-miss attributes, the docs and the notes.
-* 959ba18 and the commit after it: this addendum, the known-miss notes in the two new test files' module docs, and the
-  wording of `start_run` in `docs/mcp-tools.md`. No code.
+* 959ba18 and the commits after it: this addendum, the known-miss notes in the two new test files' module docs, and wording in
+  `docs/mcp-tools.md` and `docs/run-control.md`. No code.
 
 Set-up:
 * Windows: this host (16 threads, 93.6 GB, 32 GB free at the start, rustc 1.99.0). Release builds in the worktree's own target
@@ -263,6 +263,17 @@ Set-up:
   * `cargo fmt -p rcfd-runner -p rcfd-mcp -- --check` (Windows): clean.
 * **Leftover processes:** none on Linux (`ps` at the end of each container run). None on Windows (`rcfd`, `rcfd-runner`,
   `rcfd-mcp`, `fake-claude` and the probe, checked after all runs).
+* **Limit audit** (`python scripts/limit_audit.py`, after the last commit): 123 hits in the repository, 4 of them in this
+  job's files. Each was read.
+
+  | Hit | Class | Classification |
+  |---|---|---|
+  | `crates/rcfd-mcp/tests/runner_stdio_w48l.rs:269` `fn c2_control_child_entry` | (iii) | documented skip: the child-process entry point of the C2 control. It does nothing without its environment; the parent test `c2_control_a_runner_given_the_callers_stdout_holds_it` asserts the held pipe |
+  | `crates/rcfd-mcp/tests/runner_stdio_w48l.rs:271` `return;` | (iv) | documented skip: the same entry point's return without its environment |
+  | `crates/rcfd-runner/tests/inherit_w48l.rs:43` `return;` | (iv) | documented skip: `i_child_entry`'s return without its environment (the I1-I4 roles) |
+  | `crates/rcfd-runner/tests/output_w48l.rs:224` `fn e1_control_a_valid_budgets_file_starts` | (iii) | false positive: a positive control, which expects the start to succeed and asserts it |
+
+  The scanner raised nothing on the two held-pipe controls (C1, C2): their assertions express the expected hold.
 
 ### Deviations and notes
 
@@ -285,6 +296,13 @@ Set-up:
    `chat_e`, and `parity_assistant_access`. All of them stopped at their set-up check, "`target\release\fake-claude.exe`
    missing": this job's fresh target folder had never built rcfd-claude's replay double. After `cargo build --release -p rcfd-claude --bin fake-claude`, `chat_e` passed 14 and `parity` passed 5
    (1 ignored, as before). No code changed in between.
+8. **Known-miss names.** The brief's rule says a missed limit becomes an ignored `*_known_miss` test. This job's registered
+   platform rule names the tests `<name>_known_miss_on_windows`, so they do not match the glob `*_known_miss` literally.
+   * No script or document keys on the suffix (`scripts/`, `docs/test-process.md`).
+   * The repository already places `known_miss` inside names, for example `f2_known_miss_temporal_order_bdf2`.
+   * The names were kept, as registered.
+9. **`start_run`'s early-exit message is read from code, not run.** `docs/mcp-tools.md` describes it, and E1 measured the
+   library call that `start_run` wraps (`ensure_runner`). No `rcfd-mcp` test makes a runner fail early.
 
 ### Not run
 
@@ -293,6 +311,8 @@ Set-up:
 * Claude Code's own Bash and PowerShell tools as the capturing caller. The registered caller is std's `Command` with piped
   output.
 * What Claude Code does when `rcfd-mcp`'s stdout stays open after the server exits (C2's Windows miss).
+* The runner on Windows also holds the read end of `rcfd-mcp`'s stdin pipe. A process that writes to that pipe after the
+  server has died may therefore get no broken-pipe error. Unverified; it bears on question 1.
 * `--stdout` from an interactive Windows console. It is not checked whether a detached runner (`DETACHED_PROCESS`) can write
   to an inherited console handle; the checks used files and pipes.
 * Linux CI (`ubuntu-latest`); Docker bookworm stood in.
@@ -346,10 +366,12 @@ Set-up:
    * (b) give `serve` its own `--log-file`, which the runner opens itself for its pre-lock errors and panics.
 
    **Recommendation:** (a) now. (b) only together with question 1 (c), which needs it.
-5. **The Studio's duplicate log tail** (deviation 6). Options:
-   * (a) leave it;
+5. **The Studio's duplicate log tail** (deviation 6). Two of `quick_run.rs`'s comments are now stale: its module doc, line
+   10, and the comment at line 284. Both say that a bad budgets file would end the runner without a trace. Options:
+   * (a) leave both;
    * (b) a small Studio change: `quick_run` appends its 3 lines only when the error does not already carry the runner's
-     output.
+     output, and the two comments say that the runner's output is now in `runner.log`. The budgets check before the start
+     can stay: it refuses before anything is queued.
 
    **Recommendation:** (b), as a separate Studio change. It was not done here because it is outside the runner start.
 6. **Linux CI.** Run the CI unit tests and the Full gate on `ubuntu-latest` after the merge. **Recommendation:** yes.
