@@ -893,7 +893,7 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
             }
             p.editor_seen = Some((case.clone(), ed.base_hash.clone()));
         }
-        // the watcher saw the case file or the mesh file change
+        // the watcher saw the case file or the mesh file change (since the last frame)
         if let Some(op) = &st.project {
             let mesh_rel = p
                 .built
@@ -909,8 +909,11 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
                     p.want = true;
                 }
             }
-            p.changes_seen = op.changes.last().map(|(t, _)| *t).or(p.changes_seen);
         }
+    }
+    // changes seen while no case was asked for do not count later
+    if let Some(op) = &st.project {
+        p.changes_seen = op.changes.last().map(|(t, _)| *t).or(p.changes_seen);
     }
     if p.want {
         // a newer request supersedes a running build (its result is dropped)

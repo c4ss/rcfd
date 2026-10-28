@@ -40,6 +40,13 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
     ui.horizontal(|ui| {
         ui.strong(format!("Mesh of {case}"));
         ui.weak("(no run selected; built from the case file on disk, the solver is not run)");
+        if ui
+            .add_enabled(!st.preview.building(), egui::Button::new("Rebuild"))
+            .on_hover_text("read the case and its mesh file again (a mesh file outside the project is not watched)")
+            .clicked()
+        {
+            st.preview.rebuild();
+        }
     });
     if st.editor.as_ref().is_some_and(|e| e.rel == case && e.is_dirty()) {
         ui.colored_label(

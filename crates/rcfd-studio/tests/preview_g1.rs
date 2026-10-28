@@ -515,6 +515,51 @@ fn g9_2d_boundary_hover_names_the_patch() {
     eprintln!("G9: 64 of 64 outline midpoints name their patch (lid on y = 1, walls elsewhere); 'patch lid (wall), boundary' drawn; none at the centre");
 }
 
+/// Unregistered: an unsaved edit leaves the preview on the file; a save from the case editor rebuilds it (the editor's
+/// base hash changed); an external replacement of the file seen by the watcher rebuilds it too.
+#[test]
+fn rebuilds_after_a_save_and_an_external_change() {
+    let root = pv::project("rebuild", &[]);
+    let mut st = rcfd_studio::Studio::in_memory();
+    st.run_poll = None; // the watcher stays on (500 ms)
+    st.open_project(&root);
+    assert!(st.drain_until(pv::WAIT, |s| s.browser().is_some()));
+    assert_eq!(pv::show_case(&mut st, "cases/cavity.toml"), Status::Ready);
+    assert_eq!(pv::built(&st).cells, 256);
+    assert!(st.drain_until(pv::WAIT, |s| s.editor.is_some()));
+    st.editor
+        .as_mut()
+        .unwrap()
+        .set_value("mesh.nx", serde_json::json!(20))
+        .unwrap();
+    let requests = st.preview.stats.requests;
+    for _ in 0..20 {
+        st.drain();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(
+        (pv::built(&st).cells, st.preview.stats.requests),
+        (256, requests),
+        "unsaved edit"
+    );
+    st.save_case().unwrap();
+    assert!(
+        st.drain_until(pv::WAIT, |s| s.preview.built.as_ref().is_some_and(|b| b.cells == 320)),
+        "no rebuild after the save: {:?}",
+        st.preview.status
+    );
+    std::fs::write(root.join("cases/cavity.toml"), pv::CAVITY.replace("nx = 16", "nx = 24")).unwrap();
+    assert!(
+        st.drain_until(pv::WAIT, |s| s.preview.built.as_ref().is_some_and(|b| b.cells == 384)),
+        "no rebuild after the external change: {:?}",
+        st.preview.status
+    );
+    eprintln!(
+        "rebuild: unsaved edit kept 256 cells; save -> 320; external change -> 384 ({} requests)",
+        st.preview.stats.requests
+    );
+}
+
 /// Unregistered: the cell estimate made before building equals the built mesh's cells for the generators it lists.
 #[test]
 fn estimate_equals_the_built_cells() {
