@@ -266,6 +266,69 @@ unchanged:
    cancelled; F11's 5.0 s limit). `run_status` is called with `events: 1`, `read_residuals` with `max_points: 10`, `render_field`
    with `width: 128` (an inline image), `field_summary` and `render_field` with `field: "p"`.
 
+## Addendum: 48F server part results (2026-10-28, branch `worktree-agent-a3111463805750a3f`, debug builds on the gate host)
+
+Decisions applied as accepted: W48-12 (a), W48-13 (a), W48-14 (a), W48-15 (a). Base main 15b00ef. New workspace edges
+`rcfd-mcp -> rcfd-project, rcfd-runner, rcfd-tsstore, rcfd-post` and the dev-only `rcfd-mcp -> rcfd-claude` (all lower layers;
+`workspace_graph` 3 passed; `docs/architecture.md` updated). No new third-party crate. `rcfd-claude` and the Studio crate were
+not edited. The workspace gate was not run (the maintainer runs it); `rcfd-project` and `rcfd-mcp` were tested and linted alone,
+and `rcfd-assistant`, `rcfd-gui`, `rcfd-runner`, `rcfd-claude` pass `cargo check --all-targets`.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| F1 | `tools/list` without `--project` byte-identical to the golden of 15b00ef | 33 tools, 27 188 bytes, identical with no flags, `--root .` and `--read-only`; `initialize` unchanged | pass |
+| F1 control | the list with `--project` differs | 50 tools with `--project` (F3, F13) | fails as required |
+| F2 | both name forms valid for `AllowRule::Tool`, <= 128 characters; no `-` in plugin, server, app-owned server | 17 x 2 names valid, longest 43; `rcfd`, `project`, `rcfd_project` | pass |
+| F2 control | a name with `-` is refused | `mcp__plugin_rcfd-panel_project__list_runs` refused | fails as required |
+| F3 | result shapes equal the golden; access classes and `_meta` as listed; read-only 1100; unknown argument -32602 | 19 of 19 shapes equal the hand-written golden (runs made by `start_run` through the runner); 17 access classes as listed; 6 non-read tools refused read-only with 1100, project unchanged; 17 unknown-argument calls -32602 | pass |
+| F4 | 17 inputs x every path argument refused with 1004, nothing created | 17 x 4 = 68 calls refused with 1004 (junction made); project and outside folder trees unchanged; 5 non-run-id strings refused with 1004 | pass |
+| F4 control | `notes/a.md` accepted | written | as required |
+| F5 | `physics.nu = -1` refused with the located message, hash unchanged; a valid edit written and re-parsed | 1003 "cases/cavity.toml: physics.nu = -1 refused: ... -1 outside [Some(0.0), None]", hash unchanged; edit of nu 0.02 and max_iterations 40 written in the minimal form (comments kept), re-parsed to 0.02 and 40; stale base 1200 naming the current hash; a JSON case edited | pass |
+| F5 control | a naive writer of the invalid value changes the hash | changed, and the file no longer parses | fails as required |
+| F6 | Studio model and MCP client, 200 edits each | not run (needs the 48B Studio model, amendment 1 item 6) | not run |
+| F6 stand-in (reported) | 0 lost updates | two library writers, 200 each: 400 accepted, 227 conflicts, 400 lines, 0 lost; the edit log chains `old_hash` to the previous `new_hash` | reported |
+| F6 stand-in control | loses >= 1 update | plain read-modify-write: 400 writes, 200 lines, 200 lost | fails as expected |
+| F7 | non-cooperating edit, dirty Studio editor | not run (needs the 48B editor, ADR 0131 B6) | not run |
+| F8 | every read tool <= 40 000 bytes or a path | 20 calls on 500 runs; largest 35 897 bytes (`list_changes` over 2 001 changes, truncated), `list_runs` limit 100: 35 701 (paged); `read_residuals` max_points 2000 and `render_field` width 4096 returned paths | pass |
+| F8 control | `read_residuals` without decimation > 40 000 | 100 000 lines: 12 802 924 bytes | fails as required |
+| F9 | PNG bytes equal `render.png` | 5 084 base64 bytes, equal (p, width 640, last snapshot step 30) | pass |
+| F9 control | the snapshot before differs | differs | fails as required |
+| F10 | min, max exact; mean within 1e-12 relative | p, ux, uy on 24 x 24: min and max bit-equal, mean relative difference 0 | pass |
+| F10 control | another snapshot's summary differs | differs for all three | fails as required |
+| F11 | 30-step cavity reaches `finished`; `cancelled` within 5.0 s | finished at step 30 in 0.36 s; cancelled 0.152 s after `cancel_run` (step 38); pause seen in 0.116 s; control on an ended run 1002 | pass |
+| F11 control | `wait_run` with 0 s returns at once | under 1 s, `changed: false` | as required |
+| F12 | `plugin.json` name `rcfd`, version = workspace; `.mcp.json` args with `${CLAUDE_PROJECT_DIR}`; skills valid; release check | as listed, 3 skills; `scripts/test_release_notes.py` 6 passed (4 version places, the new plugin alone named) | pass |
+| F12 control | a skill naming an unknown tool fails | refused naming `no_such_tool` | fails as required |
+| F13 | not a project: non-zero, names the path; a project answers `initialize` | exit 2, message names the folder; `initialize` and 50 tools | pass |
+
+No known miss. Not run here: F6, F7 (Studio), the "Not in CI" items (`claude plugin validate`, a real `--plugin-dir` session, the
+marketplace install), Linux, and the build-cost measurement of the Risks section (only an incremental `cargo check` of
+`rcfd-assistant` and `rcfd-gui`, 17.5 s, which is not a cost measurement).
+
+Deviations and notes:
+* The first run of the F8, F9 and F10 tests stopped in their set-up before measuring anything: the store helper gave the service a
+  sandbox folder that did not exist (1004). A test-code defect, fixed (the folder is created), then all three ran as counted above.
+* `rcfd-mcp`'s existing test `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` fails on this host because
+  `%TEMP%\x` exists (created 2026-10-15, not by this branch); it asserts that path is absent. It fails the same way without 48F's
+  changes; skipped in the runs above.
+* `rcfd-mcp --help` gained one line for `--project`.
+* The edit lock, edit log and conflict codes are as amendment 1 items 12 and 14. Read tools write a file under `runs/<id>/mcp/` or
+  `runs/<id>/renders/` when a result is over the budget, also with `--read-only` (as the Design section says for large outputs).
+
+Questions for the maintainer:
+1. The runner's `metrics.json` holds the run summary (`state`, `reason`, `exit_code`, `steps`, `time`, `solver_finish`,
+   `last_residuals`), not the "final report values" of the plan's contract; report values are in `output/monitors.json`. So
+   `list_runs` and `compare_runs` compare `exit_code`, `steps` and `time`. Should the runner also write the final report values
+   into `metrics.json` (an ADR 0130 change), or should the tools read `output/monitors.json`?
+2. W48-13 (a) mentions an optional `RCFD_MCP` path in `env`; Claude Code's documentation does not say that `env` can replace
+   `command`, so it was not built. Keep PATH only?
+3. Should `--project` imply `--root <project>` when `--root` is not given? Now the existing tools keep their sandbox as given
+   (the plugin passes both).
+4. When the minimal TOML edit cannot be placed (a multi-line value, a key set through an inline table), `edit_case` writes the
+   canonical form, which spells out every default. Acceptable, or refuse such edits?
+5. Marketplace name `rcfd` and owner name "rcfd maintainers" in `.claude-plugin/marketplace.json`: confirm or replace.
+6. Error codes 1200 (conflict), 1201 (lock busy), 1202 (not found): confirm the numbers.
+
 ## Files
 
 `crates/rcfd-mcp/src/{lib,main}.rs`, new `src/project.rs` and tests, `crates/rcfd-mcp/Cargo.toml`, `crates/rcfd-project/src/atomic.rs`,
