@@ -3,7 +3,8 @@
 Status: **registered 2026-10-28**, part 1 (design, set-up and every limit except the tolerance of E2), before any
 registered run and before any code change; the tolerance of E2 is registered by amendment 1 after a disclosed smoke run
 and before the counted runs; amendment 2 (MT101's key list was defective) before the corrected check; results in the
-addendum: every registered limit met, every control failed as required, no known miss; not yet accepted by the
+addendum: every registered limit met (H2 after re-running two pre-existing tests under their own assumptions, a fresh
+`TEMP` and one thread: deviation 9), every control failed as required, no known miss; not yet accepted by the
 maintainer. Job 48U (the letter after 48T; ADRs 0150-0154 are taken by jobs 48P-48T on other branches),
 on local main 6867e40 (waves 48A-48O merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -281,7 +282,10 @@ control: the same case without the table gets none.
 
 Commits: 6f19884 (registration), c2a8d72 (R0), 9d50287 (code, case-level tests, the two cases, the script's
 `--add-missing`), c2d30c2 (amendment 1), c436d3d (the counted runs, the example tests), ffb859a (the Studio checks, U2 on
-the aerofoil mesh), 6cd65d2 (amendment 2), then the amendment-2 code with W1b, and this addendum. Release builds on this
+the aerofoil mesh), 6cd65d2 (amendment 2), ec4330e (the amendment-2 code, W1b), faff240 (H1 and S2 compare Windows-made
+mesh hashes on Windows only), c0e3b31 (the unregistered checks X1, X2, S1b), and this addendum (7f9cd91, 9cb3c90 and the
+commit that adds the suite totals). The branch started at 1248a76 and was fast-forwarded to local main 6867e40 before
+any work. Release builds on this
 host (shared with other agents' builds), `--test-threads 1` for the registered tests, output to files. The counted runs
 used the binaries built at c2d30c2, copied out of the target folder before the runs.
 
@@ -298,7 +302,7 @@ used the binaries built at c2d30c2, copied out of the target folder before the r
 | K2 | refused at their paths | 5 of 5 (unknown key in the table, misspelled table, string angle "give the angle as a plain number of degrees ...", 2-component origin, 400 outside [-360, 360]); `Case::set` of a string angle refused; `"25 cm"` in the origin stored as 0.25 | pass |
 | K3 | the schema | `x-rcfd-optional` true, not in `mesh.required`, units "deg" and "m", range [-360, 360]; `Case::new()` has no table and validates | pass |
 | H1 | 0 of the record differ | 0 of 41 (the new TOML block of `docs/case-schema.md` is not in the record) | pass |
-| H2 | the suites pass | SUITES | SUITES_RESULT |
+| H2 | the suites pass | `rcfd-core`, `rcfd-mesh`, `rcfd-api` (166 test binaries): 987 passed, **1 failed**, 295 ignored, `baseline_hashes.rs` 3 passed and 1 ignored as before; `rcfd-mcp` and `rcfd-cli`: 138 passed, **1 failed**, 9 ignored (`workspace_graph.rs` 3 passed); `rcfd-studio` (`fake-claude` built first, one thread): 242 passed, 0 failed, 4 ignored; `rcfd-io` and `rcfd-post` (the other users of `rcfd_core::settings`): 238 passed, 21 ignored; `rcfd-gui` (frozen, reads the schema): 48 passed, 4 ignored. The two failures are pre-existing tests that fail on this host's set-up, not on this job's code (deviation 9); run as they expect (a fresh `TEMP`; one thread) they pass | met after re-running those two |
 | P1 | matched as before; refused off-axis; control fails | `box_2d` periodic_x rotated 30 about (0.3, 0.2, 0): 8 periodic faces, the same partners; the sector rotated 17 about (0, 0, 0.7): 24 faces, the same partners; about (1, 0, 0): refused at `mesh.transform.rotate_origin` (the pair `theta_min`/`theta_max` about the axis through (0, 0, 0) named, with the fix); control: the points rotated alone, `FvGeometry::new` fails "periodic patches theta_min/theta_max are not matched by the periodic transform" | pass |
 | W1 | one MT101 at each of 7 paths, no other; none without a rotation | the 7 paths, nothing else, warning/mesh; no table and `rotate_z_deg = 0`: none; the two rotated example cases: none | pass |
 | W1b | (amendment 2) 5 paths; control none | the 5 paths (`p0` and `p1` of the line, the plane's `origin`, `disk_axis`, `disk_centre`), nothing else; without the table none | pass |
