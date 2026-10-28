@@ -192,6 +192,77 @@ the fix `Store fields for this run`; (b) that warning and its button drawn. What
 that run (its values go into the addendum); the corrected control had not run. Every registered test file runs again on
 the commit of this amendment.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-ae06d5f587d6943c4`. Commits: registration 839ff09 (on main 6867e40); DV6 (a)'s record bbac993 (the
+source still 6867e40's); the code, the docs and the tests 6563bfa; amendment 1 6fbdbb7 (the final code); then this
+addendum and the dated notes. Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11,
+16 threads, 93.6 GB; 22.4 to 23.9 GB free during the runs), `TMP` in this job's scratch folder (outside every checkout);
+`rcfd`, `rcfd-runner` and `fake-claude` built at the baseline from the same sources (no file of theirs changed).
+Registered runs: `saved_store_r.rs` on 6563bfa (first) and on 6fbdbb7 (after amendment 1), the changed earlier files
+(`start_plan_r10`, `store_plan_sf`, `case_output_sf9`) and `json_o` on 6fbdbb7, then the whole suite on 6fbdbb7 (DV7). The
+table gives the 6fbdbb7 values; where the first run differed, it says so.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| DV1 | the defaults; the twelve texts' (`sets_store`, `sets_precision`, `case_store`) as registered, the JSON texts the same; (i)-(vii) the plan of the case without the keys | defaults `0` (an integer), `0.0` (a float), `[]`, `"f64"`; (i)-(vii) (false, false, none); (viii) (true, false, `output.store_interval`); (ix) (true, false, `output.store_time_interval`); (x) (false, true, `output.store_precision`); (xi) (false, false, `output.store_fields`); (xii) (true, false, `output.store_time_interval`); every JSON text as its TOML twin; (i)-(vii) the whole `StartPlan` equal to the bare cavity's (piso cavity's), TOML and JSON | pass |
+| DV1 control | the route before takes every key in the text as the case's own | (i)-(iv), (vii) `sets_store` true; (v), (vii) `sets_precision` true; (vii) all four keys in `case_store`; (xii) both intervals | fails as required |
+| DV2 | (a)-(f) as registered | (a) the saved `cases/s.toml` 15 924 bytes, `physics.nu` 0.02, `store_interval = 0` (integer), `store_time_interval = 0.0` (float), `store_precision = "f64"`, `store_fields = []`; (b) A's `set` `["output.store_interval=1", "output.store_precision=f32"]`, finished, 30 snapshots, each `ux, uy, uz, p` in `F32`; (c) the side Run, `Ready`, 30 snapshots, the last shown (field `p`), bit-equal to the store, no note; (e) `stored fields of run <A>` and the hover line drawn; on the first adapter (NVIDIA GeForce RTX 5080, Vulkan) the viewport rendered A (renders 0 to 2), no GPU error; (f) `case.snapshot` of A and B byte-equal to each other and to the saved file, `case_snapshot_hash` `fnv64:e0fb38f122f2bc1a` for both, the rest of `run.json` equal (`case`, `case_dir`, `case_source`, `case_snapshot_hash`, `settings` without `set`: priority 0, 1 thread, `mem_mb` null, `solver_version`), A's `set` = the two store entries followed by B's (none), 30 residual lines equal bit for bit | pass |
+| DV2 control | B, the route before: no `set`, no store, `NoStore`, no picture drawn | B's `set` `[]`, no store file; the viewport `NoStore` (at the moment of the check the model still had B's row as queued: `Run <B> is queued (#1 in the queue); this run stores no fields (the case sets its own field store (output.store_*)), so there is no picture to show; the plots follow it.`; the explanation: `TurnedOff`, `... turned off (output.store_time_interval = 0) ...`); drawn without the hover line | fails as required |
+| DV3 | as DV2, the JSON case | (a) the saved `cases/j.json` 21 309 bytes, the four keys at their defaults in its `output` object; (b) as DV2 (30 snapshots, `F32`); (c) as DV2; (e) as DV2 (renders 0 to 2, no error); (f) as DV2, the hash `fnv64:6afa8cec59f36d24` for both, 30 residual lines equal | pass |
+| DV3 control | as DV2's | as DV2's; B's explanation `NotStored`, `Run <B> was started without storing fields, so there is nothing to show.` (the explainer reads a JSON snapshot as no keys: question 3) | fails as required |
+| DV4 | (a) store on, no note, the `set()`, no warning, `sets_precision` false; (b) the label and the store line drawn, no `(set by the case)`, no W-case-off, no `Store fields for this run` | as registered; the case lines (reported, question 2): `The case's output.directory is not used: the runner writes the results to runs/<run id>/output/.` and `The case's own output settings are kept: output.fields, output.retain_checkpoints, output.retain_snapshots, output.write_interval, output.write_time_interval, output.write_times.` | pass |
+| DV4 control | (amendment 1) no store, the note, `set()` empty, W-case-off for `output.store_time_interval` with its fix; drawn | as amended. First run (6563bfa): stopped at the warning, W-case-off named `output.store_time_interval` where `output.store_interval` was registered (amendment 1) | fails as required (after amendment 1) |
+| DV5 | the 17 fixtures the same in both routes (the eleven parts of `Seen`); (h) the whole plan | 17 of 17 equal; (g)'s saved text holds `store_interval = 7` and `store_precision = "f64"` and plans as its hand-written twin (no proposal, every 7 iterations, f64, 348 346 bytes, the "which is kept" line, plus question 2's two lines in both routes); (h) 10 of 10 whole plans equal | pass |
+| DV5 control | the saved cavity's `set()` differs between the routes | `["output.store_interval=1", "output.store_precision=f32"]` against `[]` | discriminates |
+| DV6 | (a) 22 texts byte-equal to the record; (b) the 22 plans equal between the routes | (a) 22 of 22 equal to `plans_6867e40.txt` (sha256 `F5DF79AA...C383`, recorded on bbac993 with the source of 6867e40); (b) 22 of 22 equal (`==`, `Debug`, `set()`, `settings()`) | pass |
+| DV6 control | the saved control's app-route text differs from the record; its route-before text equals it | differs (the app's route proposes the store); the route before equal to the record byte for byte | as required |
+| DV7 | the whole suite and the rest | DV7_PENDING | DV7_RESULT |
+
+**The changed earlier tests** (registered under "Changes to earlier tests"), on 6fbdbb7: R10 `start_plan_r10.rs` 2 of 2 ((b0) `set()` the proposal; the route before empty); SF1, SF3, SF9 `store_plan_sf.rs` 4 of 4 ((c) the plan of (a), no warning, no case line; the registered (c) with the route before: W-case-off for `output.store_interval`, its fix, the "Overrides" line); SF9 (j)-(l) `case_output_sf9.rs` 4 of 4 ((k) as changed: `set()` the proposal, `, f32.`, 342 016 bytes, the control 230 400; the registered (k) with the route before: `output.store_interval=4`, `, f64.`, 572 416); O10, O11 `json_o.rs` 4 of 4 (O10 (b) now `simplec 30 iterations, Some(144) cells; sets its store false; --set ["output.store_interval=1", "output.store_precision=f32"]`; the JSON case's run stored its fields and its residuals equal the TOML run's, 30 lines).
+
+**Other keys a saved case spells out** (the brief's check of the editor's saved bytes): the `output` table above, read
+where the Studio reads a case's text rather than its settings.
+* `store_plan::case_extra`'s `output_keys` (the Start run dialog's lines): every saved case shows the two lines measured in
+  DV4 (a), because `directory`, `fields`, `retain_checkpoints`, `retain_snapshots`, `write_interval`,
+  `write_time_interval` and `write_times` are spelled out at their defaults. Lines only; the run does not change. Question 2.
+* `run_fields::store_asked` (the viewport's explanation of a run without fields): a run of a saved TOML case started with
+  its keys as written (outside the Studio, or through the route before) is explained "turned off (output.store_time_interval
+  = 0)", one of a saved JSON case "not stored" (it reads `case.snapshot` as TOML only): DV2 and DV3's controls. Runs the
+  Studio starts now store, so they do not reach it. Question 3.
+* Not flipped (they read resolved settings, where a saved case equals its source, or treat the default as absent): the
+  step-control keys of ADR 0140 D3 (`fixed_dt`), `compressible.mode`, `solver.*`, `mesh.*`, `dynamic_mesh.enabled` and
+  `chain.sequence` (`run_fields::read_record` reads them from the text but takes only `true` and a non-empty list), the
+  viewport's run kind (from the stored times), `quick_run` (it reads the plan, not the text). From reading.
+
+**Deviations and notes.**
+1. Amendment 1: DV4's control text named the wrong key in the registration (a prediction error: 6867e40 names the last
+   interval at 0); corrected before its rerun; every registered file ran again on the amendment's commit.
+2. The baseline's 3 failures were the environment (`TMP` inside the worktree's target folder, which the binary search of
+   ADR 0141 G3/G7 walks up from), not the code; every registered run used a `TMP` outside every checkout.
+3. Decision 2's scope (the four store keys) is my reading of the brief; question 1 offers the narrower one.
+4. DV2 and DV3's controls checked `NoStore` while the model's row of B still read queued (the run worker's next tick had
+   not come); the limit (`NoStore`, no store, no picture) does not depend on the text, which is reported.
+5. `scripts/limit_audit.py` on the touched test files: one hit, `saved_store_r.rs` DV6 (b) `assert_eq!(format!("{a:?}"),
+   format!("{b:?}"))` (class v), read: the `Debug` texts of two different plans (the app's route and the route before), not
+   a value compared with itself.
+6. Nothing outside `crates/rcfd-studio` and `docs` changed (DV7).
+
+**Not run.** A person at the real window (the checklist below); Linux; debug builds of the new tests; the workspace gate
+and workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests beyond `workspace_graph` and
+`baseline_hashes`; `cargo deny` (no dependency changed).
+
+## DV7's first whole-suite run and its rerun (2026-10-28, written before the rerun)
+
+The whole `rcfd-studio` suite on 6fbdbb7 (`fake-claude` built first; 438 s; 25.0 GB free at its start): 52 test binaries,
+245 passed, **1 failed**, 5 ignored (the four known misses and DV6 (a)'s recorder). The failure: ADR 0134's E11
+(`chat_e.rs`, `e11_confirmation_dialog_gates_the_first_chat`) panicked in the test helper `chat_common::Fake::calls`
+(`.fake-claude-calls.jsonl` read while a `fake-claude` process was still appending to it: `EOF while parsing a string`
+on its last, unterminated line, `unwrap`ped). Not this job's code (the chat model and the fake share no code path with the
+start plan); `chat_e` passed 14 of 14 in the baseline and, run alone three times on 6fbdbb7 after this run, 14 of 14 each
+time. The rerun: the same command on the same commit, once, its result reported below whatever it is; E11 is not changed
+or ignored (question 6).
+
 ## Not in CI (by hand)
 
 A person at the real window: a case edited and saved, then Run: the Run side shows the field; Runs > Start run... on the
@@ -220,6 +291,10 @@ same with a `.json` case.
    Recommendation: (a).
 5. ADR 0149 question 9 (c) (the save leaves out settings at their defaults) is no longer needed for the store; it stays with
    ADR 0135's question on edits that rewrite a case in its canonical form.
+6. **ADR 0134 E11's helper reads a file another process appends to** (`chat_common::Fake::calls` `unwrap`s every line of
+   `.fake-claude-calls.jsonl`, the last one possibly unterminated), so E11 fails now and then (DV7's first run). Options:
+   (a) keep; (b) the helper skips an unterminated last line (a test-only change of ADR 0134's helper, with its own
+   check). Recommendation: (b), as a small job of its own.
 
 ## Files
 
