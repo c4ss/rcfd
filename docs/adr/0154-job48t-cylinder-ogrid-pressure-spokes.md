@@ -273,3 +273,101 @@ for t = 10, which B8a did not run to. Added (same command line and reading rules
 
 Solver numerics, defaults, schema, the Studio and the render core (a display fix only if D1 fails and the fix is small),
 `baseline_hashes.rs`, the user's project folder and the main checkout.
+
+## Addendum (2026-10-28): results against the registered limits
+
+Everything below was measured after the registration and the two amendments; no limit or rule was changed after a result was
+seen. Machine shared with other agents (CPU load 57 to 100 %); runs at `--threads 1` (R256, RU, W4: 2); wall times are therefore
+rough. Work folder `E:\projects\cfd\w48t-work` (runs, dumps, `metrics-all.json`, `report\`); the findings, tables and image paths
+for the user are in [the job's README](../investigations/job48t-cylinder-spokes/README.md).
+
+### Answer: (b), a numerical artefact of the solver
+
+The default transient coupling of the case, `solver.algorithm = "piso"` (`PimpleSettings::piso`: n_outer 1, `n_correctors` 2),
+does not converge the pressure-velocity coupling in the thin wall cells once the wall diffusion number nu dt / dr1^2 exceeds an
+onset between 6.5 (R128, clean) and 11.4 (B4b, spoky). The left-over error is amplified from step to step (DG1: the ADR 0073
+pressure-lag map has rho = 2.42 on the user's set-up, 0.36 on the committed one; its leading mode sits in the wall cell layer),
+saturates at about 50 q as grid-scale circumferential pressure oscillations confined to r < 0.7 D (the spokes, wavelength 4.5 to 6
+cells at 256 cells around, 7.2 cells at both 256 and 512 at t = 1), and on several set-ups grows until the divergence guard stops
+the run. The Courant-matched refinement of the report raised nu dt / dr1^2 from 3.35 to 22.7 because the grading put the added
+radial cells at the wall (first cell 0.01366 -> 0.00262 D).
+
+### Results
+
+| Check | Limit (registered) | Measured | Outcome |
+|---|---|---|---|
+| S0 | 20 iteration events equal; stored p at t = 1 bit-identical | 20 of 20 events equal; `store.rts` (and `monitors.csv`) byte-identical | **met**: the Studio's save changed no physics |
+| RU | stored p bit-identical to U3 at t = 1, 2, 3 | bit-identical at all 9 common snapshots (t = 1.014 to 9.001) | **met**: this branch reproduces the user's run |
+| D1 | 0 mismatching pixels (R64 and R256 at t = 3, U3 near t = 3) | 0 on 5 adapters (RTX 5080 Vulkan/DX12, Radeon Vulkan/DX12, WARP), domain and zoom views; also R64, R128, R256, W3, W5 at t = 1, 3, 10 | **met**: H-disp rejected |
+| L3 per run | clean: M_hf <= max(2 x R64, 0.01); spoky: >= 0.1 | README table: clean R64, R128, B1, B1b, B3, B4c, B8a, B8b, W3, W5, W6; spoky R256, RU, B2c, B4a, B4b, B6, B7, B9, B10, B11, B12; diverged B2, B2b, B5, B6r, W1, W2 | as listed |
+| L4 (screen) | smooth <= 0.05, jumpy >= 0.5 per step | every clean run 0.0003 to 0.0043; every spoky run 6.2 to 70 | agrees with L3 everywhere |
+| F-a | (a) rejected if any of four | lambda* 4.5 to 6 cells (> 4: criterion not met); no decay (L7); smooth starts B6 spoky, B6r diverged; jumpy on 256 x 256 while 64 x 48 and 128 x 96 are smooth at the same Courant number | **(a) rejected** (three criteria) |
+| L6 | lambda* in cells within 1.5x while in D >= 1.8x apart | U2 (256) 7.31 cells, U5 (512) 7.21 cells at t = 1; 0.103 D against 0.052 D at r = 0.6 | **numerical** |
+| L7 | decays if M_hf(30)/M_hf(10) <= 0.5 | R256 44.9/44.0 = 1.02; U2 62.7/52.9 = 1.19 (48 to 69 up to t = 71, then diverged) | **persists** |
+| Bisection: H-Dw / H-Co | monotone in one with one threshold | with PISO-2: clean at nu dt/dr1^2 0.84 (B1, B3), 3.35 (R64, B1b), 5.7 (B4c), 6.5 (R128); spoky or diverged at 11.4, 22.7, 22.8, 91. Courant: clean at 10 (B1b), diverged at 0.64 (B2b) | **H-Dw supported, H-Co rejected** |
+| H-Choi (B11) | removes | 49.1 at t = 3 (R256 48.3) | no effect, rejected |
+| H-lin (B10) | removes | 45.3 at t = 3; pressure solves take 10 to 14 iterations (DG1 `p_iters`), cap 3000 | no effect, rejected |
+| H-conv (B7) | removes | 40.3 (0.83 x) | no effect, rejected |
+| H-start (B5, B6, B6r) | removes | B5 diverged (step 32), B6 49.9 at t0 + 3, B6r diverged (step 46) | rejected |
+| H-nonorth (B9) | predicted no effect | 45.3 (0.94 x) | no effect, as predicted |
+| B12 (BDF2) | reduces if <= 0.3 x | 15.3 = 0.317 x | no effect (just above the reduce line) |
+| B8a, B8b (3, 4 correctors) | removes | 9.2e-8, 9.1e-8 at t = 3 | **removes** |
+| B3 (grading 10.88), B4c (dt 1/256) | removes | 3.1e-7, 1.1e-7 at t = 3 | **removes** |
+| W (workaround rule) | clean at 1, 3, 10; smooth; cd(10) within 10 % of R128's 1.286 | W3 fractional step: 1.9e-7 / 7.9e-8 / 4.1e-8, cd(10) 1.291, 29 s per simulated second. W5 three correctors: 2.7e-7 / 9.2e-8 / 5.3e-8, 1.296, 49 s. W6 (user's dt 0.0156, three correctors): 2.8e-7 / 9.1e-8 / 4.3e-8, 1.296, 49 s. W4: see below. W1, W2 (PIMPLE n_outer 2, 4, alpha 0.9): diverged | W3, W5, W6 **accepted**; W1, W2 rejected |
+| Recommendation | least wall time per simulated second | W3, `solver.time_advance = "fractional_step"` | as registered |
+| E1 | bit-identical after 16 steps | p, ux, uy bit-identical | **met** |
+| DG1 | rho >= 1 exactly on spoky/diverged twins | 8 of 9 arms agree (failing twins rho 1.68 to 4.36, clean 0.22 to 0.75); G256s rho 1.17 / 1.07 with a clean twin (B4c) | **rejected** in the strict form; rho separates the classes at a threshold between 1.17 and 1.68, not at 1 |
+| K1 | reaches t = 3, M_hf <= 0.0114 | stopped at step 30 (t = 0.453) | **miss**: `w48t_k1_..._known_miss`, ignored, limit intact |
+| K2 | the same with 3 correctors | reaches t = 3, M_hf 282 | **miss**: `w48t_k2_..._known_miss`, ignored, limit intact |
+| M_hf cross-check | <= 1e-3 relative | 2.0e-7 (Rust 5.699737e-3, script 5.699736e-3) | met |
+| W3, W5 in-process (heavy tests) | M_hf <= 0.0114 at t = 3 | 7.7e-8, 9.0e-8 | pass |
+
+### Proposed fix (a recommendation; nothing of it is implemented; each needs the maintainer's decision)
+
+1. **Warn (no numerics change).** Run the existing ADR 0073 pressure-lag estimate on the case path also for `n_correctors >= 2`
+   (`sim.rs` limits it to 1 corrector) in warn mode, at step 1; results stay bit-identical (the estimate works on copies). DG1 says
+   the warning level must be above 1.17 and below 1.68 for this case family (for example 1.3, to be registered); the message
+   names `n_correctors`, `time_advance = "fractional_step"`, a lower grading or a smaller dt. Cost at step 1: about 60 extra
+   step-equivalents of the linear algebra (1 to 2 s on 65,536 cells).
+2. **Numerics (opt-in first).** PISO correctors until converged: an opt-in key (for example a tolerance on the largest pressure
+   change between two correctors, relative to the pressure range, with a cap), defaults bit-identical when off. Acceptance to
+   register: K1 and K2 pass, R256 clean, the ADR 0069 / 0073 transient benchmarks unchanged within their limits. A fixed third
+   corrector is not enough in general: K2 (aspect 18.8 at the wall) stays spoky with three.
+3. **Example project.** A note in `notes/cylinder.md` that refining `ny` at `grading = 100` thins the wall cell, with the
+   settings above; the file is the user's tracked file, so the maintainer decides.
+
+### Deviations
+
+1. The worktree started 197 commits behind local main (at 1248a76); it was fast-forwarded to main 6867e40 before any work, as
+   the brief requires ("based on local main, includes 48A-48O").
+2. B6's screen window is t in [12, 13] (t0 + [2, 3] for the run restarted at t0 = 10), its checked times t0 + 1, t0 + 3; the
+   registered window reads t in [2, 3] for runs started at 0.
+3. The M_hf cross-check ran on the control, not on the K1 arm (no field at t = 3 there); written in amendment 2 before the run.
+4. Runs whose guard stopped them before t = 1 are classified "diverged" (amendment 1). B2 and W2 stored t = 1 before diverging
+   and are "spoky then diverged".
+5. P0 (the `--print-settings` parse) and `rcfd check` ran before the registration (orientation, no solver run); S0 is their
+   registered behavioural check.
+6. The analysis scripts run with the user's site packages (numpy, matplotlib), i.e. without `python -I`; they read only this
+   job's own dumps.
+
+### Not run
+
+* The whole gate (workspace fmt, clippy, tests). Run: rustfmt on the two new test files, `cargo clippy -p rcfd-api -p rcfd-studio
+  --all-targets -- -D warnings` (clean), the docs-site test (2 passed), the new ignored tests as reported above.
+* `rcfd-mcp render_field` (the CPU renderer): D1 used the Studio's own wgpu path; both draw the stored cell values.
+* A 512 x 512 arm of this branch (only the user's U5 store, diverged at step 22).
+* Linux.
+* Any change to the user's project, the main checkout or the committed example case.
+
+### Questions for the maintainer (with recommendations)
+
+1. Enable the pressure-lag warning for `n_correctors >= 2` (fix 1)? Recommendation: yes, with a registered level between 1.17
+   and 1.68 (DG1), as a separate job; it changes no result.
+2. Add the opt-in converged-corrector PISO (fix 2)? Recommendation: yes, opt-in first, with K1 and K2 as its acceptance tests;
+   decide a default only after a registered benchmark run.
+3. Should the example case or its note recommend `time_advance = "fractional_step"` or `n_correctors = 3` for refined meshes?
+   Recommendation: a note only (the committed 64 x 48 case is clean as it is); `fractional_step` is cheaper here, but ADR 0073
+   (verdict 4) records a temporal-order floor of the fractional path (its total-pressure face term, an O(dt h^2) error), so PISO
+   with enough correctors is the conservative choice for time accuracy.
+4. A setup rule on nu dt / dr1^2 instead of fix 1? Recommendation: no; DG1 shows rho is not a function of that number alone
+   (G256s at 5.7 has rho 1.17, G128 at 6.5 has 0.75), so the lag estimate itself is the better test.
