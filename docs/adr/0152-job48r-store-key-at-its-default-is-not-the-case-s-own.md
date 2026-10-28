@@ -1,7 +1,10 @@
 # ADR 0152: Job 48R, a store key at its schema default is not the case's own: a case saved in the Studio stores its fields when the Studio starts it
 
 Status: **registered 2026-10-28**, before any registered run (what had run before is listed under "What I already
-knew"); not yet accepted by the maintainer. Job 48R, on local main 6867e40 (waves 48A-48O merged). House rules of
+knew"); amendment 1 (DV4's control text) before its corrected run; results in the addendum: every registered limit met
+and every control failed as required (DV4's control after amendment 1); DV7's first whole-suite run missed on one earlier
+test (ADR 0134 E11, a torn read in its helper, not this job's code), its rerun is reported; not yet accepted by the
+maintainer. Job 48R, on local main 6867e40 (waves 48A-48O merged). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
 the corrected run; defaults of existing code stay bit-identical outside the Studio; `crates/rcfd-api/tests/baseline_hashes.rs`
@@ -126,8 +129,9 @@ and not saving; for a pure check, the same edit through a `CaseEditor` and its `
 | DV6 | Check 3, unedited TOML cases, the plan bit-identical: the ten files under `cases/`, the ten cases of `example-projects/`, `common::RUN_CASE` and `common::CAVITY` (22 plans), and as the control the 30-iteration cavity with `physics.nu` 0.02 written by `rcfd-api`'s writer (`Case::to_toml`, every key spelled out). (a) Recorded once on 6867e40, before any code change of this job: per case the `Debug` text of `StartPlan::new`'s result and of its `set()`, written by `plans_record_r.rs` (an ignored test that writes only to a new file named by `RCFD_DV6_RECORD`) and kept as `tests/fixtures/plans_6867e40.txt`; after the change, the same text of each; (b) after the change, the app's route against the route before | (a) the 22 texts byte-equal to the record; (b) the 22 plans equal (`==` and `Debug`), `set()` and `settings()` equal | the saved control: its app-route text differs from the record, and its route-before text equals it (the switch reproduces 6867e40's reading) |
 | DV7 | The rest: the whole `rcfd-studio` suite (`fake-claude` built first) with the changed earlier tests below; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings`; `cargo fmt -p rcfd-studio -- --check`; `rcfd-cli`'s `workspace_graph`; `rcfd-api`'s `baseline_hashes` (run, not re-recorded); `git diff 6867e40` outside `crates/rcfd-studio/` and `docs/` empty and `Cargo.lock` unchanged; `scripts/third_party_licenses.py --check` | pass; the four known misses ignored as before (ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b) | (their own) |
 
-How the registered runs are made: DV6 (a)'s record first, on 6867e40 with only the recording files added (`cargo test
---release -p rcfd-studio --test plans_record_r -- --ignored`), committed; then the code; then `cargo test --release -p
+How the registered runs are made: DV6 (a)'s record first, on 6867e40 with only the recording files added
+(`RCFD_DV6_RECORD=<a new file> cargo test --release -p rcfd-studio --test plans_record_r -- --ignored`, the file then
+kept as the fixture), committed; then the code; then `cargo test --release -p
 rcfd-studio --test saved_store_r -- --test-threads 1 --nocapture` and the changed earlier test files, each output to a file;
 then the whole `rcfd-studio` suite once with `--no-fail-fast -- --test-threads 1 --nocapture` (`fake-claude` built first),
 output to a file; clippy, fmt, `workspace_graph`, `baseline_hashes`, the diff and the licence check on the final commit.
@@ -135,6 +139,12 @@ output to a file; clippy, fmt, `workspace_graph`, `baseline_hashes`, the diff an
 ## Changes to earlier tests (registered here, none run yet)
 
 Each follows from the decision; limits not named are unchanged.
+
+Note (added with the addendum, after the runs; no limit changed): R10 (b0) and SF9 (c) follow from the maintainer's answer
+itself (an interval at 0); **SF9 (k) follows from decision 2's scope reading** (`store_precision = "f64"` counted as a
+default), not from the answer's words, as do the `output.store_precision=f32` entry in DV2's, DV3's and DV4's `set()`
+limits and DV2's and DV3's `F32` store limit. With question 1 (b) they revert: SF9 (k) as registered in ADR 0140, those
+`set()` limits without the precision entry, an `F64` store.
 
 * **ADR 0133 R10 (b0)** (`start_plan_r10.rs`): the cavity of R10 with `[output] store_interval = 0`: `set()` exactly
   `output.store_interval=4`, `output.store_precision=f32` (the proposal; before: empty). The registered "empty" is kept as a
@@ -195,13 +205,15 @@ the commit of this amendment.
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-ae06d5f587d6943c4`. Commits: registration 839ff09 (on main 6867e40); DV6 (a)'s record bbac993 (the
-source still 6867e40's); the code, the docs and the tests 6563bfa; amendment 1 6fbdbb7 (the final code); then this
-addendum and the dated notes. Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11,
-16 threads, 93.6 GB; 22.4 to 23.9 GB free during the runs), `TMP` in this job's scratch folder (outside every checkout);
+source still 6867e40's); the code, the docs and the tests 6563bfa; amendment 1 6fbdbb7 (the final code); 4b75913 (this
+addendum's DV1-DV6 results, DV7's first run and the plan of its rerun, the dated notes; docs only); then the commit that
+completes this addendum (docs only). Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11,
+16 threads, 93.6 GB; 22.4 to 30.2 GB free during the runs), `TMP` in this job's scratch folder (outside every checkout);
 `rcfd`, `rcfd-runner` and `fake-claude` built at the baseline from the same sources (no file of theirs changed).
 Registered runs: `saved_store_r.rs` on 6563bfa (first) and on 6fbdbb7 (after amendment 1), the changed earlier files
-(`start_plan_r10`, `store_plan_sf`, `case_output_sf9`) and `json_o` on 6fbdbb7, then the whole suite on 6fbdbb7 (DV7). The
-table gives the 6fbdbb7 values; where the first run differed, it says so.
+(`start_plan_r10`, `store_plan_sf`, `case_output_sf9`) and `json_o` on 6fbdbb7, then the whole suite on 6fbdbb7 (DV7) and,
+after its E11 failure, once more on 4b75913 (docs only after 6fbdbb7: the same code; see "DV7's first whole-suite run and
+its rerun"). The table gives the 6fbdbb7 values; where the first run differed, it says so.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -217,7 +229,7 @@ table gives the 6fbdbb7 values; where the first run differed, it says so.
 | DV5 control | the saved cavity's `set()` differs between the routes | `["output.store_interval=1", "output.store_precision=f32"]` against `[]` | discriminates |
 | DV6 | (a) 22 texts byte-equal to the record; (b) the 22 plans equal between the routes | (a) 22 of 22 equal to `plans_6867e40.txt` (sha256 `F5DF79AA...C383`, recorded on bbac993 with the source of 6867e40); (b) 22 of 22 equal (`==`, `Debug`, `set()`, `settings()`) | pass |
 | DV6 control | the saved control's app-route text differs from the record; its route-before text equals it | differs (the app's route proposes the store); the route before equal to the record byte for byte | as required |
-| DV7 | the whole suite and the rest | DV7_PENDING | DV7_RESULT |
+| DV7 | the whole suite (the four known misses ignored) and the rest | the whole suite, first run on 6fbdbb7 (438 s): 52 test binaries, 245 passed, **1 failed** (ADR 0134 E11, a torn read in its test helper, see below), 5 ignored; `chat_e` alone three times on 6fbdbb7: 14 of 14 each; the rerun on 4b75913 (the same code, 703 s, 26.5 GB free at its start): 52 binaries, **246 passed, 0 failed, 5 ignored** (the four known misses ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b, and DV6 (a)'s recorder, ignored by design); against the baseline's 239, the 7 new tests (DV1-DV6, the changed SF9 (k)); `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 6fbdbb7; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed; `baseline_hashes` 3 passed, 1 ignored as before, the file unchanged since 6867e40; `git diff 6867e40` outside `crates/rcfd-studio/` and `docs/`: empty, `Cargo.toml`, `Cargo.lock` unchanged; `scripts/third_party_licenses.py --check`: up to date | first run missed (E11), rerun pass |
 
 **The changed earlier tests** (registered under "Changes to earlier tests"), on 6fbdbb7: R10 `start_plan_r10.rs` 2 of 2 ((b0) `set()` the proposal; the route before empty); SF1, SF3, SF9 `store_plan_sf.rs` 4 of 4 ((c) the plan of (a), no warning, no case line; the registered (c) with the route before: W-case-off for `output.store_interval`, its fix, the "Overrides" line); SF9 (j)-(l) `case_output_sf9.rs` 4 of 4 ((k) as changed: `set()` the proposal, `, f32.`, 342 016 bytes, the control 230 400; the registered (k) with the route before: `output.store_interval=4`, `, f64.`, 572 416); O10, O11 `json_o.rs` 4 of 4 (O10 (b) now `simplec 30 iterations, Some(144) cells; sets its store false; --set ["output.store_interval=1", "output.store_precision=f32"]`; the JSON case's run stored its fields and its residuals equal the TOML run's, 30 lines).
 
@@ -247,6 +259,11 @@ where the Studio reads a case's text rather than its settings.
    format!("{b:?}"))` (class v), read: the `Debug` texts of two different plans (the app's route and the route before), not
    a value compared with itself.
 6. Nothing outside `crates/rcfd-studio` and `docs` changed (DV7).
+7. Two texts of the registration were completed with the addendum, no limit changed: "How the registered runs are made"
+   now names `RCFD_DV6_RECORD` in the recorder's command (DV6's row already said the recorder writes only to the file it
+   names), and "Changes to earlier tests" has a note on which changes follow from decision 2's scope reading.
+8. DV7's whole suite: the first run missed on ADR 0134 E11 (a torn read in its test helper), see the section on it and
+   question 6; the result row gives both runs.
 
 **Not run.** A person at the real window (the checklist below); Linux; debug builds of the new tests; the workspace gate
 and workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests beyond `workspace_graph` and
@@ -262,6 +279,9 @@ on its last, unterminated line, `unwrap`ped). Not this job's code (the chat mode
 start plan); `chat_e` passed 14 of 14 in the baseline and, run alone three times on 6fbdbb7 after this run, 14 of 14 each
 time. The rerun: the same command on the same commit, once, its result reported below whatever it is; E11 is not changed
 or ignored (question 6).
+
+The rerun (on 4b75913, which changed only docs after 6fbdbb7; 703 s, 26.5 GB free at its start, 30.2 GB at its end): 52
+test binaries, 246 passed, 0 failed, 5 ignored (the four known misses and DV6 (a)'s recorder); E11 passed.
 
 ## Not in CI (by hand)
 
