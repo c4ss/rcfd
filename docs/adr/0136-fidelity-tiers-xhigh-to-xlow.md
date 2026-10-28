@@ -213,7 +213,8 @@ How Table D follows from Table E:
 
 * **One setting, `fidelity`, carried by the run [F-2 (a)].**
   * It is set with `rcfd run --fidelity <tier>`, `RunSettings.fidelity` in the runner, an optional `fidelity` argument of the MCP
-    project tool `start_run`, or a select box in the Studio's start dialog.
+    project tool `start_run`, or a select box in the Studio's start dialog. That dialog is proposed in
+    [ADR 0133](0133-wave48d-run-control-and-live-monitoring.md) and is not in `crates/rcfd-studio/src` at a89ccb3.
   * Case files are unchanged, and `tools_list_default.json` stays byte-identical.
   * `rcfd schema` is unchanged by T1 and T2; T3 adds the key `solver.precision` [F-6 (a)].
 * **One expansion function, `rcfd_api::fidelity::expand(case, tier, presets)`.**
