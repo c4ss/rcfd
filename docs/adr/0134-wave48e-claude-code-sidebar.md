@@ -389,3 +389,20 @@ confirmation dialog; hooks: the `Studio::chat` field, opened with the browser's 
     the recorded text; one process).
 12. Also run, unchanged: every other `rcfd-studio` test and `workspace_graph` (3 tests; `rcfd-studio` at 9 depends on
     `rcfd-claude` at 2). `rcfd-claude` is not changed by this part.
+
+## Amendment 4 (2026-10-28, integration part, E10 control set-up defect, before the corrected run)
+
+Run 1 (the registered run of Amendment 3, commit 0d85f78: `cargo test --release -p rcfd-studio -- --test-threads 1`):
+every chat check passed except **the E10 negative control, which did not fail as required**: median 2.303 ms (min 0.469,
+max 17.231) with the whole feed drawn as one label. Cause, in the control's set-up and not in the panel: egui 0.36's galley
+cache splits a text that contains `\n` into paragraphs and caches each one (`epaint` 0.36.2, `text/fonts.rs`,
+`should_cache_each_paragraph_individually` and `layout_each_paragraph_individually`), so a text that grows at its end is
+laid out again only in its last paragraph. The feed's text has a `\n` between items and in the model's text, so the control
+did not lay out "the whole transcript as one text each frame", which is what the ADR's control names. Because the first
+failing test binary stopped `cargo test`, the test binaries after `chat_e` did not run in run 1.
+
+Correction (limit and positive check unchanged): `Switches::whole_text` draws the whole feed as one text without line
+breaks (each `\n` replaced by a space, items separated by `" | "`), which egui lays out as a single paragraph whenever it
+changes, as every frame of the streaming turn does. The corrected run is the whole crate again, with `--no-fail-fast` so
+that every test binary runs. Run 1's values of the other checks are reported in the addendum as run 1; the corrected run's
+values are the registered results.

@@ -248,12 +248,14 @@ impl Feed {
         self.dirty = Dirty::Clean;
     }
 
-    /// The whole feed as one text (the E10 negative control draws this).
+    /// The whole feed as one text without line breaks, items separated by `" | "` (the E10 negative control draws
+    /// this). Without `\n` the text is one paragraph, so egui's galley cache, which caches each paragraph of a text
+    /// separately, lays the whole text out again whenever it changes (ADR 0134 Amendment 4).
     pub fn whole_text(&self) -> String {
         let mut s = String::new();
         for it in &self.items {
-            s.push_str(&it.text);
-            s.push('\n');
+            s.extend(it.text.chars().map(|c| if c == '\n' { ' ' } else { c }));
+            s.push_str(" | ");
         }
         s
     }
