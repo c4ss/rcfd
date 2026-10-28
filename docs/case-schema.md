@@ -638,7 +638,8 @@ standard deviation, minimum and maximum of transient incompressible runs as fiel
 `output.write_interval`, `retain_snapshots`, `retain_checkpoints` and `fields` control numbered snapshots, backup
 retention and the variables written. Details and limits: `docs/run-control.md` (Output policy and statistics).
 `output.store_interval`, `output.store_time_interval` and `output.store_fields` write the time-series field store
-`<output directory>/fields/` (ADR 0124; off by default, see `docs/run-control.md`, Field store).
+`<output directory>/fields/` (ADR 0124; off by default, see `docs/run-control.md`, Field store); `output.store_precision`
+(`"f64"` default, or `"f32"`, lossy, ADR 0133) sets its precision.
 
 ## SIMPLEC non-orthogonal compensation (ADR 0050 Part 1)
 

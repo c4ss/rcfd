@@ -75,13 +75,59 @@ fn parity_settings_editor_with_schema_validation() {
     assert_eq!(ed.state(), EditorState::Clean);
 }
 
+/// Plan section 6, "run with live residual and report monitors and run control" (48D, ADR 0133): through the drawn app
+/// a run starts through `rcfd-runner`, the Plots panel shows its residuals and its `lid_drag` monitor while it runs, and
+/// the last plotted monitor value is the solver's (`output/monitors.json`) bit for bit.
 #[test]
-#[ignore = "48D (ADR 0133): runs start through rcfd-runner and their residuals and monitors are plotted live; not in 48B"]
-fn parity_run_with_live_residual_and_report_monitors_known_miss() {
-    // Present in 48B: the Plots panel draws a monitor store (ported M6); 48D fills it from a run.
-    let mut app = StudioApp::new(Studio::in_memory(), None);
-    layout::show(&mut app.st.dock, Panel::Plots);
-    panic!("run control and live monitors arrive with 48D");
+fn parity_run_with_live_residual_and_report_monitors() {
+    let mut p = common::RunnerProject::new("parity-live", 3);
+    p.serve();
+    let mut st = Studio::in_memory();
+    st.runner_exe = p.runner.clone();
+    st.open_project(&p.dir);
+    let mut app = StudioApp::new(st, None);
+    layout::float(&mut app.st.dock, Panel::Plots);
+    let ctx = egui::Context::default();
+    assert!(frames_until(&mut app, &ctx, WAIT, |a| a.st.browser().is_some()
+        && a.st.runs.last_tick.is_some()));
+    app.st.start_run(p.plan(3000, false)).unwrap();
+    assert!(frames_until(&mut app, &ctx, Duration::from_secs(60), |_| p.ids().len() == 1));
+    let id = p.ids()[0].clone();
+    app.st.select_run(&id);
+    // live: residuals and the monitor are plotted while the run is still running
+    let live = frames_until(&mut app, &ctx, Duration::from_secs(120), |a| {
+        a.st.runs
+            .row(&id)
+            .is_some_and(|r| r.state == rcfd_project::RunState::Running)
+            && a.st.plots.series.get("res_u").is_some_and(|s| s.x.len() >= 10)
+            && a.st.monitors.series.get("lid_drag").is_some_and(|s| s.x.len() >= 10)
+    });
+    assert!(live, "no live residual and monitor points while running");
+    assert!(frames_until(&mut app, &ctx, Duration::from_secs(300), |a| a
+        .st
+        .runs
+        .row(&id)
+        .is_some_and(|r| r.state.is_terminal())));
+    let last_step = p.status(&id).unwrap().step as f64;
+    assert!(frames_until(&mut app, &ctx, Duration::from_secs(10), |a| a
+        .st
+        .monitors
+        .series
+        .get("lid_drag")
+        .and_then(|s| s.x.last().copied())
+        == Some(last_step)));
+    let monitors: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(p.run_dir(&id).join("output/monitors.json")).unwrap()).unwrap();
+    let recorded = monitors["series"]["lid_drag"]["y"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    let plotted = *app.st.monitors.series["lid_drag"].y.last().unwrap();
+    eprintln!("parity live monitors: {last_step} steps, last lid_drag {plotted:e} (monitors.json {recorded:e})");
+    assert_eq!(plotted.to_bits(), recorded.to_bits());
 }
 
 #[test]

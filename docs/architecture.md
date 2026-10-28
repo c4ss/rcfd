@@ -30,7 +30,7 @@ rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)
 rcfd-runner -> project   (Studio L2 run service: runs the `rcfd` binary as child processes, ADR 0123; on rcfd-project's records, ADR 0130)
 rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 0125)
 rcfd-claude -> project   (Studio L6: Claude Code bridge, ADR 0126; atomic allow-list file, ADR 0134)
-rcfd-studio -> project, api, core   (Studio L5: eframe/egui on wgpu, ADR 0131; runner, tsstore, render and claude join in 48C-48E; needs Rust 1.95)
+rcfd-studio -> project, runner, api, core   (Studio L5: eframe/egui on wgpu, ADR 0131; run control through the runner's client, ADR 0133; tsstore (a dev-dependency in 48D), render and claude join in 48C and 48E; needs Rust 1.95)
 ```
 
 ## Layering rules

@@ -27,6 +27,23 @@ pub struct Browser {
     pub skipped: Vec<Issue>,
     /// Lists that could not be read, located.
     pub errors: Vec<String>,
+    /// Run folders summarised to make this listing (a cost measure, ADR 0133 R12).
+    pub summaries_read: usize,
+}
+
+/// The run id of a project-relative path under `runs/<id>/`, if it names a run folder.
+pub fn run_of(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("runs/")?;
+    let id = rest.split('/').next()?;
+    rcfd_project::runid::is_run_id(id).then_some(id)
+}
+
+/// Does a change of `path` (under `runs/<id>/`) change that run's summary? Only `run.json`, `status.json` and
+/// `metrics.json` feed it (`Project::run_summary`).
+fn feeds_summary(path: &str) -> bool {
+    let mut parts = path.split('/');
+    let (_, _, file, rest) = (parts.next(), parts.next(), parts.next(), parts.next());
+    rest.is_none() && matches!(file, Some("run.json" | "status.json" | "metrics.json"))
 }
 
 impl Browser {
@@ -49,6 +66,7 @@ impl Browser {
                 (Vec::new(), Vec::new())
             }
         };
+        let summaries_read = runs.len() + skipped.len();
         Browser {
             root: p.root().to_path_buf(),
             name: p.manifest().name.clone(),
@@ -60,7 +78,55 @@ impl Browser {
             runs,
             skipped,
             errors,
+            summaries_read,
         }
+    }
+
+    /// Bring the lists up to date after the watcher reported `changed` (project-relative paths). When every path is
+    /// under `runs/`, only the runs whose summary can have changed are summarised again (their `run.json`,
+    /// `status.json` or `metrics.json` changed, or the folder appeared or went away), so the cost follows the runs that
+    /// change, not the size of the project (ADR 0133 R12); any other path reloads everything ([`Browser::load`]).
+    /// Returns whether anything was read.
+    pub fn refresh(&mut self, p: &Project, changed: &[String]) -> bool {
+        if changed.iter().any(|c| !c.starts_with("runs/")) {
+            *self = Browser::load(p);
+            return true;
+        }
+        let listed = |b: &Browser, id: &str| {
+            b.runs.iter().any(|r| r.id == id) || b.skipped.iter().any(|s| s.path.file_name().is_some_and(|n| n == id))
+        };
+        let mut ids: Vec<&str> = changed
+            .iter()
+            .filter_map(|c| run_of(c).map(|id| (id, c)))
+            .filter(|(id, c)| feeds_summary(c) || !listed(self, id) || !self.root.join("runs").join(id).is_dir())
+            .map(|(id, _)| id)
+            .collect();
+        ids.sort_unstable();
+        ids.dedup();
+        self.summaries_read = 0;
+        if ids.is_empty() {
+            return false;
+        }
+        for id in ids {
+            self.runs.retain(|r| r.id != id);
+            self.skipped.retain(|s| s.path.file_name().is_none_or(|n| n != id));
+            let dir = self.root.join("runs").join(id);
+            if !dir.is_dir() {
+                continue;
+            }
+            self.summaries_read += 1;
+            match p.run_summary(id) {
+                Ok(s) => self.runs.push(s),
+                Err(e) => self.skipped.push(Issue {
+                    path: p.root().join("runs").join(id),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        // the orders of Project::runs: runs by (created, id), skipped by id
+        self.runs.sort_by(|a, b| (&a.created, &a.id).cmp(&(&b.created, &b.id)));
+        self.skipped.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
+        true
     }
 
     /// A notice for the header, if any: the in-memory migration that has not been saved.

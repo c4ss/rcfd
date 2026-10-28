@@ -3599,9 +3599,12 @@ dependencies = [
  "rcfd-api",
  "rcfd-core",
  "rcfd-project",
+ "rcfd-runner",
+ "rcfd-tsstore",
  "rfd",
  "serde",
  "serde_json",
+ "toml",
  "wgpu 30.0.1",
 ]
 

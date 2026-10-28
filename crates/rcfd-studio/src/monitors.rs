@@ -1,7 +1,9 @@
 //! Monitor history store with incremental merge (no UI code).
 //!
-//! Copied from `crates/rcfd-gui/src/monitors.rs` at main 15b00ef (last changed in c2345a4) by ADR 0131 W48-9 (a); unchanged
-//! apart from this note. The copy goes away with `rcfd-gui`. The Studio fills it per run in 48D (ADR 0133 D3).
+//! Copied from `crates/rcfd-gui/src/monitors.rs` at main 15b00ef (last changed in c2345a4) by ADR 0131 W48-9 (a); the copied
+//! functions are unchanged apart from this note. The copy goes away with `rcfd-gui`. The Studio fills it per run in 48D
+//! (ADR 0133 D3), which adds [`MonitorStore::push`] (one sample, the merge rule) and [`segments`] (a drawn line is split at
+//! non-finite values so a gap stays a gap).
 
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -83,6 +85,30 @@ impl MonitorStore {
         decimate_minmax(&self.plot_points(name, log), max_points)
     }
 
+    /// Add one sample to `name` with the rule of [`MonitorStore::merge`]: a sample at or before the series' last x is
+    /// ignored (returns false). Non-finite values are kept (NaN for a `null` in the file).
+    pub fn push(&mut self, name: &str, x: f64, y: f64) -> bool {
+        let dst = self.series.entry(name.to_string()).or_default();
+        if dst.x.last().is_some_and(|l| x <= *l) {
+            return false;
+        }
+        dst.x.push(x);
+        dst.y.push(y);
+        true
+    }
+
+    /// The drawable pieces of `name` ([`segments`] of its samples), each reduced to at most `max_points` by
+    /// [`decimate_minmax`].
+    pub fn plot_segments(&self, name: &str, log: bool, max_points: usize) -> Vec<Vec<[f64; 2]>> {
+        let Some(s) = self.series.get(name) else {
+            return vec![];
+        };
+        segments(&s.x, &s.y, log)
+            .into_iter()
+            .map(|seg| decimate_minmax(&seg, max_points))
+            .collect()
+    }
+
     /// Names of series that are residual-like (used for the residual plot).
     pub fn residual_names(&self) -> Vec<String> {
         self.series
@@ -100,6 +126,26 @@ impl MonitorStore {
             .cloned()
             .collect()
     }
+}
+
+/// Split samples into runs of drawable points: a value that is not finite (or, with `log`, not positive) ends the
+/// current piece, so the plot shows a gap there instead of a line joining its neighbours. With `log` the y values are
+/// log10. Empty pieces are left out.
+pub fn segments(x: &[f64], y: &[f64], log: bool) -> Vec<Vec<[f64; 2]>> {
+    let mut out = Vec::new();
+    let mut cur: Vec<[f64; 2]> = Vec::new();
+    for (&xv, &yv) in x.iter().zip(y) {
+        let ok = yv.is_finite() && (!log || yv > 0.0);
+        if ok {
+            cur.push([xv, if log { yv.log10() } else { yv }]);
+        } else if !cur.is_empty() {
+            out.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
 }
 
 /// Points handed to a plot per series (see [`decimate_minmax`]).

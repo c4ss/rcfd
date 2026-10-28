@@ -1,7 +1,7 @@
 //! Opt-in time-series field store of the run path (ADR 0124): with `output.store_interval` (steps) or
 //! `output.store_time_interval` (simulated seconds) above 0 and an output directory, [`crate::runctl::drive`] writes
 //! the cell fields `output.store_fields` (default ux, uy, uz, p) to `<out_dir>/fields/` (`rcfd_tsstore`), plus the
-//! final state when the run ends. Off by default; when off nothing here runs. The hook only reads the solver, so a
+//! final state when the run ends, in `output.store_precision` (f64 bit-exact by default, f32 opt-in, ADR 0133). Off by default; when off nothing here runs. The hook only reads the solver, so a
 //! run with the store on takes the same steps as one with it off.
 
 use crate::sim::Simulation;
@@ -27,6 +27,7 @@ pub(crate) struct Hook {
     dt: f64,
     bucket: f64,
     names: Vec<String>,
+    precision: Precision,
     last: Option<u64>,
 }
 
@@ -84,6 +85,17 @@ impl Hook {
         for n in &names {
             sim.field(n).map_err(|e| format!("output.store_fields: {e}"))?;
         }
+        // ADR 0133: opt-in lossy store; absent or "f64" is the bit-exact store of ADR 0124
+        let precision = match sim
+            .case
+            .get("output.store_precision")
+            .ok()
+            .as_ref()
+            .and_then(|v| v.as_str())
+        {
+            Some("f32") => Precision::F32,
+            _ => Precision::F64,
+        };
         let mesh = &sim.geom.mesh;
         let exists = dir.join(STORE_FILE).exists();
         let w = if exists && sim.iteration() > 0 {
@@ -113,6 +125,7 @@ impl Hook {
             dt,
             bucket: if dt > 0.0 { bucket(sim.time(), dt) } else { 0.0 },
             names,
+            precision,
             last: None,
         })
     }
@@ -121,7 +134,7 @@ impl Hook {
         let mut s = self.w.snapshot(step, time).map_err(|e| e.to_string())?;
         for n in &self.names {
             let v = sim.field(n).map_err(|e| e.to_string())?;
-            s.field(n, unit_of(n), Location::Cell, &v, Precision::F64)
+            s.field(n, unit_of(n), Location::Cell, &v, self.precision)
                 .map_err(|e| e.to_string())?;
         }
         s.commit().map_err(|e| e.to_string())?;
