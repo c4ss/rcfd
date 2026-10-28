@@ -179,3 +179,32 @@ Found defect, not fixed (R1 covers finite values only): serde_json writes NaN an
 `f64`, so a diverged run whose `residuals.jsonl` or `status.json` holds NaN would make the whole residual file unreadable and drop
 the run into `skipped` (probe: `{"step":1,"time":null,"residuals":{"p":null},...}` gives "invalid type: null, expected f64"). An
 additive reader-side fix (read `null` as NaN) is proposed for the roadmap.
+
+## Amendment 3 (2026-10-28, registered before the corrected run): A1 run length on a slow disk
+
+What happened. The first full gate in CI (`gate.yml`, windows-latest, run 40670036763, main a89ccb3) failed
+`hammer::a1_atomic_replace_never_exposes_a_partial_file` on the overlap minimum: `writes: 15, reads: 2828, partial: 0, open_errors: 0`
+(writes >= 20 not reached). No partial read was seen; the in-place control passed in the same gate.
+
+Cause, reproduced on this machine before writing this amendment (release, `RCFD_PROJECT_SCRATCH` on the SATA HDD `D:`): 15 and 17
+writes in 2 s, 0 partial, the control 351 and 349 writes with 933 and 886 partial reads; on the NVMe temp folder `C:` 489 writes, 1377
+reads, 0 partial (control 853 partial of 1199). `atomic_write` fsyncs each 1 MiB temp file (`sync_all`); on a slow disk one fsync
+takes about 130 ms, so a fixed 2 s holds about 15 writes. The in-place control does not fsync and is not affected. The set-up is
+defective: its overlap minimums depend on the disk's fsync latency, which the check does not test.
+
+Correction (same limits, same payload, readers, writer and asserts): the hammer runs at least the registered 2 s and then continues
+until writes >= 20 and reads >= 200, with a hard cap of 30 s of writing; reaching the cap without both minimums fails the overlap
+assert, as before. The elapsed time is printed. The negative control uses the same stopping rule (it reaches the minimums within the
+2 s). The positive check keeps `atomic_write` with its fsync (not `atomic_write_unsynced`) and 1 MiB, so what A1 proves is unchanged:
+no reader ever sees a partial file while a fsyncing atomic writer replaces it. The original fixed-2 s test stays as the ignored
+`a1_atomic_replace_never_exposes_a_partial_file_known_miss` with its limits intact. This machine passes with and without the
+correction on `C:`; the CI runner is the discriminating check.
+
+Corrected runs (2026-10-28, release, this machine, after commit 725c696; local runs, not a gate):
+
+* `C:` (NVMe), 3 runs: A1 439 / 425 / 454 writes, 1105 / 1462 / 1136 reads, 0 partial, 2.00-2.01 s; control 392 to 730 partial.
+* `D:` (HDD), 3 runs alone: A1 21 / 26 / 28 writes, 0 partial, 2.02-2.07 s; control 225 to 359 partial. The HDD was faster than in
+  the diagnosis (the fixed-2 s known miss passed once with 22 writes).
+* `D:`, 4 test processes at once (a loaded slow disk), 3 rounds: corrected A1 always 20 writes, 5421 to 9505 reads, 0 partial, in
+  6.09 to 7.93 s; the fixed-2 s known miss in the same runs 5 to 14 writes (fails, as in CI); the control under the same load 261 to
+  558 partial (passes).
