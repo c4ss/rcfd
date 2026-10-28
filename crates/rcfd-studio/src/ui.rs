@@ -88,7 +88,9 @@ impl StudioApp {
         });
         self.st.dock = dock;
         if ctx.input(|i| i.viewport().close_requested()) {
-            self.st.save_prefs();
+            if let Err(e) = self.st.save_prefs_now() {
+                eprintln!("rcfd-studio: could not save preferences: {e}");
+            }
         }
     }
 

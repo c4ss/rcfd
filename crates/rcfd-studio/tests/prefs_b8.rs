@@ -102,3 +102,34 @@ fn b8_control_layout_with_a_duplicated_panel_gives_the_default_layout_and_a_mess
     assert_eq!(l.prefs.theme, Theme::Dark);
     assert_eq!(l.prefs.recent, ["C:/projects/x"]);
 }
+
+/// Not a registered check: closing the window saves the layout on the spot (a background save could be cut off by the
+/// process exit), so a tab moved before closing is in the file.
+#[test]
+fn closing_the_window_saves_the_layout_synchronously() {
+    let dir = temp("b8close");
+    let mut st = rcfd_studio::Studio::new(Prefs::default(), layout::default_layout(), Some(dir.clone()));
+    st.theme = Theme::Dark;
+    layout::float(&mut st.dock, Panel::Log);
+    let mut app = rcfd_studio::StudioApp::new(st, None);
+    let ctx = egui::Context::default();
+    let mut input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
+        ..Default::default()
+    };
+    input
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .events
+        .push(egui::ViewportEvent::Close);
+    let _ = ctx.run_ui(input, |ui| app.ui(ui));
+    // no waiting: the file must be there when the frame returns
+    let l = Prefs::load(&dir);
+    assert!(l.message.is_none(), "{:?}", l.message);
+    assert_eq!(l.prefs.theme, Theme::Dark);
+    assert_eq!(
+        layout::to_json(&l.dock).unwrap(),
+        layout::to_json(&app.st.dock).unwrap()
+    );
+}

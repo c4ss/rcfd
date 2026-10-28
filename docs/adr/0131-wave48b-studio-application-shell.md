@@ -282,6 +282,19 @@ Deviations and notes:
 * Docs touched beyond the Files list: `docs/glossary.md` (the Studio entry said "It has no window yet") and `docs/releasing.md` (what
   the 1.90 job proves).
 * M5 and M7 are not ported (amendment 1 item 1).
+* Fixed after the registered runs (found in review, not by a test): closing the window saved the preferences on a background thread,
+  which the process exit can cut off, and tab moves are only captured at close. The close path now saves on the UI thread
+  (`Studio::save_prefs_now`, one small write at exit; the only file I/O of the UI thread). Unregistered test
+  `closing_the_window_saves_the_layout_synchronously` (a frame carrying the close event) passes; B8 re-run: 4 of 4 pass.
+* `scripts/gate_test.py --jobs 5 -- -p rcfd-studio`: 34 test processes, all pass, wall 9.9 s, peak summed working set 54 MB, max
+  time/limit 0.002. `scripts/limit_audit.py` hits in the new tests, read: B7's two `return`s are the debug-build skip with a
+  `SKIP` line (the limit is for release; the gate is release); `child_entry`'s `return` is the child-process pattern of
+  `rcfd-project`; B6's `dt <= LIMIT` is flagged because the test sleeps, but `dt` is measured from the child's exit, after the
+  sleep; the four `*_control*` tests (B1, B4, B8 twice) assert the failure they show as positive facts (`count` 2, 9 ids, a
+  message and the default layout), which the heuristic does not recognise.
+* Known limits: closing or switching a project joins the worker thread on the UI thread, so a watcher scan of a large project in
+  progress delays it by that scan; every change seen by the watcher re-reads all run summaries (`Browser::load`), a worker-side
+  cost for 48D to revisit when runs stream.
 
 Not run: a real window (DX12, Vulkan, WARP; resizing, high-DPI, keyboard focus), the native `rfd` dialogs and the by-hand
 view-and-report checklist; `cargo deny` (not installed; licences checked from `cargo metadata`); the CI `min-toolchain` job

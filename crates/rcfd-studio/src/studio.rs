@@ -313,4 +313,14 @@ impl Studio {
             }
         });
     }
+
+    /// Save preferences now, on the calling thread. Used when the window closes: a background thread could be cut off by
+    /// the process exit, and tab moves are only captured here. One small file write at exit.
+    pub fn save_prefs_now(&mut self) -> Result<(), String> {
+        self.prefs = self.capture_prefs();
+        match &self.prefs_dir {
+            Some(dir) => self.prefs.save(dir),
+            None => Ok(()),
+        }
+    }
 }
