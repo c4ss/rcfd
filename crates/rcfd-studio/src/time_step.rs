@@ -748,7 +748,7 @@ pub const MESH_HOVER: &str = "The estimated Courant number is the fastest speed 
      runs along the thin cells. Run sets the time step when the run starts, from the mesh the run builds; the case file \
      keeps its own solver.dt.";
 
-/// The sentence "Refine x2" adds to its hover for a transient case (ADR 0153 D8): the time step follows the finer cells
+/// The sentence "Refine x2" adds to its hover for a transient case (ADR 0153 D7): the time step follows the finer cells
 /// at run time.
 pub fn refine_note(f: &Facts, rt: &RunTime) -> Option<String> {
     let tp = plan(f, rt).ok()?;
@@ -769,7 +769,7 @@ pub fn refine_note(f: &Facts, rt: &RunTime) -> Option<String> {
     ))
 }
 
-/// The Start run dialog's lines for a transient case (ADR 0153 D9): the dialog's run takes the case's own time settings
+/// The Start run dialog's lines for a transient case (ADR 0153 D12): the dialog's run takes the case's own time settings
 /// (with the dialog's overrides `set`, last wins), and, when that `solver.dt` gives an estimated Courant number above
 /// [`COURANT_WARN`], the warning. `(warning, text)` pairs; none for other cases.
 pub fn dialog_lines(case: &str, f: &Facts, set: &[String]) -> Vec<(bool, String)> {

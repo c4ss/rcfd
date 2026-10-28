@@ -333,6 +333,119 @@ toolbar while a transient case is selected (ADR 0148 N9 selects the wind tunnel'
 the time row as well; their limits do not read it (checked by reading N9: its only absence limits are ` t = ` and `  t `,
 which no new text holds).
 
+## Addendum: results against the registered limits (2026-10-28/29)
+
+Branch `worktree-agent-a36702f9566b8d038`. Commits: 56c0161 (the code and tests), c4d3346 (main a64864e merged: 48P,
+48R), 724d735 (registration), bfc2600 (registration corrected in review, before any run), 3ae759b (amendment 1), 31ba296
+(amendment 2, the final code), then this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files,
+this host (Windows 11, 16 threads, 93.6 GB, 34-37 GB free during the runs, shared with other agents' builds and runs).
+Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first run, (a)); 3ae759b and 31ba296 in `target-48s-a1/` (the
+corrected (f), f3, the (f) control again, the known-miss test, W), because (a) and D2 ran from `target/`'s binaries; the code
+of the amendments is display-only (the time fields' number format, the warning row's layout, a doc comment), outside the
+run path (a), D2 and the other runs exercise.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| D1 | R1-R3 (St within 3 %) | A: 4,663 steps, 85.9 s, end 80 bit for bit, dt 0.00602 to 0.0178, Courant 0.218 at step 1 and at most 0.4502 after step 10, last step 58 % of the one before; F: 13,272 steps of 0.006027727546714889 s, 193.9 s, end 80 bit for bit, Courant 0.218 and at most 0.204; St 0.15725 (A, 7 crossings, amplitude 0.295) against 0.15857 (F): 0.83 % | pass |
+| D2 | R1-R3 (`cd` within 2 %) | A: 891 steps, 409 s, end 3 bit for bit, dt 0.00116 to 0.00354, Courant 0.147 and at most 0.4501, last step 32 %; F: 2,567 steps of 0.001168679392286716 s, 1,151 s, **end 2.999999999999983**, Courant 0.148 and at most 0.174; `cd` 1.46727 against 1.46430 (0.20 %) | **miss** (F's R1): `d2_cylinder_256x256_known_miss`, ignored (amendment 3); A's limits met |
+| D3 | R1-R3 (`lid_drag` within 1 %) | A: 633 steps, 2.2 s, end 10 bit for bit, dt 0.0156 to 0.0270 (smallest 0.01436), Courant 0.103 and at most 0.456; F: 640 steps of 0.015625 s, 2.2 s, Courant 0.103 and at most 0.452; `lid_drag` -0.00490209 against -0.00490212 (5e-6) | pass |
+| D4 | R1-R3 (`p_inlet` within 2 %) | A: 1,909 steps, 90.5 s, end 30 bit for bit, dt 0.00835 to 0.0192, Courant 0.389 and at most 0.452; F: 3,591 steps of 0.00835421888053467 s, 271.9 s, Courant 0.389 and at most 0.325; `p_inlet` -0.143926 against -0.143889 (0.03 %) | pass |
+| S-E | dt0 ratio in [0.47, 0.53], largest step unchanged | cylinder 0.00602 -> 0.00307 (0.5100; thinnest cell 0.013460 -> 0.006878, 0.5110), cavity 0.0156 -> 0.00781 (0.5006); largest steps 0.8 and 0.1 both times | pass |
+| S-E control | a ratio outside | 1.0000 and 1.0000 (the case's own 0.0625 and 0.01) | fails as required |
+| S-G | (g1), (g2) as registered | (g1) u0 84.2615 = sqrt(7100) from `GRAVITY_SCALE`, thinnest cell 0.025, the entries exactly; (g2) no scale, the entries exactly, no estimate, the hover's sentence, F refused with D5's text exactly | pass |
+| S-H | equal facts and plans | equal apart from the hashes (fnv64:95119f22923ad8df, fnv64:1cd487632e231c40) | pass |
+| S-K | as registered | the cavity `Steady { max_iterations: 2000 }` and its line; sod and wedge the compressible reason, no plan, `compressible: the case's own time step, to its end time 0.2 s` / `3 s`; the cylinder transient, its own dt 0.0625 and end 80 in the text, no step control, 3,072 cells, the speed 1.1165 from the initial field | pass |
+| (a) control | must fail (a) | 20 steps, finished at 1.25 s, `set` exactly `solver.end_time=1.25`; first Courant number 6.32 (above 0.5), largest 500.5 (above 10), `cl` half range 17 | fails as required |
+| (b) | as registered | 4,663 steps, 78.1 s, finished at 80 bit for bit; Courant 0.218 at step 1, at most 0.4502 after step 10; over [40, 80] 7 crossings, St 0.15725, amplitude 0.2955; `set` the four entries | pass |
+| (b) control | Courant above 0.55 after step 10 | 1,280 steps, 22.8 s; Courant 1.777 at step 1, 1.927 after step 10 (2.063 at step 2); St 0.15167 (6 crossings), amplitude 0.309 | fails as required |
+| (c) | as registered | finished, time 7.3 bit for bit, reason `finished: end time 7.3 reached`; 8 snapshots at (72, 1.00273), (138, 2.00178), (201, 3.00762), (263, 4.01429), (323, 5.01352), (381, 6.00386), (440, 7.00892), (458, 7.3); the last step 6.33 % of the one before; `cd` 1.307936 against [1.307954, 1.321218] of the 50 before (0.1 range 0.00133), change 1.8e-5 (limit 5 x 3.09e-4); `cl` -0.176185 against [-0.230915, -0.177203], change 1.02e-3 (limit 5 x 2.25e-3); the last snapshot's largest abs `p` 0.977 of the one before | pass |
+| (d) | as registered | the case file and `case.snapshot` byte-equal to the file before; the editor clean with 0.0625 and 80; plan and `run.json` exactly `solver.end_time=7.3`, `solver.dt=0.00602`, `solver.max_courant=0.5`, `solver.max_dt=0.073`; the status bar `queued run r-20261028T231859-9357 of cases/cyl.toml (rcfd run --set solver.end_time=7.3 solver.dt=0.00602 solver.max_courant=0.5 solver.max_dt=0.073)`; `dt` 0.00602 first, 0.01715 largest | pass |
+| (c), (d) control | not at 7.3; no `solver.*` entry | 1,280 steps of 0.0625 to 80 s; `set` empty | fails as required |
+| (f), first run (bfc2600) | as registered | set-up defect: the first frame of a new context did not paint the toolbar's second row (amendment 1) | defective set-up |
+| (f), corrected (3ae759b) | as registered | (i)-(iii) met; (iv): the popover's texts, `dt 0.0625 s, the case's own` and the warning exactly drawn, its fix button not (out of the window) | **miss**: `f_the_toolbar_time_row_drawn_known_miss`, ignored (amendment 2) |
+| f3 (31ba296) | (f)'s limits | every limit of (i)-(vi) met on the corrected layout | pass |
+| (f) control | none drawn | none drawn (bfc2600, 3ae759b, 31ba296) | fails as required |
+| (f2) | as registered | (i) the note drawn; (ii) the 128 x 96 Mesh line `Courant estimate 10.16 at the case's solver.dt 0.0625 s (1.118 m/s through the thinnest cell, 0.006878 m); Run sets the time step: 0.00307 s at the start for Courant 0.5, then adaptive, so the case's solver.dt is overridden at run time.` and `dt auto: 0.00307 s ...` drawn, Run refused with the "save it first" text exactly; (iii) the dialog's line and warning drawn; (iv) the line with 0.02 s, no warning | pass |
+| (f2) control | none drawn | none drawn | fails as required |
+| (g1) | as registered | `set` exactly as registered; 3,810 steps, finished at 2 s bit for bit, every monitor finite; Courant 0.00058 at step 1 (dt 1.48e-4, growing 1.2 times a step), at most 0.518 after step 10 | pass |
+| (g2) | as registered | `set` exactly as registered; 113 steps, finished at 2 s bit for bit, every monitor finite; Courant at most 0.461 after step 10 | pass |
+| (h) | as registered | `run.json` `set` = the TOML twin's `solver.end_time=2.3`, `solver.dt=0.00602`, `solver.max_courant=0.5`, `solver.max_dt=0.023`; finished at 2.3 bit for bit; `case.snapshot` the JSON file | pass |
+| (h) control | no `solver.*` entry | `set` empty | fails as required |
+| (a) | as registered | running at the time of writing (started 23:13; t = 20 s at 23:52) | pending |
+| W | the whole suite and the lints | first run on 31ba296 (23:29-23:41): 59 binaries, 268 passed, 1 failed (ADR 0152's DV6 (a), amendment 3), 11 ignored; corrected run on 5895991 (23:42-23:54): **269 passed, 0 failed, 11 ignored**: the known misses of ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and ADR 0144 J3b, ADR 0152's DV6 recorder, and this ADR's (a), D1, D3, D4 (heavy), `d2_cylinder_256x256_known_miss` and `f_the_toolbar_time_row_drawn_known_miss`; against main's 246 (ADR 0152), the 23 new tests that are not ignored; DV6's 22 cases equal to the record. `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 5895991; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed (after W); `scripts/third_party_licenses.py --check`: up to date | pass |
+
+**Decision.** A, the solver's adaptive Courant controller from the conservative first step, met every limit of its own on
+D1-D4; F missed its own end-time limit on D2 (amendment 3), which the registered rule let gate A. As amendment 3 says, A
+stays the Studio's automatic step (`time_step::DEFAULT_MODE` is `StepMode::Adaptive`, unchanged since the registration) and
+the maintainer is asked to confirm (question 7); nothing ran again with F. Measured trade-off (F is the estimate's step
+throughout, so it runs at the estimate's caution): the cylinder 64 x 48 took 4,663 adaptive steps against 13,272 fixed
+(2.85 times fewer), 85.9 s against 193.9 s, at a realized Courant number of 0.45 against 0.20; the 256 x 256 cylinder 891
+against 2,567 steps (409 s against 1,151 s) to 3 s; the step 1,909 against 3,591; the cavity, whose uniform grid makes the
+estimate tight, 633 against 640. The results agree within 0.83 % (St), 0.20 % (`cd`), 0.03 % (`p_inlet`) and 5e-6 relative
+(`lid_drag`); A ends on N bit for bit on all four, F on three.
+
+**Deviations and notes.**
+
+1. The registration was corrected in review before any run (bfc2600, the status line): check (f2), the (a) control at
+   1.25 s, the gravity scale of D5 with the ramped-lid case (g2), D3's wording, the order of runs, CRLF-proof helpers.
+2. Amendment 1: (f)'s first run read the first frame of a new egui context, whose top panel clips the toolbar's second row;
+   and the field showed `80.0` where (f) registered `80`: the procedure reads the second frame and the fields use the
+   Studio's number format. The limit `80` was kept.
+3. Amendment 2: the corrected (f) found a real defect, the warning's fix button out of the 1280-point window; (f) is the
+   ignored `f_the_toolbar_time_row_drawn_known_miss` with its limits intact (the registration's layout through
+   `QuickRun::switches.warning_fix_last`), the button now comes first, and f3 checks (f)'s limits on the new layout.
+4. Amendment 3: W's first run found ADR 0152's DV6 broken by this job's new plan field in the plan's `Debug` text; the plan
+   prints as before without a time plan, and W ran again whole. D2's F missed its end time; D2 is a known miss and the
+   decision is the maintainer's to confirm.
+5. (a), D1-D4, the model checks and `run_time_s`' first run ran from the registration's build (bfc2600, `target/`); the
+   amendments were built in `target-48s-a1` (the corrected (f), f3, the (f) control again, the known-miss test, W twice),
+   because (a) and D2 ran from `target/`'s programs. The amendments change only the drawing of the time fields and the
+   warning row, the plan's `Debug` text and a doc comment, not the plan's entries, the facts or the run.
+6. An attempt to run `workspace_graph` in `target/` while (a) ran failed to replace `target/release/rcfd.exe` (in use by
+   (a)'s solver: Windows locks a running program, and building `rcfd-cli`'s tests rebuilds that program); nothing was
+   built or changed and (a) went on; `workspace_graph` ran in `target-48s-a1` after W.
+7. The facts are computed in the Studio process (`Simulation::new` of the case, on a control thread): 0.03 s for the
+   64 x 48 cylinder, 0.95 s for 256 x 256 (P11); a large case costs its simulation's memory there once per shown text
+   (question 6).
+8. The adaptive run's snapshots are stored at the first step after each store interval, not on it ((c): 1.0027 to 7.0089),
+   and its last step is between 5 % and 105 % of the proposal ((c): 6.3 %; ADR 0050's landing); both registered and met.
+9. (g1)'s Courant number reached 0.518 after step 10 (the buoyant flow accelerating faster than the controller's aim of
+   0.45), within the registered 0.55.
+10. P11 ran before the gravity rule; the table's heated cavity row is the code before it.
+11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed; `store_plan.rs` is untouched (job 48R's); `Cargo.toml`,
+    `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` unchanged.
+
+**Not run.** A person at the real window (the checklist); Linux and macOS; debug builds of the new tests; the workspace
+gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited); `cargo deny` (no
+dependency change); the heavy tests outside this job (`--ignored` of earlier ADRs).
+
+**Questions added by the addendum** (the registration's 1-5 stand; recommendations for them below).
+
+6. **The facts' cost.** The Studio builds the case's simulation (`Simulation::new`) on a control thread for the shown text of
+   a transient case, and again at Run when the file changed since: 0.95 s and its memory for 256 x 256 (P11). Accept, or
+   compute the thinnest cell and the speeds in a child process (`rcfd`) for large meshes?
+7. **The decision** (amendment 3). The registered rule, read literally, made neither A nor F the default, because F missed
+   its own end-time limit on D2; this job kept A, which met every limit of its own and ends on N exactly. Confirm A as the
+   Studio's automatic step, or choose otherwise?
+8. **Snapshot times of the adaptive step** are those of the first step after each store interval ((c): 1.0027 ... 7.0089 s,
+   the last on N exactly). Options: (a) keep; (b) land the steps on the store times too (ADR 0050's
+   `output.write_time_interval` lands on them but also writes a VTU snapshot each time; a solver option without the VTU
+   would be a solver change). Recommendation: (a).
+9. **A fixed step's end within 1e-12** (found by D2's F, not fixed): `rcfd run` with a fixed `solver.dt` may end up to
+   1e-12 short of `solver.end_time` (D2: 1.7e-14 after 2,567 steps), so its final time and last snapshot's time are not
+   `solver.end_time` bit for bit; ADR 0145's stretching acts only above that tolerance. Options: (a) keep; (b) a solver job
+   that snaps the final time onto `solver.end_time` when the end test is met within its tolerance (the fields unchanged,
+   only the time stamp). Recommendation: (b), small, with its own bit-identity check of the fields.
+10. **VOF and variable-density runs** take fixed steps only, so the automatic step is not offered there (D1). Options: (a)
+    keep; (b) offer the fixed automatic step F for them, with its own checks. Recommendation: (a) until asked; (b) when a
+    VOF case meets the same trouble as the cylinder.
+
+Recommendations for questions 1-5 of the registration: 1 keep 0.5 (it held the 256 x 256 cylinder through (a)'s 40 s and
+costs 2.85 times fewer steps than the fixed alternative on the shipped cylinder); 2 a solver job after job 48T's findings,
+not a run-time corrector count from the Studio; 3 yes, as a small follow-up with SF4 (b) and SF9 (g) registered again; 4
+keep the read-only line until it is missed; 5 calibrate from the project's finished runs (steps, cells and wall time are in
+their records) when the estimate is found wrong in use.
+
 ## Not in CI (by hand)
 
 A person at the real window: the row under Run on a transient and a steady case, the popover, the hover, the indicator, the
