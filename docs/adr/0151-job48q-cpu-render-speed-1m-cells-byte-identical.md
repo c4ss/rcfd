@@ -617,7 +617,12 @@ files. Each was read.
 7. **The control's r4 runs** (C-r4) used the control test binary. It reaches `target\release\rcfd.exe`, whose hash was checked
    to be the control's (20B2DFE4) before every run. The after runs (R4) checked the change's (A6A077BE).
 8. **Processes of other sessions** (`rcfd.exe` runs of other worktrees) ran on the host during some runs; none was touched.
-   No busy loop of this job was left running (checked after every series).
+   No busy loop of this job was left running (checked after every series), and no `rcfd` process of this job was left at
+   the end.
+9. **The worktree's start.** The worktree was created at origin/main 1248a76, not at local main. Before any work it was
+   fast-forwarded to local main 6867e40, the base of every figure here.
+10. **The row 15 probe runs in the gate.** It is report-only, has no limit as registered, and takes under 0.1 s. An
+    `#[ignore]` would match its role equally well; it was left as committed.
 
 ### Not run
 
@@ -629,6 +634,12 @@ files. Each was read.
 * r2 and r4 in debug builds: they are ignored there by design.
 * The Studio's and `rcfd-mcp`'s render paths by hand. Their automated tests are in Re-runs.
 * More than 16 threads, and hosts with more than 64 logical CPUs.
+* CI's `min-toolchain` job, which type-checks with Rust 1.90, and its `cargo check --workspace --all-targets` job.
+  * The APIs used are older than both 1.90 and `rcfd-post`'s declared `rust-version` 1.80: `usize::div_ceil` (1.73),
+    `std::thread::scope` (1.63), `<[T]>::repeat` and `let`-`else` (1.65).
+  * Only 1.99.0 is installed here.
+* A merge with today's main. Main moved past 6867e40 (waves 48P, 48R and 48T merged), but no file of this job changed
+  there, and a trial `git merge-tree` against main reported no conflict.
 
 ### Files
 
@@ -686,3 +697,10 @@ files. Each was read.
    **Recommendation:** (a).
 6. **Confirm on CI.** Run the Full gate on `windows-latest` after the merge: r2 and r4 are predicted at about 0.5-0.7 s
    there (Q4, Q5). **Recommendation:** yes, with the result appended here.
+7. **Q2's PNG hashes run in the gate.** They depend on the locked `png`, `fdeflate` and `miniz_oxide` output, so a
+   `cargo update` could fail Q2 for a reason that has nothing to do with rendering. The RGBA hashes depend only on this
+   crate. Options:
+   * (a) keep both, and document that a dependency bump re-records Q2's PNG hashes;
+   * (b) keep only the RGBA hashes in Q2 (gate), and leave the PNG hashes to the ignored Q3, run by hand.
+
+   **Recommendation:** (b), as a one-line change once decided. It is not done here, because Q2 was registered with both.
