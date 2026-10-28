@@ -243,7 +243,9 @@ RR in detail:
 * `cargo fmt -p rcfd-runner -p rcfd-studio -p rcfd-fv -p rcfd-mesh -- --check` clean (Windows; Linux for runner, fv,
   mesh). `cargo clippy --workspace --all-targets -- -D warnings` clean on Windows; `cargo clippy -p rcfd-runner
   --all-targets -- -D warnings` clean on Linux (the Unix code paths).
-* Leftover processes after the Linux runs: none (`ps`).
+* `rcfd-cli` `workspace_graph`: 3 passed (no edge changed).
+* Leftover processes after all runs: none (`ps` in the containers; `tasklist` for `rcfd-runner.exe` and `rcfd.exe` on
+  Windows).
 
 ### Deviations and notes
 
