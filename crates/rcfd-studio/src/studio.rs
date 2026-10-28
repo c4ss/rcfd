@@ -69,6 +69,8 @@ pub struct Studio {
     pub plot_marker: Option<f64>,
     /// The viewport of the selected run (ADR 0132; its GPU is attached by the app, none in `new`).
     pub viewport: crate::viewport::Viewport,
+    /// The mesh of the open case, shown by the viewport while no run is selected (ADR 0138).
+    pub preview: crate::preview::Preview,
     /// Status and error messages, latest last.
     pub messages: Vec<String>,
     /// The Claude Code sidebar (ADR 0134); off until `main` configures its bridge.
@@ -114,6 +116,7 @@ impl Studio {
             runs: RunsView::default(),
             plot_marker: None,
             viewport: Default::default(),
+            preview: Default::default(),
             messages: Vec::new(),
             chat: ChatModel::default(),
             poll: Some(POLL),
@@ -194,6 +197,7 @@ impl Studio {
         self.monitors.clear();
         self.shown_run = None;
         self.viewport.close();
+        self.preview.close();
         self.plot_marker = None;
     }
 
@@ -205,6 +209,7 @@ impl Studio {
         }
         self.pending_case = Some(rel.to_string());
         p.worker.send(Command::Load(rel.to_string()));
+        self.preview.select(rel);
     }
 
     /// Hand the editor's content to the worker for a save with the base-hash rule. Refused in the conflict state (resolve
@@ -269,6 +274,9 @@ impl Studio {
             .sync(root.as_deref(), selected.as_deref(), poll::PERIOD, &self.wake);
         n += self.viewport.drain();
         self.plot_marker = self.viewport.marker();
+        // with no run selected the viewport shows the open case's mesh (ADR 0138)
+        let wake = self.wake.clone();
+        n += crate::preview::follow(self, &wake);
         let (k, msgs) = self.chat.drain();
         for m in msgs {
             self.say(m);
