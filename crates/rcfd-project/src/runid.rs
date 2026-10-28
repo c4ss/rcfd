@@ -35,6 +35,12 @@ fn random_u64() -> u64 {
     h.finish()
 }
 
+/// A run id for time `now` with a random suffix, without claiming anything. For writers that build a run folder
+/// under another name and rename it into place (the run service), checking that the id is free first.
+pub fn candidate(now: SystemTime) -> String {
+    format!("r-{}-{:04x}", crate::time::compact(now), random_u64() & 0xffff)
+}
+
 /// Claim a fresh run directory under `runs_dir` at time `now`. Returns the id and its directory.
 pub fn claim(runs_dir: &Path, now: SystemTime) -> Result<(String, PathBuf)> {
     claim_with(runs_dir, &crate::time::compact(now), 16).map(|(id, dir, _)| (id, dir))

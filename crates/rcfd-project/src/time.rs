@@ -41,6 +41,13 @@ pub fn now() -> String {
     rfc3339_ms(SystemTime::now())
 }
 
+/// `yyyy-mm-ddThh:mm:ss.nnnnnnnnnZ` (UTC with nanoseconds, fixed width): the run service's submission order.
+pub fn rfc3339_ns(t: SystemTime) -> String {
+    let (y, mo, d, h, mi, s, _) = parts(t);
+    let ns = t.duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).subsec_nanos();
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{ns:09}Z")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
