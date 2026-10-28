@@ -98,6 +98,34 @@ pub struct GpuMesh {
     n_vertices: u32,
     n_parts: usize,
     range: Option<(f64, f64)>,
+    // ADR 0132 W48-8: the surface's face loops (CSR, u32), so that `update_scalar` can expand a field to the
+    // triangle vertices in the order of `upload` without the surface; and the scalar buffer (4 bytes per vertex),
+    // made by the first `update_scalar`. A mesh without it draws through the unchanged 52-byte path.
+    n_points: usize,
+    face_offsets: Vec<u32>,
+    face_points: Vec<u32>,
+    scalar: Option<wgpu::Buffer>,
+}
+
+impl GpuMesh {
+    /// Vertex values of `field` in the order of the vertex buffer (the fan triangles of [`SurfaceMesh::triangles`]).
+    fn expand(&self, field: Field) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.n_vertices as usize * 4);
+        for f in 0..self.face_offsets.len().saturating_sub(1) {
+            let l = &self.face_points[self.face_offsets[f] as usize..self.face_offsets[f + 1] as usize];
+            for k in 1..l.len().saturating_sub(1) {
+                for p in [l[0], l[k], l[k + 1]] {
+                    let v = match field {
+                        Field::None => 0.0,
+                        Field::Face(v) => v[f],
+                        Field::Vertex(v) => v[p as usize],
+                    };
+                    out.extend_from_slice(&(v as f32).to_le_bytes());
+                }
+            }
+        }
+        out
+    }
 }
 
 /// Result of a picking pass: per pixel the surface face (or none) and the interpolated field value.
@@ -133,6 +161,10 @@ pub struct Renderer {
     layout: wgpu::BindGroupLayout,
     colour: wgpu::RenderPipeline,
     pick: wgpu::RenderPipeline,
+    // ADR 0132 W48-8: the same shaders with the scalar read from a second vertex buffer (meshes after
+    // `update_scalar` only).
+    colour_split: wgpu::RenderPipeline,
+    pick_split: wgpu::RenderPipeline,
 }
 
 struct Unpark(std::thread::Thread);
@@ -199,6 +231,14 @@ impl Renderer {
     /// Renderer on a given adapter.
     pub fn from_adapter(adapter: &wgpu::Adapter) -> Result<Renderer> {
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).map_err(gpu_err)?;
+        Self::from_device(device, queue, adapter.get_info())
+    }
+
+    /// Renderer on a device and queue the caller already has (ADR 0132 W48-7: the Studio shares eframe's device, so
+    /// [`Renderer::render_into`] can draw into a texture that egui shows). The pipelines are built on `device`;
+    /// `info` describes its adapter (names in messages, [`Renderer::info`]). The device needs no feature and only
+    /// the default limits. Every [`GpuMesh`] and target texture used with this renderer must come from `device`.
+    pub fn from_device(device: wgpu::Device, queue: wgpu::Queue, info: wgpu::AdapterInfo) -> Result<Renderer> {
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rcfd-render"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -235,52 +275,91 @@ impl Renderer {
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &attrs,
         })];
-        let pipeline = |fs: &str, targets: &[Option<wgpu::ColorTargetState>]| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(fs),
-                layout: Some(&pl),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: Some("vs"),
-                    compilation_options: Default::default(),
-                    buffers: &vbl,
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: DEPTH,
-                    depth_write_enabled: Some(true),
-                    depth_compare: Some(wgpu::CompareFunction::Less),
-                    stencil: Default::default(),
-                    bias: Default::default(),
-                }),
-                multisample: Default::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &module,
-                    entry_point: Some(fs),
-                    compilation_options: Default::default(),
-                    targets,
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
+        // ADR 0132 W48-8: the same attributes, the scalar (location 3) from a second buffer of 4 bytes per vertex.
+        let attr = |shader_location, format, offset| wgpu::VertexAttribute {
+            format,
+            offset,
+            shader_location,
         };
-        let colour = pipeline("fs_colour", &[Some(COLOUR.into())]);
-        let pick = pipeline(
-            "fs_pick",
-            &[
-                Some(wgpu::TextureFormat::R32Uint.into()),
-                Some(wgpu::TextureFormat::R32Float.into()),
-            ],
-        );
+        let attrs_split = [
+            attr(0, wgpu::VertexFormat::Float32x3, 0),
+            attr(1, wgpu::VertexFormat::Float32x3, 12),
+            attr(2, wgpu::VertexFormat::Float32x3, 24),
+            attr(4, wgpu::VertexFormat::Uint32, 40),
+            attr(5, wgpu::VertexFormat::Uint32, 44),
+        ];
+        let attr_scalar = wgpu::vertex_attr_array![3 => Float32];
+        let vbl_split = [
+            Some(wgpu::VertexBufferLayout {
+                array_stride: VERTEX_BYTES,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &attrs_split,
+            }),
+            Some(wgpu::VertexBufferLayout {
+                array_stride: 4,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &attr_scalar,
+            }),
+        ];
+        let pipeline_with =
+            |fs: &str, targets: &[Option<wgpu::ColorTargetState>], buffers: &[Option<wgpu::VertexBufferLayout>]| {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(fs),
+                    layout: Some(&pl),
+                    vertex: wgpu::VertexState {
+                        module: &module,
+                        entry_point: Some("vs"),
+                        compilation_options: Default::default(),
+                        buffers,
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: Some(wgpu::DepthStencilState {
+                        format: DEPTH,
+                        depth_write_enabled: Some(true),
+                        depth_compare: Some(wgpu::CompareFunction::Less),
+                        stencil: Default::default(),
+                        bias: Default::default(),
+                    }),
+                    multisample: Default::default(),
+                    fragment: Some(wgpu::FragmentState {
+                        module: &module,
+                        entry_point: Some(fs),
+                        compilation_options: Default::default(),
+                        targets,
+                    }),
+                    multiview_mask: None,
+                    cache: None,
+                })
+            };
+        let pick_targets = [
+            Some(wgpu::TextureFormat::R32Uint.into()),
+            Some(wgpu::TextureFormat::R32Float.into()),
+        ];
+        let colour = pipeline_with("fs_colour", &[Some(COLOUR.into())], &vbl);
+        let pick = pipeline_with("fs_pick", &pick_targets, &vbl);
+        let colour_split = pipeline_with("fs_colour", &[Some(COLOUR.into())], &vbl_split);
+        let pick_split = pipeline_with("fs_pick", &pick_targets, &vbl_split);
         Ok(Renderer {
             max_dim: device.limits().max_texture_dimension_2d,
             device,
             queue,
-            info: adapter.get_info(),
+            info,
             layout,
             colour,
             pick,
+            colour_split,
+            pick_split,
         })
+    }
+
+    /// The device this renderer draws with (for the textures of [`Renderer::render_into`]).
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    /// The queue this renderer submits to.
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
     }
 
     /// Adapter name, back end, type and driver.
@@ -342,7 +421,35 @@ impl Renderer {
             n_vertices: n,
             n_parts: s.parts.len(),
             range,
+            n_points: s.points.len(),
+            face_offsets: s.face_offsets.iter().map(|&o| o as u32).collect(),
+            face_points: s.face_points.iter().map(|&p| p as u32).collect(),
+            scalar: None,
         })
+    }
+
+    /// Replace the field of an uploaded mesh by rewriting only its scalar, 4 bytes per triangle vertex (ADR 0132
+    /// W48-8), instead of a new [`Renderer::upload`] of 52 bytes per vertex. `field` is checked as by `upload`
+    /// (count and finite values) and must belong to the surface the mesh was uploaded from; on an error the mesh
+    /// is unchanged. The first call makes a scalar vertex buffer, later calls write into it. The pixels equal those
+    /// of a fresh upload of the same surface with `field` (ADR 0132 V6).
+    pub fn update_scalar(&self, mesh: &mut GpuMesh, field: Field) -> Result<()> {
+        let n_faces = mesh.face_offsets.len().saturating_sub(1);
+        let range = crate::surface::field_range_for(field, n_faces, mesh.n_points)?;
+        let bytes = mesh.expand(field);
+        debug_assert_eq!(bytes.len(), mesh.n_vertices as usize * 4);
+        match &mesh.scalar {
+            Some(b) => self.queue.write_buffer(b, 0, &bytes),
+            None => {
+                mesh.scalar = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("scalar"),
+                    contents: &bytes,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                }))
+            }
+        }
+        mesh.range = range;
+        Ok(())
     }
 
     fn check_size(&self, view: &View) -> Result<()> {
@@ -452,8 +559,75 @@ impl Renderer {
         })
     }
 
+    /// Encode one render pass of `mesh` into the colour attachments `views` (cleared to `clear`) with a fresh depth
+    /// buffer. `scalar` is the mesh's scalar buffer (ADR 0132 W48-8), or `None` for the 52-byte path of ADR 0125.
+    #[allow(clippy::too_many_arguments)]
+    fn pass(
+        &self,
+        enc: &mut wgpu::CommandEncoder,
+        mesh: &GpuMesh,
+        scalar: Option<&wgpu::Buffer>,
+        bg: &wgpu::BindGroup,
+        pick: bool,
+        views: &[&wgpu::TextureView],
+        clear: &[wgpu::Color],
+        depth_view: &wgpu::TextureView,
+    ) {
+        let attachments: Vec<Option<wgpu::RenderPassColorAttachment>> = views
+            .iter()
+            .zip(clear)
+            .map(|(v, c)| {
+                Some(wgpu::RenderPassColorAttachment {
+                    view: v,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(*c),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })
+            })
+            .collect();
+        let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &attachments,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Discard,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        match scalar {
+            None => {
+                rp.set_pipeline(if pick { &self.pick } else { &self.colour });
+                rp.set_bind_group(0, bg, &[]);
+                rp.set_vertex_buffer(0, mesh.vertices.slice(..));
+            }
+            Some(s) => {
+                rp.set_pipeline(if pick { &self.pick_split } else { &self.colour_split });
+                rp.set_bind_group(0, bg, &[]);
+                rp.set_vertex_buffer(0, mesh.vertices.slice(..));
+                rp.set_vertex_buffer(1, s.slice(..));
+            }
+        }
+        rp.draw(0..mesh.n_vertices, 0..1);
+    }
+
     /// Draw `mesh` into the given 4-byte-per-pixel targets and read them back (rows unpadded).
-    fn draw(&self, mesh: &GpuMesh, view: &View, pick: bool, clear: &[wgpu::Color]) -> Result<Vec<Vec<u8>>> {
+    fn draw(
+        &self,
+        mesh: &GpuMesh,
+        scalar: Option<&wgpu::Buffer>,
+        view: &View,
+        pick: bool,
+        clear: &[wgpu::Color],
+    ) -> Result<Vec<Vec<u8>>> {
         self.check_size(view)?;
         let bg = self.bind_group(mesh, view)?;
         let formats: &[wgpu::TextureFormat] = if pick {
@@ -466,42 +640,8 @@ impl Renderer {
         let depth = self.target(view, DEPTH);
         let depth_view = depth.create_view(&Default::default());
         let mut enc = self.device.create_command_encoder(&Default::default());
-        {
-            let attachments: Vec<Option<wgpu::RenderPassColorAttachment>> = views
-                .iter()
-                .zip(clear)
-                .map(|(v, c)| {
-                    Some(wgpu::RenderPassColorAttachment {
-                        view: v,
-                        depth_slice: None,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(*c),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })
-                })
-                .collect();
-            let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &attachments,
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            rp.set_pipeline(if pick { &self.pick } else { &self.colour });
-            rp.set_bind_group(0, &bg, &[]);
-            rp.set_vertex_buffer(0, mesh.vertices.slice(..));
-            rp.draw(0..mesh.n_vertices, 0..1);
-        }
+        let view_refs: Vec<&wgpu::TextureView> = views.iter().collect();
+        self.pass(&mut enc, mesh, scalar, &bg, pick, &view_refs, clear, &depth_view);
         // Copies need rows padded to 256 bytes; the padding is stripped after mapping.
         let row = view.width as u64 * 4;
         let padded = row.div_ceil(256) * 256;
@@ -560,14 +700,11 @@ impl Renderer {
 
     /// Render to an RGBA image.
     pub fn render(&self, mesh: &GpuMesh, view: &View) -> Result<Image> {
-        let c = view.background.map(|x| x as f64 / 255.0);
-        let clear = wgpu::Color {
-            r: c[0],
-            g: c[1],
-            b: c[2],
-            a: c[3],
-        };
-        let rgba = self.draw(mesh, view, false, &[clear])?.remove(0);
+        self.render_with(mesh, mesh.scalar.as_ref(), view)
+    }
+
+    fn render_with(&self, mesh: &GpuMesh, scalar: Option<&wgpu::Buffer>, view: &View) -> Result<Image> {
+        let rgba = self.draw(mesh, scalar, view, false, &[clear_colour(view)])?.remove(0);
         Ok(Image {
             width: view.width as usize,
             height: view.height as usize,
@@ -575,9 +712,88 @@ impl Renderer {
         })
     }
 
+    /// Negative control of ADR 0132 V6 only, not for use: [`Renderer::render`] of a mesh as if `update_scalar` had
+    /// written its scalar buffer but the draw had not bound it (the scalars of the original upload, the colour range
+    /// of the update).
+    #[doc(hidden)]
+    pub fn render_ignoring_scalar_buffer(&self, mesh: &GpuMesh, view: &View) -> Result<Image> {
+        self.render_with(mesh, None, view)
+    }
+
+    /// Draw into a caller's texture, with no readback (ADR 0132 W48-7): the same pipeline, state, format and pixels
+    /// as [`Renderer::render`] (ADR 0132 V1). `target` must be a view of a whole 2-D texture made on this renderer's
+    /// device, of format `Rgba8Unorm` (linear: the texture holds exactly the bytes `render` returns; ADR 0125
+    /// "Colour maps"), size `view.width` x `view.height`, one mip level and layer, one sample, with
+    /// `RENDER_ATTACHMENT` usage; anything else is a located error. The commands are submitted to the renderer's
+    /// queue; the call does not wait for the GPU (work later submitted to the same queue, such as egui's frame,
+    /// sees the finished image).
+    pub fn render_into(&self, mesh: &GpuMesh, view: &View, target: &wgpu::TextureView) -> Result<()> {
+        self.check_size(view)?;
+        self.check_target(view, target.texture())?;
+        let bg = self.bind_group(mesh, view)?;
+        let depth = self.target(view, DEPTH);
+        let depth_view = depth.create_view(&Default::default());
+        let mut enc = self.device.create_command_encoder(&Default::default());
+        self.pass(
+            &mut enc,
+            mesh,
+            mesh.scalar.as_ref(),
+            &bg,
+            false,
+            &[target],
+            &[clear_colour(view)],
+            &depth_view,
+        );
+        self.queue.submit([enc.finish()]);
+        Ok(())
+    }
+
+    fn check_target(&self, view: &View, t: &wgpu::Texture) -> Result<()> {
+        let bad = |what: &str, reason: String| {
+            Err(Error::InvalidValue {
+                path: format!("target.{what}"),
+                reason: format!("{reason} (render_into on {})", self.info.name),
+            })
+        };
+        if t.format() != COLOUR {
+            return bad("format", format!("{:?}, need Rgba8Unorm", t.format()));
+        }
+        if !t.usage().contains(wgpu::TextureUsages::RENDER_ATTACHMENT) {
+            return bad("usage", format!("{:?} lacks RENDER_ATTACHMENT", t.usage()));
+        }
+        let size = t.size();
+        if t.dimension() != wgpu::TextureDimension::D2
+            || (size.width, size.height, size.depth_or_array_layers) != (view.width, view.height, 1)
+        {
+            return bad(
+                "size",
+                format!(
+                    "{:?} {}x{}x{}, need D2 {}x{}x1 (the view's size)",
+                    t.dimension(),
+                    size.width,
+                    size.height,
+                    size.depth_or_array_layers,
+                    view.width,
+                    view.height
+                ),
+            );
+        }
+        if t.mip_level_count() != 1 || t.sample_count() != 1 {
+            return bad(
+                "levels",
+                format!(
+                    "{} mip levels and {} samples, need 1 and 1",
+                    t.mip_level_count(),
+                    t.sample_count()
+                ),
+            );
+        }
+        Ok(())
+    }
+
     /// Picking pass: per pixel the visible surface face and its field value.
     pub fn pick(&self, mesh: &GpuMesh, view: &View) -> Result<PickImage> {
-        let mut out = self.draw(mesh, view, true, &[wgpu::Color::TRANSPARENT; 2])?;
+        let mut out = self.draw(mesh, mesh.scalar.as_ref(), view, true, &[wgpu::Color::TRANSPARENT; 2])?;
         let values = out.pop().unwrap_or_default();
         let ids = out.pop().unwrap_or_default();
         let words = |b: &[u8]| -> Vec<[u8; 4]> { b.as_chunks::<4>().0.to_vec() };
@@ -587,5 +803,16 @@ impl Renderer {
             ids: words(&ids).into_iter().map(u32::from_le_bytes).collect(),
             values: words(&values).into_iter().map(f32::from_le_bytes).collect(),
         })
+    }
+}
+
+/// The clear colour of a view's background.
+fn clear_colour(view: &View) -> wgpu::Color {
+    let c = view.background.map(|x| x as f64 / 255.0);
+    wgpu::Color {
+        r: c[0],
+        g: c[1],
+        b: c[2],
+        a: c[3],
     }
 }
