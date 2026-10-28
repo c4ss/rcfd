@@ -882,7 +882,7 @@ fn g3_ordered(pairs: &[(&str, f64, f64)]) -> Vec<String> {
 /// G3, crossing count (registered limit: at least 7 upward crossings of `cl` through its mean in the second half of each
 /// cylinder run). Known miss (ADR 0142 amendment 1): the Re 100 run has 6, because about 6 periods fit into the second
 /// half of an 80 D/U run. The limit is kept. Every cylinder run of both trees is counted and printed before the limit is
-/// asserted (ADR 0150).
+/// asserted (ADR 0150); the Linux tree's Re 100 run crosses 6 times too, the same known miss (ADR 0150 L3).
 #[test]
 #[ignore = "known miss (ADR 0142 amendment 1): the Re 100 cylinder run crosses 6 times in its second half, limit 7"]
 fn g3_cylinders_cross_at_least_7_times_known_miss() {
