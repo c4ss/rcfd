@@ -196,3 +196,157 @@ other. It is renamed `<name>_known_miss_on_<platform>` and gets `#[cfg_attr(<pla
 * Nothing of this job was built or run before this registration. The tests are written after it, and the code change after the
   before runs.
 * The predictions in the table are mine, from the reading above, not from measurements.
+
+## Addendum: results against the registered limits (2026-10-28)
+
+Commits:
+* 6f1d109: the registration.
+* 7b5b309: the tests, with no non-test code changed. The "before" runs used it.
+* fa69632: the change.
+* 65f9228: the known-miss attributes, the docs and the notes.
+
+Set-up:
+* Windows: this host (16 threads, 93.6 GB, 32 GB free at the start, rustc 1.99.0). Release builds in the worktree's own target
+  folder, `--test-threads 1`, output to files.
+* Linux: Docker `rust:1.99-bookworm` (glibc 2.36, rustc 1.99.1), `--init --cpuset-cpus 0-3 --memory 16g`, on archives of
+  7b5b309 and fa69632 extracted with `tar -m`.
+* No new crate, `Cargo.lock` unchanged, no unsafe code, no numerics changed.
+
+| Id | Limit | Windows | Linux | Result |
+|---|---|---|---|---|
+| E1 | `Err` within 2.0 s, naming `exit code 1`, `must be positive` and `runner-config.json`; the runner's line in `runner.log`; lock probe false | **0.042 s**: "the runner (pid 67652) exited with exit code 1 before it held the project's lock; its output (`...\.rcfd\runner.log`): rcfd-runner: `...\.rcfd\runner-config.json`: max_runs, cpu_threads and poll_ms must be positive". `runner.log` holds that line; lock probe false | 0.021 s, the same message | pass |
+| E1c | before: fails (about 10 s, no exit code, no line) | 10.072 s, "the runner did not take the lock in time (see `...runner.log`)", `runner.log` empty | 10.015 s, the same | fails as required |
+| E1 control | a valid config: `Ok`, lock held | `Ok`; lock held | `Ok`; lock held | as required |
+| N3 (re-run as E1's control) | both `Ok`, both started; one alive, `runner.json`'s; one "started" line; lock probe true | `Ok(Some(66008))` and `Ok(Some(67180))`; alive [67180], which is `runner.json`'s; 1 line; probe true. Control: two projects, both alive | pass | pass |
+| O1 | exit 1 within 2.0 s; `exit code 1` and `must be positive` on stderr; the line in `runner.log` | 0.061 s | 0.031 s | pass |
+| O2 | `--log-file`: the line in `x.log`, not in `runner.log`; stderr names `x.log` | 0.060 s; `x.log` has the line; no `runner.log` | 0.031 s | pass |
+| O3 | `--stdout`, `--foreground`: the runner's own line and the client's report on the caller's stderr; nothing in `runner.log` | 0.060 s and 0.049 s; the runner's line, then "...; its output went to this program's standard output and error" | 0.031 s each | pass |
+| O4 | `--quiet`: `exit code 1` and `discarded`; the line nowhere | 0.061 s; "...; its output was discarded" | 0.031 s | pass |
+| O5 | (a), (b) refused with nothing started; (c) `start --quiet <case>` | (a) "choose one of --log-file, --stdout (or --foreground) and --quiet"; (b) "--log-file needs a file"; nothing started in either. (c) exit 0 after 0.092 s, a run id, the run finished at step 30 | pass | pass |
+| C1 | returned within 3.0 s; the runner alive at the return; the run finishes | **held**. The client exited 0 after 0.102 s; both EOFs came only after the runner's shutdown request (0.014 s after it, 3.53 s after the start) | returned after 0.051 s; lock probe true, `runner.json`'s pid alive; the run finished; probe still true | **Windows: miss, as predicted.** Now `c1_capturing_caller_returns_within_3_s_known_miss_on_windows`, ignored on Windows, limit intact. Linux: pass |
+| C1 control | `--stdout`: held 3.0 s after the client's exit; EOFs within 5 s of the shutdown | held; EOFs 0.013 s after the shutdown request | held; 0.083 s | as required, both platforms |
+| C1c | before: Windows fails, Linux passes | held: client exit 0.067 s, EOFs 0.015 s after the shutdown request | returned after 0.061 s | as predicted |
+| C2 | `rcfd-mcp` exits 0 within 10 s of the close; its stdout reaches EOF within 3.0 s of its exit; the runner alive | **held**. The server exited 0, 0.010 s after the close; its stdout reached EOF only 0.082 s after the runner's shutdown request | exit 0.010 s after the close; stdout EOF 0.0 s after the exit; lock probe true; the run finished | **Windows: miss, as predicted.** Now `c2_mcp_stdout_reaches_eof_after_the_server_exits_known_miss_on_windows`, ignored on Windows, limit intact. Linux: pass |
+| C2 control | the child whose runner got its stdout is held 3.0 s after its exit; EOF within 5 s of the shutdown | held; EOF 0.007 s after the shutdown request | held; 0.070 s | as required, both platforms |
+| C2c | before: Windows fails, Linux passes | held; EOF 0.030 s after the shutdown request | EOF 0.0 s after the exit | as predicted |
+| U1 | Linux: the runner's process group is its pid | (not compiled) | runner 918 in group 918; the test process in group 7 | pass |
+| I1-I4 | reported against the predictions; I4 released; no daemon left | **I1 held, I2 held, I3 held, I4 released**. In I1-I3 the EOFs came 5-12 ms after the stop file, that is when the daemon exited; no daemon left | all four released (EOF within 3 ms of the client's exit); no daemon left | as predicted |
+| I5, I6 | scratch probe (not in the repository), reported | I1 rerun as the control: held. **I5** (`inherit_handles(false)`): released. **I6**: released, but the daemon's line never reached its log file; its write returned `Ok(())` and the line was discarded | not run | as predicted |
+
+### Re-runs (RR)
+
+* **`rcfd-runner`, Windows (fa69632).** Unit tests 8; `contract_w48a` 2; `inherit_w48l` 1 (the child entry), 1 ignored;
+  `native_start_w48i` 3; `no_window_scan` 1 (F17 scan); `output_w48l` 8; `runner_w47b` 13, 1 ignored (S5); `runner_wfix` 6;
+  `zombie_w48i` 1.
+  * C1 also ran in this re-run and failed: the binary predates its known-miss attribute (deviation 1).
+  * N4 (c) found no shell name in 35 files.
+* **`rcfd-runner`, Linux.** Unit tests 7; contract 2; inherit 1, 1 ignored; native 3; scan 1; `output_w48l` 10 (C1 and U1
+  included); `runner_w47b` 13, 1 ignored; `runner_wfix` 4 (F15 is Windows only); zombie 1.
+* **S5 with `--ignored`** (reported only).
+  * Windows: fails at its 10 s EOF wait ("the client's stdout did not reach EOF: the runner inherited the pipe").
+  * Linux: **passes** (3.29 s). See question 2.
+* **`rcfd-mcp`** `project_runs_w48f` 3 and `project_w48f` 10, on Windows and on Linux.
+* **`rcfd-studio`, Windows, the whole crate:** PENDING.
+* **Lint.**
+  * `cargo clippy -p rcfd-runner -p rcfd-mcp -p rcfd-studio --all-targets -- -D warnings` (Windows): clean.
+  * Workspace clippy (Windows): PENDING.
+  * Linux clippy and fmt: PENDING. The first attempt did not run, because the image lacks the clippy and rustfmt
+    components (deviation 4).
+  * `cargo fmt -p rcfd-runner -p rcfd-mcp -- --check` (Windows): clean.
+* **Leftover processes:** none on Linux (`ps` at the end of each container run). Windows: PENDING.
+
+### Deviations and notes
+
+1. **C1 in the Windows crate re-run.** That re-run used the build of fa69632, so it ran C1 before C1 had its known-miss
+   attribute. C1 failed there in the same way as in the registered run.
+2. **Overlapping runs.** The Linux after run overlapped the Windows `rcfd-runner` crate re-run, and then the Studio build.
+   Both have generous time limits. The registered Windows runs (E1, O1-O5, C1, C2, N3) ran with nothing else of this job
+   running. This follows ADR 0143 deviation 5.
+3. **Toolchains.** Linux used rustc 1.99.1 and Windows 1.99.0, as in ADR 0143. I1-I4 ran once on Windows, with the before
+   runs; they do not depend on the change, as registered.
+4. **Linux lint.** The registered Linux clippy step first failed to start, because `rust:1.99-bookworm` has no clippy or
+   rustfmt component. It ran again on 65f9228 after `rustup component add clippy rustfmt` in the container (results above).
+5. **C1's early-exit path is not involved in its miss.** On Windows the client returned its run id in about 0.1 s. Only the
+   EOF waited. The runner's own output went to `runner.log`, as decided.
+6. **Not changed, read from code: the Studio repeats the log tail.** The Studio's Run button (`quick_run`) appends the last 3
+   lines of `runner.log` to an `ensure_runner` error. For an early exit, the client's message now carries the tail already, so
+   the same lines can appear twice. The Run button checks the budgets first, so this happens only for other early exits
+   (question 5).
+
+### Not run
+
+* A real window, by hand: the Studio's first Run of a session with the runner's output in `runner.log`; closing the Studio
+  while a run runs.
+* Claude Code's own Bash and PowerShell tools as the capturing caller. The registered caller is std's `Command` with piped
+  output.
+* What Claude Code does when `rcfd-mcp`'s stdout stays open after the server exits (C2's Windows miss).
+* `--stdout` from an interactive Windows console. It is not checked whether a detached runner (`DETACHED_PROCESS`) can write
+  to an inherited console handle; the checks used files and pipes.
+* Linux CI (`ubuntu-latest`); Docker bookworm stood in.
+* The `rcfd-studio` tests on Linux; macOS; debug builds of the new tests; the full gate (`scripts/gate_test.py`);
+  `cargo deny`.
+* I5 and I6 on Linux. They are Windows-only probes, and Unix has no such switch.
+
+### Questions for the maintainer
+
+1. **What remains for a capturing caller on Windows (C1 and C2 miss).**
+
+   Measured: a std-spawned runner holds the caller's pipes whatever its standard handles are (I1, I2), and so does an
+   intermediate stage (I3). Only turning inheritance off releases the caller (I5), and that also drops the standard handles
+   given to the runner (I6). Options:
+   * (a) **Accept and document**, as done. On Windows, start the runner where nobody reads the output to the end: the
+     Studio, an interactive terminal, or a background job of the calling tool.
+   * (b) **Allow one reviewed unsafe island**: `CreateProcessW` with `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` holding only the
+     three standard handles. This keeps the log file and drops everything else.
+     * It conflicts with `unsafe_code = "forbid"`: it needs a lint exception for one module or one small crate.
+     * Clearing the inherit flag of the client's own standard handles (`SetHandleInformation`) would be smaller, but it
+       leaves the other handles the caller leaked to the client. For example, a shell's own pipe that the shell passed on
+       as an extra handle.
+   * (c) **Wait for std.** `CommandExt::inherit_handles(false)` (issue 146407) releases the caller. But the runner then gets
+     no usable standard handles (I6), so it would have to open its own log file:
+     * a `serve --log-file`, opened by the runner itself, plus a panic hook;
+     * the early-exit report would then read that file.
+
+     A handle list through `spawn_with_attributes` (issue 114854) would need std to put its own duplicates of the standard
+     handles into the list. A caller cannot name those handles.
+   * (d) **A launcher that does not inherit.** For example ShellExecute through `rundll32 shell32.dll,ShellExec_RunDLL`;
+     ADR 0123 measured that ShellExecute passes no handles. Not verified here. It puts a launcher back into the start path
+     (against ADR 0143 decision 1). The client loses the `Child`, so there is no exit code for decision 2 and no reaping.
+     It may open a console window, and it can hang as PowerShell did.
+
+   **Recommendation:** (a) now. Then (c) when `inherit_handles` is stable, together with the runner opening its own log. (b)
+   only if the fix is wanted now and one reviewed unsafe module is acceptable.
+2. **S5 passes on Linux** (`--ignored`, 3.29 s), as C1 does. Options:
+   * (a) keep S5 ignored everywhere: C1 runs the same set-up on Linux with a tighter limit and the same survival checks;
+   * (b) ignore S5 on Windows only, so that the Linux gate runs it too.
+
+   **Recommendation:** (a). It avoids two copies of one check in the gate.
+3. **`--foreground` is an alias of `--stdout`**, as decision 1 names both. It does not keep the runner in the foreground;
+   that is `serve`. Options:
+   * (a) keep the alias, documented as the same option;
+   * (b) drop it, to avoid the confusion with `serve`.
+
+   **Recommendation:** (a), since it is the decision's own word. Revisit if users read it as "run in the foreground".
+4. **"`serve` detach path".** It was read as the detached `serve` that `start`, `ensure` and the library start: there is no
+   other detach path. `serve` itself, run in the foreground, takes no output option. Options:
+   * (a) leave `serve` as it is: whoever starts it in the foreground redirects its output;
+   * (b) give `serve` its own `--log-file`, which the runner opens itself for its pre-lock errors and panics.
+
+   **Recommendation:** (a) now. (b) only together with question 1 (c), which needs it.
+5. **The Studio's duplicate log tail** (deviation 6). Options:
+   * (a) leave it;
+   * (b) a small Studio change: `quick_run` appends its 3 lines only when the error does not already carry the runner's
+     output.
+
+   **Recommendation:** (b), as a separate Studio change. It was not done here because it is outside the runner start.
+6. **Linux CI.** Run the CI unit tests and the Full gate on `ubuntu-latest` after the merge. **Recommendation:** yes.
+
+## Files
+
+* This ADR.
+* `crates/rcfd-runner/src/{client,sys,main}.rs`.
+* New tests: `crates/rcfd-runner/tests/{output_w48l,inherit_w48l}.rs`, `crates/rcfd-runner/tests/capture/mod.rs` and
+  `crates/rcfd-mcp/tests/runner_stdio_w48l.rs`.
+* S5's text in `crates/rcfd-runner/tests/runner_w47b.rs`.
+* `docs/run-control.md` (section "Run service") and `docs/mcp-tools.md` (`start_run`, the Windows note).
+* Notes in ADRs 0123 and 0143.
