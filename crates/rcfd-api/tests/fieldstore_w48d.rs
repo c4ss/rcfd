@@ -128,9 +128,9 @@ fn r11_store_precision_absent_is_f64_and_f32_rounds_within_the_bound() {
 
 #[test]
 fn r11_unknown_precision_is_refused_with_its_path() {
-    let e = Case::parse_toml(&lid("store_precision = \"f16\""))
-        .err()
-        .expect("f16 is refused");
+    let Err(e) = Case::parse_toml(&lid("store_precision = \"f16\"")) else {
+        panic!("f16 is accepted");
+    };
     assert!(e.iter().any(|d| d.path == "output.store_precision"), "{e:?}");
     assert!(Case::parse_toml(&lid("store_precision = \"f32\"")).is_ok());
 }
