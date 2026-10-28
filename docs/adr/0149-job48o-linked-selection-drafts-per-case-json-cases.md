@@ -400,6 +400,11 @@ The table gives the final runs' values (39df6a5); where an earlier run differed,
 11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed: `rcfd-api`, `rcfd-cli`, `rcfd-mcp`, `rcfd-project` and
     `rcfd-runner` were read, not edited; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` are
     unchanged.
+12. "Amend CS7 first, register, then change": ADR 0139 amendment 3 (CS7's new limit and control) was written into the
+    registration commit c057aee, which also holds the starter's new words; neither the old nor the changed CS7 had run on
+    this job's code before that commit (the baseline ran the old CS7 on 9e857d8, where it does not read the run length).
+13. The field ids per case (amendment 1) have no failing control: the probe showed the route before does not leak in the
+    default layout either; O9b guards the rule.
 
 **Not run.** A person at the real window (the checklist below); Linux; debug builds of the new tests; the workspace gate and
 workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests (not changed); `cargo deny` (no dependency
@@ -424,13 +429,18 @@ descriptor.
 4. Start a run with Run (F5) and click another case at once: the Viewport stays on that case's mesh; the run appears in
    the Runs panel; click its case: it is that case's newest run.
 5. Edit a field of a case (Enter), click another case: a `*` follows the first case in the Project panel. Type into a
-   field without Enter and click another case: back on it, the field shows what you typed. Run and Runs > Start run...
-   refuse a case with a `*` ("save it first"). "Discard edits" in the case editor drops them.
+   field without Enter and click another case: back on it, the typed value is there (as an unsaved edit: the click
+   takes the focus first). Run and Runs > Start run... refuse a case with a `*` ("save it first"). "Discard edits" in the
+   case editor drops them. Note: a case saved by the Studio (Case > Save, or "Save all and close") then stores no fields
+   when Run starts it, so the Run side shows no picture (addendum deviation 4, question 9: not this job's change; the
+   Start run dialog's "store for this case" fix turns the store on for one run).
 6. With a `*` showing, use Project > Close project, open another project, or close the window: the question "Unsaved
    edits" lists the cases; try Cancel, then "Save all and close" (or Discard).
-7. Copy a case to `cases/<name>.json` with the case editor (or write one) and run it: it runs. Click a repository
-   descriptor copied in as `cases/<id>/case.json`: Run is greyed out with the one line "not a case file"; Runs > Start
-   run... shows the same line.
+7. Make a JSON case: `cmd /c "target\release\rcfd.exe run <project>\cases\<case>.toml --print-settings >
+   <project>\cases\<name>.json"` (the resolved settings as JSON, a valid case; `cmd` because a PowerShell `>` writes
+   UTF-16 or a byte-order mark, which no case reader takes), click it and Run: it runs; its Run side shows no stored
+   fields for the reason of item 5 (every setting spelled out). Click a repository descriptor copied in as `cases/<id>/case.json`: Run is
+   greyed out with the one line "not a case file"; Runs > Start run... shows the same line.
 8. Case > New case from example...: a transient example says "to simulated time ... s".
 9. Report anything slow, confusing or wrong, with the case and what was done.
 
