@@ -60,8 +60,19 @@ pub fn step_piso(end_time: f64) -> String {
     )
 }
 
+/// The quick start's cavity as PISO to `end_time` with its lid ramped from rest: `velocity_expression_x = "min(1 [m/s],
+/// 1 [m/s] * t / 1 [s])"` in place of its fixed `velocity_value` (no speed at t = 0, no gravity: no speed scale).
+pub fn cavity_ramp_piso(end_time: f64) -> String {
+    let t = cavity_piso(32, end_time);
+    assert!(t.contains("velocity_value = [1.0, 0.0, 0.0]"), "the lid moved");
+    t.replace(
+        "velocity_value = [1.0, 0.0, 0.0]",
+        "velocity_expression_x = \"min(1 [m/s], 1 [m/s] * t / 1 [s])\"",
+    )
+}
+
 /// The quick start's `heated-cavity-ra1e4.toml` as a PISO run to `end_time`: a flow at rest, driven by buoyancy only
-/// (no inflow, moving wall or initial velocity).
+/// (no inflow, moving wall or initial velocity; gravity 7100 m/s^2 in a 1 m box).
 pub fn heated_piso(end_time: f64) -> String {
     piso(
         &std::fs::read_to_string(quick_start_cases().join("heated-cavity-ra1e4.toml")).unwrap(),

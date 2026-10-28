@@ -110,20 +110,41 @@ fn se_control_the_case_step_does_not_follow_the_mesh() {
 
 // ---------------------------------------------------------------- S-G: no speed scale
 
-/// S-G (model): the heated cavity at rest under PISO has no speed scale; the adaptive plan starts with the case's own
-/// `solver.dt` (the schema default 0.01 s) under the Courant controller and says so; the fixed automatic step is refused
-/// with the registered message.
+/// S-G (model): (g1) the heated cavity at rest under PISO gets the gravity scale `sqrt(|g| L)` (7100 m/s^2 over 1 m) and
+/// a plan from it; (g2) the cavity whose lid is ramped from rest has no speed scale: the adaptive plan starts with the
+/// case's own `solver.dt` (the schema default 0.01 s) under the Courant controller and says so; the fixed automatic step
+/// is refused with the registered message.
 #[test]
-fn sg_no_speed_scale_starts_with_the_case_step() {
+fn sg_gravity_scale_and_no_speed_scale() {
     let dir = ts::quick_start_cases();
+    // (g1)
     let f = facts(&ts::heated_piso(2.0), &dir);
     eprintln!(
-        "S-G facts: u0 {} from {:?}, h_min {}, dt {}",
+        "S-G (g1) facts: u0 {} from {:?}, h_min {}, dt {}",
         f.u0, f.u0_from, f.h_min, f.dt
     );
     assert_eq!(f.kind, Kind::Transient);
-    assert_eq!(f.u0, 0.0);
-    assert_eq!(f.u0_from, None);
+    assert_eq!(f.u0_from.as_deref(), Some(time_step::GRAVITY_SCALE));
+    assert!((f.u0 - 7100f64.sqrt()).abs() <= 1e-9 * f.u0, "(g1) u0 {}", f.u0);
+    let p = plan(&f, 2.0, StepMode::Adaptive);
+    assert!(!p.no_speed);
+    assert_eq!(
+        p.entries,
+        vec![
+            "solver.end_time=2",
+            "solver.dt=0.000148",
+            "solver.max_courant=0.5",
+            "solver.max_dt=0.02"
+        ]
+    );
+    // (g2)
+    let f = facts(&ts::cavity_ramp_piso(2.0), &dir);
+    eprintln!(
+        "S-G (g2) facts: u0 {} from {:?}, h_min {}, dt {}",
+        f.u0, f.u0_from, f.h_min, f.dt
+    );
+    assert_eq!(f.kind, Kind::Transient);
+    assert_eq!((f.u0, f.u0_from.clone()), (0.0, None));
     let p = plan(&f, 2.0, StepMode::Adaptive);
     assert!(p.no_speed);
     assert_eq!(
@@ -136,11 +157,12 @@ fn sg_no_speed_scale_starts_with_the_case_step() {
         ]
     );
     assert_eq!(p.courant0, None);
+    let h = time_step::hover(&f, &p);
     assert!(
-        time_step::hover(&f, &p)
-            .contains("(the case's solver.dt: no inflow, moving wall or initial velocity gives a speed at the start)"),
-        "{}",
-        time_step::hover(&f, &p)
+        h.contains(
+            "(the case's solver.dt: no inflow, moving wall, initial velocity or gravity gives a speed at the start)"
+        ),
+        "{h}"
     );
     let fixed = time_step::plan(
         &f,
@@ -151,9 +173,11 @@ fn sg_no_speed_scale_starts_with_the_case_step() {
     );
     assert_eq!(
         fixed,
-        Err("no speed scale for a fixed automatic step: the case has no inflow, moving wall or initial velocity at its \
-             start"
-            .to_string())
+        Err(
+            "no speed scale for a fixed automatic step: the case has no inflow, moving wall, initial velocity or \
+             gravity at its start"
+                .to_string()
+        )
     );
 }
 
@@ -243,6 +267,7 @@ struct DRun {
     t_end: f64,
     co_first: f64,
     co_max_after_10: f64,
+    dt_first: f64,
     dt_min: f64,
     dt_max: f64,
     last_step_fraction: f64,
@@ -273,6 +298,7 @@ fn d_run(tag: &str, text: &str, dir: &Path, n: f64, mode: StepMode, metric: &dyn
         t_end: t.last().copied().unwrap_or(f64::NAN),
         co_first: co.first().copied().unwrap_or(f64::NAN),
         co_max_after_10: ts::max_from(co, 10),
+        dt_first: dt.first().copied().unwrap_or(f64::NAN),
         dt_min: dt.iter().copied().fold(f64::INFINITY, f64::min),
         dt_max: dt.iter().copied().fold(0.0, f64::max),
         last_step_fraction: if k >= 2 { dt[k - 1] / dt[k - 2] } else { f64::NAN },
@@ -283,9 +309,9 @@ fn d_run(tag: &str, text: &str, dir: &Path, n: f64, mode: StepMode, metric: &dyn
 }
 
 /// D's limits on the adaptive run `a` against the fixed run `f` (registered): R1 both end at `n` bit for bit with exit 0
-/// (the adaptive run: the ADR 0050 controller ran, its largest step above 1.2 times its first); R2 the adaptive run's
-/// first Courant number at most the target and its largest after step 10 at most 1.1 times the target; R3 its metric
-/// within `tol` (relative) of the fixed run's.
+/// (the adaptive run: the ADR 0050 controller ran, its largest step above its first; the earlier controller never steps
+/// above `solver.dt`); R2 the adaptive run's first Courant number at most the target and its largest after step 10 at
+/// most 1.1 times the target; R3 its metric within `tol` (relative) of the fixed run's.
 fn d_limits(tag: &str, n: f64, a: &DRun, f: &DRun, tol: f64) {
     let c = time_step::COURANT_TARGET;
     eprintln!(
@@ -303,9 +329,9 @@ fn d_limits(tag: &str, n: f64, a: &DRun, f: &DRun, tol: f64) {
         assert_eq!(r.t_end_bits, n.to_bits(), "{tag} R1 {:?}: end {}", r.mode, r.t_end);
     }
     assert!(
-        a.dt_max > 1.2 * a.dt_min,
-        "{tag} R1: the adaptive step did not grow ({} .. {})",
-        a.dt_min,
+        a.dt_max > a.dt_first,
+        "{tag} R1: the adaptive step did not grow above its first ({} .. {})",
+        a.dt_first,
         a.dt_max
     );
     assert!(a.co_first <= c, "{tag} R2: first Courant number {}", a.co_first);

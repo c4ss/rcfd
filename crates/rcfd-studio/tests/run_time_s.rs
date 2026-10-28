@@ -429,40 +429,69 @@ fn cd_control_the_route_before_runs_to_the_case_end() {
 
 // ---------------------------------------------------------------- (g) no speed scale, (h) JSON
 
-/// (g): the heated cavity at rest under PISO (no speed scale) through Run, "Simulate for" 2 s: the run's settings are the
-/// registered plan (the case's `solver.dt` 0.01 s as the first step, the Courant controller on), it finishes at 2 s bit
-/// for bit, and the controller keeps the Courant number at most 1.1 times the target after step 10.
-#[test]
-fn g_a_case_without_a_speed_scale_runs_under_the_controller() {
-    let p = project("g", &[("cases/hot.toml", ts::heated_piso(10.0))]);
+/// (g)'s procedure: `text` as `cases/g.toml` through Run, "Simulate for" 2 s: the toolbar's hover, the run's `set`, its
+/// end, and the largest Courant number after step 10.
+fn g_run(tag: &str, text: String) -> (String, Vec<String>, RunState, u64, f64, bool) {
+    let p = project(tag, &[("cases/g.toml", text)]);
     let mut st = studio(&p, false);
-    select(&mut st, "cases/hot.toml");
-    quick_run::run_time_mut(&mut st, "cases/hot.toml").simulate = Some(2.0);
+    select(&mut st, "cases/g.toml");
+    quick_run::run_time_mut(&mut st, "cases/g.toml").simulate = Some(2.0);
     let hover = match quick_run::time_view(&st) {
         TimeView::Transient {
             facts, plan: Ok(tp), ..
         } => time_step::hover(&facts, &tp),
-        other => panic!("(g) {other:?}"),
+        other => panic!("(g) {tag}: {other:?}"),
     };
     let id = run_now(&mut st).unwrap();
-    let s = wait_end(&p, &mut st, &id, Duration::from_secs(600));
+    let s = wait_end(&p, &mut st, &id, Duration::from_secs(900));
     let m = monitors(&p, &id);
     let co = ts::max_from(&m["courant"], 10);
+    let finite = m.values().all(|c| c.iter().all(|x| x.is_finite()));
     eprintln!(
-        "(g): set {:?}, state {:?}, end {}, steps {}, Courant after step 10 {co}, first steps {:?}",
+        "(g) {tag}: set {:?}, state {:?}, end {}, steps {}, Courant after step 10 {co}, first Courant numbers {:?}, \
+         first steps {:?}\n  hover: {hover}",
         run_set(&p, &id),
         s.state,
         s.time,
         m["dt"].len(),
-        &m["dt"][..m["dt"].len().min(8)]
+        &m["courant"][..m["courant"].len().min(12)],
+        &m["dt"][..m["dt"].len().min(12)]
     );
-    assert!(
-        hover.contains("no inflow, moving wall or initial velocity"),
-        "(g) hover: {hover}"
-    );
+    (hover, run_set(&p, &id), s.state, s.time.to_bits(), co, finite)
+}
+
+/// (g1): the heated cavity at rest under PISO (buoyancy only) gets the gravity scale: its run's settings are the
+/// registered plan, it finishes at 2 s bit for bit with every monitor finite, and the controller keeps the Courant number
+/// at most 1.1 times the target after step 10.
+#[test]
+fn g1_a_flow_at_rest_under_gravity_gets_the_gravity_scale() {
+    let (hover, set, state, end, co, finite) = g_run("g1", ts::heated_piso(10.0));
+    assert!(hover.contains(time_step::GRAVITY_SCALE), "(g1) hover: {hover}");
     // the example sets its own store (every 10 steps, f32): no store entry
     assert_eq!(
-        run_set(&p, &id),
+        set,
+        vec![
+            "solver.end_time=2",
+            "solver.dt=0.000148",
+            "solver.max_courant=0.5",
+            "solver.max_dt=0.02"
+        ]
+    );
+    assert_eq!((state, end), (RunState::Finished, 2f64.to_bits()));
+    assert!(finite, "(g1) a monitor is not finite");
+    assert!(co <= 1.1 * time_step::COURANT_TARGET, "(g1) Courant {co}");
+}
+
+/// (g2): the cavity with its lid ramped from rest (no speed scale): the toolbar's hover says so, the run starts with the
+/// case's `solver.dt` 0.01 s under the controller, finishes at 2 s bit for bit with every monitor finite, and the
+/// controller keeps the Courant number at most 1.1 times the target after step 10.
+#[test]
+fn g2_a_case_without_a_speed_scale_runs_under_the_controller() {
+    let (hover, set, state, end, co, finite) = g_run("g2", ts::cavity_ramp_piso(10.0));
+    assert!(hover.contains(time_step::NO_SPEED), "(g2) hover: {hover}");
+    // the example sets its own store (every 5 steps, f32): no store entry
+    assert_eq!(
+        set,
         vec![
             "solver.end_time=2",
             "solver.dt=0.01",
@@ -470,8 +499,9 @@ fn g_a_case_without_a_speed_scale_runs_under_the_controller() {
             "solver.max_dt=0.02"
         ]
     );
-    assert_eq!((s.state, s.time.to_bits()), (RunState::Finished, 2f64.to_bits()));
-    assert!(co <= 1.1 * time_step::COURANT_TARGET, "(g) Courant {co}");
+    assert_eq!((state, end), (RunState::Finished, 2f64.to_bits()));
+    assert!(finite, "(g2) a monitor is not finite");
+    assert!(co <= 1.1 * time_step::COURANT_TARGET, "(g2) Courant {co}");
 }
 
 /// (h)'s procedure: the cylinder as `cases/c.toml` and as `cases/c.json` (`Case::to_json_string`); the JSON case
@@ -547,8 +577,8 @@ fn frame(app: &mut StudioApp, ctx: &egui::Context, events: Vec<egui::Event>) -> 
 /// (f)'s procedure: a served project with the cylinder (64 x 48) and the quick start's steady cavity; drawn frames of
 /// 1280 x 800, tooltips at once. (i) the cylinder selected, a frame; (ii) the pointer on Run (30 frames at most); (iii)
 /// "Simulate for" 7.3 s (the model's call the field makes), a frame; (iv) a drawn click on Advanced, a frame, a drawn click
-/// on its checkbox (the automatic step off), frames; (v) a drawn click on the warning's fix, a frame; (vi) the steady
-/// cavity selected, a frame.
+/// on its checkbox (the automatic step off), Escape (the popover closes), frames; (v) a drawn click on the warning's fix, a
+/// frame; (vi) the steady cavity selected, a frame.
 fn f_run(tag: &str, before: bool) -> F {
     let cav = std::fs::read_to_string(ts::quick_start_cases().join("cavity-re100.toml")).unwrap();
     let p = project(
@@ -586,6 +616,8 @@ fn f_run(tag: &str, before: bool) -> F {
         if let Some(b) = app.st.quick.rects.get(AUTO_BOX).copied() {
             lj::click_at(&mut app, &ctx, b.center());
         }
+        // Escape closes the popover (it may cover the warning's row below the toolbar)
+        let _ = frame(&mut app, &ctx, lj::key(egui::Key::Escape));
         let _ = frame(&mut app, &ctx, vec![egui::Event::PointerMoved(egui::pos2(5.0, 795.0))]);
         r.warned = frame(&mut app, &ctx, Vec::new());
         // (v)

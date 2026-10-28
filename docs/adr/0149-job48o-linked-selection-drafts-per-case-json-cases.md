@@ -35,7 +35,8 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
    startable. Registered: a JSON case written from a TOML case by the existing writer runs from the Studio model and its
    run snapshot matches; each descriptor under the repository's `cases/` is refused with the one line.
 4. Questions 3, 4 and 5 of ADR 0148: its recommendations (a): the step axis kept, no time estimate for "Refine x2", no
-   "Refine x2" for `axial_fan_sector`. Nothing changes.
+   "Refine x2" for `axial_fan_sector`. Nothing changes. (Note 2026-10-28: question 4 is superseded by
+   [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md), the time step set when a run starts.)
 5. The stray bare `to t = X` of the case starter's dialog says "simulated time"; ADR 0139's CS7 reads that line, so CS7
    is amended first ([ADR 0139 amendment 3](0139-wave48g2-case-starter.md), written with this registration), then the
    text changes.

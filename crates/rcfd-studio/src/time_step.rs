@@ -7,7 +7,8 @@
 //!   `solver.dt` and `solver.end_time` (and whether the text sets them), its own step control, the thinnest cell of the
 //!   mesh the run builds and the fastest speed of the case at its start. The last two come from the solver's own
 //!   initial state (`rcfd_api::sim::Simulation::new`): the largest speed of the initial velocity field and of the
-//!   boundary faces at t = 0 (fixed values, free stream, moving walls, boundary expressions and user functions).
+//!   boundary faces at t = 0 (fixed values, free stream, moving walls, boundary expressions and user functions), or, for a
+//!   flow at rest under gravity, free fall across the domain.
 //! * [`plan`] turns them and the run-time settings ([`RunTime`]: "Simulate for", the Courant target, the largest step,
 //!   the case's own step) into the `rcfd run --set` entries of the run ([`TimePlan`]). `solver.end_time` is the time to
 //!   simulate. The automatic step ([`StepMode::Adaptive`]) starts at the step that gives the Courant target at the
@@ -105,9 +106,10 @@ pub struct Facts {
     /// runs; 0 otherwise).
     pub h_min: f64,
     /// The fastest speed of the case at its start, m/s: the largest of the initial velocity field and of the boundary
-    /// faces at t = 0 (0 when there is none).
+    /// faces at t = 0; for a flow at rest under gravity, free fall across the domain, `sqrt(|g| L)` with `L` the largest
+    /// extent of the mesh; 0 when there is none.
     pub u0: f64,
-    /// Where [`Facts::u0`] is: `the initial velocity field` or `boundary <patch>`.
+    /// Where [`Facts::u0`] is: `the initial velocity field`, `boundary <patch>` or [`GRAVITY_SCALE`].
     pub u0_from: Option<String>,
 }
 
@@ -325,8 +327,37 @@ fn fastest(sim: &Simulation) -> Result<(f64, Option<String>), String> {
     if cells > 0.0 {
         return Ok((cells, Some("the initial velocity field".into())));
     }
+    // ADR 0153 D5: a flow at rest driven by gravity (buoyancy): free fall across the domain, sqrt(|g| L), an upper bound
+    let g = sim
+        .case
+        .get("physics.gravity")
+        .ok()
+        .and_then(|v| {
+            v.as_array()
+                .map(|a| a.iter().filter_map(Value::as_f64).collect::<Vec<f64>>())
+        })
+        .map_or(0.0, |a| a.iter().map(|x| x * x).sum::<f64>().sqrt());
+    if g > 0.0 && g.is_finite() {
+        let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+        for p in sim.geom.mesh.points() {
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+        let l = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
+        if l > 0.0 && l.is_finite() {
+            return Ok(((g * l).sqrt(), Some(GRAVITY_SCALE.into())));
+        }
+    }
     Ok((0.0, None))
 }
+
+/// Where the speed scale of a flow at rest under gravity comes from (ADR 0153 D5).
+pub const GRAVITY_SCALE: &str = "gravity (free fall across the domain, sqrt(|g| L))";
+
+/// What a case without a speed scale lacks (ADR 0153 D5).
+pub const NO_SPEED: &str = "no inflow, moving wall, initial velocity or gravity";
 
 /// What the time step of the case `text` depends on (`dir`: its folder, for relative files). The text is read as
 /// `rcfd run` reads it (JSON when it starts with `{`, else TOML: [`crate::preview::parse_case`]); a transient case's
@@ -453,9 +484,7 @@ pub fn plan(f: &Facts, rt: &RunTime) -> Result<TimePlan, String> {
         }
         StepMode::Fixed => {
             let raw = f.step_for(c).ok_or_else(|| {
-                "no speed scale for a fixed automatic step: the case has no inflow, moving wall or initial velocity \
-                 at its start"
-                    .to_string()
+                format!("no speed scale for a fixed automatic step: the case has {NO_SPEED} at its start")
             })?;
             let steps = ((n / raw) - 1e-9).ceil().max(1.0) as u64;
             let dt = n / steps as f64;
@@ -568,8 +597,7 @@ pub fn hover(f: &Facts, tp: &TimePlan) -> String {
              largest cell Courant number at about {} and at most {} (steps of at most {} s) and lands on {n} s.",
             fmt_num(*dt0),
             if tp.no_speed {
-                " (the case's solver.dt: no inflow, moving wall or initial velocity gives a speed at the start)"
-                    .to_string()
+                format!(" (the case's solver.dt: {NO_SPEED} gives a speed at the start)")
             } else {
                 String::new()
             },
@@ -681,8 +709,7 @@ pub fn mesh_line(f: &Facts, rt: &RunTime) -> Option<String> {
             fmt_num(f.h_min)
         ),
         None => format!(
-            "no speed scale at the start (no inflow, moving wall or initial velocity), so no Courant estimate; thinnest \
-             cell {} m",
+            "no speed scale at the start ({NO_SPEED}), so no Courant estimate; thinnest cell {} m",
             fmt_num(f.h_min)
         ),
     };
