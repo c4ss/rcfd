@@ -62,8 +62,9 @@ section 2, ADRs [0131](0131-wave48b-studio-application-shell.md), [0132](0132-wa
    folder counts only when it holds both `rcfd-runner` and `rcfd` (or `rcfd-runner` and an existing `RCFD_BIN`). The error
    lists every folder searched in order, programs found alone, and the build command
    `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli -p rcfd-mcp`. `main` searches once at start (file
-   checks only) and gives the run worker the runner found; every Run searches again, so a build made while the Studio is
-   open is used.
+   checks only) and gives the run worker the runner found; every Run searches again, so Run uses a build made while the
+   Studio is open. Known limit: the open project's run worker keeps the runner it was given when the project opened, so
+   the Start run dialog and "Start runner" use that one until the project is opened again (question 3).
 4. **After the start.** When the id arrives the run is selected (the run worker reads its series, events and log; the
    viewport follows it) and the Viewport panel is shown (it is opened again when it was closed; above the Plots since
    amendment 1) and put in front of its place; Plots is put in front of its place when it does not share the Viewport's. A run started by Run that fails before
@@ -106,6 +107,12 @@ files, kept small for the merge of the parallel 48G items:
 | `src/viewport.rs` | field `follow` (default, `reset_run`), the `Snaps` condition, `set_pos` and `show_snapshot` set it, new `set_follow` |
 | `src/viewport_ui.rs` | the "follow latest" box in the time row |
 | `README.md` | the two script one-liners |
+
+Merge notes for the parallel 48G items: G1 and G5 rely on the dialog's default store proposal (item 3 may change it). G1
+needs stored snapshots while the 3000-step run runs; G5 needs none before its kill (about step 1000 of 1 000 000), and
+asserts that before killing, so a changed proposal fails G5 loudly at that precondition, not as a regression. The
+viewport texts of decision 7 and the Log focus apply only when the viewport shows the selected run
+(`viewport.run == selected_run`); a case preview (item 1) must keep a selected run taking precedence over the preview.
 
 ## Registered checks
 
@@ -234,9 +241,24 @@ G9 ran on 6b94b98: `cargo test --release -p rcfd-studio --no-fail-fast -- --test
 Every test binary of the crate passes: B1-B9 (`project_b1_b3`, `frames_b4`, `editor_b5`, `watch_b6`, `frame_cost_b7`,
 `prefs_b8`, `parity`), R1-R12 (`run_control_r1_r3`, `ingest_r4_r7`, `monitors_plot`, `tick_cost_r6`, `monitors_r8`,
 `runner_start_r9`, `start_plan_r10`, `browser_refresh_r12`), V2-V11 (`viewport_v2`, `viewport_model`, `viewport_store`),
-`viewport_live`, the chat tests E1-E11 (`chat_e`) and the four new files (G1b-G7 again, with the values of the table in
-kind). The three ignored tests are the known misses that were ignored before or by amendment 1: ADR 0133's R6, ADR 0131's
-tutorials item, and G1.
+`viewport_live`, the chat tests E1-E11 (`chat_e`) and the four new files (G1b-G7 again). That run captured no output, so
+it shows pass or fail only, not the measured values. The three ignored tests are the known misses that were ignored
+before or by amendment 1: ADR 0133's R6, ADR 0131's tutorials item, and G1.
+
+After the addendum's runs (dcea11d):
+* G1's known-miss test, run once with `--ignored` (output to a file): it fails at (h) with (true, true, false), as
+  registered; (a)-(g) met again (listed 0.094 s, running 5.477 s, first snapshot shown 0.158 s after its commit). The switch
+  therefore reproduces the missed behaviour.
+* Leftover processes after all runs: none (`rcfd.exe`, `rcfd-runner.exe`, `fake-claude.exe` listed by command line).
+* `scripts/limit_audit.py`, the hits in the new files, read: `bins_g4.rs:87` (class i) compares the constant `BUILD` with
+  the literal command the request names, on purpose (a changed constant fails); `oneclick_g4.rs:311` (class i,
+  sleep/elapsed) is G7's limit, whose time starts after the control's 20 frames with their sleeps.
+* Changed after the registered runs (UI only, found in review): during a start nothing woke the UI, so the strip's age
+  counter stood still while the runner started; the strip now asks for a repaint every 250 ms while a start is in flight.
+  Re-run on that code (output to a file): G1b pass ((a) 0.089 s, (b) 5.464 s, (c) 0.159 s, (h) (true, true, true)), G4-G7
+  and the G1 control pass (G4 0.509 s, G5 0.077 s, G6 paused 0.266 s and cancelled 0.265 s, G7 0.002 s), B4 pass, B7
+  median 0.392 ms (min 0.333, p90 0.564; 48D measured 0.339 ms without the toolbar and the strip; limit 8 ms), its control
+  13.5 ms.
 
 Reported, not limited:
 * The first Run of a session waited about 5.3 s from the click to the running run (G1 5.339 s, G1b 5.353 s), as ADR 0133 R9
@@ -271,10 +293,11 @@ has the focus; the scripts on the maintainer's shells; the Linux runs of every p
    scripts/studio.sh <project folder>`). The toolbar under the menu bar should name the folder where `rcfd-runner` and
    `rcfd` were found. To see the error: rename `target\release\rcfd-runner.exe`, press "Search again": the toolbar should
    list the folders searched and the build command; rename it back and press "Search again".
-2. Click a case in the Project panel (the lid cavity, a few hundred steps), then Run (or F5). Within seconds: the run is
-   selected in the Runs panel, the Viewport is in front, the strip at the bottom shows the run's state, step, time and
-   residuals; the field appears with the first stored snapshot and moves on by itself ("following the latest" in the
-   strip, the "follow latest" box ticked).
+2. Click a case in the Project panel (the lid cavity, a few hundred steps), then Run (or F5). At once the run is selected
+   in the Runs panel, the Viewport is in front and the strip at the bottom shows the start; the first Run of a session
+   may wait about 5 s while the runner starts (question 11; the strip counts the seconds). Then the strip shows the run's
+   state, step, time and residuals, and the field appears with the first stored snapshot and moves on by itself
+   ("following the latest" in the strip, the "follow latest" box ticked).
 3. While it runs, drag the slider back: the box clears, the view stays, the slider keeps growing. Tick the box (or press
    `>|`): it jumps to the newest and follows again. Check that the Plots panel's vertical line follows the shown step.
 4. Pause, Resume and Cancel in the strip on a longer run: the state in the strip changes within about a second.
@@ -305,6 +328,10 @@ has the focus; the scripts on the maintainer's shells; the Linux runs of every p
    on Linux here)?
 10. The scripts start the Studio in the foreground (the terminal shows its messages and waits for the window to close).
     Accept, or start it detached?
+11. The first Run of a session waits about 5.3 s on this host before the run starts (G1, G1b; ADR 0133 R9 measured
+    5.166 s): `ensure_runner` gives the PowerShell route 5 s to take the lock, and on this host it does not, so the direct
+    start follows (which route started the runner is not recorded). The strip counts the wait. Investigate the
+    PowerShell route on this host, or shorten its wait (an `rcfd-runner` change, ADR 0123 amendment 2)?
 
 ## Files
 

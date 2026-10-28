@@ -115,4 +115,8 @@ pub fn strip(ui: &mut egui::Ui, st: &mut Studio) {
             st.say(m);
         }
     }
+    // a start in flight (the runner may take seconds to start): keep its age counting, no worker wakes the UI then
+    if st.quick.starting.is_some() {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+    }
 }
