@@ -9,6 +9,7 @@
 //! sidebar ([`chat`], ADR 0134) has its own worker and turn threads. Studio-started runs store fields by default, and
 //! a run without fields to show says why ([`store_plan`], [`run_fields`], [`fields_ui`], ADR 0140).
 
+pub mod bins;
 pub mod case_edit;
 pub mod case_starter;
 pub mod case_starter_ui;
@@ -20,6 +21,8 @@ pub mod monitors;
 pub mod poll;
 pub mod prefs;
 pub mod project_view;
+pub mod quick_run;
+pub mod quick_run_ui;
 pub mod run_fields;
 pub mod runs;
 pub mod schema_model;
