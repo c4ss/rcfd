@@ -4373,7 +4373,9 @@ mod tests {
 
     /// Differentially heated cavity through the settings tree (nondimensional units: alpha = 1,
     /// H = 1, g = Ra Pr), Ra = 1e3, 32x32 cells graded 4:1: Nu from the heat_flow reports against
-    /// de Vahl Davis (1983), Nu = 1.118.
+    /// de Vahl Davis (1983), Nu = 1.118. The t_mid probe sits inside the cell left of and below the centre: (0.5, 0.5)
+    /// is a vertex shared by four cells, so the nearest-centre pick was decided by last-ulp grading rounding (`powi`
+    /// differs between platforms) and landed on a different cell on Linux than on Windows.
     #[test]
     fn heated_cavity_case_reproduces_the_benchmark_nusselt_number() {
         let toml = r#"
@@ -4428,7 +4430,7 @@ expression = "-q_hot / (conductivity * 1 [K] * 0.03125 [m])"
 [reports.t_mid]
 type = "probe"
 field = "T"
-point = [0.5, 0.5, 0.015]
+point = [0.47, 0.47, 0.015]
 "#;
         let case = Case::parse_toml(toml).unwrap();
         let mut sim = Simulation::new(&case).unwrap();
