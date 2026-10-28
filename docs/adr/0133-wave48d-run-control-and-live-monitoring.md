@@ -97,7 +97,8 @@ exactly as before (the same code path). `"f32"`: every stored field is written w
 nearest single, bound `f32_error_bound`). The solver is unchanged by the key (the hook only reads it). A continued run appends with
 the precision of its own case. Consequence read from code, not changed here: like every schema addition (ADR 0124's three keys),
 the new default enters `SettingsTree::content_hash`, so the settings hash of a case container (`rcfd-io` `save_case`) saved before
-this commit no longer matches on `load_case`; no such file is committed in the repository.
+this commit no longer matches on `load_case`; no such file is committed in the repository. (The addendum, question 5, lists
+every use of that hash found afterwards; checkpoints are not among them.)
 
 **Model and threads (D1, D2 as implemented).**
 1. Modules: `runs.rs` (run rows, queue order, start plan and store proposal, runner budgets), `poll.rs` (the run worker: one
@@ -311,10 +312,12 @@ Also run: `rcfd-cli` `workspace_graph` (3), `run_flags_w48a` (A6, A7), `cli` (8)
 Reported, not limited:
 * R6b with every run's `status.json` replaced before each tick (as moving runs): median 6.700 ms (min 5.552, max 8.680). The
   fresh `status.json` of each moving run is still opened every tick (about 1.5 ms each here).
-* R2 probed every about 0.4 s, not every 100 ms: each `pid_alive` runs `tasklist` (about 0.15-0.2 s), so the 2 s gap had 5
-  probe rounds of both pids.
 
 Deviations and notes:
+* R2 set-up deviation: amendment 1 registered a probe every 100 ms; the test sleeps 100 ms between rounds, but each
+  `pid_alive` runs `tasklist` (about 0.15-0.2 s), so the 2 s gap had 5 rounds of both pids, about one every 0.4 s. The
+  limit was met; the evidence is coarser than registered (a solver dying and being replaced within 0.4 s would not be
+  seen). Not re-run.
 * R6 missed; amendment 4 changed the reader and registered R6b (same limit) before it ran. The known-miss test keeps the
   missed set-up through the `reopen_files` switch.
 * Amendment 3: R10 case (f) was not a valid case (test-code defect), corrected before the counted run.
@@ -329,8 +332,10 @@ Deviations and notes:
   step rule from `max_iterations`.
 
 Not run: the "Not in CI" items (a real window: smooth plots with two streaming runs, responsiveness with 4 runs; closing the
-Studio by hand and checking Task Manager); the Studio tests in a debug build (R6 skips there; the process tests use a quarter
-of the steps); Linux; the workspace gate and workspace-wide clippy; `cargo deny` (not installed).
+Studio by hand and checking Task Manager); the Studio tests in a debug build, the profile of a plain `cargo test
+--workspace` (R6 skips there; R1-R3 use a quarter of the steps; the B9 live parity test and R8, R9 do not scale their 3000,
+400 and 2000 steps); Linux (the new process tests R1-R3, R8, R9 and the live parity test have never run there: a CI risk);
+the workspace gate and workspace-wide clippy; `cargo deny` (not installed).
 
 Questions for the maintainer:
 1. Is the R6 handling accepted: the registered R6 stays an ignored known miss, and R6b (kept read handles, registered in
@@ -341,9 +346,14 @@ Questions for the maintainer:
    `rcfd-api` expose that test instead?
 4. For `compressible` and other non-`piso`/`pimple` algorithms the store proposal uses `max_iterations` as the step count.
    Should the Studio ask the solver (a check run) for the step budget instead?
-5. Adding a schema key changes `SettingsTree::content_hash`, so case containers saved before (`rcfd-io` `save_case`) fail
-   `load_case` with "settings hash mismatch" (read from code, the same for ADR 0124's keys). Leave, or make the container
-   hash ignore keys at their default (a separate change)?
+5. Adding a schema key changes `SettingsTree::content_hash` of every case (read from code; the same happened with ADR
+   0124's three keys). What that touches, from the callers: the `case_hash` of the solver's `start` event and of
+   `journal.get` changes for every case; `journal.replay` of a journal recorded before 7644fcc replays but reports
+   `matches: false`; `rcfd_io::container::load_case` refuses a case container saved before ("settings hash mismatch"), but
+   no code outside `rcfd-io`'s own tests calls `save_case` or `load_case`. Checkpoints and `--restart-from` are not
+   touched: `restart.rcfd` and `rcfd-post` checkpoints compare only the mesh hash, so a run started before this commit
+   can still be continued (read from code, not run). Leave as with ADR 0124, or make these hashes ignore keys at their
+   default (a separate change)?
 
 ## Files
 
