@@ -7,7 +7,7 @@ project is opened and a run is selected.
 | Folder | What is inside | Start with |
 |---|---|---|
 | `wind-tunnel/` | flow past a cylinder (vortex shedding), a NACA 0012 aerofoil (k-omega SST) and a laminar backward-facing step, each with a variant and both runs | `wind-tunnel/notes/README.md` |
-| `quick-start/` | a lid-driven cavity and a heated cavity, each with a variant and both runs; every run takes about a second | `quick-start/notes/README.md` |
+| `quick-start/` | a lid-driven cavity and a heated cavity, each with a variant and both runs; every run takes one or two seconds | `quick-start/notes/README.md` |
 
 Open one with `target\release\rcfd-studio.exe example-projects\wind-tunnel` after
 `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`. To start runs of your own, copy the folder out of the

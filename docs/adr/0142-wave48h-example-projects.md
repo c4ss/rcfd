@@ -1,6 +1,7 @@
 # ADR 0142: Wave 48H, finished example projects: a wind tunnel and a quick start that open straight to a picture
 
-Status: **PROPOSED 2026-10-28** (registered before any counted run; results in the addendum). Written at main f558285
+Status: **PROPOSED 2026-10-28** (checks registered before any counted run; amendment 1 before the corrected
+post-processing; results in the addendum: every registered limit met except two predicted known misses). Written at main f558285
 (waves 47 and 48, the 48G case starter and store-fields default, the Linux gate fixes). Job 5 of the "first run to first
 picture" work; jobs 1 (mesh preview from a case), 3 (store fields by default, merged as ADR 0140) and 4 (one-click start
 and follow) are done on other branches and edit the Studio, which this job does not. House rules of ADRs 0110-0140 apply:
@@ -224,6 +225,104 @@ and the quick-start project were not written. Nothing else of the runs was looke
    limit stays; that part of G3 becomes the ignored test `g3_cylinders_cross_at_least_7_times_known_miss`; the other G3
    comparisons are a separate test with their limits unchanged.
 3. The cylinder note's sentence on the method follows the corrected rule.
+
+## Addendum: results (2026-10-28, branch `worktree-agent-a62d8ecd6bf092d6d`, release build of f558285's solver and runner)
+
+Commits: acc912b (registration), 47b4873 (amendment 1), 4abace8 (the generated examples), then this addendum. The
+counted rebuild: `python scripts/make_example_projects.py` at acc912b ran the six wind-tunnel runs through the run
+service (first launch 15:21:29.9, last finish 15:24:35.7 UTC, one solver at a time, one thread) and stopped in its
+post-processing (amendment 1); after amendment 1, `--project wind-tunnel --summarise-only` wrote the wind-tunnel
+ledger and run table from those run folders, and `--project quick-start` built the quick-start project (15:26:41, 6 s)
+and the manifest; its own `--check` reported 0 problems. The tests ran in release with `--test-threads 1`, output to
+files. The machine was shared with three other agents' builds and a Visual Studio update that removed `link.exe` for
+about 15 minutes: two compile attempts of the staleness test failed at the link step then; nothing counted ran while it
+was missing.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| G1 | 10 of 10 finished with the registered solver states | cylinders `finished` at step 1280, time 80, exit 0; aerofoils `not_converged` at 2000, exit 5; steps `converged` at 740 and 429; cavities at 121 and 158; heated cavities at 339 and 278 | pass |
+| G2 | each run <= 180 s, all <= 20 min | 18.4, 16.4 (cylinders), 58.6, 55.7 (aerofoils), 23.4, 13.4 (steps), 0.6, 0.7 (cavities), 2.0, 2.1 s (heated cavities); 191.2 s in all | pass |
+| G3 crossings | >= 7 upward crossings of `cl` in the second half | Re 100: **6**; Re 200: 7 | **miss** (predicted by amendment 1): `g3_cylinders_cross_at_least_7_times_known_miss`, ignored, limit intact |
+| G3 other | the ten comparisons | `cl_amplitude` 0.309 and 0.630; St 0.1517 < 0.1751; 0 < `cl` 0.1988 < 0.3482; 0 < `x_reattach` 4.248 < 5.888 < 15; 1 < `nu_hot` 1.119 < 2.257; `lid_drag` -0.00491 and -0.00161 | pass |
+| G3 control | the 4 swapped variant comparisons fail | 4 of 4 fail | as required |
+| S1 | open, no migration, 0 issues, 0 skipped, runs finished with their case, cases equal snapshots, stores open from their footer, verify and agree with `index.json` | wind-tunnel 6 runs, quick-start 4 runs, 0 problems | pass |
+| S1 controls | (a)-(d) reported | (a) "case.snapshot: hash fnv64:5588... does not match run.json fnv64:60c6..." and the case/snapshot difference; (b) "store has 24 snapshots, index.json 25" and the scanned index; (c) 0: "migration 0 -> 1: v0: missing string `title`", 2: "schema_version 2 is newer than supported 1"; (d) "cases/cavity-re100.toml changed since run ..." | as required |
+| S2 | no runtime or pruned files | `.rcfd/` holds `.gitignore` only; no stream, VTU or checkpoint in 10 runs | pass |
+| S3 | 10 of 10 validate through rcfd-api | exit 0, 0 error-level rules each (cells 1024, 1024, 1600, 1600, 3072, 3072, 6144, 6144, 8000, 8000); the aerofoils warn SV101 | pass |
+| E1 generator cases | 8 of 8 through the editor's calls | 8 of 8 open and valid, 0 diagnostics | pass |
+| E1 aerofoil cases | validate through the editor's calls | open, **not valid**: `mesh.file`: ".\../meshes/naca0012-ogrid: io error: The system cannot find the path specified. (os error 3)" | **miss** (predicted): `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss`, ignored, limit intact |
+| E2 | by path valid; by text invalid at `mesh.file` | both aerofoil cases: by path valid, 0 diagnostics; by text the diagnostic above | pass |
+| S4 | angle consistent | 4 and 2 degrees from the cases, equal in the ledger; far-field, lift and drag directions within 1e-15 | pass |
+| S5 | mesh hash, cells, snapshots, fields, residual steps, end time, reports | every run: store mesh hash equals the mesh built from `case.snapshot`; snapshots 80, 80, 10, 10, 19, 11, 25, 32, 34, 28, all f32 with the case's fields; steps 1..N; cylinder end time 80; reports bit-equal to the last residual line | pass |
+| S6 | ledger | 0 skipped lines, 10 entries valid; reports bit-equal; derived recomputed within 1e-9: periods 5 and 6, St 0.15167 and 0.17514, mean C_D 1.32326 and 1.29138, C_L amplitude 0.30905 and 0.63030; reattachment 5.8881 and 4.2480, upper bubble 4.6519-10.4177 and 3.8563-5.2706 | pass |
+| S7 | notes' paths exist; README names every run | 61 (wind-tunnel) and 22 (quick-start) paths, all exist | pass |
+| S7 control | a missing file reported | `cases/no-such-case.toml` reported (and, in the copy outside the repository, the `../../` paths) | as required |
+| S8 | caps | wind-tunnel 27 404 458 bytes (cap 35 000 000), quick-start 4 250 536 (cap 6 000 000), total 31 658 359 (cap 40 000 000) | pass |
+| S9 | recipe | 6144 cells; aerofoil points off the surface by at most 4.4e-15, far-field points off the circle by 7.1e-15 | pass |
+| P1 | `--check` 0 problems; self-test passes | `--check` 0 problems (end of the build); `python -m unittest scripts/test_make_example_projects.py`: 8 passed (the committed examples fresh; the tampered copy reported: changed case, index/store mismatch, runtime file) | pass |
+| R1 | the D10 files of 10 runs and the 5 polyMesh files byte-equal | both projects rebuilt in a temporary copy (201 s): 50 of 50 run files and 5 of 5 polyMesh files byte-equal | pass |
+| H1 | the Studio model: lists, every run `Ready` at its last snapshot showing `p`, the editor | wind-tunnel 6 cases, 6 runs, quick-start 4 and 4, 0 skipped; every run `Ready` with 80, 80, 10, 10, 19, 11, 25, 32, 34, 28 snapshots (the stores' counts), `p` shown at the last snapshot, drawn as 2D; 8 generator cases valid in the Studio's own Case editor | pass |
+| H1 control | the 2 aerofoil cases fail in the editor | not valid: "mesh.file: .\../meshes/naca0012-ogrid: io error: The system cannot find the path specified. (os error 3)" (E1's miss, through the Studio) | as predicted |
+| H2 | real binary | not run: the task limits Studio trials to headless tests, and the hook opens a window | not run |
+
+No known miss other than the two predicted ones (E1 for the aerofoil cases, G3's crossing count for the Re 100 cylinder).
+
+**Sizes** (bytes; every file of the committed runs): cylinder runs 5 554 735 and 5 553 650 (store 4 782 536 each, output
+523 067, residuals 240 587); aerofoil runs 3 706 139 and 3 706 323 (store 2 574 878, output 744 858); step runs 4 222 831
+(Re 800) and 3 320 728 (store 3 904 422 and 3 131 998); cavity runs 649 368 and 755 226; heated-cavity runs 1 512 282 and
+1 319 956; the aerofoil polyMesh 1 306 825. Projects on the final tree: wind-tunnel 27 404 656, quick-start 4 250 540
+(as `manifest.json` records them); with `README.md`, `manifest.json` and `.gitattributes` 31 658 565 bytes in all (S8's
+second run). The ADR 0140 D4 estimates of the
+stores were within 2 % (for example 4.85 MB estimated for 81 cylinder snapshots, 4.78 MB measured for 80).
+
+**What the runs give** (for orientation; none of it is a validation, each with one coarse mesh):
+* Cylinder: St 0.1517 (5 periods), mean C_D 1.323, C_L amplitude 0.309 at Re 100; St 0.1751 (6 periods), mean C_D 1.291,
+  C_L amplitude 0.630 at Re 200. The repository's Re 100 validation set-up (4 times the cells) gave St 0.159 to 0.165 and
+  C_D 1.310 to 1.344.
+* Aerofoil (SST, Re 6e6): C_L 0.3482 at 4 degrees and 0.1988 at 2 degrees, so 0.0747 per degree between them, about 30 %
+  below the slope of Ladson's data as the repository reads it (about 0.108); C_D 0.0254 and 0.0189 against the measured
+  minimum 0.0080. Both runs end at the cap with res_u about 1.5e-6.
+* Step: reattachment at 5.888 H (Re 800) and 4.248 H (Re 400); the upper bubble from 4.652 to 10.418 H (Re 800) and 3.856 to
+  5.271 H (Re 400). The values the repository quotes for Re 800 (secondary sources): 6.10 H and 4.85 to 10.48 H; for
+  Re 400 (an independent code, ER 2): 8.10 step heights = 4.05 H.
+* Heated cavity: hot-wall Nusselt number 1.1188 (Ra 1e3) and 2.2572 (Ra 1e4); de Vahl Davis 1.118 and 2.243.
+* Lid-driven cavity: `lid_drag` -0.004911 (Re 100) and -0.001609 (Re 400) N on the 0.03125 m deep cell layer.
+
+**Deviations and notes.**
+1. The task names "the lid-driven cavity and the heated cavity (runnable TOMLs from the 48G list)": the 48G list (ADR
+   0139) has no such files, so their case files were written from the cavity tutorial's case and ADR 0092's heated-cavity
+   set-up (D1), each with a store and reports added.
+2. The step is Gartling's laminar expansion-ratio-2 step, not the descriptor's turbulent Driver-Seegmiller step (D1, its
+   note); the aerofoil uses ADR 0092's mesh file, so its two cases miss E1 in the Studio's editor.
+3. The aerofoil variant is at 2 degrees (8 degrees did not converge in the smoke); the cylinder's time step is a power
+   of two (the remainder-step defect of question 6).
+4. Amendment 1: D8's shedding window was defective; the post-processing ran again on the counted runs, which were not
+   repeated; G3's crossing count is a known miss.
+5. D1's table estimated 81 cylinder and 11 aerofoil snapshots; the stores hold 80 and 10, because the time rule and the
+   step rule store no snapshot of the initial state (t = 1 to 80; iterations 200 to 2000). No limit depends on it (S5:
+   1 to 100); the notes give the stored counts.
+6. The project manifest `rcfd-project.json` is written by the script (no command line creates one): the four documented
+   fields. `.rcfd/` is in git only through its `.gitignore` (`*`, `!.gitignore`), so `validate()` finds the folder in a
+   fresh checkout and no runtime state can be committed.
+7. `log.txt` and the solver events of each run name the checkpoint `output/restart.rcfd`, which the rebuild removes (D5).
+8. The rebuild's post-processing is deterministic: a second `--summarise-only` on the same runs rewrote the four
+   ledgers and run tables byte for byte (only `manifest.json`'s byte counts changed after note edits).
+9. H2 (the real Studio binary with ADR 0132's smoke hook) was not run: the task allows only headless trials of the Studio,
+   and the hook opens a window on the desktop.
+
+**Not run.** The "Not in CI" checklist (a person at the window); H2; Linux (the gate runs the new tests there; the
+example folders are read with `-text` and LF-only files, so the bytes are the same; not run on Linux here); the
+workspace gate and workspace-wide clippy (`cargo clippy -p rcfd-mcp -p rcfd-studio --tests` only); `cargo deny` (no new
+dependency).
+
+**New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
+
+**Code after the registered runs** (behaviour-neutral): `cargo clippy --release -p rcfd-mcp -p rcfd-studio --tests -- -D
+warnings` found two lints in the new staleness test (`type_complexity`, `neg_cmp_op_on_partial_ord`), fixed with a type
+alias and `partial_cmp`; clippy is then clean and `cargo fmt -p rcfd-mcp -p rcfd-studio -- --check` passes. The staleness
+tests ran again on the fixed file: 15 passed, 2 ignored, the same values. Notes were edited after the runs (stored
+snapshot counts, the aerofoil's measured drift, wording); `--summarise-only` then rewrote the ledgers and run tables byte
+for byte equal and only `manifest.json`'s byte counts changed; `--check` and the self-test pass on the final tree.
 
 ## Questions for the maintainer (open at registration; the addendum may add to them)
 

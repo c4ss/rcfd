@@ -1,7 +1,7 @@
 # Quick start: lid-driven cavity and heated cavity
 
 This is the small finished example project of the rcfd Studio (ADR 0142): two classic closed-box flows, each as a case,
-a variant and a completed run of both, made by the real solver through the run service. Every run takes about a second,
+a variant and a completed run of both, made by the real solver through the run service. Every run takes one or two seconds,
 so this is the project to try the Studio's own run controls on.
 
 | Problem | Cases | What it shows |

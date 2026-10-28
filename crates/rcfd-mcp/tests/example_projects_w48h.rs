@@ -164,7 +164,11 @@ fn project_problems(dir: &Path, runs: &[(String, String)]) -> Vec<String> {
     out
 }
 
-fn all_projects() -> Vec<(String, PathBuf, Vec<(String, String)>)> {
+/// (run id, case) of the committed runs of one project.
+type Committed = Vec<(String, String)>;
+
+/// Every example project: (name, folder, committed runs).
+fn all_projects() -> Vec<(String, PathBuf, Committed)> {
     let root = examples();
     manifest(&root)
         .into_iter()
@@ -611,7 +615,11 @@ fn s6_ledger_matches_the_runs() {
             let mut checked = Vec::new();
             if e.metric("strouhal").is_some() {
                 let (st, cd, amp, periods) = shedding(&read_json(&run.join("output").join("monitors.json")));
-                assert_eq!(e.metric("periods").map(|q| q.value), Some(periods as f64), "{name}/{id}: periods");
+                assert_eq!(
+                    e.metric("periods").map(|q| q.value),
+                    Some(periods as f64),
+                    "{name}/{id}: periods"
+                );
                 checked.push(format!("periods {periods}"));
                 for (k, v) in [("strouhal", st), ("cd_mean", cd), ("cl_amplitude", amp)] {
                     let q = e.metric(k).unwrap().value;
@@ -713,7 +721,7 @@ fn g1_g2_runs_finished_as_registered_within_their_time() {
 fn g3_ordered(pairs: &[(&str, f64, f64)]) -> Vec<String> {
     pairs
         .iter()
-        .filter(|(_, lo, hi)| !(lo < hi))
+        .filter(|(_, lo, hi)| lo.partial_cmp(hi) != Some(std::cmp::Ordering::Less))
         .map(|(what, lo, hi)| format!("{what}: {lo} is not below {hi}"))
         .collect()
 }
