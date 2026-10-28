@@ -20,11 +20,15 @@ step to the next, does not decay (the user's dt 0.0625 run held it from t = 2 to
 (64 x 256, no push, a ramped start, PIMPLE with weak relaxation) it grows until the divergence guard stops the run.
 
 It is **not**: the Studio's save of the case (the resolved settings differ only in nx, ny, dt; the two files give byte-identical
-runs), the display (every rendered pixel shows exactly the stored cell value), the Courant number (256 x 48 at Courant 10 is
-clean; 64 x 256 at Courant 0.64 diverges), the transient Rhie-Chow term (`ddt_correction = false` still spoky), the convection
-scheme (upwind still spoky), non-orthogonal correction (the mesh is orthogonal to 1e-11), the linear-solver tolerances (1e-12
-still spoky; pressure solves take about 10 iterations against a cap of 3000), or the start (a restart from the developed 64 x 48
-field and a ramped start both fail).
+runs), the display (every rendered pixel shows exactly the stored cell value), the Courant number (256 x 48 at dt 1/16 runs clean
+at a solver Courant number of 6.4 to 8.0; 64 x 256 at dt 1/64 starts at Courant 1.03 and diverges; the Courant numbers near 100
+of the spoky runs come from the spurious velocities, after the start), the cell Peclet number (2U h / nu at the wall falls with
+refinement: 9.9 around and 2.7 across the first cell on 64 x 48, 2.5 and 0.5 on 256 x 256), the transient Rhie-Chow term
+(`ddt_correction = false` still spoky), the convection scheme (upwind still spoky), non-orthogonal correction (the mesh is
+orthogonal to 1e-11; skewness 0.006; the in-plane wall aspect is 4.7 against 3.6 on 64 x 48), the linear-solver tolerances
+(1e-12 still spoky; pressure solves take about 10 iterations against a cap of 3000), the wall pressure condition (at a
+fixed-velocity wall the solver uses zero gradient whatever the case says, and `pressure_update = "bernoulli"` applies only to
+`target_mass_flow_outlet`), or the start (a restart from the developed 64 x 48 field and a ramped start both fail).
 
 ## What to do on the 256 x 256 case (workaround, no code change)
 
@@ -37,13 +41,28 @@ has 0.0057 at t = 3, the user's run 52.7):
 | `[solver] time_advance = "fractional_step"` (recommended: the cheapest accepted) | 1.9e-7 / 7.9e-8 / 4.1e-8 | 1.466 / 1.291 | 29 s |
 | `[solver] n_correctors = 3` (stays PISO), dt 1/64 | 2.7e-7 / 9.2e-8 / 5.3e-8 | 1.466 / 1.296 | 49 s |
 | `[solver] n_correctors = 3` with the user's dt 0.0156 | 2.8e-7 / 9.1e-8 / 4.3e-8 | 1.466 / 1.296 | 49 s |
+| `[solver] dt = 0.00390625` (1/256, PISO as it is; 4 times the steps) | 1.2e-7 / 1.1e-7 / 4.3e-8, no growth at any stored time | 1.465 / 1.303 | 106 s (two threads) |
 
-For comparison the 128 x 96 run (clean) has cd 1.468 / 1.286. Also clean, measured to t = 3 or 10: `n_correctors = 4`; dt 1/256
-(4 times the steps); and keeping the defaults but lowering `mesh.grading` to about 11 at ny = 256, which keeps the 64 x 48
-first cell and puts the added radial cells into the field instead of the wall (closer to "a higher resolution far field").
+For comparison the 128 x 96 run (clean) has cd 1.468 / 1.286. The first row is the registered recommendation (least wall time).
+Two things to know before choosing:
+
+* With `time_advance = "fractional_step"` the p residual in the Studio's plot is **1.0 at every step, by design**: that path
+  solves for the pressure increment starting from zero each step (`crates/rcfd-fv/src/pimple/fractional.rs`), and the normalised
+  initial residual of a zero start is exactly 1 (`normalised_residual` in `simple.rs`). A flat p residual of 1.0 there does not
+  mean "not converging". With `n_correctors = 3` the residuals look like the 64 x 48 case (p about 0.0014, u about 0.001
+  per step), so it is the setting to pick if the residual plot should stay readable; it costs about 1.7 times the wall time here.
+* Every workaround was run to t = 10 only. The case's end time is 80 and shedding starts at about 40 D/U; the user's dt 0.0625
+  run kept its spokes for 70 time units before diverging, so clean to t = 10 does not by itself prove the shedding phase. At the
+  measured rates (one thread, a shared machine) a full 80 s run takes about 40 min with `fractional_step` and about 65 min with
+  `n_correctors = 3`. For reference the user's own 256 x 256 run ran at 22.8 s per simulated second.
+
+Also clean, measured to t = 3 or 10: `n_correctors = 4` (to t = 3); and keeping the defaults but
+lowering `mesh.grading` to about 11 at ny = 256 (47 s per simulated second, clean to t = 10), which keeps the 64 x 48 first cell
+and puts the added radial cells into the field instead of the wall: closest to "a higher resolution far field".
 Do not use: PIMPLE with `n_outer = 2` or `4` and `alpha_u = alpha_p = 0.9` (both diverged), `ddt_correction = false`,
-`convection = "upwind"`, `time_scheme = "bdf2"` (still spoky, M_hf 15). Rule of thumb for the default PISO on this O-grid: keep
-nu dt / dr1^2 below about 6, or use one of the settings above.
+`convection = "upwind"`, `time_scheme = "bdf2"` (still spoky, M_hf 15). Rule of thumb on this O-grid (in-plane wall aspect 3.6 to
+4.7) with the default PISO: clean up to nu dt / dr1^2 = 6.5, spoky from 11.4. It is only a guide: on the stretched 64 x 256 wall
+layer (aspect 18.8) even three correctors stay spoky at 22.8, and the pressure-lag estimate below is the real test.
 
 What to expect when it is right: at Re = 100 the impulsive start gives one large pressure impulse in the first step (cd 33 at
 dt 1/16, larger at smaller dt), the force then settles within about one time unit (cd 1.47 at t = 3, 1.29 at t = 10 on every
@@ -62,9 +81,9 @@ faithfully, not the cause.
 | R256 | 256 x 256, 1/64 | 22.8 | 42.6 / 48.3 / 44.0 (44.9 at t = 30) | 16.2 | spoky |
 | RU | 256 x 256, 0.0156 (bit-identical to the user's run) | 22.7 | 46.2 / 52.7 / 10.4 | 18.3 | spoky |
 | B1 | 256 x 48, 1/64 (nx only) | 0.84 | 1.2e-6 / 1.1e-6 / 9e-7 | 0.001 | clean |
-| B1b | 256 x 48, 1/16 (Courant 10) | 3.35 | 1.5e-6 / 1.1e-6 / 9e-7 | 0.004 | clean |
+| B1b | 256 x 48, 1/16 (solver Courant 6.4 to 8.0) | 3.35 | 1.5e-6 / 1.1e-6 / 9e-7 | 0.004 | clean |
 | B2 | 64 x 256, 1/16 (ny only) | 91 | 6.6e5 at t = 1 | - | diverged (step 19) |
-| B2b | 64 x 256, 1/64 (Courant 0.64) | 22.8 | - | - | diverged (step 30) |
+| B2b | 64 x 256, 1/64 (circumferential Courant estimate 0.64; solver Courant 1.03 at step 1) | 22.8 | - | - | diverged (step 30) |
 | B2c | 64 x 256, 1/64, 3 correctors | 22.8 | 253 / 282 | 69.9 | spoky |
 | B3 | 256 x 256, grading 10.88, 1/64 | 0.84 | 3.8e-7 / 3.1e-7 / 2.5e-7 | 0.001 | clean |
 | B4a, B4b, B4c | 256 x 256, dt 1/16, 1/128, 1/256 | 91, 11.4, 5.7 | 28 / 57; 30 / 26; 1.2e-7 / 1.1e-7 | 24.7; 11.9; 0.0003 | spoky; spoky; clean |
@@ -75,6 +94,7 @@ faithfully, not the cause.
 | B8a, B8b | R256 + 3, 4 correctors | 22.8 | 9.2e-8, 9.1e-8 at t = 3 | 0.001 | clean |
 | W1, W2 | R256 + PIMPLE n_outer 2, 4 (alpha 0.9) | 22.8 | -, 78.6 at t = 1 | - | diverged (steps 39, 81) |
 | W3, W5, W6 | fractional step; 3 correctors; 3 correctors at dt 0.0156 | 22.8 | see the workaround table | 0.001 | clean |
+| W4 | 256 x 256, dt 1/256 to t = 10 | 5.7 | see the workaround table | 0.0003 | clean |
 
 The user's own stores: 64 x 48 (0.0057 at t = 3, identical to R64); 256 x 256 dt 0.0625 (28 / 57 / 53, 48 to 69 up to t = 71,
 then diverged); 256 x 256 dt 0.0156 (46 / 53); 512 x 512 dt 0.0625 (369 at t = 1, diverged at step 22).

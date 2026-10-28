@@ -5,8 +5,11 @@
 //!   and settings, so that the ADR 0073 pressure-lag estimate can run with two correctors (the case path enables it with one).
 //! * `w48t_k1_..._known_miss` (amendment 2): the default PISO (two correctors) on the 64 x 256 O-grid (first radial cell
 //!   0.00262 D) through `Simulation` to t = 3 must not be stopped by the divergence guard and must be clean, M_hf <= 0.0114. It
-//!   diverges at step 30: a known miss, ignored with the limit intact. `w48t_k2_...` is the same with `n_correctors = 3`.
+//!   diverges at step 30: a known miss, ignored with the limit intact. `w48t_k2_..._known_miss` is the same with
+//!   `n_correctors = 3`: it reaches t = 3 with M_hf 282, a second known miss.
 //! * `w48t_mhf_control_cross_check` (amendment 2, prints): the Rust M_hf against `scripts/w48t_spoke_metrics.py` on the control.
+//! * `w48t_w3_...`, `w48t_w5_...` (heavy, ignored, pass): the accepted workarounds on the user's 256 x 256 mesh,
+//!   `time_advance = "fractional_step"` and `n_correctors = 3`, clean at t = 3.
 //!
 //! Every test prints what it measured before it asserts.
 

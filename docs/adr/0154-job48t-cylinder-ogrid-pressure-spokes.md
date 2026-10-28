@@ -304,7 +304,7 @@ radial cells at the wall (first cell 0.01366 -> 0.00262 D).
 | F-a | (a) rejected if any of four | lambda* 4.5 to 6 cells (> 4: criterion not met); no decay (L7); smooth starts B6 spoky, B6r diverged; jumpy on 256 x 256 while 64 x 48 and 128 x 96 are smooth at the same Courant number | **(a) rejected** (three criteria) |
 | L6 | lambda* in cells within 1.5x while in D >= 1.8x apart | U2 (256) 7.31 cells, U5 (512) 7.21 cells at t = 1; 0.103 D against 0.052 D at r = 0.6 | **numerical** |
 | L7 | decays if M_hf(30)/M_hf(10) <= 0.5 | R256 44.9/44.0 = 1.02; U2 62.7/52.9 = 1.19 (48 to 69 up to t = 71, then diverged) | **persists** |
-| Bisection: H-Dw / H-Co | monotone in one with one threshold | with PISO-2: clean at nu dt/dr1^2 0.84 (B1, B3), 3.35 (R64, B1b), 5.7 (B4c), 6.5 (R128); spoky or diverged at 11.4, 22.7, 22.8, 91. Courant: clean at 10 (B1b), diverged at 0.64 (B2b) | **H-Dw supported, H-Co rejected** |
+| Bisection: H-Dw / H-Co | monotone in one with one threshold | with PISO-2: clean at nu dt/dr1^2 0.84 (B1, B3), 3.35 (R64, B1b), 5.7 (B4c), 6.5 (R128); spoky or diverged at 11.4, 22.7, 22.8, 91. Courant (the solver's maximum, `monitors.csv`): B1b clean at 6.4 to 8.0; B2b diverged from 1.03 at step 1 (circumferential estimate 0.64), B4b spoky from 0.82; the values near 100 of R256 and RU appear only after the start (spurious velocities). Cell Peclet 2U h/nu at the wall (not registered, printed): 9.9 around and 2.7 across the first cell on 64 x 48, 4.9 and 1.4 on 128 x 96, 2.5 and 0.5 on 256 x 256, 9.8 and 0.5 on 64 x 256: falls with refinement, not the trigger | **H-Dw supported, H-Co rejected** (B1b alone carries the rejection) |
 | H-Choi (B11) | removes | 49.1 at t = 3 (R256 48.3) | no effect, rejected |
 | H-lin (B10) | removes | 45.3 at t = 3; pressure solves take 10 to 14 iterations (DG1 `p_iters`), cap 3000 | no effect, rejected |
 | H-conv (B7) | removes | 40.3 (0.83 x) | no effect, rejected |
@@ -313,10 +313,10 @@ radial cells at the wall (first cell 0.01366 -> 0.00262 D).
 | B12 (BDF2) | reduces if <= 0.3 x | 15.3 = 0.317 x | no effect (just above the reduce line) |
 | B8a, B8b (3, 4 correctors) | removes | 9.2e-8, 9.1e-8 at t = 3 | **removes** |
 | B3 (grading 10.88), B4c (dt 1/256) | removes | 3.1e-7, 1.1e-7 at t = 3 | **removes** |
-| W (workaround rule) | clean at 1, 3, 10; smooth; cd(10) within 10 % of R128's 1.286 | W3 fractional step: 1.9e-7 / 7.9e-8 / 4.1e-8, cd(10) 1.291, 29 s per simulated second. W5 three correctors: 2.7e-7 / 9.2e-8 / 5.3e-8, 1.296, 49 s. W6 (user's dt 0.0156, three correctors): 2.8e-7 / 9.1e-8 / 4.3e-8, 1.296, 49 s. W4: see below. W1, W2 (PIMPLE n_outer 2, 4, alpha 0.9): diverged | W3, W5, W6 **accepted**; W1, W2 rejected |
+| W (workaround rule) | clean at 1, 3, 10; smooth; cd(10) within 10 % of R128's 1.286 | W3 fractional step: 1.9e-7 / 7.9e-8 / 4.1e-8, cd(10) 1.291, 29 s per simulated second (its median initial p residual is 1.0 by construction: the incremental path solves for the increment from zero every step, and `normalised_residual` of a zero start is 1). W5 three correctors: 2.7e-7 / 9.2e-8 / 5.3e-8, 1.296, 49 s. W6 (user's dt 0.0156, three correctors): 2.8e-7 / 9.1e-8 / 4.3e-8, 1.296, 49 s. W4 (dt 1/256, run because B4c was clean): 1.2e-7 / 1.1e-7 / 4.3e-8 with no growth at any stored time 1 to 10 (largest 1.6e-7 at t = 2), cd(10) 1.303, cd change 0.0003 per step, 106 s per simulated second at 2 threads. W1, W2 (PIMPLE n_outer 2, 4, alpha 0.9): diverged | W3, W4, W5, W6 **accepted**; W1, W2 rejected |
 | Recommendation | least wall time per simulated second | W3, `solver.time_advance = "fractional_step"` | as registered |
 | E1 | bit-identical after 16 steps | p, ux, uy bit-identical | **met** |
-| DG1 | rho >= 1 exactly on spoky/diverged twins | 8 of 9 arms agree (failing twins rho 1.68 to 4.36, clean 0.22 to 0.75); G256s rho 1.17 / 1.07 with a clean twin (B4c) | **rejected** in the strict form; rho separates the classes at a threshold between 1.17 and 1.68, not at 1 |
+| DG1 | rho >= 1 exactly on spoky/diverged twins | 8 of 9 arms agree (failing twins rho 1.68 to 4.36, clean 0.22 to 0.75); G256s rho 1.17 / 1.07 with a clean twin (B4c, and W4, the same set-up, clean with no growth over 2,560 steps to t = 10) | **rejected** in the strict form; rho separates the classes at a threshold between 1.17 and 1.68, not at 1 |
 | K1 | reaches t = 3, M_hf <= 0.0114 | stopped at step 30 (t = 0.453) | **miss**: `w48t_k1_..._known_miss`, ignored, limit intact |
 | K2 | the same with 3 correctors | reaches t = 3, M_hf 282 | **miss**: `w48t_k2_..._known_miss`, ignored, limit intact |
 | M_hf cross-check | <= 1e-3 relative | 2.0e-7 (Rust 5.699737e-3, script 5.699736e-3) | met |
@@ -354,6 +354,8 @@ radial cells at the wall (first cell 0.01366 -> 0.00262 D).
 
 * The whole gate (workspace fmt, clippy, tests). Run: rustfmt on the two new test files, `cargo clippy -p rcfd-api -p rcfd-studio
   --all-targets -- -D warnings` (clean), the docs-site test (2 passed), the new ignored tests as reported above.
+* The shedding phase: every workaround ran to t = 10 only (the case runs to 80; shedding starts at about 40 D/U; U2 held its
+  spokes for 70 time units before diverging). Projected full runs at the measured rates: about 40 min (W3), 65 min (W5).
 * `rcfd-mcp render_field` (the CPU renderer): D1 used the Studio's own wgpu path; both draw the stored cell values.
 * A 512 x 512 arm of this branch (only the user's U5 store, diverged at step 22).
 * Linux.
