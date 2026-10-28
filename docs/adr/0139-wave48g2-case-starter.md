@@ -1,8 +1,8 @@
 # ADR 0139: Wave 48G item 2, case starter: new case files from the shipped examples
 
-Status: **PROPOSED 2026-10-28** (sub-wave 48G, "first run to first picture", item 2 of 4; the other three items are the mesh
-preview from a case, the store-fields default and one-click start-and-follow, done on other branches). Checks registered below
-before any run of them; results go in the addendum. Written at main f3bf005. House rules as in ADR 0130: limits are fixed before
+Status: **PROPOSED 2026-10-28, implemented; results in the addendum** (sub-wave 48G, "first run to first picture", item 2 of 4;
+the other three items are the mesh preview from a case, the store-fields default and one-click start-and-follow, done on other
+branches). Checks registered below before any run of them. Written at main f3bf005. House rules as in ADR 0130: limits are fixed before
 the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected
 by an amendment written before the corrected run; defaults of existing code stay bit-identical;
 `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parents: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section
@@ -162,6 +162,113 @@ name field, both themes; the run of a created case (other 48G items).
 
 Copying data files next to a case; a JSON variant of the examples; a "duplicate this case" action; deleting or renaming cases;
 adding examples to `cases/`; the mesh preview, store default and start-and-follow items of 48G.
+
+## Addendum: results (2026-10-28, branch `worktree-agent-a38bcefbdba6707af`, release build on the gate host)
+
+Commits on main f3bf005: 8b78d17 (this ADR, registration), b06f4a5 (implementation and tests), 0761022 (amendment 1), then this
+addendum. Run 1 (at b06f4a5): 23 of 24 tests passed; the CS1 validate-stage control's set-up was defective (amendment 1). Run 2 (at
+0761022, after the amendment): 24 of 24 passed. The numbers below are from run 2. Run 1's numbers were the same wherever run 1 got
+that far, except the timings (CS13 7.386 ms, its control 212.327 ms).
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| CS1 | 9 of 9 open; `validate()` true, 0 diagnostics | 9 of 9, 0 diagnostics each; 0.002 to 0.008 s per 2D case, 0.095 s (C-grid fan) and 0.123 s (sector fan) | pass |
+| CS1 controls | open stage: refused, naming `mesh.nx`; validate stage (amendment 1): opens, `validate()` false on `boundaries.ymax` | "cases/sod.toml: mesh.nx: expected integer, got "abc""; the rotating channel without `[boundaries.ymax]` opens, `validate()` false, "boundaries.ymax: no boundary condition for mesh patch 'ymax'" | fail as required |
+| CS2 | byte-equal, 9 of 9 | 9 of 9 equal to the embedded text and to the `cases/` file (664 to 2,041 bytes; for example `cases/sod.toml`, 1,058 bytes, fnv64:f4c2a21b32815512) | pass |
+| CS2 control | the editor's save bytes differ, 9 of 9 | 9 of 9 differ: 16,122 to 22,089 bytes (canonical TOML with every default) | fails as required |
+| CS3 | 40 refusals with their reasons, 8 acceptances | 40 refused, each message naming its rule ("a case needs a name", "'.' is not allowed: use letters, digits, '-' and '_' only (no spaces or dots)", "no path separators: ...", "start the name with a letter or a digit", "give the name without the extension (.toml is added)", "at most 64 characters (this name has 65)", "'con' is a reserved device name on Windows", "cases/Wedge.toml already exists"); 8 accepted with `cases/<name>.toml` | pass |
+| CS3 control | the 5 names pass `Project::resolve` | `x.`, `my case`, `a/b`, `-x` and the 65-character name all resolve (`cases\x..toml`, `cases\a\b.toml`, ...). Reported: `cases/CON.toml` and `cases/LPT9.toml` also resolve on this host | fails as required |
+| CS4 | (a), (b), (c) refused; hashes unchanged; no `*.tmp` | (a) "cases/sod.toml already exists", nothing sent (no message within 1 s); (b) "...\cases\sod.toml: already exists"; (c) the model accepted `late`, the worker refused with "...\cases\late.toml: already exists" (`Event::Failed`), no editor and no pending case; both files' hashes unchanged; no `*.tmp` in `cases/` | pass |
+| CS4 control | `atomic_write` changes the hash | fnv64:62f6a715c336b05d to fnv64:f4c2a21b32815512 | fails as required |
+| CS5 | 0 problems | 24 files in `cases/`: 9 offered, 8 excluded, 7 reference data; 0 problems; no path both offered and excluded, no duplicate, every reason given | pass |
+| CS5 controls | exactly 1 problem each, naming the file | added: "extra/extra.toml: shipped but neither offered nor excluded"; deleted: "sod/sod.toml: offered but not in cases/"; stale: "channel/profile_inlet.csv: excluded but not in cases/ (stale exclusion)"; changed: "wedge/wedge.toml: the embedded copy differs from the file" | fail as required |
+| CS6 | the 6 descriptors and `profile_inlet.toml` do not open | 7 of 7 refused: the descriptors on unknown settings (`description`, `id`, `boundary_conditions`, ...); `profile_inlet.toml` with "tables.inlet_u.file: cannot read table file .\profile_inlet.csv: The system cannot find the file specified." | pass |
+| CS7 | cells, dimension and title, 9 of 9 | 9 of 9 equal; for example "Sod shock tube: Shock tube with the compressible Euler solver (...), one cell high. 2D, 100 cells, compressible, to t = 0.2." | pass |
+| CS7 control | `cells + 1` and the other dimension fail | "sod/sod.toml: 101 cells listed, the mesh has 100"; "sod/sod.toml: listed 3D, the mesh is 2D" | fail as required |
+| CS8 | listed exactly; editor clean with the source's hash; message | `cases/first.toml` listed alone, open, clean, `base_hash` of `sod.toml`, "created cases/first.toml"; 0.007 s from the call to the editor holding it | pass |
+| CS8 control | not listed after 2.0 s | not listed | fails as required |
+| CS9 | editor keeps `cases/a.toml`, dirty, `mesh.nx` 12; the message says not opened | as stated: "created cases/w.toml; not opened, because the open case has unsaved edits or a conflict (save or resolve them, then select cases/w.toml in the Project panel)"; `cases/w.toml` byte-equal to `wedge.toml` | pass |
+| CS9 control | a clean editor switches | switched to `cases/w.toml` | as required |
+| CS10 | empty and `title`-only text invalid with the 2 diagnostics | both: `validate()` false, `boundaries.lid` and `boundaries.walls` ("no boundary condition for mesh patch ...") | pass |
+| CS10 control | with the 2 tables it validates | true, 0 diagnostics | fails as required |
+| CS11 | at most 32,768 bytes, `.toml` only, no reference data | 11,908 bytes, 9 `.toml` files, none under `reference/` | pass |
+| CS11 control | the reference CSV and 32,769 bytes fail | 2 problems ("not a .toml case file", "reference data"); 1 problem ("32769 bytes embedded, more than 32768") | fails as required |
+| CS12 | 60 frames, no panic, 9 rows each | 60 frames, 9 rows in each, at least 174 shapes per frame; proposed name `kepsilon_channel` | pass |
+| CS13 | at most 100 ms | 9.916 ms, the largest of 5 builds | pass |
+| CS13 control | more than 100 ms | 244.453 ms | fails as required |
+| CS14 | the other `rcfd-studio` tests pass; clippy and fmt clean | `cargo test -p rcfd-studio --release --no-fail-fast -- --test-threads 1` (with `rcfd-runner`, `rcfd` and `fake-claude` built in release next to the Studio): 21 integration binaries, 103 passed (CS1-CS13 included), 0 failed, 2 ignored. The 2 ignored are the existing known misses `parity_tutorials_name_the_gui_known_miss` (ADR 0131 B9) and `r6_tick_with_four_large_runs_is_within_5_ms_known_miss` (ADR 0133); B6's 4 child-process runs also passed. Wall time 2 min 18 s. An earlier attempt without `fake-claude` built failed the 14 tests of `chat_e.rs` in their set-up ("fake-claude.exe missing: cargo build -p rcfd-claude --bin fake-claude with this profile", ADR 0134 amendment 3) and stopped there. `cargo clippy -p rcfd-studio --all-targets -- -D warnings` (debug) and `--release`: clean. `cargo fmt -p rcfd-studio --check`: clean | pass |
+
+No known miss.
+
+**Deviations and notes.**
+1. The task text asks for `cases/<name>.json` and says the user copies "a case.json". The shipped `case.json` files are benchmark
+   descriptors that the editor refuses (CS6). The starter offers the 9 runnable TOML files and writes `cases/<name>.toml`, byte-equal
+   to the source (D1, D3).
+2. No "New empty case" (D7, CS10): the all-defaults case does not validate. CS10's control shows what a minimal valid text needs:
+   the two boundary tables. That text is a 20 x 20 box with all walls fixed and no flow (question 4).
+3. Amendment 1: CS1's validate-stage control moved from the k-epsilon inlet channel (refused at open) to the laminar rotating
+   channel.
+4. `watch.rs` is edited (a `Create` command and a `Created` event), besides the shared files the task named. The edits stay small:
+   `lib.rs` +2 lines, `studio.rs` +2 and -1, `ui.rs` +12, `watch.rs` +47.
+5. Found, not fixed: `Project::resolve` accepts Windows device names (`cases/CON.toml` and `cases/LPT9.toml` resolved on this
+   Windows 11 host, CS3 report). The starter's name rule refuses them. Other writers of a project (for example `write_note` of ADR
+   0135, which creates files under `notes/`) do not have that rule (question 9).
+6. Creating a case does not write a line to `.rcfd/edits.jsonl` (D5, question 6).
+7. The run-length text is derived from the case: "simplec, at most 6000 iterations" or "compressible, to t = 3". It is not a measured
+   time.
+8. Set-up detail not written in the table: the Studio models of CS2, CS4, CS8, CS9 and CS12 run without the run worker
+   (`run_poll = None`), because these tests start no runs. CS4 and CS8 run with the watcher off, as registered. CS9 and CS12 also
+   run with it off; the table does not say so, and neither check depends on the watcher. CS2 runs with the watcher on.
+9. `scripts/limit_audit.py` hits in the new test file, each read:
+   * five class (iii) hits, on the controls of CS2, CS5, CS9, CS10 and CS11. Each control asserts the failure it shows as a positive
+     fact: 9 differing files, exactly 1 problem, the editor switched, `validate()` true where CS10 requires false, 2 problems and 1
+     problem. The heuristic does not recognise this form, as with ADR 0131's controls;
+   * two class (iv) hits: the debug-build skips of CS13 and its control, each with a `SKIP` line. The limit is for release, and the
+     gate is release.
+
+**Not run.** The "Not in CI" items (a person looking at the window). Also not run: a debug build of the new tests (CS13 and its
+control print `SKIP` there by design, as B7 does); Linux; the workspace gate; workspace-wide clippy (only `-p rcfd-studio`, as
+asked); `cargo deny` (no new dependency).
+
+**View-and-report checklist for the maintainer.**
+1. Build `cargo build --release -p rcfd-studio`. To run a created case, also build `-p rcfd-runner -p rcfd-cli`. Start
+   `target\release\rcfd-studio.exe`.
+2. Project > New project...: make an empty project. The Project panel shows "This project has no cases yet." and a "New case from
+   example..." button. The Case menu has "New case from example...", enabled only while a project is open.
+3. Click the button. A "New case from example" window lists 9 examples, cheapest first. Each shows its title in bold and one line
+   below it: what it shows, 2D or 3D, cells, solver and run length. Check that the text is readable and that the window fits your
+   screen.
+4. Select "Sod shock tube". The name field proposes `sod`, and the line under it reads "creates cases/sod.toml from the example
+   sod/sod.toml". Click Create. The window closes, the Project panel lists `cases/sod.toml` highlighted, the Case editor shows it,
+   and the status bar says "created cases/sod.toml".
+5. Open the window again and select Sod: the proposed name is now `sod-2`. Type `sod`: a red line says "cases/sod.toml already
+   exists" and Create is disabled. Try `CON`, `a/b`, `my case` and `x.toml`: each gives its reason. Type a valid name and press
+   Enter: the case is created.
+6. Open `<project>\cases\sod.toml` in a text editor. It should equal `cases\sod\sod.toml` of the repository, comments included.
+7. Edit a value in the Case editor without saving, then create another case. The new case appears in the Project panel, the editor
+   keeps your edited case, and the status bar says the new case was not opened.
+8. Switch the theme (View menu) and resize the window. The dialog should stay usable.
+9. Report anything that looks wrong or confusing: the descriptions, the order, the proposed names, the wording. Say what you did.
+
+**Questions for the maintainer.**
+1. Is offering only the TOML case files right (deviation 1)? Or should the Studio also write JSON (a conversion, so not byte-equal
+   and without the comments)?
+2. `cases/` has no runnable lid-driven cavity, only its descriptor. The runnable text is `rcfd-mcp`'s template, and the Studio may
+   not depend on `rcfd-mcp`. Add `cases/cavity/cavity.toml`? It would then be added to the list, as CS5 requires. Or move the
+   template to a crate both can use?
+3. `channel/profile_inlet.toml` needs its CSV. Options: copy both files (but `Project::cases()` lists every file under `cases/`, so
+   the CSV would show as a case); keep it excluded; or offer it once the editor resolves data paths against the case's folder (ADR
+   0131 question 3).
+4. "New empty case": offer the minimal valid text (CS10 control: defaults plus fixed `lid` and `walls`, a box with no flow), offer the
+   cavity of question 2 as the starter, or offer nothing?
+5. The name rule allows ASCII letters, digits, `-` and `_`, up to 64 characters, and compares names without letter case. Should it
+   also allow spaces, dots or non-ASCII letters?
+6. Should creating a case write a line to `.rcfd/edits.jsonl`, like the cooperative edits of ADR 0135?
+7. `channel/kepsilon_channel.toml` and `channel/sst_channel.toml` set `output.directory = "results"`. Does that interact with the
+   runner's `--out runs/<id>/output`? This is for item 4 (start-and-follow); it is flagged here, not checked.
+8. Is cheapest-first order right? The dialog proposes the first entry, `kepsilon_channel` (56 cells). Should another example come
+   first, for example `wedge`, whose picture shows a shock?
+9. Should `rcfd-project` refuse Windows device names for every writer (deviation 5)?
 
 ## Files
 
