@@ -1,10 +1,23 @@
-"""Build and check the finished example projects in example-projects/ (ADR 0142).
+"""Build and check the finished example projects (ADR 0142), one tree per platform (ADR 0150).
 
-    python scripts/make_example_projects.py                  rebuild every project: mesh recipe, runs, ledger, run table
+    python scripts/make_example_projects.py                  rebuild every project of this platform's tree: mesh
+                                                             recipe, runs, ledger, run table
     python scripts/make_example_projects.py --project NAME   rebuild one project (wind-tunnel or quick-start)
-    python scripts/make_example_projects.py --check          check the committed examples (no solver run, no binary needed)
-    python scripts/make_example_projects.py --rerun-check    rebuild every project in a temporary copy and compare the
-                                                             files that are byte-reproducible with the committed ones
+    python scripts/make_example_projects.py --docker         build the Linux tree in Docker (Ubuntu 24.04, glibc 2.39,
+                                                             Rust 1.99.0, the CI runner's distribution), from this
+                                                             checkout's files, and put it in place
+    python scripts/make_example_projects.py --check          check both committed trees and their shared inputs (no
+                                                             solver run, no binary needed)
+    python scripts/make_example_projects.py --rerun-check    rebuild this platform's tree in a temporary copy and compare
+                                                             the files that are byte-reproducible with the committed ones
+    python scripts/make_example_projects.py --docker --rerun-check   the same for the Linux tree, in Docker
+
+The trees (ADR 0150): `example-projects/` holds runs built on Windows (ADR 0142), `example-projects-linux/` the same
+projects with runs built on x86_64 Linux. Mesh generators call the C library's libm, whose last bits differ per platform
+(ADR 0137), so a run's stored mesh equals the mesh a platform builds from the run's case only in that platform's tree.
+The Windows tree holds the inputs (case files, notes, mesh recipes, `rcfd-project.json`); a Linux rebuild copies them
+into the Linux tree first, so the two trees differ only in what the runs produced. A rebuild writes only the tree of the
+platform it runs on.
 
 A rebuild runs the real solver through the real run service: it starts `rcfd-runner serve --project <dir>` itself (output
 to a file, never a pipe), queues each case with `rcfd-runner start <case> --no-runner`, waits for each run, shuts the
@@ -23,17 +36,33 @@ import argparse
 import json
 import math
 import os
+import platform
 import re
+import shlex
 import shutil
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(REPO, "example-projects")
+LINUX_EXAMPLES = os.path.join(REPO, "example-projects-linux")
 EXE = ".exe" if os.name == "nt" else ""
+
+# The committed trees (ADR 0150): the platform whose runs a tree holds -> its folder. The Windows tree holds the inputs.
+TREES = {"windows": EXAMPLES, "linux": LINUX_EXAMPLES}
+INPUT_TREE = "windows"
+# Files at the top of a tree that are the same in every tree (copied from the Windows tree by a Linux rebuild).
+TREE_SHARED_FILES = [".gitattributes"]
+
+# The Linux build environment (ADR 0150): the CI runner's distribution with the gate's toolchain.
+DOCKER_IMAGE = "rcfd-linux:ubuntu24.04-rust1.99.0"
+DOCKERFILE = os.path.join(REPO, "scripts", "docker", "ubuntu-24.04-rust.Dockerfile")
+# Named volumes: the cargo target folder and the crate registry, kept between builds.
+DOCKER_VOLUMES = [("rcfd-examples-target", "/target"), ("rcfd-examples-cargo-registry", "/usr/local/cargo/registry")]
 
 # Size caps registered in ADR 0142 (bytes, every file of the project folder counted, `.rcfd/` included).
 CAP_TOTAL = 40_000_000
@@ -178,6 +207,173 @@ def rfc3339_ms(t):
 
 def event_kind(ev):
     return ev.get("kind") or ev.get("event")
+
+
+def same_path(a, b):
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+# ------------------------------------------------------------------------------------------------ platforms and trees
+
+
+def this_platform():
+    """The tree built on this platform (ADR 0150): "windows", "linux" (x86_64 only), or None (no tree is built here; the
+    Rust tests decide the same way with cfg!(windows) and cfg!(all(target_os = "linux", target_arch = "x86_64")))."""
+    if os.name == "nt":
+        return "windows"
+    if sys.platform.startswith("linux") and platform.machine().lower() in ("x86_64", "amd64"):
+        return "linux"
+    return None
+
+
+def platform_block():
+    """What a tree's manifest records about the platform that built its runs (ADR 0150)."""
+    arch = platform.machine().lower()
+    out = {"os": this_platform() or sys.platform, "arch": "x86_64" if arch in ("x86_64", "amd64") else arch,
+           "python": platform.python_version()}
+    if sys.platform.startswith("linux"):
+        lib, ver = platform.libc_ver()
+        out["libc"] = ("%s %s" % (lib, ver)).strip()
+    if os.environ.get("RCFD_EXAMPLES_IMAGE"):
+        out["image"] = os.environ["RCFD_EXAMPLES_IMAGE"]
+    return out
+
+
+def tree_of(root):
+    """The committed tree whose folder is `root`, or None (a scratch folder)."""
+    return next((t for t, r in TREES.items() if same_path(r, root)), None)
+
+
+def resolve_tree(tree, root):
+    """(tree, folder) that a rebuild writes. A committed tree is written only on its own platform (ADR 0150)."""
+    if root:
+        root = os.path.abspath(root)
+        found = tree_of(root)
+        if tree and found != tree:
+            sys.exit("--tree %s and --root %s name different folders" % (tree, root))
+        tree = found
+    else:
+        tree = tree or this_platform()
+        if tree is None:
+            sys.exit("no example tree is built on this platform (ADR 0150: Windows and x86_64 Linux); give --root")
+        root = TREES[tree]
+    here = this_platform()
+    if tree is not None and tree != here:
+        sys.exit("%s holds runs built on %s, and this is %s: build it there%s (ADR 0150)" % (
+            rel(REPO, root), tree, here or sys.platform, " (from Windows: --docker)" if tree == "linux" else ""))
+    return tree, root
+
+
+# ------------------------------------------------------------------------------------------------ inputs of a tree
+
+
+def project_files(pdir):
+    out = []
+    for d, _, files in os.walk(pdir):
+        for f in files:
+            out.append(rel(pdir, os.path.join(d, f)))
+    return sorted(out)
+
+
+def is_generated(pname, relpath):
+    """A file a rebuild writes (runs, runtime folder, ledger, meshes built from a recipe); every other file of a project
+    folder is an input (ADR 0150)."""
+    parts = relpath.split("/")
+    if parts[0] in ("runs", ".rcfd") or relpath == "designs/variants.ledger.jsonl":
+        return True
+    return len(parts) >= 3 and parts[0] == "meshes" and parts[1] in PROJECTS[pname]["meshes"]
+
+
+def input_files(pdir, pname):
+    return [p for p in project_files(pdir) if not is_generated(pname, p)] if os.path.isdir(pdir) else []
+
+
+def comparable(relpath, data):
+    """The bytes two trees must share: a notes file without its generated run table."""
+    if relpath.startswith("notes/"):
+        text = data.decode("utf-8")
+        a, b = text.find(RUNS_BEGIN), text.find(RUNS_END)
+        if 0 <= a < b:
+            return (text[:a] + text[b + len(RUNS_END):]).encode("utf-8")
+    return data
+
+
+def sync_inputs(src_root, dst_root, pname):
+    """Copy the inputs of project `pname` from tree `src_root` to tree `dst_root`, and remove inputs of the copy that the
+    source no longer has. Returns the number of files copied."""
+    src, dst = os.path.join(src_root, pname), os.path.join(dst_root, pname)
+    want = input_files(src, pname)
+    if not want:
+        raise RuntimeError("%s has no inputs" % src)
+    for p in input_files(dst, pname):
+        if p not in want:
+            os.remove(os.path.join(dst, p.replace("/", os.sep)))
+    for p in want:
+        to = os.path.join(dst, p.replace("/", os.sep))
+        os.makedirs(os.path.dirname(to), exist_ok=True)
+        shutil.copyfile(os.path.join(src, p.replace("/", os.sep)), to)
+    for f in TREE_SHARED_FILES:
+        shutil.copyfile(os.path.join(src_root, f), os.path.join(dst_root, f))
+    return len(want)
+
+
+def inputs_problems(src_root, dst_root):
+    """Inputs that differ between the Windows tree (`src_root`) and another tree (ADR 0150 T1)."""
+    problems = []
+    fix = "rebuild the Linux tree: python scripts/make_example_projects.py --docker"
+    a_name, b_name = os.path.basename(src_root), os.path.basename(dst_root)
+    for f in TREE_SHARED_FILES:
+        pa, pb = os.path.join(src_root, f), os.path.join(dst_root, f)
+        if not os.path.exists(pb) or not os.path.exists(pa) or read(pa) != read(pb):
+            problems.append("%s/%s differs from %s/%s (%s)" % (b_name, f, a_name, f, fix))
+    for pname in PROJECTS:
+        a, b = os.path.join(src_root, pname), os.path.join(dst_root, pname)
+        fa, fb = set(input_files(a, pname)), set(input_files(b, pname))
+        for p in sorted(fa - fb):
+            problems.append("%s/%s/%s: missing, %s has it (%s)" % (b_name, pname, p, a_name, fix))
+        for p in sorted(fb - fa):
+            problems.append("%s/%s/%s: not an input of %s/%s (%s)" % (b_name, pname, p, a_name, pname, fix))
+        for p in sorted(fa & fb):
+            da = comparable(p, read(os.path.join(a, p.replace("/", os.sep))))
+            db = comparable(p, read(os.path.join(b, p.replace("/", os.sep))))
+            if da != db:
+                problems.append("%s/%s/%s differs from %s/%s/%s (%s)" % (b_name, pname, p, a_name, pname, p, fix))
+    return problems
+
+
+def provenance_problems(tree, root):
+    """Signs that a committed tree was not built on its platform (ADR 0150 T2): the manifest's platform, and the absolute
+    case paths that every run.json records (an x86_64 Linux tree names `/.../<tree>/<project>/cases`, the Windows tree
+    `X:\\...\\<tree>\\<project>\\cases`)."""
+    problems = []
+    name = os.path.basename(root)
+    man = read_json(os.path.join(root, "manifest.json"))
+    plat = man.get("platform")
+    if plat is None:
+        if tree != "windows":
+            problems.append("manifest.json: no platform (only the Windows tree of ADR 0142 predates it)")
+    else:
+        if plat.get("os") != tree or plat.get("arch") != "x86_64":
+            problems.append("manifest.json: built on %s %s, expected %s x86_64" % (plat.get("os"), plat.get("arch"),
+                                                                                 tree))
+        if tree == "linux" and not str(plat.get("libc", "")).startswith("glibc"):
+            problems.append("manifest.json: libc %r, expected glibc" % plat.get("libc"))
+    for pname, p in man.get("projects", {}).items():
+        for r in p.get("runs", []):
+            path = os.path.join(root, pname, "runs", r.get("run") or "?", "run.json")
+            if not os.path.exists(path):
+                continue  # reported by check()
+            rec = read_json(path)
+            for key in ("case_dir", "case_source"):
+                v = str(rec.get(key, ""))
+                if tree == "linux":
+                    ok = v.startswith("/") and ("/%s/%s/cases" % (name, pname)) in v
+                else:
+                    ok = re.match(r"^[A-Za-z]:\\", v) is not None and ("\\%s\\%s\\cases" % (name, pname)) in v
+                if not ok:
+                    problems.append("%s/runs/%s/run.json: %s %r is not a path of a %s build of this tree" % (
+                        pname, r.get("run"), key, v, tree))
+    return problems
 
 
 # ------------------------------------------------------------------------------------------------ mesh recipe
@@ -597,8 +793,10 @@ def write_manifest(bins, root=EXAMPLES):
             runs.append({"case": r["case"], "run": rid})
         projects[pname] = {"runs": runs, "bytes": tree_size(pdir)}
     man = {"format": "rcfd-example-projects-1", "adr": "0142", "solver_version": version,
-           "script": "scripts/make_example_projects.py", "projects": projects,
+           "script": "scripts/make_example_projects.py", "platform": platform_block(), "projects": projects,
            "caps": {"total": CAP_TOTAL, "projects": CAP_PROJECT}}
+    if tree_of(root) not in (None, INPUT_TREE):
+        man["inputs_from"] = os.path.basename(TREES[INPUT_TREE])
     write_text(os.path.join(root, "manifest.json"), json.dumps(man, indent=2) + "\n")
 
 
@@ -692,7 +890,28 @@ def check(root=EXAMPLES, problems=None):
         check_ledger(pdir, pname, expected, add)
     total += sum(os.path.getsize(os.path.join(root, f)) for f in os.listdir(root) if os.path.isfile(os.path.join(root, f)))
     if total > CAP_TOTAL:
-        add("example-projects: %d bytes, above the cap %d" % (total, CAP_TOTAL))
+        add("%s: %d bytes, above the cap %d" % (os.path.basename(root), total, CAP_TOTAL))
+    return problems
+
+
+def check_trees(roots=None):
+    """Problems of every committed tree (ADR 0150): each tree's own check (the caps of ADR 0142 D7 apply to each tree),
+    the platform it was built on, and the inputs it shares with the Windows tree. `roots` maps tree -> folder (default:
+    the repository's trees)."""
+    roots = dict(TREES if roots is None else roots)
+    problems = []
+    for tree, root in roots.items():
+        name = os.path.basename(root)
+        if not os.path.isdir(root):
+            problems.append("%s: missing (ADR 0150)" % name)
+            continue
+        problems += ["%s: %s" % (name, p) for p in check(root)]
+        if os.path.exists(os.path.join(root, "manifest.json")):
+            problems += ["%s: %s" % (name, p) for p in provenance_problems(tree, root)]
+    src = roots.get(INPUT_TREE)
+    for tree, root in roots.items():
+        if tree != INPUT_TREE and src and os.path.isdir(src) and os.path.isdir(root):
+            problems += inputs_problems(src, root)
     return problems
 
 
@@ -789,6 +1008,97 @@ def rerun_check(bins, threads, root=EXAMPLES, projects=None):
     return problems
 
 
+# ------------------------------------------------------------------------------------------------ the Linux tree in Docker
+
+
+def source_tar(path):
+    """Write a tar of this checkout's files as they are in the working tree: every file git tracks or would track
+    (untracked files that are not ignored). Returns the number of files."""
+    r = subprocess.run(["git", "-C", REPO, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                       capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError("git ls-files failed (--docker needs a git checkout): %s" % r.stderr.decode("utf-8", "replace"))
+    names = sorted(set(n for n in r.stdout.decode("utf-8").split("\0") if n))
+    n = 0
+    with tarfile.open(path, "w") as tar:
+        for name in names:
+            p = os.path.join(REPO, name.replace("/", os.sep))
+            if os.path.isfile(p):  # a tracked file deleted in the working tree is left out
+                tar.add(p, arcname=name, recursive=False)
+                n += 1
+    return n
+
+
+def extract_tree(tar_path, dest, top):
+    """Extract a tar that holds only regular files and folders under `top/` into `dest` (refuses anything else)."""
+    with tarfile.open(tar_path) as tar:
+        members = tar.getmembers()
+        for m in members:
+            parts = m.name.replace("\\", "/").split("/")
+            if parts[0] != top or ".." in parts or m.name.startswith("/") or not (m.isfile() or m.isdir()):
+                raise RuntimeError("%s: unexpected member %r" % (tar_path, m.name))
+        for m in members:
+            to = os.path.join(dest, *m.name.split("/"))
+            if m.isdir():
+                os.makedirs(to, exist_ok=True)
+                continue
+            os.makedirs(os.path.dirname(to), exist_ok=True)
+            with tar.extractfile(m) as src, open(to, "wb") as out:
+                shutil.copyfileobj(src, out)
+
+
+def docker_command(io_dir, image, inner, copy_out, cpus, memory):
+    """The `docker run` that builds rcfd and rcfd-runner from /io/src.tar in the container's own file system and runs
+    `inner` (this script) there; with `copy_out` the Linux tree is written back as /io/out.tar."""
+    steps = ["set -e", "mkdir -p /src", "tar -m -xf /io/src.tar -C /src", "cd /src",
+             "cargo build --release --locked -p rcfd-cli -p rcfd-runner",
+             " ".join(shlex.quote(x) for x in inner)]
+    if copy_out:
+        steps.append("tar -cf /io/out.tar %s" % os.path.basename(LINUX_EXAMPLES))
+    if os.name != "nt" and hasattr(os, "getuid"):
+        steps.append("chown -R %d:%d /io" % (os.getuid(), os.getgid()))
+    cmd = ["docker", "run", "--rm", "--init", "--cpuset-cpus", cpus, "--memory", memory,
+           "-e", "CARGO_TARGET_DIR=/target", "-e", "RCFD_EXAMPLES_IMAGE=" + image, "-v", "%s:/io" % io_dir]
+    for vol, mount in DOCKER_VOLUMES:
+        cmd += ["-v", "%s:%s" % (vol, mount)]
+    return cmd + [image, "bash", "-c", "; ".join(steps)]
+
+
+def docker_linux(a):
+    """--docker: build the Linux tree (or, with --rerun-check, rebuild it in a temporary copy and compare) in a container
+    of DOCKERFILE's image, from this checkout's files; the built tree replaces example-projects-linux/ (ADR 0150)."""
+    image = a.docker_image
+    if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode != 0:
+        print("building the image %s from %s" % (image, rel(REPO, DOCKERFILE)))
+        r = subprocess.run(["docker", "build", "-t", image, "-f", DOCKERFILE, os.path.dirname(DOCKERFILE)])
+        if r.returncode != 0:
+            return r.returncode
+    inner = ["python3", "scripts/make_example_projects.py", "--tree", "linux", "--bin-dir", "/target/release",
+             "--threads", str(a.threads)]
+    for p in a.project or []:
+        inner += ["--project", p]
+    if a.rerun_check:
+        inner.append("--rerun-check")
+    with tempfile.TemporaryDirectory(prefix="rcfd_w48p_docker_") as io_dir:
+        n = source_tar(os.path.join(io_dir, "src.tar"))
+        cmd = docker_command(io_dir, image, inner, not a.rerun_check, a.docker_cpus, a.docker_memory)
+        print("sources: %d files of %s" % (n, REPO))
+        print("docker: %s" % " ".join(shlex.quote(x) for x in cmd))
+        sys.stdout.flush()
+        r = subprocess.run(cmd, stdin=subprocess.DEVNULL)
+        if r.returncode != 0 or a.rerun_check:
+            print("docker run: exit %d" % r.returncode)
+            return r.returncode
+        if os.path.isdir(LINUX_EXAMPLES):
+            shutil.rmtree(LINUX_EXAMPLES)
+        extract_tree(os.path.join(io_dir, "out.tar"), REPO, os.path.basename(LINUX_EXAMPLES))
+    problems = check_trees()
+    for p in problems:
+        print("PROBLEM:", p)
+    print("check of both trees: %d problem(s)" % len(problems))
+    return 1 if problems else 0
+
+
 # ------------------------------------------------------------------------------------------------ main
 
 
@@ -803,21 +1113,35 @@ def binaries(bin_dir):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--project", action="append", choices=sorted(PROJECTS), help="rebuild only this project")
-    ap.add_argument("--check", action="store_true", help="check the committed examples (no solver run)")
+    ap.add_argument("--check", action="store_true",
+                    help="check both committed trees and their shared inputs, or the folder of --root (no solver run)")
     ap.add_argument("--rerun-check", action="store_true", help="rebuild in a temporary copy and compare")
     ap.add_argument("--bin-dir", default=os.path.join(REPO, "target", "release"))
     ap.add_argument("--threads", type=int, default=1, help="solver threads per run (results do not depend on it)")
-    ap.add_argument("--root", default=EXAMPLES, help="folder holding the projects (default: example-projects)")
+    ap.add_argument("--tree", choices=sorted(TREES),
+                    help="the committed tree to rebuild (default: the tree of this platform); written only on its "
+                         "own platform")
+    ap.add_argument("--root", default=None, help="folder holding the projects (default: the tree's folder)")
     ap.add_argument("--summarise-only", action="store_true",
                     help="write the ledger and run tables of the existing runs (no solver run), then the manifest")
+    ap.add_argument("--docker", action="store_true",
+                    help="build the Linux tree in Docker and put it in place (with --rerun-check: compare only)")
+    ap.add_argument("--docker-image", default=DOCKER_IMAGE, help="image (built from %s when missing)" %
+                    rel(REPO, DOCKERFILE))
+    ap.add_argument("--docker-cpus", default="0-3", help="--cpuset-cpus of the container")
+    ap.add_argument("--docker-memory", default="16g", help="--memory of the container")
     a = ap.parse_args(argv)
-    root = os.path.abspath(a.root)
     if a.check:
-        problems = check(root)
+        problems = check(os.path.abspath(a.root)) if a.root else check_trees()
         for p in problems:
             print("PROBLEM:", p)
         print("check: %d problem(s)" % len(problems))
         return 1 if problems else 0
+    if a.docker:
+        if a.root or (a.tree and a.tree != "linux") or a.summarise_only:
+            sys.exit("--docker builds the Linux tree; --root, another --tree and --summarise-only do not apply")
+        return docker_linux(a)
+    tree, root = resolve_tree(a.tree, a.root)
     bins = binaries(os.path.abspath(a.bin_dir))
     if a.rerun_check:
         problems = rerun_check(bins, a.threads, root, a.project)
@@ -829,12 +1153,17 @@ def main(argv=None):
         if a.summarise_only:
             print("summarising %s: %s" % (pname, summarise_existing(pname, root)))
             continue
+        if tree is not None and tree != INPUT_TREE:
+            n = sync_inputs(TREES[INPUT_TREE], root, pname)
+            print("inputs of %s: %d files copied from %s" % (pname, n, rel(REPO, TREES[INPUT_TREE])))
         print("building %s" % pname)
         t0 = time.time()
         res = build_project(pname, bins, a.threads, root)
         print("  built in %.0f s; pruned %s" % (time.time() - t0, {k: [f for f, _ in v] for k, v in res["pruned"].items()}))
     write_manifest(bins, root)
     problems = check(root)
+    if tree is not None and tree != INPUT_TREE:
+        problems += provenance_problems(tree, root) + inputs_problems(TREES[INPUT_TREE], root)
     for p in problems:
         print("PROBLEM:", p)
     for pname in PROJECTS:
