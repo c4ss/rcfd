@@ -34,7 +34,7 @@ rust-version = "1.75"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
-thiserror = "1"
+thiserror = "2"
 toml = { version = "1", default-features = false, features = ["parse", "display", "serde"] }
 png = "0.18"
 rayon = "1"
