@@ -14,7 +14,9 @@ step, step height and inlet height h = H / 2, a parabolic inflow of mean velocit
   (Gartling used 30 H).
 * Mesh: the repository's `box_2d` generator, 200 x 40 uniform cells (8000 cells).
 * Solver: SIMPLEC, second-order upwind convection, until the residual targets 1e-6 are met. Stored: `ux`, `uy`, `p` every
-  40 iterations, single precision. Report: `p_inlet`, the mean pressure on the left boundary (the outlet is at p = 0).
+  40 iterations, single precision. Report: `p_inlet`, the mean pressure on the left boundary (the outlet is at p = 0). It
+  comes out negative: the flow slows down behind the expansion and its pressure rises more than friction takes away
+  over the 15 H.
 
 ## What to click
 
