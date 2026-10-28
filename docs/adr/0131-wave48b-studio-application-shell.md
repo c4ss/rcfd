@@ -141,6 +141,94 @@ Linux packaging; installers; removal of `rcfd-gui`.
 * Build time and target size grow (ADR 0125: wgpu alone 202 s of unit time); the gate machine's memory is the constraint.
 * Immediate-mode redraw while runs stream: the UI requests repaints only on new data (no busy loop), checked by B7 and by hand.
 
+## Amendment 1 (2026-10-28, 48B, before any registered run): step 0 and set-up
+
+Written by the 48B implementer at main 15b00ef (48A, 48C library part and 48E library part merged) after reading the code and the
+crates.io dependency data, before any 48B test ran. What I knew: the code reading; `cargo tree` and `cargo metadata` of the changed
+manifest (no compile). Limits are unchanged.
+
+**Step 0 (W48-2), crates.io data read 2026-10-28.**
+
+| Crate | Version | Published | Licence | rust-version | Why this version |
+|---|---|---|---|---|---|
+| eframe, egui, egui-wgpu, egui-winit, epaint, emath, ecolor | 0.36.2 | 2026-09-08 | MIT OR Apache-2.0 | 1.95 | 0.37.0 (2026-10-15) passes the two-week rule only on 2026-10-29 |
+| `epaint_default_fonts` | 0.36.2 | 2026-09-08 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | 1.95 | the fonts moved out of `epaint` into this crate |
+| egui_dock | 0.21.1 | 2026-08-06 | MIT | 1.95 | newest release on egui ^0.36 |
+| egui_plot | 0.37.0 | 2026-08-05 | MIT OR Apache-2.0 | 1.95 | egui ^0.36.0; 0.38.0 (2026-10-19) needs egui ^0.37 |
+| rfd | =0.15.4 | 2025-07-12 | MIT | none | already locked and reviewed for `rcfd-gui`; no egui coupling; 0.16.1 (2026-10-22) fails the two-week rule |
+| winit | 0.30.13 | (eframe's requirement) | Apache-2.0 | 1.70 | |
+
+* eframe features: `wgpu_no_default_features`, `default_fonts`, `x11`, `wayland`, default features off. eframe's `wgpu` feature
+  turns on `egui-wgpu/default`, which enables wgpu's `metal`, `webgl` and default back ends; through feature unification
+  `cargo test --workspace` would then build `rcfd-render` with more back ends, which can change what `rcfd_render::adapters()`
+  returns. `rcfd-studio` therefore also lists `wgpu = "=30.0.1"` (not a new crate: ADR 0125's version and features `std`, `wgsl`,
+  `dx12`, `vulkan`). `cargo tree -e features -i wgpu@30.0.1 --workspace` lists `dx12`, `std`, `vulkan`, `wgsl`, as for
+  `rcfd-render` alone before the change. `accesskit`, `links` and `persistence` are off: they add crates the ADR does not name (the
+  layout and preferences are persisted by the Studio itself, B8).
+* `Cargo.lock`: one wgpu 30.x, **30.0.1** (and the frozen GUI's 0.19.4). 85 new packages, no package removed (compared by name
+  and version; the two `-version = "0.3.2"` lines of `git diff` are hunk boundaries of `objc2-metal` and `objc2-quartz-core` 0.3.2,
+  which stay). Every new licence is on `deny.toml`'s list alone or as one choice, except `epaint_default_fonts` (below). One new
+  package was published less than two weeks ago: `font-types` 0.12.7 (2026-10-15); it is held at 0.12.6 (2026-10-03) with
+  `cargo update -p font-types --precise 0.12.6`.
+* **Deviation (deny.toml, not in Files).** `deny.toml`'s exception is keyed on `epaint`; in 0.36 the fonts are in
+  `epaint_default_fonts`, which declares the SPDX id `Ubuntu-font-1.0` instead of `LicenseRef-UFL-1.0`. The same exception is added
+  for that crate (`OFL-1.1`, `Ubuntu-font-1.0`): the same fonts and licences the ADR already accepts. The notice text of
+  `scripts/third_party_licenses.py` names both crates.
+* `cargo-deny` is not installed on this host; the licence check is from `cargo metadata` (the CI `deny` job is the reference).
+
+**Set-up of the checks.**
+
+1. W48-9 copy: `schema_model.rs`, `monitors.rs` and `layout.rs` are copied from `crates/rcfd-gui/src/` at main 15b00ef (the files'
+   last change is 3db01e0). `layout.rs` gets the Studio's panels (Browser, Case editor, Runs, Viewport, Plots, Log, Chat, Outputs)
+   and egui_dock 0.21's `TabPath`; the other two are unchanged apart from the source note. Ported tests, limits unchanged:
+   `every_schema_leaf_is_reachable_and_parses_its_default` and `parse_input_rejects_out_of_range_and_garbage` (B5),
+   `layout_keeps_exactly_one_instance_per_panel` (B4), `monitors_merge_is_idempotent_and_incremental`, M1-M4 and M6 (M6 draws the
+   Plots panel from a monitor store set by the test). **Not ported: M5 and M7.** They start a run of the in-process solver
+   (`Controller::run_start`); ADR 0133 D1 says the Studio never runs the solver in process, so their Studio form is ADR 0133 R1, R3
+   and R4 (48D).
+2. Save and the conflict rule: the editor records `rcfd_project::records::hash_bytes` of the bytes it loaded; save re-reads the
+   file, compares, and writes with `atomic::atomic_write` only on a match; a mismatch is the conflict state. This is done inside
+   `rcfd-studio`. The cooperative lock and `atomic::replace_if_hash` belong to the parallel 48F branch (ADR 0135) and replace this
+   compare-then-write when it merges. A save writes the case as `Case::to_toml` of the edited settings (as the frozen GUI's
+   `save_to`), so comments and layout of the file are not kept.
+3. Threads: one worker thread per open project owns the `Project` and the `Watcher` (poll every 500 ms), opens and creates the
+   project, builds the browser lists, loads and saves case files, and sends results by channel; the UI thread only drains the
+   channel. Editing calls the in-process `rcfd_api` service (`session.create`, `settings.set`), which does no file I/O.
+4. B1: the test builds the fixture at run time in a temporary folder: `Project::create`; `cases/a.toml`, `cases/b.toml`,
+   `cases/sub/c.toml`; `meshes/m1.msh`, `meshes/m2.msh`; 8 runs by `Project::create_run`, two each left `queued` and set to
+   `running`, `finished` and `failed` by `write_status`; one half-created run folder with a valid run id holding only
+   `case.snapshot`. The model is the browser snapshot the worker sends after open. Compared with `cases()`, `meshes()`,
+   `runs().runs` and `runs().skipped` (path and reason). Negative control: `run_ids()` has 9 entries.
+5. B2: name and solver version entered as `rcfd_api::design::ledger::solver_version()`; `Project::validate` on the created folder.
+   Negative control: a second create into the same folder is an error whose message names `rcfd-project.json` in that folder.
+6. B3: the newer manifest has `schema_version` 2; "nothing written" is checked as equal bytes of every file of the folder before
+   and after the open. The v0 manifest is ADR 0122's constructed format (`title`, `created_unix`); the model shows "unsaved
+   migration (schema 0)" and the manifest bytes are unchanged.
+7. B4: 200 frames of `StudioApp::ui` through `egui::Context::run_ui` (1280 x 800), the B1 project open and `cases/a.toml` in the
+   editor. Frame i acts on panel `ALL[i % 8]`: hide, show or float in turn ((i / 8) % 3), and the theme alternates every frame.
+   After every frame each panel has at most one instance, and the acted-on panel exactly one after show or float. Negative control:
+   a layout with the Browser twice fails the instance check (`count` is 2) and `layout::from_json` refuses it.
+8. B5: messages naming the path: an editor refusal is returned and shown as `<path>: <reason>`. Negative control: a value that
+   parses locally but the service refuses (a string for `mesh.nx` through `set_value`) is refused, the editor stays clean, and a
+   save leaves the file's hash unchanged.
+9. B6: the other process is this test binary run again with an environment variable (the pattern of `rcfd-project`'s
+   `tests/process.rs`); it replaces `cases/a.toml` with `atomic_write` and exits. The time is measured from the child's exit to the
+   first drained model event that names `cases/a.toml`. Clean and dirty editors are two runs. The negative control starts the
+   worker with polling off and waits 5 s.
+10. B7: release build. 500 runs are put into the browser snapshot in memory (the UI never reads files, so the frame cost does not
+    depend on where they came from); Runs and Browser panels shown. 5 warm-up frames, then 100 frames timed with wall-clock time
+    around `ctx.run_ui` (wall time bounds the thread's CPU time from above, so a pass is conservative; thread CPU time needs an
+    unsafe OS call, which the workspace forbids). The run list is drawn with `ScrollArea::show_rows`, so only visible rows are
+    built; the negative control adds 1 ms of busy CPU per built row and the number of built rows per frame is reported.
+11. B8: the preferences (theme, layout, recent projects) are a JSON file in a directory the caller passes (the user's config
+    directory in the app: `%APPDATA%\rcfd\studio` on Windows, else `$XDG_CONFIG_HOME/rcfd/studio` or `~/.config/rcfd/studio`;
+    tests pass a temporary folder). Round trip: saved and loaded preferences are equal (layout compared as JSON). Negative
+    controls: a file of garbage and a file whose layout lists a panel twice each give the default layout and a message.
+12. B9: `tests/parity.rs` holds one test per plan section 6 item. Open and save a case and the settings editor with schema
+    validation are real tests. Run with live monitors (48D, ADR 0133), the 2D field view (48C, ADR 0132) and assistant access
+    (48E, ADR 0134) are ignored `*_known_miss` tests naming their sub-wave. The tutorials item is ignored with the reason that
+    rewriting or keeping them is the user's call at the parity step (this ADR).
+
 ## Files
 
 `crates/rcfd-studio/` (new), root `Cargo.toml` (member), `Cargo.lock`, `crates/rcfd-cli/tests/workspace_graph.rs`,
