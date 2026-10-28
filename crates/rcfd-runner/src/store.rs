@@ -178,7 +178,13 @@ impl RunStore for FsStore {
     fn write_status(&self, id: &str, status: &RunStatus) -> io::Result<()> {
         let mut s = status.clone();
         s.updated = records::now_iso();
-        atomic::write_json(&self.run_dir(id).join("status.json"), &s).map_err(io_error)
+        // replaced up to every poll period; without fsync, as before the switch (ADR 0123 limits: a killed process
+        // loses nothing). An fsync after the rename widened the window in which a reader sees the final status
+        // before its state event (S7 on Linux).
+        let path = self.run_dir(id).join("status.json");
+        let mut bytes = serde_json::to_vec_pretty(&s).map_err(bad)?;
+        bytes.push(b'\n');
+        atomic::atomic_write_unsynced(&path, &bytes).map_err(io_error)
     }
 
     fn append_event(&self, id: &str, mut event: Value) -> io::Result<()> {

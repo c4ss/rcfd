@@ -85,11 +85,18 @@ fn temp_path(path: &Path) -> Result<PathBuf> {
 }
 
 fn write_temp(path: &Path, bytes: &[u8]) -> Result<PathBuf> {
+    write_temp_sync(path, bytes, true)
+}
+
+fn write_temp_sync(path: &Path, bytes: &[u8], sync: bool) -> Result<PathBuf> {
     let tmp = temp_path(path)?;
     let res = (|| {
         let mut f = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
         f.write_all(bytes)?;
-        f.sync_all()
+        if sync {
+            f.sync_all()?;
+        }
+        Ok(())
     })();
     if let Err(e) = res {
         let _ = fs::remove_file(&tmp);
@@ -130,6 +137,18 @@ pub fn atomic_write_with(path: &Path, bytes: &[u8], retry: &Retry) -> Result<()>
     res?;
     sync_parent(path);
     Ok(())
+}
+
+/// Atomically replace `path` with `bytes` like [`atomic_write`], but without any fsync: a reader still sees the old
+/// or the new complete file, and a killed process loses nothing, but a power loss can lose the write. For files
+/// replaced many times a second whose last version a reader polls (the run service's `status.json`, ADR 0130).
+pub fn atomic_write_unsynced(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp = write_temp_sync(path, bytes, false)?;
+    let res = with_retry("replace", path, &DEFAULT_RETRY, || fs::rename(&tmp, path));
+    if res.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    res
 }
 
 /// Atomically create `path` with `bytes`; fails with [`ProjectError::Exists`] if it exists.
