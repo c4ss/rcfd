@@ -189,22 +189,32 @@ fn o1(tag: &str, unlinked: bool) -> (Runs, Vec<Step>) {
         );
         out.push((name, v, why_run));
     };
+    // amendment 3: a toggle refused (the route before has no run selected at (c')) is reported, not a stop; the limits
+    // read the side after each toggle
+    let toggle = |st: &mut Studio, side: Side| {
+        if let Err(m) = st.set_view(side) {
+            eprintln!(
+                "O1{} the toggle to {side:?} refused: {m}",
+                if unlinked { " control" } else { "" }
+            );
+        }
+    };
     step("(a) nothing selected", &mut st);
     st.open_case("cases/hex.toml");
     step("(b) hex", &mut st);
     st.open_case("cases/cavity.toml");
     step("(c) cavity", &mut st);
-    st.set_view(Side::Run).unwrap();
+    toggle(&mut st, Side::Run);
     step("(c') toggle Run", &mut st);
     st.open_run(&runs.r1);
     // the same case: its editor is not read again
     assert_eq!(st.pending_case, None, "(d) the cavity was read again for a run of it");
     step("(d) r1", &mut st);
-    st.set_view(Side::Mesh).unwrap();
+    toggle(&mut st, Side::Mesh);
     step("(e) toggle Mesh", &mut st);
     st.open_run(&runs.r3);
     step("(f) r3", &mut st);
-    st.set_view(Side::Mesh).unwrap();
+    toggle(&mut st, Side::Mesh);
     step("(g) toggle Mesh", &mut st);
     st.open_case("cases/cavity.toml");
     step("(h) cavity", &mut st);

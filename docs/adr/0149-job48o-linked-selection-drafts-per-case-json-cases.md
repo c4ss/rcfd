@@ -2,8 +2,8 @@
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (the case editor's fields per case, O9b)
-before any registered run; amendment 2 (the set-ups of O1 and O8's control) before the corrected runs; not yet accepted
-by the maintainer. Job 48O, on local
+before any registered run; amendment 2 (the set-ups of O1 and O8's control) and amendment 3 (O1's control) before their
+corrected runs; not yet accepted by the maintainer. Job 48O, on local
 main 9e857d8 (waves 48A-48N merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
 are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
 defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
@@ -307,6 +307,19 @@ being read and, when a case is asked for, `lj::settled`; O8's procedure saves th
 unsaved edits (O8's own path, where it does, is unchanged). What I knew when writing this: the output of those runs (the
 values are in the addendum); the corrected tests had not run. Every registered file and the whole suite run again on the
 commit of this amendment.
+
+## Amendment 3 (2026-10-28, O1's control after amendment 2; before its corrected run)
+
+The corrected runs on 3198a8e (amendment 2): `drafts_o.rs` 16 of 16, `json_o.rs` 4 of 4, `case_starter_g2.rs` 26 of 26,
+`linked_o.rs` 5 of 6: O1 passed (every limit), and **O1's control** stopped at (c'), `called Result::unwrap() on an Err
+value: "No run is selected: ..."`: the procedure, shared with O1, toggles to the Run side after (c) and stopped on a
+refusal, but in ADR 0148's route the cavity's click selects no run, so the toggle is refused there by design. None of the
+control's limits had been read (it measured (c): no run selected, as the control requires). A defect of the procedure.
+
+Corrected set-up (the same test name; every limit and control unchanged): a refused toggle is printed and the procedure
+goes on (O1's limits read the side after each toggle, so a refused toggle in O1 itself still fails its limit). What I knew
+when writing this: the output of that run (O1's values are in the addendum); the corrected control had not run. The four
+registered files and the whole suite run again on the commit of this amendment.
 
 ## Not in CI (by hand)
 
