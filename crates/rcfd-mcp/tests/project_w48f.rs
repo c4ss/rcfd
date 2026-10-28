@@ -339,6 +339,68 @@ fn f5_edit_case_validates_before_writing() {
     );
 }
 
+/// ADR 0135 amendment 3 E1: an edit that cannot be placed in the file's own lines is refused, nothing written.
+#[test]
+fn e1_edit_case_refuses_a_whole_case_rewrite() {
+    let dir = project("e1");
+    let s = server(&dir, Policy::default());
+    let path = dir.join("cases/cavity.toml");
+    let text = cavity(12, 30).replace(
+        "velocity_value = [1.0, 0.0, 0.0]",
+        "velocity_value = [\n  1.0,\n  0.0,\n  0.0,\n]",
+    );
+    std::fs::write(&path, &text).unwrap();
+    let h = hash_bytes(text.as_bytes());
+    let r = call(
+        &s,
+        "edit_case",
+        json!({"path": "cases/cavity.toml", "base_hash": h, "set": {"boundaries.lid.velocity_value": [2.0, 0.0, 0.0]}}),
+    );
+    assert_eq!(err_code(&r), 1003, "{r}");
+    let msg = r["structuredContent"]["error"]["message"].as_str().unwrap().to_string();
+    assert!(
+        msg.contains("boundaries.lid.velocity_value") && msg.contains("edit the file by hand"),
+        "{msg}"
+    );
+    assert_eq!(
+        hash_bytes(&std::fs::read(&path).unwrap()),
+        h,
+        "the refused edit changed the file"
+    );
+    assert!(!dir.join(".rcfd/edits.jsonl").exists(), "an edit-log line was written");
+    // control: a single-line setting of the same file is still edited in place
+    let ok_r = ok(&call(
+        &s,
+        "edit_case",
+        json!({"path": "cases/cavity.toml", "base_hash": h, "set": {"physics.nu": 0.02}}),
+    ));
+    assert_eq!(
+        (ok_r["written"].clone(), ok_r["form"].clone()),
+        (json!(true), json!("minimal"))
+    );
+    eprintln!("E1: refused with 1003 ({msg}); hash unchanged; single-line control written");
+}
+
+/// ADR 0135 amendment 3 M1 control: a `metrics.json` without `reports` (an older record) gives `list_runs` its numeric
+/// top-level entries; with `reports`, the report values.
+#[test]
+fn m1_list_runs_metrics_fall_back_without_reports() {
+    let dir = project("m1");
+    let p = Project::open(&dir).unwrap();
+    let old = p.create_run("cases/cavity.toml", None, "test", json!({})).unwrap().id;
+    let new = p.create_run("cases/cavity.toml", None, "test", json!({})).unwrap().id;
+    let summary = json!({"state": "finished", "reason": "r", "exit_code": 0, "steps": 30, "time": 1.5});
+    rcfd_project::atomic::write_json(&dir.join("runs").join(&old).join("metrics.json"), &summary).unwrap();
+    let mut with = summary.clone();
+    with["reports"] = json!({"lid_drag": -8.5e-3});
+    rcfd_project::atomic::write_json(&dir.join("runs").join(&new).join("metrics.json"), &with).unwrap();
+    let s = server(&dir, Policy::default());
+    let runs = ok(&call(&s, "list_runs", json!({})))["runs"].clone();
+    let by = |id: &str| runs.as_array().unwrap().iter().find(|r| r["id"] == id).unwrap()["metrics"].clone();
+    assert_eq!(by(&old), json!({"exit_code": 0.0, "steps": 30.0, "time": 1.5}));
+    assert_eq!(by(&new), json!({"lid_drag": -8.5e-3}));
+}
+
 /// The F8 fixture: 500 runs (finished, metrics), one with a 100 000-step residual file and a 64 x 64 field store.
 fn f8_fixture() -> (PathBuf, Vec<String>, String, String) {
     let dir = project("f8");

@@ -128,6 +128,57 @@ fn f3_f11_project_tools_on_runner_made_runs() {
     assert_eq!(wb["structuredContent"]["state"], "finished");
     assert_eq!(wb["structuredContent"]["status"]["step"], 20);
 
+    // ADR 0135 amendment 3 M1: the runner's metrics.json carries the final report values; list_runs and compare_runs
+    // use them
+    let mut finals = std::collections::BTreeMap::new();
+    for id in [&a, &b] {
+        let rd = dir.join("runs").join(id);
+        let met: Value = serde_json::from_str(&std::fs::read_to_string(rd.join("metrics.json")).unwrap()).unwrap();
+        let mon: Value =
+            serde_json::from_str(&std::fs::read_to_string(rd.join("output/monitors.json")).unwrap()).unwrap();
+        let want = mon["series"]["lid_drag"]["y"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .as_f64()
+            .unwrap();
+        let got = met["reports"]["lid_drag"].as_f64().unwrap();
+        for k in [
+            "state",
+            "reason",
+            "exit_code",
+            "steps",
+            "time",
+            "solver_finish",
+            "last_residuals",
+        ] {
+            assert!(met.get(k).is_some(), "{id}: metrics.json lost {k}");
+        }
+        assert_eq!(met["reports"].as_object().unwrap().len(), 1, "{}", met["reports"]);
+        assert_eq!(
+            got.to_bits(),
+            want.to_bits(),
+            "{id}: reports.lid_drag {got:e} vs monitors.json {want:e}"
+        );
+        eprintln!("M1 {id}: reports.lid_drag {got:e} = monitors.json final {want:e}");
+        finals.insert(id.clone(), got);
+    }
+    let lr = m.call("list_runs", json!({}))["structuredContent"].clone();
+    for r in lr["runs"].as_array().unwrap() {
+        let id = r["id"].as_str().unwrap();
+        assert_eq!(r["metrics"], json!({"lid_drag": finals[id]}), "list_runs {id}");
+    }
+    let cr = m.call("compare_runs", json!({"runs": [a, b]}))["structuredContent"].clone();
+    let mut per_run = serde_json::Map::new();
+    per_run.insert(a.clone(), json!(finals[&a]));
+    per_run.insert(b.clone(), json!(finals[&b]));
+    assert_eq!(cr["metrics"], json!({"lid_drag": per_run}));
+    assert_eq!(
+        cr["differences"]["lid_drag"][&b].as_f64().unwrap().to_bits(),
+        (finals[&b] - finals[&a]).to_bits()
+    );
+
     // the read tools on the two finished runs
     sh.record("project_info", &m.call("project_info", json!({})));
     sh.record("list_runs", &m.call("list_runs", json!({})));
@@ -225,6 +276,26 @@ fn f3_f11_project_tools_on_runner_made_runs() {
         golden.as_object().unwrap().len()
     );
     assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// ADR 0135 amendment 3 R1: `--project` without `--root` confines the existing tools' paths to the project, whatever
+/// the working folder; an explicit `--root` wins.
+#[test]
+fn r1_project_implies_root() {
+    let dir = project("r1");
+    let elsewhere = scratch("r1-cwd");
+    let d = dir.to_string_lossy().to_string();
+    let mut m = Mcp::start_in(&["--project", &d], &elsewhere);
+    let r = m.call("create_case", json!({"path": "cases/cavity.toml"}));
+    assert_eq!(r["isError"], false, "{r}");
+    let r = m.call("create_case", json!({"path": "../x.toml"}));
+    assert_eq!(err_code(&r), 1004, "{r}");
+    // control: an explicit --root is used instead
+    let other = elsewhere.to_string_lossy().to_string();
+    let mut m2 = Mcp::start_in(&["--project", &d, "--root", &other], &elsewhere);
+    let r = m2.call("create_case", json!({"path": "cases/cavity.toml"}));
+    assert_eq!(r["isError"], true, "{r}");
+    eprintln!("R1: cases/cavity.toml resolved in the project without --root; ../x refused 1004; with --root <other> not found");
 }
 
 /// F13: `--project <not a project>` exits non-zero naming the path; with a project the server answers `initialize`.

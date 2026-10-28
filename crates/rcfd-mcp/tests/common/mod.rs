@@ -163,8 +163,14 @@ pub struct Mcp {
 
 impl Mcp {
     pub fn start(args: &[&str]) -> Mcp {
+        Self::start_in(args, &std::env::current_dir().unwrap())
+    }
+
+    /// [`Mcp::start`] with the working folder `cwd`.
+    pub fn start_in(args: &[&str], cwd: &Path) -> Mcp {
         let mut child = Command::new(env!("CARGO_BIN_EXE_rcfd-mcp"))
             .args(args)
+            .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

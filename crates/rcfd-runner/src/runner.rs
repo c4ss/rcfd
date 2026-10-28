@@ -229,6 +229,30 @@ fn read_last_line(p: &Path) -> Option<String> {
     text.lines().rev().find(|l| !l.trim().is_empty()).map(String::from)
 }
 
+/// Final report values for `metrics.json` (ADR 0135 amendment 3): the report names are the `monitors` keys of the last
+/// residual line (`rcfd run --status-monitors`); each value is the last `y` of that series in the solver's
+/// `monitors.json`, else the residual line's value. Non-finite values are `null` (as serde_json writes them).
+pub fn report_values(monitors_json: &Path, last_residual: Option<&Value>) -> Value {
+    let mon: Option<Value> = std::fs::read_to_string(monitors_json)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok());
+    let mut out = serde_json::Map::new();
+    for (name, v) in last_residual
+        .and_then(|l| l.get("monitors"))
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+    {
+        let fin = mon
+            .as_ref()
+            .and_then(|m| m["series"][name.as_str()]["y"].as_array())
+            .and_then(|y| y.last())
+            .cloned();
+        out.insert(name.clone(), fin.unwrap_or_else(|| v.clone()));
+    }
+    Value::Object(out)
+}
+
 impl<S: RunStore> Runner<S> {
     fn new(store: S, cfg: Config, cfg_src: String) -> Self {
         Runner {
@@ -270,7 +294,7 @@ impl<S: RunStore> Runner<S> {
             "metrics",
             self.store.write_metrics(
                 id,
-                &json!({"state": state, "reason": reason, "steps": 0, "launched": false}),
+                &json!({"state": state, "reason": reason, "steps": 0, "launched": false, "reports": {}}),
             ),
         );
         self.set_state(id, &st, &reason);
@@ -902,10 +926,12 @@ impl<S: RunStore> Runner<S> {
         st.time = a.time;
         st.reason = Some(reason.clone());
         st.exit_code = fin_code.or(code);
+        let last = read_last_line(&dir.join("residuals.jsonl")).and_then(|l| serde_json::from_str::<Value>(&l).ok());
+        // `reports` is additive (ADR 0135 amendment 3); the other keys are as before
+        let reports = report_values(&dir.join(extra::OUTPUT).join("monitors.json"), last.as_ref());
         let metrics = json!({
             "state": state, "reason": reason, "exit_code": st.exit_code, "steps": a.step, "time": a.time,
-            "solver_finish": fin, "last_residuals": read_last_line(&dir.join("residuals.jsonl"))
-                .and_then(|l| serde_json::from_str::<Value>(&l).ok()),
+            "solver_finish": fin, "last_residuals": last, "reports": reports,
         });
         note("metrics", self.store.write_metrics(&a.id, &metrics));
         self.set_state(&a.id, &st, &reason);

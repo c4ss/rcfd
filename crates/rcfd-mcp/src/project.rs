@@ -293,6 +293,18 @@ fn state_name(s: RunState) -> String {
     rcfd_runner::client::state_name(s)
 }
 
+/// `s` with its metrics taken from the `reports` object of `metrics.json` (final report values, written by the run
+/// service, ADR 0135 amendment 3) when it has one; otherwise the numeric top-level entries as `rcfd-project` reads them.
+fn with_reports(root: &Path, mut s: RunSummary) -> RunSummary {
+    let p = root.join("runs").join(&s.id).join("metrics.json");
+    if let Ok(v) = atomic::read_json::<Value>(&p) {
+        if let Some(r) = v.get("reports").filter(|r| r.is_object()) {
+            s.metrics = rcfd_project::records::metrics_from_json(r);
+        }
+    }
+    s
+}
+
 fn summary_json(s: &RunSummary) -> Value {
     json!({"id": s.id, "case": s.case, "created": s.created, "state": state_name(s.state), "step": s.step,
         "time": s.time, "metrics": s.metrics})
@@ -583,7 +595,7 @@ impl ProjectTools {
         let mut size = text_len(&v);
         let mut out = Vec::new();
         for r in rows.iter().skip(offset).take(limit) {
-            let row = summary_json(r);
+            let row = summary_json(&with_reports(self.project.root(), (*r).clone()));
             let n = text_len(&row) + 1;
             if size + n > TEXT_BUDGET {
                 break;
@@ -900,7 +912,7 @@ impl ProjectTools {
                 json!({"id": id, "case": s.case, "state": state_name(s.state), "step": s.step, "time": s.time,
                 "residual_lines": lines}),
             );
-            sums.push(s);
+            sums.push(with_reports(self.project.root(), s));
         }
         let names: BTreeSet<&String> = sums.iter().flat_map(|s| s.metrics.keys()).collect();
         let base = &sums[0];
@@ -1099,22 +1111,16 @@ impl ProjectTools {
         };
         let (new_text, form) = match minimal.filter(|t| parse(t).is_ok_and(|c| c.tree.to_json() == want)) {
             Some(t) => (t, "minimal"),
+            // ADR 0135 amendment 3 item 3: never rewrite the whole case with every default spelled out
             None => {
-                let t = if is_json {
-                    expected.to_json_string() + "\n"
-                } else {
-                    expected.to_toml()
-                };
-                match parse(&t) {
-                    Ok(c) if c.tree.to_json() == want => (t, "canonical"),
-                    Ok(_) => {
-                        return Err(err(
-                            INTERNAL,
-                            format!("{norm}: the canonical form does not re-parse to the edited case"),
-                        ))
-                    }
-                    Err(d) => return Err(invalid("the canonical form does not parse".into(), d)),
-                }
+                let keys: Vec<&String> = set.keys().collect();
+                return Err(RpcError {
+                    code: VALIDATION,
+                    message: format!(
+                        "{norm}: edit_case cannot change {keys:?} in the file's own lines (for example a value written over several lines or set through an inline table); the values are valid, but nothing was written: edit the file by hand"
+                    ),
+                    data: Some(json!({"settings": keys, "values": set})),
+                });
             }
         };
         let values: Map<String, Value> = set
