@@ -1,0 +1,73 @@
+{
+  "format": "rcfd-example-projects-1",
+  "adr": "0142",
+  "solver_version": "rcfd 0.1.0",
+  "script": "scripts/make_example_projects.py",
+  "platform": {
+    "os": "linux",
+    "arch": "x86_64",
+    "python": "3.12.3",
+    "libc": "glibc 2.39",
+    "image": "rcfd-linux:ubuntu24.04-rust1.99.0"
+  },
+  "projects": {
+    "wind-tunnel": {
+      "runs": [
+        {
+          "case": "cases/cylinder-re100.toml",
+          "run": "r-20261028T220207-7a4b"
+        },
+        {
+          "case": "cases/cylinder-re200.toml",
+          "run": "r-20261028T220207-b94d"
+        },
+        {
+          "case": "cases/naca0012-aoa4.toml",
+          "run": "r-20261028T220207-6504"
+        },
+        {
+          "case": "cases/naca0012-aoa2.toml",
+          "run": "r-20261028T220207-763f"
+        },
+        {
+          "case": "cases/step-re800.toml",
+          "run": "r-20261028T220207-7213"
+        },
+        {
+          "case": "cases/step-re400.toml",
+          "run": "r-20261028T220207-1173"
+        }
+      ],
+      "bytes": 27402312
+    },
+    "quick-start": {
+      "runs": [
+        {
+          "case": "cases/cavity-re100.toml",
+          "run": "r-20261028T220751-76ca"
+        },
+        {
+          "case": "cases/cavity-re400.toml",
+          "run": "r-20261028T220751-919f"
+        },
+        {
+          "case": "cases/heated-cavity-ra1e3.toml",
+          "run": "r-20261028T220751-9dc3"
+        },
+        {
+          "case": "cases/heated-cavity-ra1e4.toml",
+          "run": "r-20261028T220751-d599"
+        }
+      ],
+      "bytes": 4248948
+    }
+  },
+  "caps": {
+    "total": 40000000,
+    "projects": {
+      "wind-tunnel": 35000000,
+      "quick-start": 6000000
+    }
+  },
+  "inputs_from": "example-projects"
+}

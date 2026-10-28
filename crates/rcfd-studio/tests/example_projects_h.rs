@@ -1,8 +1,12 @@
-//! ADR 0142 H1: the finished example projects (`example-projects/`) in the Studio model, headless and without a GPU.
-//! Each project opens, lists its cases and runs, every committed run shows a field at once, and every case opens in the
-//! Case editor and validates there. The two aerofoil cases (`mesh.file = "../meshes/naca0012-ogrid"`) failed there
-//! until ADR 0144 made the editor resolve relative paths against the case's folder (ADR 0142 E1's predicted miss); this
-//! branch was the check of that failure and is now positive.
+//! ADR 0142 H1: the finished example projects in the Studio model, headless and without a GPU. Each project opens,
+//! lists its cases and runs, every committed run shows a field at once, and every case opens in the Case editor and
+//! validates there. The two aerofoil cases (`mesh.file = "../meshes/naca0012-ogrid"`) failed there until ADR 0144 made
+//! the editor resolve relative paths against the case's folder (ADR 0142 E1's predicted miss); this branch was the check
+//! of that failure and is now positive.
+//!
+//! ADR 0150: the projects are opened from the tree whose runs were built on this platform: `example-projects-linux/` on
+//! x86_64 Linux, `example-projects/` on Windows (and on platforms with no tree of their own). Each tree holds only its
+//! own platform's runs, so the Runs panel lists each case's run once.
 
 mod vp;
 
@@ -11,14 +15,20 @@ use rcfd_studio::Studio;
 use serde_json::Value;
 use std::path::PathBuf;
 
+/// The tree of this platform (ADR 0150).
 fn examples() -> PathBuf {
+    let tree = if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "example-projects-linux"
+    } else {
+        "example-projects"
+    };
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
-        .join("example-projects")
+        .join(tree)
 }
 
-/// (run id, case) of the committed runs of `project`, from `example-projects/manifest.json`.
+/// (run id, case) of the committed runs of `project`, from the tree's `manifest.json`.
 fn committed(project: &str) -> Vec<(String, String)> {
     let m: Value = serde_json::from_str(&std::fs::read_to_string(examples().join("manifest.json")).unwrap()).unwrap();
     m["projects"][project]["runs"]
@@ -50,7 +60,8 @@ fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
         let b = st.browser().unwrap();
         let (cases, listed, skipped) = (b.cases.clone(), b.runs.len(), b.skipped.len());
         println!(
-            "H1 {name}: {} cases, {listed} runs, {skipped} skipped, errors {:?}",
+            "H1 {}: {} cases, {listed} runs, {skipped} skipped, errors {:?}",
+            root.display(),
             cases.len(),
             b.errors
         );

@@ -1,0 +1,5 @@
+/src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-7213/case.snapshot: ok, 8000 cells
+8000 cells, algorithm simplec
+checkpoint written to /src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-7213/output/restart.rcfd
+results written to /src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-7213/output
+finished after 740 iterations/steps (converged: residual targets met: res_u 9.934e-7 < 1.000e-6, res_p 3.820e-7 < 1.000e-6)

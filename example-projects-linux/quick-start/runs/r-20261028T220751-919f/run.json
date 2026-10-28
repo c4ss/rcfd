@@ -1,0 +1,15 @@
+{
+  "id": "r-20261028T220751-919f",
+  "case": "cases/cavity-re400.toml",
+  "case_snapshot_hash": "fnv64:d5320b0fdb34352b",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-28T22:07:51.373836389Z",
+  "case_source": "/src/example-projects-linux/quick-start/cases/cavity-re400.toml",
+  "case_dir": "/src/example-projects-linux/quick-start/cases"
+}

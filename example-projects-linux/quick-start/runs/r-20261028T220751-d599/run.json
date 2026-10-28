@@ -1,0 +1,15 @@
+{
+  "id": "r-20261028T220751-d599",
+  "case": "cases/heated-cavity-ra1e4.toml",
+  "case_snapshot_hash": "fnv64:6166c8f999848972",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-28T22:07:51.476009705Z",
+  "case_source": "/src/example-projects-linux/quick-start/cases/heated-cavity-ra1e4.toml",
+  "case_dir": "/src/example-projects-linux/quick-start/cases"
+}
