@@ -17,6 +17,10 @@ rcfd-mesh.workspace = true
 rcfd-post.workspace = true
 png.workspace = true
 
+[dev-dependencies]
+# ADR 0132 V7: the scrub-cost check reads a field store (workspace crate, layer 4; no third-party crate).
+rcfd-tsstore.workspace = true
+
 [dependencies.wgpu]
 version = "=30.0.1"
 default-features = false

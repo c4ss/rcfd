@@ -115,3 +115,66 @@ Wave 50: fan-specific views.
 
 `crates/rcfd-render/src/{gpu,lib}.rs`, `crates/rcfd-render/tests/` (new file for V1, V2, V6, V7), `crates/rcfd-studio/src/viewport*.rs`
 and its tests, this ADR.
+
+## Library part: set-up registered before the first registered run (2026-10-28)
+
+Written on branch `worktree-agent-abf02dbe83f0d73a7` (based on main 3492c75) after the code and tests were written and before V1, V6
+or V7 ran. The limits of the table above are unchanged; this section only fixes what the table leaves open.
+
+**Scope of the library part.** V1, V6 and V7 (in `crates/rcfd-render/tests/viewport.rs`) and the ADR 0125 checks run unchanged.
+V2 needs egui-wgpu and the Studio window's format; Placement gives `rcfd-render` no new dependency, so V2 is left to the integration
+part (see the question in the addendum). V3-V5, V8 and V9 test the viewport model of `rcfd-studio` and are integration too.
+
+**API as implemented (additive).**
+* `Renderer::from_device(device, queue, info) -> Result<Renderer>`; `from_adapter` now requests a device and calls it (the pipelines
+  are built by the same code). Accessors `Renderer::device()` and `Renderer::queue()`.
+* `Renderer::render_into(&GpuMesh, &View, &wgpu::TextureView) -> Result<()>`: one render pass with the colour pipeline, the clear
+  colour, bind group and a fresh depth buffer exactly as `render`, then a submit; no readback, no wait. The texture must be
+  `Rgba8Unorm`, D2, of the view's size, one layer, one mip level, one sample, with `RENDER_ATTACHMENT` usage; otherwise a located
+  `InvalidValue` error at `target.format`, `target.usage`, `target.size` or `target.levels`.
+* `Renderer::update_scalar(&mut GpuMesh, Field) -> Result<()>` (W48-8 (a)). The 52-byte buffer and the two ADR 0125 pipelines are
+  unchanged. The first update makes a second vertex buffer of 4 bytes per triangle vertex (`VERTEX | COPY_DST`); later updates
+  `queue.write_buffer` it. A mesh that has it is drawn (colour, pick, `render_into`) by a second pipeline pair: the same shader
+  module and entry points, buffer 0 with stride 52 and locations 0, 1, 2, 4, 5, buffer 1 with location 3. A mesh never updated is
+  drawn exactly as before. The field is checked as by `upload` (the same function); on an error the mesh is unchanged. The colour
+  range of the mesh follows the new field.
+* To keep the ADR's signature (no surface argument), `GpuMesh` keeps the surface's face loops as `u32` CSR (4 bytes per face plus 4 per
+  face corner on the host; about 10 MB for the 1M-triangle T1 surface) and expands the field in the fan order of `upload`.
+* `#[doc(hidden)] Renderer::render_ignoring_scalar_buffer`: `render` with the scalar buffer left unbound, for V6's negative
+  control only.
+
+**V1 set-up.** The four G2 scenes of ADR 0125 (cube 4 x 4 x 4, yaw 35 degrees, 320 x 240, the scene fields of `tests/render.rs`).
+Per adapter of `adapters()`: the reference is `Renderer::render` of a `from_adapter` renderer (its own device); the window path is a
+renderer from `from_device` on a second device that the test requests from the same adapter, the mesh uploaded on it, drawn by
+`render_into` into an `Rgba8Unorm` texture (`RENDER_ATTACHMENT | COPY_SRC | TEXTURE_BINDING`) and read back by code in the test (rows
+padded to 256 bytes, padding stripped). Limit: the bytes are equal. Negative control: the window path at yaw 37 differs from the yaw-35
+reference.
+
+**V6 set-up.** On the `from_device` renderer: upload the cube with scene (c)'s field (per point), `update_scalar` with scene (a)'s
+field (per face), render with scene (a)'s view; compare byte for byte with a fresh upload of scene (a)'s field under the same view.
+Also asserted (same limit, byte-identical): `render_into` after the update; the pick pass after the update (ids and values) against the
+fresh upload's pick; a second update back to field (c) against the original upload under scene (c)'s view. Negative control:
+`render_ignoring_scalar_buffer` after the update differs from the fresh image. Every ADR 0125 test in `tests/render.rs` runs unchanged.
+
+**V7 set-up.** Release only (ignored in debug, as ADR 0124 C7).
+* Stores: the C7 layout (20 f64 fields `f00`-`f19`, 3 snapshots at times 0, 0.5, 1, values `sin(i 1e-3 + field) (1 + snapshot) + 1e5`,
+  default write options), written under the test target's temporary directory and deleted afterwards. Arm 1: the 100^3 box of C7,
+  surface of all 6 patches (60 000 faces, 120 000 triangles). Arm 2: the T1 mesh (500 x 500 x 1 box, size 1 x 1 x 0.01), surface
+  `zmin` + `zmax` (1 000 000 triangles), store of the same layout on its 250 000 cells. The surface is built from `Reader::mesh()`.
+* View: `Camera::fit(yaw 0.4, pitch 0.6, perspective fovy 0.8)` as T1, flat shading, 1920 x 1080, colour range from the field. One
+  `Rgba8Unorm` texture of that size per adapter, reused by every step.
+* Step: snapshot index `k -> (k + 1) mod 3`; timed from before `Reader::read_field(k, "f07")` through `face_values_from_cells`,
+  `update_scalar` (`Field::Face`) and `render_into`, to the return of `device.poll(wait_indefinitely)`. Mesh first uploaded with
+  snapshot 0; one untimed warm-up step (the first update makes the scalar buffer), then 20 timed steps; median of 20 = mean of the
+  10th and 11th sorted values.
+* Negative control (arm 2 only): the same step with `upload` in place of `update_scalar`, median of 5 steps.
+* The limit and the control are asserted on `DiscreteGpu` adapters; every adapter's medians are printed with its name.
+
+**Dependencies.** `rcfd-tsstore` (workspace crate, layer 4) becomes a dev-dependency of `rcfd-render` (layer 5) for V7. No
+third-party crate is added; wgpu stays `=30.0.1`.
+
+**What I already knew (rule d).** Before this registration: the existing ADR 0125 tests passed on the base commit (release, five
+adapters; T1 medians 2.3-67.7 ms, uploads 142-172 ms), their saved PNGs were copied aside for a byte comparison after the change;
+an unregistered smoke test (`render_into_and_update_scalar_reject_bad_input`) passed on all five adapters: wrong size, format (incl.
+`Rgba8UnormSrgb`) and usage are located errors, a wrong-length or NaN update fails and leaves the image unchanged, and
+`update_scalar(Field::None)` renders the same bytes as `upload(Field::None)`. No V1, V6 or V7 result had been seen.
