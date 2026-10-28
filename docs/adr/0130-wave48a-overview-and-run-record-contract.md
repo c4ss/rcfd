@@ -308,6 +308,22 @@ those binaries are 1248a76's code. No 48A code had run. Limits are unchanged.
     `output.store_precision` key is not added in 48A, because the Studio applies W48-5 later; recorded as a question for the
     maintainer.
 
+## Amendment 2 (2026-10-28, 48A, before A6 and A7 ran)
+
+1. A7 compares streams "after removing `wall_s`". The `finish` event also carries `elapsed_s`, the same wall-clock time
+   (`RunOutcome::to_json`), so no two streams are equal with it. Both are removed. Both runs use the same case path and `--out`
+   folder, because the `start` event's `info.case` and the `checkpoint` event's `path` name them.
+2. A6 "without the flag byte-identical files": compared once on this host with main 3492c75's `rcfd` (same case, paths and flags,
+   every file of `--out`). The CI test runs the same case without and with the flag: the store at `--store-dir` is byte-equal to
+   `<out>/fields` of the run without it, and every other file of `--out` is byte-equal.
+3. A1: `validate()` reports every temp file (`.<name>.<pid>.<n>.tmp`) as stale, also one that a live writer is about to rename:
+   the runner replaces `status.json` of a running run every poll period, so a validation during that window would report it. The
+   folder is therefore read after a clean shutdown of the runner (ADR 0123 decision 8: the solvers keep running, the running
+   run stays `running` and the held one `paused`). The pre-change negative control uses the same test file.
+4. Not registered, reported: the same through the run service (a runner-made run of the A7 case with `output.store_interval`
+   has its store at `runs/<id>/fields` and the step's `lid_drag` in every `residuals.jsonl` line, the last bit-equal to
+   `monitors.json`).
+
 ## Files
 
 This ADR. Implementation (48A): `crates/rcfd-project/src/records.rs`, `crates/rcfd-runner/src/{records,store,runner,client}.rs`,
