@@ -2691,7 +2691,12 @@ name = "rcfd-mcp"
 version = "0.1.0"
 dependencies = [
  "rcfd-api",
+ "rcfd-claude",
  "rcfd-io",
+ "rcfd-post",
+ "rcfd-project",
+ "rcfd-runner",
+ "rcfd-tsstore",
  "serde_json",
 ]
 

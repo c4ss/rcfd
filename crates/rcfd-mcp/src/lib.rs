@@ -10,7 +10,9 @@
 //! denied permission) are tool results with `isError: true` whose text is a
 //! JSON object `{"error": {"code", "message", "data"?}}`.
 
+mod case_edit;
 pub mod policy;
+pub mod project;
 
 use policy::{Access, Policy, ToolCall};
 use rcfd_api::service::{RpcError, Service};
@@ -51,18 +53,21 @@ direction = [1.0, 0.0, 0.0]
 component = "viscous"
 "#;
 
-struct Tool {
-    name: &'static str,
-    description: &'static str,
-    access: Access,
-    schema: fn() -> Value,
+/// Added to the `initialize` instructions when the server has a project (ADR 0135).
+const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; start_run, wait_run, pause_run, resume_run and cancel_run drive the project's run service.";
+
+pub(crate) struct Tool {
+    pub(crate) name: &'static str,
+    pub(crate) description: &'static str,
+    pub(crate) access: Access,
+    pub(crate) schema: fn() -> Value,
 }
 
 fn sess() -> Value {
     json!({"type": "string", "description": "Session id; defaults to the session made by the last create_case"})
 }
 
-fn obj(props: Value, required: &[&str]) -> Value {
+pub(crate) fn obj(props: Value, required: &[&str]) -> Value {
     json!({"type": "object", "properties": props, "required": required, "additionalProperties": false})
 }
 
@@ -578,6 +583,7 @@ pub struct McpServer {
     policy: Policy,
     current: Mutex<Option<String>>,
     cases_dir: PathBuf,
+    project: Option<project::ProjectTools>,
 }
 
 fn error_result(e: &RpcError) -> Value {
@@ -589,7 +595,7 @@ fn error_result(e: &RpcError) -> Value {
     json!({"content": [{"type": "text", "text": body.to_string()}], "structuredContent": body, "isError": true})
 }
 
-fn ok_result(v: Value) -> Value {
+pub(crate) fn ok_result(v: Value) -> Value {
     json!({"content": [{"type": "text", "text": v.to_string()}], "structuredContent": v, "isError": false})
 }
 
@@ -601,7 +607,28 @@ impl McpServer {
             policy,
             current: Mutex::new(None),
             cases_dir: PathBuf::from("cases"),
+            project: None,
         }
+    }
+
+    /// Add the project tools of ADR 0135 for one project folder (`rcfd-mcp --project`). Without this call the tool
+    /// list and every answer are those of a server without a project.
+    pub fn with_project(mut self, project: project::ProjectTools) -> Self {
+        self.project = Some(project);
+        self
+    }
+
+    /// The project the project tools work on, if any.
+    pub fn project(&self) -> Option<&project::ProjectTools> {
+        self.project.as_ref()
+    }
+
+    fn all_tools(&self) -> Vec<Tool> {
+        let mut t = tools();
+        if self.project.is_some() {
+            t.extend(project::tools());
+        }
+        t
     }
 
     /// Directory searched by `list_cases` by default.
@@ -627,7 +654,8 @@ impl McpServer {
 
     /// `tools/list` payload.
     pub fn tool_list(&self) -> Value {
-        let list: Vec<Value> = tools()
+        let list: Vec<Value> = self
+            .all_tools()
             .iter()
             .map(|t| {
                 json!({
@@ -665,7 +693,7 @@ impl McpServer {
 
     /// Execute a tool; the `Err` side is a JSON-RPC level error.
     pub fn call_tool(&self, name: &str, args: &Value) -> Result<Value, RpcError> {
-        let all = tools();
+        let all = self.all_tools();
         let Some(tool) = all.iter().find(|t| t.name == name) else {
             return Err(RpcError {
                 code: -32602,
@@ -695,6 +723,9 @@ impl McpServer {
     }
 
     fn dispatch(&self, name: &str, args: &Value) -> Result<Value, RpcError> {
+        if let Some(r) = self.project.as_ref().and_then(|p| p.call(name, args)) {
+            return r;
+        }
         let svc = &self.svc;
         let with = |extra: Value| -> Result<Value, RpcError> {
             let mut m = extra.as_object().cloned().unwrap_or_default();
@@ -952,12 +983,18 @@ impl McpServer {
         };
         id.as_ref()?;
         let result = match method {
-            "initialize" => json!({
-                "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(DEFAULT_PROTOCOL_VERSION),
-                "capabilities": {"tools": {"listChanged": false}},
-                "serverInfo": {"name": "rcfd", "version": env!("CARGO_PKG_VERSION")},
-                "instructions": "Clean-room open source CFD solver. create_case, adjust settings, check_mesh, run, then inspect residuals, fields and images."
-            }),
+            "initialize" => {
+                let mut instructions = String::from("Clean-room open source CFD solver. create_case, adjust settings, check_mesh, run, then inspect residuals, fields and images.");
+                if self.project.is_some() {
+                    instructions.push_str(PROJECT_INSTRUCTIONS);
+                }
+                json!({
+                    "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(DEFAULT_PROTOCOL_VERSION),
+                    "capabilities": {"tools": {"listChanged": false}},
+                    "serverInfo": {"name": "rcfd", "version": env!("CARGO_PKG_VERSION")},
+                    "instructions": instructions
+                })
+            }
             "ping" => json!({}),
             "tools/list" => self.tool_list(),
             "tools/call" => {
