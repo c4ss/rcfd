@@ -11,7 +11,10 @@ publish = false
 workspace = true
 
 [dependencies]
+serde.workspace = true
 serde_json.workspace = true
+# Atomic file replacement and path canonicalization (ADR 0134 Placement; layer 2 above rcfd-project).
+rcfd-project = { path = "../rcfd-project" }
 
 # Test-only replay double of the `claude` executable (ADR 0126); the driver never calls it unless a test passes its path.
 [[bin]]

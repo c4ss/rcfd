@@ -5,6 +5,10 @@
 //! * [`stream`]: a tolerant parser of `claude -p --output-format stream-json` lines.
 //! * [`allow`]: the typed allow-list and its mapping onto CLI flags; nothing here can emit a bypass flag.
 //! * [`driver`]: spawns `claude -p` per message, streams events to a channel, cancels without orphans.
+//! * [`trust`]: the files of a project folder that change what `claude -p` runs (ADR 0134 W48-10 (b)), with hashes.
+//!
+//! ADR 0134 adds the per-project allow-list file ([`allow::ALLOW_FILE`]) and MCP pinning ([`Claude::mcp_config`],
+//! [`allow::check_args_in`]).
 //!
 //! The transcript and stream formats are not published; they were observed on Claude Code 2.1.310 (ADR 0126).
 //! Unknown shapes become `Unrecognised` values, never errors or panics.
@@ -14,6 +18,7 @@ pub mod discover;
 pub mod driver;
 pub mod stream;
 pub mod transcript;
+pub mod trust;
 
 pub use allow::{AllowList, AllowRule};
 pub use discover::{Discovery, OpenState, SessionInfo};
@@ -83,6 +88,17 @@ pub enum Error {
     },
     /// `claude agents --json` failed or returned something unreadable.
     Listing(String),
+    /// An allow-list file was refused as a whole (ADR 0134 W48-11 (a)); nothing from it is used.
+    AllowFile {
+        /// The file.
+        path: PathBuf,
+        /// 1-based line of the refused rule or syntax error (0 when not known).
+        line: usize,
+        /// 1-based column.
+        column: usize,
+        /// Why.
+        reason: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -101,6 +117,16 @@ impl fmt::Display for Error {
             Error::ForbiddenArgument(a) => write!(f, "refusing to start claude: forbidden argument {a:?}"),
             Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Error::Listing(s) => write!(f, "claude agents --json: {s}"),
+            Error::AllowFile {
+                path,
+                line,
+                column,
+                reason,
+            } => write!(
+                f,
+                "{}: line {line}, column {column}: {reason}; the allow-list file is not used",
+                path.display()
+            ),
         }
     }
 }

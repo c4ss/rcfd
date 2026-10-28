@@ -2593,6 +2593,8 @@ dependencies = [
 name = "rcfd-claude"
 version = "0.1.0"
 dependencies = [
+ "rcfd-project",
+ "serde",
  "serde_json",
 ]
 
