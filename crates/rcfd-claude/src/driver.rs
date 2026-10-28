@@ -9,6 +9,7 @@
 use crate::allow::{check_args_in, suggest, AllowList};
 use crate::discover::{classify, live_pids, parse_agents, AgentEntry, Discovery};
 use crate::stream::{parse_line, StreamEvent};
+use crate::trust::{check_folder, TrustState, TrustStore};
 use crate::{is_uuid, new_uuid, Error};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -35,6 +36,11 @@ pub struct Claude {
     /// `.mcp.json`); the file must lie outside the project folder ([`check_args_in`]). `None` (the default of
     /// [`Claude::new`]) leaves the argument list as before.
     pub mcp_config: Option<PathBuf>,
+    /// The per-user record of confirmed folders ([`TrustStore`], a file in the Studio's config folder, never inside a
+    /// project). `new_session` and `resume` start nothing in a folder whose control files are not confirmed there
+    /// ([`Error::FolderNotConfirmed`]). `None` (the default of [`Claude::new`]): nothing can be confirmed, so only a
+    /// folder without control files can start a chat.
+    pub trust_store: Option<PathBuf>,
 }
 
 impl Claude {
@@ -46,6 +52,7 @@ impl Claude {
             model: None,
             listing_timeout: Duration::from_secs(20),
             mcp_config: None,
+            trust_store: None,
         }
     }
 
@@ -163,17 +170,21 @@ impl Claude {
         a
     }
 
-    /// Starts a new session with an id chosen here (`--session-id`) and sends `prompt`.
+    /// Starts a new session with an id chosen here (`--session-id`) and sends `prompt`. Refuses a folder whose control
+    /// files are not confirmed ([`Error::FolderNotConfirmed`]) before starting anything.
     pub fn new_session(&self, project: &Path, allow: &AllowList, prompt: &str) -> Result<Chat, Error> {
         self.spawn(project, "--session-id", new_uuid(), allow, prompt)
     }
 
     /// Resumes a CLOSED session (`--resume`) and sends `prompt`. Refuses a session another process has open
-    /// ([`Error::SessionOpen`]) and one whose state cannot be established ([`Error::OpenStateUnknown`]).
+    /// ([`Error::SessionOpen`]) and one whose state cannot be established ([`Error::OpenStateUnknown`]); a folder
+    /// whose control files are not confirmed is refused first, before `claude agents --json` runs.
     pub fn resume(&self, project: &Path, session_id: &str, allow: &AllowList, prompt: &str) -> Result<Chat, Error> {
         if !is_uuid(session_id) {
             return Err(Error::InvalidSessionId(session_id.to_string()));
         }
+        // the argument and folder checks come before any process, including the listing
+        self.prepare(project, "--resume", session_id, allow)?;
         let unknown = |reason: String| Error::OpenStateUnknown {
             session_id: session_id.to_string(),
             reason,
@@ -199,6 +210,31 @@ impl Claude {
         self.spawn(project, "--resume", session_id.to_string(), allow, prompt)
     }
 
+    /// Whether a chat may start in `project`: the scan of its control files against [`Claude::trust_store`]
+    /// (ADR 0134 Amendment 2). `new_session` and `resume` refuse anything but [`TrustState::Confirmed`].
+    pub fn check_folder(&self, project: &Path) -> Result<TrustState, Error> {
+        let store = self.trust_store.as_ref().map(TrustStore::new);
+        check_folder(project, store.as_ref())
+    }
+
+    /// The checked argument list of a chat: the model value, [`check_args_in`], then the folder check.
+    fn prepare(&self, project: &Path, flag: &str, session_id: &str, allow: &AllowList) -> Result<Vec<String>, Error> {
+        if let Some(m) = &self.model {
+            if m.is_empty() || m.starts_with('-') || m.chars().any(|c| c.is_whitespace() || c.is_control()) {
+                return Err(Error::ForbiddenArgument(format!("--model {m}")));
+            }
+        }
+        let args = self.chat_args(flag, session_id, allow);
+        check_args_in(&args, project)?; // the verdict of check_args when no MCP flag is present
+        match self.check_folder(project)? {
+            TrustState::Confirmed => Ok(args),
+            TrustState::Pending(pending) => Err(Error::FolderNotConfirmed {
+                project: project.to_path_buf(),
+                pending,
+            }),
+        }
+    }
+
     fn spawn(
         &self,
         project: &Path,
@@ -207,13 +243,7 @@ impl Claude {
         allow: &AllowList,
         prompt: &str,
     ) -> Result<Chat, Error> {
-        if let Some(m) = &self.model {
-            if m.is_empty() || m.starts_with('-') || m.chars().any(|c| c.is_whitespace() || c.is_control()) {
-                return Err(Error::ForbiddenArgument(format!("--model {m}")));
-            }
-        }
-        let args = self.chat_args(flag, &session_id, allow);
-        check_args_in(&args, project)?; // the verdict of check_args when no MCP flag is present
+        let args = self.prepare(project, flag, &session_id, allow)?;
         let mut child = self.chat_cmd(project, &args).0.spawn().map_err(|source| Error::Io {
             path: self.program.clone(),
             source,

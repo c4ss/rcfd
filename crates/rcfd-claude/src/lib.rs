@@ -99,6 +99,14 @@ pub enum Error {
         /// Why.
         reason: String,
     },
+    /// The project folder holds Claude Code control files (or an allow-list file) that the user has not confirmed, or
+    /// that changed since (ADR 0134 Amendment 2); no process was started.
+    FolderNotConfirmed {
+        /// The project folder.
+        project: PathBuf,
+        /// What to show and confirm.
+        pending: trust::Pending,
+    },
 }
 
 impl fmt::Display for Error {
@@ -126,6 +134,13 @@ impl fmt::Display for Error {
                 f,
                 "{}: line {line}, column {column}: {reason}; the allow-list file is not used",
                 path.display()
+            ),
+            Error::FolderNotConfirmed { project, pending } => write!(
+                f,
+                "{}: {} Claude Code control file(s) not confirmed (changed: {}); no chat is started until the user confirms them",
+                project.display(),
+                pending.files.len(),
+                pending.changed.join(", ")
             ),
         }
     }

@@ -578,7 +578,7 @@ fn mcp_config_outside(value: &str, project: &Path) -> Result<(), String> {
 }
 
 /// The components of `p` with `.` dropped and `..` applied, as strings (ASCII-lowercased on Windows).
-fn lexical(p: &Path) -> Vec<String> {
+pub(crate) fn lexical(p: &Path) -> Vec<String> {
     use std::path::Component;
     let (mut out, mut roots): (Vec<String>, usize) = (Vec::new(), 0);
     for c in p.components() {
@@ -600,7 +600,7 @@ fn lexical(p: &Path) -> Vec<String> {
 }
 
 /// Is `p` equal to `base` or below it (whole components, so `proj2` is not below `proj`)?
-fn inside(base: &[String], p: &[String]) -> bool {
+pub(crate) fn inside(base: &[String], p: &[String]) -> bool {
     p.len() >= base.len() && p[..base.len()] == *base
 }
 
