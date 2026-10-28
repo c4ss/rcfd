@@ -152,9 +152,13 @@ pub struct CaseFacts {
     pub end_time: f64,
     /// Cells, when the mesh generator's counts give them (`None`: a mesh file or a generator not counted here).
     pub cells: Option<u64>,
-    /// The case text sets `output.store_interval` or `output.store_time_interval` (any value, 0 included).
+    /// The case sets `output.store_interval` or `output.store_time_interval` itself: to a value other than its schema
+    /// default ([`crate::store_plan::store_key_set`], ADR 0152). A 0, the default of both, is not set: it cannot be told
+    /// from the default a case saved by the Studio spells out. With [`PlanRoute::default_store_keys_set`] (the route
+    /// before): the text has either key, whatever its value.
     pub sets_store: bool,
-    /// The case text sets `output.store_precision`.
+    /// The case sets `output.store_precision` itself (to `"f32"`: `"f64"` is the default; ADR 0152); the route before:
+    /// the text has the key.
     pub sets_precision: bool,
     /// `dynamic_mesh.enabled` (the store does not support a moving mesh).
     pub dynamic_mesh: bool,
@@ -208,15 +212,16 @@ fn steady(alg: &str) -> bool {
     matches!(alg, "simple" | "simplec" | "coupled")
 }
 
-fn text_sets(raw: &Value, path: &[&str]) -> bool {
-    let mut v = raw;
-    for p in path {
-        match v.get(p) {
-            Some(x) => v = x,
-            None => return false,
-        }
-    }
-    true
+/// How a case text is read for its start plan. The default is the app's route; the switches are the routes before
+/// ADR 0149 and ADR 0152, for the registered negative controls.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlanRoute {
+    /// The route before ADR 0149: the text is read as TOML only (a JSON case is refused with `not TOML: ...`, a benchmark
+    /// descriptor without ADR 0147's one line).
+    pub toml_only: bool,
+    /// The route before ADR 0152: a store key the text has is the case's own whatever its value, also at its schema
+    /// default (so a case saved by the Studio, which spells out `store_interval = 0`, turns the Studio's store off).
+    pub default_store_keys_set: bool,
 }
 
 /// The keys a case text sets, as a tree (no defaults, nothing resolved): JSON when the text starts with `{`, else TOML
@@ -229,17 +234,31 @@ fn text_tree(text: &str, toml_only: bool) -> Result<Value, String> {
     toml::from_str::<Value>(text).map_err(|e| format!("not TOML: {}", e.message()))
 }
 
-/// Read the facts of a case text (`base_dir`: where its relative data files are). The store keys are looked for in the
-/// text, not in the resolved settings: an explicit `0` is the case's own choice, and the resolved tree cannot tell it
-/// from the default. The text is read as `rcfd run` reads it (ADR 0149): JSON when it starts with `{`, else TOML
-/// ([`crate::preview::parse_case`]).
+/// Read the facts of a case text (`base_dir`: where its relative data files are). A store key is the case's own when
+/// its resolved value differs from its schema default ([`crate::store_plan::store_key_set`], ADR 0152): a key at its
+/// default, as a case saved by the Studio spells every key out, is not set, so the Studio's store proposal applies; an
+/// explicit `0` (or `"f64"`) cannot be told from the default. The text is read as `rcfd run` reads it (ADR 0149): JSON
+/// when it starts with `{`, else TOML ([`crate::preview::parse_case`]).
 pub fn case_facts(text: &str, base_dir: &Path) -> Result<CaseFacts, String> {
-    case_facts_with(text, base_dir, false)
+    case_facts_route(text, base_dir, PlanRoute::default())
 }
 
 /// [`case_facts`]; with `toml_only`, the route before ADR 0149: the text is read as TOML only (a JSON case is refused
 /// with `not TOML: ...`).
 pub fn case_facts_with(text: &str, base_dir: &Path, toml_only: bool) -> Result<CaseFacts, String> {
+    case_facts_route(
+        text,
+        base_dir,
+        PlanRoute {
+            toml_only,
+            ..PlanRoute::default()
+        },
+    )
+}
+
+/// [`case_facts`] by `route` ([`PlanRoute`]: the routes before ADR 0149 and ADR 0152).
+pub fn case_facts_route(text: &str, base_dir: &Path, route: PlanRoute) -> Result<CaseFacts, String> {
+    let toml_only = route.toml_only;
     let raw = text_tree(text, toml_only)?;
     let parsed = if toml_only {
         Case::parse_toml_in(text, base_dir)
@@ -265,16 +284,16 @@ pub fn case_facts_with(text: &str, base_dir: &Path, toml_only: bool) -> Result<C
             "annulus_3d" | "annulus_3d_sector" => Some(int("mesh.nx") * int("mesh.ny") * int("mesh.nz")),
             _ => None,
         });
+    let sets = |key: &str| crate::store_plan::store_key_set(&raw, &case, key, route);
     Ok(CaseFacts {
         algorithm: get("solver.algorithm").as_str().unwrap_or_default().to_string(),
         max_iterations: int("solver.max_iterations"),
         end_time: get("solver.end_time").as_f64().unwrap_or(0.0),
         cells,
-        sets_store: text_sets(&raw, &["output", "store_interval"])
-            || text_sets(&raw, &["output", "store_time_interval"]),
-        sets_precision: text_sets(&raw, &["output", "store_precision"]),
+        sets_store: sets("output.store_interval") || sets("output.store_time_interval"),
+        sets_precision: sets("output.store_precision"),
         dynamic_mesh: get("dynamic_mesh.enabled").as_bool() == Some(true),
-        extra: Box::new(crate::store_plan::case_extra(&raw, &case, cells.is_some())),
+        extra: Box::new(crate::store_plan::case_extra(&raw, &case, cells.is_some(), route)),
     })
 }
 
@@ -320,7 +339,21 @@ impl StartPlan {
 
     /// [`StartPlan::new`]; with `toml_only`, the route before ADR 0149 (the text read as TOML only, no descriptor line).
     pub fn new_with(rel: &str, text: &str, base_dir: &Path, toml_only: bool) -> Result<StartPlan, String> {
-        let facts = case_facts_with(text, base_dir, toml_only).map_err(|e| {
+        Self::new_route(
+            rel,
+            text,
+            base_dir,
+            PlanRoute {
+                toml_only,
+                ..PlanRoute::default()
+            },
+        )
+    }
+
+    /// [`StartPlan::new`] by `route` ([`PlanRoute`]: the routes before ADR 0149 and ADR 0152).
+    pub fn new_route(rel: &str, text: &str, base_dir: &Path, route: PlanRoute) -> Result<StartPlan, String> {
+        let toml_only = route.toml_only;
+        let facts = case_facts_route(text, base_dir, route).map_err(|e| {
             let short = (!toml_only)
                 .then(|| crate::preview::descriptor_message(rel, text))
                 .flatten();

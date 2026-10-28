@@ -5,7 +5,7 @@ mod common;
 
 use rcfd_api::case::Case;
 use rcfd_api::chain::apply_set;
-use rcfd_studio::runs::StartPlan;
+use rcfd_studio::runs::{PlanRoute, StartPlan};
 use std::path::Path;
 
 fn cavity(alg: &str, extra: &str) -> String {
@@ -83,9 +83,20 @@ fn r10_store_proposal_of_the_start_plan() {
     assert!(b.set().is_empty());
     assert!(b.store.is_none());
     parses_with_set(&b_text, &b);
-    // an explicit 0 in the text is the case's own choice too (the resolved tree cannot tell it from the default)
-    let b0 = plan(&cavity("simplec", "[output]\nstore_interval = 0\n"));
-    assert!(b0.set().is_empty(), "{:?}", b0.set());
+    // (b0) ADR 0152 (a registered change): an explicit 0 is the schema default, which a case saved by the Studio spells
+    // out, so it is not the case's own: the plan is (a)'s proposal
+    let b0_text = cavity("simplec", "[output]\nstore_interval = 0\n");
+    let b0 = plan(&b0_text);
+    eprintln!("R10 (b0): set {:?}", b0.set());
+    assert_eq!(b0.set(), ["output.store_interval=4", "output.store_precision=f32"]);
+    parses_with_set(&b0_text, &b0);
+    // the registered (b0) as the route before ADR 0152: an explicit 0 in the text was the case's own choice
+    let before = PlanRoute {
+        default_store_keys_set: true,
+        ..PlanRoute::default()
+    };
+    let b0_before = StartPlan::new_route("cases/x.toml", &b0_text, Path::new("."), before).unwrap();
+    assert!(b0_before.set().is_empty(), "{:?}", b0_before.set());
     // (c) switched off
     let mut c = plan(&a_text);
     c.store.as_mut().unwrap().on = false;

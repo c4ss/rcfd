@@ -53,6 +53,9 @@ pub struct Switches {
     /// The route before ADR 0149: the Start run dialog's plan reads a case as TOML only (a `.json` case is refused with
     /// `not TOML: ...`, a benchmark descriptor with the TOML parser's message).
     pub cases_as_toml: bool,
+    /// The route before ADR 0152: the Start run dialog's plan takes a store key in the case text as the case's own
+    /// whatever its value ([`crate::runs::PlanRoute::default_store_keys_set`]).
+    pub default_store_keys_set: bool,
 }
 
 /// New samples of one run's series (column form): name -> (steps, values).
@@ -847,8 +850,13 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
                 .and_then(|path| {
                     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
                     let base = path.parent().unwrap_or(&p.root).to_path_buf();
-                    // ADR 0149: JSON as `rcfd run` reads it, a benchmark descriptor's one line
-                    let mut plan = StartPlan::new_with(&rel, &text, &base, p.switches.cases_as_toml)?;
+                    // ADR 0149: JSON as `rcfd run` reads it, a benchmark descriptor's one line; ADR 0152: a store key at
+                    // its schema default is not the case's own
+                    let route = crate::runs::PlanRoute {
+                        toml_only: p.switches.cases_as_toml,
+                        default_store_keys_set: p.switches.default_store_keys_set,
+                    };
+                    let mut plan = StartPlan::new_route(&rel, &text, &base, route)?;
                     if plan.facts.cells.is_none() {
                         // ADR 0140 D5: the mesh is built on a control thread, never in the tick loop
                         plan.facts.extra.cells_state = crate::store_plan::CellsState::Counting;
