@@ -687,6 +687,17 @@ Remaining limit (ADR 0102): with the key, plain SIMPLEC with a strong vent (K = 
 that grows from the first iteration (the X7 duct does not settle in 3000 iterations, the F-200 C3 channel is non-finite at iteration 2767);
 use pseudo-time there. `false` keeps every earlier result bit for bit.
 
+## Landing on `solver.end_time` (ADR 0145)
+
+A fixed-step transient run (`solver.dt`, or the `solver.max_courant` controller without the keys below; incompressible,
+prescribed flow, variable density and VOF) adds its steps up to `solver.end_time`, and the added steps carry rounding
+errors: 2000 steps of 0.05 reach 99.99999999999646, not 100. When a step would stop short of the end time by less than
+1e-6 of itself, it is lengthened to end exactly on the end time, instead of adding a step of a few picoseconds whose
+pressure is meaningless. A larger remainder is still taken as a separate, shorter last step; when it is shorter than 5 %
+of the step, the run reports the warning `short_last_step` (`rcfd run` on stderr, the run's events), because the
+pressure of a much shorter step can be inaccurate: choose `solver.end_time` as a whole number of steps of `solver.dt`.
+The adaptive controller below lands on the end time and on write times by its own rule.
+
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
 Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset

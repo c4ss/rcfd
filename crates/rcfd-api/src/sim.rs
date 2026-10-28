@@ -827,6 +827,50 @@ pub struct StepSummary {
     pub converged: bool,
 }
 
+/// A fixed-step transient run whose summed steps stop short of `solver.end_time` by more than the end tolerance (1e-12)
+/// adds a remainder step: 2000 steps of 0.05 reach 99.99999999999646, and the step of 3.5e-12 s that followed spoiled the
+/// pressure (ADR 0142 question 6). A step that would leave a remainder below this fraction of itself is stretched to end
+/// on `solver.end_time` instead (ADR 0145 D1, D2).
+const REMAINDER_ABSORB: f64 = 1e-6;
+
+/// A separate last step shorter than this fraction of the step proposed for it is reported as the run-time warning
+/// `short_last_step` (ADR 0145 D4; the fraction is ADR 0050's `LAND_STRETCH - 1`).
+const SHORT_LAST_STEP: f64 = 0.05;
+
+/// The step of a fixed-step transient run (fixed `solver.dt` or the legacy `solver.max_courant` controller) at time `t`
+/// towards `end`, with the proposed step `dt` (ADR 0145 D1): the step `min(dt, max(end - t, 1e-12))` as before, stretched
+/// to `end - t` when it would stop short of `end` by more than the end tolerance 1e-12 and by less than
+/// [`REMAINDER_ABSORB`] of itself. Returns the step and whether it was stretched; the run is done after a stretched step.
+fn fixed_step(t: f64, dt: f64, end: f64) -> (f64, bool) {
+    let d = dt.min((end - t).max(1e-12));
+    let after = t + d;
+    if after < end - 1e-12 && end - after < REMAINDER_ABSORB * d {
+        (end - t, true)
+    } else {
+        (d, false)
+    }
+}
+
+/// The run-time warning `short_last_step` (ADR 0145 D4) of the step `d` taken at step `step`, ending at `time`, instead of
+/// the proposed step `dt` towards the end time `end`; `None` unless `d` is shorter than [`SHORT_LAST_STEP`] of `dt`. A
+/// stretched step (D1) is longer than its proposal and never warns.
+fn short_last_step(step: usize, time: f64, d: f64, dt: f64, end: f64) -> Option<serde_json::Value> {
+    if d < dt && d < SHORT_LAST_STEP * dt {
+        Some(serde_json::json!({
+            "message": format!(
+                "the last step is {d:.3e} s, {:.2e} of the step {dt} s, because solver.end_time {end} is not a whole number \
+                 of steps away: the pressure of a much shorter step can be inaccurate (ADR 0145); choose solver.end_time as \
+                 a whole number of steps of solver.dt",
+                d / dt
+            ),
+            "kind": "short_last_step", "step": step, "time": time, "dt": d, "dt_proposed": dt, "fraction": d / dt,
+            "end_time": end,
+        }))
+    } else {
+        None
+    }
+}
+
 /// A configured, runnable simulation.
 pub struct Simulation {
     /// Settings used to build it.
@@ -919,6 +963,8 @@ pub struct Simulation {
     steady_diverged: Option<rcfd_fv::simple::SteadyDivergence>,
     /// Pressure-lag warnings of the transient solver already handed out (ADR 0077 part C).
     lag_reported: usize,
+    /// `short_last_step` warnings not handed out yet (ADR 0145 D4).
+    landing_warnings: Vec<serde_json::Value>,
     /// Solution limits (`limits.*`, ADR 0016): `(enabled, min, max)` for temperature and transported scalars.
     limit_t: (bool, f64, f64),
     limit_s: (bool, f64, f64),
@@ -1982,6 +2028,7 @@ impl Simulation {
             steady_guard,
             steady_diverged: None,
             lag_reported: 0,
+            landing_warnings: Vec::new(),
             limit_t,
             limit_s,
             clipped: 0,
@@ -2378,14 +2425,16 @@ impl Simulation {
         }))
     }
 
-    /// Pressure-lag warnings of the transient solver not handed out yet (ADR 0077 part C), as `warning` event bodies.
+    /// Run-time warnings not handed out yet, as `warning` event bodies: the `short_last_step` warning of a fixed-step
+    /// run (ADR 0145 D4), then the pressure-lag warnings of the transient solver (ADR 0077 part C).
     pub fn take_runtime_warnings(&mut self) -> Vec<serde_json::Value> {
+        let mut out = std::mem::take(&mut self.landing_warnings);
         let Engine::Transient(s) = &self.engine else {
-            return Vec::new();
+            return out;
         };
         let cc = self.geom.mesh.cell_centres();
         let nc = s.settings.n_correctors;
-        let out: Vec<serde_json::Value> = s.lag_warnings[self.lag_reported.min(s.lag_warnings.len())..]
+        out.extend(s.lag_warnings[self.lag_reported.min(s.lag_warnings.len())..]
             .iter()
             .map(|w| {
                 let x = cc.get(w.cell).copied().unwrap_or([f64::NAN; 3]);
@@ -2397,8 +2446,7 @@ impl Simulation {
                     ),
                     "kind": "pressure_lag", "step": w.step, "rho": w.rho, "cell": w.cell, "position": x,
                 })
-            })
-            .collect();
+            }));
         self.lag_reported = s.lag_warnings.len();
         out
     }
@@ -2578,7 +2626,8 @@ impl Simulation {
                 }
             }
             Engine::Transient(s) if frozen => {
-                let dt = self.dt.min((self.end_time - s.time).max(1e-12));
+                // ADR 0145 D1: a rounding remainder is absorbed into the last whole step (no warning: no pressure here)
+                let (dt, last) = fixed_step(s.time, self.dt, self.end_time);
                 if let Some(en) = &mut self.energy {
                     let joule = joule_source(&mut self.electric, &self.geom, &en.solver.t.values, &mut udf_error);
                     if let Some(zs) = &self.zone_sources {
@@ -2621,7 +2670,7 @@ impl Simulation {
                     res_u: 0.0,
                     res_p: 0.0,
                     continuity: 0.0,
-                    done: s.time >= self.end_time - 1e-12,
+                    done: last || s.time >= self.end_time - 1e-12,
                     converged: false,
                 }
             }
@@ -2957,8 +3006,9 @@ impl Simulation {
                 }
             }
             Engine::VarDensity(v) if v.solver.settings.transient.is_some() => {
-                // transient variable density (ADR 0009): one time step of SIMPLE-inner iterations
-                let dt = self.dt.min((self.end_time - v.solver.time).max(1e-12));
+                // transient variable density (ADR 0009): one time step of SIMPLE-inner iterations; a rounding remainder is
+                // absorbed into the last whole step (ADR 0145 D1)
+                let (dt, last) = fixed_step(v.solver.time, self.dt, self.end_time);
                 match v.solver.advance(dt) {
                     Ok(si) => {
                         v.steps += 1;
@@ -2973,6 +3023,9 @@ impl Simulation {
                                 si.time
                             ));
                         }
+                        if let Some(w) = short_last_step(v.steps, si.time, dt, self.dt, self.end_time) {
+                            self.landing_warnings.push(w);
+                        }
                         self.monitors.push("res_T", "", si.time, l.res_h);
                         self.monitors.push("inner_iterations", "", si.time, si.inner as f64);
                         self.monitors.push("dt", "s", si.time, dt);
@@ -2982,7 +3035,7 @@ impl Simulation {
                             res_u: l.res_u,
                             res_p: l.res_p,
                             continuity: l.continuity,
-                            done: !finite || si.time >= self.end_time - 1e-12,
+                            done: !finite || last || si.time >= self.end_time - 1e-12,
                             converged: false,
                         }
                     }
@@ -3024,8 +3077,9 @@ impl Simulation {
                 }
             }
             Engine::Vof(v) => {
-                // two-phase free-surface step (ADR 0049): alpha sub-cycled, then PISO / PIMPLE on the mixture
-                let dt = self.dt.min((self.end_time - v.solver.time).max(1e-12));
+                // two-phase free-surface step (ADR 0049): alpha sub-cycled, then PISO / PIMPLE on the mixture; a rounding
+                // remainder is absorbed into the last whole step (ADR 0145 D1)
+                let (dt, last) = fixed_step(v.solver.time, self.dt, self.end_time);
                 match v.solver.step(dt) {
                     Ok(si) => {
                         v.steps += 1;
@@ -3036,6 +3090,9 @@ impl Simulation {
                                 si.time
                             ));
                         }
+                        if let Some(w) = short_last_step(si.step, si.time, dt, self.dt, self.end_time) {
+                            self.landing_warnings.push(w);
+                        }
                         self.monitors.push("courant", "", si.time, si.courant);
                         self.monitors.push("alpha_courant", "", si.time, si.alpha_courant);
                         self.monitors.push("dt", "s", si.time, si.dt);
@@ -3045,7 +3102,7 @@ impl Simulation {
                             res_u: si.res_u,
                             res_p: si.res_p,
                             continuity: si.continuity,
-                            done: !finite || si.time >= self.end_time - 1e-12,
+                            done: !finite || last || si.time >= self.end_time - 1e-12,
                             converged: false,
                         }
                     }
@@ -3075,7 +3132,14 @@ impl Simulation {
                     (None, Some(c)) if !s.history.is_empty() => c.next_dt(&s.geom, &s.phi, dt_prev),
                     _ => self.dt,
                 };
-                if planned.is_none() {
+                // ADR 0145 D1: the solver's own fixed or legacy-Courant step absorbs a rounding remainder into the last
+                // whole step; the step-doubling error control lands by itself (ADR 0050), its local clamp is unchanged
+                let fixed = planned.is_none() && !self.timectl.as_ref().is_some_and(|c| c.ctl.settings.error_tol > 0.0);
+                let proposed = dt;
+                let mut last = false;
+                if fixed {
+                    (dt, last) = fixed_step(s.time, dt, self.end_time);
+                } else if planned.is_none() {
                     dt = dt.min((self.end_time - s.time).max(1e-12));
                 }
                 if let (Some(c), Some(_)) = (&self.timectl, &planned) {
@@ -3277,6 +3341,11 @@ impl Simulation {
                         udf_error = Some(e);
                     }
                 }
+                if fixed {
+                    if let Some(w) = short_last_step(i.step, i.time, dt, proposed, self.end_time) {
+                        self.landing_warnings.push(w);
+                    }
+                }
                 self.monitors.push("courant", "", i.time, i.courant);
                 self.monitors.push("dt", "s", i.time, i.dt);
                 StepSummary {
@@ -3285,7 +3354,7 @@ impl Simulation {
                     res_u: i.res_u,
                     res_p: i.res_p,
                     continuity: i.continuity,
-                    done: i.time >= self.end_time - 1e-12,
+                    done: last || i.time >= self.end_time - 1e-12,
                     converged: false,
                 }
             }
