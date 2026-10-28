@@ -309,8 +309,8 @@ Deviations and notes:
 * The first run of the F8, F9 and F10 tests stopped in their set-up before measuring anything: the store helper gave the service a
   sandbox folder that did not exist (1004). A test-code defect, fixed (the folder is created), then all three ran as counted above.
 * `rcfd-mcp`'s existing test `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` fails on this host because
-  `%TEMP%\x` exists (created 2026-10-15, not by this branch); it asserts that path is absent. It fails the same way without 48F's
-  changes; skipped in the runs above.
+  `%TEMP%\x` exists (created 2026-10-15, not by this branch); it asserts that path is absent. The failing assertion reads only
+  that folder and the test is unchanged (not re-run on 15b00ef); skipped in the runs above.
 * `rcfd-mcp --help` gained one line for `--project`.
 * The edit lock, edit log and conflict codes are as amendment 1 items 12 and 14. Read tools write a file under `runs/<id>/mcp/` or
   `runs/<id>/renders/` when a result is over the budget, also with `--read-only` (as the Design section says for large outputs).
