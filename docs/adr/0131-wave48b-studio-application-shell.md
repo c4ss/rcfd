@@ -178,8 +178,8 @@ manifest (no compile). Limits are unchanged.
 
 **Set-up of the checks.**
 
-1. W48-9 copy: `schema_model.rs`, `monitors.rs` and `layout.rs` are copied from `crates/rcfd-gui/src/` at main 15b00ef (the files'
-   last change is 3db01e0). `layout.rs` gets the Studio's panels (Browser, Case editor, Runs, Viewport, Plots, Log, Chat, Outputs)
+1. W48-9 copy: `schema_model.rs`, `monitors.rs` and `layout.rs` are copied from `crates/rcfd-gui/src/` at main 15b00ef (last changed in
+   f71f6e2, c2345a4 and f71f6e2). `layout.rs` gets the Studio's panels (Browser, Case editor, Runs, Viewport, Plots, Log, Chat, Outputs)
    and egui_dock 0.21's `TabPath`; the other two are unchanged apart from the source note. Ported tests, limits unchanged:
    `every_schema_leaf_is_reachable_and_parses_its_default` and `parse_input_rejects_out_of_range_and_garbage` (B5),
    `layout_keeps_exactly_one_instance_per_panel` (B4), `monitors_merge_is_idempotent_and_incremental`, M1-M4 and M6 (M6 draws the
