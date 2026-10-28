@@ -92,10 +92,13 @@ fn delete_and_rename(st: &mut Studio, root: &Path) {
     );
 }
 
-/// Drain until nothing is being read and the preview settled.
+/// Drain until nothing is being read and the preview settled. Amendment 2: with no case asked for the preview is idle,
+/// which `lj::settled` does not count as settled; the registered "settled" (nothing read, no build running or waiting)
+/// holds then.
 fn settle(st: &mut Studio) {
     assert!(
-        st.drain_until(WAIT, |s| s.pending_case.is_none() && lj::settled(s)),
+        st.drain_until(WAIT, |s| s.pending_case.is_none()
+            && (s.preview.case.is_none() || lj::settled(s))),
         "did not settle: pending {:?}, preview {:?}",
         st.pending_case,
         st.preview.status

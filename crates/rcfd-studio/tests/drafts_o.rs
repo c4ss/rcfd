@@ -865,8 +865,11 @@ fn o8(tag: &str, drop_drafts: bool) -> O8 {
     let kept = st.parked.keys().cloned().collect();
     select(&mut st, "cases/cavity.toml");
     let kept_after = st.parked.keys().cloned().collect();
-    st.save_case().unwrap();
-    assert!(st.drain_until(WAIT, |s| s.editor.as_ref().is_some_and(|e| !e.saving && !e.is_dirty())));
+    // amendment 2: saved when it holds unsaved edits (in ADR 0148's route it comes back clean from its file)
+    if st.editor.as_ref().is_some_and(|e| e.is_dirty()) {
+        st.save_case().unwrap();
+        assert!(st.drain_until(WAIT, |s| s.editor.as_ref().is_some_and(|e| !e.saving && !e.is_dirty())));
+    }
     select(&mut st, "cases/hex.toml");
     let kept_last = st.parked.keys().cloned().collect();
     let size = st

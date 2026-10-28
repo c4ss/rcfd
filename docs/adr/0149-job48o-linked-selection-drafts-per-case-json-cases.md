@@ -2,7 +2,8 @@
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (the case editor's fields per case, O9b)
-before any registered run; not yet accepted by the maintainer. Job 48O, on local
+before any registered run; amendment 2 (the set-ups of O1 and O8's control) before the corrected runs; not yet accepted
+by the maintainer. Job 48O, on local
 main 9e857d8 (waves 48A-48N merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
 are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
 defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
@@ -287,6 +288,25 @@ kept (`mesh.ny` 12 committed and left); in the cavity "20" typed into `mesh.nx` 
 b's label; settled. Limits: b's `mesh.nx` 10 and b has no field being typed; the cavity is kept holding its 20, either as
 the field being typed or committed and dirty (which one is reported). Every registered file (`linked_o`, `drafts_o`,
 `json_o`, `case_starter_g2`) and the whole suite run on the commit of this amendment.
+
+## Amendment 2 (2026-10-28, two set-up defects found by the registered runs; before the corrected runs)
+
+The registered runs of the four files on 894b659 (amendment 1): `json_o.rs` 4 of 4 and `case_starter_g2.rs` 26 of 26
+passed; `drafts_o.rs` passed 15 of 16; `linked_o.rs` passed O2, O3 and their controls and stopped O1 and its control.
+
+* **O1 and its control** stopped at step (a), `did not settle: pending None, preview Idle`. The test's `settle` waited for
+  `lj::settled`, which does not count an idle preview as settled; with no case selected the preview is idle for good. The
+  registered "settled" (nothing being read, the preview neither building nor waiting for its debounce) holds then. A
+  defect of the helper, not of the code: none of O1's limits was read.
+* **O8's control** stopped with `cases/cavity.toml: nothing to save`: the procedure, shared with O8, saves the cavity
+  after selecting it again; in ADR 0148's route the cavity comes back clean from its file, so the save is refused and the
+  test's `unwrap` ends the control before its limits are read. O8 itself passed.
+
+Corrected set-ups (the same test names; every limit and control unchanged): `settle` in `linked_o.rs` waits for nothing
+being read and, when a case is asked for, `lj::settled`; O8's procedure saves the cavity only when its editor holds
+unsaved edits (O8's own path, where it does, is unchanged). What I knew when writing this: the output of those runs (the
+values are in the addendum); the corrected tests had not run. Every registered file and the whole suite run again on the
+commit of this amendment.
 
 ## Not in CI (by hand)
 
