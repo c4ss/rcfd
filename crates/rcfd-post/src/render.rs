@@ -5,10 +5,17 @@
 //! 3D meshes are sliced: only cells whose extent along `axis` contains the
 //! slice coordinate are drawn. Each cell is filled with the colour of its
 //! value (flat shading), so what you see is exactly the cell data.
+//!
+//! [`render_scalar`] finds the cells' polygons in contiguous ranges of cells and
+//! fills the image in bands of rows, on [`RenderOptions::threads`] threads. Every
+//! band draws the cells in cell order, as a single thread does, so a later cell
+//! still overwrites an earlier one and the image does not depend on the thread
+//! count (ADR 0151).
 
 use rcfd_core::vec3::Vec3;
 use rcfd_core::{Error, Result};
 use rcfd_mesh::Mesh;
+use std::ops::Range;
 
 /// RGBA raster image.
 #[derive(Debug, Clone)]
@@ -23,11 +30,11 @@ pub struct Image {
 
 impl Image {
     fn new(width: usize, height: usize, bg: [u8; 4]) -> Self {
-        let mut rgba = Vec::with_capacity(width * height * 4);
-        for _ in 0..width * height {
-            rgba.extend_from_slice(&bg);
+        Image {
+            width,
+            height,
+            rgba: bg.repeat(width * height),
         }
-        Image { width, height, rgba }
     }
 
     /// Pixel colour.
@@ -93,6 +100,10 @@ pub struct RenderOptions {
     pub range: Option<(f64, f64)>,
     /// Draw the colour bar with min/max labels.
     pub colorbar: bool,
+    /// Threads for [`render_scalar`]; 0 picks the available parallelism, at most
+    /// [`MAX_AUTO_THREADS`], and one thread below [`PARALLEL_MIN_CELLS`] cells.
+    /// The image does not depend on it.
+    pub threads: usize,
 }
 
 impl Default for RenderOptions {
@@ -104,7 +115,24 @@ impl Default for RenderOptions {
             slice: None,
             range: None,
             colorbar: true,
+            threads: 0,
         }
+    }
+}
+
+/// Below this many cells [`RenderOptions::threads`] = 0 renders on one thread.
+pub const PARALLEL_MIN_CELLS: usize = 16_384;
+
+/// The most threads [`RenderOptions::threads`] = 0 takes.
+pub const MAX_AUTO_THREADS: usize = 8;
+
+fn render_threads(opt: &RenderOptions, cells: usize) -> usize {
+    if opt.threads > 0 {
+        opt.threads
+    } else if cells < PARALLEL_MIN_CELLS {
+        1
+    } else {
+        std::thread::available_parallelism().map_or(1, |n| n.get().min(MAX_AUTO_THREADS))
     }
 }
 
@@ -158,55 +186,155 @@ fn view(mesh: &Mesh, opt: &RenderOptions) -> View {
 }
 
 fn convex_hull(mut p: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
-    p.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
-    p.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-14 && (a[1] - b[1]).abs() < 1e-14);
-    if p.len() < 3 {
-        return p;
-    }
-    let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-    let mut h: Vec<[f64; 2]> = Vec::new();
-    for pass in 0..2 {
-        let start = h.len();
-        let it: Box<dyn Iterator<Item = &[f64; 2]>> = if pass == 0 {
-            Box::new(p.iter())
-        } else {
-            Box::new(p.iter().rev())
-        };
-        for &q in it {
-            while h.len() >= start + 2 && cross(h[h.len() - 2], h[h.len() - 1], q) <= 0.0 {
-                h.pop();
-            }
-            h.push(q);
-        }
-        h.pop();
-    }
+    let mut h = Vec::new();
+    convex_hull_into(&mut p, &mut h);
     h
 }
 
-fn fill_polygon(img: &mut Image, poly: &[[f64; 2]], color: [u8; 4]) {
-    if poly.len() < 3 {
+/// Convex hull of `p` into `h` (monotone chain; `p` is sorted and deduplicated in place). Points closer than 1e-14 px are
+/// merged; fewer than 3 points come back as they are.
+fn convex_hull_into(p: &mut Vec<[f64; 2]>, h: &mut Vec<[f64; 2]>) {
+    p.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    p.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-14 && (a[1] - b[1]).abs() < 1e-14);
+    h.clear();
+    if p.len() < 3 {
+        h.extend_from_slice(p);
         return;
+    }
+    let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    for &q in p.iter() {
+        while h.len() >= 2 && cross(h[h.len() - 2], h[h.len() - 1], q) <= 0.0 {
+            h.pop();
+        }
+        h.push(q);
+    }
+    h.pop();
+    let start = h.len();
+    for &q in p.iter().rev() {
+        while h.len() >= start + 2 && cross(h[h.len() - 2], h[h.len() - 1], q) <= 0.0 {
+            h.pop();
+        }
+        h.push(q);
+    }
+    h.pop();
+}
+
+/// The image rows a polygon's fill covers, `(first, last)`; empty (`first > last`) for fewer than 3 points.
+fn fill_rows(poly: &[[f64; 2]], height: usize) -> (i64, i64) {
+    if poly.len() < 3 {
+        return (0, -1);
     }
     let (ymin, ymax) = poly
         .iter()
         .fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p[1]), a.1.max(p[1])));
     let y0 = (ymin - 0.5).ceil().max(0.0) as i64;
-    let y1 = (ymax - 0.5).floor().min(img.height as f64 - 1.0) as i64;
-    for y in y0..=y1 {
-        let yc = y as f64 + 0.5;
-        let mut xs: Vec<f64> = Vec::new();
-        for i in 0..poly.len() {
-            let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
-            if (a[1] <= yc && b[1] > yc) || (b[1] <= yc && a[1] > yc) {
-                xs.push(a[0] + (yc - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    let y1 = (ymax - 0.5).floor().min(height as f64 - 1.0) as i64;
+    (y0, y1)
+}
+
+/// Fill image row `y` (its RGBA bytes `row`, `width` pixels) inside the polygon: the pixel centres between pairs of edge
+/// crossings at `y + 0.5`. `xs` is scratch space.
+fn fill_scanline(poly: &[[f64; 2]], y: i64, width: usize, row: &mut [u8], color: [u8; 4], xs: &mut Vec<f64>) {
+    let yc = y as f64 + 0.5;
+    xs.clear();
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+        if (a[1] <= yc && b[1] > yc) || (b[1] <= yc && a[1] > yc) {
+            xs.push(a[0] + (yc - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+        }
+    }
+    xs.sort_by(f64::total_cmp);
+    for pair in xs.chunks_exact(2) {
+        let xa = (pair[0] - 0.5).ceil().max(0.0) as i64;
+        let xb = (pair[1] - 0.5).floor().min(width as f64 - 1.0) as i64;
+        // only pixels inside the image are written
+        let (xa, xb) = (xa.max(0), xb.min(width as i64 - 1));
+        if xa <= xb {
+            for px in row[4 * xa as usize..4 * (xb as usize + 1)].chunks_exact_mut(4) {
+                px.copy_from_slice(&color);
             }
         }
-        xs.sort_by(f64::total_cmp);
-        for pair in xs.chunks_exact(2) {
-            let xa = (pair[0] - 0.5).ceil().max(0.0) as i64;
-            let xb = (pair[1] - 0.5).floor().min(img.width as f64 - 1.0) as i64;
-            for x in xa..=xb {
-                img.put(x, y, color);
+    }
+}
+
+/// The drawn cells of a contiguous range of cells, in cell order: their hulls (hull `k` is `pts[ends[k - 1]..ends[k]]`,
+/// from 0 for the first) and the image rows their fills cover.
+struct Hulls {
+    cells: Vec<usize>,
+    rows: Vec<(i64, i64)>,
+    ends: Vec<usize>,
+    pts: Vec<[f64; 2]>,
+}
+
+fn cell_hulls(mesh: &Mesh, cells: Range<usize>, v: &View, f: &Frame) -> Hulls {
+    let pts = mesh.points();
+    let n = cells.len();
+    let mut out = Hulls {
+        cells: Vec::with_capacity(n),
+        rows: Vec::with_capacity(n),
+        ends: Vec::with_capacity(n),
+        pts: Vec::with_capacity(4 * n),
+    };
+    let (mut ids, mut proj, mut hull) = (Vec::new(), Vec::new(), Vec::new());
+    for c in cells {
+        // Each point of the cell once: the extent along the axis is the same as over all its faces' points, and so is
+        // the hull, because exact copies of a finite point change neither the sort nor the merge of `convex_hull_into`.
+        ids.clear();
+        for &face in mesh.cell_faces(c) {
+            for &pi in mesh.face_points(face) {
+                if !ids.contains(&pi) {
+                    ids.push(pi);
+                }
+            }
+        }
+        let (mut zlo, mut zhi) = (f64::MAX, f64::MIN);
+        proj.clear();
+        for &pi in &ids {
+            let p = pts[pi];
+            zlo = zlo.min(p[v.axis]);
+            zhi = zhi.max(p[v.axis]);
+            proj.push(map_point(f, v, p));
+        }
+        if v.slice < zlo - 1e-12 || v.slice > zhi + 1e-12 {
+            continue;
+        }
+        if !proj.iter().all(|q| q[0].is_finite() && q[1].is_finite()) {
+            // copies of a non-finite point are not merged, so every face point goes in, as listed
+            proj.clear();
+            for &face in mesh.cell_faces(c) {
+                for &pi in mesh.face_points(face) {
+                    proj.push(map_point(f, v, pts[pi]));
+                }
+            }
+        }
+        convex_hull_into(&mut proj, &mut hull);
+        out.cells.push(c);
+        out.rows.push(fill_rows(&hull, f.h));
+        out.pts.extend_from_slice(&hull);
+        out.ends.push(out.pts.len());
+    }
+    out
+}
+
+/// Fill the image rows `rows` (their RGBA bytes `band`, `width` pixels a row) with the drawn cells of `parts`, in cell order.
+fn fill_band(band: &mut [u8], rows: Range<usize>, width: usize, parts: &[Hulls], values: &[f64], range: (f64, f64)) {
+    let (vmin, span) = range;
+    let (first, last) = (rows.start as i64, rows.end as i64 - 1);
+    let mut xs = Vec::new();
+    for part in parts {
+        let mut start = 0;
+        for (k, &c) in part.cells.iter().enumerate() {
+            let poly = &part.pts[start..part.ends[k]];
+            start = part.ends[k];
+            let (y0, y1) = part.rows[k];
+            let (ya, yb) = (y0.max(first), y1.min(last));
+            if ya > yb {
+                continue;
+            }
+            let [r, g, b] = colormap((values[c] - vmin) / span);
+            for y in ya..=yb {
+                let at = (y - first) as usize * width * 4;
+                fill_scanline(poly, y, width, &mut band[at..at + width * 4], [r, g, b, 255], &mut xs);
             }
         }
     }
@@ -339,18 +467,46 @@ pub fn render_scalar(mesh: &Mesh, values: &[f64], opt: &RenderOptions) -> Result
     let v = view(mesh, opt);
     let fr = frame(&v, opt);
     let mut img = Image::new(fr.w, fr.h, [255, 255, 255, 255]);
-    let polys: Vec<(usize, Vec<[f64; 2]>)> = (0..mesh.n_cells())
-        .filter_map(|c| cell_polygon(mesh, c, &v, &fr).map(|p| (c, p)))
-        .collect();
-    let finite = polys.iter().map(|(c, _)| values[*c]).filter(|x| x.is_finite());
+    let n = mesh.n_cells();
+    let threads = render_threads(opt, n);
+    // the drawn cells' hulls, one contiguous range of cells per thread, joined in cell order
+    let parts: Vec<Hulls> = if threads == 1 {
+        vec![cell_hulls(mesh, 0..n, &v, &fr)]
+    } else {
+        let per = n.div_ceil(threads);
+        let (v, fr) = (&v, &fr);
+        std::thread::scope(|s| {
+            let workers: Vec<_> = (0..threads)
+                .map(|k| s.spawn(move || cell_hulls(mesh, (k * per).min(n)..((k + 1) * per).min(n), v, fr)))
+                .collect();
+            workers
+                .into_iter()
+                .map(|w| w.join().expect("render worker panicked"))
+                .collect()
+        })
+    };
+    let finite = parts
+        .iter()
+        .flat_map(|p| p.cells.iter().map(|&c| values[c]))
+        .filter(|x| x.is_finite());
     let (dmin, dmax) = finite.fold((f64::MAX, f64::MIN), |a, x| (a.0.min(x), a.1.max(x)));
     let (vmin, vmax) = opt
         .range
         .unwrap_or(if dmin <= dmax { (dmin, dmax) } else { (0.0, 1.0) });
     let span = if vmax > vmin { vmax - vmin } else { 1.0 };
-    for (c, poly) in &polys {
-        let [r, g, b] = colormap((values[*c] - vmin) / span);
-        fill_polygon(&mut img, poly, [r, g, b, 255]);
+    // the fill, one band of rows per thread; every band draws the cells in cell order
+    let (w, h) = (fr.w, fr.h);
+    if threads == 1 {
+        fill_band(&mut img.rgba, 0..h, w, &parts, values, (vmin, span));
+    } else {
+        let band_rows = h.div_ceil(threads);
+        let parts = &parts;
+        std::thread::scope(|s| {
+            for (k, band) in img.rgba.chunks_mut(band_rows * w * 4).enumerate() {
+                let rows = k * band_rows..((k + 1) * band_rows).min(h);
+                s.spawn(move || fill_band(band, rows, w, parts, values, (vmin, span)));
+            }
+        });
     }
     if opt.colorbar {
         let x0 = fr.w as i64 - 62;
@@ -369,7 +525,7 @@ pub fn render_scalar(mesh: &Mesh, values: &[f64], opt: &RenderOptions) -> Result
         image: img,
         vmin,
         vmax,
-        cells_drawn: polys.len(),
+        cells_drawn: parts.iter().map(|p| p.cells.len()).sum(),
     })
 }
 

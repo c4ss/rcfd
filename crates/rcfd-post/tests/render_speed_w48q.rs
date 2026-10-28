@@ -4,6 +4,8 @@
 //! * Q2: r1's and r3's images are as before (SHA-256 recorded from the base code).
 //! * Q3: the 1M-cell image of r2 is as before. Ignored: run by hand in release; the mesh takes 2.7 GB.
 //! * Q0: the profile of the base renderer on r2's workload. Ignored: run by hand in release.
+//! * Q4: the margin proxy (ADR 0151 part 2): the base copy and the product with 1, 2 and the default threads on r2's
+//!   workload, interleaved in one process. Ignored: run by hand in release under the registered conditions.
 //!
 //! The base renderer is the verbatim copy in `render_control_w48q`.
 
@@ -273,12 +275,45 @@ fn matrix() -> Vec<Case> {
         },
         false,
     ));
+    // 15 (ADR 0151 part 2): non-finite projections, the full-face-point path of `cell_hulls`
+    match nan_mesh() {
+        Ok(nan) => m.push(case(
+            "15 cavity 12, NaN points",
+            &nan,
+            random_values(144, 15),
+            no_bar(300),
+            false,
+        )),
+        Err(e) => {
+            eprintln!("Q1 row 15 dropped: the constructor refuses the mesh ({e}); the non-finite path is not reachable")
+        }
+    }
     m
 }
 
-/// The options each case is rendered with by the product.
+/// Row 15's mesh: `cavity_2d_rect(12, 12)` with the points on x = 1 moved to x = NaN and those on y = 1 to y = NaN.
+fn nan_mesh() -> rcfd_core::Result<Mesh> {
+    let base = cavity_2d_rect(12, 12, 1.0, 1.0)?;
+    warp(&base, |p| {
+        let x = if p[0] == 1.0 { f64::NAN } else { p[0] };
+        let y = if p[1] == 1.0 { f64::NAN } else { p[1] };
+        [x, y, p[2]]
+    })
+}
+
+/// The options each case is rendered with by the product: the default threads and 1, 2, 3, 5, 8 and 16 threads.
 fn variants(opt: &RenderOptions) -> Vec<(String, RenderOptions)> {
-    vec![("default".into(), opt.clone())]
+    [0, 1, 2, 3, 5, 8, 16]
+        .into_iter()
+        .map(|threads| {
+            let label = if threads == 0 {
+                "default threads".to_string()
+            } else {
+                format!("{threads} threads")
+            };
+            (label, RenderOptions { threads, ..opt.clone() })
+        })
+        .collect()
 }
 
 /// Differences of `a` from `b`; the PNG bytes are compared when `png` is set and nothing else differs.
@@ -751,4 +786,142 @@ fn q0_profile_control_phases() {
         let (med, lo, hi) = stats(xs);
         eprintln!("Q0 {name:<38} {med:>9.1} {lo:>9.1} {hi:>9.1}");
     }
+}
+
+/// Q1 row 15's probe (reported, no limit): would row 15 tell the product's non-finite path apart from deduplicated points
+/// throughout? The image from probe B's hulls (no fallback) is compared with the base image.
+#[test]
+fn q1_row15_probe_without_the_non_finite_path() {
+    let Ok(mesh) = nan_mesh() else {
+        eprintln!("Q1 row 15 probe: the mesh is refused; nothing to probe");
+        return;
+    };
+    let (values, opt) = (random_values(144, 15), no_bar(300));
+    let base = control::render_scalar(&mesh, &values, &opt).unwrap();
+    let v = control::view(&mesh, &opt);
+    let fr = control::frame(&v, &opt);
+    let flat = probe_dedup(&mesh, &v, &fr);
+    let span = if base.vmax > base.vmin {
+        base.vmax - base.vmin
+    } else {
+        1.0
+    };
+    let mut img = control::image_new(fr.w, fr.h, [255, 255, 255, 255]);
+    probe_fill(&flat, &values, base.vmin, span, &mut img);
+    let n = img
+        .rgba
+        .chunks(4)
+        .zip(base.image.rgba.chunks(4))
+        .filter(|(a, b)| a != b)
+        .count();
+    let nan_cells = (0..mesh.n_cells())
+        .filter(|&c| {
+            mesh.cell_faces(c)
+                .iter()
+                .flat_map(|&f| mesh.face_points(f))
+                .any(|&p| !mesh.points()[p][0].is_finite() || !mesh.points()[p][1].is_finite())
+        })
+        .count();
+    eprintln!(
+        "Q1 row 15 probe: {nan_cells} cells with NaN points, {} drawn; without the non-finite path {n} pixels differ from the base",
+        base.cells_drawn
+    );
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Q4: the margin proxy (ADR 0151 part 2).
+
+/// Q4-r1 and Q4-r2: the product's median over the base copy's, with 1 and with 2 threads.
+const Q4_RATIO: f64 = 0.43;
+/// Q4-a1 and Q4-a2 (S2L only): the product's median with 1 and with 2 threads, seconds.
+const Q4_ABSOLUTE_S: f64 = 1.0;
+/// Q4-v (S2L only): the base copy's median that makes an S2L run valid, seconds.
+const Q4_VALID_BASE_S: f64 = 1.6;
+
+#[test]
+#[ignore = "ADR 0151 Q4: run by hand in release under the registered conditions (RCFD_W48Q_COND, RCFD_W48Q_REPS)"]
+fn q4_margin_proxy_render_times() {
+    let reps: usize = std::env::var("RCFD_W48Q_REPS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(7);
+    let cond = std::env::var("RCFD_W48Q_COND").unwrap_or_else(|_| "U".into());
+    let (mesh, vals, opt) = r2_workload();
+    let reference = control::render_scalar(&mesh, &vals, &opt).unwrap();
+    let variants: [(&str, Option<usize>); 4] = [
+        ("base copy", None),
+        ("product, 1 thread", Some(1)),
+        ("product, 2 threads", Some(2)),
+        ("product, default threads", Some(0)),
+    ];
+    let mut secs = vec![Vec::new(); variants.len()];
+    for rep in 0..reps {
+        // the order rotates every round, so that a drift in the load spreads over all variants
+        for j in 0..variants.len() {
+            let k = (j + rep) % variants.len();
+            let t = Instant::now();
+            let r = match variants[k].1 {
+                None => control::render_scalar(&mesh, &vals, &opt).unwrap(),
+                Some(threads) => render_scalar(&mesh, &vals, &RenderOptions { threads, ..opt.clone() }).unwrap(),
+            };
+            secs[k].push(t.elapsed().as_secs_f64());
+            assert!(
+                r.image.rgba == reference.image.rgba && r.vmin.to_bits() == reference.vmin.to_bits(),
+                "{}: the image differs from the base",
+                variants[k].0
+            );
+        }
+    }
+    eprintln!("Q4 r2 workload, condition {cond}, {reps} rounds (s: median, min, max)");
+    let mut med = Vec::new();
+    for ((name, _), xs) in variants.iter().zip(&secs) {
+        let (m, lo, hi) = stats(xs);
+        eprintln!("Q4 {name:<26} {m:>7.3} {lo:>7.3} {hi:>7.3}");
+        med.push(m);
+    }
+    let (r1, r2) = (med[1] / med[0], med[2] / med[0]);
+    eprintln!(
+        "Q4 ratios to the base copy: 1 thread {r1:.3}, 2 threads {r2:.3}, default {:.3}",
+        med[3] / med[0]
+    );
+    let mut checks = vec![
+        ("Q4-r1 ratio, 1 thread", r1, Q4_RATIO, r1 <= Q4_RATIO),
+        ("Q4-r2 ratio, 2 threads", r2, Q4_RATIO, r2 <= Q4_RATIO),
+    ];
+    let mut void = false;
+    if cond == "S2L" {
+        void = med[0] < Q4_VALID_BASE_S;
+        eprintln!(
+            "Q4-v validity: base copy median {:.3} s, needs >= {Q4_VALID_BASE_S} s: {}",
+            med[0],
+            if void { "VOID run" } else { "valid" }
+        );
+        if !void {
+            checks.push((
+                "Q4-a1 median, 1 thread (s)",
+                med[1],
+                Q4_ABSOLUTE_S,
+                med[1] <= Q4_ABSOLUTE_S,
+            ));
+            checks.push((
+                "Q4-a2 median, 2 threads (s)",
+                med[2],
+                Q4_ABSOLUTE_S,
+                med[2] <= Q4_ABSOLUTE_S,
+            ));
+        }
+    }
+    for (name, got, limit, ok) in &checks {
+        eprintln!(
+            "Q4 {name}: {got:.3} against <= {limit}: {}",
+            if *ok { "pass" } else { "MISS" }
+        );
+    }
+    let missed: Vec<_> = checks.iter().filter(|c| !c.3).map(|c| c.0).collect();
+    assert!(missed.is_empty(), "missed: {missed:?}");
+    assert!(
+        !void,
+        "Q4-v: the S2L run is void (base copy median {:.3} s < {Q4_VALID_BASE_S} s)",
+        med[0]
+    );
 }

@@ -2,7 +2,8 @@
 //! by hand in release builds.
 //! * Q5: one `rcfd serve` per `rcfd` binary listed in `RCFD_W48Q_EXES` (`;`-separated; default: this build's), each with
 //!   r4's session; then `RCFD_W48Q_ROUNDS` (default 7) rounds of `rcfd call service.info` and `rcfd call render.png`,
-//!   alternating between the binaries. The stdout of every `render.png` call must be byte-identical.
+//!   alternating between the binaries. The stdout of every `render.png` call must be byte-identical. With two binaries
+//!   (the control, then the after build) the limits of ADR 0151 part 2 apply; `RCFD_W48Q_COND` names the condition.
 //! * Q6: r4's session in an in-process `Service`: the `render.png` handler, the reply's serialisation, `base64`, the reply's
 //!   transport over loopback TCP (as `serve_stream` writes it, and as one write) and the client's parse and print.
 
@@ -143,7 +144,45 @@ fn q5_cli_render_timing() {
             first[k]
         );
     }
+    // ADR 0151 part 2: with two binaries, the control and then the after build, the registered limits apply
+    // (Q5-i, the identical stdout, is asserted above for every call)
+    if servers.len() == 2 {
+        let cond = std::env::var("RCFD_W48Q_COND").unwrap_or_else(|_| "U".into());
+        let (control, after) = (stats(&render[0]).0, stats(&render[1]).0);
+        let ratio = after / control;
+        let mut checks = vec![("Q5-r after/control median ratio", ratio, Q5_RATIO, ratio <= Q5_RATIO)];
+        let mut void = false;
+        if cond == "S2L" {
+            void = control < Q5_VALID_CONTROL_S;
+            eprintln!(
+                "Q5-v validity: control median {control:.3} s, needs >= {Q5_VALID_CONTROL_S} s: {}",
+                if void { "VOID run" } else { "valid" }
+            );
+            if !void {
+                checks.push(("Q5-a after median (s)", after, Q5_ABSOLUTE_S, after <= Q5_ABSOLUTE_S));
+            }
+        }
+        for (name, got, limit, ok) in &checks {
+            eprintln!(
+                "Q5 {name}, condition {cond}: {got:.3} against <= {limit}: {}",
+                if *ok { "pass" } else { "MISS" }
+            );
+        }
+        let missed: Vec<_> = checks.iter().filter(|c| !c.3).map(|c| c.0).collect();
+        assert!(missed.is_empty(), "missed: {missed:?}");
+        assert!(
+            !void,
+            "Q5-v: the S2L run is void (control median {control:.3} s < {Q5_VALID_CONTROL_S} s)"
+        );
+    }
 }
+
+/// Q5-r: the after build's `render.png` median over the control's (ADR 0151 part 2).
+const Q5_RATIO: f64 = 0.5;
+/// Q5-a (S2L only): the after build's `render.png` median, seconds.
+const Q5_ABSOLUTE_S: f64 = 1.0;
+/// Q5-v (S2L only): the control's `render.png` median that makes an S2L run valid, seconds.
+const Q5_VALID_CONTROL_S: f64 = 1.6;
 
 /// Standard base64 decoding (the inverse of `rcfd_api::service::base64`).
 fn decode64(s: &str) -> Vec<u8> {
