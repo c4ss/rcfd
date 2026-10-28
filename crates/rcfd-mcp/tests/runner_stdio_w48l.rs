@@ -1,6 +1,7 @@
 //! ADR 0146 C2: a runner that `rcfd-mcp` started (`start_run`) does not keep the server's stdout pipe open after the server
-//! has exited, so a caller that reads that pipe to the end (Claude Code) sees EOF. Control: a process that starts the runner
-//! with its own stdout given to the runner on purpose holds its caller's pipe, so the harness sees a held pipe.
+//! has exited, so a caller that reads that pipe to the end (Claude Code) sees EOF; a known miss on Windows (ADR 0146: the
+//! runner inherits the server's pipes). Control: a process that starts the runner with its own stdout given to the runner
+//! on purpose holds its caller's pipe, so the harness sees a held pipe.
 //!
 //! The harness never blocks on a pipe. A reader thread per pipe records the instant of EOF; the exit is polled with
 //! `try_wait`. A guard shuts the runner down, which ends a held pipe. The tests need `rcfd` and `rcfd-runner` next to

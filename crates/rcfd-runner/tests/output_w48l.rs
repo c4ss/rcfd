@@ -3,7 +3,7 @@
 //!   with its exit code and the end of its output.
 //! * O1-O5: the CLI's output options, probed with the same failing runner (the only way to make a runner write to stderr).
 //! * C1: `rcfd-runner start` run by a capturing caller returns within 3 s while the runner stays alive. Its control holds the
-//!   caller on purpose (`--stdout`).
+//!   caller on purpose (`--stdout`). C1 is a known miss on Windows (ADR 0146: the runner inherits the caller's pipes).
 //! * U1 (Unix): the started runner leads its own process group.
 //!
 //! Every test has its own project folder (`<temp>/rcfd_runner_w48l_<pid>_<name>`). Processes are killed only by pids the test

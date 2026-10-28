@@ -204,6 +204,8 @@ Commits:
 * 7b5b309: the tests, with no non-test code changed. The "before" runs used it.
 * fa69632: the change.
 * 65f9228: the known-miss attributes, the docs and the notes.
+* 959ba18 and the commit after it: this addendum, the known-miss notes in the two new test files' module docs, and the
+  wording of `start_run` in `docs/mcp-tools.md`. No code.
 
 Set-up:
 * Windows: this host (16 threads, 93.6 GB, 32 GB free at the start, rustc 1.99.0). Release builds in the worktree's own target
@@ -246,14 +248,21 @@ Set-up:
   * Windows: fails at its 10 s EOF wait ("the client's stdout did not reach EOF: the runner inherited the pipe").
   * Linux: **passes** (3.29 s). See question 2.
 * **`rcfd-mcp`** `project_runs_w48f` 3 and `project_w48f` 10, on Windows and on Linux.
-* **`rcfd-studio`, Windows, the whole crate:** PENDING.
+* **`rcfd-studio`, Windows, the whole crate:** 154 passed, 3 failed, 3 ignored, counting the re-run of deviation 7.
+  * The runner-start tests all pass: N1 and N2 (ADR 0143), R1-R3, R9, G4-G7, `bins_g4`, SF2, SF4, SF5 and SF8.
+  * The 3 failures are the ones ADR 0143 recorded on main (its question 3), with the same assertions: G1b ("renders 17
+    uploads 2"), the G1 control ("a frame without the auto-select") and the G4 control (`!vp.contains(&reason)`).
+  * The 3 ignored tests are the known misses G1, B9 tutorials and R6.
+* **`rcfd-cli` `workspace_graph`:** 3 passed; no edge changed.
 * **Lint.**
   * `cargo clippy -p rcfd-runner -p rcfd-mcp -p rcfd-studio --all-targets -- -D warnings` (Windows): clean.
-  * Workspace clippy (Windows): PENDING.
-  * Linux clippy and fmt: PENDING. The first attempt did not run, because the image lacks the clippy and rustfmt
-    components (deviation 4).
+  * `cargo clippy --workspace --all-targets -- -D warnings` (Windows): clean.
+  * Linux, on 65f9228: `cargo clippy -p rcfd-runner -p rcfd-mcp --all-targets -- -D warnings` and
+    `cargo fmt -p rcfd-runner -p rcfd-mcp -- --check` are clean. In the same container, `output_w48l` passed 10 (the renamed C1
+    runs there) and `runner_stdio_w48l` passed 3 (the renamed C2 runs there).
   * `cargo fmt -p rcfd-runner -p rcfd-mcp -- --check` (Windows): clean.
-* **Leftover processes:** none on Linux (`ps` at the end of each container run). Windows: PENDING.
+* **Leftover processes:** none on Linux (`ps` at the end of each container run). None on Windows (`rcfd`, `rcfd-runner`,
+  `rcfd-mcp`, `fake-claude` and the probe, checked after all runs).
 
 ### Deviations and notes
 
@@ -272,6 +281,10 @@ Set-up:
    lines of `runner.log` to an `ensure_runner` error. For an early exit, the client's message now carries the tail already, so
    the same lines can appear twice. The Run button checks the budgets first, so this happens only for other early exits
    (question 5).
+7. **Studio re-run set-up.** The first whole-crate Studio re-run had 15 more failures: all 14 ADR 0134 chat tests in
+   `chat_e`, and `parity_assistant_access`. All of them stopped at their set-up check, "`target\release\fake-claude.exe`
+   missing": this job's fresh target folder had never built rcfd-claude's replay double. After `cargo build --release -p rcfd-claude --bin fake-claude`, `chat_e` passed 14 and `parity` passed 5
+   (1 ignored, as before). No code changed in between.
 
 ### Not run
 
