@@ -366,6 +366,14 @@ run of each check; the final run's numbers follow it where they differ in kind.
 | J17 | E1 with the case's folder; the rest of the file | `example_projects_w48h`: 16 passed, 1 ignored (ADR 0142's G3 crossing-count known miss); E1: the 2 aerofoil and the 8 generator cases open and validate through the editor's calls; E2: by path valid, by text without a base folder not valid at `mesh.file` | pass |
 | J18 | H1, aerofoil branch positive | H1 passes: the projects, runs and snapshots as registered; the 2 aerofoil cases validate in the Studio's editor with no diagnostic, like the 8 others | pass |
 
+**J19 (amendment 6)**, on fad60e5 with the rest of `live_preview_j.rs` (15 passed, J3b ignored): two build threads
+alive when `503` was asked for; the final build 251,500 cells (503 x 500) of the editor's text; 3 builds of the text, 2
+results discarded, at most 2 threads: **pass**. Control (`disk_only`): no build of the text, the file's 250,000 cells:
+fails as required.
+
+**Leftover processes** after all runs: none running from this job's target folder (`rcfd.exe`, `rcfd-runner.exe`,
+`fake-claude.exe` or any other).
+
 **J2 after amendment 5.** The whole-suite run on 392d9d7 and one of two diagnostic reruns failed J2 at its second click
 (amendment 5: the newest run taken in name order). Corrected J2, three runs on f5a3cf3: runs selected and shown on the
 Run side 0.059 / 0.062 s, 0.058 / 0.057 s and 0.050 / 0.049 s after the clicks (the first of them had the order that
