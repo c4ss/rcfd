@@ -5,6 +5,10 @@
 //! * [`stream`]: a tolerant parser of `claude -p --output-format stream-json` lines.
 //! * [`allow`]: the typed allow-list and its mapping onto CLI flags; nothing here can emit a bypass flag.
 //! * [`driver`]: spawns `claude -p` per message, streams events to a channel, cancels without orphans.
+//! * [`trust`]: the files of a project folder that change what `claude -p` runs (ADR 0134 W48-10 (b)), with hashes.
+//!
+//! ADR 0134 adds the per-project allow-list file ([`allow::ALLOW_FILE`]) and MCP pinning ([`Claude::mcp_config`],
+//! [`allow::check_args_in`]).
 //!
 //! The transcript and stream formats are not published; they were observed on Claude Code 2.1.310 (ADR 0126).
 //! Unknown shapes become `Unrecognised` values, never errors or panics.
@@ -14,6 +18,7 @@ pub mod discover;
 pub mod driver;
 pub mod stream;
 pub mod transcript;
+pub mod trust;
 
 pub use allow::{AllowList, AllowRule};
 pub use discover::{Discovery, OpenState, SessionInfo};

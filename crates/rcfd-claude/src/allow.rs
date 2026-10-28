@@ -483,7 +483,7 @@ impl AllowList {
 }
 
 /// An `rcfd-project` file error as a bridge error, keeping the I/O error (and so its kind) where there is one.
-fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
+pub(crate) fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
     use rcfd_project::ProjectError as P;
     match e {
         P::Io { path, source, .. } | P::Retry { path, source, .. } => Error::Io { path, source },
