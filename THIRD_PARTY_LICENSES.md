@@ -17,6 +17,9 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
   LicenseRef-UFL-1.0` because it bundles fonts. The SIL Open Font License 1.1 and the Ubuntu Font Licence 1.0 texts must ship
   with any binary that embeds those fonts. Which font carries which licence is recorded in the `epaint` package (not checked
   here: UNVERIFIED).
+* `epaint_default_fonts` (through `egui` 0.36, only in the Studio `rcfd-studio`): the same fonts, moved out of `epaint`;
+  declares `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`. The same two font licence texts must ship with the Studio
+  binary.
 * Unicode-3.0 (`unicode-ident` and the `icu_*`, `zerovec`, `yoke`, `tinystr`, `litemap`, `writeable`, `zerofrom` family): the
   Unicode licence notice must accompany copies of the data.
 * CDLA-Permissive-2.0 (`webpki-roots`, a bundle of certificate-authority data): the licence text must accompany the data.
@@ -28,33 +31,37 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 * Packages with an `OR` licence (for example `r-efi`, which also offers LGPL-2.1-or-later) are used under their permissive
   option.
 
-## Licence summary (468 packages)
+## Licence summary (553 packages)
 
 | Licence (as declared) | Packages |
 |---|---|
-| `MIT OR Apache-2.0` | 238 |
-| `MIT` | 84 |
-| `Apache-2.0 OR MIT` | 32 |
-| `MIT/Apache-2.0` | 19 |
+| `MIT OR Apache-2.0` | 266 |
+| `MIT` | 110 |
+| `Apache-2.0 OR MIT` | 43 |
+| `Apache-2.0` | 22 |
+| `MIT/Apache-2.0` | 22 |
 | `Unicode-3.0` | 18 |
-| `Apache-2.0` | 16 |
 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` | 11 |
-| `Zlib OR Apache-2.0 OR MIT` | 9 |
-| `MIT OR Apache-2.0 OR Zlib` | 5 |
+| `Zlib OR Apache-2.0 OR MIT` | 10 |
+| `MIT OR Apache-2.0 OR Zlib` | 8 |
+| `Unlicense OR MIT` | 5 |
+| `Apache-2.0/MIT` | 4 |
 | `ISC` | 4 |
-| `Unlicense OR MIT` | 4 |
-| `Apache-2.0/MIT` | 3 |
 | `Zlib` | 3 |
 | `BSD-2-Clause OR Apache-2.0 OR MIT` | 2 |
+| `BSD-3-Clause OR Apache-2.0` | 2 |
 | `BSD-3-Clause OR MIT OR Apache-2.0` | 2 |
 | `BSL-1.0` | 2 |
 | `MIT OR Apache-2.0 OR LGPL-2.1-or-later` | 2 |
 | `MIT OR Zlib OR Apache-2.0` | 2 |
 | `Unlicense/MIT` | 2 |
 | `(MIT OR Apache-2.0) AND OFL-1.1 AND LicenseRef-UFL-1.0` | 1 |
+| `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0` | 1 |
 | `(MIT OR Apache-2.0) AND Unicode-3.0` | 1 |
 | `0BSD OR MIT OR Apache-2.0` | 1 |
 | `Apache-2.0 AND ISC` | 1 |
+| `Apache-2.0 AND MIT` | 1 |
+| `Apache-2.0 OR GPL-2.0-only` | 1 |
 | `Apache-2.0 OR ISC OR MIT` | 1 |
 | `Apache-2.0 WITH LLVM-exception` | 1 |
 | `BSD-3-Clause` | 1 |
@@ -69,10 +76,12 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | ab_glyph | 0.2.32 | `Apache-2.0` |
 | ab_glyph_rasterizer | 0.1.10 | `Apache-2.0` |
 | accesskit | 0.12.3 | `MIT OR Apache-2.0` |
+| accesskit | 0.24.1 | `MIT OR Apache-2.0` |
 | adler2 | 2.0.1 | `0BSD OR MIT OR Apache-2.0` |
 | ahash | 0.8.12 | `MIT OR Apache-2.0` |
 | allocator-api2 | 0.2.21 | `MIT OR Apache-2.0` |
 | android-activity | 0.5.2 | `MIT OR Apache-2.0` |
+| android-activity | 0.6.1 | `MIT OR Apache-2.0` |
 | android-properties | 0.2.2 | `MIT` |
 | android_system_properties | 0.1.6 | `MIT OR Apache-2.0` |
 | arboard | 3.6.1 | `MIT OR Apache-2.0` |
@@ -105,16 +114,20 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | block | 0.1.6 | `MIT` |
 | block-sys | 0.2.1 | `MIT` |
 | block2 | 0.3.0 | `MIT` |
+| block2 | 0.5.1 | `MIT` |
 | block2 | 0.6.2 | `MIT` |
 | blocking | 1.7.0 | `Apache-2.0 OR MIT` |
 | bumpalo | 3.20.3 | `MIT OR Apache-2.0` |
 | bytemuck | 1.25.2 | `Zlib OR Apache-2.0 OR MIT` |
 | bytemuck_derive | 1.12.1 | `Zlib OR Apache-2.0 OR MIT` |
 | byteorder | 1.5.0 | `Unlicense OR MIT` |
+| byteorder-lite | 0.1.0 | `Unlicense OR MIT` |
 | bytes | 1.12.1 | `MIT` |
 | calloop | 0.12.4 | `MIT` |
+| calloop | 0.13.0 | `MIT` |
 | calloop | 0.14.5 | `MIT` |
 | calloop-wayland-source | 0.2.0 | `MIT` |
+| calloop-wayland-source | 0.3.0 | `MIT` |
 | calloop-wayland-source | 0.4.1 | `MIT` |
 | cc | 1.8.0 | `MIT OR Apache-2.0` |
 | cesu8 | 1.1.0 | `Apache-2.0/MIT` |
@@ -127,6 +140,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | cocoa-foundation | 0.1.2 | `MIT OR Apache-2.0` |
 | codespan-reporting | 0.11.1 | `Apache-2.0` |
 | codespan-reporting | 0.13.1 | `Apache-2.0` |
+| color | 0.3.3 | `Apache-2.0 OR MIT` |
 | color_quant | 1.1.0 | `MIT` |
 | com | 0.6.0 | `MIT` |
 | com_macros | 0.6.0 | `MIT` |
@@ -150,32 +164,49 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | dlib | 0.5.3 | `MIT` |
 | document-features | 0.2.12 | `MIT OR Apache-2.0` |
 | downcast-rs | 1.2.1 | `MIT/Apache-2.0` |
+| dpi | 0.1.2 | `Apache-2.0 AND MIT` |
 | duplicate | 1.0.0 | `MIT OR Apache-2.0` |
+| duplicate | 2.0.1 | `MIT OR Apache-2.0` |
 | ecolor | 0.27.2 | `MIT OR Apache-2.0` |
+| ecolor | 0.36.2 | `MIT OR Apache-2.0` |
 | eframe | 0.27.2 | `MIT OR Apache-2.0` |
+| eframe | 0.36.2 | `MIT OR Apache-2.0` |
 | egui | 0.27.2 | `MIT OR Apache-2.0` |
+| egui | 0.36.2 | `MIT OR Apache-2.0` |
 | egui-wgpu | 0.27.2 | `MIT OR Apache-2.0` |
+| egui-wgpu | 0.36.2 | `MIT OR Apache-2.0` |
 | egui-winit | 0.27.2 | `MIT OR Apache-2.0` |
+| egui-winit | 0.36.2 | `MIT OR Apache-2.0` |
 | egui_dock | 0.12.0 | `MIT` |
+| egui_dock | 0.21.1 | `MIT` |
 | egui_glow | 0.27.2 | `MIT OR Apache-2.0` |
+| egui_glow | 0.36.2 | `MIT OR Apache-2.0` |
 | egui_plot | 0.27.2 | `MIT OR Apache-2.0` |
+| egui_plot | 0.37.0 | `MIT OR Apache-2.0` |
 | either | 1.19.0 | `MIT OR Apache-2.0` |
 | emath | 0.27.2 | `MIT OR Apache-2.0` |
+| emath | 0.36.2 | `MIT OR Apache-2.0` |
 | endi | 1.1.1 | `MIT` |
 | enumflags2 | 0.7.12 | `MIT OR Apache-2.0` |
 | enumflags2_derive | 0.7.12 | `MIT OR Apache-2.0` |
 | enumn | 0.1.14 | `MIT OR Apache-2.0` |
 | epaint | 0.27.2 | `(MIT OR Apache-2.0) AND OFL-1.1 AND LicenseRef-UFL-1.0` |
+| epaint | 0.36.2 | `MIT OR Apache-2.0` |
+| epaint_default_fonts | 0.36.2 | `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0` |
 | equivalent | 1.0.2 | `Apache-2.0 OR MIT` |
 | errno | 0.3.14 | `MIT OR Apache-2.0` |
 | error-code | 3.4.0 | `BSL-1.0` |
+| euclid | 0.22.14 | `MIT OR Apache-2.0` |
 | event-listener | 5.4.2 | `Apache-2.0 OR MIT` |
 | event-listener-strategy | 0.5.4 | `Apache-2.0 OR MIT` |
 | fastrand | 2.5.0 | `Apache-2.0 OR MIT` |
+| fax | 0.2.7 | `MIT` |
 | fdeflate | 0.3.7 | `MIT OR Apache-2.0` |
+| fearless_simd | 0.4.1 | `Apache-2.0 OR MIT` |
 | find-msvc-tools | 0.1.14 | `MIT OR Apache-2.0` |
 | flate2 | 1.1.10 | `MIT OR Apache-2.0` |
 | foldhash | 0.2.0 | `Zlib` |
+| font-types | 0.12.6 | `MIT OR Apache-2.0` |
 | foreign-types | 0.5.0 | `MIT/Apache-2.0` |
 | foreign-types-macros | 0.2.4 | `MIT/Apache-2.0` |
 | foreign-types-shared | 0.3.1 | `MIT/Apache-2.0` |
@@ -192,24 +223,34 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | getrandom | 0.3.4 | `MIT OR Apache-2.0` |
 | getrandom | 0.4.3 | `MIT OR Apache-2.0` |
 | gl_generator | 0.14.0 | `Apache-2.0` |
+| glifo | 0.2.0 | `Apache-2.0 OR MIT` |
 | glow | 0.13.1 | `MIT OR Apache-2.0 OR Zlib` |
+| glow | 0.17.0 | `MIT OR Apache-2.0 OR Zlib` |
 | glutin | 0.31.3 | `Apache-2.0` |
+| glutin | 0.32.3 | `Apache-2.0` |
 | glutin-winit | 0.4.2 | `MIT` |
+| glutin-winit | 0.5.0 | `MIT` |
 | glutin_egl_sys | 0.6.0 | `Apache-2.0` |
+| glutin_egl_sys | 0.7.1 | `Apache-2.0` |
 | glutin_glx_sys | 0.5.0 | `Apache-2.0` |
+| glutin_glx_sys | 0.6.1 | `Apache-2.0` |
 | glutin_wgl_sys | 0.5.0 | `Apache-2.0` |
+| glutin_wgl_sys | 0.6.1 | `Apache-2.0` |
 | gpu-alloc | 0.6.2 | `MIT OR Apache-2.0` |
 | gpu-alloc-types | 0.3.1 | `MIT OR Apache-2.0` |
 | gpu-allocator | 0.25.0 | `MIT OR Apache-2.0` |
 | gpu-allocator | 0.28.0 | `MIT OR Apache-2.0` |
 | gpu-descriptor | 0.2.4 | `MIT OR Apache-2.0` |
 | gpu-descriptor-types | 0.1.2 | `MIT OR Apache-2.0` |
+| guillotiere | 0.7.0 | `MIT/Apache-2.0` |
 | half | 2.7.1 | `MIT OR Apache-2.0` |
+| harfrust | 0.12.0 | `MIT` |
 | hashbrown | 0.14.5 | `MIT OR Apache-2.0` |
 | hashbrown | 0.16.1 | `MIT OR Apache-2.0` |
 | hashbrown | 0.17.1 | `MIT OR Apache-2.0` |
 | hassle-rs | 0.11.0 | `MIT` |
 | heck | 0.4.1 | `MIT OR Apache-2.0` |
+| heck | 0.5.0 | `MIT OR Apache-2.0` |
 | hermit-abi | 0.5.3 | `MIT OR Apache-2.0` |
 | hex | 0.4.3 | `MIT OR Apache-2.0` |
 | hexf-parse | 0.2.1 | `CC0-1.0` |
@@ -227,10 +268,14 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | idna | 1.1.0 | `MIT OR Apache-2.0` |
 | idna_adapter | 1.2.2 | `Apache-2.0 OR MIT` |
 | image | 0.24.9 | `MIT OR Apache-2.0` |
+| image | 0.25.10 | `MIT OR Apache-2.0` |
 | indexmap | 2.14.2 | `Apache-2.0 OR MIT` |
 | indexmap-nostd | 0.4.0 | `Apache-2.0` |
+| itertools | 0.15.0 | `MIT OR Apache-2.0` |
 | itoa | 1.0.18 | `MIT OR Apache-2.0` |
 | jni | 0.21.1 | `MIT/Apache-2.0` |
+| jni | 0.22.4 | `MIT OR Apache-2.0` |
+| jni-macros | 0.22.4 | `MIT OR Apache-2.0` |
 | jni-sys | 0.3.1 | `MIT OR Apache-2.0` |
 | jni-sys | 0.4.1 | `MIT OR Apache-2.0` |
 | jni-sys-macros | 0.4.1 | `MIT OR Apache-2.0` |
@@ -239,12 +284,14 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | keyring | 3.6.3 | `MIT OR Apache-2.0` |
 | khronos-egl | 6.0.0 | `MIT/Apache-2.0` |
 | khronos_api | 3.1.0 | `Apache-2.0` |
+| kurbo | 0.13.1 | `Apache-2.0 OR MIT` |
 | leb128fmt | 0.1.0 | `MIT OR Apache-2.0` |
 | libc | 0.2.190 | `MIT OR Apache-2.0` |
 | libloading | 0.7.4 | `ISC` |
 | libloading | 0.8.9 | `ISC` |
 | libm | 0.2.16 | `MIT` |
 | libredox | 0.1.25 | `MIT` |
+| linebender_resource_handle | 0.1.1 | `Apache-2.0 OR MIT` |
 | linux-raw-sys | 0.4.15 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | linux-raw-sys | 0.12.1 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | litemap | 0.8.3 | `Unicode-3.0` |
@@ -258,12 +305,15 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | metal | 0.27.0 | `MIT OR Apache-2.0` |
 | miniz_oxide | 0.8.9 | `MIT OR Zlib OR Apache-2.0` |
 | miniz_oxide | 0.9.1 | `MIT OR Zlib OR Apache-2.0` |
+| moxcms | 0.8.1 | `BSD-3-Clause OR Apache-2.0` |
 | naga | 0.19.2 | `MIT OR Apache-2.0` |
 | naga | 30.0.1 | `MIT OR Apache-2.0` |
 | naga-types | 30.0.1 | `MIT OR Apache-2.0` |
 | ndk | 0.8.0 | `MIT OR Apache-2.0` |
+| ndk | 0.9.0 | `MIT OR Apache-2.0` |
 | ndk-context | 0.1.1 | `MIT OR Apache-2.0` |
 | ndk-sys | 0.5.0+25.2.9519653 | `MIT OR Apache-2.0` |
+| ndk-sys | 0.6.0+11769913 | `MIT OR Apache-2.0` |
 | nohash-hasher | 0.2.0 | `Apache-2.0 OR MIT` |
 | num-traits | 0.2.19 | `MIT OR Apache-2.0` |
 | num_enum | 0.7.6 | `BSD-3-Clause OR MIT OR Apache-2.0` |
@@ -271,16 +321,32 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | objc | 0.2.7 | `MIT` |
 | objc-sys | 0.3.5 | `MIT` |
 | objc2 | 0.4.1 | `MIT` |
+| objc2 | 0.5.3 | `MIT` |
 | objc2 | 0.6.5 | `MIT` |
+| objc2-app-kit | 0.2.2 | `MIT` |
 | objc2-app-kit | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-cloud-kit | 0.2.2 | `MIT` |
+| objc2-contacts | 0.2.2 | `MIT` |
+| objc2-core-data | 0.2.2 | `MIT` |
 | objc2-core-foundation | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
 | objc2-core-graphics | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-core-image | 0.2.2 | `MIT` |
+| objc2-core-location | 0.2.2 | `MIT` |
 | objc2-encode | 3.0.0 | `MIT` |
 | objc2-encode | 4.1.0 | `MIT` |
+| objc2-foundation | 0.2.2 | `MIT` |
 | objc2-foundation | 0.3.2 | `MIT` |
 | objc2-io-surface | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-link-presentation | 0.2.2 | `MIT` |
+| objc2-metal | 0.2.2 | `MIT` |
 | objc2-metal | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-quartz-core | 0.2.2 | `MIT` |
 | objc2-quartz-core | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-symbols | 0.2.2 | `MIT` |
+| objc2-ui-kit | 0.2.2 | `MIT` |
+| objc2-ui-kit | 0.3.2 | `Zlib OR Apache-2.0 OR MIT` |
+| objc2-uniform-type-identifiers | 0.2.2 | `MIT` |
+| objc2-user-notifications | 0.2.2 | `MIT` |
 | objc_exception | 0.1.2 | `MIT` |
 | once_cell | 1.21.4 | `MIT OR Apache-2.0` |
 | orbclient | 0.3.55 | `MIT` |
@@ -291,7 +357,10 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | parking_lot | 0.12.5 | `MIT OR Apache-2.0` |
 | parking_lot_core | 0.9.12 | `MIT OR Apache-2.0` |
 | paste | 1.0.15 | `MIT OR Apache-2.0` |
+| peniko | 0.6.1 | `Apache-2.0 OR MIT` |
 | percent-encoding | 2.3.2 | `MIT OR Apache-2.0` |
+| pin-project | 1.1.13 | `Apache-2.0 OR MIT` |
+| pin-project-internal | 1.1.13 | `Apache-2.0 OR MIT` |
 | pin-project-lite | 0.2.17 | `Apache-2.0 OR MIT` |
 | piper | 0.2.5 | `MIT OR Apache-2.0` |
 | pkg-config | 0.3.34 | `MIT OR Apache-2.0` |
@@ -300,6 +369,8 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | png | 0.18.1 | `MIT OR Apache-2.0` |
 | polling | 3.11.0 | `Apache-2.0 OR MIT` |
 | pollster | 0.4.0 | `Apache-2.0/MIT` |
+| pollster | 1.0.1 | `Apache-2.0/MIT` |
+| polycool | 0.4.0 | `MIT OR Apache-2.0` |
 | portable-atomic | 1.15.0 | `Apache-2.0 OR MIT` |
 | portable-atomic-util | 0.2.8 | `Apache-2.0 OR MIT` |
 | potential_utf | 0.1.6 | `Unicode-3.0` |
@@ -309,7 +380,10 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | proc-macro-error | 1.0.4 | `MIT OR Apache-2.0` |
 | proc-macro-error-attr | 1.0.4 | `MIT OR Apache-2.0` |
 | proc-macro2 | 1.0.107 | `MIT OR Apache-2.0` |
+| proc-macro2-diagnostics | 0.10.1 | `MIT/Apache-2.0` |
 | profiling | 1.0.18 | `MIT OR Apache-2.0` |
+| pxfm | 0.1.30 | `BSD-3-Clause OR Apache-2.0` |
+| quick-error | 2.0.1 | `MIT/Apache-2.0` |
 | quick-xml | 0.41.0 | `MIT` |
 | quote | 1.0.47 | `MIT OR Apache-2.0` |
 | r-efi | 5.3.0 | `MIT OR Apache-2.0 OR LGPL-2.1-or-later` |
@@ -323,7 +397,9 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | raw-window-metal | 1.1.0 | `MIT OR Apache-2.0` |
 | rayon | 1.12.0 | `MIT OR Apache-2.0` |
 | rayon-core | 1.13.0 | `MIT OR Apache-2.0` |
+| read-fonts | 0.41.0 | `MIT OR Apache-2.0` |
 | redox_syscall | 0.3.5 | `MIT` |
+| redox_syscall | 0.4.1 | `MIT` |
 | redox_syscall | 0.5.18 | `MIT` |
 | redox_syscall | 0.9.4 | `MIT` |
 | renderdoc-sys | 1.1.0 | `MIT OR Apache-2.0` |
@@ -331,6 +407,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | ring | 0.17.14 | `Apache-2.0 AND ISC` |
 | rustc-hash | 1.1.0 | `Apache-2.0/MIT` |
 | rustc-hash | 2.1.3 | `Apache-2.0 OR MIT` |
+| rustc_version | 0.4.1 | `MIT OR Apache-2.0` |
 | rustix | 0.38.44 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | rustix | 1.1.5 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | rustls | 0.23.45 | `Apache-2.0 OR ISC OR MIT` |
@@ -343,6 +420,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | security-framework | 2.11.1 | `MIT OR Apache-2.0` |
 | security-framework | 3.7.0 | `MIT OR Apache-2.0` |
 | security-framework-sys | 2.17.0 | `MIT OR Apache-2.0` |
+| self_cell | 1.3.0 | `Apache-2.0 OR GPL-2.0-only` |
 | semver | 1.0.28 | `MIT OR Apache-2.0` |
 | serde | 1.0.229 | `MIT OR Apache-2.0` |
 | serde_core | 1.0.229 | `MIT OR Apache-2.0` |
@@ -353,10 +431,14 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | shlex | 2.0.1 | `MIT OR Apache-2.0` |
 | signal-hook-registry | 1.4.8 | `MIT OR Apache-2.0` |
 | simd-adler32 | 0.3.10 | `MIT` |
+| simd_cesu8 | 1.2.0 | `Apache-2.0 OR MIT` |
+| simdutf8 | 0.1.5 | `MIT OR Apache-2.0` |
+| skrifa | 0.44.0 | `MIT OR Apache-2.0` |
 | slab | 0.4.12 | `MIT` |
 | slotmap | 1.1.1 | `Zlib` |
 | smallvec | 1.16.3 | `MIT OR Apache-2.0` |
 | smithay-client-toolkit | 0.18.1 | `MIT` |
+| smithay-client-toolkit | 0.19.2 | `MIT` |
 | smithay-client-toolkit | 0.20.0 | `MIT` |
 | smithay-clipboard | 0.7.3 | `MIT` |
 | smol_str | 0.2.2 | `MIT OR Apache-2.0` |
@@ -376,6 +458,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | thiserror | 2.0.21 | `MIT OR Apache-2.0` |
 | thiserror-impl | 1.0.69 | `MIT OR Apache-2.0` |
 | thiserror-impl | 2.0.21 | `MIT OR Apache-2.0` |
+| tiff | 0.11.3 | `MIT` |
 | tinystr | 0.8.4 | `Unicode-3.0` |
 | tokio | 1.53.2 | `MIT` |
 | toml | 1.1.8+spec-1.1.0 | `MIT OR Apache-2.0` |
@@ -389,6 +472,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | ttf-parser | 0.25.1 | `MIT OR Apache-2.0` |
 | type-map | 0.5.1 | `MIT/Apache-2.0` |
 | uds_windows | 1.2.1 | `MIT` |
+| unicode-general-category | 1.1.0 | `Apache-2.0` |
 | unicode-ident | 1.0.27 | `(MIT OR Apache-2.0) AND Unicode-3.0` |
 | unicode-segmentation | 1.13.3 | `MIT OR Apache-2.0` |
 | unicode-width | 0.1.14 | `MIT OR Apache-2.0` |
@@ -402,6 +486,8 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | utf8-zero | 0.8.1 | `MIT OR Apache-2.0` |
 | utf8_iter | 1.0.4 | `Apache-2.0 OR MIT` |
 | uuid | 1.28.0 | `Apache-2.0 OR MIT` |
+| vello_common | 0.1.0 | `Apache-2.0 OR MIT` |
+| vello_cpu | 0.1.0 | `Apache-2.0 OR MIT` |
 | version_check | 0.9.5 | `MIT/Apache-2.0` |
 | walkdir | 2.5.0 | `Unlicense/MIT` |
 | wasi | 0.11.1+wasi-snapshot-preview1 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
@@ -428,14 +514,17 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | wayland-protocols-experimental | 20250721.0.1 | `MIT` |
 | wayland-protocols-misc | 0.3.12 | `MIT` |
 | wayland-protocols-plasma | 0.2.0 | `MIT` |
+| wayland-protocols-plasma | 0.3.12 | `MIT` |
 | wayland-protocols-wlr | 0.2.0 | `MIT` |
 | wayland-protocols-wlr | 0.3.12 | `MIT` |
 | wayland-scanner | 0.31.11 | `MIT` |
 | wayland-sys | 0.31.11 | `MIT` |
 | web-sys | 0.3.106 | `MIT OR Apache-2.0` |
 | web-time | 0.2.4 | `MIT OR Apache-2.0` |
+| web-time | 1.1.0 | `MIT OR Apache-2.0` |
 | webbrowser | 0.8.15 | `MIT OR Apache-2.0` |
 | webpki-roots | 1.0.9 | `CDLA-Permissive-2.0` |
+| weezl | 0.1.12 | `MIT OR Apache-2.0` |
 | wgpu | 0.19.4 | `MIT OR Apache-2.0` |
 | wgpu | 30.0.1 | `MIT OR Apache-2.0` |
 | wgpu-core | 0.19.4 | `MIT OR Apache-2.0` |
@@ -505,6 +594,7 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | windows_x86_64_msvc | 0.52.6 | `MIT OR Apache-2.0` |
 | windows_x86_64_msvc | 0.53.1 | `MIT OR Apache-2.0` |
 | winit | 0.29.15 | `Apache-2.0` |
+| winit | 0.30.13 | `Apache-2.0` |
 | winnow | 1.0.4 | `MIT` |
 | wit-bindgen | 0.57.1 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | writeable | 0.6.4 | `Unicode-3.0` |
@@ -531,6 +621,8 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | zerovec-derive | 0.11.6 | `Unicode-3.0` |
 | zlib-rs | 0.6.8 | `Zlib` |
 | zmij | 1.0.23 | `MIT` |
+| zune-core | 0.5.3 | `MIT OR Apache-2.0 OR Zlib` |
+| zune-jpeg | 0.5.15 | `MIT OR Apache-2.0 OR Zlib` |
 | zvariant | 5.15.0 | `MIT` |
 | zvariant_derive | 5.15.0 | `MIT` |
 | zvariant_utils | 4.2.0 | `MIT` |

@@ -47,11 +47,12 @@ On Windows the binary is `target\release\rcfd.exe`.
 
 Prerequisites:
 
-* Rust 1.90 or later for the whole workspace. CI type-checks it with 1.90
-  and builds and tests it with 1.99; tests have not been run on 1.90. Each
-  crate's `rust-version` states its own minimum (1.75 to 1.90): 1.75, or the
-  highest minimum its dependencies declare if that is higher. Older
-  toolchains are not tested.
+* Rust 1.90 or later for the solver and libraries; Rust 1.95 or later for
+  the Studio (`rcfd-studio`, its eframe needs 1.95). CI type-checks the
+  workspace without the Studio with 1.90 and builds and tests everything
+  with 1.99; tests have not been run on 1.90. Each crate's `rust-version`
+  states its own minimum (1.75 to 1.95): 1.75, or the highest minimum its
+  dependencies declare if that is higher. Older toolchains are not tested.
 * The render crate uses the GPU through wgpu. Without a GPU or a software
   adapter its tests print a skip message and pass. CUDA support is an
   optional feature, off by default ([docs/gpu.md](docs/gpu.md)).

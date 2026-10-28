@@ -1,0 +1,38 @@
+[package]
+name = "rcfd-studio"
+description = "rcfd Studio (layer L5): eframe/egui on wgpu, project folders, case/mesh/run browser, schema-driven case editor (ADR 0131)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# eframe 0.36 needs Rust 1.95 (ADR 0131 W48-1 (b)); the rest of the workspace keeps its own minimums.
+rust-version = "1.95"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-api.workspace = true
+rcfd-core.workspace = true
+rcfd-project.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# ADR 0131 W48-2 (a): eframe 0.36.2 (0.37.0 fails the two-week rule until 2026-10-29) on its wgpu back end.
+# `wgpu_no_default_features`: eframe's `wgpu` feature would turn on wgpu's default back ends (Metal, GLES, WebGL), which
+# feature unification would also give rcfd-render; the back ends are chosen by the wgpu entry below instead.
+eframe = { version = "0.36.2", default-features = false, features = ["wgpu_no_default_features", "default_fonts", "x11", "wayland"] }
+egui = "0.36.2"
+egui_dock = { version = "0.21.1", features = ["serde"] }
+egui_plot = "0.37.0"
+# Same version as rcfd-gui: already locked and reviewed; no egui coupling.
+rfd = "=0.15.4"
+
+# Not a new crate: the version and back ends of rcfd-render (ADR 0125), so egui-wgpu and the render core share one wgpu.
+[dependencies.wgpu]
+version = "=30.0.1"
+default-features = false
+features = ["std", "wgsl", "dx12", "vulkan"]
+
+[[bin]]
+name = "rcfd-studio"
+path = "src/main.rs"

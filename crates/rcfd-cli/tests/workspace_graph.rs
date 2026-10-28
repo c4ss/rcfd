@@ -90,6 +90,7 @@ fn layering_matches_architecture_doc() {
         "rcfd-mcp" | "rcfd-cli" => 6,
         "rcfd-assistant" => 7,
         "rcfd-gui" => 8,
+        "rcfd-studio" => 9,
         other => panic!("unknown crate {other}"),
     };
     for (c, deps) in &g {

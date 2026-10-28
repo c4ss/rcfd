@@ -22,6 +22,7 @@ members = [
     "crates/rcfd-runner",
     "crates/rcfd-render",
     "crates/rcfd-tsstore",
+    "crates/rcfd-studio",
 ]
 
 [workspace.package]
