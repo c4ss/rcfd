@@ -246,24 +246,26 @@ fn v10_slider_uses_the_scalar_only_update() {
         assert!(g.renders >= 1);
         let mut controls = 0;
         for (n, k) in [1usize, 2, 0].into_iter().enumerate() {
-            let view = app.st.viewport.view().unwrap();
+            let size = app.st.viewport.size;
             let g = app.st.viewport.gpu().unwrap();
             let rd = g.renderer();
-            let fresh = rd.upload(&surface, Field::Face(&expected[k])).unwrap();
-            let want = rd.render(&fresh, &view).unwrap();
             let before = vp::read_back(rd.device(), rd.queue(), g.texture().unwrap());
-            if before != want.rgba {
-                controls += 1;
-            }
             app.st.viewport.show_snapshot(k);
             assert!(app.st.drain_until(vp::WAIT, |s| !s.viewport.pending()
                 && s.viewport.frame.as_ref().is_some_and(|f| f.index == k)));
             let _ = vp::frame(&mut app, &ctx);
-            assert_eq!(app.st.viewport.view().unwrap().width, view.width, "the size did not change");
+            assert_eq!(app.st.viewport.size, size, "the size did not change");
+            // amendment 2: the expected image under the view the model draws the new snapshot with
+            let view = app.st.viewport.view().unwrap();
             let g = app.st.viewport.gpu().unwrap();
             assert_eq!(g.uploads, 1, "{}: step to {k} uploaded", vp::adapter_name(a));
             assert_eq!(g.scalar_updates, n as u64 + 1);
             let rd = g.renderer();
+            let fresh = rd.upload(&surface, Field::Face(&expected[k])).unwrap();
+            let want = rd.render(&fresh, &view).unwrap();
+            if before != want.rgba {
+                controls += 1;
+            }
             let after = vp::read_back(rd.device(), rd.queue(), g.texture().unwrap());
             let diff = after.chunks(4).zip(want.rgba.chunks(4)).filter(|(x, y)| x != y).count();
             assert_eq!(diff, 0, "{}: snapshot {k}: {diff} pixels differ from a fresh upload", vp::adapter_name(a));

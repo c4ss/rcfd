@@ -360,3 +360,14 @@ re-export `eframe::egui_wgpu` (already locked as eframe's dependency). No third-
 
 **What I already knew (rule d).** The code reading above and the `Cargo.lock` reading. No integration code existed and no test
 of this part had run.
+
+## Integration part: amendment 2 (2026-10-28, V10 set-up defect, before the corrected run)
+
+The first registered run of `tests/viewport_store.rs` (commit 87b8552) failed V10 on its first adapter before reaching its limit:
+the test rendered the expected image with the `View` it read **before** the step. With the colour range "auto per snapshot"
+that view carries the previous snapshot's range, so the expected image was drawn with the wrong range (66 766 pixels differed
+on NVIDIA Vulkan). A test-code defect: the registered set-up says "under the model's `View`", the view the model draws the new
+snapshot with. Corrected: the expected image (a fresh `upload` of the snapshot's mapped values, `Renderer::render`) is made with
+`Viewport::view()` read after the step has been drawn; the negative control compares the texture read before the step with that
+corrected expected image. Limits unchanged. What I knew: V4, V5, V8 and V11 passed in that run (the addendum reports them); V3
+and V9 had passed in their own run.
