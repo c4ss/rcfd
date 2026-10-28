@@ -30,7 +30,14 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
             return;
         }
         Status::NoStore(m) => {
-            ui.weak(m);
+            // ADR 0140 D8, D9: why there is nothing to show, and the re-run when it is offered
+            if crate::fields_ui::empty_state(ui, vp.empty.as_ref(), &m, true) {
+                if let Some(id) = vp.run.clone() {
+                    if let Err(e) = st.rerun_with_fields(&id) {
+                        st.say(e);
+                    }
+                }
+            }
             return;
         }
         Status::Failed(m) => {
@@ -40,8 +47,11 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
         Status::Ready => {}
     }
     if vp.snaps.is_empty() {
-        ui.weak("The store has no snapshots yet.");
+        crate::fields_ui::empty_state(ui, vp.empty.as_ref(), "The store has no snapshots yet.", false);
         return;
+    }
+    if let Some(n) = &vp.store_note {
+        ui.weak(n.as_str());
     }
     controls(ui, vp);
     time_row(ui, vp);

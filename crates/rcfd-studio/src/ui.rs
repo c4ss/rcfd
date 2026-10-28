@@ -689,44 +689,8 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
 }
 
 fn store_ui(ui: &mut egui::Ui, plan: &mut crate::runs::StartPlan) {
-    use crate::runs::StoreEvery;
-    if let Some(n) = &plan.note {
-        ui.weak(n.as_str());
-    }
-    let Some(s) = plan.store.as_mut() else { return };
-    ui.checkbox(&mut s.on, "Store fields for scrubbing (ux, uy, uz, p)");
-    if !s.on {
-        return;
-    }
-    ui.horizontal(|ui| match &mut s.every {
-        StoreEvery::Steps(k) => {
-            ui.label("every");
-            ui.add(egui::DragValue::new(k).range(1..=1_000_000_000u64));
-            ui.label("steps");
-        }
-        StoreEvery::Time(dt) => {
-            ui.label("every");
-            ui.add(egui::DragValue::new(dt).range(1e-12..=1e12).speed(0.0));
-            ui.label("s of simulated time");
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.radio_value(&mut s.f32, true, "f32 (lossy, half size)");
-        ui.radio_value(&mut s.f32, false, "f64 (exact)");
-    });
-    match (plan.snapshots(), plan.estimated_bytes()) {
-        (Some(n), Some(b)) => ui.weak(format!(
-            "about {n} snapshots, estimated {:.1} MB (cells x 4 fields x snapshots x {} bytes)",
-            b as f64 / 1e6,
-            if plan.store.as_ref().is_some_and(|s| s.f32) {
-                4
-            } else {
-                8
-            }
-        )),
-        (Some(n), None) => ui.weak(format!("about {n} snapshots; cell count unknown before the run")),
-        _ => ui.weak(""),
-    };
+    // ADR 0140: the store section (switch, summary, warnings and fixes) is drawn by its own module
+    crate::fields_ui::store_section(ui, plan);
 }
 
 fn budgets_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {

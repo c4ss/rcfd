@@ -158,6 +158,9 @@ pub struct CaseFacts {
     pub sets_precision: bool,
     /// `dynamic_mesh.enabled` (the store does not support a moving mesh).
     pub dynamic_mesh: bool,
+    /// What the text says beyond these fields (ADR 0140: the case's own store and output keys, the time step, chains);
+    /// boxed so that the run worker's updates stay small.
+    pub extra: Box<crate::store_plan::CaseExtra>,
 }
 
 /// How often the store writes.
@@ -249,13 +252,15 @@ pub fn case_facts(text: &str, base_dir: &Path) -> Result<CaseFacts, String> {
             || text_sets(&raw, &["output", "store_time_interval"]),
         sets_precision: text_sets(&raw, &["output", "store_precision"]),
         dynamic_mesh: get("dynamic_mesh.enabled").as_bool() == Some(true),
+        extra: Box::new(crate::store_plan::case_extra(&raw, &case, cells.is_some())),
     })
 }
 
 /// The store proposal of W48-5 (a) for `facts`: `None` with a note when the case sets the store itself or uses a moving
 /// mesh. Steady algorithms get `store_interval = ceil(max_iterations / 100)` (so `ceil(M / k) <= 100` snapshots,
-/// the final state included); `piso` and `pimple` with an `end_time` get `store_time_interval = end_time / 100`; other
-/// algorithms get the step rule. Precision f32 (lossy, half the size).
+/// the final state included); transient runs (`piso`, `pimple`, and `compressible` unless `compressible.mode = "steady"`,
+/// ADR 0140 D2) with an `end_time` get `store_time_interval = end_time / 100`; other runs get the step rule. Precision
+/// f32 (lossy, half the size).
 pub fn propose_store(facts: &CaseFacts) -> (Option<StorePlan>, Option<String>) {
     if facts.sets_store {
         return (None, Some("the case sets its own field store (output.store_*)".into()));
@@ -266,12 +271,12 @@ pub fn propose_store(facts: &CaseFacts) -> (Option<StorePlan>, Option<String>) {
             Some("no field store: the store does not support dynamic_mesh.enabled".into()),
         );
     }
-    let every =
-        if !steady(&facts.algorithm) && matches!(facts.algorithm.as_str(), "piso" | "pimple") && facts.end_time > 0.0 {
-            StoreEvery::Time(facts.end_time / STORE_SNAPSHOTS as f64)
-        } else {
-            StoreEvery::Steps(facts.max_iterations.div_ceil(STORE_SNAPSHOTS).max(1))
-        };
+    let transient = crate::store_plan::is_transient(&facts.algorithm, facts.extra.compressible_steady);
+    let every = if !steady(&facts.algorithm) && transient && facts.end_time > 0.0 {
+        StoreEvery::Time(facts.end_time / STORE_SNAPSHOTS as f64)
+    } else {
+        StoreEvery::Steps(facts.max_iterations.div_ceil(STORE_SNAPSHOTS).max(1))
+    };
     (
         Some(StorePlan {
             on: true,
