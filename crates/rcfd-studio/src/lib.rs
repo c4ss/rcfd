@@ -5,9 +5,12 @@
 //! [`prefs`], [`runs`], [`poll`], [`viewport`]); [`ui`] and [`viewport_ui`] only draw. The viewport (ADR 0132) renders a
 //! run's stored fields with `rcfd-render` on eframe's own wgpu device into a texture that egui shows. File work runs on worker threads per open project: the project
 //! worker ([`watch`]) and the run worker ([`poll`], ADR 0133), which talks to the project's `rcfd-runner`. Tests drive
-//! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI").
+//! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
+//! sidebar ([`chat`], ADR 0134) has its own worker and turn threads.
 
 pub mod case_edit;
+pub mod chat;
+pub mod chat_ui;
 pub mod layout;
 pub mod monitors;
 pub mod poll;

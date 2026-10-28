@@ -2,6 +2,7 @@
 //! the same methods. File work is sent to the project worker ([`crate::watch`]); [`Studio::drain`] applies its results.
 
 use crate::case_edit::{schema_tree, CaseEditor, EditorState, External};
+use crate::chat::ChatModel;
 use crate::layout::{self, Panel};
 use crate::monitors::MonitorStore;
 use crate::poll::{self, RunWorker, Switches, Update};
@@ -70,6 +71,8 @@ pub struct Studio {
     pub viewport: crate::viewport::Viewport,
     /// Status and error messages, latest last.
     pub messages: Vec<String>,
+    /// The Claude Code sidebar (ADR 0134); off until `main` configures its bridge.
+    pub chat: ChatModel,
     /// Watcher period for projects opened from now on (`None`: watcher off).
     pub poll: Option<Duration>,
     /// Run worker period for projects opened from now on (`None`: no run worker).
@@ -112,6 +115,7 @@ impl Studio {
             plot_marker: None,
             viewport: Default::default(),
             messages: Vec::new(),
+            chat: ChatModel::default(),
             poll: Some(POLL),
             run_poll: Some(poll::PERIOD),
             run_switches: Switches::default(),
@@ -184,6 +188,7 @@ impl Studio {
         self.pending_case = None;
         self.selected_run = None;
         self.project = None;
+        self.chat.close();
         self.runs = RunsView::default();
         self.plots.clear();
         self.monitors.clear();
@@ -264,7 +269,11 @@ impl Studio {
             .sync(root.as_deref(), selected.as_deref(), poll::PERIOD, &self.wake);
         n += self.viewport.drain();
         self.plot_marker = self.viewport.marker();
-        n
+        let (k, msgs) = self.chat.drain();
+        for m in msgs {
+            self.say(m);
+        }
+        n + k
     }
 
     fn run_worker(&self) -> Option<&RunWorker> {
@@ -488,6 +497,7 @@ impl Studio {
                     w
                 });
                 self.shown_run = None;
+                self.chat.open(&b.root, self.wake.clone());
                 if let Some(p) = &mut self.project {
                     p.browser = Some(b);
                     p.runs = runs;

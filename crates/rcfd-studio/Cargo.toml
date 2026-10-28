@@ -22,6 +22,8 @@ rcfd-tsstore.workspace = true
 rcfd-mesh.workspace = true
 # Run control through the project's runner (ADR 0133 D1): client, records, budgets. Layer 2, no third-party crate.
 rcfd-runner = { path = "../rcfd-runner" }
+# The Claude Code sidebar (ADR 0134): sessions, transcript mirror, headless chat, allow-list, trust record. Layer 2.
+rcfd-claude = { path = "../rcfd-claude" }
 serde.workspace = true
 serde_json.workspace = true
 # Already in the workspace (rcfd-api): the start dialog reads which store keys a case text sets (ADR 0133 R10).
