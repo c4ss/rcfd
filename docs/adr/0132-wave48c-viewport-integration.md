@@ -178,3 +178,36 @@ adapters; T1 medians 2.3-67.7 ms, uploads 142-172 ms), their saved PNGs were cop
 an unregistered smoke test (`render_into_and_update_scalar_reject_bad_input`) passed on all five adapters: wrong size, format (incl.
 `Rgba8UnormSrgb`) and usage are located errors, a wrong-length or NaN update fails and leaves the image unchanged, and
 `update_scalar(Field::None)` renders the same bytes as `upload(Field::None)`. No V1, V6 or V7 result had been seen.
+
+## Addendum: library part, results against the registered limits (2026-10-28)
+
+Registered run: commit 83d9296, `cargo test --release -p rcfd-render -- --test-threads=1` (`CARGO_BUILD_JOBS=2`), this machine, the
+five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP). No test took the
+SKIP branch. Result: 5 unit + 11 `render.rs` (2 ignored known misses of ADR 0125, unchanged) + 2 `upload_limit_wfix.rs` + 4
+`viewport.rs` passed, 0 failed. No amendment was needed.
+
+| Id | Measured | Limit | Status |
+|---|---|---|---|
+| V1 | all four G2 scenes on all five adapters: 0 pixels of the `render_into` texture differ from `render` (byte-identical); negative control at yaw 37: 3400 (a), 23 936 (b), 27 619 (c; 27 618 on WARP), 19 161 (d) differing pixels | byte-identical; control differs | pass |
+| V6 | all five adapters: after `update_scalar` (field (c) to field (a)) 0 differing pixels against a fresh upload of (a), also through `render_into`; pick ids and values equal; updating back to (c) equals the original upload under (c)'s view; negative control (scalar buffer not bound) 28 109 differing pixels | byte-identical; control differs | pass |
+| V6, ADR 0125 checks unchanged | R0, G1, G2 a-d, D1, G3, P1b, P2 depth/visibility, V1, K1, W1, S1, T1, U1 pass with the values of ADR 0125's addendum; the 29 PNGs the tests save (G1, G2 per adapter and the CPU references) are byte-identical to those of the base commit 3492c75 (`cmp`) | pass unchanged | pass |
+| V7, 100^3 box (120 000 triangles) | median step: NVIDIA Vulkan 11.0 ms, NVIDIA DX12 10.8 ms; AMD Vulkan 12.6 ms, AMD DX12 12.8 ms; WARP 179.3 ms | <= 100 ms on `DiscreteGpu` | pass (others reported) |
+| V7, T1 surface (1 000 000 triangles) | median step: NVIDIA Vulkan 16.4 ms, NVIDIA DX12 12.9 ms; AMD Vulkan 19.4 ms, AMD DX12 22.8 ms; WARP 1414.4 ms | <= 100 ms on `DiscreteGpu` | pass (others reported) |
+| V7 negative control (full re-upload, T1 surface) | median of 5: NVIDIA Vulkan 164.0 ms, NVIDIA DX12 155.4 ms; AMD Vulkan 208.9 ms, AMD DX12 206.4 ms; WARP 17 581.8 ms | > 100 ms on `DiscreteGpu` | discriminates |
+
+T1 in the same run (reported, limit 250 ms on discrete GPUs): median frame 2.5 / 5.3 ms (NVIDIA Vulkan / DX12), 9.7 / 9.3 ms (AMD),
+68.8 ms (WARP); uploads 146-195 ms. V7 set-up times: box store written and surface built in 2.6 s, T1-mesh store in 0.7 s; the whole
+`viewport.rs` binary took 163 s, most of it WARP's 1M-triangle arm.
+
+**Not run in the library part:** V2 (egui-wgpu composite), V3, V4, V5, V8, V9 (viewport model), the step-0 check that eframe's wgpu
+resolves to the same 30.0.1 in `Cargo.lock`, and the "Not in CI" items. They belong to the integration part on the 48B shell.
+
+**Linux/CI:** the new tests take the SKIP branch before building any fixture when `adapters()` is empty; V7 is ignored in debug
+builds. Not run on Linux here (UNVERIFIED on a Linux host); nothing in the new code is platform-specific.
+
+**Notes for the integration part.**
+* `render_into` submits but does not wait; egui's frame submitted later on the same queue sees the finished image.
+* WARP's scrub step on 1M triangles is about 1.4 s (and its re-upload about 17.6 s), so a software-adapter Studio cannot scrub large
+  meshes at the V7 rate; the limit is registered for discrete GPUs only, as T1.
+* Question for the maintainer: the Files section puts V2 in `crates/rcfd-render/tests/`, but V2 needs egui-wgpu, which Placement does
+  not allow as an `rcfd-render` dependency. Proposal: V2 lives in `rcfd-studio`'s tests (the crate that has egui-wgpu anyway).
