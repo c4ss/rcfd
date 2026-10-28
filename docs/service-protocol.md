@@ -35,7 +35,10 @@ symbolic links).
 ## Sessions and run states
 
 `session.create` takes one of `{toml}`, `{settings}` (JSON object), `{path}`
-(sandboxed) or nothing (defaults) and returns `{session}`.
+(sandboxed) or nothing (defaults) and returns `{session}`. With `{toml}` or `{settings}` an optional
+`base_dir` (sandboxed) is the folder that relative data paths of the case (mesh file, lookup tables) resolve
+against, as a case file's own folder does for `{path}`; without it they resolve against the sandbox root, else
+the working folder (ADR 0144). The journal's create entry records `base_dir` when it was given.
 States: `defined` -> `ready` -> `running` <-> `paused` -> `finished` | `stopped` | `failed`.
 Changing settings is refused (1002) while running or paused; a change discards the
 built simulation and returns the session to `defined`.

@@ -1038,3 +1038,79 @@ fn j9_a_case_made_by_the_starter_is_previewed() {
     );
     assert_eq!(st.view.side, Side::Run, "control 2: the view moved");
 }
+
+// ---------------------------------------------------------------- J15: the case editor's base folder
+
+/// J15 (amendment 3): the Studio's case editor resolves relative paths against the case's folder. Through the Studio
+/// model (the worker's bytes): (a) the hex box (`mesh.file = "../meshes/hex.msh"`) opens with the case's folder and
+/// `validate()` is true with no diagnostic; (b) `cases/channel/profile_inlet.toml` and its `profile_inlet.csv` copied
+/// into `cases/` open (the table is read there), validate, and a committed edit is saved: the file on disk then loads
+/// with the edit. Negative controls (the route before, `CaseEditor::from_bytes`, base `.`): the hex bytes open and fail
+/// at `mesh.file`; the profile bytes do not open and the message names `tables.inlet_u.file`.
+#[test]
+fn j15_the_case_editor_resolves_paths_against_the_case_folder() {
+    let repo = pv::repo_root();
+    let profile = std::fs::read(repo.join("cases/channel/profile_inlet.toml")).unwrap();
+    let csv = std::fs::read(repo.join("cases/channel/profile_inlet.csv")).unwrap();
+    let root = pv::project(
+        "j15",
+        &[
+            ("cases/profile_inlet.toml", profile.as_slice()),
+            ("cases/profile_inlet.csv", csv.as_slice()),
+        ],
+    );
+    let cases = root.join("cases");
+    let mut st = lj::studio(&root, false);
+    // (a)
+    assert_eq!(lj::open(&mut st, "cases/hex.toml"), Status::Ready);
+    let ed = st.editor.as_mut().unwrap();
+    assert_eq!(ed.dir.as_deref(), Some(cases.as_path()), "(a) the editor's folder");
+    let ok = ed.validate();
+    eprintln!("J15 (a) cases/hex.toml: validate {ok} {:?}", ed.diagnostics);
+    assert!(ok && ed.diagnostics.is_empty(), "(a) {:?}", ed.diagnostics);
+    // (b)
+    st.open_case("cases/profile_inlet.toml");
+    assert!(
+        st.drain_until(lj::WAIT, |s| s
+            .editor
+            .as_ref()
+            .is_some_and(|e| e.rel == "cases/profile_inlet.toml")),
+        "(b) not opened: {:?}",
+        st.last_message()
+    );
+    let ed = st.editor.as_mut().unwrap();
+    let ok = ed.validate();
+    eprintln!(
+        "J15 (b) cases/profile_inlet.toml: opened, validate {ok} {:?}",
+        ed.diagnostics
+    );
+    assert!(ok && ed.diagnostics.is_empty(), "(b) {:?}", ed.diagnostics);
+    ed.set_value("solver.max_iterations", json!(7)).unwrap();
+    st.save_case().unwrap();
+    assert!(
+        st.drain_until(lj::WAIT, |s| s
+            .editor
+            .as_ref()
+            .is_some_and(|e| !e.saving && !e.is_dirty())),
+        "(b) not saved: {:?}",
+        st.last_message()
+    );
+    let saved = Case::load(cases.join("profile_inlet.toml")).unwrap_or_else(|d| panic!("(b) saved file: {d:?}"));
+    assert_eq!(saved.get("solver.max_iterations").unwrap(), json!(7), "(b) the edit");
+    eprintln!("J15 (b): saved with the edit; the file loads with the table from its folder");
+    // controls: the route before the change (base `.`)
+    let svc = Studio::in_memory().svc;
+    let hex = std::fs::read(cases.join("hex.toml")).unwrap();
+    let mut old = rcfd_studio::case_edit::CaseEditor::from_bytes(svc.clone(), "cases/hex.toml", &hex).unwrap();
+    let ok = old.validate();
+    eprintln!("J15 control (base .): hex validate {ok} {:?}", old.diagnostics);
+    assert!(
+        !ok && old.diagnostics.iter().any(|d| d.contains("mesh.file")),
+        "control: hex"
+    );
+    let refused = rcfd_studio::case_edit::CaseEditor::from_bytes(svc, "cases/profile_inlet.toml", &profile)
+        .err()
+        .expect("control: the profile case opened with base '.'");
+    eprintln!("J15 control (base .): profile_inlet refused: {refused}");
+    assert!(refused.contains("tables.inlet_u.file"), "control: {refused}");
+}

@@ -571,7 +571,16 @@ impl Studio {
                     return;
                 }
                 self.pending_case = None;
-                match CaseEditor::from_bytes(self.svc.clone(), &rel, &bytes) {
+                // ADR 0144: relative data paths against the case's own folder, as a run resolves them
+                let dir = self
+                    .browser()
+                    .map(|b| b.root.join(&rel))
+                    .and_then(|f| f.parent().map(Path::to_path_buf));
+                let ed = match &dir {
+                    Some(d) => CaseEditor::from_bytes_in(self.svc.clone(), &rel, d, &bytes),
+                    None => CaseEditor::from_bytes(self.svc.clone(), &rel, &bytes),
+                };
+                match ed {
                     Ok(ed) => self.editor = Some(ed),
                     Err(m) => self.say(m),
                 }

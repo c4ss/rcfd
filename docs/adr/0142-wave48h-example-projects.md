@@ -372,6 +372,15 @@ for byte equal and only `manifest.json`'s byte counts changed; `--check` and the
     intended follow-up then: un-ignore `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss` and turn H1's
     aerofoil branch into the positive check, with a note in this ADR.
 
+## Note (2026-10-28, ADR 0144 amendment 3)
+
+The maintainer decided questions 2 and 11: the Studio's case editor resolves relative paths against the case's folder
+(ADR 0144 amendment 3: `session.create` with `base_dir`, the editor opened with the case's folder). Following question
+11, `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss` is un-ignored and renamed
+`e1_mesh_file_cases_validate_through_the_editor_calls` (E1's limit unchanged; the helper gives the case's folder as the
+editor now does), E2 keeps the text call without a base folder as its contrast, and H1's aerofoil branch is the positive
+check. The results are in ADR 0144's addendum (J17, J18).
+
 ## Files
 
 This ADR; `example-projects/**`; `scripts/make_example_projects.py`, `scripts/test_make_example_projects.py`;

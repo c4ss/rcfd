@@ -124,10 +124,12 @@ crate. Clean-room: our own Studio code and the egui public API.
 
 ## Placement
 
-Only `crates/rcfd-studio` and `docs/`. New module `src/view_toggle.rs`; hunks in `src/{lib,studio,preview,preview_ui,
-viewport_ui,case_edit,ui,case_starter,quick_run}.rs`. No new crate, no new dependency, no new workspace edge;
-`Cargo.toml`, `Cargo.lock`, `crates/rcfd-cli/tests/workspace_graph.rs` and `docs/architecture.md` unchanged. Every other
-crate is untouched, so `rcfd run` and the runner write what they wrote before.
+`crates/rcfd-studio` and `docs/`. New module `src/view_toggle.rs`; hunks in `src/{lib,studio,preview,preview_ui,
+viewport_ui,case_edit,ui,case_starter,quick_run}.rs`. Amendment 3 adds an opt-in parameter to `rcfd-api`'s
+`session.create` (`src/service.rs`, a new test file) and changes ADR 0142's tests in `rcfd-mcp` and `rcfd-studio`. No new
+crate, no new dependency, no new workspace edge; `Cargo.toml`, `Cargo.lock`, `crates/rcfd-cli/tests/workspace_graph.rs`
+and `docs/architecture.md` unchanged. `rcfd run` and the runner do not use `session.create`, so they write what they
+wrote before.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
@@ -237,6 +239,46 @@ procedure (frames drawn as the window draws them). Limits: the frame after the k
 `DEBOUNCE` later; the first frame drawn at the delay it asked for (no input) asks for the build (one frame); 0.50 to
 0.75 s after the keystroke. Controls: an idle frame asks for no frame within 1 s; with the switch (the code that
 missed) the first frame drawn at the asked delay does not ask for the build.
+
+## Amendment 3 (2026-10-28, the maintainer's decision on the case editor's base folder; before any of its runs)
+
+**Decision** (the maintainer, relayed 2026-10-28, answering ADR 0131 question 3 and ADR 0142 questions 2 and 11): the
+case editor resolves relative paths (`mesh.file`, lookup tables) against the case's own folder, not the working folder.
+Evidence: ADR 0142's E1 known miss and H1's aerofoil branch (the wind-tunnel aerofoil cases name
+`../meshes/naca0012-ogrid`). Main (with 48H, ADR 0142, merged as 0a69af4) was merged into this branch first (e38ef9c;
+48H added tests and data only, no conflict).
+
+**Change** (decision 8 of this ADR):
+* `rcfd-api` `session.create` takes an optional `base_dir` with `toml` or `settings`: the folder relative data paths
+  resolve against (sandbox-checked when the service has a sandbox root). Without it nothing changes (the sandbox root,
+  else the working folder), and the journal's create entry gets a `base_dir` key only when it was given;
+  `journal.replay` passes it on. `docs/service-protocol.md` says so. This is the change ADR 0131 question 3 named; the
+  other route of ADR 0142 question 2, `session.create {"path"}`, was not taken: the service would read the file again
+  on the UI thread and the session could hold other bytes than the editor's `base_hash`.
+* The Studio's editor is opened with the case's folder (`CaseEditor::from_bytes_in`, `CaseEditor::dir`, from
+  `Studio`'s `Loaded` event): its session, `validate()`, reloads and the bytes a save writes (`to_bytes`:
+  `Case::from_json_in(settings, dir)`) resolve against it. `CaseEditor::from_bytes` (no folder) keeps the working folder
+  for callers that give none (the ADR 0139 tests call it).
+* ADR 0142's tests: `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss` is un-ignored (renamed without
+  `_known_miss`, its limit unchanged: the 2 aerofoil cases open and validate through the editor's calls) and its helper
+  gives the case's folder as the editor now does; E1's generator half likewise; E2 keeps the text call without a base
+  folder as its contrast (the service's default, unchanged); H1's aerofoil branch becomes the positive check (the two
+  aerofoil cases validate in the Studio's editor, like the eight others). ADR 0142 gets a note.
+* `case_starter::EXCLUDED`'s reason for `channel/profile_inlet.toml` names the true cause now (the table is not copied).
+
+**Registered checks** (limits fixed here, before any run; release, `--test-threads 1 --nocapture`, output to files):
+
+| Id | Check | Limit | Negative control |
+|---|---|---|---|
+| J15 | The Studio's editor, through the Studio model (watcher and run worker off): (a) `cases/hex.toml` of ADR 0138's project; (b) `cases/channel/profile_inlet.toml` with `profile_inlet.csv` copied into the project's `cases/`, then `solver.max_iterations = 7` committed and saved | (a) the editor's folder is `<project>/cases`; `validate()` true, no diagnostic; (b) opens, `validate()` true, no diagnostic; the save ends clean; `Case::load` of the saved file holds `max_iterations = 7` | the route before (`CaseEditor::from_bytes`, base `.`): the hex case fails `validate()` at `mesh.file`; the profile case does not open and the message names `tables.inlet_u.file` |
+| J16 | `rcfd-api` `session.create`'s `base_dir` (`crates/rcfd-api/tests/service_base_dir_w48j.rs`): (i) the hex case as text and as settings with `base_dir = <root>/cases`; (ii) `journal.get` and `journal.replay` of (i); (iii) a service with a sandbox root: `base_dir = <root>/meshes` with `mesh.file = "hex.msh"`, and a `base_dir` outside the root | (i) both validate; (ii) the journal's create entry holds `base_dir`, the replayed session validates and `matches`; (iii) inside: validates; outside: refused with code `LIMIT` (1004) | the defaults: without `base_dir` the text opens and fails at `mesh.file`, and its journal's create entry has no `base_dir` key |
+| J17 | ADR 0142's E1 (`crates/rcfd-mcp/tests/example_projects_w48h.rs`, the whole file run) | E1's limit unchanged: the 2 aerofoil cases (and the 8 generator cases) open and validate through the editor's calls; E2, S1-S9 and the rest of the file as registered in ADR 0142 (G3's crossing count stays its ignored known miss) | E2's text call without a base folder fails at `mesh.file` |
+| J18 | ADR 0142's H1 (`crates/rcfd-studio/tests/example_projects_h.rs`) | H1's limits unchanged, and the 2 aerofoil cases validate in the Studio's editor (no diagnostic), like the 8 others | (the route before: J15's controls) |
+
+J14 (the rest) now also covers, in `rcfd-api`: the library's unit tests (the service module's among them) and the
+integration tests `service_tcp`, `tables`, `workflow`, `physics_service`, `mesh_quality` (they create sessions, read
+tables or replay journals) and `baseline_hashes` (unchanged, not re-recorded): pass as before. The rest of `rcfd-api`
+and of `rcfd-mcp` is left to the maintainer's gate.
 
 ## Not in CI (by hand)
 

@@ -113,8 +113,8 @@ pub const EXCLUDED: &[(&str, &str)] = &[
     ("naca0012/case.json", DESCRIPTOR),
     (
         "channel/profile_inlet.toml",
-        "reads its inlet profile from profile_inlet.csv by a relative path: a copy of the one file does not open in the \
-         case editor, whose service resolves the path against the working folder (ADR 0131 addendum, question 3)",
+        "reads its inlet profile from profile_inlet.csv by a relative path, which the starter does not copy: a copy of \
+         the one file does not open in the case editor (the table is looked for in the case's folder since ADR 0144)",
     ),
     (
         "channel/profile_inlet.csv",

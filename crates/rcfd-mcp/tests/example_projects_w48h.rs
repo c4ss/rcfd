@@ -336,11 +336,15 @@ fn s3_every_case_validates_through_rcfd_api() {
     assert_eq!(n, 10, "ten case files");
 }
 
-/// The Studio case editor's calls (`crates/rcfd-studio/src/case_edit.rs`): a default service, `session.create` with the
-/// text, `settings.validate`. Returns (opened, valid, diagnostics).
-fn editor_validate(text: &str) -> (bool, bool, String) {
+/// A default service, `session.create` with the text (and `base_dir` when given), `settings.validate`. Returns
+/// (opened, valid, diagnostics).
+fn text_validate(text: &str, base_dir: Option<&Path>) -> (bool, bool, String) {
     let svc = Service::new(ServiceConfig::default());
-    let Ok(s) = svc.call("session.create", &json!({ "toml": text })) else {
+    let mut p = json!({ "toml": text });
+    if let Some(d) = base_dir {
+        p["base_dir"] = json!(d.to_string_lossy());
+    }
+    let Ok(s) = svc.call("session.create", &p) else {
         return (false, false, String::new());
     };
     let v = svc
@@ -349,8 +353,19 @@ fn editor_validate(text: &str) -> (bool, bool, String) {
     (true, v["ok"] == true, v["diagnostics"].to_string())
 }
 
-/// E1: the eight generator cases open and validate through the Studio editor's calls (no file is read, so the working
-/// folder does not matter).
+/// The Studio case editor's calls (`crates/rcfd-studio/src/case_edit.rs`): a default service, `session.create` with the
+/// text and the case's folder as `base_dir` (ADR 0144: relative paths resolve against the case's folder),
+/// `settings.validate`. Returns (opened, valid, diagnostics).
+fn editor_validate(text: &str, case_dir: &Path) -> (bool, bool, String) {
+    text_validate(text, Some(case_dir))
+}
+
+/// The folder of case `rel` of project folder `dir`.
+fn case_dir(dir: &Path, rel: &str) -> PathBuf {
+    dir.join(rel).parent().unwrap().to_path_buf()
+}
+
+/// E1: the eight generator cases open and validate through the Studio editor's calls.
 #[test]
 fn e1_generator_cases_validate_through_the_editor_calls() {
     let mut n = 0;
@@ -359,7 +374,8 @@ fn e1_generator_cases_validate_through_the_editor_calls() {
             .into_iter()
             .filter(|r| !MESH_FILE_CASES.contains(&r.as_str()))
         {
-            let (open, ok, diag) = editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap());
+            let (open, ok, diag) =
+                editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap(), &case_dir(&dir, &rel));
             println!("E1 {name}/{rel}: open {open}, valid {ok} {diag}");
             assert!(open && ok, "{name}/{rel}: {diag}");
             n += 1;
@@ -368,27 +384,28 @@ fn e1_generator_cases_validate_through_the_editor_calls() {
     assert_eq!(n, 8);
 }
 
-/// E1 known miss (registered limit: every case validates through the editor's calls): the two aerofoil cases name
-/// `../meshes/naca0012-ogrid`, which the editor's service resolves against the process's working folder
-/// (`session.create` with text uses the base `.`, ADR 0131 question 3), so validation fails outside `cases/`.
+/// E1 for the two aerofoil cases (registered limit: every case validates through the editor's calls). They name
+/// `../meshes/naca0012-ogrid`; the editor resolved it against the process's working folder until ADR 0144 (this test
+/// was the ignored known miss `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss`); its calls now give the
+/// case's folder (`base_dir`), as `rcfd run` and the run service do.
 #[test]
-#[ignore = "known miss (ADR 0142 E1): the Studio editor resolves relative mesh paths against the working folder"]
-fn e1_mesh_file_cases_validate_through_the_editor_calls_known_miss() {
+fn e1_mesh_file_cases_validate_through_the_editor_calls() {
     for (name, dir, _) in all_projects() {
         for rel in case_files(&dir)
             .into_iter()
             .filter(|r| MESH_FILE_CASES.contains(&r.as_str()))
         {
-            let (open, ok, diag) = editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap());
+            let (open, ok, diag) =
+                editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap(), &case_dir(&dir, &rel));
             println!("E1 {name}/{rel}: open {open}, valid {ok} {diag}");
             assert!(open && ok, "{name}/{rel}: {diag}");
         }
     }
 }
 
-/// E2 (contrast to the known miss): the same aerofoil cases through `session.create` with the file's path (base: the
-/// case's folder, as `rcfd run` and the run service resolve it) validate; through the text call they open but fail at
-/// `mesh.file`.
+/// E2 (contrast to E1): the same aerofoil cases through `session.create` with the file's path (base: the case's
+/// folder, as `rcfd run` and the run service resolve it) validate; through the text call without a base folder (the
+/// service's rule for text, and the editor's call before ADR 0144) they open but fail at `mesh.file`.
 #[test]
 fn e2_mesh_file_cases_validate_when_resolved_against_their_folder() {
     let dir = examples().join("wind-tunnel");
@@ -403,7 +420,7 @@ fn e2_mesh_file_cases_validate_when_resolved_against_their_folder() {
             .unwrap();
         println!("E2 {rel} by path: valid {} {}", v["ok"], v["diagnostics"]);
         assert_eq!(v["ok"], true, "{rel}: {}", v["diagnostics"]);
-        let (open, ok, diag) = editor_validate(&std::fs::read_to_string(dir.join(rel)).unwrap());
+        let (open, ok, diag) = text_validate(&std::fs::read_to_string(dir.join(rel)).unwrap(), None);
         println!("E2 {rel} by text: open {open}, valid {ok} {diag}");
         assert!(open && !ok && diag.contains("mesh.file"), "{rel}: {diag}");
     }
