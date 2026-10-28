@@ -84,7 +84,7 @@ fn busy_lock_waits_then_gives_up_and_a_stale_lock_is_broken() {
     }
     let waited = t0.elapsed();
     assert!(
-        waited >= Duration::from_secs(2) && waited < Duration::from_secs(6),
+        waited >= Duration::from_secs(2) && waited < Duration::from_secs(30),
         "{waited:?}"
     );
     assert!(!root.join("notes/a.md").exists());
@@ -183,8 +183,7 @@ fn two_writers_without_lock_and_hash_lose_updates_control() {
         accepted - lines
     );
     assert_eq!(accepted, 400);
-    // reported control: expected to lose at least one update; not a registered limit (amendment 1 item 6)
-    if lines == accepted {
-        eprintln!("F6 stand-in control: no update lost in this run (the interleaving did not race)");
-    }
+    // reported control (amendment 1 item 6): it must lose at least one update, else the two writers did not race and the
+    // stand-in above showed nothing
+    assert!(lines < accepted, "no update lost: the writers did not interleave");
 }

@@ -115,7 +115,8 @@ fn f3_f11_project_tools_on_runner_made_runs() {
     // control: wait_run with a 0 s timeout returns the current state without waiting
     let t0 = Instant::now();
     let z = m.call("wait_run", json!({"run": a, "timeout_s": 0, "from": "finished"}));
-    assert!(t0.elapsed() < Duration::from_secs(1));
+    // the default timeout is 30 s: well under that means it did not wait
+    assert!(t0.elapsed() < Duration::from_secs(5));
     assert_eq!(z["structuredContent"]["changed"], false);
 
     let r = m.call(

@@ -312,6 +312,13 @@ Deviations and notes:
   `%TEMP%\x` exists (created 2026-10-15, not by this branch); it asserts that path is absent. The failing assertion reads only
   that folder and the test is unchanged (not re-run on 15b00ef); skipped in the runs above.
 * `rcfd-mcp --help` gained one line for `--project`.
+* After the counted runs, for the gate: `scripts/limit_audit.py` flagged the F6 stand-in control (class iii, no failing
+  assertion); it now asserts that at least one update is lost (it lost 200 of 400). Two unregistered timing bounds of these tests
+  were widened against gate load: the busy-lock wait upper bound 6 s to 30 s (the lower bound of 2 s is the check), and the
+  `wait_run` 0 s control from 1 s to 5 s (the default wait is 30 s). The registered 5.0 s of F11 is unchanged. `edit_case`'s
+  refusal of `runs/`, `.rcfd/` and the manifest compares case-insensitively on Windows, as the edit lock does. The affected tests
+  were re-run and pass; the audit has no hit in the new tests. The gate builds `rcfd` and `rcfd-runner` with every workspace
+  binary (`cargo test --workspace --release --no-run`), which F3 and F11 need.
 * The edit lock, edit log and conflict codes are as amendment 1 items 12 and 14. Read tools write a file under `runs/<id>/mcp/` or
   `runs/<id>/renders/` when a result is over the budget, also with `--read-only` (as the Design section says for large outputs).
 

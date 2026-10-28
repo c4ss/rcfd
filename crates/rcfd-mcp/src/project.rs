@@ -1004,7 +1004,13 @@ impl ProjectTools {
         let rel = str_arg(args, "path");
         let path = self.project.resolve(rel).map_err(perr)?;
         let norm = self.rel(&path);
-        if norm.starts_with("runs/") || norm.starts_with(".rcfd/") || norm == "rcfd-project.json" {
+        // names differing only in case are one file on Windows (as the edit lock's key)
+        let key = if cfg!(windows) {
+            norm.to_lowercase()
+        } else {
+            norm.clone()
+        };
+        if key.starts_with("runs/") || key.starts_with(".rcfd/") || key == "rcfd-project.json" {
             return Err(err(
                 REFUSED,
                 format!("edit_case does not write {norm}: run records, .rcfd/ and the manifest are not case files"),
