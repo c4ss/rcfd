@@ -1,6 +1,7 @@
 # ADR 0140: Wave 48G job 3, first run gives a picture: Studio-started runs store fields by default, helpful empty states
 
-Status: **PROPOSED 2026-10-28** (registered before any run of the checks below). Written at main f3bf005 (waves 47 and 48 and the
+Status: **PROPOSED 2026-10-28** (registered before any run of the checks below; implemented, every registered limit met, see the
+addendum; the questions at the end are open). Written at main f3bf005 (waves 47 and 48 and the
 Linux gate fixes merged). One of four parallel jobs "48G, first run to first picture" (1 mesh preview from a case, 2 case starter
 menu, 3 this ADR, 4 one-click start-and-follow). House rules of ADRs 0110-0133 apply: limits are fixed here before the registered
 runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment
@@ -257,6 +258,8 @@ Build: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`, then `
 5. Chain runs store per stage in `runs/<id>/output/<stage>/fields/`; should the viewport offer those stages?
 6. The cell count builds the mesh inside the Studio process (a short memory peak for a large mesh file). Accept, or count in a
    child process (`rcfd check-mesh --json`)?
+7. The plugin's `field_summary` and `render_field` tools (`rcfd-mcp`) still look only at `runs/<id>/fields/`, so they do not find
+   the pre-48A stores the viewport now finds. Give them the same fallback (ADR 0135's tools, outside this job)?
 
 ## Amendment 1 (2026-10-28, before any registered run): set-up details found while writing the code and tests
 
@@ -325,12 +328,26 @@ this host from 2c48494, release, `--test-threads 1`, output to files; the proces
 | SF10 (b) | every output file byte-equal | the branch's `rcfd.exe` was not rebuilt by cargo (no source of its closure changed) and has the saved binary's sha256 (`911b94e2...27c7`); cavity fixture 5 files and `sod` 4 files byte-equal, exit 0 both | pass |
 | SF10 (c) | A6, A7, `baseline_hashes` unchanged | `run_flags_w48a` 2 passed; `baseline_hashes` 3 passed, 1 ignored as before | pass |
 | SF10 control | `--set output.store_interval=4` adds `fields/` | `Only in .../control: fields` | differs as required |
-| SF11 | the whole `rcfd-studio` suite passes unchanged | SF11_RESULT | SF11_STATUS |
+| SF11 | the whole `rcfd-studio` suite passes unchanged | 88 passed, 2 ignored as before (R6 known miss, one ADR 0131 B9 item), 0 failed: B1-B9, R1-R5, R6b, R7-R12, the live parity test, V2-V11, `viewport_live`, the 14 `chat_e` checks of ADR 0134, and SF1-SF9; the same on 2c48494 and on 5010e8c | pass |
+| SF9 (j) (amendment 2) | no proposal, `set()` empty, the "which is kept" line, the f64 store line, 348 346 bytes, no warning | all exact | pass |
+| SF9 (k) (amendment 2) | `set()` `output.store_interval=4`, `, f64.`, 572 416 bytes, no case line, no warning | all exact | pass |
+| SF9 (l) (amendment 2) | `set()`, fields `["p"]`, store line, 123 316 bytes, label drawn, store holds only `p` in `F32` | all exact; one snapshot (step 3) holding `p`, `F32`, no warning | pass |
+| SF9 (j)-(l) controls | R10's `estimated_bytes()`: none for (j), 230 400 for (k) and (l); the 48D label not drawn | none; 230 400; 230 400; 48D label not drawn | discriminate |
+
+Code after the registered runs (behaviour-neutral; the whole suite and SF1-SF9 were run again on it): 5010e8c applies `cargo fmt`
+and four clippy findings (`rfind` for a `filter(..).next_back()`, a collapsed match guard, `CaseFacts::extra` boxed so that the run
+worker's `Update` enum stays within clippy's variant-size limit, two test assertions written with `contains`), and a doc comment of
+`store_plan::case_unchanged` edited while the first SF11 run was going (that run used the binaries built before the edit). The
+SF tests re-run on 5010e8c with their output printed gave the registered run's numbers exactly: SF3 11 536 and 13 332 cells; SF4
+100, 100 and 100 snapshots of 342 012, 346 419 and 271 872 bytes against 342 016, 342 016 and 260 000; SF9 (a) 342 016 and (d)
+1 864 313 600 / 984 141 615. Amendment 2's checks ran once, on 5010e8c plus the new test file, and passed.
 
 Deviations and notes:
 * SF11's first run stopped at `chat_e` (14 tests): this fresh worktree had no `fake-claude` test double, which ADR 0134
   amendment 3 requires to be built (`cargo build -p rcfd-claude --bin fake-claude`); a set-up step, not a code change. It was
   built and the whole suite was run again with `--no-fail-fast` (the row above).
+* Amendment 2 was written after SF1-SF11 had run, for a requirement no registered check covered (a case's own output settings);
+  its limits were fixed and committed (7a26de7) before its test was written or run.
 * Reported, not limited: `sod` stored 100 snapshots, the plan's upper bound; the transient estimates are slightly low because the
   stored times print longer (`0.015000000000000001`) than the steady `0.0`.
 * The re-run queues the new run and says so in the status bar; the viewport stays on the selected run (following a started run
@@ -344,4 +361,16 @@ installed).
 ## Files
 
 This ADR. `crates/rcfd-studio/src/{store_plan,run_fields,fields_ui}.rs` (new), `crates/rcfd-studio/src/{runs,poll,studio,viewport,
-viewport_ui,ui,lib}.rs` (hooks), tests in new files of `crates/rcfd-studio/tests/`.
+viewport_ui,ui,lib}.rs` (hooks), tests `crates/rcfd-studio/tests/{store_plan_sf,shipped_store_sf2,empty_states_sf6_sf7,
+store_runs_sf4_sf5_sf8,case_output_sf9}.rs` (new).
+
+Merge notes for the other 48G jobs (they edit the same files):
+* `poll.rs`: new `Update::PlanCells` and `Command::Rerun`; the `Command::Plan` arm now sends its `Update::Plan` itself (before
+  the cell-count thread starts) and returns `None`.
+* `runs.rs`: `CaseFacts` gained `extra: Box<CaseExtra>` (struct literals of `CaseFacts` must add it); `propose_store` uses
+  `store_plan::is_transient` (D2).
+* `studio.rs`: one `apply_update` arm (`PlanCells`) and `Studio::rerun_with_fields`.
+* `viewport.rs`: `Event::Opened` gained `note`, `Event::NoStore` gained `empty`, new `Event::Empty`; `try_open` takes the
+  explainer and looks in both store locations; the worker loop explains stores without snapshots; `Viewport` gained `empty` and
+  `store_note`. The likeliest collision is a mesh preview (job 1) in the same worker.
+* `ui.rs`: only the body of `store_ui` (one call); `viewport_ui.rs`: the `NoStore` arm and the empty-store branch.
