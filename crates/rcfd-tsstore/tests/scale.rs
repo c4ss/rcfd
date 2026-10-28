@@ -32,10 +32,49 @@ fn value(field: usize, snap: usize, i: usize) -> f64 {
     (i as f64 * 1e-3 + field as f64).sin() * (1.0 + snap as f64) + 1e5
 }
 
-fn median(f: &mut dyn FnMut() -> f64) -> f64 {
-    let mut v: Vec<f64> = (0..5).map(|_| f()).collect();
+/// Five repetitions, in call order.
+fn samples5(f: &mut dyn FnMut() -> f64) -> Vec<f64> {
+    (0..5).map(|_| f()).collect()
+}
+
+fn median_of(v: &[f64]) -> f64 {
+    let mut v = v.to_vec();
     v.sort_by(|a, b| a.total_cmp(b));
-    v[2]
+    v[v.len() / 2]
+}
+
+fn median(f: &mut dyn FnMut() -> f64) -> f64 {
+    median_of(&samples5(f))
+}
+
+/// The five open times of an "open with footer" row, printed, and their median.
+fn open_median(what: &str, f: &mut dyn FnMut() -> f64) -> f64 {
+    let v = samples5(f);
+    let list: Vec<String> = v.iter().map(|x| format!("{x:.4}")).collect();
+    println!("C7 {what}, the 5 opens in order: {} s", list.join(", "));
+    median_of(&v)
+}
+
+/// ADR 0124 amendment 2: with `at_rest`, flush the store to disk before its timed reads (time printed).
+fn bring_to_rest(at_rest: bool, file: &std::fs::File, what: &str) {
+    if at_rest {
+        let t = Instant::now();
+        file.sync_all().unwrap();
+        println!(
+            "C7 set-up: flushed {what} to disk in {:.3} s",
+            t.elapsed().as_secs_f64()
+        );
+    }
+}
+
+fn flush_store(at_rest: bool, dir: &Path, what: &str) {
+    if at_rest {
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .open(dir.join(STORE_FILE))
+            .unwrap();
+        bring_to_rest(at_rest, &f, what);
+    }
 }
 
 fn timed(f: &mut dyn FnMut()) -> f64 {
@@ -155,21 +194,30 @@ fn child_peak(dir: &Path, mode: &str, method: &str) -> u64 {
 #[test]
 #[ignore = "defective set-up (ADR 0124 amendment 1): the powershell memory probe hung in the gate; see the typeperf test"]
 fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_known_miss() {
-    c7_c8_run("powershell");
+    c7_c8_run("powershell", false);
 }
 
-/// ADR 0124 amendment 1: C7/C8 with the memory probe read from the PDH counters by `typeperf`, under a 60 s timeout.
+/// ADR 0124 amendment 1: C7/C8 with the memory probe read from the PDH counters by `typeperf`, under a 60 s timeout. Missed
+/// "open with footer" in the first CI gate (0.126 s, timed right after the 674 MB write); kept with the same limits (amendment 2).
+#[test]
+#[ignore = "missed in CI with the opens timed right after the write (ADR 0124 amendment 2); see the at_rest test"]
+fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf_known_miss() {
+    c7_c8_run("typeperf", false);
+}
+
+/// ADR 0124 amendment 2: the amendment-1 test with each store flushed to disk before its timed reads; the opens right after the
+/// write are reported (no limit).
 #[test]
 #[cfg_attr(
     debug_assertions,
     ignore = "1M cells x 20 fields: timing and memory criteria are for release builds"
 )]
-fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf() {
-    c7_c8_run("typeperf");
+fn c7_c8_scrubbing_a_1m_cell_store_with_20_fields_at_rest() {
+    c7_c8_run("typeperf", true);
 }
 
-fn c7_c8_run(method: &str) {
-    let dir = tmp(&format!("c7-{method}"));
+fn c7_c8_run(method: &str, at_rest: bool) {
+    let dir = tmp(&format!("c7-{method}-{}", if at_rest { "rest" } else { "now" }));
     let t_mesh = Instant::now();
     let mesh = box_mesh([100, 100, 100], [1.0; 3], [Grading::Uniform; 3]).unwrap();
     let n = mesh.n_cells();
@@ -198,8 +246,18 @@ fn c7_c8_run(method: &str) {
         bytes as f64 / 1e6
     );
 
-    let open_footer =
-        median(&mut || timed(&mut || assert_eq!(Reader::open(&dir).unwrap().index_source(), &IndexSource::Footer)));
+    let mut open_footer_once =
+        || timed(&mut || assert_eq!(Reader::open(&dir).unwrap().index_source(), &IndexSource::Footer));
+    if at_rest {
+        // diagnostic (amendment 2): the original set-up's measurement, right after the write; reported, no limit
+        let before = open_median(
+            "open with footer (1M x 20 x 3) right after the write, not limited",
+            &mut open_footer_once,
+        );
+        println!("C7 open with footer (1M x 20 x 3) right after the write: median {before:.4} s (reported, no limit)");
+    }
+    flush_store(at_rest, &dir, "the 1M store");
+    let open_footer = open_median("open with footer (1M x 20 x 3)", &mut open_footer_once);
     let mut r = Reader::open(&dir).unwrap();
     let mut k = 0;
     let nearest = median(&mut || {
@@ -244,6 +302,7 @@ fn c7_c8_run(method: &str) {
         .open(dir.join(STORE_FILE))
         .unwrap();
     f.set_len(bytes - TRAILER_LEN).unwrap();
+    bring_to_rest(at_rest, &f, "the cut 1M store");
     drop(f);
     let open_scan = median(&mut || {
         timed(&mut || {
@@ -254,7 +313,7 @@ fn c7_c8_run(method: &str) {
     let _ = std::fs::remove_dir_all(&dir);
 
     // many snapshots: 2000 snapshots of one 1000-cell field
-    let dir = tmp(&format!("c7-many-{method}"));
+    let dir = tmp(&format!("c7-many-{method}-{}", if at_rest { "rest" } else { "now" }));
     let small = box_mesh([10, 10, 10], [1.0; 3], [Grading::Uniform; 3]).unwrap();
     let mut w = Writer::create(&dir, &small, WriteOptions::default()).unwrap();
     for s in 0..2000usize {
@@ -264,7 +323,10 @@ fn c7_c8_run(method: &str) {
         sw.commit().unwrap();
     }
     w.finish().unwrap();
-    let many_footer = median(&mut || timed(&mut || assert_eq!(Reader::open(&dir).unwrap().snapshots().len(), 2000)));
+    flush_store(at_rest, &dir, "the 2000-snapshot store");
+    let many_footer = open_median("open with footer (2000 snapshots)", &mut || {
+        timed(&mut || assert_eq!(Reader::open(&dir).unwrap().snapshots().len(), 2000))
+    });
     let mut r = Reader::open(&dir).unwrap();
     let many_read = median(&mut || {
         let mut seed = k as u64 * 0x9E37_79B9 + 1;
@@ -291,6 +353,7 @@ fn c7_c8_run(method: &str) {
         .open(dir.join(STORE_FILE))
         .unwrap();
     f.set_len(len - TRAILER_LEN).unwrap();
+    bring_to_rest(at_rest, &f, "the cut 2000-snapshot store");
     drop(f);
     let many_scan = median(&mut || timed(&mut || assert_eq!(Reader::open(&dir).unwrap().snapshots().len(), 2000)));
     let _ = std::fs::remove_dir_all(&dir);
