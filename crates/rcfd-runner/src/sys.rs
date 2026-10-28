@@ -139,16 +139,19 @@ pub fn detached_command(exe: &Path, args: &[String]) -> (Command, u32) {
 }
 
 /// Start `exe args` detached from the caller ([`detached_command`]), so that the caller's exit or Ctrl+C does not end
-/// it: the only start route (ADR 0143). Hand the child to [`keep_started`] so that it is reaped when it exits.
+/// it: the only start route (ADR 0143). Its stdout and stderr go to `stdout` and `stderr`, its stdin is the null device
+/// (ADR 0146). Keep the child until it exits, or hand it to [`keep_started`], so that it is reaped.
 ///
 /// Windows: std's spawn passes the new process every inheritable handle of the caller (std's switch for it is
 /// unstable, and the workspace forbids unsafe code). A caller whose stdout is a pipe that another process reads to the
-/// end (a shell capturing `rcfd-runner start ...`) therefore keeps that reader waiting until the new process exits.
-pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<Child> {
-    detached_command(exe, args).0.spawn()
+/// end (a shell capturing `rcfd-runner start ...`) therefore keeps that reader waiting until the new process exits,
+/// whatever `stdout` and `stderr` are (ADR 0146 I1-I3).
+pub fn spawn_detached(exe: &Path, args: &[String], stdout: Stdio, stderr: Stdio) -> io::Result<Child> {
+    let (mut cmd, _) = detached_command(exe, args);
+    cmd.stdout(stdout).stderr(stderr).spawn()
 }
 
-/// The processes this process started with [`spawn_detached`] and still owns, until they exit (ADR 0143).
+/// The processes this process started with [`spawn_detached`] and handed over to be reaped, until they exit (ADR 0143).
 static STARTED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
 
 /// Keep `child` until it exits; [`reap_started`] collects it then.
