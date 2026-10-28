@@ -174,6 +174,24 @@ Each follows from the decision; limits not named are unchanged.
 * A review of the approach (no data): the rule defined on the resolved value, the four keys, one switch, the checks above.
 * No test of this ADR has been written or run; DV6 (a)'s record does not exist yet.
 
+## Amendment 1 (2026-10-28, DV4's control after the first registered run; before its corrected run)
+
+The first registered run of `saved_store_r.rs` (commit 6563bfa, the code and the tests as registered) passed DV1, DV2,
+DV3, DV5 and DV6 and every limit of DV4 ((a) and (b)); DV4's negative control stopped at its warning: the route before
+gave W-case-off for **`output.store_time_interval`**, not for `output.store_interval` as registered. The registration's
+text was a wrong prediction: `store_plan::effective` applies the case's keys in `STORE_KEYS` order and reports the last
+interval at 0 (`OffBy::Case`), and a saved case has both intervals at 0, so 6867e40 names `output.store_time_interval`
+for it (SF9 (c), whose text has only `store_interval = 0`, names that key). A defect of the control's set-up, not of the
+code: DV6's control showed on the same run that the route before plans the saved case exactly as the record made on
+6867e40.
+
+Corrected control of DV4 (the same test; every limit of DV4 unchanged): (a) no store, the note `the case sets its own
+field store (output.store_*)`, `set()` empty, the warnings exactly W-case-off for `output.store_time_interval` (`The case
+turns the field store off (output.store_time_interval = 0), so the Viewport will have nothing to show for this run.`) with
+the fix `Store fields for this run`; (b) that warning and its button drawn. What I knew when writing this: the output of
+that run (its values go into the addendum); the corrected control had not run. Every registered test file runs again on
+the commit of this amendment.
+
 ## Not in CI (by hand)
 
 A person at the real window: a case edited and saved, then Run: the Run side shows the field; Runs > Start run... on the

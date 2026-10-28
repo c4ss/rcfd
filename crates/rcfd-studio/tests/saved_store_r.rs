@@ -30,9 +30,13 @@ use std::time::Duration;
 
 const WAIT: Duration = Duration::from_secs(30);
 const RUN_WAIT: Duration = Duration::from_secs(60);
-/// W-case-off of ADR 0140 for `output.store_interval`.
+/// The start of W-case-off of ADR 0140, whichever key it names.
+const CASE_OFF_START: &str = "The case turns the field store off (";
+/// W-case-off of ADR 0140 for `output.store_time_interval`: the route before names the last interval at 0 that
+/// `store_plan::effective` applies, and a saved case has both at 0 (ADR 0152 amendment 1).
 const CASE_OFF: &str =
-    "The case turns the field store off (output.store_interval = 0), so the Viewport will have nothing to show for this run.";
+    "The case turns the field store off (output.store_time_interval = 0), so the Viewport will have \
+                        nothing to show for this run.";
 
 /// The route before ADR 0152.
 fn before() -> PlanRoute {
@@ -661,9 +665,13 @@ fn dv4_the_start_dialog_of_a_saved_case_proposes_the_store() {
     for want in ["Store fields for scrubbing (ux, uy, uz, p)", store_line] {
         assert!(drawn.iter().any(|t| t == want), "(b) not drawn: {want}\n{drawn:?}");
     }
-    for not in ["(set by the case)", CASE_OFF, "Store fields for this run"] {
+    for not in ["(set by the case)", "Store fields for this run"] {
         assert!(!drawn.iter().any(|t| t == not), "(b) drawn: {not}");
     }
+    assert!(
+        !drawn.iter().any(|t| t.starts_with(CASE_OFF_START)),
+        "(b) W-case-off drawn"
+    );
     eprintln!("DV4 (b): the label and the store line drawn; no (set by the case), no W-case-off");
     // negative control: the route before
     let mut st2 = dialog_studio(&root, true);
