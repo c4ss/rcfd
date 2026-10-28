@@ -248,6 +248,27 @@ with one corrector (`sim.rs`: `n_correctors == 1`) while the default PISO has tw
 A run that the guard stops before t = 1 has no metric; it is classified **diverged**, which fails "clean" (a reading of L3, not a
 change of it).
 
+## Amendment 2 (2026-10-28, before any run of W5, W6, B2c, K1 or K2): the third corrector as a workaround candidate
+
+Seen before this amendment, in addition to amendment 1's list: E1 (met), the metrics of B1b, B3, B4a, B6, B7, B8a, B8b, B9, B12
+(B8a and B8b, `n_correctors` 3 and 4, are clean to t = 3); B5 and B6r diverged (steps 32 and 46). The registered W rule asks
+for t = 10, which B8a did not run to. Added (same command line and reading rules as above):
+
+| Id | Overrides | End | Purpose |
+|---|---|---|---|
+| W5 | R256 + `n_correctors = 3` | 10 | workaround candidate (user's mesh, dt 1/64) |
+| W6 | nx 256, ny 256, dt 0.0156 (the user's file) + `n_correctors = 3` | 10 | the user's case with one key changed |
+| B2c | B2b (64 x 256, dt 1/64) + `n_correctors = 3` | 3 | the known-miss set-up with the third corrector |
+
+* **K1 (known miss).** `crates/rcfd-api/tests/w48t_cylinder_spokes.rs`: B2b's set-up (the cheapest failing arm: 16,384 cells,
+  diverged at step 30 through `rcfd run`) through `Simulation` in-process to t = 3; limit: not stopped by the divergence guard,
+  and clean by L3 at t = 3, `M_hf <= max(2 x 0.0057, 0.01) = 0.0114` (0.0057 is R64's measured M_hf at t = 3). Expected: miss;
+  the test is `#[ignore]`d as a known miss with this limit.
+* **K2.** The same with `n_correctors = 3`; a passing (heavy, ignored) test when B2c is clean, else a second known miss.
+* **M_hf in Rust.** The test computes M_hf with the definition above; cross-check (prints): on the control (64 x 48, dt 1/16,
+  t = 3, in-process f64) against the script's 0.0057 on R64's stored f32 field, relative difference <= 1e-3; on the K1 arm there
+  is no field at t = 3 (it diverges), which is why the control is used (a deviation from the registration's "on that arm").
+
 ## Not changed by this job
 
 Solver numerics, defaults, schema, the Studio and the render core (a display fix only if D1 fails and the fix is small),
