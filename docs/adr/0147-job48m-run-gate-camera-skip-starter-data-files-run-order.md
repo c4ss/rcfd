@@ -2,7 +2,8 @@
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (M1's hover set-up) before its corrected
-run, amendment 2 (M7 (b) a Windows fixture); results in the addendum, no known miss; not yet accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
+run, amendment 2 (M7 (b) a Windows fixture); results in the addendum: every check met its limit, no known miss; not yet
+accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
 [ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md) (the Mesh / Run toggle and the live preview), and the extra
 scope of [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) question 5. On main ec6a443 (48J,
 ADR 0144, and 48L, ADR 0146, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are
@@ -246,12 +247,14 @@ rule with the runner's own early exit (a bad budgets file) on every platform.
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
-(M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2); this addendum. Every run: release,
-`--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; other agents' work held
-50-55 GB in WSL during these runs, so free memory was 1-7 GB); target folder of this job; `rcfd`, `rcfd-runner` and
-`fake-claude` built from the same commit as the tests. The table gives the registered run of each check; M1's control is
-from the corrected run after amendment 1 (on 7d115fc, where every other check of `followups_m.rs` passed again with the
-same values).
+(M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2); 96b165f (this addendum's first part);
+amendment 2 f208b07; this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files, this host
+(Windows 11, 16 threads, 93.6 GB; other agents' work held 50-55 GB in WSL during these runs, so free memory was 1-8 GB);
+target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same commit as the tests. The table
+gives the registered run of each check: `followups_m.rs` on 0bc172f, its corrected run on 7d115fc (M1's control; every
+other check of the file passed again with the same values), `starter_run_m.rs` on 1976a47 (3.0 GB free at its start),
+`case_starter_g2.rs` on 1976a47 (1.6 GB free), the whole suite (M8) on f208b07 (5.0 GB free at its start, 4.6 GB at its
+end).
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -271,8 +274,47 @@ same values).
 | M7 (b) | 5.0 s; the marker; once; drawn | **0.084 s** after the click: `the runner did not start: the runner (pid N) exited with exit code 1 before it held the project's lock; its output (<project>\.rcfd\runner.log): rcfd-runner: runner lock: Access is denied. (os error 5). The run stays queued until a runner starts (Runs > Start runner)`, the line once, drawn | pass |
 | M7 controls | twice | (a) twice; (b) twice (`...; last lines of <runner.log>: rcfd-runner: runner lock: Access is denied. (os error 5)` appended), 0.082 s | fail as required |
 | CS (ADR 0139 amendment 2) | as amended | `case_starter_g2` 25 of 25: CS1 10 of 10 (the profile case opens with its folder, valid, 0.005 s); CS2 10 of 10 and `cases/profile_inlet.csv` 251 bytes = `cases/channel/profile_inlet.csv`, 11 files listed; CS2 control 10 of 10 differ (the profile case's save 17,560 bytes); CS5 24 files, 10 offered, 6 excluded, 7 reference, 0 problems, its 6 controls one problem each; CS6 6 of 6 refused; CS7 10 of 10 (`channel with a profile-file inlet: ... 2D, 480 cells, simplec, at most 2000 iterations.`); CS11 12,823 bytes; CS12 10 rows; CS13 8.611 ms (control 215.108 ms) | pass |
+| M8 | the whole suite; `workspace_graph`; clippy; fmt; licences | `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1 --nocapture` on f208b07: 48 test binaries, **187 passed, 0 failed, 4 ignored** (the four known misses: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b), 461 s; against the baseline's 175 passed on 84ee864, the 12 new tests of this ADR. Values of the timing checks in that run, under the memory pressure above: B7 median 0.404 ms (control 13.647 ms); J3 0.505 s; J3c 0.504 s, one frame; J4 B shown 0.091 s; J10 median 0.976 ms, max 5.2 ms (control 3,061.3 ms); J2 0.098 / 0.082 s; ADR 0138 G3 median 0.773 ms, max 3.1 ms; G10 NVIDIA Vulkan 46.1 ms, DX12 39.2 ms. `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean on f208b07; `scripts/third_party_licenses.py --check`: up to date | pass |
 
-M8 (the whole suite): pending.
+**Leftover processes** after all runs: none running from this job's target folder (any program, `rcfd.exe`,
+`rcfd-runner.exe` and `fake-claude.exe` among them). M4's control and M7 (b) leave runs queued in their temporary projects,
+with no runner.
+
+**Deviations and notes.**
+1. Amendment 1: the M1 control's hover helper drew 5 frames, fewer than egui needs before a first tooltip once the
+   pointer comes from the field (it waits until the pointer is still); corrected before the control's corrected run, which
+   failed as required. M1 itself had passed with the old helper only because its hover came within egui's 0.2 s tooltip
+   grace time after (a)'s.
+2. 1976a47, before M4's first run: M4 (e) looks for the dialog's line in its first 3 frames, because egui 0.36.2 lays a new
+   area out unseen in its first frame (`containers/area.rs` lines 444 and 626). The limit is unchanged.
+3. Amendment 2: M7 (b)'s fixture is a Windows fixture (ignored elsewhere, limits unchanged); M7 (a) covers the rule
+   everywhere. Not run on Linux.
+4. The baseline ran on 84ee864, before 48L merged; the registered runs ran on ec6a443 and later (48L's runner). ADR 0146's
+   addendum records 48L's own Studio run; no second baseline was made on ec6a443.
+5. Memory: other agents' work held 50-55 GB in WSL during this job's runs, so free memory was 0.5-8 GB (each run's start is
+   given above). The new process checks' timing limits have wide margins (M4 (b) 0.062 s and M7 (b) 0.084 s against 5.0
+   s), and the suite's timing checks met theirs with values like ADR 0144's.
+6. ADR 0144 amendment 3's last bullet and its deviation 5 describe `EXCLUDED`'s reason for `channel/profile_inlet.toml`;
+   that entry is gone now (the case is offered with its data file).
+7. A skipped build still sets the status to building until the comparison's result arrives (milliseconds for the cavity),
+   so the stale line and badge can show for a frame or two (checklist item 4).
+8. `created` is written with milliseconds by `rcfd-project` and with nanoseconds by the runner client. Within one
+   millisecond, a project holding runs of both writers orders the millisecond stamp after the nanosecond one (`Z` sorts
+   after a digit): still one fixed order, but not strictly the creation order across the two writers.
+9. A bad budgets file cannot reach the strip through Run: the budgets check before the start refuses it first (ADR 0141).
+   That is why M7 checks the rule twice: (a) with the runner's own early exit on a bad budgets file through the library,
+   and (b) through Run with an early exit after the budgets check passed (the lock folder).
+10. `scripts/limit_audit.py` hits in this job's test files, read: `followups_m.rs` `m3_control_no_skip_rule` (class iii), a
+    control asserting the pre-change behaviour (built again) as a positive fact, the form the heuristic does not recognise
+    (as ADR 0139's and 0144's controls); in `case_starter_g2.rs` the same five class (iii) controls and two class (iv)
+    debug skips (CS13) that ADR 0139 read. None in `starter_run_m.rs`.
+11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed: `rcfd-project`, `rcfd-runner` and the other crates were
+    read, not edited; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` are unchanged.
+
+**Not run.** A person at the real window (the checklist); Linux (none of the new tests; M7 (b) would be ignored there by
+amendment 2); debug builds of the new tests; the workspace gate and workspace-wide clippy (only `rcfd-studio` changed);
+`rcfd-project`'s, `rcfd-runner`'s and `rcfd-mcp`'s own tests (not changed; M5 (a) reads `rcfd-project`'s listing and M7
+the runner client); `cargo deny` (no dependency changed).
 
 ## Not in CI (by hand)
 
@@ -298,7 +340,32 @@ the starter's dialog line and the data file in the Project panel, the strip's er
 
 ## Questions for the maintainer (not decided here)
 
-Written with the results in the addendum.
+1. **"Refit"** was read as the double click's Fit: the camera keeps its yaw, pitch and projection kind and frames the new
+   box. Options: (a) keep; (b) the start camera of the new mesh when the bounds change (what ADR 0138 did on every
+   rebuild). Recommendation: (a): a view the user turned stays turned, and a 2D case looks the same either way unless it was
+   orbited.
+2. **Builds that are not compared.** Only the debounce's builds of the editor's text are compared with the shown mesh. A
+   save (its rebuild reads the saved file, whose bytes are the shown text), a reload, a change on disk, "Rebuild", and a
+   field typed and put back (the source goes back to the file, whose bytes differ from the editor's canonical text) build
+   again. Options: (a) keep; (b) also skip a save's rebuild when the saved bytes are the shown text and the mesh file is
+   unchanged (ADR 0138's unregistered rebuild test asserts that rebuild and would change); (c) compare the parsed case
+   instead of the bytes. Recommendation: (b), registered as its own check; not (c), which is the key filtering ADR 0144
+   question 6 warned about.
+3. **The data file in the Project panel.** `cases/profile_inlet.csv` is listed among the cases (`Project::cases` lists every
+   file under `cases/`); clicking it gives the editor's and the preview's parse errors. Options: (a) keep; (b) the Studio
+   lists only `.toml` and `.json` files as cases and the other files under "Data files"; (c) the same in `rcfd-project`
+   (`Project::cases`, also read by `rcfd-mcp`'s `project_info`). Recommendation: (b).
+4. **The Start run dialog** (Options...) still plans and starts the file on disk while a field is being typed or edits are
+   unsaved. Options: (a) keep; (b) grey its Start out the same way as Run. Recommendation: (b).
+5. **`rcfd-runner list`** prints runs in id order (outside the Studio, not changed). Options: (a) keep; (b) order it by
+   `created`, then id, like every listing of the Studio and `rcfd-project`. Recommendation: (b), as a runner change.
+6. **The early-exit marker.** The Studio recognises an error that carries the runner's output by the client's wording
+   (` before it held the project's lock; `); M7 (a) pins that wording against the real client. Options: (a) keep;
+   (b) a typed error from `ensure_runner` (an `rcfd-runner` API change). Recommendation: (a) now.
+7. **A shared data file.** Two cases made from the same example share `cases/profile_inlet.csv`, so editing the table for
+   one changes the other's input. Options: (a) keep (the text names the file; the second creation says that it reuses
+   it); (b) give each case its own copy (`<case>_profile_inlet.csv`) and rewrite its `file` key, so that the case is no
+   longer byte-equal to the example. Recommendation: (a).
 
 ## Files
 
