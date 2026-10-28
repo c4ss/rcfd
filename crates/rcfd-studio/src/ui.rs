@@ -47,6 +47,8 @@ pub struct UiState {
     pub start_dialog: Option<StartDialog>,
     /// Edit buffer of the runner budgets (`None`: closed).
     pub budgets: Option<rcfd_runner::runner::Config>,
+    /// Open "New case from example" dialog (ADR 0139).
+    pub starter: Option<crate::case_starter_ui::StarterDialog>,
 }
 
 /// UI fields of the start dialog; the plan itself is in the model ([`crate::runs::RunsView::plan`]).
@@ -159,6 +161,14 @@ impl StudioApp {
                 }
             });
             ui.menu_button("Case", |ui| {
+                let has_project = self.st.browser().is_some();
+                if ui
+                    .add_enabled(has_project, egui::Button::new("New case from example..."))
+                    .clicked()
+                {
+                    crate::case_starter_ui::request_open(ui.ctx());
+                    ui.close();
+                }
                 let can_save = self
                     .st
                     .editor
@@ -288,6 +298,7 @@ impl StudioApp {
         }
         start_dialog(ctx, &mut self.st, &mut self.ui_state);
         budgets_dialog(ctx, &mut self.st, &mut self.ui_state);
+        crate::case_starter_ui::dialog(ctx, &mut self.st, &mut self.ui_state.starter);
         crate::chat_ui::confirm_dialog(ctx, &mut self.st);
         if let Some(mut path) = self.ui_state.open_dialog.take() {
             let mut open = true;
@@ -378,6 +389,7 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
     for e in &b.errors {
         ui.colored_label(ERR, e);
     }
+    crate::case_starter_ui::browser_entry(ui, st);
     let mut open_case: Option<String> = None;
     let current = st.editor.as_ref().map(|e| e.rel.clone()).or(st.pending_case.clone());
     egui::ScrollArea::vertical()

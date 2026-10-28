@@ -49,6 +49,19 @@ pub enum Command {
         /// New content.
         bytes: Vec<u8>,
     },
+    /// Create a case file that does not exist yet ([`crate::case_starter::create`], never replaces one), send the lists
+    /// that hold it and [`Event::Created`]; with `open`, stop reporting `untrack`, report the new file from now on and
+    /// send it as [`Event::Loaded`] (ADR 0139 D5).
+    Create {
+        /// Project-relative path (`cases/<name>.toml`).
+        rel: String,
+        /// Content.
+        bytes: Vec<u8>,
+        /// Open it in the editor.
+        open: bool,
+        /// The file the editor had open, no longer reported once the new one is open.
+        untrack: Option<String>,
+    },
 }
 
 /// Results for the UI.
@@ -91,6 +104,13 @@ pub enum Event {
         rel: String,
         /// Current content (`None`: no file).
         disk: Option<Vec<u8>>,
+    },
+    /// A file was created for [`Command::Create`]; the lists that hold it were sent just before.
+    Created {
+        /// Project-relative path.
+        rel: String,
+        /// It is being opened: [`Event::Loaded`] follows.
+        opened: bool,
     },
 }
 
@@ -217,6 +237,33 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                             Event::Saved { rel, hash }
                         }
                         Ok(SaveOutcome::Conflict(disk)) => Event::SaveConflict { rel, disk },
+                        Err(m) => Event::Failed(m),
+                    },
+                    Command::Create {
+                        rel,
+                        bytes,
+                        open,
+                        untrack,
+                    } => match crate::case_starter::create(&project, &rel, &bytes) {
+                        Ok(()) => {
+                            current = Browser::load(&project);
+                            let mut ok = send(Event::Listing(current.clone()));
+                            ok &= send(Event::Created {
+                                rel: rel.clone(),
+                                opened: open,
+                            });
+                            if open {
+                                if let Some(old) = untrack {
+                                    tracked.remove(&old);
+                                }
+                                tracked.insert(rel.clone());
+                                ok &= send(Event::Loaded { rel, bytes });
+                            }
+                            if !ok {
+                                return;
+                            }
+                            continue;
+                        }
                         Err(m) => Event::Failed(m),
                     },
                 };

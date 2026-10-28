@@ -25,7 +25,7 @@ pub const MAX_MESSAGES: usize = 200;
 
 /// One open (or opening) project.
 pub struct OpenProject {
-    worker: ProjectWorker,
+    pub(crate) worker: ProjectWorker,
     /// The folder as requested.
     pub requested: PathBuf,
     /// The lists, once the worker opened the project.
@@ -565,6 +565,7 @@ impl Studio {
                     "{rel}: not saved, the file changed on disk; resolve the conflict"
                 ));
             }
+            Event::Created { rel, opened } => crate::case_starter::on_created(self, &rel, opened),
         }
     }
 
