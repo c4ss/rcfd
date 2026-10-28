@@ -336,6 +336,36 @@ Questions for the maintainer:
 5. Marketplace name `rcfd` and owner name "rcfd maintainers" in `.claude-plugin/marketplace.json`: confirm or replace.
 6. Error codes 1200 (conflict), 1201 (lock busy), 1202 (not found): confirm the numbers.
 
+## Amendment 3 (2026-10-28, after the maintainer's answers to the addendum questions, before any run of the changes)
+
+Maintainer decisions (recommendations taken): (1) the runner also writes the final report values into `metrics.json`, additively,
+and `list_runs` and `compare_runs` use them; (2) no `RCFD_MCP` override, PATH only; (3) `--project` implies `--root <project>` when
+`--root` is not given; (4) `edit_case` refuses an edit that would need the whole case rewritten with every default spelled out;
+(5) marketplace name `rcfd` kept, the owner name "rcfd maintainers" stays a placeholder (open); (6) codes 1200, 1201, 1202
+confirmed. Written at main 64732bb before any code of these changes. Set-ups and limits:
+
+1. **Report values.** `rcfd-runner` adds one key to the `metrics.json` it writes at a run's end: `reports`, an object
+   `{report name: final value}`. The names are the keys of `monitors` in the run's last `residuals.jsonl` line (the reports, 48A
+   `--status-monitors`); each value is the last `y` of that name's series in `output/monitors.json`, or the residual line's value
+   when the file or series is missing; a non-finite value is `null`. The existing keys (`state`, `reason`, `exit_code`, `steps`,
+   `time`, `solver_finish`, `last_residuals`) are unchanged; a run that never launched gets `reports: {}`. The solver is not
+   changed, so its outputs stay bit-identical. `list_runs` and `compare_runs` take a run's `metrics` from `reports` when
+   `metrics.json` has that object, else (an older record) from its numeric top-level entries, as before. `rcfd-project`'s reader
+   is not changed.
+   * **M1 limit:** on the F3 fixture, each finished run's `reports.lid_drag` equals bit-exactly the last `y` of `lid_drag` in its
+     `output/monitors.json`; every existing key is still present; `list_runs` and `compare_runs` report exactly `{lid_drag}` with
+     that value. **Control:** a `metrics.json` without `reports` gives `list_runs` the numeric top-level entries (`exit_code`,
+     `steps`, `time`). The `rcfd-runner` tests (`runner_w47b`, `contract_w48a`, `runner_wfix`, unit tests) pass as before (S5
+     stays ignored).
+2. **R1, `--project` implies `--root`:** `rcfd-mcp --project <dir>`, started in another working folder, resolves a sandboxed
+   path of an existing tool against the project (`create_case {path: "cases/cavity.toml"}` succeeds; `../x` is refused with
+   1004). **Control:** with an explicit `--root <other>`, that root is used (the same `create_case` fails). F1 is unaffected (no
+   `--project`).
+3. **E1, no whole-case rewrite:** an edit that cannot be placed in the file's own lines (a multi-line value) is refused with
+   1003 and a message naming the setting and saying to edit the file by hand; the file hash is unchanged and no edit-log line is
+   written. **Control:** the single-line edit of F5 is still written. The canonical form is no longer written; `form` is always
+   `minimal`.
+
 ## Files
 
 `crates/rcfd-mcp/src/{lib,main}.rs`, new `src/project.rs` and tests, `crates/rcfd-mcp/Cargo.toml`, `crates/rcfd-project/src/atomic.rs`,
