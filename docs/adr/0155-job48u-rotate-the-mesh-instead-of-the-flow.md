@@ -256,3 +256,21 @@ are expected to reproduce the smoke's values exactly, which E4 does not check (t
 2. U5's "(x, y, z) to (-y, x, z) bit for bit" is checked as exact values: `0 - 0` is `+0` in floating point, so a
    coordinate 0 may come back as `+0` where `-y` is `-0`; every other bit is exact, z bit for bit.
 
+
+## Amendment 2 (2026-10-28, after the counted runs E1, before the corrected W1 run)
+
+What I knew when writing this: the counted runs (E1) and the checks U1-U6, K1-K3, H1, P1, W1, S1-S3, E2, E3, E5 had run
+and passed (results in the addendum); E4 was running. Reading the schema for the docs, I found D6's key list
+**defective**: it misses the post-processing sample lines (`postprocessing.samples.<n>.p0`, `p1`) and plane directions
+(`e1`, `e2`), which the brief names ("probe/sample points"), and other keys that place something relative to the
+geometry: `normal` (a VOF half-space), `pivot`, `rest_position`, `orientation_axis` (dynamic mesh bodies), `disk_centre`,
+`disk_axis` (actuator disks), `cone_axis` (particle injection cones). Corrected D6: those keys join the list of position
+and axis keys (a non-empty value warns), and every `postprocessing.samples.<n>` entry warns at its `p0` (line) or `origin`
+(plane) even at the default, as probes do. Nothing else of D6 changes. No solver run depends on MT101 (a warning never
+changes a run), so E1-E4 stand.
+
+**W1b (registered here, before it ran):** a cavity case rotated by -4 with a line sample (`p0`, `p1`), a plane sample at its
+default origin, an actuator disk source (`disk_centre`, `disk_axis`) and a VOF-free `normal`-less set-up gets exactly one
+MT101 at each of `postprocessing.samples.line.p0`, `postprocessing.samples.line.p1`, `postprocessing.samples.plane.origin`,
+`sources.disk.disk_centre`, `sources.disk.disk_axis` (each key is its own setting; a box is the one pair warned once);
+control: the same case without the table gets none.
