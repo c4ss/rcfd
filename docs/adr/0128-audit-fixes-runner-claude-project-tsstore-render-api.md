@@ -273,6 +273,12 @@ the 5 s fallback is unchanged. The claude CLI spawns get only the flag: stdio an
   `GetConsoleWindow()` in a child started with and without `0x0800_0000`); reported in the addendum, or reported as not verified.
 Fails-before: (a) and (c) fail on the pre-fix code (the builders are introduced as a seam returning the old flags first).
 
+## Amendment 3 (2026-10-28): finding 12's rule is applied per run
+
+On the first Linux gate the listing took about 6 ms, so `10 w <= 500 ms` and the asserted control failed. Finding 12's registered
+decision rule is now evaluated by the test on every run ([ADR 0137](0137-linux-gate-platform-values.md)): the control is asserted
+when `10 w > 500 ms` (as measured here on Windows), otherwise the test prints `10 w` and `500 ms / w`. The budget is unchanged.
+
 ## Addendum: measured values (2026-10-27)
 
 Every finding was reproduced: each new test failed on the pre-fix code (the same test, or the test plus its seam alone) and passes
