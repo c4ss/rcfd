@@ -1,7 +1,8 @@
 # ADR 0141: Wave 48G item 4, one click from a case to a picture: Run, follow the run live, a start that says why it failed
 
 Status: **registered** 2026-10-28, before any registered run (the code and the tests below were written and compiled
-first; what was run before is listed under "What I already knew"). The maintainer's request of 2026-10-28 ("48G, first run
+first; what was run before is listed under "What I already knew"); amendment 1 after the G1 miss; results in the addendum;
+not yet accepted by the maintainer. The maintainer's request of 2026-10-28 ("48G, first run
 to first picture", item 4 of 4; items 1-3, mesh preview from a case, case starter menu and the store-fields default, are
 done by other agents in parallel and are not part of this ADR). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -64,8 +65,8 @@ section 2, ADRs [0131](0131-wave48b-studio-application-shell.md), [0132](0132-wa
    checks only) and gives the run worker the runner found; every Run searches again, so a build made while the Studio is
    open is used.
 4. **After the start.** When the id arrives the run is selected (the run worker reads its series, events and log; the
-   viewport follows it) and the Viewport panel is shown (it is opened again when it was closed) and put in front of its
-   place; Plots is put in front of its place when it does not share the Viewport's. A run started by Run that fails before
+   viewport follows it) and the Viewport panel is shown (it is opened again when it was closed; above the Plots since
+   amendment 1) and put in front of its place; Plots is put in front of its place when it does not share the Viewport's. A run started by Run that fails before
    its first shown snapshot puts the Log panel in front the same way, once, and says why in the status bar.
 5. **Follow latest (`Viewport::follow`).** On for a newly shown run. Each new snapshot of a live run is shown while it is on.
    A scrub to an older snapshot (slider, `|<`, `<`, play from the start) turns it off: the slider still extends and the view
@@ -203,6 +204,61 @@ floating); when Plots is closed too, where `layout::show` puts it (unchanged). D
 **G1b** (new check id, `tests/oneclick_e2e_g4.rs`): the fixture, procedure and limits (a)-(h) of G1 with the change. The
 G1 control (auto-select and focus off) is unchanged and is not run again.
 
+## Addendum: results against the registered limits (2026-10-28, branch `worktree-agent-a9d885d943a633e09`)
+
+Registered runs: release, `--test-threads 1`, output to files, this host (Windows 11, 16 threads; three other agents were
+building at the same time). G2-G8 and the G1 control ran on ae3e85f (registration), G1 on ae3e85f, G1b on 6b94b98
+(amendment 1). No new third-party crate, no new workspace edge, `Cargo.lock` unchanged.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| G1 | (a)-(h) | (a)-(g) met (amendment 1 lists the values); (h) Viewport open and in front, Plots **not** in front | **miss** (h): `g1_one_click_from_case_to_picture_known_miss`, ignored, limits intact |
+| G1b | (a) 5.0 s; (b) 20.0 s; (c) 1.0 s; (d)-(h) | (a) 0.209 s; (b) 5.353 s; (c) committed at 5.346 s, shown at 5.473 s: 0.127 s; (d) lengths 0, 8, 24, 25, 42, 57, 58, 72, 88, 100 (9 while running), shown snapshots 8, 25, 42, 58, 72, 88, 100, the newest in the first frame holding the final length (0.0 s); (e) no marker difference, final marker 3000; (f) `status.json` finished, step 3000, time 0, the model equal (time bits), strip `run r-... cases/live.toml finished step 3000 t 0.0000e0 res u 5.10e-16 p 3.76e-13 continuity 3.86e-12 snapshot 100/100 (following the latest)`, shown step 3000; (g) NVIDIA GeForce RTX 5080 (Vulkan): one upload, one render at the first shown snapshot, ten at the end, no error; (h) (true, true, true) | pass |
+| G1 control | no frame 5.0 s after the first committed snapshot; nothing selected; Viewport closed; Outputs in front | no frame in 5.004 s, nothing selected, Viewport closed, Outputs in front | fails as required |
+| G2 | 1.0 s per new snapshot; the view held 0.5 s; box, `<`, `>|`, slider | on: 6 of 6 shown, worst 0.265 s, marker = step each time; off: slider extended 0.255, 0.011, 0.026 s after the commits, only snapshot 1 shown during each hold; the box showed the newest after 0.005 s and followed the next after 0.259 s; `<` off, `>|` on, slider middle off, right end on; "follow latest" drawn | pass |
+| G2 controls | on-check fails with follow off; off-check fails with follow forced on | follow off: snapshot 2 not shown within 1.0 s (snapshot 1 shown, slider 2); forced on: the view moved to snapshots 4, 5, 6 | fail as required |
+| G3 | exact | 4 tests pass: the not-found message lists `studio`, `p1`, `p 2`, `ws\target\release` in order with the build command and `RCFD_RUNNER_BIN`; found in `p 2` (PATH), the Studio folder first, the checkout (Dev); programs alone named; `RCFD_RUNNER_BIN` missing is an error naming it; `RCFD_BIN` with a lone runner found; the built `rcfd` accepted, the renamed runner refused ("does not name --store-dir and --status-monitors"), a text file refused ("cannot run it", os error 216) | pass |
+| G3 control | the pre-change rule finds nothing in PATH's layout | nothing found | fails as required |
+| G4 | 5.0 s | 0.255 s; reason `pre-launch check failed (exit 3): mesh.file: <project>\cases\missing.msh: io error: The system cannot find the file specified. (os error 2) (see <run>\check.json and <run>\log.txt)`, drawn; the viewport `Run r-... failed before writing its first stored snapshot: <reason>. Last line of its log: ...`; Log in front | pass |
+| G4 control | not within 5.0 s | not shown in 5.0 s nor 5.0 s later; the viewport kept 48C's `no stored fields: <run>\fields\store.rts not found (start the run with "Store fields" on)` | fails as required |
+| G5 | 5.0 s | 0.333 s after the kill at step 955; reason `solver process 33104 ended without a finish event (exit code 1); last step 955 at time 0; last log line: '144 cells, algorithm simplec' (log: ...)` in the viewport message and the strip, the message drawn, 48C's text not drawn; while running the strip read `... running step 411 ... no stored snapshot yet` | pass |
+| G5 control | not within 5.0 s | not explained; the viewport kept 48C's "The store has no snapshots yet." (the store file existed with no snapshot) | fails as required |
+| G6 | paused 2.0 s; held 2.0 s; moves 5.0 s after Resume; cancelled 5.0 s; enabled controls | paused 0.260 s after the click at step 134; still 134 after 2 s; resumed to 202; cancelled 0.279 s after the click; controls exactly as registered | pass |
+| G6 control | no step 5.0 s after the mapped Resume | S0 195, none beyond it in 5.0 s; cancelled 0.329 s after the click | fails as required |
+| G7 | 2.0 s; drawn build command and folders; no run folder | 0.003 s; drawn; no run folder | pass |
+| G7 controls | without the key nothing starts; the pre-change route | 20 frames: nothing started; pre-change: one run folder left `queued`, the message 7.1 s after the call `the run was not started: cannot start <folder>\rcfd-runner.exe: The system cannot find the file specified. (os error 2)`, no build command, no folder searched | as required |
+| G8 | exact | 24 of 24 (8 checks under Windows PowerShell 5.1, PowerShell 7 and Git Bash `sh`) | pass |
+| G9 | earlier tests unchanged | 98 passed, 0 failed, 3 ignored (below) | pass |
+
+G9 ran on 6b94b98: `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1`, output to a file, 3 min 41 s.
+Every test binary of the crate passes: B1-B9 (`project_b1_b3`, `frames_b4`, `editor_b5`, `watch_b6`, `frame_cost_b7`,
+`prefs_b8`, `parity`), R1-R12 (`run_control_r1_r3`, `ingest_r4_r7`, `monitors_plot`, `tick_cost_r6`, `monitors_r8`,
+`runner_start_r9`, `start_plan_r10`, `browser_refresh_r12`), V2-V11 (`viewport_v2`, `viewport_model`, `viewport_store`),
+`viewport_live`, the chat tests E1-E11 (`chat_e`) and the four new files (G1b-G7 again, with the values of the table in
+kind). The three ignored tests are the known misses that were ignored before or by amendment 1: ADR 0133's R6, ADR 0131's
+tutorials item, and G1.
+
+Reported, not limited:
+* The first Run of a session waited about 5.3 s from the click to the running run (G1 5.339 s, G1b 5.353 s), as ADR 0133 R9
+  (5.166 s): consistent with `ensure_runner`'s 5 s wait for the PowerShell route and then the direct start (which route
+  started the runner is not recorded). Later Runs of the session find the runner alive.
+* G1b's first-snapshot delay (0.127 s) against G1's (0.028 s): both within one viewport poll period of 250 ms.
+
+Deviations and notes:
+* G1 missed (h); amendment 1 changed the reopening of a closed Viewport and registered G1b before it ran.
+* G5's "fails before the first snapshot" is a killed solver, because the store hook writes the final state for every
+  outcome of the solver (Context): a diverged run gets a snapshot (possibly of non-finite values, which the 48C viewport
+  refuses with a located error), so only a refusal before launch (G4), a crash or a kill leaves none.
+* The chat tests of 48E need the `fake-claude` double built for the profile (`cargo build --release -p rcfd-claude --bin
+  fake-claude`); the first G9 run stopped at `chat_e.rs` for that reason (14 failed at the double's existence check,
+  before any of their limits) and G9 was run again after building it.
+* For a finished run without a store, the explanation (decision 7) replaces 48C's text, which named the store path; the
+  new text names why there is no store but not the path.
+
+Not run: the "Not in CI" items (a person at the window); Linux (none of the new process tests has run there); a debug
+build of the new tests; the workspace gate and workspace-wide clippy (the maintainer runs them); `cargo deny` (not
+installed; no dependency changed); the CI scripts job with the new script test (not added, question 9).
+
 ## Not in CI (by hand)
 
 The real window: the toolbar, the strip and the "follow latest" box on DX12 and Vulkan, at high DPI; F5 while a text field
@@ -225,7 +281,8 @@ has the focus; the scripts on the maintainer's shells; the Linux runs of every p
 5. A failing start: a case whose `mesh.file` does not exist. Run: the strip should show "failed" with the runner's reason
    in red, the viewport should say the run failed before its first stored snapshot, and the Log panel should be in front.
 6. With unsaved edits in the case editor, Run should be greyed out with "save it first" on hover.
-7. Close the Viewport tab (View menu), press Run: the Viewport should come back in front. Report where it docks.
+7. Close the Viewport tab (View menu), press Run: the Viewport should come back in front, above the Plots (amendment 1),
+   with the Plots tab in front below it. Report how the space is shared.
 8. Report anything slow, confusing or wrong, with the run id and what was done.
 
 ## Questions for the maintainer
@@ -239,8 +296,8 @@ has the focus; the scripts on the maintainer's shells; the Linux runs of every p
    folder holding `Cargo.toml`). Keep that rule in every build, or only in debug builds?
 5. Every Run runs `rcfd --help` (about 0.1 s, on the control thread) to refuse a stale solver. Accept, or check once per
    program file (path and modification time)?
-6. A closed Viewport is reopened by Run where egui_dock puts a new tab (the first docked place), not where the default layout
-   has it. Accept, or put it back in its default place?
+6. A closed Viewport is reopened by Run above the Plots' place (amendment 1), or, with Plots closed too, in the focused
+   place. Accept, or reset the whole layout to the default one?
 7. A failed start brings the Log panel to the front (when it does not share the Viewport's place). Accept?
 8. The not-found message is shown in full in the toolbar at start-up (several lines). Accept, or a one-line summary with the
    list on hover?
