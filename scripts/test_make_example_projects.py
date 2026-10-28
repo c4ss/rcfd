@@ -105,11 +105,15 @@ class Committed(unittest.TestCase):
         self.assertEqual(mx.check_trees(), [])
 
     def test_a_linux_tree_out_of_step_is_reported(self):
+        def placeless(problems):
+            # copies outside the repository cannot resolve the notes' `../../` paths into it (ADR 0150 amendment 1)
+            return [p for p in problems if "names `../../" not in p]
+
         with tempfile.TemporaryDirectory() as d:
             roots = {t: os.path.join(d, os.path.basename(r)) for t, r in mx.TREES.items()}
             for t, r in mx.TREES.items():
                 shutil.copytree(r, roots[t])
-            self.assertEqual(mx.check_trees(roots), [], "the unchanged copies")
+            self.assertEqual(placeless(mx.check_trees(roots)), [], "the unchanged copies")
             lin = roots["linux"]
             man = mx.read_json(os.path.join(lin, "manifest.json"))
             run = man["projects"]["quick-start"]["runs"][0]
@@ -131,7 +135,7 @@ class Committed(unittest.TestCase):
             rec["case_dir"] = "E:\\x\\example-projects-linux\\quick-start\\cases"
             with open(rpath, "w", newline="\n") as fh:
                 json.dump(rec, fh, indent=2)
-            problems = mx.check_trees(roots)
+            problems = placeless(mx.check_trees(roots))
         joined = "\n".join(problems)
         self.assertIn("example-projects-linux/quick-start/%s differs from example-projects/quick-start/%s"
                       % (run["case"], run["case"]), joined)

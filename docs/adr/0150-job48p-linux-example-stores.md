@@ -178,6 +178,22 @@ final commit.
   not run (the Linux tree is not built). At 6867e40 the self-test passed 8 of 8.
 * No registered check of this ADR has run; no Linux run of the examples has been made.
 
+## Amendment 1 (2026-10-28, a set-up defect of P1's new self-test found by its first registered run; before the corrected run)
+
+The registered runs so far: C0 (on 6867e40), L1 (on 963c871: the Linux tree, committed as b5428fc), W1 and W2 (on
+b5428fc), and P1 on Windows (on b5428fc): `--check` 0 problems; the self-test 13 of 14, the new
+`test_a_linux_tree_out_of_step_is_reported` failed at its first assertion ("the unchanged copies"): 18 problems, each a
+notes file naming a `../../` path into the repository (`../../cases/naca0012/case.json`, ...). The test copies both trees
+into a temporary folder, where those paths cannot resolve; ADR 0142's addendum saw the same in its S7 control ("in the
+copy outside the repository, the `../../` paths"). A defect of the procedure: none of the test's assertions on the
+tampered pair had been read. P1 on Linux runs in the L4 container started before this was found and will meet the same
+assertion.
+
+Corrected set-up (the same test name; P1's limit and every assertion unchanged): the test leaves out the problems that
+name a `../../` path (they concern where the copies are, not the trees) before it compares. What I knew when writing
+this: the output of that run, and a throwaway check of the same copies (18 problems, each one naming a `../../` path,
+and nothing else). The self-test runs again on both platforms on the commit of this amendment.
+
 ## Not in CI (by hand)
 
 On Linux at the window: `sh scripts/studio.sh example-projects-linux/wind-tunnel`: 6 cases, 6 runs, a picture when a run
