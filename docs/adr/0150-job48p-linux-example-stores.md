@@ -1,7 +1,10 @@
 # ADR 0150: Job 48P, Linux-built example stores: a second tree `example-projects-linux/`, built by the same script in Docker
 
 Status: **registered 2026-10-28**, before any registered run (the code, the tests and the Docker image were written,
-built and compiled first; what ran before is listed under "What I already knew"). Job 48P, on local main 6867e40 (waves
+built and compiled first; what ran before is listed under "What I already knew"); amendment 1 (a set-up defect of P1's
+new self-test) before its corrected run; results in the addendum: every registered limit met and every control as
+required (P1 after amendment 1); the Linux Re 100 cylinder run misses G3's crossing count as the Windows one does (the
+same ignored known miss, limit intact); not yet accepted by the maintainer. Job 48P, on local main 6867e40 (waves
 48A-48O merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here
 before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective
 set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical;
@@ -194,6 +197,91 @@ name a `../../` path (they concern where the copies are, not the trees) before i
 this: the output of that run, and a throwaway check of the same copies (18 problems, each one naming a `../../` path,
 and nothing else). The self-test runs again on both platforms on the commit of this amendment.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a33a297ef7d8884e0`. Commits: registration 963c871 (on main 6867e40); b5428fc, the Linux tree as
+L1 wrote it (159 files, nothing edited); amendment 1 112a755; f25803f (one comment line in the known-miss test, after
+L3); then this addendum. Linux: the image of D4 (image `sha256:485f28a2036497ed`..., base `ubuntu:24.04`
+`sha256:24737cef17f4`...; glibc 2.39-0ubuntu8.9, rustc 1.99.0, Python 3.12.3), `--init --cpuset-cpus 0-3 --memory 16g`,
+archives extracted into `/src`. Windows: this host (Windows 11, 16 threads, 93.6 GB; 22.7 to 27.3 GB free during the
+runs, other agents' builds running), release, Python 3.9.13.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| C0 | one failure, S5 at d5cb with the CI values; 15 pass | 6867e40: `s5_run_stores_residuals_and_metrics_match_their_case` failed at `wind-tunnel/r-20261028T152128-d5cb: store mesh hash`, left 2159359318246829613, right 10791892230985098653; 15 passed, 1 failed, 1 ignored | as required: the image builds the cylinder mesh as CI does |
+| L1 | exit 0; 10 of 10 with G1's states; `--check` 0 | 963c871: container exit 0 (1368 source files; `rcfd` and `rcfd-runner` built in 54 s; inputs copied: 12 and 7 files; wind-tunnel 344 s, quick-start 6 s); cylinders `finished` at step 1280 (end time 80), exit 0; aerofoils `not_converged` at 2000, exit 5; steps `converged` at 740 and 429; cavities at 121 and 158; heated cavities at 339 and 278 (the Windows runs' step counts); `--check` of both trees: 0 problems | pass |
+| L2 | each <= 180 s; sum <= 20 min | 0.5, 0.7 (cavities), 2.0, 1.6 (heated cavities), 19.9, 19.0 (cylinders), 100.5, 98.9 (aerofoils), 65.9, 38.5 s (steps); 347.7 s in all (the Windows tree: 191.2 s) | pass |
+| L3 | the ten comparisons; crossing count reported | `cl_amplitude` 0.30905 and 0.63030; St 0.151669 < 0.175138; 0 < `cl` 0.198833 < 0.348195; 0 < `x_reattach` 4.2480 < 5.8881 < 15; 1 < `nu_hot` 1.11879 < 2.25718; `lid_drag` -0.004911 and -0.001609. Crossings: Re 100 **6**, Re 200 7 (the Windows tree: 6 and 7) | pass; the crossing count misses for the Linux Re 100 run as for the Windows one, the same known miss (`g3_cylinders_cross_at_least_7_times_known_miss`, ignored, limit 7 intact) |
+| L3 control | 4 swapped comparisons fail | 4 of 4 fail | as required |
+| L4 | every test passes; S5 exact for the Linux runs | b5428fc: 21 passed, 0 failed, 1 ignored. S5 asserted for the 10 Linux runs: store mesh hash equal to the mesh built in the container (cavities 9134465315737883872, heated cavities 15615021881842952904, cylinders 10791892230985098653, aerofoils 11543926204880617909, steps 16720390881750798361); T1: 12 and 7 inputs, 0 differ; T2: 0 problems for both trees (the Linux manifest: `{"arch":"x86_64","image":"rcfd-linux:ubuntu24.04-rust1.99.0","libc":"glibc 2.39","os":"linux","python":"3.12.3"}`; the Windows one has none, as registered); S8: 27 402 312 and 4 248 948 bytes, the Linux tree 31 655 580 | pass |
+| L4 controls | T3; T1, T2, S1, S7 controls | T3: the Windows tree's cylinder stores (2159359318246829613) differ from the meshes built in the container (10791892230985098653); its other 8 runs equal (uniform boxes; the aerofoils read the Windows tree's own polyMesh file). T1 control: (a) `cases/cavity-re100.toml: differs`, (b) `cases/extra.toml: in ... but not an input`, (c) `notes/README.md: differs`, (d) nothing. T2 control: the unchanged copy clean; (a) `manifest.json: built on "windows" "x86_64"`; (b) the run's `case_dir`. S1 (a)-(d) and S7 as in ADR 0142 | as required |
+| L5 | the Studio model on the Linux tree | b5428fc: 1 passed: `/src/example-projects-linux/wind-tunnel` 6 cases, 6 runs, 0 skipped; `quick-start` 4, 4, 0; every run `Ready` with 80, 80, 10, 10, 19, 11, 25, 32, 34, 28 snapshots, `p` at the last one, drawn 2D; the 10 cases valid in the Case editor | pass |
+| W1 | every test passes; S5 as before | b5428fc (this worktree): 21 passed, 0 failed, 1 ignored; the Windows tree's S5 asserted as before; T3: the Linux tree's cylinder stores (10791892230985098653) differ from the meshes built on Windows (2159359318246829613), its other 8 runs equal; S8 unchanged (31 658 565) | pass; T3 as required |
+| W2 | ADR 0142 H1 unchanged | b5428fc: 1 passed; `example-projects` 6 cases, 6 runs, 0 skipped and 4, 4, 0; the snapshot counts of ADR 0142 | pass |
+| T4 | empty diff | `git diff --stat 6867e40 f25803f -- example-projects/`: empty | pass |
+| P1 | `--check` 0 on both; the self-test passes on both | b5428fc: `--check` 0 problems on Windows and Linux; the self-test 13 of 14 on both (`test_a_linux_tree_out_of_step_is_reported`, amendment 1). 112a755: 14 of 14 on Windows (Python 3.9.13) and Linux (3.12.3), `--check` 0 problems on both; the tampered pair reported as registered, the other platform's tree refused | pass (after amendment 1) |
+| R1L | 55 of 55 byte-equal | 112a755: the Linux tree rebuilt in a temporary copy in a second container (the same states and steps): 50 of 50 run files byte-equal, the 5 polyMesh files equal (no problem), `rerun check: 0 problem(s)` | pass |
+| T5 | caps per tree; growth reported | below | pass (caps); reported |
+| Q1 | clippy and fmt clean on both | Windows: before registration and on the archive of f25803f; Linux: on b5428fc and on the archive of f25803f: clean | pass |
+
+**Final runs on archives of f25803f** (whose code every later commit has). Linux, one container: `example_projects_w48h`
+21 passed, 1 ignored; the known-miss test with `--ignored` printed 6, 7 (Windows tree) and 6, 7 (Linux tree) and failed
+on the Windows tree's Re 100 run, as registered in ADR 0142; H1 1 passed; `--check` 0 problems; the self-test 14 of 14;
+clippy and fmt clean. Windows, an extracted archive with its own target folder: `example_projects_w48h` 21 passed, 1
+ignored; H1 1 passed; `--check` 0 problems; the self-test 14 of 14; clippy and fmt clean; `docs_site` (this ADR's
+links) 2 passed.
+
+**Sizes and growth (T5).** Bytes of every file: `example-projects/` 31 658 565, `example-projects-linux/` 31 655 580, each
+under its 40 000 000 cap (projects under 35 000 000 and 6 000 000), about 63 MB together in a checkout. In git, the Linux
+tree commit b5428fc adds 78 blobs the repository did not hold: 18 877 244 bytes uncompressed, 11 270 905 bytes as one
+pack. The 81 Linux files that are byte-identical to a file of the Windows tree (11 983 271 bytes) are the same blobs and
+add nothing. The whole job (6867e40..f25803f): 89 new blobs, 19 131 980 bytes uncompressed, 11 343 206 bytes packed.
+For scale: the Windows tree's 161 blobs pack to 17 310 395 bytes. A transfer may be larger than what is stored: `git
+pack-objects --revs b5428fc ^963c871` packs 17 312 577 bytes with git's default sparse walk (`pack.useSparse`), which does
+not find the parent's identical blobs at other paths, and 11 270 905 with `pack.useSparse=false`.
+
+Byte-identical across the platforms (matched by case): for the step, cavity and heated-cavity runs the store,
+`index.json`, `residuals.jsonl`, `output/monitors.json`, `monitors.csv`, `report.html` and `check.json` (their meshes are
+uniform boxes and their runs are bit-identical); for the cylinders and the aerofoils only `case.snapshot` (and the
+cylinders' `report.html`). The aerofoil polyMesh's `boundary`, `faces`, `owner` and `neighbour` are identical, its
+`points` differ (built by `rcfd convert` and Python's `math` on glibc). `run.json`, `status.json`, `events.jsonl`,
+`log.txt` and `metrics.json` differ by ids, times and paths, as ADR 0142 D10 says.
+
+**What the Linux runs give** against the Windows runs (orientation, not a check): the step, the cavities and the heated
+cavities bit-identical; the cylinders equal to about 13 digits (St 0.1516691046868687 against ...878, mean C_D
+1.3232575505167183 against ...181); the aerofoils to about 7 digits (C_L 0.34819494914633836 against 0.34819495674563833 at
+4 degrees, 0.19883331320623607 against 0.19883327814014404 at 2; C_D 0.0253602676 against 0.0253602671). S9: the Linux
+polyMesh lies 2.5e-17 off the aerofoil surface and 3.6e-15 off the far-field circle (the Windows file: 4.4e-15 and
+7.1e-15 read on Windows).
+
+**Deviations and notes.**
+1. Amendment 1: the new self-test's comparison of unchanged copies failed on the `../../` paths of copies outside the
+   repository; corrected before its rerun, its assertions unchanged.
+2. The container compiled a draft before registration that differed only in the known-miss test (disclosed under "What
+   I already knew"); every registered Linux run built the registered code.
+3. After L3, the known-miss test's comment names the Linux Re 100 count (f25803f, a comment only); the final runs on its
+   archive gave the same results.
+4. The Linux aerofoil runs use the Linux tree's own polyMesh, whose `points` differ from the Windows file's (D2: each
+   tree builds its recipe mesh on its platform); both are the recipe's within S9's 1e-12.
+5. The container's runs took longer than the Windows runs (347.7 s against 191.2 s; four CPUs of a machine shared with
+   other agents' builds), inside G2's limits.
+6. `scripts/limit_audit.py` on the changed files: class (iii) for `t2_control_a_foreign_build_is_reported` (and ADR
+   0142's `s1_controls_tampered_copies_are_reported`, `s7_control_a_missing_file_is_reported`): each control asserts the
+   report it expects as a positive fact, the form the heuristic does not recognise; class (iv) for T3's early `return` on
+   a platform without a tree of its own (registered in D6: print and skip, ADR 0137). No other hit.
+7. `README.md` of the repository gained the pointer of D8; `example-projects/README.md` is unchanged (question 1).
+8. Leftover processes: none (every container ran with `--rm`; no runner was started on Windows).
+
+**Not run.** The CI `Full gate` on `ubuntu-latest` (no push): the real check. C0 showed that the image builds the cylinder
+mesh as CI did; the other eight Linux stores hold meshes that do not depend on the platform (uniform boxes, and the
+aerofoil's file), so S5 should hold there. The workspace gate and workspace-wide clippy (only two test files, two scripts
+and docs changed); `scale_n.rs` and `end_time_landing_w48k.rs` (unchanged, they read the Windows tree); the Studio at a
+real window on either platform (the checklist); macOS and Linux on ARM; `--docker` from a Linux host (its `chown` of the
+bind mount is untested); `cargo deny` (no dependency changed).
+
+**New dependencies:** none (no crate, no `Cargo.lock` change, no workspace edge). New tool: the Docker image of D4, built
+from the repository's Dockerfile.
+
 ## Not in CI (by hand)
 
 On Linux at the window: `sh scripts/studio.sh example-projects-linux/wind-tunnel`: 6 cases, 6 runs, a picture when a run
@@ -214,6 +302,18 @@ is selected; the same on Windows with `example-projects\wind-tunnel` as before.
    `gate.yml`. Recommendation: (b), as a separate one-line change.
 5. **Binary stores in git** (ADR 0142 question 1), now two sets. Recommendation: keep them in git until the regenerations
    are frequent; T5 gives the cost of one set.
+
+Added by the addendum:
+
+6. **`--docker` builds what is on disk** (the files git tracks or would track, as they are in the working tree), not
+   HEAD, so an edited input can be rebuilt before it is committed; the counted build ran on a clean tree. Options: (a)
+   keep (it prints the number of files it sends); (b) build from `git archive HEAD` only. Recommendation: (a).
+7. **The launch scripts** could take an example's name and open the tree of the platform (`scripts/studio.sh --example
+   wind-tunnel`). Options: (a) no, the READMEs name the folder; (b) add it (ADR 0141's scripts and their self-test
+   change). Recommendation: (a) for now.
+8. **The Linux Re 100 crossing count** (6, limit 7) is the Windows known miss repeated; ADR 0142 amendment 1's reason (an
+   80 D/U run holds about 6 periods in its second half) holds on both platforms. Nothing to decide unless the run length
+   or the limit is to change (ADR 0142's open point).
 
 ## Files
 
