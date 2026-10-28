@@ -312,3 +312,19 @@ platform (Windows: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WIND
 stdio) and waits 10 s for the lock; PowerShell is no longer run, so the last item of Limits ("Windows detached start needs
 `powershell.exe`") no longer applies. S5 stays an ignored known miss: on Windows the direct start hands the runner the client's
 inheritable handles. A client also reaps the runners it started, and on Unix `pid_alive` reads a zombie as dead.
+
+## Note 2026-10-28: the output of a started runner and early exits (ADR 0146)
+
+By the maintainer's decision of 2026-10-28, [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) set a
+started runner's standard handles explicitly:
+* stdin is the null device;
+* stdout and stderr are appended to `.rcfd/runner.log` by default. `--log-file`, `--stdout` and `--quiet` on `ensure` and
+  `start`, and `Client::with_output` in the library, choose otherwise.
+
+`ensure_runner` reports a runner that exits before it holds the lock at once, with its exit code and the end of its output, not
+after 10 s. A bad `runner-config.json` therefore no longer ends the runner without a trace.
+
+S5 stays an ignored known miss. On Windows the runner also inherits the client's other inheritable handles, so the client's
+piped stdout reaches EOF only when the runner exits. ADR 0146 measured this (I1-I3) for null stdio, for files on all three
+handles and for an intermediate stage, and found no safe way around it on stable Rust. On Linux ADR 0146's C1 (S5's set-up with
+a 3 s limit) is met.

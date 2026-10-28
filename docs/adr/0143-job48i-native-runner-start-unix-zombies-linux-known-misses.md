@@ -316,3 +316,13 @@ This ADR; `crates/rcfd-runner/src/{sys,client}.rs`; tests `crates/rcfd-runner/te
 `crates/rcfd-runner/tests/{runner_wfix,runner_w47b}.rs` (F15, S5 text), `crates/rcfd-studio/tests/native_start_w48i.rs` (new),
 the doc comments of `crates/rcfd-studio/tests/{runner_start_r9,oneclick_e2e_g4}.rs`, `crates/rcfd-fv/tests/cavitation.rs`,
 `crates/rcfd-mesh/tests/tetmesh.rs`; notes in ADRs 0123, 0137 and 0141.
+
+## Note 2026-10-28: questions 1 and 6 (ADR 0146)
+
+[ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) implemented question 6: an early exit is reported at
+once, with the exit code and the end of the runner's output. It also investigated question 1:
+* null standard handles, files on all three, and an intermediate stage all leave the caller's pipes inherited (I1-I3);
+* in a scratch probe, only `inherit_handles(false)` (unstable) released the caller (I5), and it lost the redirected standard
+  handles (I6).
+
+The options that remain are in ADR 0146's question 1.

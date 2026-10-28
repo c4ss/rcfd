@@ -119,9 +119,15 @@ are paged, series decimated, files read in pages; a residual set or image over t
 | `read_project_file` | read | `path`, `hash` (of the whole file; the `base_hash` for edits), `size`, `offset`, `text`, `next_offset` (null at the end); pages of at most 32 000 bytes |
 | `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; an edit that cannot be placed in the file's own lines, such as a value written over several lines, is refused with 1003 and nothing is written), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run` |
 | `write_note` | write_files | `path`, `created`, `old_hash`, `new_hash`; under `notes/` only; no `base_hash` means "create, the file must not exist" |
-| `start_run` | execute | `run`, `case`, `state`; arguments `case`, `set` [`path=value`], `priority`, `threads`, `mem_mb`; starts the project's `rcfd-runner` when none is alive |
+| `start_run` | execute | `run`, `case`, `state`; arguments `case`, `set` [`path=value`], `priority`, `threads`, `mem_mb`; starts the project's `rcfd-runner` when none is alive, with its output appended to `.rcfd/runner.log`; a runner that exits before it holds the project's lock gives an error result at once (code -32000, `data.run` the queued run) whose message has the runner's exit code and the end of that log ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md)) |
 | `pause_run`, `resume_run`, `cancel_run` | execute | `run`, `requested`, `state`; 1002 for a run that already ended |
 | `wait_run` | read | `run`, `from`, `state`, `changed`, `terminal`, `waited_s`, `status`; returns when the state differs from `from` (default: the state at the call) or the run ended, at the latest after `timeout_s` (default 30, at most 60) |
+
+On Windows the runner that `start_run` starts (and the solvers it starts) also inherit `rcfd-mcp`'s standard input and output
+pipes, because std starts processes with handle inheritance on and the workspace allows no unsafe code. Measured: after the
+server has exited, its standard output reaches EOF only when that runner exits ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md)
+C2). What this does to Claude Code when it closes or restarts the server has not been checked. On Linux the pipe closes with the
+server.
 
 Edits (`edit_case`, `write_note`) are compare-and-replace under a cooperative lock (`rcfd_project::atomic::replace_if_hash`): the
 file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held; each accepted edit appends
