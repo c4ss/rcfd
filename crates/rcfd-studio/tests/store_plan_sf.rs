@@ -43,13 +43,19 @@ fn plan_of(rel: &str, path: &Path) -> StartPlan {
 /// The registered `set()` of every shipped case (SF1), before `output.store_precision=f32`.
 const EXPECTED: [(&str, &str); 10] = [
     ("cases/axial_fan_cgrid/axial_fan_cgrid.toml", "output.store_interval=60"),
-    ("cases/axial_fan_sector/axial_fan_sector.toml", "output.store_interval=60"),
+    (
+        "cases/axial_fan_sector/axial_fan_sector.toml",
+        "output.store_interval=60",
+    ),
     ("cases/channel/kepsilon_channel.toml", "output.store_interval=80"),
     ("cases/channel/kepsilon_inlet.toml", "output.store_interval=4"),
     ("cases/channel/profile_inlet.toml", "output.store_interval=20"),
     ("cases/channel/sst_channel.toml", "output.store_interval=90"),
     ("cases/packed_bed/packed_bed.toml", "output.store_interval=17"),
-    ("cases/rotating_channel/rotating_channel.toml", "output.store_interval=17"),
+    (
+        "cases/rotating_channel/rotating_channel.toml",
+        "output.store_interval=17",
+    ),
     ("cases/sod/sod.toml", "output.store_time_interval=0.002"),
     ("cases/wedge/wedge.toml", "output.store_time_interval=0.03"),
 ];
@@ -142,7 +148,10 @@ fn sf3_cell_counts() {
             st.drain_until(Duration::from_secs(60), |s| matches!(&s.runs.plan, Some(Ok(p))
                 if p.case == local && p.facts.cells.is_some())),
             "{local}: no cell count within 60 s: {:?}",
-            st.runs.plan.as_ref().map(|p| p.as_ref().map(|p| p.facts.extra.cells_state.clone()))
+            st.runs
+                .plan
+                .as_ref()
+                .map(|p| p.as_ref().map(|p| p.facts.extra.cells_state.clone()))
         );
         let Some(Ok(p)) = &st.runs.plan else { unreachable!() };
         eprintln!(
@@ -219,7 +228,10 @@ fn sf9_start_dialog_lines_warnings_and_fixes() {
         "Estimated size 342 kB (144 cells), in runs/<run id>/fields/ where the Viewport reads it."
     );
     assert_eq!(store_plan::estimate(&a), Some(342_016));
-    assert!(store_plan::warnings(&a).is_empty(), "control: the default has no warning");
+    assert!(
+        store_plan::warnings(&a).is_empty(),
+        "control: the default has no warning"
+    );
     // (b) switched off, and the fix
     let mut b = a.clone();
     b.store.as_mut().unwrap().on = false;
@@ -255,7 +267,12 @@ fn sf9_start_dialog_lines_warnings_and_fixes() {
     // (d) huge
     let mut d = cavity_plan(BIG);
     let w = store_plan::warnings(&d);
-    eprintln!("SF9 (d): cells {:?}, estimate {:?}, {:?}", d.facts.cells, store_plan::estimate(&d), w);
+    eprintln!(
+        "SF9 (d): cells {:?}, estimate {:?}, {:?}",
+        d.facts.cells,
+        store_plan::estimate(&d),
+        w
+    );
     assert_eq!(d.facts.cells, Some(1_000_000));
     assert_eq!(d.set(), ["output.store_interval=20", "output.store_precision=f32"]);
     assert_eq!(store_plan::estimate(&d), Some(1_864_313_600));
@@ -269,7 +286,11 @@ fn sf9_start_dialog_lines_warnings_and_fixes() {
         }]
     );
     store_plan::apply_fix(&mut d, Fix::FitHuge);
-    eprintln!("SF9 (d) fixed: set {:?}, estimate {:?}", d.set(), store_plan::estimate(&d));
+    eprintln!(
+        "SF9 (d) fixed: set {:?}, estimate {:?}",
+        d.set(),
+        store_plan::estimate(&d)
+    );
     assert_eq!(d.set(), ["output.store_interval=45", "output.store_precision=f32"]);
     assert_eq!(store_plan::estimate(&d), Some(984_141_615));
     assert!(store_plan::estimate(&d).unwrap() <= store_plan::HUGE_BYTES);
@@ -358,8 +379,14 @@ fn sf9_start_dialog_drawn() {
         "Stores ux, uy, uz, p every 4 iterations: at most 100 snapshots (fewer if the run converges earlier), f32.";
     let size_line = "Estimated size 342 kB (144 cells), in runs/<run id>/fields/ where the Viewport reads it.";
     let first = texts(&common::frame(&mut app, &ctx).shapes);
-    eprintln!("SF9 (i) control: first frame has the store line: {}", first.iter().any(|t| t == store_line));
-    assert!(!first.iter().any(|t| t == store_line), "control: drawn before the plan arrived");
+    eprintln!(
+        "SF9 (i) control: first frame has the store line: {}",
+        first.iter().any(|t| t == store_line)
+    );
+    assert!(
+        !first.iter().any(|t| t == store_line),
+        "control: drawn before the plan arrived"
+    );
     let mut drawn = Vec::new();
     assert!(common::frames_until(&mut app, &ctx, Duration::from_secs(30), |a| {
         matches!(&a.st.runs.plan, Some(Ok(_)))
@@ -381,7 +408,7 @@ fn sf9_start_dialog_drawn() {
         off = texts(&common::frame(&mut app, &ctx).shapes);
     }
     for want in [format!("Fields will not be stored, {OFF}"), "Store fields".to_string()] {
-        assert!(off.iter().any(|t| *t == want), "not drawn: {want}\n{off:?}");
+        assert!(off.contains(&want), "not drawn: {want}\n{off:?}");
     }
     assert!(!off.iter().any(|t| t == store_line));
     eprintln!("SF9 (i): switched off: warning and \"Store fields\" drawn, no store line");

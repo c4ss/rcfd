@@ -158,8 +158,9 @@ pub struct CaseFacts {
     pub sets_precision: bool,
     /// `dynamic_mesh.enabled` (the store does not support a moving mesh).
     pub dynamic_mesh: bool,
-    /// What the text says beyond these fields (ADR 0140: the case's own store and output keys, the time step, chains).
-    pub extra: crate::store_plan::CaseExtra,
+    /// What the text says beyond these fields (ADR 0140: the case's own store and output keys, the time step, chains);
+    /// boxed so that the run worker's updates stay small.
+    pub extra: Box<crate::store_plan::CaseExtra>,
 }
 
 /// How often the store writes.
@@ -251,7 +252,7 @@ pub fn case_facts(text: &str, base_dir: &Path) -> Result<CaseFacts, String> {
             || text_sets(&raw, &["output", "store_time_interval"]),
         sets_precision: text_sets(&raw, &["output", "store_precision"]),
         dynamic_mesh: get("dynamic_mesh.enabled").as_bool() == Some(true),
-        extra: crate::store_plan::case_extra(&raw, &case, cells.is_some()),
+        extra: Box::new(crate::store_plan::case_extra(&raw, &case, cells.is_some())),
     })
 }
 

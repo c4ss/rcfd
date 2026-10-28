@@ -5,8 +5,8 @@ mod common;
 
 use common::{studio_on, RunnerProject, RUN_CASE};
 use rcfd_project::RunState;
-use rcfd_studio::runs::StartPlan;
 use rcfd_studio::run_fields::EmptyKind;
+use rcfd_studio::runs::StartPlan;
 use rcfd_studio::store_plan;
 use rcfd_studio::viewport::{Status, StoreView};
 use rcfd_studio::Studio;
@@ -35,8 +35,13 @@ fn dir_bytes(dir: &Path) -> u64 {
 /// The plan the start dialog gets for `rel` (through the run worker), with ADR 0133's test settings.
 fn dialog_plan(st: &mut Studio, rel: &str) -> StartPlan {
     st.plan_start(rel).unwrap();
-    assert!(st.drain_until(Duration::from_secs(30), |s| matches!(&s.runs.plan, Some(Ok(p)) if p.case == rel)));
-    let Some(Ok(mut p)) = st.runs.plan.clone() else { unreachable!() };
+    assert!(st.drain_until(
+        Duration::from_secs(30),
+        |s| matches!(&s.runs.plan, Some(Ok(p)) if p.case == rel)
+    ));
+    let Some(Ok(mut p)) = st.runs.plan.clone() else {
+        unreachable!()
+    };
     p.mem_mb = Some(10);
     p
 }
@@ -51,7 +56,10 @@ fn start(st: &mut Studio, p: &RunnerProject, plan: StartPlan) -> String {
 
 fn wait_finished(st: &mut Studio, p: &RunnerProject, id: &str) {
     assert!(
-        st.drain_until(Duration::from_secs(300), |s| s.runs.row(id).is_some_and(|r| r.state.is_terminal())),
+        st.drain_until(Duration::from_secs(300), |s| s
+            .runs
+            .row(id)
+            .is_some_and(|r| r.state.is_terminal())),
         "run {id} did not end"
     );
     assert_eq!(p.status(id).unwrap().state, RunState::Finished, "{:?}", p.status(id));
@@ -63,7 +71,10 @@ fn show_last(st: &mut Studio, id: &str) {
     assert!(
         st.drain_until(Duration::from_secs(30), |s| s.viewport.run.as_deref() == Some(id)
             && s.viewport.status == Status::Ready
-            && s.viewport.frame.as_ref().is_some_and(|f| f.index + 1 == s.viewport.snaps.len())
+            && s.viewport
+                .frame
+                .as_ref()
+                .is_some_and(|f| f.index + 1 == s.viewport.snaps.len())
             && !s.viewport.pending()),
         "{id}: {:?}",
         st.viewport.status
@@ -120,7 +131,11 @@ fn sf4_sf5_estimates_and_the_viewport_location() {
     // negative control: R10's data-only estimate misses (a) by more than 10 %
     let old = runs[0].2.estimated_bytes().unwrap();
     let miss = old as f64 / actual[0].1 as f64 - 1.0;
-    eprintln!("SF4 control: estimated_bytes() {old} against {} bytes: {:+.1} %", actual[0].1, 100.0 * miss);
+    eprintln!(
+        "SF4 control: estimated_bytes() {old} against {} bytes: {:+.1} %",
+        actual[0].1,
+        100.0 * miss
+    );
     assert!(miss.abs() > 0.10);
     // SF5: each run in the viewport, at the contract location, values bit-equal to the store
     for ((name, id, _), (n, _)) in runs.iter().zip(&actual) {
@@ -128,7 +143,10 @@ fn sf4_sf5_estimates_and_the_viewport_location() {
         let dir = p.run_dir(id).join("fields");
         let sv = StoreView::open(&dir).unwrap();
         let mut r = rcfd_tsstore::Reader::open(&dir).unwrap();
-        let want = sv.surface.face_values_from_cells(&r.read_field(n - 1, "p").unwrap()).unwrap();
+        let want = sv
+            .surface
+            .face_values_from_cells(&r.read_field(n - 1, "p").unwrap())
+            .unwrap();
         let f = st.viewport.frame.as_ref().unwrap();
         let equal = f.faces.len() == want.len() && f.faces.iter().zip(&want).all(|(a, b)| a.to_bits() == b.to_bits());
         eprintln!(
@@ -147,11 +165,17 @@ fn sf4_sf5_estimates_and_the_viewport_location() {
     std::fs::rename(p.run_dir(a).join("fields"), p.run_dir(a).join("fields.moved")).unwrap();
     st.select_run(&runs[1].1);
     st.select_run(a);
-    assert!(st.drain_until(Duration::from_secs(30), |s| matches!(&s.viewport.status, Status::NoStore(_))));
+    assert!(st.drain_until(Duration::from_secs(30), |s| matches!(
+        &s.viewport.status,
+        Status::NoStore(_)
+    )));
     let e = st.viewport.empty.clone().unwrap();
     eprintln!("SF5 control: {:?}: {}", e.kind, e.text);
     assert_eq!(e.kind, EmptyKind::Missing);
-    assert_eq!(e.text, format!("Run {a} asked for stored fields, but no store was found."));
+    assert_eq!(
+        e.text,
+        format!("Run {a} asked for stored fields, but no store was found.")
+    );
 }
 
 #[test]
@@ -164,8 +188,10 @@ fn sf8_rerun_with_fields_stored() {
     let old = start(&mut st, &p, plan);
     wait_finished(&mut st, &p, &old);
     st.select_run(&old);
-    assert!(st.drain_until(Duration::from_secs(30), |s| matches!(&s.viewport.status, Status::NoStore(_))
-        && s.viewport.empty.is_some()));
+    assert!(st.drain_until(Duration::from_secs(30), |s| matches!(
+        &s.viewport.status,
+        Status::NoStore(_)
+    ) && s.viewport.empty.is_some()));
     let e = st.viewport.empty.clone().unwrap();
     eprintln!("SF8: {:?}: {}; {:?}", e.kind, e.text, e.rerun_line);
     assert_eq!(e.kind, EmptyKind::NotStored);
@@ -202,12 +228,12 @@ fn sf8_rerun_with_fields_stored() {
     std::fs::write(&case, format!("{RUN_CASE}# edited\n")).unwrap();
     let said = st.messages.len();
     st.rerun_with_fields(&old).unwrap();
-    let want = format!(
-        "the run was not started: cases/cavity.toml changed since this run, so it is not re-run; start a new run with \
-         Runs > Start run... (\"Store fields\" is on by default)."
-    );
+    let want =
+        "the run was not started: cases/cavity.toml changed since this run, so it is not re-run; start a new run \
+                with Runs > Start run... (\"Store fields\" is on by default)."
+            .to_string();
     assert!(
-        st.drain_until(Duration::from_secs(30), |s| s.messages[said..].iter().any(|m| *m == want)),
+        st.drain_until(Duration::from_secs(30), |s| s.messages[said..].contains(&want)),
         "{:?}",
         &st.messages[said..]
     );

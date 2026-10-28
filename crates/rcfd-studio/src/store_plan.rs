@@ -57,7 +57,14 @@ const STEP_KEYS: [&str; 12] = [
 ];
 
 /// The 2D generators of D4 (one cell thick, `empty` front and back).
-const GEN_2D: [&str; 6] = ["cavity_2d", "box_2d", "channel_2d", "wedge_2d", "nozzle_2d", "cylinder_ogrid"];
+const GEN_2D: [&str; 6] = [
+    "cavity_2d",
+    "box_2d",
+    "channel_2d",
+    "wedge_2d",
+    "nozzle_2d",
+    "cylinder_ogrid",
+];
 
 /// Where the plan's cell count comes from.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -101,9 +108,7 @@ pub struct CaseExtra {
 }
 
 fn set_value(v: &Value) -> bool {
-    v.as_f64().is_some_and(|x| x != 0.0)
-        || v.as_bool() == Some(true)
-        || v.as_array().is_some_and(|a| !a.is_empty())
+    v.as_f64().is_some_and(|x| x != 0.0) || v.as_bool() == Some(true) || v.as_array().is_some_and(|a| !a.is_empty())
 }
 
 /// Read [`CaseExtra`] from the raw TOML of a case and the parsed case (`counted`: the generator's counts gave the cells).
@@ -283,11 +288,7 @@ pub fn effective(plan: &StartPlan) -> Effective {
             "solver.dt" => e.dt = v.as_f64().unwrap_or(e.dt),
             "solver.algorithm" => algorithm = v.as_str().unwrap_or(&algorithm).to_string(),
             "compressible.mode" => mode_steady = v.as_str() == Some("steady"),
-            p if p == "solver.max_courant" || STEP_KEYS.contains(&p) => {
-                if set_value(v) {
-                    e.fixed_dt = false;
-                }
-            }
+            p if (p == "solver.max_courant" || STEP_KEYS.contains(&p)) && set_value(v) => e.fixed_dt = false,
             _ => {}
         }
     };
@@ -306,7 +307,10 @@ pub fn effective(plan: &StartPlan) -> Effective {
         }
     }
     if e.fields.is_empty() {
-        e.fields = rcfd_api::fieldstore::DEFAULT_FIELDS.iter().map(|s| s.to_string()).collect();
+        e.fields = rcfd_api::fieldstore::DEFAULT_FIELDS
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
     }
     e.compressible = algorithm == "compressible";
     e.steady = !is_transient(&algorithm, mode_steady);
@@ -369,7 +373,8 @@ pub fn count(e: &Effective) -> Option<Count> {
             kind: CountKind::Steady,
         });
     }
-    let n_steps = (e.fixed_dt && !e.compressible && e.dt > 0.0 && e.end_time > 0.0).then(|| ceil_eps(e.end_time / e.dt));
+    let n_steps =
+        (e.fixed_dt && !e.compressible && e.dt > 0.0 && e.end_time > 0.0).then(|| ceil_eps(e.end_time / e.dt));
     let loose = if e.compressible {
         CountKind::Cfl
     } else {
@@ -424,14 +429,8 @@ pub fn store_bytes(cells: u64, fields: u64, n: u64, width: u64, mesh: u64) -> u6
 /// The plan's mesh bytes: built, else per cell (D4).
 fn plan_mesh_bytes(plan: &StartPlan, cells: u64) -> u64 {
     let x = &plan.facts.extra;
-    x.mesh_bytes.unwrap_or_else(|| {
-        cells
-            * if x.two_d {
-                MESH_2D_PER_CELL
-            } else {
-                MESH_3D_PER_CELL
-            }
-    })
+    x.mesh_bytes
+        .unwrap_or_else(|| cells * if x.two_d { MESH_2D_PER_CELL } else { MESH_3D_PER_CELL })
 }
 
 /// The D4 estimate of the plan's store (`None` when off, the count is unknown or the cells are not known).
@@ -529,7 +528,10 @@ fn value_text(v: &Value) -> String {
 pub fn case_off_key(plan: &StartPlan) -> Option<String> {
     let cs = &plan.facts.extra.case_store;
     let interval = |k: &str| cs.iter().find(|(p, _)| p == k).map(|(_, v)| v.as_f64().unwrap_or(0.0));
-    let (a, b) = (interval("output.store_interval"), interval("output.store_time_interval"));
+    let (a, b) = (
+        interval("output.store_interval"),
+        interval("output.store_time_interval"),
+    );
     if a.unwrap_or(0.0) > 0.0 || b.unwrap_or(0.0) > 0.0 {
         return None;
     }
@@ -615,9 +617,10 @@ pub fn warnings(plan: &StartPlan) -> Vec<Warning> {
     let mut v = Vec::new();
     if plan.facts.extra.chain {
         v.push(Warning {
-            text: "The case is a chain: each stage stores its fields in runs/<run id>/output/<stage>/fields/, which the \
+            text:
+                "The case is a chain: each stage stores its fields in runs/<run id>/output/<stage>/fields/, which the \
                    Viewport does not read yet."
-                .into(),
+                    .into(),
             fix: None,
         });
     }
@@ -782,7 +785,8 @@ pub fn not_found_text(case: &str) -> String {
     )
 }
 
-/// Whether the case of a run is unchanged: `Ok(())`, or the refusal text.
+/// The case file of a run when it is unchanged since the run (its bytes hash to `case_snapshot_hash`), else the
+/// refusal text ([`changed_text`], [`not_found_text`]).
 pub fn case_unchanged(root: &Path, rec: &RunRecord) -> Result<Vec<u8>, String> {
     let path = root.join(&rec.case);
     let bytes = std::fs::read(&path).map_err(|_| not_found_text(&rec.case))?;

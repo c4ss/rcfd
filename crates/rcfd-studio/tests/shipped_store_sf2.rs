@@ -114,7 +114,10 @@ fn sf2_every_shipped_case_writes_a_readable_store() {
     }
     let dir = tmp.join("control");
     let warns = store_warnings(&three_steps(&case, &dir));
-    eprintln!("SF2 control: {warns:?}; store file: {}", dir.join("fields/store.rts").exists());
+    eprintln!(
+        "SF2 control: {warns:?}; store file: {}",
+        dir.join("fields/store.rts").exists()
+    );
     assert!(warns.iter().any(|w| w.contains("field store disabled")));
     assert!(!dir.join("fields").join(rcfd_tsstore::STORE_FILE).exists());
 }

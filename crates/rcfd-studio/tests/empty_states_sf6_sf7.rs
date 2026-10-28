@@ -191,7 +191,13 @@ fn sf7_empty_states_exact_texts() {
         format!("Run {id} failed before it stored its first snapshot: solver exploded"),
         false,
     );
-    let id = run(&p, "cases/cavity.toml", &s4, RunState::Cancelled, Some("cancelled before launch"));
+    let id = run(
+        &p,
+        "cases/cavity.toml",
+        &s4,
+        RunState::Cancelled,
+        Some("cancelled before launch"),
+    );
     add(
         "cancelled",
         id.clone(),
@@ -202,8 +208,12 @@ fn sf7_empty_states_exact_texts() {
     let id = run(&p, "cases/cavity.toml", &s4, RunState::Failed, Some("killed"));
     {
         // a header-only store: created, never committed a snapshot
-        let w = Writer::create(&root.join("runs").join(&id).join("fields"), &vp::cavity8(), WriteOptions::default())
-            .unwrap();
+        let w = Writer::create(
+            &root.join("runs").join(&id).join("fields"),
+            &vp::cavity8(),
+            WriteOptions::default(),
+        )
+        .unwrap();
         drop(w);
     }
     add(
@@ -293,8 +303,9 @@ fn sf7_empty_states_exact_texts() {
             }
             "turned off by the case" => {
                 w.rerun = true;
-                w.rerun_line =
-                    Some("Starts a new run of cases/off.toml (unchanged since this run) with the field store on.".into());
+                w.rerun_line = Some(
+                    "Starts a new run of cases/off.toml (unchanged since this run) with the field store on.".into(),
+                );
             }
             "legacy, not stored" => {
                 w.hint = Some(NOT_STORED_HINT);
@@ -327,7 +338,9 @@ fn sf7_empty_states_exact_texts() {
             "{name}: {:?}",
             st.viewport.status
         );
-        let Status::NoStore(m) = &st.viewport.status else { unreachable!() };
+        let Status::NoStore(m) = &st.viewport.status else {
+            unreachable!()
+        };
         eprintln!("SF7 model {name}: {m:?}");
         assert_eq!(*m, format!("{}\n{}", w.text, looked(&root, id)), "{name}");
         check(name, st.viewport.empty.as_ref().unwrap(), w, &root, id);
@@ -338,7 +351,11 @@ fn sf7_empty_states_exact_texts() {
     assert!(st.drain_until(vp::WAIT, |s| s.viewport.status == Status::Ready
         && s.viewport.empty.is_some()));
     let got = st.viewport.empty.as_ref().unwrap();
-    eprintln!("SF7 model {name}: Ready, {} snapshots: {}", st.viewport.snaps.len(), got.text);
+    eprintln!(
+        "SF7 model {name}: Ready, {} snapshots: {}",
+        st.viewport.snaps.len(),
+        got.text
+    );
     assert!(st.viewport.snaps.is_empty());
     assert_eq!(got.text, w.text);
     // the case-changed variant of the re-run line
@@ -357,7 +374,10 @@ fn sf7_empty_states_exact_texts() {
             differ += 1;
         }
     }
-    eprintln!("SF7 control: the 48C text differs from {differ} of {} registered texts", fixtures.len());
+    eprintln!(
+        "SF7 control: the 48C text differs from {differ} of {} registered texts",
+        fixtures.len()
+    );
     assert_eq!(differ, fixtures.len());
 }
 
@@ -409,10 +429,16 @@ fn sf6_store_at_the_pre_48a_location_is_found() {
     let mut r = rcfd_tsstore::Reader::open(&legacy).unwrap();
     for k in 0..3 {
         vp::show(&mut st, k);
-        let want = sv.surface.face_values_from_cells(&r.read_field(k, "p").unwrap()).unwrap();
+        let want = sv
+            .surface
+            .face_values_from_cells(&r.read_field(k, "p").unwrap())
+            .unwrap();
         let got = &st.viewport.frame.as_ref().unwrap().faces;
         assert_eq!(got.len(), want.len());
-        assert!(got.iter().zip(&want).all(|(a, b)| a.to_bits() == b.to_bits()), "snapshot {k}");
+        assert!(
+            got.iter().zip(&want).all(|(a, b)| a.to_bits() == b.to_bits()),
+            "snapshot {k}"
+        );
     }
     eprintln!("SF6: 3 snapshots x {} faces bit-equal", sv.surface.n_faces());
     // the contract location wins over the legacy one

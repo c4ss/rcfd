@@ -103,7 +103,8 @@ impl EmptyState {
 }
 
 /// The hint under "not stored" (registered text).
-pub const NOT_STORED_HINT: &str = "Runs started from Claude Code or the command line store fields only when the case or an \
+pub const NOT_STORED_HINT: &str =
+    "Runs started from Claude Code or the command line store fields only when the case or an \
                                    override sets output.store_interval or output.store_time_interval.";
 
 /// The re-run button's label.
@@ -225,8 +226,7 @@ fn store_warning(path: &Path) -> Option<String> {
         .filter(|v| v["kind"] == "solver" || v["event"] == "solver")
         .filter(|v| v["solver"]["event"] == "warning")
         .filter_map(|v| v["solver"]["message"].as_str().map(String::from))
-        .filter(|m| m.contains("field store"))
-        .last()
+        .rfind(|m| m.contains("field store"))
 }
 
 /// Explains empty viewports of one run at a time, caching what does not change.
@@ -304,7 +304,9 @@ impl Explainer {
                 Some(k) => set(
                     &mut st,
                     EmptyKind::TurnedOff,
-                    format!("Run {id} was started with the field store turned off ({k} = 0), so there is nothing to show."),
+                    format!(
+                        "Run {id} was started with the field store turned off ({k} = 0), so there is nothing to show."
+                    ),
                 ),
                 None => {
                     set(
