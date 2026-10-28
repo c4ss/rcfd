@@ -26,15 +26,30 @@ use std::time::{Duration, Instant, SystemTime};
 /// The Run button's hover text when it is enabled (`quick_run_ui::toolbar`).
 const RUN_HOVER: &str = "start the selected case with the default plan and follow it in the viewport (F5)";
 
-/// The drawn texts of a few frames with the pointer on the Run button (tooltip delay 0); the pointer stays there.
-fn hover_run(app: &mut StudioApp, ctx: &egui::Context) -> Vec<String> {
+/// The drawn texts of the frames with the pointer on the Run button (tooltip delay 0) until one of `want` is drawn or 30
+/// frames passed (amendment 1: egui shows a first tooltip once the pointer is still, about 6 headless frames after it
+/// moved); the pointer stays there.
+fn hover_run_for(app: &mut StudioApp, ctx: &egui::Context, want: &[&str]) -> Vec<String> {
     let _ = lj::frame_with(app, ctx, Vec::new());
     let pos = app.st.quick.rects["Run"].center();
     let mut seen = lj::texts(&lj::frame_with(app, ctx, vec![egui::Event::PointerMoved(pos)]));
-    for _ in 0..4 {
+    for _ in 0..30 {
+        if seen.iter().any(|t| want.contains(&t.as_str())) {
+            break;
+        }
         seen.extend(lj::texts(&lj::frame_with(app, ctx, Vec::new())));
     }
     seen
+}
+
+/// [`hover_run_for`] waiting for either of Run's hover texts: the start text or the reason it is greyed out.
+fn hover_run(app: &mut StudioApp, ctx: &egui::Context) -> Vec<String> {
+    let why = quick_run::blocked(&app.st);
+    let mut want = vec![RUN_HOVER];
+    if let Some(w) = &why {
+        want.push(w.as_str());
+    }
+    hover_run_for(app, ctx, &want)
 }
 
 /// Move the pointer away from the toolbar (no click).

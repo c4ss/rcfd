@@ -213,6 +213,23 @@ the licence check on the final commit.
   fixed, `cargo fmt -p rcfd-studio` applied. No registered check of this ADR, and none of the changed earlier tests, has
   run.
 
+## Amendment 1 (2026-10-28, the M1 control's set-up; before the corrected run)
+
+The registered run of `followups_m.rs` on 0bc172f (release, `--test-threads 1 --nocapture`, output to a file) passed M1,
+M2, M3, M5, M6, M7 (a), (c) and the controls of M2, M3, M6 and M7, and failed the M1 control: with `run_while_typing`
+Run was enabled (`blocked` none) and the preview's next source was the editor's text, as the control requires, but the
+start text was not drawn within the hover helper's 5 frames. Cause, read from egui 0.36.2: a headless frame without a
+time advances egui's clock by `predicted_dt`, 1/60 s (`input_state/mod.rs` line 374); a first tooltip is shown only while
+the pointer is still (`show_tooltips_only_when_still`, `containers/tooltip.rs` lines 354-365), and the pointer counts as
+moving while its 0.1 s position history (`History::new(2..1000, 0.1)`, line 1079; every frame adds the position, line 1225)
+still holds the position of the click into the field, about 6 frames; within the 0.2 s grace time after another tooltip
+that wait is skipped (`tooltip_grace_time`). M1 (b) passed with 4 frames because its hover came 11 frames after (a)'s
+tooltip; the control has no earlier tooltip. A set-up defect of the helper, not of the change.
+
+Corrected set-up (the same test names; limits and controls unchanged): after the pointer moves onto Run, frames are drawn
+until the hover text is drawn or 30 frames (0.5 s of egui's clock) have passed, and every drawn text of those frames is
+kept. What I knew when writing this: the numbers above and egui's code; the corrected helper had not run.
+
 ## Not in CI (by hand)
 
 A person at the real window: the greyed Run and its hover text while typing, the camera staying while typing `nx`,
