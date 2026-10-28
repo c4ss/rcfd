@@ -47,6 +47,9 @@ pub struct Switches {
     pub reread_whole: bool,
     /// R3 control: send a pause request for a resume.
     pub resume_as_pause: bool,
+    /// R6 known miss (amendment 4): open every file again in every tick and read every `status.json` each tick, as the
+    /// registered R6 set-up did.
+    pub reopen_files: bool,
 }
 
 /// New samples of one run's series (column form): name -> (steps, values).
@@ -164,12 +167,14 @@ struct Known {
     res_len: Option<u64>,
     last_res: BTreeMap<String, f64>,
     held: bool,
+    /// Length and modification time of `status.json` at its last read (amendment 4: unchanged, not read again).
+    status_sig: Option<(u64, Option<std::time::SystemTime>)>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct Shown {
-    res: u64,
-    ev: u64,
+    res: Tail,
+    ev: Tail,
     res_reset: bool,
     ev_reset: bool,
     log_len: Option<u64>,
@@ -206,8 +211,59 @@ fn not_found(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::NotFound
 }
 
+/// A followed JSONL file: the offset up to the last complete line read, and the read handle kept between ticks (ADR
+/// 0133 amendment 4: opening a file just appended to costs milliseconds on the gate host; reading through a kept
+/// handle does not).
+#[derive(Debug, Default)]
+struct Tail {
+    offset: u64,
+    file: Option<std::fs::File>,
+}
+
+impl Tail {
+    /// The new complete lines (at most `max` bytes), advancing the offset to just after the last newline read. The
+    /// path's length is taken first: equal to the offset, nothing is opened or read; shorter, the file was cut or
+    /// replaced and is opened again and read from 0 (`reset` true). With `reopen` (the R6 known-miss switch) the file
+    /// is opened every call, as the registered R6 set-up did.
+    fn read(&mut self, path: &Path, drop_torn: bool, max: u64, reopen: bool) -> (Vec<u8>, bool) {
+        if reopen {
+            self.file = None;
+            return new_lines(path, &mut self.offset, drop_torn, max);
+        }
+        let len = match std::fs::metadata(path) {
+            Ok(m) => m.len(),
+            Err(_) => {
+                self.file = None;
+                return (Vec::new(), false);
+            }
+        };
+        let mut reset = false;
+        if len < self.offset {
+            self.offset = 0;
+            self.file = None;
+            reset = true;
+        }
+        if len == self.offset {
+            return (Vec::new(), reset);
+        }
+        if self.file.is_none() {
+            self.file = std::fs::File::open(path).ok();
+        }
+        let Some(f) = self.file.as_mut() else {
+            return (Vec::new(), reset);
+        };
+        let mut buf = Vec::new();
+        if f.seek(SeekFrom::Start(self.offset)).is_err() || f.take(max).read_to_end(&mut buf).is_err() {
+            self.file = None;
+            return (Vec::new(), reset);
+        }
+        (take_complete(buf, &mut self.offset, drop_torn), reset)
+    }
+}
+
 /// The new complete lines of a JSONL file from `*offset` (at most [`READ_CHUNK`] bytes), advancing the offset to just
-/// after the last newline read; a file shorter than the offset was replaced and is read from 0 (`reset` true).
+/// after the last newline read; a file shorter than the offset was replaced and is read from 0 (`reset` true). Opens
+/// the file on every call (the set-up R6 measured; kept for its known-miss test).
 fn new_lines(path: &Path, offset: &mut u64, drop_torn: bool, max: u64) -> (Vec<u8>, bool) {
     let (len, buf) = match read_from(path, *offset, max) {
         Ok(v) => v,
@@ -302,7 +358,7 @@ impl RunPoller {
 
     /// The kept `residuals.jsonl` offset of a shown run (bytes read up to the last complete line).
     pub fn residual_offset(&self, id: &str) -> Option<u64> {
-        self.shown.get(id).map(|s| s.res)
+        self.shown.get(id).map(|s| s.res.offset)
     }
 
     fn dir(&self, id: &str) -> PathBuf {
@@ -346,6 +402,7 @@ impl RunPoller {
             res_len: None,
             last_res: BTreeMap::new(),
             held: false,
+            status_sig: None,
         })
     }
 
@@ -368,19 +425,27 @@ impl RunPoller {
         for id in &ids {
             let dir = self.dir(id);
             let k = self.known.get_mut(id).expect("known");
-            let read = if self.switches.status_once {
+            let mut read = if self.switches.status_once {
                 k.status.is_none()
             } else {
                 !k.done
             };
+            let path = dir.join("status.json");
+            let sig = (!self.switches.reopen_files)
+                .then(|| std::fs::metadata(&path).ok().map(|m| (m.len(), m.modified().ok())))
+                .flatten();
+            if read && sig.is_some() && sig == k.status_sig && k.status.is_some() {
+                read = false; // unchanged since its last read (amendment 4)
+            }
             if read {
-                match std::fs::read(dir.join("status.json"))
+                match std::fs::read(&path)
                     .ok()
                     .and_then(|b| serde_json::from_slice::<RunStatus>(&b).ok())
                 {
                     Some(st) => {
                         k.done = st.state.is_terminal();
                         k.status = Some(st);
+                        k.status_sig = sig;
                     }
                     None => self.status_errors += 1,
                 }
@@ -469,10 +534,12 @@ impl RunPoller {
         // residuals
         let reread = sw.reread_whole;
         if reread {
-            sh.res = 0;
+            sh.res.offset = 0;
         }
         let max = if reread { u64::MAX } else { READ_CHUNK };
-        let (bytes, replaced) = new_lines(&dir.join("residuals.jsonl"), &mut sh.res, sw.drop_torn_tail, max);
+        let (bytes, replaced) = sh
+            .res
+            .read(&dir.join("residuals.jsonl"), sw.drop_torn_tail, max, sw.reopen_files);
         let reset = (sh.res_reset || replaced) && !reread;
         if replaced && !reread {
             sh.last_step = None;
@@ -544,7 +611,12 @@ impl RunPoller {
         }
         sh.res_reset = false;
         // events
-        let (bytes, replaced) = new_lines(&dir.join("events.jsonl"), &mut sh.ev, sw.drop_torn_tail, READ_CHUNK);
+        let (bytes, replaced) = sh.ev.read(
+            &dir.join("events.jsonl"),
+            sw.drop_torn_tail,
+            READ_CHUNK,
+            sw.reopen_files,
+        );
         let items: Vec<RunEvent> = lines(&bytes).filter_map(|l| serde_json::from_slice(l).ok()).collect();
         let reset = sh.ev_reset || replaced;
         if reset || !items.is_empty() {

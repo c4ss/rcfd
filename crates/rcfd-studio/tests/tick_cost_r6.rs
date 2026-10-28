@@ -119,31 +119,81 @@ fn median(sorted: &[f64]) -> f64 {
     }
 }
 
-#[test]
-fn r6_tick_with_four_large_runs_is_within_5_ms() {
-    if cfg!(debug_assertions) {
-        eprintln!("SKIP r6 (crates/rcfd-studio/tests/tick_cost_r6.rs): the limit is registered for release builds");
-        return;
-    }
+/// R6 / R6b body: `reopen` is the registered R6 set-up (every file opened in every tick), off the amendment 4 change.
+/// `touch_status`: also replace every run's `status.json` before each tick (reported, not limited).
+fn r6_run(tag: &str, reopen: bool, touch_status: bool) -> f64 {
     let t0 = Instant::now();
-    let mut fx = Fixture::new("r6");
+    let mut fx = Fixture::new(tag);
     let sizes: Vec<u64> = (0..4).map(|i| std::fs::metadata(fx.path(i)).unwrap().len()).collect();
     let made = t0.elapsed().as_secs_f64();
     let lines0 = fx.next[0] - 1;
     let root = fx.root.clone();
     let mut p = poller(&fx, &root);
+    p.switches.reopen_files = reopen;
     let t1 = Instant::now();
     let ticks = catch_up(&mut p, &fx);
     let first = t1.elapsed().as_secs_f64();
-    let v = timed(&mut p, &mut fx, 50);
+    let proj = Project::open(&root).unwrap();
+    let mut v = Vec::with_capacity(50);
+    for k in 0..50u64 {
+        fx.append(10);
+        if touch_status {
+            for id in &fx.ids {
+                let st = RunStatus {
+                    step: k + 1,
+                    ..RunStatus::new(RunState::Running)
+                };
+                proj.write_status(id, &st).unwrap();
+            }
+        }
+        let t = Instant::now();
+        let (_, updates) = p.tick();
+        v.push(t.elapsed().as_secs_f64() * 1e3);
+        drop(updates);
+    }
+    v.sort_by(f64::total_cmp);
     let m = median(&v);
     eprintln!(
-        "R6: files {sizes:?} bytes ({lines0} lines each) written in {made:.1} s, read in {ticks} untimed ticks ({first:.1} s); 50 ticks: median {m:.3} ms, min {:.3}, max {:.3}",
+        "{tag}: files {sizes:?} bytes ({lines0} lines each) written in {made:.1} s, read in {ticks} untimed ticks ({first:.1} s); reopen {reopen}, status replaced {touch_status}; 50 ticks: median {m:.3} ms, min {:.3}, max {:.3}",
         v[0],
         v[49]
     );
-    assert!(m <= LIMIT_MS, "median {m:.3} ms");
     let _ = std::fs::remove_dir_all(&root);
+    m
+}
+
+/// The registered R6 run missed (amendment 4: median 45.7 ms); kept with the limit intact on the set-up that missed.
+#[test]
+#[ignore = "ADR 0133 amendment 4: R6 missed (median 45.7 ms against 5 ms): opening a just-appended file costs about 5 ms on the gate host; R6b registers the kept-handle reader"]
+fn r6_tick_with_four_large_runs_is_within_5_ms_known_miss() {
+    if cfg!(debug_assertions) {
+        eprintln!("SKIP r6 (crates/rcfd-studio/tests/tick_cost_r6.rs): the limit is registered for release builds");
+        return;
+    }
+    let m = r6_run("R6", true, false);
+    assert!(m <= LIMIT_MS, "median {m:.3} ms");
+}
+
+/// R6b (amendment 4): the same fixture and limit with the kept read handles.
+#[test]
+fn r6b_tick_with_four_large_runs_and_kept_handles_is_within_5_ms() {
+    if cfg!(debug_assertions) {
+        eprintln!("SKIP r6b (crates/rcfd-studio/tests/tick_cost_r6.rs): the limit is registered for release builds");
+        return;
+    }
+    let m = r6_run("R6b", false, false);
+    assert!(m <= LIMIT_MS, "median {m:.3} ms");
+}
+
+/// Reported, not limited (amendment 4): R6b with every run's `status.json` replaced before each tick, as moving runs do.
+#[test]
+fn r6b_report_with_status_replaced_every_tick() {
+    if cfg!(debug_assertions) {
+        eprintln!("SKIP r6b report (crates/rcfd-studio/tests/tick_cost_r6.rs): release builds only");
+        return;
+    }
+    let m = r6_run("R6b with status replaced", false, true);
+    eprintln!("R6b report: median {m:.3} ms (no limit)");
 }
 
 #[test]

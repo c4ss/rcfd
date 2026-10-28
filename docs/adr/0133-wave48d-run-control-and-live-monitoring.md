@@ -229,6 +229,34 @@ A test-code defect: (f) must be a valid moving-mesh case. Corrected: (f) is the 
 fixed patch `xmax`). Limits unchanged (nothing added, a note naming `dynamic_mesh.enabled`). Cases (a)-(e) had passed in that
 run (printed before the failure) and are not changed.
 
+## Amendment 4 (2026-10-28, 48D, after the R6 miss, before R6b ran)
+
+**R6 missed its limit** in the registered run: median 45.7 ms against 5 ms (min 37.4, max 84.0; 4 files of 100 000 129
+bytes, 542 470 lines each; control 2016 ms). It becomes the ignored `r6_..._known_miss` test with the limit intact; the set-up
+it measured (every file opened again in every tick) stays reachable through the worker's test switch `reopen_files`, so
+the known-miss test measures exactly what missed.
+
+Diagnosis (an unregistered timing on this host, 30 repetitions each, not kept as a test): opening a file that another
+handle has just appended to and closed costs a median 5.3 ms (100 MB file) and 6.5 ms (a 9 KB file), against 0.03 ms for
+the same open of an unchanged file, 0.11 ms for its metadata, and 0.09 ms to read the new bytes through a handle kept open.
+So the cost is the open of a just-modified file (consistent with on-access scanning by the host's anti-virus; not
+verified which component), not the reading or parsing, and it does not depend on the file's size; four appended files per
+tick give about 21 ms of the 45.7 ms. Read, not measured: `status.json` is replaced by the runner every 100 ms while a run
+moves, so the real worker opens a fresh file per running run per tick too.
+
+**Change (registered here before its run).** The worker keeps the read handles of the shown runs' `residuals.jsonl` and
+`events.jsonl` open between ticks and reads new bytes through them; each tick first takes the path's metadata (length): equal
+to the kept offset, nothing is read; shorter, the file was cut or replaced and is opened again from 0 (the series reset as
+before). `status.json` and the pause file are read only when the status file's length or modification time changed since
+the last read (a run that does not move costs one metadata call). Rust opens files on Windows with read, write and delete
+sharing, so a kept handle does not block the runner's appends or its torn-tail truncation. Limit of the change: a file
+replaced by a rename with a length not shorter than the offset is not noticed while the handle is kept (the runner never
+replaces these two files).
+
+**R6b** (new check id, the same fixture, procedure and limit as R6): median of 50 ticks <= 5 ms with the change, release
+only. Negative control: R6's whole-file re-read control, unchanged. Not registered, reported: the same 50 ticks when the
+appended lines also change every run's `status.json` (as a moving run does), to show the remaining per-run open cost.
+
 ## Files
 
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,
