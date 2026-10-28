@@ -16,7 +16,7 @@ Other waves (27B solver robustness / adaptive stepping, 27C viscoelastic / struc
 adds new files (`rcfd-fv/src/vof.rs`, `rcfd-api/src/vof.rs`, tests) and only small hunks in shared files (`lib.rs`, `sim.rs`,
 `schema.rs`, `case-schema.md`, `reference-data.md`, `roadmap.json`), committed through a temporary index.
 
-## Audit (HEAD bc792a5)
+## Audit (HEAD 7c3cbe5)
 
 * `PimpleSolver` (`pimple.rs`) is kinematic: constant `nu`, pressure divided by density, `ddt(U) + div(phi U) - div(nu grad U)`.
   Its `body_force` (`BodyForce { cell, face }`) is a separate cell acceleration plus a face acceleration; the cell velocity is

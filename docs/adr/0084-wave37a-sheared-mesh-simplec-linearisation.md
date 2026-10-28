@@ -2,7 +2,7 @@
 
 Status: registered before any run it governs and before any solver code of this wave was written. Limits are not changed, widened or deleted after a
 run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
-Baseline hashes are never re-recorded; every change is opt-in. Clean-room: first principles and published literature only. Written at HEAD db67c4c
+Baseline hashes are never re-recorded; every change is opt-in. Clean-room: first principles and published literature only. Written at HEAD feb015f
 (scratch clone `<scratch dir>`, target `<target dir>`).
 
 Parent: ADR 0081 part X (wave 36B). Its outcome: SIMPLEC (alpha_u 0.9, alpha_p 1.0, `upwind`, no non-orthogonal correctors) on the uniformly sheared
@@ -14,7 +14,7 @@ V9b (channel B at 60 degrees, nu 0.01: increments from the converged state decay
 ## What was run before this registration (disclosed; rule (d))
 
 Scratch files `crates/rcfd-fv/tests/w37a_smoke.rs` (not committed) and the harness `crates/rcfd-fv/tests/w37a_jacobian.rs` (its two smoke tests),
-release build of db67c4c. Classification = the ADR 0081 one (1000 iterations, `SteadyGuard`, UNSTABLE iff trip, or max speed over 10..1000 above
+release build of feb015f. Classification = the ADR 0081 one (1000 iterations, `SteadyGuard`, UNSTABLE iff trip, or max speed over 10..1000 above
 3 U_ref, or continuity non-finite, or max continuity over 900..1000 above its value at 10).
 
 * **SM1 V7 (40 x 10 on 4 x 1), alpha_p 1.0, default linear tolerances**: at 50, 55, 57.5 degrees the speed reaches 1.03-1.04 by iteration 20 and stays
@@ -136,7 +136,7 @@ defect finding and proposed for a later wave.
 | A3 | hold-out, never run before the fix is frozen: V7 on 30 x 8 cells on 3 x 1, alpha_p 0.7, fix on, over Theta | theta_c >= 75 |
 | A4 | no regression: K40 and B at alpha_p 1.0 and 0.5, fix on, over Theta | theta_c(on) >= theta_c(off) per set-up (off: K40 1.0 = 60 and B 1.0 = 50, B 0.5 = 70 from ADR 0081; K40 0.5 off run in this check) |
 | A5 | solution unchanged: K40 and B at 45, 60, 70 degrees, fix on at alpha_p 0.7 (tight solves) iterated until `max_du` <= 1e-13 (cap 20 000), against x* (fix off, 0.9/0.3, tight) | max abs velocity difference <= 1e-8 (U = 1); max abs pressure difference <= 1e-8 max(1, max abs p); K40: the RMS error of u_x against sin(k y) equal on and off to a relative 1e-6 (the error value reported). A fix-on run that does not reach `max_du` <= 1e-13 within the cap fails A5 at that angle |
-| A6 | defaults | key absent and key = default bit-identical on the ADR 0077 A4 set-up (`cavity-simple`, 60 iterations: u, p, phi `to_bits`); `baseline_hashes.rs` untouched and passing; the full suite as at db67c4c plus this wave's tests |
+| A6 | defaults | key absent and key = default bit-identical on the ADR 0077 A4 set-up (`cavity-simple`, 60 iterations: u, p, phi `to_bits`); `baseline_hashes.rs` untouched and passing; the full suite as at feb015f plus this wave's tests |
 
 Justification (rule (a)): A1-A4 are stability classifications (decision thresholds of the ADR 0081 protocol); A5 is a fixed-point identity, so its
 limits are round-off / convergence-floor limits (1e-13 increments; 1e-8 leaves five decades for the conditioning of the fixed-point problem), plus the
@@ -265,7 +265,7 @@ after the flow has overshot); R was attributed at x0 only (registered), so A2 is
 
 ## Addendum: measured values, misses and deviations
 
-Release builds, scratch tree on db67c4c (`<scratch dir>`); each registered run once. Limits are the registered ones, unchanged.
+Release builds, scratch tree on feb015f (`<scratch dir>`); each registered run once. Limits are the registered ones, unchanged.
 
 Outcome in one paragraph. The SIMPLEC divergence on uniformly sheared meshes is a period-two pressure mode of the outer iteration. The cell velocity
 is corrected with `rAtU` times the full Green-Gauss gradient of the pressure change; the face flux is corrected with the over-relaxed orthogonal part
@@ -323,7 +323,7 @@ flow at Re 1.4e5; none was diagnosed.
 * J10 ran in the J1 invocation (a prefix match of the selection); it was registered and formed once.
 * The channel B attribution was formed at x0 only, the first start-up state with rho > 1. It was not formed at x*, whose rho is below 1; the
   registration asked for attribution only where the base rho > 1.
-* The diagnostic switches P(m), P(implicit) and S were in the solver for the attribution runs (record commit 3624232) and were removed afterwards.
+* The diagnostic switches P(m), P(implicit) and S were in the solver for the attribution runs (record commit bb6341b) and were removed afterwards.
 * The FAN-01 report used one 1500-iteration run for both the 300- and the 1500-iteration readings (the first 300 iterations are the same run).
 * Finding S is reported, not fixed: the SIMPLEC compensation is missing on periodic seam faces, so a converged SIMPLEC seam flux carries rAtU where
   internal faces carry rAU. Fixing it changes converged results on periodic meshes and needs its own registration.
@@ -335,7 +335,7 @@ of amendment 1 is a first-principles derivation (symbols of the orthogonal and c
 
 ### Final gate
 
-On a fresh `git archive` of 3823653 (main with this wave's commits on top of a21faea, which contains the other wave-37 agents' commits up to it):
+On a fresh `git archive` of 18904b1 (main with this wave's commits on top of 875a080, which contains the other wave-37 agents' commits up to it):
 `cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`:
 **1879 passed, 0 failed, 525 ignored** (wave 36: 1873 / 0 / 519; this wave adds 5 running tests, A1-A3 and the two A6 tests, and 6 ignored ones: the
 harness smokes, the registered Jacobians, A4, A5 and the FAN-01 report). `baseline_hashes.rs` passed unchanged. No LNK1201. This paragraph is a

@@ -2,7 +2,7 @@
 
 Status: registered before any code and any run. Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the
 limit intact; a defective set-up gets an amendment written before the corrected run. Results go into the addendum. Written at
-HEAD 44d7ccc (scratch copy `<scratch dir>`, target `<target dir>`). Clean-room: first principles and
+HEAD 6a11732 (scratch copy `<scratch dir>`, target `<target dir>`). Clean-room: first principles and
 the Hysing et al. (2009) case-1 values already read in ADR 0096 (V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Context: ADR 0100
 (refinement miss), ADR 0103 (diagnosis: the averaged-diagonal defect at `Symmetry` walls, fixed by the opt-in
 `VofSettings::component_diagonal`; residual drift with errors growing from 40 x 80 to 80 x 160; suspect #1 the CSF curvature,
@@ -119,7 +119,7 @@ meshes would be refused by the height-function check; that is reported as a bloc
 
 ## Addendum: measured values (after the runs)
 
-All runs once, release build, scratch tree (archive of 44d7ccc plus this wave's files). Errors are relative errors of `-kappa`
+All runs once, release build, scratch tree (archive of 6a11732 plus this wave's files). Errors are relative errors of `-kappa`
 (H1, H2) or of the Laplace jump (H3); bubble errors are to 1.0813 / 0.2417 / 0.9213.
 
 ### H1 circle (exact fractions), not ignored

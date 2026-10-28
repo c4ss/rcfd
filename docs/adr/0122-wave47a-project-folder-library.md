@@ -1,6 +1,6 @@
 # ADR 0122: Wave 47A, `rcfd-project`, the project folder library (Studio layer L1)
 
-Status: **ACCEPTED 2026-10-26** (checks and limits registered before the registered runs). Written at main 3a379a1 on branch
+Status: **ACCEPTED 2026-10-26** (checks and limits registered before the registered runs). Written at main 48b30bc on branch
 `w47a`, target `<target dir>`. House rules of ADRs 0110-0117: limits fixed before runs; a missed limit becomes an
 ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults of
 existing code are bit-identical (this ADR adds a crate and touches no existing code); `crates/rcfd-api/tests/baseline_hashes.rs` is not
@@ -139,7 +139,7 @@ torn-tail path is exercised by the split-writer control and the J1 fixtures, not
 What happened. The first workspace gate (archive of 95e1e3c) failed one test outside this crate:
 `crates/rcfd-cli/tests/workspace_graph.rs::layering_matches_architecture_doc` panics on any crate not in its layer table. Fixed by
 placing `rcfd-project` (depends on `rcfd-core` only) in layer 1 of that table and in `docs/architecture.md`. After the rebase onto
-f0a8814 a debug run of `cargo test -p rcfd-project` failed the A2 negative control (0 bad observations); three debug reruns gave 1, 8
+8ca5c5b a debug run of `cargo test -p rcfd-project` failed the A2 negative control (0 bad observations); three debug reruns gave 1, 8
 and 4. The set-up is defective in debug builds: the child builds each 1 MiB payload inside its loop, which takes longer than the write,
 so the file is complete most of the time. The registered release run (99 bad) was not affected, but a control that fails in debug
 does not discriminate reliably.
@@ -166,14 +166,14 @@ two precomputed payloads of equal length), so a kill leaves a mix of the two gen
 schedule, read after each kill, limit bad >= 1. Smoke (debug, whole `process` binary, 6 runs): 19 to 20 bad of 20, no hang; the
 positive A2 in the same runs: 0 bad. The registered run of A2n is the final gate.
 
-## Final gate (2026-10-26, fresh archive of f79d54e on main f0a8814)
+## Final gate (2026-10-26, fresh archive of 29643bb on main 8ca5c5b)
 
 * fmt: clean. Tests (`cargo test --workspace --release --no-fail-fast`): **2137 passed, 0 failed, 662 ignored**. This crate adds 27
   passed (2 unit, 25 integration including the no-op `child_entry`) and 1 ignored (the amendment-1 known miss); the corrected A2n
   control passed in this run (its count is not printed by the gate, which captures test output).
 * Workspace clippy: **exit 101, not caused by this branch**: two errors in `crates/rcfd-api/src/design/ledger_tests.rs:134`
   (`cloned_ref_to_slice_refs`) and `crates/rcfd-api/src/design/uq_tests.rs:295` (`type_complexity`), files this branch does not
-  touch, present on main f0a8814. `cargo clippy -p rcfd-project -p rcfd-cli --all-targets -- -D warnings`: clean.
+  touch, present on main 8ca5c5b. `cargo clippy -p rcfd-project -p rcfd-cli --all-targets -- -D warnings`: clean.
 
 Found defect, not fixed (R1 covers finite values only): serde_json writes NaN and infinity as `null` and refuses `null` for an
 `f64`, so a diverged run whose `residuals.jsonl` or `status.json` holds NaN would make the whole residual file unreadable and drop

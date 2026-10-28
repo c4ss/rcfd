@@ -11,7 +11,7 @@ vendor material. Waves 28A (VOF wiring) and 28B (chemistry) work in the same tre
 `lib.rs` files, `reference-data.md`, `meshing.md`, `roadmap.json`, committed through a temporary index. No existing solver or
 mesh path is edited, so the baseline hashes and all existing tests are unchanged by construction (re-verified at the end).
 
-## Audit (HEAD b58fff5)
+## Audit (HEAD 9cd9149)
 
 * `rcfd_mesh::octree::fill` (wave 26B) builds a 2:1 balanced octree around a surface with a private `Tree`; the lattice, balance
   and hanging-node face-loop code is private to that module and tied to surface classification, so it is NOT reused: adaptation

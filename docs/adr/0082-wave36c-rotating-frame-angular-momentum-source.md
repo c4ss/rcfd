@@ -9,7 +9,7 @@ ADR 0065 S4 (`mrf` refused on the sector), ADR 0077 (steady guard, partner seam 
 
 ## What was known when this was written
 
-* Every number of ADR 0078 and its amendment 4. Code read (read-only) on HEAD 57dbdd5: `rcfd_fv::convection` (upwind matrix; TVD by deferred
+* Every number of ADR 0078 and its amendment 4. Code read (read-only) on HEAD 6c3ddc9: `rcfd_fv::convection` (upwind matrix; TVD by deferred
   correction; periodic faces upwind between the owner and the lagged rotated partner value, minmod adds the full central value there),
   `rcfd_fv::diffusion::laplacian` (two-point flux `Gamma_f |S|/|d| (u_N - u_O)`, the secondary gradient only when a gradient is passed), the
   SIMPLE/SIMPLEC kernel (`simple.rs`: no transposed stress term; Green-Gauss pressure gradient with linearly interpolated face values and the trapezoid
@@ -76,7 +76,7 @@ ADR 0078 stop rules (8000 iterations, continuity non-finite or above 1e6, 60 min
 ends the run as diverged).
 
 * **X2a-36.** ADR 0078 X2a unchanged, first. Reproduction rule: outlet L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit (ADR 0078
-  amendment 4 on 667c015). If it does not reproduce, the other runs stop until the difference is explained in an amendment. The budget is computed at
+  amendment 4 on c188d3f). If it does not reproduce, the other runs stop until the difference is explained in an amendment. The budget is computed at
   its end.
 * **X2d-36.** ADR 0078 X2d unchanged (expected 0.0026 N m, 19.97 Pa, to the printed digits) with the budget.
 
@@ -257,7 +257,7 @@ R(M0), R(M1) = X2a-36, R(M2), with `p_R = ln(L(R(M0)) / L(R(M2))) / ln(2.25)`. E
 
 ## Addendum (2026-10-20): measured values, verdicts, removal of F-RP, misses and deviations
 
-All runs: release builds of 57dbdd5 plus this wave's files, single thread per run, at most two runs at a time on a shared machine, one run per
+All runs: release builds of 6c3ddc9 plus this wave's files, single thread per run, at most two runs at a time on a shared machine, one run per
 set-up. Full annulus values, `rho` = 1.2.
 
 ### Where the spurious swirl comes from (answer to the diagnosis)
@@ -342,7 +342,7 @@ falls with refinement, as ADR 0078 concluded, now shown on a converged three-mes
 * The per-region closed form of the location report was added after the first X2a output (deterministic re-run, disclosed, not scored).
 * Scratch, disclosed: F1 to 300 iterations; the pressure-solver iteration counts of the first 5 iterations of Y(M1), F1 and E0 (5-6 each).
 * The steady-guard record was added to the run loop as a stop rule (registered); it never tripped.
-* A0 (ii) (X2a reproduction on the final code) is moot: the final code is 57dbdd5's solver plus a test file.
+* A0 (ii) (X2a reproduction on the final code) is moot: the final code is 6c3ddc9's solver plus a test file.
 * The ignored tests that ran the Y and F1 arms were deleted with F-RP (they need the removed key); their values are only in this ADR. The remaining
   ignored tests run the budget (X2a, X2d), the construction measurements, the B and R arms.
 
@@ -352,6 +352,6 @@ None. Every limit is derived here, measured, or a decision threshold of this pro
 
 ### Final gate
 
-Fresh `git archive` of 6afa15a (which contains the commits of the other wave-36 agents up to 7f59577): `cargo fmt --check` clean, `cargo clippy --workspace
+Fresh `git archive` of 7c4dff2 (which contains the commits of the other wave-36 agents up to d33b745): `cargo fmt --check` clean, `cargo clippy --workspace
 --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1862 passed, 0 failed, 512 ignored (no LNK1201). This paragraph is
 a docs-only commit and was not re-gated.

@@ -3,7 +3,7 @@
 Status: registered before any diagnostic switch run and before any run of the fix. Limits are not changed after a run; a miss becomes an
 ignored `*_known_miss` test with the limit intact. Defaults stay bit-identical: any fix is opt-in, and `crates/rcfd-api/tests/baseline_hashes.rs`
 is not re-recorded. Clean-room: first principles only (the SIMPLEC velocity correction of Van Doormaal and Raithby, 1984, Numer. Heat Transfer
-7, 147-163, UNVERIFIED as a citation; everything used here is re-derived below). Written at HEAD 33807c2 (scratch copy
+7, 147-163, UNVERIFIED as a citation; everything used here is re-derived below). Written at HEAD e325ab4 (scratch copy
 `<scratch dir>`, target `<target dir>`).
 
 ## The defect
@@ -195,7 +195,7 @@ Amendments 1 and 2 above.
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of the scratch copy at 33807c2 plus this wave's files. Each registered run was made once unless stated.
+Release builds of the scratch copy at e325ab4 plus this wave's files. Each registered run was made once unless stated.
 
 ### Diagnosis (amendment 1)
 
@@ -277,7 +277,7 @@ the default-code X7 at pseudo-time 0.02 remains a known miss.
 
 ### Final gate
 
-On a fresh `git archive` of 42ba2a3 (main with the other wave-41 agents' commits up to it): `cargo fmt --all -- --check` clean,
+On a fresh `git archive` of 6352a32 (main with the other wave-41 agents' commits up to it): `cargo fmt --all -- --check` clean,
 `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: **1958 passed, 0 failed,
 554 ignored**. This wave adds 4 running tests (A1, B1, B2, A4) and 1 ignored report (R3). The only later commit changes the text of this
 ADR, and no test reads ADR files.

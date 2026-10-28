@@ -192,7 +192,7 @@ H-SEAM-BF stands if the R2b order is in [1.9, 2.3]; otherwise it is falsified. T
 
 Order of the runs: smoke (default code), registration, F-S and rotational F-G written, N2 fingerprints, Y4 (amendment 1), F-R written, Part A + N1 + N5 (one
 process), Part R (one process), amendment 2, Y5 (scratch, once), removal. Every registered row ran exactly once with K = F-G + F-S + F-R. The code of K and
-its tests as measured is commit **e50297e** ("candidate K as measured"); the next commit removes it.
+its tests as measured is commit **fbcc05c** ("candidate K as measured"); the next commit removes it.
 
 ### Part A with K (TG / TG-S N = 32, BDF2, band [1.9, 2.3])
 
@@ -255,11 +255,11 @@ Open item for the fan milestone (any transient run of a rotationally periodic se
 * **K is not accepted** (C-O2, N1, R2, R2b, R3, R4 missed).
 * Per fix (registered rows, all measured with K): **F-G** misses N1, R2b and R4 -> removed; **F-S** misses R2, R3, N1 (TG-S) and R4 -> removed; **F-R** misses C-O2
   -> removed. Removed from `pimple.rs`: the fields `rhie_chow_consistent`, `seam_extrapolation`, `relax_extrapolated`, the F-G corrector block and its set-up,
-  `seam_faces`, `rc_commutator`, `seam_defects`, the F-S coefficient override and the F-R anchor. `pimple.rs` is now the code of b225b90 minus F-G (the default
+  `seam_faces`, `rc_commutator`, `seam_defects`, the F-S coefficient override and the F-R anchor. `pimple.rs` is now the code of 211d3e3 minus F-G (the default
   path is unchanged; N2 fingerprints identical). This supersedes the "kept opt-in" statement of ADR 0073 for F-G (ADR 0073 itself is not edited).
 * Tests removed with the fixes: `w34b_floor.rs` loses every F-G test (`c_o9_fg_joint_refinement`, which ran by default, `c_fg_orders_known_miss`,
   `n1_fg_no_harm_known_miss`, `n3_fg_decomposition`, `c_fg_met_rows`) and its non-TG problems; A0 and A1 (default code) stay. `w35a_seam.rs` keeps the SWIRL and
-  SECT-M set-ups and the default-code smoke (`smoke_sector_setups`, ignored); the K tests are in e50297e.
+  SECT-M set-ups and the default-code smoke (`smoke_sector_setups`, ignored); the K tests are in fbcc05c.
 * **Cylinder not run** (K not accepted).
 * Keys were never wired into `schema.rs` / `sim.rs`.
 
@@ -280,7 +280,7 @@ Open item for the fan milestone (any transient run of a rotationally periodic se
   refinement failed it.
 * N3 was not rerun (registered).
 * Y5 was registered in amendment 2, after the acceptance results and before its own run.
-* The K code was committed once as a record (e50297e) and removed in the following commit, so that the measured code stays recoverable.
+* The K code was committed once as a record (fbcc05c) and removed in the following commit, so that the measured code stays recoverable.
 
 ### Unverified references
 

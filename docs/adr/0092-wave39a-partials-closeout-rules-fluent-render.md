@@ -172,4 +172,4 @@ amendment 1 (V2b plays the role of V2).
 * E2 (not ignored) still passes with the Graetz literal in the corpus: 90 texts evaluated, warnings SV101 (two) and SV103 (one).
 * F-240 stays done under the reading registered above, with one stated exception: the FAN-01 case of `fan01_validation.rs`
   (template, F-126) is not covered.
-* Gate before the amendments, fresh archive of 41331b1: fmt clean, clippy clean, 1922 passed / 0 failed / 543 ignored.
+* Gate before the amendments, fresh archive of a351a3d: fmt clean, clippy clean, 1922 passed / 0 failed / 543 ignored.

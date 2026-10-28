@@ -11,7 +11,7 @@ at `partial` with named gaps; none is marked done. F-051 (CHT) and F-201 (zone s
 Clean-room: published literature only; nothing from vendor material, vendor installs or manuals; no vendor names in the
 repository. All closed forms below are derived in this document.
 
-Baseline: `crates/rcfd-api/tests/baseline_hashes.rs` passes on HEAD (e0a14af) before any change of this wave (3 passed, 1 ignored,
+Baseline: `crates/rcfd-api/tests/baseline_hashes.rs` passes on HEAD (36e5046) before any change of this wave (3 passed, 1 ignored,
 run with `CARGO_TARGET_DIR=<target dir>`). It is never edited; it is run again after each slice. Every new code path
 is gated on an `Option` that is `None` unless a new key is set, so existing cases take their old code path unchanged.
 
@@ -223,17 +223,17 @@ comparison, pull velocity, phase-dependent properties, damping in the settings t
 
 ## Addendum: results and deviations (written after the runs; registered limits above were not changed)
 
-### F-215 (commit 615b2e0)
+### F-215 (commit 8316901)
 
 G1 error/dT 2.2e-14, jump 1.0e-14; G2 2.0e-14 / 5.4e-14; G3 within 1e-10; G4 error/dT 2.3e-14, end-wall flows 9.6e-14 and 0 against the 1e-12 limit; G7 all located errors found. **G5 MISSED at the registered dt = 0.01**: per-side enthalpy drift 2.0e-12 and 1.8e-11 against 1e-12; the cell Fourier number is about 8e3 and the drift is solver round-off (independent of the linear tolerance, 2.5e-13 / 3.8e-14 at dt = 1e-3). Kept as the ignored `g5_open_connection_transient_conserves_each_side_known_miss`; the corrected set-up `g5_v2_...` (dt = 1e-3, chosen after seeing the miss, the ADR did not fix dt) passes.
 Deviation: the tree G4 measures the end-wall heat flows as the proxy for "no flow through the open interface"; the zero interface face conductance is asserted exactly in the library check G5.
 
-### F-213 (commit ecd3a1c)
+### F-213 (commit 0181af2)
 
 H1 phi 1.4e-15, current 1.1e-14, in/out 8.7e-15; H2 4.6e-15 / 2.3e-15; H3 3.6e-16 uniform, 1.8e-14 graded; H4 errors N=20/40/80 2.5e-3, 6.25e-4, 1.56e-4 (orders 2.000, 2.000), balances <= 6.5e-14; H5 errors 2.157e-3, 5.30e-4, 1.314e-4 (orders 2.025, 2.012), voltage 5.8e-4, 1.4e-4, 3.5e-5; H6(i) 1.999999999998 (exact 2), H6(ii) 5.47e-3, 2.72e-3, 1.36e-3 (orders 1.008, 1.004); H7 1.6e-15 with exact zeros; H8 tree equals the library (same numbers, orders 2.000) and current rel <= 2.8e-14; H9 12 located-error cases and the runtime message naming `electric.temperature_coefficient`. All met.
 Deviations: (a) the ADR text names a report kind `electric_current`; the implementation exposes the boundary field `electric_current_density` read by the existing `area_integral` report. (b) The H8 current check compares with the analytic current `sigma V A / L` of the H4 bar, not "the I of H1". (c) The 2D mesh depth scales with the cell size, so the patch area depends on N; the tree tests prescribe the total current `J A` from the built simulation. (d) The first attempt of the tree H5 test passed a current density as the total current and diverged; this set-up defect was corrected before any pass was recorded. (e) The identity is exact on orthogonal meshes only, as registered.
 
-### F-212 (library commit ecd3a1c, tree wiring in the following commit)
+### F-212 (library commit 0181af2, tree wiring in the following commit)
 
 Set-up: the tree needs absolute temperatures, so the tree runs use Tm = 300 K (shift-invariant; the library run compared with it uses the same shift). The T2 reference clamp is computed from the literal solidus and liquidus (an earlier version through `T - Tm + eps` had 2.4e-12 round-off from the shift: test defect, corrected).
 P1 first set-up started the solid at Tm (mid-mush, f = 0.5 everywhere), i.e. not "solid at Ts": defect; kept as the ignored record `p1_one_phase_melting_setup_defect_record`; corrected test with the solid at Ts. Results (position rel. error N = 60/120/240/480): P1 2.05e-3, 3.00e-3, 2.88e-3, 1.46e-3; P2 and P8 (identical numbers) 1.86e-2, 3.50e-3, 6.3e-5, then 5.1e-3 at N=480 with a failed Newton solve. P3 max error/dT 1.56e-3 (limit 5e-3) met. K1 values match to round-off. P7 root residual met.
@@ -245,7 +245,7 @@ T1 (tree vs Neumann position rel 1.30e-3; tree vs library difference 0.0) , T2 (
 
 ### Process note
 
-Other agents' commits picked up lines of mine that were then still uncommitted (`pub mod electric;` in rcfd-fv `lib.rs` in 64dfbdf and the `electric` schema lines in a wave 21C commit), so those intermediate commits reference modules committed only later (ecd3a1c) and do not build on their own. History was not rewritten.
+Other agents' commits picked up lines of mine that were then still uncommitted (`pub mod electric;` in rcfd-fv `lib.rs` in 19819b3 and the `electric` schema lines in a wave 21C commit), so those intermediate commits reference modules committed only later (0181af2) and do not build on their own. History was not rewritten.
 
 ### Reconciliation of "Not delivered"
 

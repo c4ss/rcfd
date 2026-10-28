@@ -2,7 +2,7 @@
 
 Status: registered before the experiment, the timing run and the registered tests were run. Limits and the decision rule are not
 changed after a run; a missed limit becomes an ignored `*_known_miss` test with the limit intact. The main tree keeps
-`TetOptions::quality_sweeps = 0` unless the decision rule below is met. Written at HEAD d8bc1b6, target `<target dir>`.
+`TetOptions::quality_sweeps = 0` unless the decision rule below is met. Written at HEAD 3e755c9, target `<target dir>`.
 Clean-room: first principles only; no literature value enters a limit.
 
 ## Context
@@ -14,7 +14,7 @@ nothing. With 10 sweeps the cylinder-in-box STL mesh goes from minimum dihedral 
 0.936 to 1.000. The user decision of 2026-10-22 (F-131 note): evaluate making the pass the default, only if every existing
 baseline hash stays identical.
 
-## Who produces a tetrahedral mesh by default (enumerated at d8bc1b6)
+## Who produces a tetrahedral mesh by default (enumerated at 3e755c9)
 
 `tetrahedralize` has no caller in any library or binary source: grep over `crates/*/src` finds only its definition, and
 `rcfd_mesh::polydual::tet_to_polydual` only consumes a `TetMesh`. `rcfd-api` (including `tests/baseline_hashes.rs`), `rcfd-cli`,
@@ -139,9 +139,9 @@ before asserting. It is run once more to get M10 and L2. The L1 verdict on M1 st
 second run gives on M1; the second run's M1 value is reported but not used. What I knew when writing this: only the M1 numbers
 above.
 
-## Separate fix (done before this ADR, commit d8bc1b6)
+## Separate fix (done before this ADR, commit 3e755c9)
 
-`crates/rcfd-io/tests/stl_cylinder_in_box.rs` wrote one fixed temp STL name from parallel tests (the same race that commit 8a1916d
+`crates/rcfd-io/tests/stl_cylinder_in_box.rs` wrote one fixed temp STL name from parallel tests (the same race that commit 88e4d67
 fixed in w41d after it failed a wave-41 gate run); it now writes one file per call, as w41d does.
 
 ## Results
@@ -208,9 +208,9 @@ the pins, docs and the listed ADR addenda (ADR 0030 T5/T6/T10/P1/T5b, ADR 0093 S
 Deviations: the L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the
 second run). The first registered run of `l3`, `q8` and `l12` used a version of the file not yet committed: the "without the pass"
 side was changed from `TetOptions::default()` to an explicit `no_pass()` (`quality_sweeps: 0`) after the registration commit
-82d7fa5 and committed with amendment 1 (376145c); with the default at 0 the two are the same options, so no result changes. Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
+d2e0d4a and committed with amendment 1 (c45aae5); with the default at 0 the two are the same options, so no result changes. Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
 so `tetrahedralize` refused that surface; not pursued.
 
-Gate on a fresh archive of 4f35720: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
+Gate on a fresh archive of 1e3aded: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1967 passed / 0 failed / 585 ignored (this ADR's file: 2 passed, 2 ignored; the
 rest of the change since wave 41's 1959 / 576 is waves 42A and 42B). The commit after the gate changes this ADR's text only.

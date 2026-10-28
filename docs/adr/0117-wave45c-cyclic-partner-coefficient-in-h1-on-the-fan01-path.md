@@ -2,7 +2,7 @@
 
 Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs; the user accepted the wave-45 draft decisions: a bool key,
 known-miss FAN-01 tests kept compiling through a test-only route, no default-flip draft before the combined wave-45 result). Written at
-main cf7c7e2 on branch `w45c`, target `<target dir>`. House rules of ADRs 0110-0113: limits fixed before runs; a missed
+main e65b4ea on branch `w45c`, target `<target dir>`. House rules of ADRs 0110-0113: limits fixed before runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected
 run; defaults are bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
@@ -23,7 +23,7 @@ Clean-room: first principles and our own ADRs. Parents: ADRs 0008, 0086, 0110, 0
 * ADR 0110 part L: on the empty passage (exact absolute swirl 0) the outlet angular momentum L grows with refinement and is undiagnosed:
   E3 / E2 / E1 = -0.009518 / 0.059612 / 0.105977 N m (L1, 600 iterations). Falsified so far: the limited rigid torque (L1) and the seam
   gradient (L2); SST (L3) and freezing (L5) were not evaluable. The seam `rAtU` defect has not been tested as a candidate.
-* Code trap (checked against the code at cf7c7e2): `crates/rcfd-api/src/sim.rs` line 2667, inside `Simulation::step()`, sets
+* Code trap (checked against the code at e65b4ea): `crates/rcfd-api/src/sim.rs` line 2667, inside `Simulation::step()`, sets
   `s.coupled_offdiag_in_h1 = sources.cyclic_seams` on every step. `Sources::cyclic_seams` is true only for an MRF zone with
   `cyclic_seams = true` (`sources.rs` 611). So a `simple_solver_mut()` switch on a `rotating_frame` case is overwritten to false at the
   next step, and F1 cannot reach the FAN-01 path without an API change. ADR 0113 says the API "sets [F1] when an MRF source has
@@ -255,9 +255,9 @@ Status: F-126 stays partial; ADR 0110 part L stays open; no default changed.
 
 ## Final gate
 
-Fresh `git archive` of HEAD 4cae95b (branch `w45c` rebased onto main c516892, which includes the ADR 0116 merge), gate directory
+Fresh `git archive` of HEAD 6869f06 (branch `w45c` rebased onto main 02ebcbf, which includes the ADR 0116 merge), gate directory
 `<scratch dir>`: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test
 --workspace --release --no-fail-fast` **2025 passed, 0 failed, 639 ignored** (main 2020 / 0 / 634 plus this ADR's 5 passing and 5 ignored
 tests). `baseline_hashes.rs` untouched and passing; `mrf_cyclic_seams_w44c.rs` passes in both crates. An earlier gate of 87b4a60 (before
-the rebase onto c516892) failed clippy only: `neg_cmp_op_on_partial_ord` on the two NaN-failing checks of `rotating_seam_h1_w45c.rs`, now
+the rebase onto 02ebcbf) failed clippy only: `neg_cmp_op_on_partial_ord` on the two NaN-failing checks of `rotating_seam_h1_w45c.rs`, now
 allowed file-wide as in `fan01_stall_w43c.rs`; its tests gave 2015 / 0 / 638 on the older base.

@@ -3,7 +3,7 @@
 Status: registered before any code of this wave was written. Everything under "Registered" was committed before the code and the runs it
 governs. Limits are not changed, widened or deleted after a run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective
 set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles only; nothing
-in this ADR is taken from another CFD code or its documentation. Written at HEAD b225b90.
+in this ADR is taken from another CFD code or its documentation. Written at HEAD 211d3e3.
 
 Parents: ADR 0067 (PIMPLE/PISO divergence guard, design-loop infrastructure), ADR 0073 B4 (`PimpleSettings::pressure_lag_check`), ADR 0074 part C and
 `docs/component-diagonal-default.md` (the corrected diagonal and the `lumped` z4 failure), ADR 0075 amendment 3 and addendum (FAN-01: a diverged
@@ -12,7 +12,7 @@ under automation").
 
 ## Disclosure: what was run before this registration (smoke runs, rule (d) of wave 35)
 
-All smoke runs were made on b225b90 with scratch test files that are not committed (`w35b_smoke.rs`, `w35b_smoke_fv.rs`), release build.
+All smoke runs were made on 211d3e3 with scratch test files that are not committed (`w35b_smoke.rs`, `w35b_smoke_fv.rs`), release build.
 
 * S1 FAN-01 attempt-2 set-up (ADR 0075 amendment 2: H-slit, 13 332 cells, first cell 2e-4 m, design point, `rotating_frame`, SIMPLEC), 40 iterations,
   about 0.1 s per iteration. Maximum boundary-face speed 40.03 m/s.
@@ -431,5 +431,5 @@ recalled, UNVERIFIED); the "high aspect ratio times non-orthogonality" reading o
 
 ### Final gate
 
-Fresh `git archive` of d38514b (the addendum commit): `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
+Fresh `git archive` of 5d562bc (the addendum commit): `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1853 passed, 0 failed, 490 ignored (no LNK1201). This line is docs only and was added after the gate.

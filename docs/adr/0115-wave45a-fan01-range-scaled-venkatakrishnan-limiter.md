@@ -4,7 +4,7 @@ Status: **ACCEPTED (registered 2026-10-26) before any registered run. Outcome (a
 missed limit becomes an ignored `*_known_miss` test with the limit intact. A defective set-up gets an amendment written before the
 corrected run. Defaults stay bit-identical. `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles,
 our own ADRs, and the public literature listed at the end (UNVERIFIED). Parents: ADRs 0081 (part L), 0086, 0110, 0111. Written on branch
-`w45a` from main bfce6ec (worktree `<scratch dir>`, target `<target dir>`). The user accepted the drafted
+`w45a` from main 637f8d2 (worktree `<scratch dir>`, target `<target dir>`). The user accepted the drafted
 decisions: the range-scaled form, the k set {0.002, 0.01, 0.05} with the smallest passing k, no case key if the empty passage passes and B3
 misses (the library variant stays), and P4 required unless its feasibility smoke shows it infeasible, then amended before registration.
 
@@ -31,7 +31,7 @@ misses (the library variant stays), and P4 required unless its feasibility smoke
 
 Code written before this registration (committed after it, in the implementation commit): the library variant, the case key and its
 checks, and every test below. Runs made before registration, each once:
-* **P5 hashes at main.** The P5 test was compiled against unchanged library code (main cf7c7e2) and its three FNV-1a hashes recorded:
+* **P5 hashes at main.** The P5 test was compiled against unchanged library code (main e65b4ea) and its three FNV-1a hashes recorded:
   key absent and `none` 0xec721116c0963182 (both trip the guard, `velocity_runaway`, within the 30 iterations: unlimited `linear_upwind`
   diverges on B3, as on E3), `barth_jespersen` 0x26e5a0c524957698. With the implementation, P5, P6 and the located-error test were run once
   during development and passed (exact checks without a tunable number).
@@ -150,10 +150,10 @@ change; meshes finer than F1, B2 / B1; agreement with FAN-01 data; the growth of
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of `w45a` at 83935ec (the registered code, on base bfce6ec; registration commit cd5bc53); each registered run made once,
-from copies of the built test binaries. The P5 hashes were recorded at cf7c7e2. The branch was then rebased without conflicts onto main
-c516892 (ADR 0116 merged) and then onto 2894cd3 (ADR 0117 merged; the only conflict was the two appended blocks at the end of
-`fan01_stall_w43c.rs`, both kept, 0117's first): the registration and implementation commits are now d9d6e48 and 4cc4535.
+Release builds of `w45a` at 83935ec (the registered code, on base 637f8d2; registration commit cd5bc53); each registered run made once,
+from copies of the built test binaries. The P5 hashes were recorded at e65b4ea. The branch was then rebased without conflicts onto main
+02ebcbf (ADR 0116 merged) and then onto 1f85b91 (ADR 0117 merged; the only conflict was the two appended blocks at the end of
+`fan01_stall_w43c.rs`, both kept, 0117's first): the registration and implementation commits are now 911d362 and 1f65e2a.
 
 ### Z1, the empty passage (switch at 1000, 2000 more iterations)
 
@@ -240,10 +240,10 @@ c516892 (ADR 0116 merged) and then onto 2894cd3 (ADR 0117 merged; the only confl
 
 ### Final gate
 
-Fresh `git archive` of 692599f (main c516892 plus this wave) in `<scratch dir>`: `cargo fmt --check` clean, `cargo clippy
+Fresh `git archive` of 692599f (main 02ebcbf plus this wave) in `<scratch dir>`: `cargo fmt --check` clean, `cargo clippy
 --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **2023 passed, 0 failed, 644 ignored**
-(main c516892: 2020 / 0 / 634; this wave adds 3 running and 10 ignored tests); `baseline_hashes.rs` passed unchanged. After the rebase
-onto 2894cd3 (ADR 0117 merged) the cheap checks were re-run on the rebased tree: fmt clean, clippy on `rcfd-fv` and `rcfd-api` clean, the
+(main 02ebcbf: 2020 / 0 / 634; this wave adds 3 running and 10 ignored tests); `baseline_hashes.rs` passed unchanged. After the rebase
+onto 1f85b91 (ADR 0117 merged) the cheap checks were re-run on the rebased tree: fmt clean, clippy on `rcfd-fv` and `rcfd-api` clean, the
 non-ignored tests of `fan01_stall_w43c`, `w36b_limiter`, `rules_w19c` (e2 included), `baseline_hashes` and the `rcfd-fv` gradient unit
 tests pass. The full gate was not repeated on the rebased HEAD; this paragraph is a docs-only commit.
 

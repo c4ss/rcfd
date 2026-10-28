@@ -12,7 +12,7 @@ samplers, Nelder-Mead and differential evolution only; it has no gradient and no
 ## What was run before this ADR was written (disclosed)
 
 The set-up helpers (`design::adjoint::{Ffd, Duct, pressure_drop, wall_drag, solve_primal}`) and the ignored set-up smoke test
-`duct_setup_smoke` (crates/rcfd-api/tests/adjoint_duct.rs) were written and run once, release build, HEAD 88f9701 plus these files.
+`duct_setup_smoke` (crates/rcfd-api/tests/adjoint_duct.rs) were written and run once, release build, HEAD a4e0f36 plus these files.
 No adjoint code existed. Measured:
 
 * Base shape `a0 = (0.10, 0.20, 0.05)`: cold start stagnates after 272 SIMPLEC iterations at `max(res_u, res_p)` 9.9e-15 (0.3 s);
@@ -110,7 +110,7 @@ lands but A1 misses; `todo` if nothing usable lands. The roadmap SCOPE extras (R
 turbulence-coefficient optimisers, multi-objective support, study / service / MCP exposure of gradients) are not part of the
 acceptance text and are listed as not delivered.
 
-## Addendum: measured values (release build, scratch tree on HEAD 92e7383 plus the wave-38D files)
+## Addendum: measured values (release build, scratch tree on HEAD 94015e1 plus the wave-38D files)
 
 Delivered: `crates/rcfd-api/src/design/adjoint.rs` (FFD morph `Ffd`, the duct set-up `Duct`, objectives `pressure_drop` and
 `wall_drag`, `solve_primal`, `adjoint_gradient`, `shape_gradient`, a dense LU), `optim::projected_gradient` with `PgOptions`,
@@ -157,7 +157,7 @@ listed as not delivered in its note.
 
 ## Final gate (docs only, not re-gated)
 
-Fresh `git archive` of ca4da00 (the wave-38D implementation commit on top of the 38A to 38C commits present then): `cargo fmt
+Fresh `git archive` of 5967cf3 (the wave-38D implementation commit on top of the 38A to 38C commits present then): `cargo fmt
 --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release
 --no-fail-fast` **1902 passed, 0 failed, 535 ignored**; `baseline_hashes` passes unchanged. Wave-38D share: 6 new passing tests
 (3 adjoint unit tests, the `projected_gradient` unit test, A1 `duct_adjoint_matches_fd`, A3 `duct_gradient_descent`) and 2 new

@@ -1,8 +1,8 @@
 # ADR 0128: Sixteen audit fixes (runner, Claude bridge, project folder, time-series store, renderer, API)
 
-Status: **ACCEPTED 2026-10-27** (acceptance registered before any code). Written at main 511a24c on branch `wfix`, worktree
+Status: **ACCEPTED 2026-10-27** (acceptance registered before any code). Written at main af9c0fc on branch `wfix`, worktree
 `<scratch dir>`, target `<target dir>`. The findings come from an audit of the wave-47 crates and of
-`rcfd-api`; the file:line references below were re-read on 511a24c.
+`rcfd-api`; the file:line references below were re-read on af9c0fc.
 
 ## Rules for every finding
 
@@ -341,9 +341,9 @@ Fresh `git archive` in `<scratch dir>`, `scripts/gate_test.py` (docs/test-proces
 | 2 | e646d2d (clippy fixed) | 0 | 0 | 2213 / 0 / 666 |
 | 3 | b8cf6eb (finding 17 added) | 0 | 0 | **2216 / 0 / 666** (61 min) |
 
-Run 3 is the final gate. ADR 0129's final gate on 5ec4423 recorded 2190 / 0 / 666; `511a24c..5ec4423` changes no file under
+Run 3 is the final gate. ADR 0129's final gate on 39984a5 recorded 2190 / 0 / 666; `af9c0fc..39984a5` changes no file under
 `crates/`, so that is the same crate code as this branch's base: 2216 - 2190 = 26, the tests this ADR adds (none ignored).
-After the gate the branch was rebased onto main 54e968e (ADR 0129: scripts and docs only, no crate code; no conflict). On the
+After the gate the branch was rebased onto main 9800448 (ADR 0129: scripts and docs only, no crate code; no conflict). On the
 rebased head: `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, debug tests of the touched
 crates: rcfd-runner, rcfd-claude, rcfd-project, rcfd-render 101 passed / 0 failed / 7 ignored; rcfd-tsstore (lib, store, tail_wfix)
 16 / 0 / 0; rcfd-api lib `design::` and `case::` 56 / 0 / 2, `tables` and `udf` 13 / 0 / 0. The full release gate was not repeated

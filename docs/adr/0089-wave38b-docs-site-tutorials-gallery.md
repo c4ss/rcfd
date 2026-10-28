@@ -57,7 +57,7 @@ claims fan performance: the fan section only builds and checks the sector mesh a
 
 ## Smoke results (rule d, measured before registering the limits above)
 
-Release binaries built from 88f9701 in a scratch copy:
+Release binaries built from a4e0f36 in a scratch copy:
 
 * `rcfd check` on the ten `cases/*/*.toml`: all exit 0; 0.03 to 0.32 s each (fan sector 13 332 cells 0.32 s, fan C-grid 11 536 cells
   0.21 s with warning SV101). The six `cases/*/case.json` are benchmark descriptors for `rcfd cases`, not case files: `rcfd check` refuses

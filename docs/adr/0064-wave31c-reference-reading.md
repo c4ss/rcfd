@@ -1,6 +1,6 @@
 # ADR 0064: Wave 31C, reference reading (turning secondary and unverified citations into read ones)
 
-Status: done (reading wave; no solver code and no existing test changed). Branch main, written at HEAD 3e5b3d9.
+Status: done (reading wave; no solver code and no existing test changed). Branch main, written at HEAD cd826c7.
 Date of reading: 2026-10-18. The detailed per-item table and the discrepancy list are in `docs/reference-data.md`, section "Wave 31C".
 
 ## Method and caveats

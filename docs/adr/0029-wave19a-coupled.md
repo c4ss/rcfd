@@ -280,8 +280,8 @@ default gate; F-217; temperature-dependent solid conductivity (F-220).
 
 ## Results (addendum written after the runs; registered limits above are unchanged)
 
-Commits: ADR `fa3eb26`; library (open boundaries, body force, solid exclusion, tests A, B, C1, C2) `e540fff`; settings-tree glue and
-tree tests (C3, D, E) `57dc881`. Measured values are printed by the tests (`cargo test --release -p rcfd-fv --test coupled_open
+Commits: ADR `bb43922`; library (open boundaries, body force, solid exclusion, tests A, B, C1, C2) `10ed24b`; settings-tree glue and
+tree tests (C3, D, E) `666747c`. Measured values are printed by the tests (`cargo test --release -p rcfd-fv --test coupled_open
 --test coupled_solid -- --nocapture`, `-p rcfd-api --test coupled_cht -- --nocapture`).
 
 | Check | Measured | Limit | Result |

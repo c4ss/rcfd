@@ -1,6 +1,6 @@
 # Partials audit, group 1
 
-Read-only audit of ten roadmap items with status `partial` (HEAD 07ae2db, 2026-10-21). Each item is graded against its
+Read-only audit of ten roadmap items with status `partial` (HEAD 272eb89, 2026-10-21). Each item is graded against its
 `acceptance` field in docs/roadmap.json only. Wider scope from the title or a "SCOPE (merged review)" addition is listed
 separately as "scope beyond acceptance". It does not lower the grade, but the paragraph proposes how to record it.
 
@@ -34,7 +34,7 @@ Counts: DONE 3, PARTIAL 6, OVERSTATED 1, TODO 0.
 
 **F-001 (PARTIAL).** Measured: `workspace_graph` passes (crates exist, graph acyclic, layering matches docs/architecture.md).
 The documentation and acyclicity clauses are met. The CI clause is not shown. `.github/workflows/ci.yml` defines fmt, clippy and
-an ubuntu/windows test matrix. The local `origin/main` ref points at 5e300f9 (wave 32), so a push did happen at some point. The
+an ubuntu/windows test matrix. The local `origin/main` ref points at e2d5e8c (wave 32), so a push did happen at some point. The
 GitHub Actions page returns 404 without authentication (private or absent), and `gh` is not installed, so whether a hosted run
 exists is UNVERIFIED. The note's "never run on a hosted CI" is unconfirmed either way. I did not re-run the WSL Linux or full
 workspace builds. Closing this needs the user to push and read the Actions result. The acceptance is reasonable.

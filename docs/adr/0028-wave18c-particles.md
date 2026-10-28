@@ -289,7 +289,7 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   and it is the behaviour that matters): the flow solution of the registered cavity is bit-identical with and without a disabled
   populated section and equals the registered baseline hash (`pt14_disabled_section_leaves_the_cavity_run_bit_identical`).
 
-### Addendum A2: corrections after review of the first implementation commit (0b2409d)
+### Addendum A2: corrections after review of the first implementation commit (c5221c8)
 
 * Tracker bug found while diagnosing the PT7 `stuck` count. The first commit refined a wall hit by bisecting on the signed distance
   to the plane of the single face found by the walk. Near an edge or corner (observed at the x = 1 / z = 0 edge of the PT7 box with the

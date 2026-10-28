@@ -13,7 +13,7 @@ the cited tests before building on the audit's claims: `rcfd-fv/tests/init_poten
 
 ## What was run before this ADR was written (disclosed)
 
-The test code of C1, Y1 and T1 below was written first. Only these runs were made, release build, HEAD 1965eb1 plus these files:
+The test code of C1, Y1 and T1 below was written first. Only these runs were made, release build, HEAD 93107ba plus these files:
 
 * `t1_uniform_step_setup_smoke` (adaptive_step.rs, ignored): a 1-step uniform run to t = 10 (dt = 10) finishes with a finite
   field (0.013 s); 10 steps at the aimed step dt = 0.0892 finish finite (0.057 s, about 6 ms per step).
@@ -131,7 +131,7 @@ registered test. The flat-plate clause is unchanged.
 
 ## Results
 
-Addendum written after the runs: release build, HEAD 75f7a5b plus the test files. Each registered test was run once.
+Addendum written after the runs: release build, HEAD b7b7179 plus the test files. Each registered test was run once.
 
 | Check | Measured | Limit | Result |
 | --- | --- | --- | --- |

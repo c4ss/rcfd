@@ -1,6 +1,6 @@
 # Partials audit, group 6
 
-Read-only audit of ten roadmap items with status `partial` (launch HEAD c90e8ce, 2026-10-21). Each item is graded against its
+Read-only audit of ten roadmap items with status `partial` (launch HEAD 20ad0d3, 2026-10-21). Each item is graded against its
 `acceptance` field in docs/roadmap.json only. Wider scope from the title or a "SCOPE (merged review)" addition is listed as
 "scope beyond acceptance". It does not lower the grade.
 

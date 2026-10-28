@@ -25,7 +25,7 @@ is not claimed whatever the numbers are.
 * ADR 0081 L1a / L1b (limited `linear_upwind` stable on FAN-01) were measured on the H-slit attempt-2 mesh, not on the C-grid.
 * Code read (read-only): `rcfd-turb/src/sst.rs` convects k and omega with first-order `Upwind` regardless of `solver.convection`, so the formal order of
   the coupled discretisation is 1 (momentum convection 2 with the limiter, which clips to first order where it acts).
-* Construction smoke (test `smoke_build_candidates`, both constructions, bladed and empty, release, scratch tree on db67c4c; no solve): every count set
+* Construction smoke (test `smoke_build_candidates`, both constructions, bladed and empty, release, scratch tree on feb015f; no solve): every count set
   builds and is accepted by `check_mesh`:
 
 | Counts (n_up, n_chord, n_down, n_side, n_nose, n_span, n_gap) | Label | Cells bladed / empty | `camber_seam` non-orth / skewness / aspect | `camber_seam_h` |
@@ -135,7 +135,7 @@ Agreement with the FAN-01 measurement; any accuracy of the wall-normal resolutio
 
 ## Smoke of the registered runs (rule (d); 300 iterations each, ADR 0081 L1 criterion; known when this ADR was committed)
 
-Test `smoke_solve_family` (release, scratch tree on db67c4c, one run each). Every run is STABLE by the L1 criterion. Values at iteration 300 are NOT
+Test `smoke_solve_family` (release, scratch tree on feb015f, one run each). Every run is STABLE by the L1 criterion. Values at iteration 300 are NOT
 converged values and are disclosed because they were seen before this registration:
 
 | Run | Cells | s / it | Max speed (limit 3 x 40.0) | Continuity at 10 / max 200-300 | res_u at 300 | f_a at 300 | f_b at 300 |
@@ -155,10 +155,10 @@ bands are "not shown credible". The rules were written before these runs and are
 
 ## Addendum: measured values, verdicts, misses and deviations
 
-Release builds of the scratch tree on db67c4c plus the test file; the registration commit 5967578 preceded every registered run. Each registered
+Release builds of the scratch tree on feb015f plus the test file; the registration commit 5967578 preceded every registered run. Each registered
 run was made once, two at a time on a shared machine (other wave-37 agents were running), by launching the built test executable directly
 (`registered_run` with `W37C_RUN`). The limits are the registered ones, unchanged. No solver, mesh or default code was changed. Code state: the
-runs were made on db67c4c. The main-repository HEAD at commit time also contains waves 37A and 37D. 37A adds the opt-in `solver.velocity_correction
+runs were made on feb015f. The main-repository HEAD at commit time also contains waves 37A and 37D. 37A adds the opt-in `solver.velocity_correction
 = "face_flux"`, not used here. 37D added construction I and then removed it; `camber_seam_h` is kept with its B1 hash test. Neither changes a path
 these runs use with their default keys. The non-ignored tests of this file run in the final gate on the HEAD.
 
@@ -272,8 +272,8 @@ recalled, not re-read. Air density 1.2 kg/m^3 assumed (ADR 0075).
 
 ### Final gate
 
-Fresh `git archive` of adf1964, which also contains the other wave-37 agents' commits up to it: `cargo fmt --all -- --check` clean, `cargo
+Fresh `git archive` of 1c17668, which also contains the other wave-37 agents' commits up to it: `cargo fmt --all -- --check` clean, `cargo
 clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` **1881 passed, 0 failed, 531 ignored**
 (no LNK1201). The test run took about 2 h 05 min, over the 60-minute run guideline, as in wave 36. This file contributes 2 passed and 6 ignored
-tests. Later commits by waves 37A, 37B and 37D (docs only, up to 6f82be3) and this paragraph are not re-gated; this paragraph is a docs-only
+tests. Later commits by waves 37A, 37B and 37D (docs only, up to d003aae) and this paragraph are not re-gated; this paragraph is a docs-only
 commit.

@@ -3,7 +3,7 @@
 Status: registered before any hook code of this wave was written. Limits are not changed, widened or deleted after a run; a miss becomes an
 ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are
 never re-recorded; every new hook is opt-in (a case without the new settings builds and runs exactly as before). Clean-room: first principles only.
-Written at HEAD 88f9701 (scratch clone `<scratch dir>`, target `<target dir>`).
+Written at HEAD a4e0f36 (scratch clone `<scratch dir>`, target `<target dir>`).
 
 Parent: F-122 (ADR-less, `docs/udf-abi.md`): sandboxed WebAssembly user functions, ABI version 1, four hooks (`momentum_source`,
 `velocity_profile`, `kinematic_viscosity`, `monitor`). Roadmap F-239 acceptance: "Each hook, set to a constant or analytic function, reproduces the
@@ -72,7 +72,7 @@ energy relax 1, xmin/xmax T = 300 K, SIMPLEC 400 iterations.
 
 ## Smoke runs of the built-in counterparts (rule d), before this registration
 
-Scratch file `crates/rcfd-api/tests/w38a_smoke.rs` (not committed), release build of 88f9701; no hook code existed.
+Scratch file `crates/rcfd-api/tests/w38a_smoke.rs` (not committed), release build of a4e0f36; no hook code existed.
 
 * S1 (C1 set-up): xmin `temperature_expression` runs; T range 300.156 .. 313.765 K (400 iterations, iteration limit, field converged).
 * S2 (C2 set-up): `heat_flux_value = 5000` converges in 4 iterations; max |T - closed form| / (qL/k) = 3.5e-13.
@@ -153,12 +153,12 @@ writing it down; the first run had measured nothing (the module did not parse).
 ### Amendment 1 results
 
 * C9 (hook 5e3 plus zone source 5e3 against zone source 1e4): rel diff of T = 0 (limit 1e-9). Pass.
-* Gate of the first code commit 2c40c10 (fresh `git archive`, `<scratch dir>`): `cargo fmt --check` clean,
+* Gate of the first code commit 70a9406 (fresh `git archive`, `<scratch dir>`): `cargo fmt --check` clean,
   `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`
   1910 passed / 0 failed / 536 ignored. This HEAD includes waves 38B, 38C and 38D, so the totals are not comparable
-  with the wave-37 close (1881 / 531); the 38A delta at 2c40c10 was +8 passed, +1 ignored (`udf_hooks_w38a.rs`), and
+  with the wave-37 close (1881 / 531); the 38A delta at 70a9406 was +8 passed, +1 ignored (`udf_hooks_w38a.rs`), and
   C9 adds one more passed test.
-* Re-gate of 36034bd (adds C9 and doc rewording only): `cargo fmt --check` and `cargo clippy ... -D warnings` clean;
+* Re-gate of d6f33a5 (adds C9 and doc rewording only): `cargo fmt --check` and `cargo clippy ... -D warnings` clean;
   `cargo test --workspace --release --no-fail-fast` was stopped by the host for low memory after 218 test binaries
   (1160 passed, 0 failed, 297 ignored at that point) and was not restarted. C9 itself passed in the scratch build
-  (9 passed, 1 ignored in `udf_hooks_w38a.rs`). The last complete gate is the one of 2c40c10 above.
+  (9 passed, 1 ignored in `udf_hooks_w38a.rs`). The last complete gate is the one of 70a9406 above.

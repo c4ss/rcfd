@@ -1,7 +1,7 @@
 # ADR 0108: Wave 43A, Hysing refinement with all three VOF options and exact initial fractions; CSF fallback of the height function (F-055)
 
 Status: registered before any code and any run. Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the limit
-intact; a defective set-up gets an amendment written before the corrected run. Results go into the addendum. Written at HEAD 9e0f355
+intact; a defective set-up gets an amendment written before the corrected run. Results go into the addendum. Written at HEAD 83d2c1b
 (scratch copy `<scratch dir>`, target `<target dir>`). Clean-room: first principles and the Hysing et al.
 (2009) case-1 values read in ADR 0096 (V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Context: ADR 0100 (refinement check B1-B4),
 ADR 0103 (component-diagonal wall defect), ADR 0106 (height-function curvature; H4 verdict missed; H5 with all three options on 40
@@ -9,7 +9,7 @@ and 80 only).
 
 ## What I already know when writing this (rule c)
 
-* `crates/rcfd-fv/src/vof.rs` has not changed since ADR 0106's runs (the only commit touching it after 44d7ccc is 3e69c55, the
+* `crates/rcfd-fv/src/vof.rs` has not changed since ADR 0106's runs (the only commit touching it after 6a11732 is 07c7298, the
   height-function commit itself), so the control series below runs the same code path as ADR 0106 H5. Its 40 x 80 and 80 x 160
   points are therefore already published: y_c(3) 1.0794 / 1.0800, V_c,max 0.2402 / 0.2409, peak 0.9400 / 0.9225 (both errors
   falling from 40 to 80). No 160 x 320 run of any all-three-options variant exists.
@@ -118,7 +118,7 @@ wave does not change it; it checks that `d_dam_break_front` still passes.
 
 ## Addendum: measured values (after the runs)
 
-All runs once, release build, scratch tree (archive of 9e0f355 plus this wave's files). Errors are to Hysing 1.0813 / 0.2417 /
+All runs once, release build, scratch tree (archive of 83d2c1b plus this wave's files). Errors are to Hysing 1.0813 / 0.2417 /
 0.9213.
 
 ### Part 1, X (verdict): all three options, exact initial fractions
@@ -196,7 +196,7 @@ test is not feasible with the data in the file.
 
 ### Final gate
 
-Fresh `git archive` of aa8da45 (which includes the wave 43B / 43C commits before it): `cargo fmt --check` clean, `cargo clippy
+Fresh `git archive` of 132c0da (which includes the wave 43B / 43C commits before it): `cargo fmt --check` clean, `cargo clippy
 --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast` 1983 passed / 0 failed / 619
 ignored. This wave adds F1-F4 (not ignored) and three ignored tests (b1x and b1xc known misses, the smoke); the rest of the change
 from 1967 / 585 belongs to the other wave-43 agents. `d_dam_break_front` and `e_rising_bubble_free_slip_sides` pass. The wording
