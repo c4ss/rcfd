@@ -29,12 +29,13 @@ rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
 rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)
 rcfd-runner -> (no workspace crates; run service: runs the `rcfd` binary as child processes, ADR 0123)
 rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 0125)
+rcfd-claude -> project   (Studio L6: Claude Code bridge, ADR 0126; atomic allow-list file, ADR 0134)
 ```
 
 ## Layering rules
 
 Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
-`gpu`/`dist` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
+`gpu`/`dist`/`claude` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui`). The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.
 
 ## Where to go next
