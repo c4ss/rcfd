@@ -1,7 +1,9 @@
 # ADR 0148: Job 48N, the selected case is a piece of state of its own, the middle drag orbits, the Run page says its units and offers a finer mesh, and three answers to ADR 0147 (data files, a save not built again, the Start dialog waits)
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
-first; what had run before is listed under "What I already knew"); not yet accepted by the maintainer. Job 48N, on local
+first; what had run before is listed under "What I already knew"); amendment 1 (N6's control, the hovers of N8, N9 and
+N11, N9's steady run) before the corrected runs; results in the addendum: every check met its limit and every control
+failed as required (N6's control and N8 after amendment 1), no known miss; not yet accepted by the maintainer. Job 48N, on local
 main 7eb8b79 (waves 48A-48M merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
 are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
 defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
@@ -295,6 +297,66 @@ does not need the row). What I knew when writing this: the values of the run abo
 and selected; N8: the refusal texts as registered, no hover in 30 frames), round 1's dump and egui's code; the corrected
 tests had not run, N9, N10 and N11 not at all.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a640d97871463f2d7`. Commits: registration fb2e260 (on main 7eb8b79); amendment 1 ef73ebb; then
+this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 93.6 GB, 11.7
+to 21 GB free during the runs); the target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same
+sources (no file of theirs changed). The registered runs: `selection_n.rs` on fb2e260 (13.9 GB free at its start);
+`followups_n.rs` on fb2e260, then its corrected run on ef73ebb (amendment 1); `scale_n.rs` on ef73ebb (its first run,
+after amendment 1); the whole suite (N12) on ef73ebb.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| N1 | (a)-(e) as registered | (a) `a` highlighted, labelled, selected; the run's snapshot `a`; the Run side; the editor `a`; the shown mesh `a`'s own. (b) at the Run call the editor held nothing and `b` was being read; the run's snapshot `b`; then the editor `b`, `b`'s mesh. (c) not started: `cases/cav/case.json was not started: cases/cav/case.json: not TOML: invalid key-value pair, expected key`; the Mesh side; the editor empty with the descriptor's message. (d) `c` in every respect. (e) `a` in every respect. Each step: exactly one highlighted label and one toolbar label, the step's case | pass |
+| N1 control | (b) runs `a`, (c) runs `b` | (b) the editor held `a` at the Run call: the run's snapshot `a`; (c) the editor kept `b`: a run of `b`; (d) `b` again, (e) `c` (each the editor's case before the click) | fails as required |
+| N2 | (a), (b), (c) as registered | (a) (`b`, `b`, none, `b`, own), the status bar `...gone.toml: The system cannot find the file specified. (os error 2)`; (b) (`cases/profile_inlet.csv`, none, the csv, the csv, -), its message `cases/profile_inlet.csv: key with no value, expected '='`; (c) (`b`, `b`, none, `b`, own) | pass |
+| N2 control | the cavity kept, the Mesh side `b` | after (a) (`cases/cavity.toml`, `cases/cavity.toml`, none, `b`); after (b) the cavity still in the editor while the Mesh side showed the csv | fails as required |
+| N3 | (a)-(d) as registered | (a) the exact text; (b) no refusal at the switch, the run's snapshot `b`; (c) `mesh.nx` 8, clean; (d) `cases/a.toml: finish editing the field mesh.ny (press Enter or click elsewhere); the mesh shows the typed text, but a run uses the file on disk`, then a run of `b` | pass |
+| N3 control | `a`'s "save it first" at the switch | at the switch `cases/a.toml has unsaved edits: save it first ...` (Run refused); in (d) Run of `b` refused with `a`'s "finish editing" | fails as required |
+| N4 | as registered | after the first: (the queued run selected, `a`, Mesh side, no run shown, `c`); after Run of `c`: (selected, `c`, Run side, its run shown, `c`) | pass |
+| N4 control | the Run side | (the queued run selected, `a`, Run side, `a`'s run shown, `c` on the Mesh side) | fails as required |
+| N5 | as registered | `drag_input`: as registered; the hex box and the cavity: primary and middle drags changed yaw or pitch with the target bit for bit; secondary drags moved the target with yaw and pitch bit for bit | pass |
+| N5 control | the middle drag pans | both middle drags moved the target and kept yaw and pitch | fails as required |
+| N6 | as registered | `Cases (3)`, `Data files (2)`; nothing selected after the click on the csv; with the list open `b.json`, `cavity.toml`, `hex.toml` drawn 2 times, `notes.txt` and `profile_inlet.csv` once; `Project::cases` 5 | pass |
+| N6 control | (registered) the csv twice; (amendment 1) selected and at least twice | first run (fb2e260): `Cases (5)`, no `Data files`, the csv drawn 3 times (the panel, the list, the toolbar's label) and selected by the click: missed only the control's own count (amendment 1); corrected run (ef73ebb): the same values, as corrected | fails as required (after amendment 1) |
+| N7 | (a)-(c) as registered | (a) before the save (built 2, skipped 0, installs 2, surface S, from the editor, not stale, 320 cells), after it (built 2, skipped 2: the save and the watcher's notice, installs 2, surface S, the file's, not stale, 320), `Ready`, the file's source line drawn; (b) 384 cells; (c) built 5 to 6 (the mesh file's time moved), the shown mesh the file's | pass |
+| N7 control | built again | (a) built 2 to 4 (the save and the watcher's notice), skipped 0 | fails as required |
+| N8 | (a)-(d) as registered | first run (fb2e260): every limit met but the hover, not drawn in 30 frames with egui's 0.5 s tooltip delay (amendment 1); corrected run (ef73ebb): (a) `cases/cavity.toml: finish editing the field mesh.nx (press Enter or click elsewhere); the mesh shows the typed text, but a run uses the file on disk`, equal to Run's, drawn on hover, the click queued nothing; (b) the exact "save it first" text, equal to Run's; (c) none; (d) none | pass (after amendment 1) |
+| N8 control | enabled | enabled in (a)-(d); the click in (a) queued a run | fails as required |
+| N9 | as registered, the steady run as amended | transient: slider `simulated time (s)`; `snapshot 80/80  time step 1280  simulated time 80 s`; `snapshot 1/80  time step 16  simulated time 1 s`; strip `run <id>  cases/cylinder-re100.toml  finished  time step 1280  simulated time 80 s  res u 1.70e-2 ...`; header `id ... step    time (s)      res u ...`; the row's time `8.0000e1`; x axis `time step`; hover drawn. Steady (`naca0012-aoa4`): slider `iteration`; `snapshot 10/10  iteration 2000`; strip `... finished  iteration 2000  res u 1.43e-6 ...`; the row's time `-`; x axis `iteration`; hover drawn. No bare `t` drawn. The pure checks as registered | pass |
+| N9 control | the words before | `snapshot 80/80  step 1280  t = 80`; strip `step 1280  t 8.0000e1`; slider `time`; steady `step`, `snapshot 10/10  step 2000  t = 0` | fails as required |
+| N10 | as registered | the four lines exactly as registered; bars: the cavity 0.5 m (zoomed in 3 notches: 0.5 m), the hex box none, the cylinder 20 m, the step 5 m, each labelled inside the image and within its limits | pass |
+| N10 control | none | no line, no bar | fails as required |
+| N11 | (a)-(e) as registered | (a) the hover drawn; the message exactly as registered; `mesh.nx`, `mesh.ny` 32, 32, unsaved; 1,024 cells from the editor, the 32 x 32 mesh; Run `cases/cavity.toml has unsaved edits: save it first ...`; `domain 1 x 1 m; 32 x 32 = 1,024 cells`. (b) 72 then 576 cells. (c) no button. (d) the hover drawn; `TooLarge` (`cases/cavity.toml: about 1,024 cells (from the mesh.n* counts of generator "cavity_2d"), more than the preview limit of 1,000`), rebuild. (e) the refusal drawn; 16, 16 after the click | pass |
+| N11 control | no button | none drawn | fails as required |
+| N12 | the whole suite and the rest | `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1 --nocapture` on ef73ebb: **212 passed, 0 failed, 4 ignored** (the four known misses: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b), 397 s in the test binaries; against ADR 0147's 189, the 23 tests of this ADR. G1b with its changed text: the strip `... finished  iteration 3000 ...`, pass. Timing checks in that run: B7 median 0.356 ms; J10 median 1.019 ms, max 5.2 ms; J4 0.077 s; J2 0.050 s; ADR 0138 G3 median 0.610 ms, max 2.3 ms; G8 1.924 ms; G10 NVIDIA DX12 37.2 ms, AMD 31.5 ms; M4 (b) 0.065 / 0.571 s; M7 (b) 0.087 s. `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean; `scripts/third_party_licenses.py --check`: up to date | pass |
+
+**Leftover processes** after all runs: none from this job's target folder.
+
+**Deviations and notes.**
+
+1. Amendment 1: N6's control counted the csv twice, but the control's own click selects it in the route before, so the
+   toolbar's label draws it a third time; N8's hover helper drew with egui's default tooltip delay of 0.5 s, which fills
+   the 30-frame window (ADR 0147 had met the same in M1 and set the delay to 0). N9's steady run moved to the aerofoil
+   (the step's row is out of view at 1280 x 800) and its hover point to the slider's bar, before N9 ran.
+2. The scale bar is on 2D (orthographic) views only; a 3D perspective view has no single scale (asked for 2D).
+3. Decision 1 (a) changes when the unsaved edits of the case left are dropped (at the click, also when the new case cannot
+   be opened; before: when the new case arrived, and kept when it could not be opened). Not the cause of the report;
+   question 2.
+4. A JSON case cannot be started by Run or the Start run dialog: `StartPlan::new` reads the case as TOML (`case_facts`),
+   so a `.json` case is refused with `not TOML: ...` (N1 (c)'s descriptor message shows it). Not changed here; the
+   descriptor's refusal by the start is the TOML parser's, not ADR 0147's one-line "not a case file" (question 6).
+5. The ids N1 and N2 are also ADR 0143's (the native start: `n1_first_run_...`, `n2_the_runner_survives_...`); this ADR's
+   are N1-N12 of ADR 0148, in other test files.
+6. The preview's live-text path was not a cause: `preview::current_source` uses the case editor's text only when the
+   editor holds the previewed case.
+7. Nothing outside `crates/rcfd-studio` and `docs/adr` changed; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and
+   `docs/architecture.md` are unchanged.
+
+**Not run.** A person at the real window (the checklist); Linux; debug builds of the new tests; the workspace gate and
+workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests (not changed).
+
 ## Not in CI (by hand)
 
 A person at the real window: the case clicked and Run, the middle drag, the scale bar and the words on the Run page, the
@@ -342,6 +404,10 @@ Refine x2 button and its hover, the "Data files" list, the Start dialog's greyed
    (a).
 5. **Refine for `axial_fan_sector`** (counts under `mesh.fan`). Options: (a) not offered (now); (b) double its `n_*`
    counts too. Recommendation: (a): its mesh is fragile against count changes (`docs/case-schema.md`).
+6. **A JSON case and Run** (found by N1 (c), deviation 4 of the addendum). Run and the Start run dialog read a case as
+   TOML (`runs::case_facts`), so a `.json` case file is refused (`not TOML: ...`), while `rcfd run` reads a text that
+   starts with `{` as JSON; a benchmark descriptor's refusal is then the TOML parser's, not ADR 0147's one line.
+   Options: (a) keep; (b) read JSON there as `rcfd run` does and give a descriptor ADR 0147's line. Recommendation: (b).
 
 ## Files
 
