@@ -3615,7 +3615,7 @@ dependencies = [
 name = "rcfd-tsstore"
 version = "0.1.0"
 dependencies = [
- "miniz_oxide 0.8.9",
+ "miniz_oxide 0.9.1",
  "rcfd-core",
  "rcfd-io",
  "rcfd-mesh",
