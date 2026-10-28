@@ -6,6 +6,11 @@
 //! colour and visibility, a cut plane clipped per fragment in the shader. [`Renderer::render`] returns an RGBA
 //! image (PNG through [`rcfd_post::render::Image::to_png`]); [`Renderer::pick`] returns the visible face and
 //! field value per pixel. No window, no MSAA: pixels are deterministic on a given adapter.
+//!
+//! For a window (ADR 0132, wave 48C): [`Renderer::from_device`] builds the pipelines on a device the caller already
+//! has (eframe's), [`Renderer::render_into`] draws the same pixels into a caller's `Rgba8Unorm` texture without a
+//! readback, and [`Renderer::update_scalar`] replaces the field of an uploaded mesh by rewriting only its scalar
+//! (4 bytes per triangle vertex) when scrubbing through time.
 
 pub mod camera;
 mod gpu;

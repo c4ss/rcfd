@@ -185,22 +185,27 @@ impl SurfaceMesh {
 
     /// Check a field against the surface and return its min and max (`None` for [`Field::None`]).
     pub fn field_range(&self, field: Field) -> Result<Option<(f64, f64)>> {
-        let (v, n, what) = match field {
-            Field::None => return Ok(None),
-            Field::Face(v) => (v, self.n_faces(), "face"),
-            Field::Vertex(v) => (v, self.points.len(), "vertex"),
-        };
-        if v.len() != n {
-            return Err(Error::InvalidValue {
-                path: "field".into(),
-                reason: format!("{} {what} values for {n} {what}s", v.len()),
-            });
-        }
-        if let Some(i) = v.iter().position(|x| !x.is_finite()) {
-            return Err(Error::Numerical(format!("non-finite {what} value at {i}")));
-        }
-        Ok(Some(v.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, &x| {
-            (a.0.min(x), a.1.max(x))
-        })))
+        field_range_for(field, self.n_faces(), self.points.len())
     }
+}
+
+/// [`SurfaceMesh::field_range`] for a surface of `n_faces` faces and `n_points` points.
+pub(crate) fn field_range_for(field: Field, n_faces: usize, n_points: usize) -> Result<Option<(f64, f64)>> {
+    let (v, n, what) = match field {
+        Field::None => return Ok(None),
+        Field::Face(v) => (v, n_faces, "face"),
+        Field::Vertex(v) => (v, n_points, "vertex"),
+    };
+    if v.len() != n {
+        return Err(Error::InvalidValue {
+            path: "field".into(),
+            reason: format!("{} {what} values for {n} {what}s", v.len()),
+        });
+    }
+    if let Some(i) = v.iter().position(|x| !x.is_finite()) {
+        return Err(Error::Numerical(format!("non-finite {what} value at {i}")));
+    }
+    Ok(Some(v.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, &x| {
+        (a.0.min(x), a.1.max(x))
+    })))
 }
