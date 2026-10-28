@@ -277,7 +277,11 @@ mesh as CI did; the other eight Linux stores hold meshes that do not depend on t
 aerofoil's file), so S5 should hold there. The workspace gate and workspace-wide clippy (only two test files, two scripts
 and docs changed); `scale_n.rs` and `end_time_landing_w48k.rs` (unchanged, they read the Windows tree); the Studio at a
 real window on either platform (the checklist); macOS and Linux on ARM; `--docker` from a Linux host (its `chown` of the
-bind mount is untested); `cargo deny` (no dependency changed).
+bind mount is untested); `cargo deny` (no dependency changed); CI's `min-toolchain` job (Rust 1.90 type-checks the
+changed `rcfd-mcp` test; nothing in it is newer than 1.90 as far as read, not compiled with 1.90); CI's `scripts` job on
+setup-python's current `3.x` (the self-test ran with 3.9.13 and 3.12.3). Only the cylinder mesh hash was compared with a
+value CI itself printed; that CI agrees for the other eight runs is inferred from their meshes, and CI's glibc patch level
+is not known here.
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no workspace edge). New tool: the Docker image of D4, built
 from the repository's Dockerfile.
