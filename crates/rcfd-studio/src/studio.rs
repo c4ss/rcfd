@@ -81,8 +81,10 @@ pub struct Studio {
     pub run_switches: Switches,
     /// The runner program the run worker starts (`RCFD_RUNNER_BIN`, else `rcfd-runner` next to this program).
     pub runner_exe: PathBuf,
+    /// The one-click path: Run button, status strip, binaries search (ADR 0141).
+    pub quick: crate::quick_run::QuickRun,
     shown_run: Option<String>,
-    wake: Wake,
+    pub(crate) wake: Wake,
 }
 
 /// The runner program: `RCFD_RUNNER_BIN`, else `rcfd-runner` next to the current executable (the rule of
@@ -120,6 +122,7 @@ impl Studio {
             run_poll: Some(poll::PERIOD),
             run_switches: Switches::default(),
             runner_exe: default_runner_exe(),
+            quick: Default::default(),
             shown_run: None,
             wake: Arc::new(|| {}),
         }
@@ -195,6 +198,7 @@ impl Studio {
         self.shown_run = None;
         self.viewport.close();
         self.plot_marker = None;
+        self.quick.close();
     }
 
     /// Ask the worker for a case file; it opens in the editor when it arrives.
@@ -241,7 +245,9 @@ impl Studio {
 
     /// Apply everything the workers sent. Returns the number of events and updates applied. Never blocks.
     pub fn drain(&mut self) -> usize {
-        let Some(p) = &self.project else { return 0 };
+        let Some(p) = &self.project else {
+            return crate::quick_run::drain(self);
+        };
         let events = p.worker.drain();
         let mut n = events.len();
         for e in events {
@@ -273,7 +279,7 @@ impl Studio {
         for m in msgs {
             self.say(m);
         }
-        n + k
+        n + k + crate::quick_run::drain(self)
     }
 
     fn run_worker(&self) -> Option<&RunWorker> {

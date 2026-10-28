@@ -90,6 +90,7 @@ impl StudioApp {
         self.st.theme.apply(&ctx);
         egui::Panel::top("rcfd-studio-menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("rcfd-studio-status").show(ui, |ui| self.status_bar(ui));
+        crate::quick_run_ui::show(ui, &mut self.st, &mut self.ui_state); // Run toolbar and run strip (ADR 0141)
         self.dialogs(&ctx);
         let mut dock = std::mem::replace(&mut self.st.dock, DockState::new(Vec::new()));
         let style = egui_dock::Style::from_egui(ui.style());

@@ -68,6 +68,13 @@ The full test suite takes about an hour in release mode on a 16-thread
 machine, and much longer in debug mode. The project's gate runs it with
 `python scripts/gate_test.py` ([docs/test-process.md](docs/test-process.md)).
 
+The Studio starts the run service and the solver from its own folder, so build
+them together; one line builds the four programs in release and opens the
+Studio on a project folder (the folder is optional):
+
+    powershell -ExecutionPolicy Bypass -File scripts\studio.ps1 my-project
+    sh scripts/studio.sh my-project
+
 ## Where to go next
 
 * Documentation, tutorials and the example gallery start at

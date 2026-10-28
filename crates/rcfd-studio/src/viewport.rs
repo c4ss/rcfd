@@ -883,6 +883,9 @@ pub struct Viewport {
     pub frame: Option<Frame>,
     /// Playing.
     pub playing: bool,
+    /// Follow the latest snapshot: show each new snapshot of a live run as it arrives (ADR 0141). On for a newly
+    /// shown run; a scrub to an older snapshot turns it off, a scrub to the newest or [`Viewport::set_follow`] on.
+    pub follow: bool,
     last_play: Option<Instant>,
     /// GPU (`None`: none attached, as in model tests; `Err`: located message, e.g. no adapter).
     pub gpu: Option<Result<ViewGpu, String>>,
@@ -922,6 +925,7 @@ impl Default for Viewport {
             camera: None,
             frame: None,
             playing: false,
+            follow: true,
             last_play: None,
             gpu: None,
             error: None,
@@ -970,6 +974,7 @@ impl Viewport {
         self.camera = None;
         self.frame = None;
         self.playing = false;
+        self.follow = true;
         self.error = None;
         self.hover = None;
         self.pending = false;
@@ -1048,8 +1053,7 @@ impl Viewport {
                 self.status = Status::NoStore(message);
             }
             Event::Snaps { run, snaps, fields } if self.mine(&run) => {
-                // a live run grew; follow the newest snapshot when the last one (or none yet) was shown
-                let at_end = self.frame.as_ref().is_none_or(|f| f.index + 1 == self.snaps.len());
+                // a live run grew; follow the newest snapshot unless the user scrubbed away from it (ADR 0141)
                 self.snaps = snaps;
                 if self.field.is_none() {
                     self.field = fields.iter().find(|f| f.as_str() == "p").or(fields.first()).cloned();
@@ -1059,7 +1063,7 @@ impl Viewport {
                     self.run_range = None;
                     self.ask_run_range();
                 }
-                if at_end && !self.linear && !self.snaps.is_empty() {
+                if self.follow && !self.snaps.is_empty() {
                     self.pos = self.position_of(self.snaps.len() - 1);
                     self.request();
                 }
@@ -1142,20 +1146,32 @@ impl Viewport {
         self.pending
     }
 
-    /// Move the slider.
+    /// Move the slider (a scrub: following continues only at the newest end, ADR 0141).
     pub fn set_pos(&mut self, pos: f64) {
         let (a, b) = self.bounds();
         self.pos = pos.clamp(a.min(b), b.max(a));
+        self.follow = self.pos >= b.max(a);
         self.request();
     }
 
-    /// Show snapshot `i` (clamped).
+    /// Show snapshot `i` (clamped; a scrub: following continues only at the newest snapshot, ADR 0141).
     pub fn show_snapshot(&mut self, i: usize) {
         if self.snaps.is_empty() {
             return;
         }
-        self.pos = self.position_of(i.min(self.snaps.len() - 1));
+        let i = i.min(self.snaps.len() - 1);
+        self.follow = i + 1 == self.snaps.len();
+        self.pos = self.position_of(i);
         self.request();
+    }
+
+    /// Follow the latest snapshot (jumping to it now) or stop following (ADR 0141).
+    pub fn set_follow(&mut self, on: bool) {
+        if on && !self.snaps.is_empty() {
+            self.playing = false;
+            self.show_snapshot(self.snaps.len() - 1);
+        }
+        self.follow = on;
     }
 
     /// Step one stored snapshot back (`-1`) or forward (`1`) from the shown one.

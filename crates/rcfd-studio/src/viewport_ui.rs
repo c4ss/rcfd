@@ -193,6 +193,15 @@ fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
         {
             vp.set_linear(lin);
         }
+        // ADR 0141: follow the newest snapshot of a running run; scrubbing back turns it off
+        let mut follow = vp.follow;
+        if ui
+            .checkbox(&mut follow, "follow latest")
+            .on_hover_text("show each new snapshot as the run writes it; scrubbing to an older one turns this off")
+            .changed()
+        {
+            vp.set_follow(follow);
+        }
     });
     if let Some(f) = &vp.frame {
         ui.monospace(format!(

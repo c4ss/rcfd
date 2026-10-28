@@ -8,6 +8,7 @@
 //! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
 //! sidebar ([`chat`], ADR 0134) has its own worker and turn threads.
 
+pub mod bins;
 pub mod case_edit;
 pub mod chat;
 pub mod chat_ui;
@@ -16,6 +17,8 @@ pub mod monitors;
 pub mod poll;
 pub mod prefs;
 pub mod project_view;
+pub mod quick_run;
+pub mod quick_run_ui;
 pub mod runs;
 pub mod schema_model;
 pub mod studio;

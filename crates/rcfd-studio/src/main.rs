@@ -87,6 +87,12 @@ fn main() -> eframe::Result {
         },
     };
     let mut st = Studio::new(loaded.prefs, loaded.dock, dir.clone());
+    // ADR 0141: find rcfd-runner and rcfd together once at start (file checks only); the run worker uses the runner
+    let found = st.quick.search.find();
+    if let Ok(f) = &found {
+        st.runner_exe = f.runner.clone();
+    }
+    st.quick.bins = Some(found);
     // the Claude Code sidebar (ADR 0134): trust record and MCP config in the same per-user folder
     st.chat.bridge = rcfd_studio::chat::Bridge::from_env(dir);
     if let Some(m) = loaded.message {
