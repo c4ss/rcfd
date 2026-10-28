@@ -1,0 +1,63 @@
+# Differentially heated square cavity (natural convection), Rayleigh number 1e3, Prandtl number 0.71 (ADR 0142).
+# The registry set-up of ADR 0092 (crates/rcfd-api/tests/registry_setups_w39a.rs) with reports and a field store added.
+# Non-dimensional units: L = 1, alpha = k / (rho cp) = 1, temperature difference 1, beta = 1, so nu = Pr = 0.71 and
+# g = Ra Pr (Ra = g beta dT L^3 / (nu alpha)). Velocities are in units of alpha / L.
+# Variant: heated-cavity-ra1e4.toml (gravity times 10).
+title = "Heated cavity, Ra 1e3, Pr 0.71"
+
+[mesh]
+generator = "box_2d"   # 40 x 40 uniform cells; the 2D generators make the cell one cell width deep: 0.025
+nx = 40
+ny = 40
+lx = 1.0
+ly = 1.0
+
+[physics]
+nu = 0.71
+rho = 1.0
+cp = 1.0
+conductivity = 1.0
+reference_temperature = 0.5
+thermal_expansion = 1.0
+gravity = [0.0, -710.0, 0.0]   # Ra Pr = 1e3 x 0.71
+
+[energy]
+enabled = true
+
+[initial]
+temperature = 0.5
+
+[boundaries.xmin]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 1.0   # hot wall
+
+[boundaries.xmax]
+velocity = "fixed"
+temperature = "fixed"
+temperature_value = 0.0   # cold wall
+
+[boundaries.ymin]
+velocity = "fixed"   # adiabatic (zero heat flux is the default)
+
+[boundaries.ymax]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "tvd_van_leer"
+alpha_u = 0.8
+max_iterations = 3000
+
+[output]
+store_interval = 10   # a snapshot every 10 iterations, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "p", "T"]
+
+[reports.q_hot]
+type = "heat_flow"
+patch = "xmin"   # conductive heat flow out of the domain through the hot wall (negative: heat enters)
+
+[reports.nu_hot]
+type = "expression"
+expression = "-q_hot / 0.025 [W]"   # mean Nusselt number of the hot wall: -q / (k dT depth), depth 0.025

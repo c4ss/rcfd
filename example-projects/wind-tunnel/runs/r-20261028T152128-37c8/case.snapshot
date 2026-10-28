@@ -1,0 +1,46 @@
+# Variant of step-re800.toml: the same laminar backward-facing step at Re = U_mean H / nu = 400 (nu doubled) (ADR 0142).
+# Gartling's formulation (1990): the domain starts at the step, so the step face is the lower half of the inlet
+# boundary (zero velocity there) and the flow enters through the upper half with a parabolic profile.
+# Units: channel height H = 1 m (step height and inlet height h = 0.5 m), mean inlet velocity U_mean = 1 m/s.
+title = "Backward-facing step, Re 400 (variant of Re 800)"
+
+[mesh]
+# The channel behind the step: 15 H long, H high, uniform cells (dx = 0.075 m, dy = 0.025 m).
+generator = "box_2d"
+nx = 200
+ny = 40
+lx = 15.0
+ly = 1.0
+
+[physics]
+nu = 0.0025   # Re = 1 x 1 / 0.0025 = 400
+
+[boundaries.xmin]
+# Below the step lip (y < 0.5 m) the expression is 0: a no-slip wall. Above it: 24 (y - 0.5)(1 - y), mean 1, peak 1.5.
+velocity = "fixed"
+velocity_expression_x = "max(0 [m/s], 24 [m/s] * (y / 1 [m] - 0.5) * (1 - y / 1 [m]))"
+
+[boundaries.xmax]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.ymin]
+velocity = "fixed"   # floor
+
+[boundaries.ymax]
+velocity = "fixed"   # upper wall
+
+[solver]
+algorithm = "simplec"
+convection = "linear_upwind"
+max_iterations = 4000
+
+[output]
+store_interval = 40   # a snapshot every 40 iterations, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "p"]
+
+[reports.p_inlet]
+type = "area_average"
+patch = "xmin"
+field = "p"   # mean pressure over the inlet and step face; the outlet is at p = 0

@@ -1,0 +1,9 @@
+{
+  "state": "finished",
+  "step": 1280,
+  "time": 80.0,
+  "pid": null,
+  "updated": "2026-10-28T15:22:04.704630300Z",
+  "reason": "finished: end time 80 reached",
+  "exit_code": 0
+}
