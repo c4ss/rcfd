@@ -1,0 +1,36 @@
+# Variant of cavity-re100.toml: the same lid-driven cavity at Re = U L / nu = 400 (nu divided by 4) (ADR 0142).
+# Units: side L = 1 m, lid speed U = 1 m/s. On 32 x 32 cells Re 400 is coarse (docs/tutorials/cavity.md).
+title = "Lid-driven cavity, Re 400 (variant of Re 100)"
+
+[mesh]
+generator = "cavity_2d"
+nx = 32
+ny = 32
+
+[physics]
+nu = 0.0025   # Re = 1 x 1 / 0.0025 = 400
+
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+
+[boundaries.walls]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "linear_upwind"
+max_iterations = 2000
+tolerance_u = 1e-6
+tolerance_p = 1e-6
+
+[output]
+store_interval = 5   # a snapshot every 5 iterations, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "p"]
+
+[reports.lid_drag]
+type = "force"
+patch = "lid"
+direction = [1.0, 0.0, 0.0]
+component = "viscous"
