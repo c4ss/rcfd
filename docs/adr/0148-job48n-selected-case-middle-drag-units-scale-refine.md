@@ -308,7 +308,7 @@ after amendment 1); the whole suite (N12) on ef73ebb.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
-| N1 | (a)-(e) as registered | (a) `a` highlighted, labelled, selected; the run's snapshot `a`; the Run side; the editor `a`; the shown mesh `a`'s own. (b) at the Run call the editor held nothing and `b` was being read; the run's snapshot `b`; then the editor `b`, `b`'s mesh. (c) not started: `cases/cav/case.json was not started: cases/cav/case.json: not TOML: invalid key-value pair, expected key`; the Mesh side; the editor empty with the descriptor's message. (d) `c` in every respect. (e) `a` in every respect. Each step: exactly one highlighted label and one toolbar label, the step's case | pass |
+| N1 | (a)-(e) as registered | (a) `a` highlighted, labelled, selected; the run's snapshot `a`; the Run side; the editor `a`; the shown mesh `a`'s own. (b) at the Run call the editor held nothing and `b` was being read; the run's snapshot `b`; then the editor `b`, `b`'s mesh. (c) not started: `cases/cav/case.json was not started: cases/cav/case.json: not TOML: invalid key-value pair, expected key`; the Mesh side; the editor empty with the descriptor's message (the model's `editor_error`; the editor panel's drawn line was not checked). (d) `c` in every respect. (e) `a` in every respect. Each step: exactly one highlighted label and one toolbar label, the step's case | pass |
 | N1 control | (b) runs `a`, (c) runs `b` | (b) the editor held `a` at the Run call: the run's snapshot `a`; (c) the editor kept `b`: a run of `b`; (d) `b` again, (e) `c` (each the editor's case before the click) | fails as required |
 | N2 | (a), (b), (c) as registered | (a) (`b`, `b`, none, `b`, own), the status bar `...gone.toml: The system cannot find the file specified. (os error 2)`; (b) (`cases/profile_inlet.csv`, none, the csv, the csv, -), its message `cases/profile_inlet.csv: key with no value, expected '='`; (c) (`b`, `b`, none, `b`, own) | pass |
 | N2 control | the cavity kept, the Mesh side `b` | after (a) (`cases/cavity.toml`, `cases/cavity.toml`, none, `b`); after (b) the cavity still in the editor while the Mesh side showed the csv | fails as required |
@@ -353,6 +353,12 @@ after amendment 1); the whole suite (N12) on ef73ebb.
    editor holds the previewed case.
 7. Nothing outside `crates/rcfd-studio` and `docs/adr` changed; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and
    `docs/architecture.md` are unchanged.
+8. One bare time is left outside the Run page: the case starter's dialog describes a transient example as
+   `<algorithm>, to t = <end_time>` (`case_starter.rs`, `Example::describe`; ADR 0139's CS7 reads that line). Not
+   changed by this job (a follow-up: `to simulated time <end_time> s`, with CS7's text registered again).
+9. The mouse texts outside the code were searched (`docs/`, `README.md`, `scripts/studio.*`, the example projects'
+   notes): ADR 0132 and ADR 0138 carry the notes; the example notes speak of the wheel and the slider only and are
+   unchanged (their slider words, "simulated time" and "iterations", already match decision 6).
 
 **Not run.** A person at the real window (the checklist); Linux; debug builds of the new tests; the workspace gate and
 workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests (not changed).
