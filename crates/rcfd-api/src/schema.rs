@@ -1343,6 +1343,10 @@ pub fn case_schema() -> Schema {
         .field(
             "store_fields",
             Schema::list(Schema::string("")).doc("Cell fields of the field store, any name of the probe/field list such as ux, uy, uz, p, T, k, nut (empty = ux, uy, uz, p)"),
+        )
+        .field(
+            "store_precision",
+            Schema::enumeration("f64", &["f64", "f32"]).doc("Precision of the field store (ADR 0133): f64 stores every value bit-exactly; f32 rounds each value to the nearest single precision (half the size, lossy, error bound of ADR 0124 D4); the run itself is unchanged"),
         );
 
     let statistics = Schema::object()

@@ -173,7 +173,10 @@ first step at or after each multiple of `dt`; it does not change the time steps 
 The store keeps the mesh once (with its hash), each snapshot field by field in blocks with checksums; a run that is
 killed leaves every earlier snapshot readable. The Rust reader is `rcfd_tsstore::Reader` (by step or time, nearest,
 floor or linear in time, one field or a cell subset). Units are recorded for velocity (`m/s`) and `T` (`K`); other
-fields carry `unknown`. A fresh run replaces a store left in the same output directory; a continued run appends.
+fields carry `unknown`. `output.store_precision` is `"f64"` (default: every value bit-exact) or `"f32"` (opt-in, ADR
+0133: each value rounded to the nearest single precision, half the size, error at most `|x| 2^-24 + 2^-150`; the run
+itself is unchanged; a finite value beyond the single-precision range disables the store with a warning). The Studio
+proposes `"f32"` for the runs it starts. A fresh run replaces a store left in the same output directory; a continued run appends.
 Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown
 field name gives a warning and no store. Library callers that step a `Simulation` themselves are not covered.
 
