@@ -2,6 +2,7 @@
 //! hover readout. State and decisions are in [`crate::viewport`].
 
 use crate::studio::Studio;
+use crate::view_toggle::Side;
 use crate::viewport::{Axis, Input, RangeMode, Status, Viewport, LEGEND_TICKS, PLAY_PERIOD};
 use egui::{Color32, PointerButton, Pos2, Rect, Sense};
 use rcfd_render::ColorMap;
@@ -13,11 +14,12 @@ const LEGEND_W: f32 = 120.0;
 /// Draw the Viewport panel.
 pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
     let dark = st.theme == crate::theme::Theme::Dark;
+    toggle(ui, st);
     if let Some(e) = st.viewport.gpu_error() {
         ui.colored_label(ERR, e.to_string());
     }
     if st.viewport.run.is_none() {
-        // ADR 0138: no run selected: the mesh of the open case
+        // ADR 0138, ADR 0144: the Mesh side, the mesh of the open case
         crate::preview_ui::panel(ui, st, dark);
         return;
     }
@@ -71,6 +73,38 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
             ui.ctx().request_repaint();
         }
         ui.ctx().request_repaint_after(PLAY_PERIOD);
+    }
+}
+
+/// The Mesh / Run toggle (ADR 0144): which side the panel shows; a side with nothing to show is disabled and says why.
+fn toggle(ui: &mut egui::Ui, st: &mut Studio) {
+    let mut pick: Option<Side> = None;
+    ui.horizontal(|ui| {
+        for side in Side::BOTH {
+            let why = st.view_unavailable(side);
+            let r = ui
+                .add_enabled(
+                    why.is_none(),
+                    egui::Button::selectable(st.view.side == side, side.label()),
+                )
+                .on_hover_text(side.hover())
+                .on_disabled_hover_text(why.unwrap_or_default());
+            st.view.rects.insert(side.label(), r.rect);
+            st.view.enabled.insert(side.label(), why.is_none());
+            if r.clicked() {
+                pick = Some(side);
+            }
+        }
+        if let Some(c) = st.view_caption() {
+            ui.separator();
+            ui.weak(c);
+        }
+    });
+    if let Some(side) = pick {
+        if let Err(m) = st.set_view(side) {
+            st.say(m);
+        }
+        ui.ctx().request_repaint();
     }
 }
 

@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 const MEDIAN_MS: f64 = 8.0;
 const MAX_MS: f64 = 250.0;
 
-/// G3: while the preview of a 1000 x 1000 box (1,000,000 cells) builds, the median frame is at most 8 ms and no frame
-/// takes more than 250 ms (at least 20 frames, the build at least 0.5 s). Negative control: building on the UI thread
-/// gives a frame of more than 250 ms.
+/// G3: while the preview of a 500 x 500 box (250,000 cells; ADR 0138 amendment 3, the maintainer's question 8: was 1000
+/// x 1000) builds, the median frame is at most 8 ms and no frame takes more than 250 ms (at least 20 frames, the build
+/// at least 0.5 s). Negative control: building on the UI thread gives a frame of more than 250 ms.
 #[test]
 fn g3_frames_while_a_large_mesh_builds() {
     if cfg!(debug_assertions) {
@@ -22,7 +22,7 @@ fn g3_frames_while_a_large_mesh_builds() {
         return;
     }
     for control in [false, true] {
-        let root = pv::project("g3", &[("cases/big.toml", pv::box_case(1000, 1000).as_bytes())]);
+        let root = pv::project("g3", &[("cases/big.toml", pv::box_case(500, 500).as_bytes())]);
         let mut app = StudioApp::new(pv::studio(&root), None);
         app.st.preview.switches.build_on_ui_thread = control;
         let ctx = egui::Context::default();

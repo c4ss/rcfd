@@ -911,7 +911,7 @@ impl Service {
                 let first = entries.first().filter(|e| e["op"] == "create");
                 let src = first.map_or(json!({}), |e| e["source"].clone());
                 let mut cp = Map::new();
-                for k in ["toml", "settings", "path"] {
+                for k in ["toml", "settings", "path", "base_dir"] {
                     if !src[k].is_null() {
                         cp.insert(k.into(), src[k].clone());
                     }
@@ -1404,23 +1404,39 @@ impl Service {
     }
 
     fn session_create(&self, p: &Value) -> Rpc {
-        let create_entry = json!({"op": "create", "source": {
+        let mut create_entry = json!({"op": "create", "source": {
             "toml": p.get("toml"), "settings": p.get("settings"), "path": p.get("path"),
         }});
+        // `base_dir` (optional, ADR 0144): the folder that relative data paths (mesh file, lookup tables) of a `toml` or
+        // `settings` case resolve against, as a case file's own folder does for `path`; inside the sandbox when there is
+        // one. Without it, as before: the sandbox root, else the working folder.
+        let base_dir = match p.get("base_dir").and_then(Value::as_str) {
+            Some(d) => {
+                create_entry["source"]["base_dir"] = json!(d);
+                Some(self.sandbox_path(d)?)
+            }
+            None => None,
+        };
+        let text_base = || {
+            base_dir
+                .clone()
+                .or_else(|| self.cfg.root.clone())
+                .unwrap_or_else(|| PathBuf::from("."))
+        };
         let mut case = if let Some(path) = p.get("path").and_then(Value::as_str) {
             let path = self.sandbox_path(path)?;
             Case::load_with(&path, self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else if let Some(text) = p.get("toml").and_then(Value::as_str) {
-            let base = self.cfg.root.clone().unwrap_or_else(|| PathBuf::from("."));
-            Case::parse_toml_with(text, &base, self.cfg.root.as_deref()).map_err(RpcError::validation)?
+            Case::parse_toml_with(text, &text_base(), self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else if let Some(obj) = p.get("settings") {
-            let base = self.cfg.root.clone().unwrap_or_else(|| PathBuf::from("."));
-            Case::from_json_with(obj, &base, self.cfg.root.as_deref()).map_err(RpcError::validation)?
+            Case::from_json_with(obj, &text_base(), self.cfg.root.as_deref()).map_err(RpcError::validation)?
         } else {
             Case::new()
         };
         if p.get("path").is_none() {
-            if let Some(root) = &self.cfg.root {
+            if let Some(b) = &base_dir {
+                case.base_dir = b.clone();
+            } else if let Some(root) = &self.cfg.root {
                 case.base_dir = root.clone();
             }
         }

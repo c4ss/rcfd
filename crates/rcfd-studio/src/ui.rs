@@ -49,6 +49,8 @@ pub struct UiState {
     pub budgets: Option<rcfd_runner::runner::Config>,
     /// Open "New case from example" dialog (ADR 0139).
     pub starter: Option<crate::case_starter_ui::StarterDialog>,
+    /// Where each text field of the case editor was drawn last, by settings path (tests click them; ADR 0144).
+    pub field_rects: BTreeMap<String, egui::Rect>,
 }
 
 /// UI fields of the start dialog; the plan itself is in the model ([`crate::runs::RunsView::plan`]).
@@ -89,6 +91,17 @@ impl StudioApp {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         self.st.drain();
+        // ADR 0144: the preview builds an edit when typing pauses; that frame must come without further input. egui
+        // takes its predicted frame time off a requested delay (amendment 2), so that much more is asked for: the frame
+        // starts when the debounce ends.
+        if let Some(d) = self.st.preview.due_in() {
+            let frame = if self.st.preview.switches.uncompensated_repaint {
+                Duration::ZERO
+            } else {
+                Duration::try_from_secs_f32(ctx.input(|i| i.predicted_dt)).unwrap_or_default()
+            };
+            ctx.request_repaint_after(d + frame);
+        }
         self.st.theme.apply(&ctx);
         egui::Panel::top("rcfd-studio-menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("rcfd-studio-status").show(ui, |ui| self.status_bar(ui));
@@ -925,6 +938,10 @@ enum Edit {
     Value(String, Value),
     Add(String, String),
     Remove(String),
+    /// A keystroke: the field's whole text, not committed (ADR 0144).
+    Draft(String, String),
+    /// The field lost the focus holding the stored value's text.
+    EndDraft(String),
 }
 
 fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
@@ -1020,6 +1037,14 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
                 r
             }
             Edit::Remove(p) => ed.remove_named(&p),
+            Edit::Draft(p, t) => {
+                ed.type_text(&p, &t);
+                Ok(())
+            }
+            Edit::EndDraft(p) => {
+                ed.end_draft(&p);
+                Ok(())
+            }
         };
         if let Err(m) = r {
             st.messages.push(m);
@@ -1162,11 +1187,18 @@ fn leaf_ui(
                     .entry(path.to_string())
                     .or_insert_with(|| format_value(&current));
                 let r = ui.add(egui::TextEdit::singleline(buf).desired_width(130.0));
+                us.field_rects.insert(path.to_string(), r.rect);
+                if r.changed() {
+                    // ADR 0144: the case preview follows the text as it is typed
+                    edits.push(Edit::Draft(path.to_string(), buf.clone()));
+                }
                 if r.lost_focus() {
                     let text = buf.clone();
                     us.buffers.remove(path);
                     if text != format_value(&current) {
                         edits.push(Edit::Text(path.to_string(), text));
+                    } else {
+                        edits.push(Edit::EndDraft(path.to_string()));
                     }
                 } else if !r.has_focus() && err.is_none() {
                     // Not editing: follow the stored value.

@@ -85,6 +85,8 @@ pub struct Studio {
     pub runner_exe: PathBuf,
     /// The one-click path: Run button, status strip, binaries search (ADR 0141).
     pub quick: crate::quick_run::QuickRun,
+    /// The Viewport's Mesh / Run toggle (ADR 0144).
+    pub view: crate::view_toggle::Toggle,
     shown_run: Option<String>,
     pub(crate) wake: Wake,
 }
@@ -126,6 +128,7 @@ impl Studio {
             run_switches: Switches::default(),
             runner_exe: default_runner_exe(),
             quick: Default::default(),
+            view: Default::default(),
             shown_run: None,
             wake: Arc::new(|| {}),
         }
@@ -203,9 +206,11 @@ impl Studio {
         self.preview.close();
         self.plot_marker = None;
         self.quick.close();
+        self.view.close();
     }
 
-    /// Ask the worker for a case file; it opens in the editor when it arrives.
+    /// Ask the worker for a case file; it opens in the editor when it arrives. The preview builds it and the Viewport
+    /// switches to its mesh (ADR 0144).
     pub fn open_case(&mut self, rel: &str) {
         let Some(p) = &self.project else { return };
         if let Some(old) = &self.editor {
@@ -213,7 +218,7 @@ impl Studio {
         }
         self.pending_case = Some(rel.to_string());
         p.worker.send(Command::Load(rel.to_string()));
-        self.preview.select(rel);
+        self.show_case_mesh(rel);
     }
 
     /// Hand the editor's content to the worker for a save with the base-hash rule. Refused in the conflict state (resolve
@@ -273,14 +278,12 @@ impl Studio {
         if rows_changed || n > 0 {
             self.update_extra();
         }
-        // the viewport follows the selected run (ADR 0132) and the plots mark its step
-        let root = self.browser().map(|b| b.root.clone());
-        let selected = self.selected_run.clone();
-        self.viewport
-            .sync(root.as_deref(), selected.as_deref(), poll::PERIOD, &self.wake);
+        // the viewport follows the selected run on the Run side of the toggle (ADR 0132, ADR 0144); the plots mark its
+        // step
+        self.sync_viewport();
         n += self.viewport.drain();
         self.plot_marker = self.viewport.marker();
-        // with no run selected the viewport shows the open case's mesh (ADR 0138)
+        // on the Mesh side the viewport shows the open case's mesh (ADR 0138, ADR 0144)
         let wake = self.wake.clone();
         n += crate::preview::follow(self, &wake);
         let (k, msgs) = self.chat.drain();
@@ -322,10 +325,11 @@ impl Studio {
         let _ = self.send_runs(poll::Command::Show(ids));
     }
 
-    /// Select a run (its plots, events and log are read from now on).
+    /// Select a run (its plots, events and log are read from now on); the Viewport switches to it (ADR 0144).
     pub fn select_run(&mut self, id: &str) {
         self.selected_run = Some(id.to_string());
         self.sync_shown();
+        self.show_run_fields();
     }
 
     /// Queue a run of the plan's case and make sure a runner is alive (`Client::start`, on a control thread). The id
@@ -567,7 +571,16 @@ impl Studio {
                     return;
                 }
                 self.pending_case = None;
-                match CaseEditor::from_bytes(self.svc.clone(), &rel, &bytes) {
+                // ADR 0144: relative data paths against the case's own folder, as a run resolves them
+                let dir = self
+                    .browser()
+                    .map(|b| b.root.join(&rel))
+                    .and_then(|f| f.parent().map(Path::to_path_buf));
+                let ed = match &dir {
+                    Some(d) => CaseEditor::from_bytes_in(self.svc.clone(), &rel, d, &bytes),
+                    None => CaseEditor::from_bytes(self.svc.clone(), &rel, &bytes),
+                };
+                match ed {
                     Ok(ed) => self.editor = Some(ed),
                     Err(m) => self.say(m),
                 }

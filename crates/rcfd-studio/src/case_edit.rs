@@ -11,7 +11,7 @@ use rcfd_api::service::{RpcError, Service};
 use rcfd_project::records::hash_bytes;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The editor's relation to the file on disk.
@@ -109,6 +109,14 @@ pub struct CaseEditor {
     pub diagnostics: Vec<String>,
     /// A save was handed to the worker and its answer has not come back.
     pub saving: bool,
+    /// The field being typed in and not committed yet, `(path, text)` (ADR 0144): the case preview builds the settings
+    /// with this text in place. A commit of that field ends it; a refused commit keeps it (the field keeps the text).
+    pub draft: Option<(String, String)>,
+    revision: u64,
+    /// The case's folder: relative data paths (mesh file, lookup tables) resolve against it in the session, its
+    /// validation and the bytes a save writes (ADR 0144, the maintainer's answer to ADR 0131 question 3). `None`: the
+    /// working folder, as before ([`CaseEditor::from_bytes`]).
+    pub dir: Option<PathBuf>,
 }
 
 impl Drop for CaseEditor {
@@ -123,22 +131,41 @@ fn is_json(rel: &str) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("json"))
 }
 
-fn create_session(svc: &Arc<Service>, rel: &str, bytes: &[u8]) -> Result<String, String> {
+/// A session of the case text; relative data paths resolve against `dir` (the case's folder, ADR 0144), else against
+/// the working folder (the service's rule for text).
+fn create_session(svc: &Arc<Service>, rel: &str, dir: Option<&Path>, bytes: &[u8]) -> Result<String, String> {
     let text = std::str::from_utf8(bytes).map_err(|e| format!("{rel}: not UTF-8 text: {e}"))?;
-    let r = if is_json(rel) {
+    let mut p = if is_json(rel) {
         let v: Value = serde_json::from_str(text).map_err(|e| format!("{rel}: {e}"))?;
-        svc.call("session.create", &json!({ "settings": v }))
+        json!({ "settings": v })
     } else {
-        svc.call("session.create", &json!({ "toml": text }))
+        json!({ "toml": text })
     };
-    let v = r.map_err(|e| format!("{rel}: {}", rpc_msg(&e)))?;
+    if let Some(d) = dir {
+        p["base_dir"] = json!(d.to_string_lossy());
+    }
+    let v = svc
+        .call("session.create", &p)
+        .map_err(|e| format!("{rel}: {}", rpc_msg(&e)))?;
     Ok(v["session"].as_str().unwrap_or_default().to_string())
 }
 
 impl CaseEditor {
-    /// Open `rel` from the bytes a worker read. Fails with a located message when the case does not parse or validate.
+    /// Open `rel` from the bytes a worker read, relative data paths against the working folder (the route before
+    /// ADR 0144; the Studio uses [`CaseEditor::from_bytes_in`]). Fails with a located message when the case does not
+    /// parse or validate.
     pub fn from_bytes(svc: Arc<Service>, rel: &str, bytes: &[u8]) -> Result<CaseEditor, String> {
-        let session = create_session(&svc, rel, bytes)?;
+        Self::open(svc, rel, None, bytes)
+    }
+
+    /// Open `rel` from the bytes a worker read, relative data paths against the case's folder `dir` (as `rcfd run` and
+    /// the runner resolve them; ADR 0144).
+    pub fn from_bytes_in(svc: Arc<Service>, rel: &str, dir: &Path, bytes: &[u8]) -> Result<CaseEditor, String> {
+        Self::open(svc, rel, Some(dir.to_path_buf()), bytes)
+    }
+
+    fn open(svc: Arc<Service>, rel: &str, dir: Option<PathBuf>, bytes: &[u8]) -> Result<CaseEditor, String> {
+        let session = create_session(&svc, rel, dir.as_deref(), bytes)?;
         let mut ed = CaseEditor {
             svc,
             session,
@@ -150,10 +177,36 @@ impl CaseEditor {
             field_errors: BTreeMap::new(),
             diagnostics: Vec::new(),
             saving: false,
+            draft: None,
+            revision: 0,
+            dir,
         };
         ed.refresh();
         ed.saved = ed.settings.clone();
         Ok(ed)
+    }
+
+    /// A number that changes whenever the settings or the draft change (ADR 0144: the preview builds again after it).
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The text of field `path` as it is being typed (its whole text, on every change; not committed, the settings are
+    /// unchanged). The case preview builds the settings with this text in place (ADR 0144).
+    pub fn type_text(&mut self, path: &str, text: &str) {
+        let d = (path.to_string(), text.to_string());
+        if self.draft.as_ref() != Some(&d) {
+            self.draft = Some(d);
+            self.revision += 1;
+        }
+    }
+
+    /// Typing in `path` ended without a change to commit (the field holds the stored value's text again).
+    pub fn end_draft(&mut self, path: &str) {
+        if self.draft.as_ref().is_some_and(|(p, _)| p == path) {
+            self.draft = None;
+            self.revision += 1;
+        }
     }
 
     fn call(&self, method: &str, mut p: Value) -> Result<Value, RpcError> {
@@ -163,7 +216,11 @@ impl CaseEditor {
 
     fn refresh(&mut self) {
         if let Ok(v) = self.call("settings.get", json!({})) {
-            self.settings = v["value"].clone();
+            let v = v["value"].clone();
+            if v != self.settings {
+                self.settings = v;
+                self.revision += 1;
+            }
         }
     }
 
@@ -193,7 +250,11 @@ impl CaseEditor {
             return Err(self.refuse(path, "unknown setting".into()));
         };
         match parse_input(&node.kind, text) {
-            Ok(v) => self.set_value(path, v),
+            Ok(v) => {
+                self.set_value(path, v)?;
+                self.end_draft(path); // committed: the field's text is the setting now (ADR 0144)
+                Ok(())
+            }
             Err(m) => Err(self.refuse(path, m)),
         }
     }
@@ -280,7 +341,8 @@ impl CaseEditor {
     /// The bytes a save writes: the edited case as TOML (or JSON for a `.json` file).
     pub fn to_bytes(&mut self) -> Result<Vec<u8>, String> {
         self.refresh();
-        let case = Case::from_json(&self.settings)
+        let dir = self.dir.clone().unwrap_or_else(|| PathBuf::from("."));
+        let case = Case::from_json_in(&self.settings, &dir)
             .map_err(|d| d.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("; "))?;
         Ok(if is_json(&self.rel) {
             case.to_json_string()
@@ -322,13 +384,15 @@ impl CaseEditor {
     }
 
     fn reload(&mut self, bytes: &[u8]) -> Result<(), String> {
-        let session = create_session(&self.svc, &self.rel, bytes)?;
+        let session = create_session(&self.svc, &self.rel, self.dir.as_deref(), bytes)?;
         let old = std::mem::replace(&mut self.session, session);
         let _ = self.svc.call("session.close", &json!({ "session": old }));
         self.base_hash = hash_bytes(bytes);
         self.conflict = None;
         self.field_errors.clear();
         self.diagnostics.clear();
+        self.draft = None;
+        self.revision += 1;
         self.refresh();
         self.saved = self.settings.clone();
         Ok(())

@@ -4,7 +4,8 @@
 //! State and decisions live in the non-UI modules ([`studio`], [`project_view`], [`case_edit`], [`watch`], [`layout`],
 //! [`prefs`], [`runs`], [`poll`], [`viewport`], [`preview`]); [`ui`], [`viewport_ui`] and [`preview_ui`] only draw. The
 //! viewport (ADR 0132) renders a run's stored fields with `rcfd-render` on eframe's own wgpu device into a texture that
-//! egui shows; with no run selected it shows the mesh of the open case (ADR 0138). File work runs on worker threads per open project: the project
+//! egui shows; its Mesh / Run toggle ([`view_toggle`], ADR 0144) shows instead the mesh of the open case (ADR 0138), which
+//! follows the case editor's unsaved edits. File work runs on worker threads per open project: the project
 //! worker ([`watch`]) and the run worker ([`poll`], ADR 0133), which talks to the project's `rcfd-runner`. Tests drive
 //! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
 //! sidebar ([`chat`], ADR 0134) has its own worker and turn threads. Studio-started runs store fields by default, and
@@ -33,6 +34,7 @@ pub mod store_plan;
 pub mod studio;
 pub mod theme;
 pub mod ui;
+pub mod view_toggle;
 pub mod viewport;
 pub mod viewport_ui;
 pub mod watch;

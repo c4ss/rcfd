@@ -1,7 +1,8 @@
 //! ADR 0142 H1: the finished example projects (`example-projects/`) in the Studio model, headless and without a GPU.
 //! Each project opens, lists its cases and runs, every committed run shows a field at once, and every case opens in the
-//! Case editor; the generator cases validate there, the two aerofoil cases do not (ADR 0142 E1, predicted: the editor
-//! resolves `../meshes/naca0012-ogrid` against the working folder).
+//! Case editor and validates there. The two aerofoil cases (`mesh.file = "../meshes/naca0012-ogrid"`) failed there
+//! until ADR 0144 made the editor resolve relative paths against the case's folder (ADR 0142 E1's predicted miss); this
+//! branch was the check of that failure and is now positive.
 
 mod vp;
 
@@ -97,17 +98,9 @@ fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
             );
             let ed = st.editor.as_mut().unwrap();
             let ok = ed.validate();
-            let mesh_file = case.contains("naca0012");
             println!("H1 {name}/{case}: editor validate {ok} {:?}", ed.diagnostics);
-            if mesh_file {
-                // E1's predicted miss, through the Studio's own editor
-                assert!(
-                    !ok && ed.diagnostics.iter().any(|d| d.contains("mesh.file")),
-                    "{name}/{case}"
-                );
-            } else {
-                assert!(ok, "{name}/{case}: {:?}", ed.diagnostics);
-            }
+            // ADR 0144: the aerofoil cases' `../meshes/naca0012-ogrid` resolves against their folder, as in a run
+            assert!(ok, "{name}/{case}: {:?}", ed.diagnostics);
         }
     }
 }
