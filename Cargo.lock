@@ -20,16 +20,6 @@ checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 
 [[package]]
 name = "accesskit"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a4b14f3d99c1255dcba8f45621ab1a2e7540a0009652d33989005a4d0bfc6b"
-dependencies = [
- "enumn",
- "serde",
-]
-
-[[package]]
-name = "accesskit"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3b7f7f85a7e5f68090000ed7622545829afd484d210358702ae4cb97dd0c320"
@@ -915,21 +905,11 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
 name = "duplicate"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de78e66ac9061e030587b2a2e75cc88f22304913c907b11307bca737141230cb"
-dependencies = [
- "heck 0.4.1",
- "proc-macro-error",
-]
-
-[[package]]
-name = "duplicate"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e92f10a49176cbffacaedabfaa11d51db1ea0f80a83c26e1873b43cd1742c24"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "proc-macro2-diagnostics",
 ]
@@ -941,7 +921,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20930a432bbd57a6d55e07976089708d4893f3d556cf42a0d79e9e321fa73b10"
 dependencies = [
  "bytemuck",
- "serde",
 ]
 
 [[package]]
@@ -1030,12 +1009,10 @@ version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "584c5d1bf9a67b25778a3323af222dbe1a1feb532190e103901187f92c7fe29a"
 dependencies = [
- "accesskit 0.12.3",
  "ahash",
  "epaint 0.27.2",
  "log",
  "nohash-hasher",
- "serde",
 ]
 
 [[package]]
@@ -1044,7 +1021,7 @@ version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc938cc27cd911415e1e4d151bc56ff9df063d8db081374e87aeb805ea74b2ba"
 dependencies = [
- "accesskit 0.24.1",
+ "accesskit",
  "ahash",
  "bitflags 2.13.2",
  "emath 0.36.2",
@@ -1135,23 +1112,11 @@ dependencies = [
 
 [[package]]
 name = "egui_dock"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3b8d9a54c0ed60f2670ad387c269663b4771431f090fa586906cf5f0bc586f4"
-dependencies = [
- "duplicate 1.0.0",
- "egui 0.27.2",
- "paste",
- "serde",
-]
-
-[[package]]
-name = "egui_dock"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d9f668eb59ff0ab130c8bce71a513135e1d3017fb3103fb8758e9eea99d759f"
 dependencies = [
- "duplicate 2.0.1",
+ "duplicate",
  "egui 0.36.2",
  "paste",
  "serde",
@@ -1221,7 +1186,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4c3a552cfca14630702449d35f41c84a0d15963273771c6059175a803620f3f"
 dependencies = [
  "bytemuck",
- "serde",
 ]
 
 [[package]]
@@ -1286,7 +1250,6 @@ dependencies = [
  "log",
  "nohash-hasher",
  "parking_lot",
- "serde",
 ]
 
 [[package]]
@@ -1903,12 +1866,6 @@ dependencies = [
  "widestring",
  "winapi",
 ]
-
-[[package]]
-name = "heck"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "heck"
@@ -3205,30 +3162,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3478,7 +3411,7 @@ version = "0.1.0"
 dependencies = [
  "eframe 0.27.2",
  "egui 0.27.2",
- "egui_dock 0.12.0",
+ "egui_dock",
  "egui_plot 0.27.2",
  "png 0.18.1",
  "rcfd-api",
@@ -3594,7 +3527,7 @@ version = "0.1.0"
 dependencies = [
  "eframe 0.36.2",
  "egui 0.36.2",
- "egui_dock 0.21.1",
+ "egui_dock",
  "egui_plot 0.37.0",
  "rcfd-api",
  "rcfd-claude",
