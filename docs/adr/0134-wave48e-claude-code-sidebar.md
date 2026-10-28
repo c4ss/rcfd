@@ -137,7 +137,10 @@ inside serde deserialization. serde_json gives such an error a position only aft
 following `,` and whitespace, so the position is that of the next element. Correction: the file is parsed first
 (rules as strings), then each rule is validated and a refusal is located by a scan of the parsed text for the line and
 column of that array element (`allow::rule_positions`). The E5 limit ("refused with the line number") and the test are
-unchanged; the corrected run follows this amendment.
+unchanged; the corrected run follows this amendment. (This text was written into the file before the corrected run but
+committed afterwards, in the addendum commit 9e870cc.) The rule that a missed limit becomes a `*_known_miss` test was not
+applied, because the miss was a defect in new code, not a limit that the code cannot meet; the maintainer is asked to
+confirm this or have it converted.
 
 ## Addendum: library part, results against the registered limits (2026-10-28)
 
@@ -175,7 +178,7 @@ What was built (additive; `Claude::new` and `check_args` give the same results a
 | E6 | integration | cancel from the panel | not run (panel); ADR 0126 D5: both pids gone 0.527 s after cancel started (run 2) |
 | E7 | integration | mirror within 2.0 s | not run (panel); ADR 0126 P3 passes unchanged |
 | E8 | library + integration | no chat until the folder is confirmed | **not run: blocked by the open question below**; only the scan exists, with unregistered tests |
-| E9 | library | argv has `--strict-mcp-config --mcp-config <outside>`; refused inside or without `--strict-mcp-config`; T3 space clean; `--mcp-config ./.mcp.json` refused | **pass**: recorded argv equals `Chat::args` and has the triple once; 14 refusals on Windows (relative `./.mcp.json`, `.mcp.json`, `../x`; absolute inside; lexically inside through `sub/..`; other ASCII case; no `--strict-mcp-config`; inline JSON; both `=` forms; two values; flag twice; no value; missing file); accepted: sibling `my-proj2`, the config through `<proj>/..`, `--strict-mcp-config` alone; a config inside the project starts no process; T3 space with pinning 7469 lists (10 203 distinct rules), none refused or carrying a bypass token; T3's 15 bad lists still refused; ADR 0126 T3 itself unchanged and passing. Not registered: a link outside pointing into the project is refused |
+| E9 | library | argv has `--strict-mcp-config --mcp-config <outside>`; refused inside or without `--strict-mcp-config`; T3 space clean; `--mcp-config ./.mcp.json` refused | **pass, against `check_args_in`** (the limit names `check_args`, which has no project path and keeps its ADR 0126 behaviour: alone it still accepts these flags; every spawn runs `check_args_in`): recorded argv equals `Chat::args` and has the triple once; 14 refusals on Windows (relative `./.mcp.json`, `.mcp.json`, `../x`; absolute inside; lexically inside through `sub/..`; other ASCII case; no `--strict-mcp-config`; inline JSON; both `=` forms; two values; flag twice; no value; missing file); accepted: sibling `my-proj2`, the config through `<proj>/..`, `--strict-mcp-config` alone; a config inside the project starts no process; T3 space with pinning 7469 lists (10 203 distinct rules), none refused or carrying a bypass token; T3's 15 bad lists still refused; ADR 0126 T3 itself unchanged and passing. Not registered: a link outside pointing into the project is refused |
 | E10 | integration | frame build <= 8 ms | not run (panel) |
 | H1-H5 | by hand | real Claude Code session | not run (need a real session and a person) |
 
@@ -210,4 +213,8 @@ Related points for the same decision: `fnv64` is not collision-resistant, so som
 example `sha2`, MIT/Apache-2.0). The ADR list leaves out `CLAUDE.local.md` and `CLAUDE.md` files in folders above the project,
 which Claude Code also reads according to its memory documentation (from prior reading, not re-read for this addendum,
 not observed). `check_args_in` does not refuse `--plugin-dir` and similar flags,
-because the ADR does not list them; the driver never generates them.
+because the ADR does not list them; the driver never generates them. Should `check_args` itself also refuse the
+project-independent MCP forms (relative path, inline JSON, `=` forms, several values, `--mcp-config` without
+`--strict-mcp-config`)? It was left unchanged so that existing callers get the same verdicts. The outside-the-project check
+compares paths lexically and after `canonicalize`; it does not detect hard links or UNC aliases (`\\localhost\E$\...`) of a file
+in the project. The Studio chooses the config path, so this is a stated limit, not a hole a received folder can use.
