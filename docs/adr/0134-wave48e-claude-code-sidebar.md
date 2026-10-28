@@ -218,3 +218,42 @@ project-independent MCP forms (relative path, inline JSON, `=` forms, several va
 `--strict-mcp-config`)? It was left unchanged so that existing callers get the same verdicts. The outside-the-project check
 compares paths lexically and after `canonicalize`; it does not detect hard links or UNC aliases (`\\localhost\E$\...`) of a file
 in the project. The Studio chooses the config path, so this is a stated limit, not a hole a received folder can use.
+
+## Amendment 2 (2026-10-28, maintainer decisions after the library addendum; registered before the E8 run)
+
+Maintainer decisions (user-approved, from the main session): the trust record follows option **(a) + (c)** of the open question
+above. It is kept in the Studio's per-user config folder, keyed by the canonical project path, never inside the project folder
+(a `.rcfd/claude-trust.json` found in a project is ignored). `.rcfd/claude-allow.json` is listed among the files the user
+confirms, with its rules shown. `new_session` and `resume` refuse an unconfirmed or changed folder. Still open, unchanged:
+`fnv64` against a cryptographic hash (no `sha2` added), whether `check_args` itself refuses the MCP forms (left as is), and
+how the E5 rerun is treated (the code fix is kept).
+
+Design of the library part (`src/trust.rs`, `src/driver.rs`):
+* `trust::scan` also lists `.rcfd/claude-allow.json` (ASCII case and trailing dots ignored).
+* `TrustStore::new(<file in the Studio config folder>)`: JSON `{"version": 1, "projects": {<canonical path>: [entries]}}`,
+  written atomically. `check(project)` gives `Confirmed` or `Pending { files, changed, allow_rules }`: `changed` names every
+  path added, changed or removed since the record; `allow_rules` holds the allow file's rules as flag values, or why the file
+  is refused. A folder whose scan is empty is confirmed without a record (starts at once). `confirm(project, files)` records
+  the files the user was shown. `save_allow_list(project, list)` writes the allow file and updates only that file's entry
+  (the "allow" button), so other unconfirmed files still ask.
+* `Claude::trust_store: Option<PathBuf>` (`None` from `Claude::new`). `new_session` and `resume` check the folder first, after
+  the argument checks and before any process starts (for `resume` also before `claude agents --json`), and return
+  `Error::FolderNotConfirmed { project, pending }`. With no store, only a folder without control files can start.
+  Existing callers whose folders hold no control file are unaffected; a caller that used to start chats in a folder with
+  `.mcp.json`, `.claude/`, `CLAUDE.md`, `.claude-plugin/` or an allow file is now refused until it confirms (decided above).
+
+E8 set-up (`tests/w48e_trust.rs::e8_*`, `fake-claude`, store at `<tmp>/studio-config/claude-trust.json`, outside the project):
+for each of three projects holding `.mcp.json`, `.claude/settings.json` or `cases/sub/CLAUDE.md`: `new_session` and `resume`
+are refused with `FolderNotConfirmed` naming that file and the fake records no call at all; after `confirm` with the pending
+files, `new_session` starts exactly one chat process; after one byte of the file changes, `new_session` is refused again with
+the file in `changed` and the call count stays at one. Negative control: a project without those files starts at once (one
+process, no store needed). Extra cases on the same set-up, under the same rule (no process while refused, one after):
+* a project with `.rcfd/claude-allow.json`: pending shows its rules exactly; after confirming, `save_allow_list` with one more
+  rule does not ask again, while a direct write of the file does;
+* a sender's record shipped inside the project (`.rcfd/claude-trust.json` holding the right hashes in the store format) does
+  not confirm the folder;
+* a confirmed folder copied to another path is not confirmed there.
+
+E4 set-up change (limits unchanged): the E4 project holds `.rcfd/claude-allow.json`, so under the decisions above it must be
+confirmed before its first chat. The test sets `Claude::trust_store`, confirms the folder after writing the first list, and
+writes the grown list with `TrustStore::save_allow_list` (the "allow" button) instead of `AllowList::to_file`.
