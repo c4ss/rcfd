@@ -280,6 +280,67 @@ Limits unchanged.
    shapes; the control is the first frame (the plan is asked for during it).
 6. D8 as implemented: an unreadable `run.json` is read again on the next poll (a run folder still being written), not cached.
 
+## Amendment 2 (2026-10-28, after SF1-SF11 ran, before SF9 (j)-(l) ran): checks for the case's own output settings
+
+Context gap 5 (a case's own store keys) was fixed by D6 but no registered fixture covered it. Registered here before any of the
+new checks was written or run; nothing else changes. The cavity is `RUN_CASE` (144 cells, `simplec`, 400 iterations, the 2D mesh
+constant of D4), with an `[output]` table appended. New test file `tests/case_output_sf9.rs`.
+
+| Id | Case | Limit | Negative control |
+|---|---|---|---|
+| SF9 (j) | the cavity with `store_interval = 7` | no proposal and `set()` empty (as R10 (b)); case lines exactly `The case sets its own field store (output.store_interval = 7), which is kept.`; store line `Stores ux, uy, uz, p every 7 iterations: at most 58 snapshots (fewer if the run converges earlier), f64.`; estimate 900 + 38 016 + 58 x (115 + 4 x (153 + 1152)) = 348 346 bytes, size line `Estimated size 348 kB (144 cells), in runs/<run id>/fields/ where the Viewport reads it.`; no warning | R10's `estimated_bytes()` gives none for it (the 48D dialog showed no size for a case's own store) |
+| SF9 (k) | the cavity with `store_precision = "f64"` | `set()` exactly `output.store_interval=4`; store line ends `, f64.`; estimate 900 + 38 016 + 100 x (115 + 4 x (153 + 1152)) = 572 416 bytes; no case line; no warning | R10's `estimated_bytes()` gives 230 400 (4-byte values) for this f64 store |
+| SF9 (l) | the cavity with `store_fields = ["p"]` | `set()` exactly `output.store_interval=4`, `output.store_precision=f32`; the effective fields `["p"]`; store line `Stores p every 4 iterations: at most 100 snapshots (fewer if the run converges earlier), f32.`; estimate 900 + 38 016 + 100 x (115 + 1 x (153 + 576)) = 123 316 bytes; a drawn start dialog shows the label `Store fields for scrubbing (p)`; in process (SF2's pattern, three steps, the plan's `set()` applied) the store holds exactly the field `p`, in `F32` | R10's `estimated_bytes()` counts 4 fields (230 400); the 48D label text `Store fields for scrubbing (ux, uy, uz, p)` is not drawn |
+
+## Addendum: results against the registered limits (2026-10-28, branch `worktree-agent-aa058b4029a5cb958`, release builds)
+
+Registration f8999c8; code, tests and amendment 1 2c48494 (before any test of this ADR was built or run). All registered runs on
+this host from 2c48494, release, `--test-threads 1`, output to files; the process tests started `rcfd-runner serve` directly with
+`rcfd` and `rcfd-runner` of the same build. The workspace gate was not run (the maintainer runs it).
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| SF1 | ten plans with the store on and the registered `set()`; six `case.json` refused | 10 of 10 as registered (`axial_fan_*` 60, `kepsilon_channel` 80, `kepsilon_inlet` 4, `profile_inlet` 20, `sst_channel` 90, `packed_bed` 17, `rotating_channel` 17, `sod` `store_time_interval=0.002`, `wedge` 0.03, each with `store_precision=f32`), no note; the six `case.json`: `cases/<name>/case.json: not TOML: invalid key-value pair, expected key` | pass |
+| SF1 control | the 48D rule gives `sod` `output.store_interval=20` | `output.store_interval=20` | fails as required |
+| SF2 | 10 of 10: no "field store" warning, store opens, >= 1 snapshot, `ux, uy, uz, p`, all `F32` | 10 of 10: one snapshot at step 3 each, `sod` two (steps 2, 3); fields and precision as registered | pass |
+| SF2 control | "field store disabled" and no store | `field store disabled: output.store_fields: invalid value at 'nosuch': field 'nosuch' is not available in this simulation`; no store file | fails as required |
+| SF3 | table count = `build_mesh` count; fan cases counted by the model within 60 s | 56, 288, 480, 240, 320, 160, 100, 1200 equal; `axial_fan_cgrid` 11 536 and `axial_fan_sector` 13 332 counted in 0.17 s and 0.18 s, equal (their size lines: 20.9 MB and 24.1 MB) | pass |
+| SF3 control | `nx * ny` differs from the count | 400 (amendment 1 item 2) against 11 536 and 13 332 | discriminates |
+| SF4 (a) | 100 snapshots; bytes within 10 % | 100; 342 012 bytes against the estimate 342 016 (-0.001 %) | pass |
+| SF4 (b) | 100 snapshots; bytes within 10 % | 100; 346 419 against 342 016 (+1.29 %) | pass |
+| SF4 (c) | 1 <= n <= 100; bytes <= 1.10 x estimate | 100; 271 872 against 260 000 (1.046) | pass |
+| SF4 control | R10's `estimated_bytes()` misses (a) by more than 10 % | 230 400 against 342 012 (-32.6 %) | fails as required |
+| SF5 | `Ready` at `runs/<id>/fields`, counts equal, last `p` bit-equal | (a), (b), (c): 100, 100, 100 snapshots, no legacy note, no `output/fields`; 144, 144 and 100 faces bit-equal | pass |
+| SF5 control | after moving (a)'s `fields/`: the "missing" text | `Run <id> asked for stored fields, but no store was found.` | as required |
+| SF6 | legacy store `Ready`, 3 snapshots, note exact, values bit-equal; the contract location wins | 3 snapshots x 144 faces bit-equal, note exact; with both stores 2 snapshots, no note | pass |
+| SF6 control | the contract-only lookup finds nothing | `runs/<id>/fields/store.rts` absent | as required |
+| SF7 | 13 fixtures' texts exact (main text, hint, re-run line, "Looked for" line); four of them and the header-only store through the model; the case-changed line | all equal; through the model `Status::NoStore` held the main text and the "Looked for" line, the header-only store was `Ready` with no snapshot and the failed text | pass |
+| SF7 control | the 48C text equals none of the registered texts | differs from 13 of 13 | fails as required |
+| SF8 | the re-run's `set`, `case` and `case.snapshot` exact; 100 snapshots shown; refused after a change | `set` = `output.store_interval=4`, `output.store_precision=f32`, `solver.max_iterations=400`; `case` `cases/cavity.toml`; snapshot byte-equal; shown with 100 snapshots | pass |
+| SF8 control | refused with the registered text, no run created | `the run was not started: cases/cavity.toml changed since this run, ...`; 2 runs | as required |
+| SF9 (a)-(h) | texts and `set()` exact | all as registered; (d) 1 864 313 600 bytes, after the fix `store_interval=45` and 984 141 615 bytes | pass |
+| SF9 (i) | label, store line and size line drawn with the switch on; switched off: warning and "Store fields" drawn | as registered | pass |
+| SF9 controls | the default has no warning, the switched-off plan has W-off; the first frame has no store line | as stated | discriminate |
+| SF10 (a) | no change outside `crates/rcfd-studio/` and `docs/` | `git diff --stat f3bf005 HEAD` outside them is empty; `Cargo.lock` unchanged | pass |
+| SF10 (b) | every output file byte-equal | the branch's `rcfd.exe` was not rebuilt by cargo (no source of its closure changed) and has the saved binary's sha256 (`911b94e2...27c7`); cavity fixture 5 files and `sod` 4 files byte-equal, exit 0 both | pass |
+| SF10 (c) | A6, A7, `baseline_hashes` unchanged | `run_flags_w48a` 2 passed; `baseline_hashes` 3 passed, 1 ignored as before | pass |
+| SF10 control | `--set output.store_interval=4` adds `fields/` | `Only in .../control: fields` | differs as required |
+| SF11 | the whole `rcfd-studio` suite passes unchanged | SF11_RESULT | SF11_STATUS |
+
+Deviations and notes:
+* SF11's first run stopped at `chat_e` (14 tests): this fresh worktree had no `fake-claude` test double, which ADR 0134
+  amendment 3 requires to be built (`cargo build -p rcfd-claude --bin fake-claude`); a set-up step, not a code change. It was
+  built and the whole suite was run again with `--no-fail-fast` (the row above).
+* Reported, not limited: `sod` stored 100 snapshots, the plan's upper bound; the transient estimates are slightly low because the
+  stored times print longer (`0.015000000000000001`) than the steady `0.0`.
+* The re-run queues the new run and says so in the status bar; the viewport stays on the selected run (following a started run
+  is job 4's one-click start-and-follow).
+* No new third-party crate, no new workspace edge, no change of `Cargo.lock`, `workspace_graph.rs` or `docs/architecture.md`.
+
+Not run: the "Not in CI" checklist (a person looking at the window); Linux (the new process tests SF4, SF5, SF8 have never run
+there: a CI risk, as ADR 0133's); debug builds of the new tests; the workspace gate and workspace-wide clippy; `cargo deny` (not
+installed).
+
 ## Files
 
 This ADR. `crates/rcfd-studio/src/{store_plan,run_fields,fields_ui}.rs` (new), `crates/rcfd-studio/src/{runs,poll,studio,viewport,
