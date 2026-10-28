@@ -242,8 +242,8 @@ the starter's dialog line and the data file in the Project panel, the strip's er
    mesh.nx ...". F5 says the same in the status bar. Press Enter: Run says "save it first"; save: Run is enabled.
 3. Orbit, pan or zoom the mesh, then type a new `nx`: after the pause the mesh changes and the view stays. Type a new `lx`
    (or `ly`): the view is fitted to the new box, in the same direction.
-4. With a large case open, commit a field without changing its value (click into it and press Enter): no "Building the
-   mesh..." spinner follows.
+4. With a large case open, type a new value into a field and wait until its mesh is shown; then press Enter (the value is
+   committed, the text the same): no second "Building the mesh..." follows.
 5. Case > New case from example..., pick "channel with a profile-file inlet": the line says it also creates
    `cases/profile_inlet.csv`; create it, then Run: the run finishes and its fields show. The Project panel lists the table
    too (question 3).

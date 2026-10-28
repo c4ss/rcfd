@@ -65,7 +65,8 @@ fn m4_profile_inlet_from_the_starter_end_to_end() {
     });
     let line = "creates cases/profile_inlet.toml and its data file cases/profile_inlet.csv from the example \
                 channel/profile_inlet.toml";
-    let drawn = g4::texts(&common::frame(&mut app, &ctx));
+    // a new window is laid out unseen in its first frame: the line is looked for in the first 3 frames
+    let drawn: Vec<String> = (0..3).flat_map(|_| g4::texts(&common::frame(&mut app, &ctx))).collect();
     assert!(drawn.iter().any(|t| t == line), "(e) the dialog's line not drawn");
     app.ui_state.starter = None;
     // (a)
