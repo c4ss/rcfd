@@ -371,3 +371,102 @@ snapshot with. Corrected: the expected image (a fresh `upload` of the snapshot's
 `Viewport::view()` read after the step has been drawn; the negative control compares the texture read before the step with that
 corrected expected image. Limits unchanged. What I knew: V4, V5, V8 and V11 passed in that run (the addendum reports them); V3
 and V9 had passed in their own run.
+
+## Addendum: integration part, results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a90090d61490b5d71` on main 7486ecb. Registered runs: release, `--test-threads 1`, output to files, this
+machine, the five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no
+test took the SKIP branch. V3, V9 and V4, V5, V8, V11 ran on 87b8552, V10 on 801a378 (after amendment 2), V2 and the whole
+`rcfd-studio` suite on 801a378. After two later commits (39cc8e8: a live-store fix and "Save PNG", below; e9d3e8e: the smoke hook
+prints once) the viewport tests, parity, B4 and B7 were run again: all pass with the same values. The workspace gate was not run
+(the maintainer runs it).
+
+| Id | Measured | Limit | Status |
+|---|---|---|---|
+| Merge condition | `Cargo.lock`: one wgpu 30.x, 30.0.1; eframe 0.36.2 and egui-wgpu 0.36.2 depend on it; the change adds two dependency lines (`rcfd-mesh`, `rcfd-render` under `rcfd-studio`), no package | one wgpu 30.0.1 | holds |
+| V2 | 5 adapters x {`Rgba8Unorm`, `Bgra8Unorm`} x ppp {1, 2}: max channel difference inside the image 1 on the four hardware adapters (cube and ramp; egui's dithering), 0 on WARP | <= 1 | pass |
+| V2 control (amendment 1) | ramp through an `Rgba8UnormSrgb` view: 2048 of 2048 mid-grey pixels differ by > 1 (max 74), every adapter, format and ppp | >= 50 % | fails as required |
+| V3 | 40 operations (2 projections x 2 starts x 10 inputs): worst rel. difference 0 (bit-equal); pan: the old target lands within 5.7e-14 px of centre + drag; pitch clamps at pi/2 | rel. 1e-12; 1e-9 px | pass |
+| V3 control | flipped-y pan: smallest rel. difference 2.07e-2, smallest pixel miss 6.0 px | > 1e-12, > 1 px | fails as required |
+| V4 | model: 3 snapshots x 64 faces bit-equal to `face_values_from_cells(read_field)`; 64 faces, owner cells 0..63; picks: 192 of 192 per adapter return the face, the f32 of the stored value bit for bit, and the stored f64 and owner cell in the readout (each adapter: 1 upload, 2 scalar updates) | bit-exact | pass |
+| V4 control | snapshot k vs k + 1: 2 of 2 differ | differ | fails as required |
+| V5 | 213 positions (6 snapshot times, 5 midpoints, 2 ends, 200 LCG): nearest index = `by_time(Nearest)` and values bit-equal; linear values bit-equal to `field_at_time(Linear)`, flag equal (205 interpolated, none at snapshot times); app: 3 classes x 2 modes bit-equal, "interpolated" drawn iff flagged | bit-exact | pass |
+| V5 control (amendment 1) | round-half-up differs from `by_time(Nearest)` at 3 of 5 midpoints | >= 1 | fails as required |
+| V8 | per snapshot: ranges (0.5, 1.13), (1.5, 2.13), (2.5, 3.13), end labels `format!("{:.4e}")` equal and drawn; over the run (0.5, 3.13) bit-equal at every snapshot, labels 5.0000e-1 .. 3.1300e0 drawn | exact | pass |
+| V8 control | per-snapshot range differs from the run range at snapshots 0 and 2 | differ | fails as required |
+| V9 | `viewport: no adapter (wgpu: no adapter for back ends Backends(0x0))`; drawn in 20 of 20 headless frames | located, "no adapter"; frames draw | pass |
+| V10 (amendment 2) | every adapter: 3 steps byte-identical to a fresh upload (texture 531 x 379, the default layout's Viewport tab); uploads 1, scalar updates 3, renders 4 | byte-identical; no upload | pass |
+| V10 first run | failed on NVIDIA Vulkan, 66 766 pixels (test-code defect, amendment 2) | | superseded |
+| V10 control | texture before each step differs from the next image: 3 of 3 per adapter | differ | fails as required |
+| V11 | markers 10, 20, 30; linear at t = 0.125: 12.5 (`w` = 0.24999999999999994, bit-equal); `None` after close; Plots frame drawn | exact | pass |
+| V11 control | marker != snapshot index | differ | fails as required |
+| B9 parity | `parity_2d_field_view_with_colour_map_legend_and_hover` on NVIDIA Vulkan: rendered, legend end labels drawn, hover `value 1.1092974268256817  (face 0, cell 0)` drawn (the stored value) | as registered | pass |
+
+No known miss. ADR 0131 and 0133 checks re-run unchanged in the same suite (801a378): B1-B9 (B7 median 0.329 ms, control 14.7 ms),
+R1-R5, R6b, R7-R12 and the live-monitor parity test pass, R6 stays the ignored known miss. `workspace_graph` 3 passed; `cargo clippy
+--release -p rcfd-studio --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean;
+`scripts/third_party_licenses.py --check` up to date.
+
+**Unregistered.**
+* `viewport_model::steady_runs_slide_over_steps`: a store with time 0 at every snapshot slides over steps (`by_step(Nearest)`), linear
+  off. `viewport_live::live_store_extends_the_slider`: a run without a store reports where it looked; a store written while shown
+  (header only, then 3 commits) is followed snapshot by snapshot through `refresh()`, marker following. `viewport_live::
+  saved_image_equals_the_texture`: "Save PNG" reads back exactly the texture's bytes. All pass.
+* Launch smoke of the real binary (e9d3e8e, `RCFD_STUDIO_SMOKE=180`, `APPDATA` pointed to a scratch folder so the maintainer's
+  preferences were not touched), on the project of R8's last run (a runner-made 12 x 12 cavity, 100 f32 snapshots): with
+  `WGPU_BACKEND=vulkan` and `dx12` the window opened on NVIDIA RTX 5080, swap-chain format **`Bgra8Unorm`**, the run's field `p`
+  at snapshot 100 of 100 (step 400) shown, no GPU error, 1 upload, 1 render in 180 frames (render on change only), texture
+  531 x 379; the process exited 0 both times. `rcfd-studio --help` prints the usage; two arguments exit 2.
+
+**Deviations and notes.**
+* V2 and V5 negative controls replaced before any run (amendment 1, with the reasons); V10 corrected after a test-code defect
+  (amendment 2).
+* Fixed after the registered runs (found in review, not by a registered test; covered by the unregistered live test): a live run
+  whose store had no snapshot yet when opened never requested its first frame, and stepping with no snapshot could panic in a
+  `clamp`. Added after the registered runs: "Save PNG..." in the viewport (the shown image through `Renderer::render`, written on a
+  background thread after an `rfd` save dialog), so the "Not in CI" colour comparison has a PNG of the exact view.
+* The ADR's Files list names `crates/rcfd-render/tests/` for V2; per the maintainer's answer V2 is `crates/rcfd-studio/tests/
+  viewport_v2.rs`. Other touched files: `crates/rcfd-studio/{Cargo.toml, src/{lib,main,studio,ui,viewport,viewport_ui}.rs}`, tests
+  `viewport_{model,store,v2,live}.rs`, `vp/mod.rs`, `parity.rs`; `Cargo.lock` (two dependency lines); `docs/architecture.md`.
+  Edits to `studio.rs` (one field, `close_project`, the end of `drain`) and `ui.rs` (the `Panel::Viewport` arm) are kept small for
+  the 48E merge.
+* The default layout gives the Viewport tab about 531 x 379 points at 1280 x 800; enlarging it is a layout question, not changed.
+* Hover runs one pick pass (a full-size readback) on the first hover after each image change, then reads the cached ids; at large
+  windows that first hover costs a frame (not measured).
+* A 3D (non-2D) run is drawn with all boundary patches; part visibility and the cut plane of the design list are in the model's
+  `View` (`parts`, `clip`) but have no controls yet.
+* The store is looked for only at `runs/<id>/fields/` (ADR 0130 D3 (b)); runs made before 48A (store at `output/fields`) show
+  "no stored fields" with the path.
+
+**Not run.** The "Not in CI" items below (a person looking at the window); Linux and the CI skip branch of the new GPU tests (no
+adapter: they print SKIP before any fixture); a debug build of the new tests; the workspace gate and workspace-wide clippy; `cargo
+deny` (not installed).
+
+**View-and-report checklist for the maintainer** (the window is the maintainer's to judge):
+1. Build: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli` (the Studio starts `rcfd-runner` and `rcfd` from
+   its own folder; `cargo run -p rcfd-studio` alone does not build them). Then `target\release\rcfd-studio.exe <project folder>`.
+2. A run with stored fields: Runs > "Start run...", pick a case, leave "Store fields for scrubbing" on, Start (a runner starts if
+   none runs). A transient case (`piso`, `pimple`) gives a time slider; a steady case gives a step slider.
+3. Select the run in the Runs panel: the Viewport shows field `p` coloured (viridis) with the legend at the right; check another
+   field in the "field" box.
+4. Mouse: left drag orbits, right or middle drag pans (the surface follows the pointer), the wheel zooms, a double click fits.
+   Check that nothing clips while zooming and panning, and that a 2D cavity is seen face-on in an orthographic view.
+5. Time: drag the slider, use `|<`, `<`, play, `>`, `>|`; the read-out shows snapshot, step and time; with "linear" (transient
+   only) it shows "interpolated" between snapshots. Check that the Plots panel's vertical "viewport step" line follows.
+6. Hover: the readout under the image shows value, face and cell; the value should match the solver's cell value.
+7. Range: switch "snapshot", "whole run", "fixed" and type a min and max.
+8. Colours on screen: "Save PNG..." saves the shown image; take a screenshot of the same view and compare a few sampled pixels
+   (they should be equal or within 1). Note which adapter and back end the window used (set `WGPU_BACKEND=dx12` or `vulkan` to
+   choose).
+9. Resize the window and the panels, switch the theme (View menu), try high-DPI scaling if available; watch for stretching,
+   stale images or slow orbiting, and while a live run streams, that new snapshots appear on the slider.
+10. Report anything that looks wrong, with the run, adapter and what was done.
+
+**Questions for the maintainer.**
+1. The launch-smoke hook `RCFD_STUDIO_SMOKE=<frames>` is in the shipped binary (an environment variable, off unless set). Keep it
+   as a test hook, or remove it?
+2. "Save PNG..." was added beyond the ADR's design (for the "Not in CI" colour check). Keep it?
+3. Should runs made before 48A (store at `runs/<id>/output/fields/`) also be found by the viewport (ADR 0130 D3 option (a)'s
+   fallback), or stay "no stored fields"?
+4. The Viewport tab of the 48B default layout is about 531 x 379 at a 1280 x 800 window. Give the viewport more of the default
+   layout?
