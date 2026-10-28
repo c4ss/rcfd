@@ -112,7 +112,7 @@ log.
 
 ## Addendum: results with the change (2026-10-28)
 
-Docker (same image and limits), `git archive` of the branch head a2dfecf, the 16 tests of the CI failure list: 12 pass (G6, P5,
+Docker (same image and limits), `git archive` of the branch head a2dfecf (before the rebase onto main 81cf498, whose commits touch none of the changed files), the 16 tests of the CI failure list: 12 pass (G6, P5,
 `cavity_paths_match_registered_hashes`, T4, L1, A1, W33B, the three B1, W0, X0 40 x 80); 4 fail as reported above (S4a, S4b,
 C3, P1). L1 printed `10 w = 90.9 ms <= budget: the budget catches a listing 55x slower than measured`.
 
