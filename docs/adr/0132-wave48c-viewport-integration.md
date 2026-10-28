@@ -190,7 +190,7 @@ SKIP branch. Result: 5 unit + 11 `render.rs` (2 ignored known misses of ADR 0125
 |---|---|---|---|
 | V1 | all four G2 scenes on all five adapters: 0 pixels of the `render_into` texture differ from `render` (byte-identical); negative control at yaw 37: 3400 (a), 23 936 (b), 27 619 (c; 27 618 on WARP), 19 161 (d) differing pixels | byte-identical; control differs | pass |
 | V6 | all five adapters: after `update_scalar` (field (c) to field (a)) 0 differing pixels against a fresh upload of (a), also through `render_into`; pick ids and values equal; updating back to (c) equals the original upload under (c)'s view; negative control (scalar buffer not bound) 28 109 differing pixels | byte-identical; control differs | pass |
-| V6, ADR 0125 checks unchanged | R0, G1, G2 a-d, D1, G3, P1b, P2 depth/visibility, V1, K1, W1, S1, T1, U1 pass with the values of ADR 0125's addendum; the 29 PNGs the tests save (G1, G2 per adapter and the CPU references) are byte-identical to those of the base commit 3492c75 (`cmp`) | pass unchanged | pass |
+| V6, ADR 0125 checks unchanged | R0, G1, G2 a-d, D1, G3, P1b, P2 depth/visibility, V1, K1, W1, S1, T1, U1 pass; the non-timing values equal those of ADR 0125's addendum (T1 timings are reported below); the 29 PNGs the tests save (G1, G2 per adapter and the CPU references) are byte-identical to those of the base commit 3492c75 (`cmp`) | pass unchanged | pass |
 | V7, 100^3 box (120 000 triangles) | median step: NVIDIA Vulkan 11.0 ms, NVIDIA DX12 10.8 ms; AMD Vulkan 12.6 ms, AMD DX12 12.8 ms; WARP 179.3 ms | <= 100 ms on `DiscreteGpu` | pass (others reported) |
 | V7, T1 surface (1 000 000 triangles) | median step: NVIDIA Vulkan 16.4 ms, NVIDIA DX12 12.9 ms; AMD Vulkan 19.4 ms, AMD DX12 22.8 ms; WARP 1414.4 ms | <= 100 ms on `DiscreteGpu` | pass (others reported) |
 | V7 negative control (full re-upload, T1 surface) | median of 5: NVIDIA Vulkan 164.0 ms, NVIDIA DX12 155.4 ms; AMD Vulkan 208.9 ms, AMD DX12 206.4 ms; WARP 17 581.8 ms | > 100 ms on `DiscreteGpu` | discriminates |
@@ -198,6 +198,11 @@ SKIP branch. Result: 5 unit + 11 `render.rs` (2 ignored known misses of ADR 0125
 T1 in the same run (reported, limit 250 ms on discrete GPUs): median frame 2.5 / 5.3 ms (NVIDIA Vulkan / DX12), 9.7 / 9.3 ms (AMD),
 68.8 ms (WARP); uploads 146-195 ms. V7 set-up times: box store written and surface built in 2.6 s, T1-mesh store in 0.7 s; the whole
 `viewport.rs` binary took 163 s, most of it WARP's 1M-triangle arm.
+
+**Run with default test threads** (the command of the task, `cargo test --release -p rcfd-render`, same commit; the registered run
+above was single-threaded): all tests pass. V7 medians: box 12.2 / 11.0 ms (NVIDIA Vulkan / DX12), 13.1 / 13.6 ms (AMD), 178.4 ms
+(WARP); T1 surface 18.1 / 13.8 ms (NVIDIA), 21.1 / 22.2 ms (AMD), 1381.6 ms (WARP); re-upload control 174.2 / 159.3 ms (NVIDIA),
+190.4 / 199.4 ms (AMD), 17 606.9 ms (WARP).
 
 **Not run in the library part:** V2 (egui-wgpu composite), V3, V4, V5, V8, V9 (viewport model), the step-0 check that eframe's wgpu
 resolves to the same 30.0.1 in `Cargo.lock`, and the "Not in CI" items. They belong to the integration part on the 48B shell.
