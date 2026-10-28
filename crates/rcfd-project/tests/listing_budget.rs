@@ -69,17 +69,28 @@ fn l1_listing_hundreds_of_runs_within_budget() {
 
     // Negative control (ADR 0128 finding 12; replaces 500 sleeps of 2 ms, which exceeded the budget whatever the
     // listing cost): the same listing done 10 times must exceed the budget, i.e. the budget catches a listing 10x
-    // slower than the one measured.
+    // slower than the one measured. Finding 12's registered rule decides per run (ADR 0137): if 10 w <= budget the
+    // budget cannot catch a 10x slowdown on this machine, the control is not asserted and the budget assertion below
+    // is the remaining guard.
     let t = Instant::now();
     for _ in 0..10 {
         p.runs().unwrap();
     }
     let slow = t.elapsed();
     eprintln!("L1: worst of 3 listings {worst:?} (budget {BUDGET:?}); the listing 10 times: {slow:?}");
-    assert!(
-        slow > BUDGET,
-        "negative control: the budget does not catch a 10x slower listing"
-    );
+    if worst * 10 > BUDGET {
+        assert!(
+            slow > BUDGET,
+            "negative control: the budget does not catch a 10x slower listing"
+        );
+    } else {
+        eprintln!(
+            "L1: 10 w = {:?} <= budget: the budget catches a listing {:.0}x slower than measured, not 10x (ADR 0128 finding 12 \
+             rule); control not asserted, the budget assertion is the remaining guard",
+            worst * 10,
+            BUDGET.as_secs_f64() / worst.as_secs_f64()
+        );
+    }
     if !cfg!(debug_assertions) {
         assert!(worst <= BUDGET, "listing {RUNS} runs took {worst:?} > {BUDGET:?}");
     }
