@@ -1,0 +1,9 @@
+{
+  "state": "finished",
+  "step": 740,
+  "time": 0.0,
+  "pid": null,
+  "updated": "2026-10-28T22:07:12.688099868Z",
+  "reason": "converged: residual targets met: res_u 9.934e-7 < 1.000e-6, res_p 3.820e-7 < 1.000e-6",
+  "exit_code": 0
+}

@@ -1,0 +1,5 @@
+/src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-b94d/case.snapshot: ok, 3072 cells
+3072 cells, algorithm piso
+checkpoint written to /src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-b94d/output/restart.rcfd
+results written to /src/example-projects-linux/wind-tunnel/runs/r-20261028T220207-b94d/output
+finished after 1280 iterations/steps (finished: end time 80 reached)

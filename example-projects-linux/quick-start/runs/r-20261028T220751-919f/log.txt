@@ -1,0 +1,5 @@
+/src/example-projects-linux/quick-start/runs/r-20261028T220751-919f/case.snapshot: ok, 1024 cells
+1024 cells, algorithm simplec
+checkpoint written to /src/example-projects-linux/quick-start/runs/r-20261028T220751-919f/output/restart.rcfd
+results written to /src/example-projects-linux/quick-start/runs/r-20261028T220751-919f/output
+finished after 158 iterations/steps (converged: residual targets met: res_u 6.485e-7 < 1.000e-6, res_p 9.796e-7 < 1.000e-6)
