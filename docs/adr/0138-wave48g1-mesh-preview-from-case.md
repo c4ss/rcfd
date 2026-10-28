@@ -116,6 +116,17 @@ pauses).
 **What I already knew (rule d).** The code reading above; `cargo check -p rcfd-studio` and a release build of the tests
 (no test binary of this ADR run). No preview check, smoke or measurement had run when this section was written.
 
+## Amendment 1 (2026-10-28, G1c set-up defect, before the corrected run)
+
+The first registered run of `tests/preview_g1.rs` (commit ce0e7b5) failed G1c before reaching its limit: both fixture
+cases are steady (`simplec`), and `rcfd run` stopped after the 2 iterations of `--set solver.max_iterations=2` exits
+with **5** ("steady run stopped at its iteration cap without meeting the tolerances", `not_converged`,
+[`docs/run-control.md`](../run-control.md) "Exit codes"), not 0. A test set-up defect: the registered "exit 0" is wrong
+for a 2-iteration steady run. Corrected: the run's exit code is 0 or 5 (any other code fails), and the store holds 2
+snapshots (steps 1 and 2, from `output.store_interval=1`); the mesh-hash and surface limits are unchanged. What I knew:
+in that run G1a, G1b, G4 (a-e), G5, G7, G9 and the estimate test passed (the addendum reports them); G1c's stderr was
+"checkpoint written to ...; warning: stopped after 2 iterations without meeting the tolerances".
+
 ## Not in CI
 
 * A person looking at the real window: colours, the overlay on a real swap chain, high-DPI, the feel of orbiting a fan

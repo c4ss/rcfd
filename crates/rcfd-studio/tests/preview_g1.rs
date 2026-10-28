@@ -226,18 +226,21 @@ fn g1c_a_real_run_stores_the_previewed_mesh() {
             ])
             .output()
             .unwrap();
+        // amendment 1: a steady run stopped at its 2-iteration cap exits with 5 (not_converged)
+        let code = out.status.code();
         assert!(
-            out.status.success(),
-            "{rel}: rcfd run failed: {}",
+            matches!(code, Some(0) | Some(5)),
+            "{rel}: rcfd run exit {code:?}: {}",
             String::from_utf8_lossy(&out.stderr)
         );
         let sv = StoreView::open(&run.join("fields")).unwrap();
+        let steps: Vec<u64> = sv.snaps().iter().map(|s| s.step).collect();
+        assert_eq!(steps, vec![1, 2], "{rel}: stored steps");
         pv::same_surface(&b.surface, &sv.surface).unwrap_or_else(|e| panic!("{rel}: run store: {e}"));
         let mut r = rcfd_tsstore::Reader::open(&run.join("fields")).unwrap();
         assert_eq!(r.mesh().unwrap().content_hash(), b.mesh_hash, "{rel}: mesh of the run");
         eprintln!(
-            "G1c {rel}: rcfd run stored {} snapshots; mesh hash {:016x} equal, surface equal",
-            sv.snaps().len(),
+            "G1c {rel}: rcfd run exit {code:?}, stored steps {steps:?}; mesh hash {:016x} equal, surface equal",
             b.mesh_hash
         );
     }
