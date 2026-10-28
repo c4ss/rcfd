@@ -199,3 +199,12 @@ assert, as before. The elapsed time is printed. The negative control uses the sa
 no reader ever sees a partial file while a fsyncing atomic writer replaces it. The original fixed-2 s test stays as the ignored
 `a1_atomic_replace_never_exposes_a_partial_file_known_miss` with its limits intact. This machine passes with and without the
 correction on `C:`; the CI runner is the discriminating check.
+
+Corrected runs (2026-10-28, release, this machine, after commit 725c696; local runs, not a gate):
+
+* `C:` (NVMe), 3 runs: A1 439 / 425 / 454 writes, 1105 / 1462 / 1136 reads, 0 partial, 2.00-2.01 s; control 392 to 730 partial.
+* `D:` (HDD), 3 runs alone: A1 21 / 26 / 28 writes, 0 partial, 2.02-2.07 s; control 225 to 359 partial. The HDD was faster than in
+  the diagnosis (the fixed-2 s known miss passed once with 22 writes).
+* `D:`, 4 test processes at once (a loaded slow disk), 3 rounds: corrected A1 always 20 writes, 5421 to 9505 reads, 0 partial, in
+  6.09 to 7.93 s; the fixed-2 s known miss in the same runs 5 to 14 writes (fails, as in CI); the control under the same load 261 to
+  558 partial (passes).

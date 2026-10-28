@@ -209,3 +209,21 @@ shows whether the slow opens are transient. The test is `c7_c8_scrubbing_a_1m_ce
 The amendment-1 test as registered (no flush) stays as the ignored
 `c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf_known_miss`, limits intact. If the corrected test still misses on CI, the
 miss is real: it then becomes a `*_known_miss` with the limit intact and is reported, not re-corrected.
+
+Corrected runs (2026-10-28, release, this machine, after commit d4f4ba4; local runs, not a gate). All pass.
+
+* `C:` (NVMe), 3 runs of `..._at_rest`: open with footer 0.0000 / 0.0000 / 0.0001 s (right after the write, reported: 0.0001 s each);
+  flush 0.19-0.54 s; every other row and C8 as in the final addendum (scrub 28.7-29.2 MB, control 158.5-158.8 MB).
+* `C:`, the unflushed `..._typeperf_known_miss` (run with `--ignored`): passes, open with footer 0.0001 s.
+* `D:` (HDD), 2 runs alone: open with footer 0.0001 s after the flush and 0.0001 s right after the write, although the flush then
+  took 23 s, so write-back was pending during those opens. On this machine pending write-back does not slow an open: the hypothesis
+  of this amendment is not confirmed here.
+* `D:`, 3 tests at once, 2 rounds of the unflushed test: all rows inside the limits except one run whose panic message was not
+  captured (nearest, linear, subset or random lookup: the four open rows printed were inside, open with footer 0.0001 s); in the repeat with full logs, one run had open by scan (just
+  after the unflushed `set_len`) at 0.3531 s against a usual 0.003 s, inside the 0.5 s limit. 2 rounds of 3 `..._at_rest` at once:
+  all pass, open with footer 0.0000-0.0002 s, open by scan 0.0028-0.0034 s, flushes 1.8 to 75 s.
+* In every run the first of the 5 opens is the slowest (5 to 10 ms, then 0.1 ms), on both disks and both stores.
+
+Not verified: the CI runner. Its next gate run prints the 5 opens right after the write and after the flush, which tells whether
+the 0.126 s was transient after the write (corrected test passes) or a property of the runner (it misses again, and is then a known
+miss as stated above).
