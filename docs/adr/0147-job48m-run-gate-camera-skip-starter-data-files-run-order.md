@@ -230,6 +230,37 @@ Corrected set-up (the same test names; limits and controls unchanged): after the
 until the hover text is drawn or 30 frames (0.5 s of egui's clock) have passed, and every drawn text of those frames is
 kept. What I knew when writing this: the numbers above and egui's code; the corrected helper had not run.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
+(M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2); this addendum. Every run: release,
+`--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; other agents' work held
+50-55 GB in WSL during these runs, so free memory was 1-7 GB); target folder of this job; `rcfd`, `rcfd-runner` and
+`fake-claude` built from the same commit as the tests. The table gives the registered run of each check; M1's control is
+from the corrected run after amendment 1 (on 7d115fc, where every other check of `followups_m.rs` passed again with the
+same values).
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| M1 | (a)-(g) as registered | (a) enabled, the start text drawn on hover; (b) the draft `("mesh.nx", "20")`, `cases/cavity.toml: finish editing the field mesh.nx (press Enter or click elsewhere); the mesh shows the typed text, but a run uses the file on disk` drawn on hover, F5 refused with `Run: ` and that text, the click started nothing (reported: the click took the focus and committed the field); (c) `mesh.nx` 20, no draft, `cases/cavity.toml has unsaved edits: save it first (Case > Save); a run uses the file on disk`; (d) enabled after the save; (e) greyed while typed, enabled after Enter, nothing committed; (f) the draft `1e` kept and greyed, enabled after the correction; (g) 4 enabled states, each with the preview on the file | pass |
+| M1 control | enabled, the start text, the editor's text | first run (0bc172f): enabled, preview from the editor, but the start text not drawn within 5 frames (amendment 1); corrected run (7d115fc): `blocked` none, the start text drawn, the preview's next source the editor's text | fails as required (after amendment 1) |
+| M2 | (a)-(f) as registered | (a) the start camera, then panned and dollied; (b) 320 cells, the front's z 0.0625 to 0.05 with x and y bounds unchanged: the panned camera kept bit for bit, near and far from `clip_planes`, `camera_kept` + 1; (c) `lx` 1 to 2: `fit` of the camera before, `camera_refit` + 1; (d) the ring's start camera; `nz` 3 to 4 kept the orbited camera; `r_out` 1 to 1.5 refit with yaw, pitch and perspective kept; (e) the hex box's start camera, counters unchanged; (f) the start camera after Run and Mesh | pass |
+| M2 control | the camera not kept | not kept, the start camera of the new surface, `camera_kept` 0 | fails as required |
+| M3 | (a)-(e) as registered | (a) built; (b) the commit asked for one build and it was skipped (`skipped_identical` + 1, nothing built, ready, not stale, the same `Arc`, no install); the burst `2`, `20`: skipped; (c) built (384 cells); (d) Rebuild built; (e) `physics.nu` built; after the time moved and the commit: built, no install; the burst `0.03`, `0.02`: skipped; skipped 3 in all | pass |
+| M3 control | built again | `meshes_built` 2 to 3, `skipped_identical` 0 | fails as required |
+| M4 | (e), (a)-(d) as registered | (e) the line drawn; (a) both files written 0.021 s after the call, byte-equal, listed, `created cases/pi.toml and its data file cases/profile_inlet.csv`, the editor clean with the source's hash and valid, the preview ready (480 cells, 2D, the file's mesh hash), Mesh side, installed; (b) the run selected **0.062 s** after the click, finished at step 172 **0.459 s** after it, its stored mesh 82aeeeaf26901ab4 = the preview's; (c) `created cases/pi2.toml; its data file cases/profile_inlet.csv was in the project already, with the example's bytes`, the data file's bytes and modification time unchanged; (d) `cases/profile_inlet.csv exists with other content: cases/pi3.toml would read its table from that file; rename or remove cases/profile_inlet.csv, then create the case again`, no `cases/pi3.toml`, the test's bytes kept | pass |
+| M4 control | not opened; the run fails naming the table | the editor did not open `cases/pa.toml` (its message names `tables.inlet_u.file`); the run failed: `pre-launch check failed (exit 3): <run>\case.snapshot: line 28: tables.inlet_u.file: cannot read table file <project>\cases\profile_inlet.csv: The system cannot find the file specified. (os error 2) (see ...)` | fails as required |
+| M5 | D, A, B, C everywhere; C newest | `Project::runs`, the browser, the drawn rows of the Runs panel, the browser after a refresh, the run worker's `extra` list and five more listings: D, A, B, C; newest C | pass |
+| M5 control | the id order differs; its largest id is not the newest | D, B, C, A; largest id A | fails as required |
+| M6 | 6 of 6 one-line messages; drawn | 6 of 6 equal to `descriptor_message` (for example `cases/cavity/case.json: not a case file: this is a benchmark descriptor (id "cavity") (the reference data and tolerances of a validation case, read by rcfd cases), which rcfd run refuses too; Case > New case from example... makes a case file`), nothing opened, the last drawn in the status bar | pass |
+| M6 controls | located; the long list | `cases/bad.json: mesh.nx: expected integer, got "abc"`; the route before: `cases/cavity/case.json: boundary_conditions: unknown setting 'boundary_conditions' (known: ...); description: ...` (8 settings listed) | as required |
+| M7 (a), (c) | once; equal to the client's report; (c) the tail once | (a) the early exit reported 0.066 s after the call (0.025 s in the corrected run), the Studio's text equal to it, `must be positive` once; (c) `the runner did not take the lock in time (see ...); last lines of <runner.log>: runner 1 started \| line two \| rcfd-runner: something went wrong` | pass |
+| M7 (b) | 5.0 s; the marker; once; drawn | **0.084 s** after the click: `the runner did not start: the runner (pid N) exited with exit code 1 before it held the project's lock; its output (<project>\.rcfd\runner.log): rcfd-runner: runner lock: Access is denied. (os error 5). The run stays queued until a runner starts (Runs > Start runner)`, the line once, drawn | pass |
+| M7 controls | twice | (a) twice; (b) twice (`...; last lines of <runner.log>: rcfd-runner: runner lock: Access is denied. (os error 5)` appended), 0.082 s | fail as required |
+| CS (ADR 0139 amendment 2) | as amended | `case_starter_g2` 25 of 25: CS1 10 of 10 (the profile case opens with its folder, valid, 0.005 s); CS2 10 of 10 and `cases/profile_inlet.csv` 251 bytes = `cases/channel/profile_inlet.csv`, 11 files listed; CS2 control 10 of 10 differ (the profile case's save 17,560 bytes); CS5 24 files, 10 offered, 6 excluded, 7 reference, 0 problems, its 6 controls one problem each; CS6 6 of 6 refused; CS7 10 of 10 (`channel with a profile-file inlet: ... 2D, 480 cells, simplec, at most 2000 iterations.`); CS11 12,823 bytes; CS12 10 rows; CS13 8.611 ms (control 215.108 ms) | pass |
+
+M8 (the whole suite): pending.
+
 ## Not in CI (by hand)
 
 A person at the real window: the greyed Run and its hover text while typing, the camera staying while typing `nx`,
