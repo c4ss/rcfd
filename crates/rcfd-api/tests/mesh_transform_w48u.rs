@@ -585,6 +585,51 @@ fn w1b_samples_and_disk_points_are_warned() {
     assert!(mt101(&case(W1B_CASE)).is_empty(), "control");
 }
 
+// ------------------------------------------------------------------------------------------------ X1, X2 (unregistered)
+
+/// X1 (unregistered, addendum: the claim of `docs/case-schema.md`): a study sweeps the angle through the table; each
+/// point's case builds the mesh the same table written in the case builds.
+#[test]
+fn x1_a_study_sweeps_the_mesh_angle() {
+    let cavity = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 4\nny = 4\n";
+    let c = case(&format!(
+        "{cavity}\n[study.parameters.a]\npath = \"mesh.transform.rotate_z_deg\"\nvalues = [-2.0, -4.0]\n"
+    ));
+    let plan = rcfd_api::study::plan(&c, true).unwrap_or_else(|d| panic!("{d:?}"));
+    let points = plan.points();
+    assert_eq!(points.len(), 2);
+    for (p, a) in points.iter().zip([-2.0, -4.0]) {
+        let pc = rcfd_api::study::point_case(&c, &plan, p).unwrap();
+        let swept = build_mesh(&pc).unwrap();
+        let direct = mesh(&format!("{cavity}{}", table(a, [0.0; 3])));
+        println!("X1 point {a}: mesh {:016x}", swept.content_hash());
+        assert_eq!(swept.content_hash(), direct.content_hash(), "{a}");
+    }
+}
+
+/// X2 (unregistered, addendum): the axial fan sector (its pair `seam_lo`/`seam_hi` rotates about the z axis through the
+/// origin) turns about its axis, its pairs still matched, and is refused about (1, 0, 0).
+#[test]
+fn x2_the_fan_sector_turns_only_about_its_axis() {
+    let p = repo()
+        .join("cases")
+        .join("axial_fan_sector")
+        .join("axial_fan_sector.toml");
+    let text = std::fs::read_to_string(&p).unwrap();
+    let dir = p.parent().unwrap();
+    let parse = |t: &str| Case::parse_toml_in(t, dir).unwrap_or_else(|d| panic!("{d:?}"));
+    let on = build_mesh(&parse(&format!("{text}{}", table(10.0, [0.0, 0.0, 0.3])))).unwrap();
+    let g = FvGeometry::new(Arc::new(on)).unwrap();
+    let n = g.periodic_partner.iter().flatten().map(Vec::len).sum::<usize>();
+    println!("X2 about the axis: {n} periodic faces matched");
+    assert!(n > 0);
+    let off = build_mesh(&parse(&format!("{text}{}", table(10.0, [1.0, 0.0, 0.0])))).unwrap_err();
+    println!("X2 off the axis: {off:?}");
+    assert!(off
+        .iter()
+        .any(|d| d.path == "mesh.transform.rotate_origin" && d.message.contains("seam_lo")));
+}
+
 // ------------------------------------------------------------------------------------------------ E3 (geometric)
 
 /// E3, geometric: rotated by -4 degrees about the quarter chord, the leading edge (the airfoil point at x = 0) moves up

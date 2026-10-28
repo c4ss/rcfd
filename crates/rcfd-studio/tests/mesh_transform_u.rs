@@ -6,6 +6,8 @@
 //! the case starter takes a rotation in the editor, validates and previews rotated.
 
 mod common;
+mod lj;
+mod pv;
 
 use common::temp;
 use rcfd_api::case::Case;
@@ -294,4 +296,42 @@ fn s3_a_starter_case_takes_a_rotation() {
     assert_ne!(saved.mesh_hash, plain.content_hash());
     assert_eq!(saved.cells, plain.n_cells());
     assert!(saved.two_d, "a 2D case stays 2D");
+}
+
+/// S1b (unregistered, addendum): the drawn app, the cavity open and the editor filtered to `transform`: both fields are
+/// drawn in the `mesh` group with their labels, the angle with "deg" and its range, the origin with "m".
+#[test]
+fn s1b_the_drawn_editor_shows_both_fields_with_their_units() {
+    let root = pv::project("w48u_s1b", &[]);
+    let mut st = lj::studio(&root, false);
+    lj::open(&mut st, "cases/cavity.toml");
+    let mut app = rcfd_studio::StudioApp::new(st, None);
+    app.ui_state.filter = "transform".into();
+    let ctx = egui::Context::default();
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        seen.extend(lj::texts(&lj::frame_with(&mut app, &ctx, Vec::new())));
+    }
+    let rects = &app.ui_state.field_rects;
+    println!(
+        "S1b: fields drawn {:?}",
+        rects
+            .keys()
+            .filter(|k| k.starts_with("mesh.transform"))
+            .collect::<Vec<_>>()
+    );
+    assert!(rects.contains_key("mesh.transform.rotate_z_deg"), "angle field");
+    assert!(rects.contains_key("mesh.transform.rotate_origin"), "origin field");
+    for t in [
+        "mesh",
+        "transform",
+        "rotate_z_deg",
+        "rotate_origin",
+        "deg",
+        "[-360, 360]",
+        "m",
+    ] {
+        assert!(seen.iter().any(|s| s == t), "{t:?} not drawn");
+    }
+    println!("S1b: drawn mesh > transform, rotate_z_deg deg [-360, 360], rotate_origin m");
 }
