@@ -12,6 +12,21 @@ use std::time::{Duration, Instant};
 const DURATION: Duration = Duration::from_secs(2);
 const LEN: usize = 1 << 20;
 const READERS: usize = 3;
+/// Registered overlap minimums: the check is only meaningful if the readers and the writer really overlapped.
+const MIN_WRITES: u64 = 20;
+const MIN_READS: u64 = 200;
+/// ADR 0122 amendment 3: after the 2 s the hammer continues until both minimums are reached, but writes no longer than this
+/// (a slow disk makes each fsync of the atomic writer take about 130 ms).
+const CAP: Duration = Duration::from_secs(30);
+
+/// How long the writer runs.
+#[derive(Clone, Copy)]
+enum Until {
+    /// The registered set-up as first written: exactly [`DURATION`].
+    Fixed,
+    /// Amendment 3: at least [`DURATION`], then until [`MIN_WRITES`] and [`MIN_READS`] are reached, at most [`CAP`].
+    Minimums,
+}
 
 #[derive(Debug, Default)]
 struct Counts {
@@ -21,7 +36,7 @@ struct Counts {
     open_errors: u64,
 }
 
-fn hammer(tag: &str, naive: bool) -> Counts {
+fn hammer(tag: &str, naive: bool, until: Until) -> Counts {
     let dir = common::scratch(tag);
     let path = dir.join("status.json");
     atomic::atomic_write(&path, &common::payload(0, LEN)).unwrap();
@@ -54,7 +69,13 @@ fn hammer(tag: &str, naive: bool) -> Counts {
         .collect();
     let t = Instant::now();
     let mut writes = 0u64;
-    while t.elapsed() < DURATION {
+    let more = |writes: u64, elapsed: Duration| match until {
+        Until::Fixed => elapsed < DURATION,
+        Until::Minimums => {
+            elapsed < DURATION || (elapsed < CAP && (writes < MIN_WRITES || reads.load(Ordering::Relaxed) < MIN_READS))
+        }
+    };
+    while more(writes, t.elapsed()) {
         writes += 1;
         let bytes = common::payload(writes, LEN);
         if naive {
@@ -64,6 +85,7 @@ fn hammer(tag: &str, naive: bool) -> Counts {
             atomic::atomic_write(&path, &bytes).unwrap();
         }
     }
+    let elapsed = t.elapsed();
     stop.store(true, Ordering::Relaxed);
     readers.into_iter().for_each(|h| h.join().unwrap());
     let c = Counts {
@@ -73,7 +95,8 @@ fn hammer(tag: &str, naive: bool) -> Counts {
         open_errors: errs.load(Ordering::Relaxed),
     };
     eprintln!(
-        "A1 {tag}: {c:?}; reader open errors (not partial reads) {}",
+        "A1 {tag}: {c:?} in {:.2} s; reader open errors (not partial reads) {}",
+        elapsed.as_secs_f64(),
         c.open_errors
     );
     if !naive {
@@ -86,17 +109,29 @@ fn hammer(tag: &str, naive: bool) -> Counts {
     c
 }
 
+fn a1_check(c: &Counts) {
+    assert_eq!(c.partial, 0, "{c:?}");
+    // The check is only meaningful if the readers and the writer really overlapped.
+    assert!(c.writes >= MIN_WRITES && c.reads >= MIN_READS, "{c:?}");
+}
+
+/// ADR 0122 amendment 3: at least 2 s, then until the overlap minimums are reached (at most 30 s).
 #[test]
 fn a1_atomic_replace_never_exposes_a_partial_file() {
-    let c = hammer("a1", false);
-    assert_eq!(c.partial, 0);
-    // The check is only meaningful if the readers and the writer really overlapped.
-    assert!(c.writes >= 20 && c.reads >= 200, "{c:?}");
+    a1_check(&hammer("a1", false, Until::Minimums));
+}
+
+/// The registered A1 as first written (a fixed 2 s): on a slow disk the fsyncing writer does not reach 20 writes (ADR 0122
+/// amendment 3, defective set-up); kept with the same limits.
+#[test]
+#[ignore = "defective set-up (ADR 0122 amendment 3): a fixed 2 s holds about 15 fsynced writes on a slow disk"]
+fn a1_atomic_replace_never_exposes_a_partial_file_known_miss() {
+    a1_check(&hammer("a1km", false, Until::Fixed));
 }
 
 #[test]
 fn a1_negative_control_in_place_write_exposes_partial_files() {
-    let c = hammer("a1neg", true);
+    let c = hammer("a1neg", true, Until::Minimums);
     assert!(c.partial >= 1, "{c:?}");
 }
 
