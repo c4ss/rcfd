@@ -581,7 +581,7 @@ fn frame(app: &mut StudioApp, ctx: &egui::Context, events: Vec<egui::Event>) -> 
 /// "Simulate for" 7.3 s (the model's call the field makes), a frame; (iv) a drawn click on Advanced, a frame, a drawn click
 /// on its checkbox (the automatic step off), Escape (the popover closes), frames; (v) a drawn click on the warning's fix, a
 /// frame; (vi) the steady cavity selected, a frame.
-fn f_run(tag: &str, before: bool) -> F {
+fn f_run(tag: &str, before: bool, fix_last: bool) -> F {
     let cav = std::fs::read_to_string(ts::quick_start_cases().join("cavity-re100.toml")).unwrap();
     let p = project(
         tag,
@@ -590,6 +590,7 @@ fn f_run(tag: &str, before: bool) -> F {
     let file = p.dir.join("cases/cyl.toml");
     let bytes = std::fs::read(&file).unwrap();
     let mut st = studio(&p, before);
+    st.quick.switches.warning_fix_last = fix_last;
     select(&mut st, "cases/cyl.toml");
     let mut app = StudioApp::new(st, None);
     let ctx = egui::Context::default();
@@ -671,18 +672,16 @@ fn f_expected() -> (
     (f, p80, p73, case)
 }
 
-/// (f): (i) the row draws "Simulate for", the simulated time 80, "Advanced", the step `dt auto: 0.00602 s at the start,
-/// then adaptive (Courant 0.5)` and the indicator `overrides the case's solver.dt 0.0625 s for this run`; the Mesh side
-/// draws the time-step line of `time_step::mesh_line`; (ii) Run's hover draws Run's text and the plan's hover text; (iii)
-/// after "Simulate for" 7.3 the indicator also names `solver.end_time 80 s`, the case file is unchanged and the editor
-/// clean; (iv) the popover draws its checkbox and "Courant target"; with the automatic step off the row draws `dt 0.0625
-/// s, the case's own` and the warning of `time_step::warning` with its fix; (v) after the fix, the automatic step again
-/// and no warning; (vi) the steady cavity draws `steady (simplec): until converged, at most 2,000 iterations` and no
+/// (f)'s limits: (i) the row draws "Simulate for", the simulated time 80, "Advanced", the step `dt auto: 0.00602 s at the
+/// start, then adaptive (Courant 0.5)` and the indicator `overrides the case's solver.dt 0.0625 s for this run`; the Mesh
+/// side draws the time-step line of `time_step::mesh_line`; (ii) Run's hover draws Run's text and the plan's hover text;
+/// (iii) after "Simulate for" 7.3 the indicator also names `solver.end_time 80 s`, the case file is unchanged and the
+/// editor clean; (iv) the popover draws its checkbox and "Courant target"; with the automatic step off the row draws `dt
+/// 0.0625 s, the case's own` and the warning of `time_step::warning` with its fix; (v) after the fix, the automatic step
+/// again and no warning; (vi) the steady cavity draws `steady (simplec): until converged, at most 2,000 iterations` and no
 /// "Simulate for".
-#[test]
-fn f_the_toolbar_time_row_drawn() {
+fn f_limits(r: &F) {
     let (f, p80, p73, case) = f_expected();
-    let r = f_run("f", false);
     // (i)
     for t in [
         SIMULATE_FOR,
@@ -742,11 +741,27 @@ fn f_the_toolbar_time_row_drawn() {
     assert!(!drawn(&r.steady, SIMULATE_FOR), "(vi) no Simulate for");
 }
 
+/// (f) as registered (amendment 1's procedure), a known miss (amendment 2): on the toolbar's layout of the registration
+/// (`warning_fix_last`) the warning's fix button lies right of the long warning, out of the 1280-point window, so (iv)'s
+/// "with its fix" is not drawn. The limits are intact; f3 checks them on the corrected layout.
+#[test]
+#[ignore = "known miss: ADR 0153 amendment 2 (the warning's fix button out of the window)"]
+fn f_the_toolbar_time_row_drawn_known_miss() {
+    f_limits(&f_run("f", false, true));
+}
+
+/// f3 (amendment 2): (f)'s procedure and limits on the corrected layout (the fix button first, the warning wrapping
+/// after it).
+#[test]
+fn f3_the_toolbar_time_row_drawn() {
+    f_limits(&f_run("f3", false, false));
+}
+
 /// (f) control: the route before draws no time row, no indicator, no Mesh line and no plan hover.
 #[test]
 fn f_control_the_route_before_draws_none() {
     let (f, p80, ..) = f_expected();
-    let r = f_run("fctl", true);
+    let r = f_run("fctl", true, false);
     assert!(!drawn(&r.row, SIMULATE_FOR), "control: Simulate for");
     assert!(!drawn(&r.row, "overrides the case's solver.dt 0.0625 s for this run"));
     assert!(!drawn(&r.hover, &time_step::hover(&f, &p80)), "control: hover");

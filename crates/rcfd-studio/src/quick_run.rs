@@ -85,6 +85,9 @@ pub struct Switches {
     /// The route before ADR 0153: Run takes the case's own `solver.dt` and `solver.end_time` (no time settings are
     /// added to its plan), the toolbar has no time row and the Mesh side no time-step line.
     pub case_time: bool,
+    /// The layout of ADR 0153's registration (its known-miss test, amendment 2): the Courant warning's text first and its
+    /// fix button after it, which a long warning pushes out of a 1280-point window.
+    pub warning_fix_last: bool,
 }
 
 /// A start in flight.

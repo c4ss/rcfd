@@ -287,6 +287,24 @@ this amendment's commit in a target folder of their own (`target-48s-a1`), becau
 binaries of the registration's build; (a) and D2 do not draw the field. What I knew when writing this: the output of the
 first run (the passing tests' values are in the addendum) and the probe; the corrected (f) had not run.
 
+## Amendment 2 (2026-10-28, after the corrected run of (f), before the run of f3)
+
+The corrected run of (f) and its control on 3ae759b (amendment 1's build, `target-48s-a1`): the control passed; **(f)
+missed (iv)**: every limit of (i)-(iii) was met (the row's texts with `80`, the Mesh line, the hover, the indicator after
+7.3 s, the case file and the editor untouched), and in (iv) the popover's texts, `dt 0.0625 s, the case's own` and the
+warning's exact text were drawn, but not the fix button `Use the automatic time step`: the warning is one line of about
+2,000 points and the button sat right of it, outside the 1280-point window, so egui did not paint it. This is a defect of
+the code (in the window the button cannot be clicked either), not of the procedure. By the house rule the test becomes the
+ignored `f_the_toolbar_time_row_drawn_known_miss` with its limits intact, running the registration's layout through the
+test switch `QuickRun::switches.warning_fix_last`.
+
+The fix (the code of this amendment): the warning's row draws the fix button first and the warning after it, wrapped to the
+window (`egui::Label::wrap`). New check **f3** (`f3_the_toolbar_time_row_drawn`), registered here before its run: (f)'s
+procedure (as amendment 1 corrected it) and (f)'s limits, unchanged, on this layout; its control is (f)'s (the route
+before) and the known-miss test itself (the registration's layout misses (iv)). f3 and (f)'s control run on a build of
+this amendment's commit in `target-48s-a1`, as do W's suite and lints. What I knew when writing this: the output of that run
+(its values are in the addendum); f3 had not run.
+
 ## Changes to earlier tests
 
 None: Run of a steady case, the Start run dialog's plan and `StartPlan::new` are unchanged. Earlier tests that draw the

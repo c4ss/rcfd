@@ -188,11 +188,21 @@ fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
         }
     });
     if let Some((w, fix)) = plan.as_ref().ok().and_then(|tp| warning_of(case, &facts, tp)) {
+        // ADR 0153 amendment 2: the fix first, the warning wrapping after it, so that the button stays in the window
+        let last = st.quick.switches.warning_fix_last;
         ui.horizontal(|ui| {
-            ui.colored_label(WARN, w);
-            let r = ui.button(fix);
-            st.quick.rects.insert(FIX.into(), r.rect);
-            if r.clicked() {
+            let clicked = if !last {
+                let r = ui.button(fix);
+                st.quick.rects.insert(FIX.into(), r.rect);
+                ui.add(egui::Label::new(RichText::new(w.as_str()).color(WARN)).wrap());
+                r.clicked()
+            } else {
+                ui.colored_label(WARN, w);
+                let r = ui.button(fix);
+                st.quick.rects.insert(FIX.into(), r.rect);
+                r.clicked()
+            };
+            if clicked {
                 quick_run::fix_warning(st, case);
                 next = quick_run::run_time(st, case);
             }
