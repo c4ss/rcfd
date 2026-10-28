@@ -29,7 +29,10 @@ impl eframe::App for Smoke {
         }
         self.app.ui(ui);
         ui.ctx().request_repaint();
-        self.left = self.left.saturating_sub(1);
+        if self.left == 0 {
+            return; // closing
+        }
+        self.left -= 1;
         if self.left == 0 {
             let vp = &self.app.st.viewport;
             let rs = frame.wgpu_render_state();
