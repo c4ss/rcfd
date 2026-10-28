@@ -257,3 +257,29 @@ process, no store needed). Extra cases on the same set-up, under the same rule (
 E4 set-up change (limits unchanged): the E4 project holds `.rcfd/claude-allow.json`, so under the decisions above it must be
 confirmed before its first chat. The test sets `Claude::trust_store`, confirms the folder after writing the first list, and
 writes the grown list with `TrustStore::save_allow_list` (the "allow" button) instead of `AllowList::to_file`.
+
+## Addendum 2: E8 and the trust record, results (2026-10-28)
+
+Branch `worktree-agent-a99d9f825a90b2d6c` rebased onto main 15b00ef (48A, 48C and 48E library merged). Commits: fd6458c
+(Amendment 2, registered before any run), d04c7f8 (trust record and gate), c1ea451 (E8 tests, E4 set-up change). One release
+run at c1ea451 (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w48e`, `CARGO_BUILD_JOBS=2`, Windows 11), clippy
+`-D warnings` clean before it. Every test passed on this first run; no further amendment.
+
+| Check | Limit | Result |
+|---|---|---|
+| E8 | `.mcp.json`, `.claude/settings.json` or nested `CLAUDE.md`: no chat process until confirmed; one after; a changed hash asks again; a project without those files starts at once | **pass**: for each of the three, `new_session` and `resume` returned `FolderNotConfirmed` naming the file and the fake recorded 0 calls (no `claude agents --json` either); after `confirm`, 1 chat process; after one byte changed, both refused again with the file in `changed`, still 1 process. Control: a project without control files started at once, with and without a store (2 processes, no record written) |
+| E8 extra (allow file, option (c)) | same rule | pass: pending shows the file's 12 rules exactly; after confirming, `save_allow_list` with one more rule kept the folder confirmed (chat started); a direct write asked again; a tampered file is shown with its refusal (line 1) and nothing started |
+| E8 extra (shipped record, copy) | same rule | pass: a `.rcfd/claude-trust.json` shipped in the folder with the right hashes for that exact path confirms nothing; a store pointed into the project is refused (`Error::Io`, "inside the project folder") and `confirm` into it fails; a confirmed folder copied to another path is not confirmed there; 0 processes in each case |
+| E4 (set-up of Amendment 2) | unchanged | pass, same values as before: `Edit(./other.txt)`; file 12 -> 13; argv rules 12 -> 13 |
+| E5, E9, E0, ADR 0126 / 0128 tests | unchanged | pass (lib 12, `driver_fake` 7, `driver_init_wfix` 2, `fixtures_v2_1_310` 6, `w48e_library` 5, `w48e_trust` 3; `real_cli` 3 ignored); D5 0.634 s |
+
+API added: `trust::{TrustStore, TrustState, Pending, check_folder, is_allow_file}`, `Claude::trust_store`,
+`Claude::check_folder`, `Error::FolderNotConfirmed`. Behaviour change (decided): `new_session` and `resume` now refuse a folder
+holding unconfirmed control files, also for callers that set no store. Each message now scans the whole project folder (no
+directory is skipped; cost not measured on a large project).
+
+Still open (Amendment 2): `fnv64` against a cryptographic hash; whether `check_args` itself refuses the MCP forms; the
+treatment of the E5 rerun (code fix kept). Also open from the first addendum: `CLAUDE.local.md` and `CLAUDE.md` above the
+project are not scanned; `--plugin-dir` is not refused. Stated limits: the store is replaced without a lock (two Studio
+processes confirming at once can lose one confirmation, which then asks again); the gap between the folder check and the
+spawn is not covered, as for the open check (ADR 0126).
