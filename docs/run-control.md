@@ -212,6 +212,35 @@ exits with the code of the failing task: 4 (mesh check), 3 (validation), the run
 exits with the code of the lowest-index failed point (the per-run codes above) or 3 for an invalid sweep. See `docs/studies.md`.
 The Python package (`docs/python.md`) drives `run`, `check` and `study`.
 
+## Run service (`rcfd-runner`)
+
+The Studio, the `rcfd-mcp` project tools (`start_run`) and `rcfd-runner start` and `ensure` queue runs in a project folder. When
+no runner holds the project's lock they start one detached `rcfd-runner serve`, which runs each queued run as an `rcfd run`
+child process ([ADR 0123](adr/0123-wave47b-run-service.md), [ADR 0143](adr/0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md)).
+`rcfd-runner --help` lists the commands.
+
+Where a started runner writes its standard output and error ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md));
+its standard input is always the null device:
+
+| `ensure`, `start` option | Library (`Client::with_output`) | Output |
+|---|---|---|
+| none | `RunnerOutput::ProjectLog` (the default; the Studio and `rcfd-mcp` use it) | appended to `<project>/.rcfd/runner.log` |
+| `--log-file <file>` | `RunnerOutput::File` | appended to `<file>`; the runner's own log lines stay in `.rcfd/runner.log` |
+| `--stdout` (or `--foreground`) | `RunnerOutput::Caller` | the starting command's own standard output and error: a caller that reads them to the end waits until the runner exits |
+| `--quiet` | `RunnerOutput::Null` | discarded |
+
+A runner that exits before it holds the project's lock, for example on a bad `.rcfd/runner-config.json`, is reported at once,
+with its exit code and the end of its output. Before ADR 0146 the start waited 10 s and said only that the lock was not taken.
+
+**Windows: a capturing caller still waits.** std starts every process with handle inheritance on, and the workspace allows no
+unsafe code. So the started runner, and the solvers it starts, also hold every inheritable handle of the program that started
+the runner, whatever the output option. Measured (ADR 0146 C1, C2):
+* a program that reads the output of `rcfd-runner start` or `ensure` through a pipe to the end (a shell that stores it, a CI
+  step) waits until the runner exits; so does a program that reads the output of a process that runs them;
+* a runner that `rcfd-mcp` started keeps the server's standard output pipe open after the server has exited.
+
+On Linux the capturing caller returns as soon as the command exits.
+
 ## Not implemented / deviations
 
 - No control-port socket as such: remote control of a running job is the service (`rcfd serve`,

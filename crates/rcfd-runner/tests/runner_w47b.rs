@@ -429,9 +429,10 @@ fn s4c_clean_shutdown_and_restart_adopts() {
 /// (the runner holds no handle of it). Negative control: the lock probe reads false before and after.
 /// Known miss (ADR 0123 amendments 2 and 3, ADR 0143): on Windows the direct start, the only route since ADR 0143,
 /// hands the runner the client's inheritable handles, so the client's piped stdout does not reach EOF while the runner
-/// lives; the survival part is S5a.
+/// lives; the survival part is S5a. ADR 0146: the same with the runner's own output in a log file, with files for all
+/// three standard handles or through an intermediate stage (I1-I3); its C1 is this set-up with a 3 s limit (met on Linux).
 #[test]
-#[ignore = "ADR 0123 amendment 3, ADR 0143: on Windows the direct start (the only route) hands the runner the client's piped stdout"]
+#[ignore = "ADR 0123 amendment 3, ADR 0143, ADR 0146: on Windows the started runner inherits the client's piped stdout, whatever its own output"]
 fn s5_runner_survives_the_client_known_miss() {
     let p = Project::new("s5", base_config(1));
     assert!(!p.client.runner_running(), "probe reads a runner before any start");

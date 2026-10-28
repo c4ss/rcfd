@@ -193,8 +193,16 @@ fn secs(a: Instant, b: Option<Instant>) -> Option<f64> {
 
 /// C2: `rcfd-mcp` starts a run (and so the runner) through `start_run`, then its stdin is closed. The server exits 0 within
 /// 10 s (set-up); its stdout reaches EOF within 3.0 s of its exit, while the runner stays alive; the run then finishes.
+///
+/// Known miss on Windows (ADR 0146, registered platform rule): the runner inherits the server's stdio pipes (std spawns
+/// with handle inheritance on; no stable safe way to turn it off), so the server's stdout ends only when the runner exits.
+/// Linux: met.
 #[test]
-fn c2_mcp_stdout_reaches_eof_after_the_server_exits() {
+#[cfg_attr(
+    windows,
+    ignore = "known miss on Windows, ADR 0146: the runner inherits rcfd-mcp's stdio pipe handles"
+)]
+fn c2_mcp_stdout_reaches_eof_after_the_server_exits_known_miss_on_windows() {
     let mcp = binaries();
     let dir = project("c2-w48l");
     let _stop = Stop(dir.clone());

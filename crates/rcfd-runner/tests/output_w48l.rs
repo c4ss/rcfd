@@ -384,8 +384,16 @@ fn capture_start(p: &Proj, extra: &[&str]) -> Capture {
 
 /// C1: a capturing caller of `rcfd-runner start` returns (exit and both EOFs) within 3.0 s of the start, while the runner it
 /// started stays alive; the run then finishes. Set-up: no runner before the start.
+///
+/// Known miss on Windows (ADR 0146, registered platform rule): the started runner inherits the client's piped stdout and
+/// stderr (std spawns with handle inheritance on; no stable safe way to turn it off), so the capture ends only when the
+/// runner exits. Linux: met.
 #[test]
-fn c1_capturing_caller_returns_within_3_s() {
+#[cfg_attr(
+    windows,
+    ignore = "known miss on Windows, ADR 0146: the started runner inherits the capturing caller's pipe handles"
+)]
+fn c1_capturing_caller_returns_within_3_s_known_miss_on_windows() {
     rcfd_bin();
     let mut p = Proj::new("c1", &healthy());
     let c = p.client();
