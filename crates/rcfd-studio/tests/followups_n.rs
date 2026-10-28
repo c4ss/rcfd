@@ -229,13 +229,19 @@ fn n6_data_files_are_not_cases() {
     assert_eq!(listed.len(), 5, "Project::cases");
 }
 
-/// N6 control: the route before lists all five files as cases.
+/// N6 control: the route before lists all five files as cases; the click on the csv's label selects it (amendment 1:
+/// the toolbar's label then draws it too, so it is drawn at least twice).
 #[test]
 fn n6_control_every_file_is_a_case() {
-    let (headers, counts, ..) = n6("n6ctl", true);
+    let (headers, counts, selected, _) = n6("n6ctl", true);
     assert_eq!(headers, vec!["Cases (5)".to_string()]);
+    assert_eq!(
+        selected.as_deref(),
+        Some("cases/profile_inlet.csv"),
+        "control: the click selected"
+    );
     assert!(
-        counts.iter().any(|(f, n)| f.ends_with(".csv") && *n == 2),
+        counts.iter().any(|(f, n)| f.ends_with(".csv") && *n >= 2),
         "control: {counts:?}"
     );
 }
@@ -406,6 +412,8 @@ fn start_refusal(app: &mut StudioApp, ctx: &egui::Context, case: &str) -> Option
 fn n8(tag: &str, route_before: bool) -> (Vec<Option<String>>, Vec<Option<String>>, bool, bool) {
     let root = pv::project(tag, &[]);
     let (mut app, ctx) = app_on(&root, true, |st| st.quick.switches.start_ignores_editor = route_before);
+    // tooltips at once, as ADR 0147's M1 (amendment 1: egui's default delay is the whole hover window)
+    ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
     let schema = app.st.schema.clone();
     open(&mut app, &ctx, "cases/cavity.toml");
     let mut refusals = Vec::new();

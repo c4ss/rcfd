@@ -262,6 +262,39 @@ with `--no-fail-fast -- --test-threads 1 --nocapture` (`fake-claude` built first
   rcfd-studio --release --all-targets -- -D warnings` is clean, `cargo fmt -p rcfd-studio` applied. No registered check
   of this ADR, and none of the changed earlier tests, has run.
 
+## Amendment 1 (2026-10-28, N6's control and the hovers of N8, N9 and N11; before the corrected runs)
+
+The registered run of `selection_n.rs` on fb2e260 (the registration) passed N1-N4 and their four controls. The registered
+run of `followups_n.rs` on fb2e260 passed N5, N6, N7 and the controls of N5, N7 and N8, and failed two:
+
+* **N6's control**: the route before drew `Cases (5)` and no `Data files` header, as registered, but the csv three
+  times, not twice. In the route before the set-up's own click on the csv's label selects it (it is a case label then;
+  the selection was the csv), so the toolbar's label draws it as well. A defect of the control's count, not a pass of
+  the route before: it misses N6's limits (the headers; the click selected a data file).
+* **N8**: every limit of (a)-(d) met except "the refusal is drawn on hover". The hover helper drew 30 frames (0.5 s of
+  egui's clock in headless frames) with egui's default tooltip delay of 0.5 s (`Interaction::tooltip_delay`, egui 0.36.2
+  `style.rs`), which starts only once the pointer is at rest (about 6 frames, ADR 0147 amendment 1): no tooltip can
+  appear in that window. ADR 0147's M1 drew with the delay set to 0 for this reason; N8's set-up did not. N9 and N11 use
+  the same helper and have not run yet: their set-up gets the same correction before their first run.
+
+Reading N9's set-up again for the same helper, before its first run, found one more defect and one doubtful point:
+
+* its steady run, `step-re400`, has its row of the Runs panel out of view at 1280 x 800 (the rows wrap onto three lines;
+  round 1's dump drew four of the six, the two step runs last), so "the row's 4th field `-`" could not be read;
+* its hover point was the slider's label; whether egui counts the label as part of the response the hover text is given
+  to (the slider, its value box and the row they are in) was not checked, so the point is moved onto the slider's bar
+  (a precaution, not a measured defect).
+
+Corrected set-ups (the same test names; every other limit and control unchanged): N8, N9 and N11 draw with the tooltip
+delay set to 0 (`ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0)`, as M1); N6's control: `Cases (5)`, no
+`Data files` header, the csv selected by the click and drawn at least twice; N9's steady run is the run of
+`cases/naca0012-aoa4.toml` (steady: 10 snapshots, 2000 iterations; its row is the third, in view), with the limits
+`snapshot 10/10  iteration 2000` and a strip holding `  iteration 2000  ` (the rest of N9's steady limits as
+registered); N9's hover is made on the slider's bar, 70 points left of its label. N10 keeps `step-re400` (its Run side
+does not need the row). What I knew when writing this: the values of the run above (N6's control: the csv drawn 3 times
+and selected; N8: the refusal texts as registered, no hover in 30 frames), round 1's dump and egui's code; the corrected
+tests had not run, N9, N10 and N11 not at all.
+
 ## Not in CI (by hand)
 
 A person at the real window: the case clicked and Run, the middle drag, the scale bar and the words on the Run page, the

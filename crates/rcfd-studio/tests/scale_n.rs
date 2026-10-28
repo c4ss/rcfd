@@ -150,25 +150,28 @@ fn words(app: &mut StudioApp, ctx: &egui::Context, id: &str, index: Option<usize
         bare_t: has(&|s, _| s.contains(" t = ") || s.contains("  t ")),
         hover: false,
     };
-    // the slider's hover text, with the pointer on the slider's label
+    // the slider's hover text, with the pointer on the slider's bar, 70 points left of its label (amendment 1)
     if let Some((_, r)) = t.iter().find(|(s, r)| label(s) && r.max.y < image.min.y) {
         let want = match app.st.viewport.kind() {
             RunKind::Transient => "Simulated time of the stored snapshots, in seconds",
             RunKind::Steady => "A steady run has no simulated time",
         };
-        w.hover = hover(app, ctx, r.center(), want);
+        w.hover = hover(app, ctx, egui::pos2(r.min.x - 70.0, r.center().y), want);
     }
     eprintln!("  {id}: {w:?}");
     w
 }
 
 /// N9's procedure on the wind-tunnel copy: the cylinder (transient, 80 snapshots at 1, 2, ..., 80 s, 1280 steps) at its
-/// newest and its first snapshot, then the step (steady, 11 snapshots, 429 iterations).
+/// newest and its first snapshot, then the aerofoil at 4 degrees (steady, 10 snapshots, 2000 iterations; amendment 1:
+/// in place of the step, whose row of the Runs panel is out of view at 1280 x 800).
 fn n9(tag: &str, bare: bool) -> (Words, Words, Words) {
     let root = wind_tunnel(tag);
     let (mut app, ctx) = app_on(&root, |st| st.viewport.switches.bare_time = bare);
+    // tooltips at once, as ADR 0147's M1 (amendment 1: egui's default delay is the whole hover window)
+    ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
     let cyl = run_of(&app, "cases/cylinder-re100.toml");
-    let step = run_of(&app, "cases/step-re400.toml");
+    let step = run_of(&app, "cases/naca0012-aoa4.toml");
     eprintln!("N9{}:", if bare { " control" } else { "" });
     let last = words(&mut app, &ctx, &cyl, None);
     let first = words(&mut app, &ctx, &cyl, Some(0));
@@ -195,9 +198,9 @@ fn n9_every_time_says_what_it_is() {
     );
     assert!(last.hover && steady.hover, "the slider's hover text");
     assert_eq!(steady.slider, one("iteration"), "steady: the slider");
-    assert_eq!(steady.snapshot, one("snapshot 11/11  iteration 429"));
+    assert_eq!(steady.snapshot, one("snapshot 10/10  iteration 2000"));
     assert!(
-        steady.strip.len() == 1 && steady.strip[0].contains("  iteration 429  ") && !steady.strip[0].contains("time"),
+        steady.strip.len() == 1 && steady.strip[0].contains("  iteration 2000  ") && !steady.strip[0].contains("time"),
         "steady: the strip {:?}",
         steady.strip
     );
@@ -461,6 +464,8 @@ fn n11(tag: &str, no_scale: bool) -> Refined {
     st.viewport.switches.no_scale = no_scale;
     st.open_project(&root);
     let ctx = egui::Context::default();
+    // tooltips at once, as ADR 0147's M1 (amendment 1: egui's default delay is the whole hover window)
+    ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0);
     let mut app = StudioApp::new(st, None);
     assert!(common::frames_until(&mut app, &ctx, WAIT, |a| a.st.browser().is_some()));
     let mut r = Refined::default();
