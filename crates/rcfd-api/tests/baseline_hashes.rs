@@ -104,7 +104,17 @@ fn check(name: &str, got: (usize, u64), steps: usize, hash: u64) {
 fn cavity_paths_match_registered_hashes() {
     check("cavity-simple", run(&cavity("simple")), 60, 0x07e7461c36893384);
     check("cavity-simplec", run(&cavity("simplec")), 60, 0x58d5c4fd29432b05);
-    check("cavity-coupled", run(&cavity("coupled")), 59, 0x123b5330dae3f36a);
+    // The coupled hash is the only cavity value that differs per platform. 0x123b5330dae3f36a is the registered value (Windows,
+    // 8b68e46); the x86_64 Linux value 0xfa937c4ec7bcb078 was produced by this computation at 8b68e46 (e79f7db in the current
+    // history) and at HEAD in one Linux container, and equals the first Linux CI gate's value (ADR 0137). Other platforms print.
+    if cfg!(windows) {
+        check("cavity-coupled", run(&cavity("coupled")), 59, 0x123b5330dae3f36a);
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        check("cavity-coupled", run(&cavity("coupled")), 59, 0xfa937c4ec7bcb078);
+    } else {
+        let (n, h) = run(&cavity("coupled"));
+        eprintln!("cavity-coupled: no registered hash for this platform; (steps, hash) = ({n}, {h:016x})");
+    }
     check("cavity-piso", run(&cavity("piso")), 30, 0x2a042a42594c418b);
     check("cavity-pimple", run(&cavity("pimple")), 30, 0x2a042a42594c418b);
 }
