@@ -9,6 +9,8 @@
 //! sidebar ([`chat`], ADR 0134) has its own worker and turn threads.
 
 pub mod case_edit;
+pub mod case_starter;
+pub mod case_starter_ui;
 pub mod chat;
 pub mod chat_ui;
 pub mod layout;
