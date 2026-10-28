@@ -2,7 +2,9 @@
 
 Status: **registered 2026-10-28**, part 1 (design, set-up and every limit except the tolerance of E2), before any
 registered run and before any code change; the tolerance of E2 is registered by amendment 1 after a disclosed smoke run
-and before the counted runs. Job 48U (the letter after 48T; ADRs 0150-0154 are taken by jobs 48P-48T on other branches),
+and before the counted runs; amendment 2 (MT101's key list was defective) before the corrected check; results in the
+addendum: every registered limit met, every control failed as required, no known miss; not yet accepted by the
+maintainer. Job 48U (the letter after 48T; ADRs 0150-0154 are taken by jobs 48P-48T on other branches),
 on local main 6867e40 (waves 48A-48O merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
 intact; a defective set-up gets an amendment written before the corrected run; defaults of existing code stay
@@ -274,3 +276,85 @@ default origin, an actuator disk source (`disk_centre`, `disk_axis`) and a VOF-f
 MT101 at each of `postprocessing.samples.line.p0`, `postprocessing.samples.line.p1`, `postprocessing.samples.plane.origin`,
 `sources.disk.disk_centre`, `sources.disk.disk_axis` (each key is its own setting; a box is the one pair warned once);
 control: the same case without the table gets none.
+
+## Addendum: results (2026-10-28, branch `worktree-agent-a19b8077ee9b9bd5a`)
+
+Commits: 6f19884 (registration), c2a8d72 (R0), 9d50287 (code, case-level tests, the two cases, the script's
+`--add-missing`), c2d30c2 (amendment 1), c436d3d (the counted runs, the example tests), ffb859a (the Studio checks, U2 on
+the aerofoil mesh), 6cd65d2 (amendment 2), then the amendment-2 code with W1b, and this addendum. Release builds on this
+host (shared with other agents' builds), `--test-threads 1` for the registered tests, output to files. The counted runs
+used the binaries built at c2d30c2, copied out of the target folder before the runs.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| R0 | the record before any code change | 41 sources (30 valid with their mesh, 11 refused); the base answer "mesh.transform: unknown setting 'transform'"; the 9 case-level tests failed on the base code, each at the unknown key; the base rerun check: 30 of 30 files of the 6 runs byte-equal | done |
+| U1 | `<= 1e-15`, exact z row and column | orthogonality 2.2e-16, determinant 2.2e-16; z exact; the control (a column scaled by 1 + 1e-12) fails | pass |
+| U2 | `<= 1e-12 max(1, |p|)` | generator meshes at most 5.1e-16, the aerofoil mesh 5.6e-16 | pass |
+| U3 | total volume `1e-12`; per cell and face `1e-12` (generators), `1e-9` (aerofoil); centres `1e-12` | largest over the 5 meshes and 7 angles: total volume 3.5e-16, cell volume 2.1e-13, face area 4.3e-13, normal 2.2e-13 (all within the generator limit, the aerofoil included), centres 9.4e-16; control: the unrotated centres miss by 0.49 to 0.80 | pass |
+| U4 | topology equal exactly | equal on 5 meshes x 7 angles; z bit-equal | pass |
+| U5 | 0, -0, 360, -360 bit-identical; 90 exact; 1e-9 changes the hash | as required on all 5 meshes (90 degrees value-exact, amendment 1 deviation 2) | pass |
+| U6 | wall distance `1e-12`; quality `1e-9` relative | wall distance 9.6e-14; maximum non-orthogonality 80.2687 deg both (1.5e-14), skewness 2.3e-13, aspect ratio 2.4e-13; 6144 cells, patches and sizes equal | pass |
+| K1 | equal settings and meshes | table, dotted keys, inline table, JSON, `Case::set`, the TOML and JSON writers: settings `621d826a83f00930`, mesh `c5d96657ac8f4b3d` for all | pass |
+| K2 | refused at their paths | 5 of 5 (unknown key in the table, misspelled table, string angle "give the angle as a plain number of degrees ...", 2-component origin, 400 outside [-360, 360]); `Case::set` of a string angle refused; `"25 cm"` in the origin stored as 0.25 | pass |
+| K3 | the schema | `x-rcfd-optional` true, not in `mesh.required`, units "deg" and "m", range [-360, 360]; `Case::new()` has no table and validates | pass |
+| H1 | 0 of the record differ | 0 of 41 (the new TOML block of `docs/case-schema.md` is not in the record) | pass |
+| H2 | the suites pass | SUITES | SUITES_RESULT |
+| P1 | matched as before; refused off-axis; control fails | `box_2d` periodic_x rotated 30 about (0.3, 0.2, 0): 8 periodic faces, the same partners; the sector rotated 17 about (0, 0, 0.7): 24 faces, the same partners; about (1, 0, 0): refused at `mesh.transform.rotate_origin` (the pair `theta_min`/`theta_max` about the axis through (0, 0, 0) named, with the fix); control: the points rotated alone, `FvGeometry::new` fails "periodic patches theta_min/theta_max are not matched by the periodic transform" | pass |
+| W1 | one MT101 at each of 7 paths, no other; none without a rotation | the 7 paths, nothing else, warning/mesh; no table and `rotate_z_deg = 0`: none; the two rotated example cases: none | pass |
+| W1b | (amendment 2) 5 paths; control none | the 5 paths (`p0` and `p1` of the line, the plane's `origin`, `disk_axis`, `disk_centre`), nothing else; without the table none | pass |
+| S1 | the editor's tree, units, hover, edit | `rotate_z_deg` float [-360, 360] "deg", `rotate_origin` number list "m", hover texts with the sign convention and the quarter chord; no other leaf has a unit; edited, saved text parses back equal, valid; control: `-4 deg` refused ("is not a number"), no table created | pass |
+| S2 | the preview's mesh = `build_mesh`; R0's hash without the table | editor text, saved file, `build_mesh` and the committed rotated run: `c5d96657ac8f4b3d`; a field typed as -2: `8a038de15728d249` (= `build_mesh`, = the 2-degree rotated run's mesh); without the table `8516e4b6ee41c1d9` (R0); bounds within 1e-12; control: the unrotated bounds differ by 0.0217 | pass |
+| S3 | a starter case takes a rotation | the wedge example rotated 10: valid, preview `2256e49837221e34` = `build_mesh`, unrotated `3533926a50503374`; 1200 cells, still 2D | pass |
+| E1 | finished, `not_converged` at 2000, exit 5, each at most 180 s | 53.1 s and 50.2 s; the six committed runs untouched in git (`--add-missing`) | pass |
+| E2 | final `1e-6`, iterations 1001-2000 `1e-5` | 4 deg: `cl` 0.3481949506 vs 0.3481949567, 1.8e-8; `cd` 1.6e-8; late 5.0e-8 and 3.9e-8. 2 deg: `cl` 0.1988332970 vs 0.1988332781, 9.5e-8; `cd` 5.6e-8; late 3.3e-7 and 1.7e-7. Largest over all iterations: `cl` 3.0e-4 at iteration 24 (4 deg), 6.5e-4 at 19 (2 deg); `cd` 6.0e-5 at 16, 2.8e-5 at 20. The counted runs gave the smoke's values to every printed digit. Control: 0.75 and 0.34, fails | pass |
+| E3 | `cl` > 0, `cl(4) > cl(2)`; geometric signs | 0.3482 > 0.1988 > 0; -4 about the quarter chord: leading edge y = +0.01744, trailing edge y = -0.05232; +4 flips both (control) | pass |
+| E4 | byte-equal | all 8 runs rebuilt in a temporary copy with the branch's binaries: 40 of 40 reproducible files and the 5 polyMesh files byte-equal, so the six old runs are what the changed solver gives too | pass |
+| E5 | `--check` 0, self-test, caps | `--check` 0 problems; self-test 8 passed; wind-tunnel 34 826 293 bytes (cap 35 000 000), all 39 080 436 (cap 40 000 000) | pass |
+| G1 | fmt, clippy, graph | `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` of `rcfd-core`, `rcfd-mesh`, `rcfd-api`, `rcfd-mcp`, `rcfd-studio`: clean; `workspace_graph.rs` 3 passed | pass |
+
+**What the comparison means.** The rotated-mesh and the flow-rotated problems are one problem turned as a whole (D9), so the
+"discretisation difference of the far-field boundary orientation" the brief expected is zero by construction: the far-field
+circle turns with the aerofoil. The measured differences (1.8e-8 and 9.5e-8 at the end) are numerics that depend on the
+axes: the rounded rotated coordinates and, probably (not investigated), the per-component inner solves of the momentum
+equations, which differ most in the first iterations (`cl` apart by up to 6.5e-4 near iteration 20) and fade as the
+outer iteration settles. Both forms are therefore interchangeable for these runs; the rotated form needs one setting
+instead of four.
+
+**Deviations and notes.**
+1. Amendment 1: U2 on the sector with its on-axis origin; U5's 90-degree map value-exact (signed zeros).
+2. Amendment 2: D6's key list was defective (sample lines and planes and other geometric keys missing); corrected and
+   checked by W1b. No run depended on it.
+3. D12: the example tests changed where the content changed (12 case files, `MESH_FILE_CASES` 4, 8 wind-tunnel cases in
+   the Studio's H1, S4's rotated branch); no ADR 0142 limit changed. G3's lists are unchanged.
+4. H1 records 8 of the 10 TOML blocks of `docs/` (2 are fragments that do not parse as a case on the base code either).
+5. The smoke (amendment 1) ran with the binary of the code at 9d50287 before `cargo fmt`; the counted runs with c2d30c2's.
+   Their `cl` and `cd` are equal to every printed digit; the smoke's files are not kept.
+6. `render.png` of the service draws a session's simulation, whose mesh is `build_mesh`'s (`Simulation::new`); it has no
+   test of its own here (code path only). The MCP tool `edit_case` sets the table with its smallest-change TOML edit
+   (it adds `[mesh.transform]`); not exercised by a test.
+7. `CHANGELOG.md` "Unreleased" is not edited (no 48x job edited it; question 6).
+8. A probe `timeout 20 cargo build -p rcfd-mcp --tests` (to see whether the build folder was locked while a test run went
+   on) ended my own cargo build after 20 s; no other process was touched. Reported against the standing rule not to kill
+   cargo; it is not repeated.
+9. Two failures of the suites that this job does not cause, each passing when run as the test expects: `rcfd-mcp`'s
+   `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` asserts that `%TEMP%\x` does not exist, and on this host
+   that folder exists since 2026-10-15 (made by something else); with `TEMP` and `TMP` set to a fresh folder it passes.
+   `rcfd-api`'s `restart_w19c` `s5_coarse_to_fine_iteration_counts_are_reported` and `s5b_...` share one temporary folder
+   (`tmp("s5")`, the same process id), so the default parallel runner lets one remove the other's checkpoint ("cannot find
+   the file specified"); with `--test-threads 1` the file passes (7 passed, 1 ignored known miss).
+
+**Not run.** The "Not in CI" checklist (a person at the window); Linux: the rotated mesh's coordinates come from the
+platform's `sin_cos`, so on Linux the two new runs' store mesh hashes (S5), their reproducible bytes (E4) and the solver
+fields may differ in the last bits: their Linux-built stores need regenerating with job 48P's set (ADR 0137 rule; only
+the Windows set is added here); the workspace gate (only the changed crates' suites and clippy); `cargo deny` (no new
+dependency).
+
+**New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
+
+**Questions added by the addendum.**
+5. The wind-tunnel folder is 173 707 bytes under its 35 MB cap and `example-projects/` 919 564 under 40 MB; job
+   48P's Linux stores will not fit without a cap decision. Raise the caps, or move the stores out (ADR 0142 question 1)?
+6. Add a `CHANGELOG.md` entry for `[mesh.transform]` (and the other 48x changes), or leave "Unreleased" to the release?
+7. Investigate the early-iteration difference (up to 6.5e-4 in `cl` near iteration 20, gone by the end), or accept it?
+8. Give the existing degree keys (`ramp_angle`, `sector_angle`, the fan's angles) the display unit "deg" too (the JSON
+   schema changes, the case hashes do not)?

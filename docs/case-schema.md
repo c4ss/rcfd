@@ -425,9 +425,11 @@ as for any mesh. z is copied unchanged, so a 2D mesh stays 2D. Nothing else in t
 report directions, gravity and body forces stay in world coordinates by intent. Settings that place something relative
 to the geometry stay in world coordinates too, and `rcfd check`, `rcfd validate`, `rcfd run` and `--check-only` warn
 about each of them with the rule id `MT101` (warning, category mesh) while the rotation is not 0: a point, origin,
-position, centre, box or axis given in the settings (outside `mesh`), probe and moment reports, `rotating_frame` and
-`mrf` sources, a rotating wall (`wall_rotation_rate`), expressions and profile tables in x, y or z, `dynamic_mesh`, the
-mixing plane and a geometric `decomposition` (the Studio's Case > Validate shows errors only, so not these warnings).
+position, centre, box, normal or axis given in the settings (outside `mesh`: sample lines and planes, VOF regions,
+actuator disks, particle injections, dynamic-mesh bodies, ...), probe and moment reports, post-processing samples,
+`rotating_frame` and `mrf` sources, a rotating wall (`wall_rotation_rate`), expressions and profile tables in x, y or z,
+`dynamic_mesh`, the mixing plane and a geometric `decomposition` (the Studio's Case > Validate shows errors only, so not
+these warnings).
 Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches); a rotationally
 periodic pair (`annulus_3d_sector`, `axial_fan_sector`, imported cyclic patches with a rotation) only allows a rotation
 about its own axis, else the mesh is refused with a located error at `mesh.transform.rotate_origin`.
