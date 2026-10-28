@@ -52,8 +52,8 @@ the ids the remapped ADR texts cite for the same recording, checked by subject a
 ADR 0128 finding 12 registered a decision rule: if `10 w > 500 ms` (w = slowest of the 3 warm listings) the control "the listing done
 10 times exceeds the budget" is asserted; if `10 w <= 500 ms` the budget cannot catch a 10x slowdown and the remaining guard is the
 budget assertion itself. The rule was evaluated once, on Windows (w = 196 ms). On Linux the listing takes about 4-6 ms, so the
-asserted control fails although the listing is 85-140 times inside the budget. Amendment: the test applies the registered rule on
-every run. With `10 w > 500 ms` it asserts the control as before (Windows unchanged); otherwise it prints `10 w` and the factor
+asserted control fails although the listing is 85-140 times inside the budget. Amendment (an interpretation of finding 12, for the maintainer
+to confirm or to replace with another control): the test applies the registered rule on every run. With `10 w > 500 ms` it asserts the control as before (Windows unchanged); otherwise it prints `10 w` and the factor
 `500 ms / w` the budget does catch and does not assert the control. The 500 ms budget and its assertion are unchanged.
 
 ### Reported, not changed (production code or a decision is needed)
