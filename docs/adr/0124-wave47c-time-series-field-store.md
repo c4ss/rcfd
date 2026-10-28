@@ -180,3 +180,32 @@ Measured in release (separate `--nocapture` run of the same code in the worktree
 | H3, H4 | pass | |
 
 Misses: none. Deviations: amendment 1 (C8 probe). The `baseline_hashes` test passed unchanged.
+
+## Amendment 2 (2026-10-28, registered before the corrected run): C7 opens timed on a store at rest
+
+What happened. The first full gate in CI (`gate.yml`, windows-latest, run 40670036763, main a89ccb3; one process per test, three at
+once) failed `c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf` on one row: open with footer (1M x 20 x 3) median of 5 =
+0.1262 s > 0.05 s. Every other row passed in the same run: set-up mesh 10.84 s, write 5.22 s, store 674.0 MB; C8 scrub 28.4 MB,
+whole-snapshot control 158.1 MB; open by scan 0.0072 s, nearest 0.0168 s, linear 0.0382 s, subset 0.0174 s; 2000 snapshots: open
+with footer 0.0004 s, by scan 0.0275 s, access 0.0000 s. The two tests that finished just after it in the gate log were the CPU-bound
+`flat_plate_sst` cases (216 s each), not file-heavy tests.
+
+What I knew when writing this amendment (disclosed). The median is already of 5 consecutive opens, so at least 3 of the 5 took about
+0.126 s: "a median of warm repeats" is what the registered protocol already does. The reader's own work cannot explain it: open by scan
+does every I/O of open with footer (open, metadata, header, mesh prefix, the 20-byte trailer read) except one small footer JSON read,
+plus a scan, and took 7 ms on the same runner in the same process. What differs is when it runs: open with footer is timed
+immediately after `Writer::finish` closes the 674 MB file (written in 5.2 s, about 130 MB/s, so OS write-back and any filter that
+acts on a just-closed file were probably still busy); open by scan runs seconds later, after the two C8 child processes and after a
+`set_len`. This is a hypothesis about the runner, not a reproduction. On this machine the unchanged test passes with the temp folder on
+the NVMe `C:` (open with footer 0.0000 s, write 1.36 s) and on the SATA HDD `D:` (0.0002 s, write 14.16 s), so this machine does not
+discriminate; the CI runner is the check. The C7 limits are reader time bounds for scrubbing; a store still being written back by the
+OS is a property of the preceding write, which C7 does not register.
+
+Correction (same limits, same data, same medians of 5, same order of measurements): the set-up brings each store to rest before its
+timed reads: after `Writer::finish` and after each trailer cut (`set_len`), the store file is flushed to disk (`File::sync_all` on a
+write handle, time printed). The 5 individual open times of both "open with footer" rows are printed. Diagnostic, reported and not
+limited: 5 opens of the 1M store timed right after `finish`, before the flush (the original set-up's measurement), so the next CI run
+shows whether the slow opens are transient. The test is `c7_c8_scrubbing_a_1m_cell_store_with_20_fields_at_rest` (typeperf probe).
+The amendment-1 test as registered (no flush) stays as the ignored
+`c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf_known_miss`, limits intact. If the corrected test still misses on CI, the
+miss is real: it then becomes a `*_known_miss` with the limit intact and is reported, not re-corrected.
