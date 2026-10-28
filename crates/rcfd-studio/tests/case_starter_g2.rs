@@ -580,8 +580,31 @@ fn facts_match(e: &Example) -> Result<(), String> {
     Ok(())
 }
 
+/// The run length ADR 0149's amendment 3 of ADR 0139 registers for an example (its text parsed with its folder): a
+/// transient one runs `<algorithm>, to simulated time T s`, a steady one `<algorithm>, at most N iterations`.
+fn run_length(e: &Example) -> String {
+    let c = Case::parse_toml_in(e.text, &folder_of(e)).unwrap();
+    let text = |k: &str| {
+        c.get(k)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    let alg = text("solver.algorithm");
+    let transient =
+        matches!(alg.as_str(), "piso" | "pimple") || (alg == "compressible" && text("compressible.mode") != "steady");
+    if transient {
+        let t = c.get("solver.end_time").unwrap().as_f64().unwrap();
+        format!("{alg}, to simulated time {t} s")
+    } else {
+        let n = c.get("solver.max_iterations").unwrap().as_u64().unwrap();
+        format!("{alg}, at most {n} iterations")
+    }
+}
+
 #[test]
 fn cs7_curated_cells_and_dimension_match_the_mesh() {
+    let mut transient = 0;
     for (e, d) in EXAMPLES.iter().zip(case_starter::build_descriptions()) {
         facts_match(e).unwrap();
         let file: toml::Value = toml::from_str(e.text).unwrap();
@@ -589,8 +612,31 @@ fn cs7_curated_cells_and_dimension_match_the_mesh() {
         assert_eq!(d.title, title, "{}", e.source);
         let line = format!("{}: {}", d.title, d.line);
         assert!(line.contains(title) && line.contains(e.dim) && line.contains(&format!("{} cells", e.cells)));
+        // ADR 0139 amendment 3 (ADR 0149): the run length in the Run page's words, no bare `t`
+        assert_eq!(d.run, run_length(e), "{}", e.source);
+        assert!(line.contains(&format!("{}.", d.run)), "{}: {line}", e.source);
+        assert!(!line.contains(" t = "), "{}: a bare t: {line}", e.source);
+        transient += usize::from(d.run.contains("simulated time"));
         eprintln!("cs7 {line}");
     }
+    assert!(transient > 0, "set-up: no transient example");
+    eprintln!("cs7: {transient} transient examples");
+}
+
+/// ADR 0139 amendment 3's control: the words before (`describe_with(.., true)`) give the transient examples a bare
+/// `t = `, which the limit refuses.
+#[test]
+fn cs7_control_the_words_before_say_t() {
+    let mut bare = 0;
+    for e in EXAMPLES.iter() {
+        let d = e.describe_with(true);
+        if d.run.contains(" t = ") {
+            bare += 1;
+            assert_ne!(d.run, run_length(e), "{}", e.source);
+            eprintln!("cs7 control {}: {}", e.source, d.run);
+        }
+    }
+    assert!(bare > 0, "control: no bare t");
 }
 
 #[test]

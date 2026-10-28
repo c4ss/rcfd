@@ -111,11 +111,12 @@ fn set_value(v: &Value) -> bool {
     v.as_f64().is_some_and(|x| x != 0.0) || v.as_bool() == Some(true) || v.as_array().is_some_and(|a| !a.is_empty())
 }
 
-/// Read [`CaseExtra`] from the raw TOML of a case and the parsed case (`counted`: the generator's counts gave the cells).
-pub fn case_extra(raw: &toml::Value, case: &Case, counted: bool) -> CaseExtra {
+/// Read [`CaseExtra`] from the keys the case text sets (its TOML or JSON as a tree, nothing resolved) and the parsed case
+/// (`counted`: the generator's counts gave the cells).
+pub fn case_extra(raw: &Value, case: &Case, counted: bool) -> CaseExtra {
     let get = |p: &str| case.get(p).unwrap_or(Value::Null);
     let num = |p: &str| get(p).as_f64().unwrap_or(0.0);
-    let output = raw.get("output").and_then(toml::Value::as_table);
+    let output = raw.get("output").and_then(Value::as_object);
     let in_text = |key: &str| output.is_some_and(|t| t.contains_key(key));
     let case_store = STORE_KEYS
         .iter()
@@ -743,9 +744,10 @@ pub fn apply_fix(plan: &mut StartPlan, fix: Fix) {
 
 // ---------------------------------------------------------------- cell count (D5)
 
-/// Build the mesh of a case text (`base_dir`: where its relative files are) and return its cells and D4 mesh bytes.
+/// Build the mesh of a case text (`base_dir`: where its relative files are) and return its cells and D4 mesh bytes. The
+/// text is read as `rcfd run` reads it, JSON or TOML ([`crate::preview::parse_case`], ADR 0149).
 pub fn count_cells(text: &str, base_dir: &Path) -> Result<(u64, u64), String> {
-    let case = Case::parse_toml_in(text, base_dir).map_err(|errs| {
+    let case = crate::preview::parse_case(text, base_dir).map_err(|errs| {
         errs.iter()
             .map(|d| format!("{}: {}", d.path, d.message))
             .collect::<Vec<_>>()

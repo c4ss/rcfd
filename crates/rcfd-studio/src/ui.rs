@@ -5,7 +5,7 @@ use crate::case_edit::EditorState;
 use crate::layout::{self, Panel};
 use crate::monitors::MAX_PLOT_POINTS;
 use crate::schema_model::{format_value, matches_filter, value_at, Kind, Node};
-use crate::studio::Studio;
+use crate::studio::{AfterClose, CloseAnswer, Studio};
 use crate::theme::Theme;
 use egui::{Color32, RichText};
 use egui_dock::{DockArea, DockState, TabViewer};
@@ -53,7 +53,31 @@ pub struct UiState {
     pub field_rects: BTreeMap<String, egui::Rect>,
     /// Where the Start run dialog drew its Start button last, and why it was greyed out (ADR 0148; tests).
     pub start_button: Option<(egui::Rect, Option<String>)>,
+    /// Where the close question drew its buttons last, by label (ADR 0149; tests).
+    pub close_buttons: BTreeMap<&'static str, egui::Rect>,
+    /// Where the Runs panel drew each visible run row last, by run id (ADR 0149; tests click them).
+    pub run_rects: BTreeMap<String, egui::Rect>,
+    /// Where the case editor drew its Discard edits button last (ADR 0149; tests).
+    pub discard_rect: Option<egui::Rect>,
+    /// Test switch (ADR 0149 amendment 1's control): the route before, the case editor's text fields with ids from their
+    /// place and one text buffer per settings path for every case.
+    pub shared_field_ids: bool,
 }
+
+/// The mark drawn after a case of the Project panel whose editor holds unsaved state (ADR 0149).
+pub const UNSAVED_MARK: &str = "*";
+/// The mark's hover text.
+pub const UNSAVED_HOVER: &str =
+    "unsaved edits: kept while other cases are selected, until you save them (Case > Save) \
+                                 or discard them (Discard edits in the case editor)";
+/// The close question's buttons (ADR 0149).
+pub const CLOSE_SAVE: &str = "Save all and close";
+/// See [`CLOSE_SAVE`].
+pub const CLOSE_DISCARD: &str = "Discard and close";
+/// See [`CLOSE_SAVE`].
+pub const CLOSE_CANCEL: &str = "Cancel";
+/// The case editor's button that drops its unsaved state (ADR 0149).
+pub const DISCARD_EDITS: &str = "Discard edits";
 
 /// UI fields of the start dialog; the plan itself is in the model ([`crate::runs::RunsView::plan`]).
 #[derive(Debug, Clone, Default)]
@@ -123,10 +147,18 @@ impl StudioApp {
         });
         self.st.dock = dock;
         if ctx.input(|i| i.viewport().close_requested()) {
-            self.st.chat.shutdown(Duration::from_secs(5)); // a running turn's claude must not outlive the window
-            if let Err(e) = self.st.save_prefs_now() {
-                eprintln!("rcfd-studio: could not save preferences: {e}");
+            // ADR 0149: cases with unsaved edits: the window stays until the question is answered
+            if self.st.close_ask.is_some() || !self.st.request_close(crate::studio::AfterClose::Exit) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            } else {
+                self.st.chat.shutdown(Duration::from_secs(5)); // a running turn's claude must not outlive the window
+                if let Err(e) = self.st.save_prefs_now() {
+                    eprintln!("rcfd-studio: could not save preferences: {e}");
+                }
             }
+        }
+        if std::mem::take(&mut self.st.exit_now) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 
@@ -140,10 +172,12 @@ impl StudioApp {
                     });
                     ui.close();
                 }
+                // ADR 0149: opening or creating another project closes this one: asked first when cases hold unsaved
+                // edits (Studio::request_close)
                 if ui.button("Open project...").clicked() {
                     ui.close();
                     if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                        self.st.open_project(&dir);
+                        self.st.request_close(AfterClose::Open(dir));
                     }
                 }
                 if ui.button("Open typed path...").clicked() {
@@ -155,7 +189,7 @@ impl StudioApp {
                     ui.menu_button("Recent", |ui| {
                         for r in &recent {
                             if ui.button(r).clicked() {
-                                self.st.open_project(&PathBuf::from(r));
+                                self.st.request_close(AfterClose::Open(PathBuf::from(r)));
                                 ui.close();
                             }
                         }
@@ -172,7 +206,8 @@ impl StudioApp {
                     .add_enabled(self.st.project.is_some(), egui::Button::new("Close project"))
                     .clicked()
                 {
-                    self.st.close_project();
+                    // ADR 0149: asks first when cases hold unsaved edits
+                    self.st.request_close(AfterClose::Nothing);
                     ui.close();
                 }
             });
@@ -303,8 +338,11 @@ impl StudioApp {
                     });
                     let ok = !d.path.trim().is_empty() && !d.name.trim().is_empty();
                     if ui.add_enabled(ok, egui::Button::new("Create")).clicked() {
-                        self.st
-                            .create_project(&PathBuf::from(d.path.trim()), d.name.trim(), d.version.trim());
+                        self.st.request_close(AfterClose::Create {
+                            root: PathBuf::from(d.path.trim()),
+                            name: d.name.trim().to_string(),
+                            solver_version: d.version.trim().to_string(),
+                        });
                         done = true;
                     }
                 });
@@ -312,6 +350,7 @@ impl StudioApp {
                 self.ui_state.new_dialog = Some(d);
             }
         }
+        close_question(ctx, &mut self.st, &mut self.ui_state);
         start_dialog(ctx, &mut self.st, &mut self.ui_state);
         budgets_dialog(ctx, &mut self.st, &mut self.ui_state);
         crate::case_starter_ui::dialog(ctx, &mut self.st, &mut self.ui_state.starter);
@@ -327,7 +366,7 @@ impl StudioApp {
                     let r = ui.add(egui::TextEdit::singleline(&mut path).desired_width(360.0));
                     let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                     if (ui.button("Open").clicked() || enter) && !path.trim().is_empty() {
-                        self.st.open_project(&PathBuf::from(path.trim()));
+                        self.st.request_close(AfterClose::Open(PathBuf::from(path.trim())));
                         done = true;
                     }
                 });
@@ -341,6 +380,67 @@ impl StudioApp {
 impl eframe::App for StudioApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         StudioApp::ui(self, ui);
+    }
+}
+
+/// The question asked before the project closes while cases hold unsaved state (ADR 0149): which cases, then "Save all
+/// and close", "Discard and close" or "Cancel" (also Escape); why a "Save all" stopped.
+fn close_question(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
+    let Some(ask) = st.close_ask.clone() else {
+        us.close_buttons.clear();
+        return;
+    };
+    let mut answer = None;
+    let busy = !ask.saving.is_empty();
+    let r = egui::Modal::new(egui::Id::new("rcfd-studio-close-ask")).show(ctx, |ui| {
+        ui.heading("Unsaved edits");
+        ui.label(format!(
+            "{} {} edits that are not saved:",
+            ask.cases.len(),
+            if ask.cases.len() == 1 {
+                "case holds"
+            } else {
+                "cases hold"
+            }
+        ));
+        for c in &ask.cases {
+            ui.monospace(c);
+        }
+        ui.label(match &ask.then {
+            AfterClose::Nothing => "Save or discard them before the project closes.",
+            AfterClose::Open(_) | AfterClose::Create { .. } => {
+                "Save or discard them before this project closes and the other one opens."
+            }
+            AfterClose::Exit => "Save or discard them before the window closes.",
+        });
+        if busy {
+            ui.weak(format!(
+                "saving {} ...",
+                ask.saving.iter().cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
+        if let Some(e) = &ask.error {
+            ui.colored_label(ERR, e);
+        }
+        ui.horizontal(|ui| {
+            for (label, a, enabled) in [
+                (CLOSE_SAVE, CloseAnswer::SaveAll, !busy),
+                (CLOSE_DISCARD, CloseAnswer::Discard, !busy),
+                (CLOSE_CANCEL, CloseAnswer::Cancel, true),
+            ] {
+                let r = ui.add_enabled(enabled, egui::Button::new(label));
+                us.close_buttons.insert(label, r.rect);
+                if r.clicked() {
+                    answer = Some(a);
+                }
+            }
+        });
+    });
+    if answer.is_none() && r.should_close() {
+        answer = Some(CloseAnswer::Cancel);
+    }
+    if let Some(a) = answer {
+        st.answer_close(a);
     }
 }
 
@@ -411,6 +511,8 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
     let current = crate::quick_run::selected_case(st);
     // ADR 0148 (the maintainer's answer to ADR 0147 question 3): case files under Cases, other files under Data files
     let (cases, data) = crate::project_view::split_cases(&b.cases, st.view.switches.data_files_as_cases);
+    // ADR 0149: the cases whose editor holds unsaved state (the open one and the kept ones) get a mark after the label
+    let unsaved = st.unsaved_cases();
     egui::ScrollArea::vertical()
         .id_salt("browser")
         .auto_shrink([false; 2])
@@ -420,10 +522,18 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
                 .default_open(true)
                 .show(ui, |ui| {
                     for c in &cases {
-                        if ui
-                            .selectable_label(current.as_deref() == Some(c.as_str()), c.as_str())
-                            .clicked()
-                        {
+                        let selected = current.as_deref() == Some(c.as_str());
+                        let r = if unsaved.contains(c) {
+                            ui.horizontal(|ui| {
+                                let r = ui.selectable_label(selected, c.as_str());
+                                ui.colored_label(WARN, UNSAVED_MARK).on_hover_text(UNSAVED_HOVER);
+                                r
+                            })
+                            .inner
+                        } else {
+                            ui.selectable_label(selected, c.as_str())
+                        };
+                        if r.clicked() {
                             open_case = Some(c.to_string());
                         }
                     }
@@ -556,6 +666,7 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let selected = st.selected_run.clone();
     let cost = us.row_cost;
     let mut built = 0usize;
+    let mut rects = Vec::new();
     egui::ScrollArea::vertical()
         .id_salt("runs")
         .auto_shrink([false; 2])
@@ -578,14 +689,18 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
                     (l.id.as_str(), live_line(l, bare))
                 };
                 let text = RichText::new(line).monospace();
-                if ui.selectable_label(selected.as_deref() == Some(id), text).clicked() {
+                let r = ui.selectable_label(selected.as_deref() == Some(id), text);
+                rects.push((id.to_string(), r.rect));
+                if r.clicked() {
                     select = Some(id.to_string());
                 }
             }
         });
+    us.run_rects = rects.into_iter().collect();
     us.rows_built += built;
     if let Some(id) = select {
-        st.select_run(&id);
+        // ADR 0149: a click on a run also selects its case (the Project panel, Run and the Mesh side follow it)
+        st.open_run(&id);
     }
 }
 
@@ -1075,11 +1190,21 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let mut check = false;
     let mut take_disk = false;
     let mut keep_mine = false;
+    let mut discard = false;
     ui.horizontal(|ui| {
         ui.label(RichText::new(&ed.rel).strong());
         let state = ed.state();
         let can_save = state == EditorState::Dirty && !ed.saving;
         save = ui.add_enabled(can_save, egui::Button::new("Save")).clicked();
+        // ADR 0149: unsaved edits are kept until saved or discarded explicitly
+        let r = ui
+            .add_enabled(
+                crate::studio::has_unsaved(ed) && !ed.saving,
+                egui::Button::new(DISCARD_EDITS),
+            )
+            .on_hover_text("drop the unsaved edits, the field being typed and a conflict, and read the file again");
+        us.discard_rect = Some(r.rect);
+        discard = r.clicked();
         check = ui.button("Validate").clicked();
         ui.label("Filter");
         ui.add(egui::TextEdit::singleline(&mut us.filter).desired_width(140.0));
@@ -1121,21 +1246,20 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let values = ed.settings.clone();
     let filter = us.filter.clone();
     let mut edits = Vec::new();
+    let shared = us.shared_field_ids;
+    let field = Field {
+        rel: &ed.rel,
+        errors: &ed.field_errors,
+        draft: ed.draft.as_ref(),
+        shared,
+    };
+    let rel = ed.rel.clone();
     egui::ScrollArea::vertical()
         .id_salt("settings")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
             for child in &schema.children {
-                node_ui(
-                    ui,
-                    us,
-                    &ed.field_errors,
-                    child,
-                    &child.name,
-                    &values,
-                    &filter,
-                    &mut edits,
-                );
+                node_ui(ui, us, &field, child, &child.name, &values, &filter, &mut edits);
             }
         });
     for e in edits {
@@ -1143,7 +1267,7 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
             Edit::Text(p, t) => {
                 let r = ed.edit_text(&schema, &p, &t);
                 if r.is_err() {
-                    us.buffers.insert(p, t);
+                    us.buffers.insert(buffer_key(&rel, &p, shared), t);
                 }
                 r
             }
@@ -1169,6 +1293,12 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
             st.messages.push(m);
         }
     }
+    if discard {
+        if let Err(m) = st.discard_edits() {
+            st.say(m);
+        }
+        return;
+    }
     if keep_mine {
         if let Some(ed) = &mut st.editor {
             ed.keep_mine();
@@ -1189,17 +1319,38 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     }
 }
 
+/// What the case editor's fields need of the editor besides the values: its case, the refusals by path, and the field
+/// being typed (ADR 0149: a field typed in a case left and taken back shows its typed text until it is finished).
+struct Field<'a> {
+    rel: &'a str,
+    errors: &'a BTreeMap<String, String>,
+    draft: Option<&'a (String, String)>,
+    /// [`UiState::shared_field_ids`].
+    shared: bool,
+}
+
+/// The text buffer of field `path` of case `rel` (ADR 0149 amendment 1: one per case and path, so that a case's text
+/// never shows in, or is committed to, another case's field); with `shared`, the route before (one per path).
+fn buffer_key(rel: &str, path: &str, shared: bool) -> String {
+    if shared {
+        path.to_string()
+    } else {
+        format!("{rel}\u{1f}{path}")
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn node_ui(
     ui: &mut egui::Ui,
     us: &mut UiState,
-    errors: &BTreeMap<String, String>,
+    field: &Field,
     node: &Node,
     path: &str,
     values: &Value,
     filter: &str,
     edits: &mut Vec<Edit>,
 ) {
+    let errors = field.errors;
     if !matches_filter(node, path, filter) {
         return;
     }
@@ -1214,7 +1365,7 @@ fn node_ui(
                     ui.weak(&node.doc);
                 }
                 for c in &node.children {
-                    node_ui(ui, us, errors, c, &format!("{path}.{}", c.name), values, filter, edits);
+                    node_ui(ui, us, field, c, &format!("{path}.{}", c.name), values, filter, edits);
                 }
             });
         }
@@ -1237,7 +1388,7 @@ fn node_ui(
                     ui.horizontal(|ui| {
                         egui::CollapsingHeader::new(name).id_salt(&epath).show(ui, |ui| {
                             for c in &item.children {
-                                node_ui(ui, us, errors, c, &format!("{epath}.{}", c.name), values, "", edits);
+                                node_ui(ui, us, field, c, &format!("{epath}.{}", c.name), values, "", edits);
                             }
                         });
                         if ui.small_button("remove").on_hover_text("delete this entry").clicked() {
@@ -1261,21 +1412,22 @@ fn node_ui(
                 }
             });
         }
-        _ => leaf_ui(ui, us, errors, node, path, values, edits),
+        _ => leaf_ui(ui, us, field, node, path, values, edits),
     }
 }
 
 fn leaf_ui(
     ui: &mut egui::Ui,
     us: &mut UiState,
-    errors: &BTreeMap<String, String>,
+    field: &Field,
     node: &Node,
     path: &str,
     values: &Value,
     edits: &mut Vec<Edit>,
 ) {
     let current = value_at(values, path).cloned().unwrap_or_else(|| node.default.clone());
-    let err = errors.get(path).cloned();
+    let err = field.errors.get(path).cloned();
+    let typed = field.draft.filter(|(p, _)| p == path).map(|(_, t)| t.as_str());
     ui.horizontal(|ui| {
         let label = ui.label(&node.name);
         if !node.doc.is_empty() {
@@ -1301,11 +1453,16 @@ fn leaf_ui(
                     });
             }
             _ => {
-                let buf = us
-                    .buffers
-                    .entry(path.to_string())
-                    .or_insert_with(|| format_value(&current));
-                let r = ui.add(egui::TextEdit::singleline(buf).desired_width(130.0));
+                // ADR 0149 amendment 1: the field and its text belong to its case: a case taken back at the click is
+                // drawn in the frame of the click, and with one widget id and one buffer per path it would take over
+                // the focus and the text being typed in the case left, and commit them as its own
+                let key = buffer_key(field.rel, path, field.shared);
+                let buf = us.buffers.entry(key.clone()).or_insert_with(|| format_value(&current));
+                let mut edit = egui::TextEdit::singleline(buf).desired_width(130.0);
+                if !field.shared {
+                    edit = edit.id_salt(("rcfd-studio-field", field.rel, path));
+                }
+                let r = ui.add(edit);
                 us.field_rects.insert(path.to_string(), r.rect);
                 if r.changed() {
                     // ADR 0144: the case preview follows the text as it is typed
@@ -1313,15 +1470,25 @@ fn leaf_ui(
                 }
                 if r.lost_focus() {
                     let text = buf.clone();
-                    us.buffers.remove(path);
+                    us.buffers.remove(&key);
                     if text != format_value(&current) {
                         edits.push(Edit::Text(path.to_string(), text));
                     } else {
                         edits.push(Edit::EndDraft(path.to_string()));
                     }
-                } else if !r.has_focus() && err.is_none() {
-                    // Not editing: follow the stored value.
-                    *buf = format_value(&current);
+                } else if !r.has_focus() {
+                    match typed {
+                        // ADR 0149: a field typed and left (its case kept with the typed text, then taken back) shows
+                        // the text being typed until it is finished
+                        Some(t) => {
+                            if buf.as_str() != t {
+                                *buf = t.to_string();
+                            }
+                        }
+                        // Not editing: follow the stored value.
+                        None if err.is_none() => *buf = format_value(&current),
+                        None => {}
+                    }
                 }
                 match &node.kind {
                     Kind::Float { dim: Some(d), .. } => {

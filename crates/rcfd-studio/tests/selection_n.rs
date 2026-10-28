@@ -301,7 +301,11 @@ fn n1_run_and_the_mesh_follow_the_selected_case() {
                 let Ran::Refused(m) = &s.ran else {
                     panic!("{}: a run was queued: {:?}", s.name, s.ran)
                 };
-                assert!(m.starts_with(&format!("{case} was not started: ")), "{}: {m}", s.name);
+                // ADR 0149 (registered change of (c)): once read, a benchmark descriptor greys Run out with ADR 0147's
+                // one line, so Run refuses before any start (before: the start's `<case> was not started: ...`)
+                let text = std::fs::read_to_string(pv::repo_root().join("cases/cavity/case.json")).unwrap();
+                let line = rcfd_studio::preview::descriptor_message(case, &text).unwrap();
+                assert_eq!(m, &format!("Run: {line}"), "{}", s.name);
                 assert_eq!(s.editor, None, "{}: the editor holds a case", s.name);
                 assert_eq!(
                     s.editor_error.as_deref(),
@@ -452,8 +456,8 @@ fn n3(
 }
 
 /// N3: the "save it first" and "finish editing" rules hold for the case being edited; the selection of another case
-/// takes Run with it at once (its file on disk); the edits of the case left are dropped (the behaviour before, kept and
-/// reported).
+/// takes Run with it at once (its file on disk); the edits of the case left are kept and come back with it (ADR 0149,
+/// the maintainer's answer to ADR 0148 question 2; registered change of (c): before, they were dropped).
 #[test]
 fn n3_unsaved_edits_and_another_case() {
     let (dirty, at_switch, r_b, nx, clean, typed, r_typed) = n3("n3", false);
@@ -464,8 +468,8 @@ fn n3_unsaved_edits_and_another_case() {
     );
     assert_eq!(at_switch, None, "(b) Run refused at the switch");
     assert_eq!(r_b, Ran::Run("cases/b.toml".into()), "(b)");
-    assert_eq!(nx, Some(serde_json::json!(8)), "(c) a's file on disk");
-    assert!(clean, "(c)");
+    assert_eq!(nx, Some(serde_json::json!(9)), "(c) a's edit kept");
+    assert!(!clean, "(c) a's edit kept");
     assert!(
         typed
             .as_deref()
@@ -491,9 +495,9 @@ fn n3_control_the_selection_from_the_editor() {
 
 /// N4's procedure (served project of N1): a selected and settled; Run asked for, and c selected at once (before the
 /// run is queued); the start ended. Returns (the selected run is the queued one, its case, the Viewport's side, the run
-/// the viewport shows, the preview's case), then the same after Run of c.
+/// the viewport shows, the preview's case, the selected run), then the same after Run of c.
 #[allow(clippy::type_complexity)]
-fn n4(tag: &str, route_before: bool) -> Vec<(bool, String, Side, Option<String>, Option<String>)> {
+fn n4(tag: &str, route_before: bool) -> Vec<(bool, String, Side, Option<String>, Option<String>, Option<String>)> {
     let p = project(tag);
     let ctx = egui::Context::default();
     let mut app = app(&p, &ctx, route_before);
@@ -519,6 +523,7 @@ fn n4(tag: &str, route_before: bool) -> Vec<(bool, String, Side, Option<String>,
             app.st.view.side,
             app.st.viewport.run.clone(),
             app.st.preview.case.clone(),
+            app.st.selected_run.clone(),
         );
         eprintln!("N4 {then:?}: {s:?}");
         out.push(s);
@@ -526,19 +531,22 @@ fn n4(tag: &str, route_before: bool) -> Vec<(bool, String, Side, Option<String>,
     out
 }
 
-/// N4: a run that Run queued after another case was selected is selected (the plots and the strip follow it) and the
-/// Viewport stays on the selected case's mesh; Run of the selected case then shows its run.
+/// N4: a run that Run queued after another case was selected leaves the Viewport on the selected case's mesh; Run of the
+/// selected case then shows its run. ADR 0149 (registered change of the first limit, the maintainer's answer to ADR
+/// 0148 question 1): the run is not selected either (before: selected, ADR 0148 decision 1 (d)); the selected run is the
+/// selected case's newest run, none for c.
 #[test]
 fn n4_a_case_selected_while_run_starts_keeps_the_mesh() {
     let s = n4("n4", false);
     assert_eq!(
         s[0],
         (
-            true,
+            false,
             "cases/a.toml".into(),
             Side::Mesh,
             None,
-            Some("cases/c.toml".into())
+            Some("cases/c.toml".into()),
+            None
         ),
         "(a) c selected while a's run started"
     );

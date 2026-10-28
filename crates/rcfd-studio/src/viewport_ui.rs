@@ -85,14 +85,15 @@ fn toggle(ui: &mut egui::Ui, st: &mut Studio) {
     let mut pick: Option<Side> = None;
     ui.horizontal(|ui| {
         for side in Side::BOTH {
-            let why = st.view_unavailable(side);
+            // ADR 0149: the Run side of a case without runs names the case
+            let why = st.view_refusal(side);
             let r = ui
                 .add_enabled(
                     why.is_none(),
                     egui::Button::selectable(st.view.side == side, side.label()),
                 )
                 .on_hover_text(side.hover())
-                .on_disabled_hover_text(why.unwrap_or_default());
+                .on_disabled_hover_text(why.clone().unwrap_or_default());
             st.view.rects.insert(side.label(), r.rect);
             st.view.enabled.insert(side.label(), why.is_none());
             if r.clicked() {

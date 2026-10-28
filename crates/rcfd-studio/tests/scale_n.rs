@@ -456,6 +456,29 @@ fn open_settled(app: &mut StudioApp, ctx: &egui::Context, rel: &str) {
         && a.st.preview.shown.as_ref().is_some_and(|b| b.rel == rel)));
 }
 
+/// ADR 0149 (registered change of N11's set-up): the case opened again with its unsaved edits discarded ("Discard
+/// edits"), so that (d) and (e) start from the file as N11 registered; a click no longer drops them (the maintainer's
+/// answer to ADR 0148 question 2).
+fn open_fresh(app: &mut StudioApp, ctx: &egui::Context, rel: &str) {
+    app.st.open_case(rel);
+    let kept = app
+        .st
+        .editor
+        .as_ref()
+        .is_some_and(|e| e.rel == rel && rcfd_studio::studio::has_unsaved(e));
+    if kept {
+        app.st.discard_edits().unwrap();
+    }
+    assert!(common::frames_until(app, ctx, WAIT, |a| a
+        .st
+        .editor
+        .as_ref()
+        .is_some_and(|e| e.rel == rel && !rcfd_studio::studio::has_unsaved(e))
+        && a.st.pending_case.is_none()
+        && lj::settled(&a.st)
+        && a.st.preview.shown.as_ref().is_some_and(|b| b.rel == rel)));
+}
+
 fn n11(tag: &str, no_scale: bool) -> Refined {
     let root = pv::project(tag, &[("cases/ring.toml", RING.as_bytes())]);
     let mut st = Studio::in_memory();
@@ -511,7 +534,7 @@ fn n11(tag: &str, no_scale: bool) -> Refined {
     r.hex_button = refine_rect(&mut app, &ctx).is_some();
     // (d)
     app.st.preview.limits.cells = 1000;
-    open_settled(&mut app, &ctx, "cases/cavity.toml");
+    open_fresh(&mut app, &ctx, "cases/cavity.toml");
     let rect = refine_rect(&mut app, &ctx).expect("(d) Refine x2 drawn");
     r.over_hover = hover(&mut app, &ctx, rect.center(), "Over the preview limit of 1,000 cells");
     lj::click_at(&mut app, &ctx, rect.center());
@@ -519,7 +542,7 @@ fn n11(tag: &str, no_scale: bool) -> Refined {
     r.over_status = Some(app.st.preview.status.clone());
     // (e)
     app.st.preview.limits.cells = rcfd_studio::preview::MAX_CELLS;
-    open_settled(&mut app, &ctx, "cases/cavity.toml");
+    open_fresh(&mut app, &ctx, "cases/cavity.toml");
     lj::type_text(&mut app.st, "mesh.ly", "2");
     let _ = common::frames_until(&mut app, &ctx, WAIT, |a| lj::settled(&a.st));
     let rect = refine_rect(&mut app, &ctx).expect("(e) Refine x2 drawn");

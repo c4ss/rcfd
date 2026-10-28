@@ -383,10 +383,17 @@ pub fn located(rel: &str, diags: &[Diagnostic]) -> String {
         .join("\n")
 }
 
+/// The rule `rcfd run <file> --case-dir <dir>` reads a case text by (`load_case_in` of `rcfd-cli`, private to that
+/// program): JSON when the text starts with `{`, else TOML.
+pub fn is_json_text(text: &str) -> bool {
+    text.trim_start().starts_with('{')
+}
+
 /// Parse case text as `rcfd run <file> --case-dir <dir>` does: JSON when it starts with `{`, else TOML, relative paths
-/// against `dir`.
+/// against `dir` (`Case::parse_json_with` or `Case::parse_toml_with` of `rcfd-api`, the functions that program calls).
+/// The Studio's one reader of a case text for the preview, Run, the Start run dialog and its cell count (ADR 0149).
 pub fn parse_case(text: &str, dir: &Path) -> Result<Case, Vec<Diagnostic>> {
-    if text.trim_start().starts_with('{') {
+    if is_json_text(text) {
         Case::parse_json_with(text, dir, None)
     } else {
         Case::parse_toml_with(text, dir, None)

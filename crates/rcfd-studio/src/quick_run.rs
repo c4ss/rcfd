@@ -67,6 +67,16 @@ pub struct Switches {
     /// The route before ADR 0148 (the maintainer's answer to ADR 0147 question 4): the Start run dialog's Start is
     /// enabled whatever the case editor holds of its case.
     pub start_ignores_editor: bool,
+    /// The route before ADR 0149 (ADR 0148's, the maintainer's answer to its question 1): a click on a case keeps the
+    /// selected run, a click on a run keeps the selected case, and a run that Run queued after another case was
+    /// selected is selected without switching the Viewport (ADR 0148 decision 1 (d)).
+    pub case_run_unlinked: bool,
+    /// The route before ADR 0149 (ADR 0148 decision 1 (a), the maintainer's answer to its question 2): the unsaved edits
+    /// of the case left are dropped at the click, and closing the project drops them without asking.
+    pub drop_drafts: bool,
+    /// The route before ADR 0149 (the maintainer's answer to ADR 0148 question 6): Run and its plan read a case as TOML
+    /// only (a `.json` case is refused with `not TOML: ...`) and Run is not greyed out for a benchmark descriptor.
+    pub cases_as_toml: bool,
 }
 
 /// A start in flight.
@@ -218,11 +228,12 @@ pub fn selected_case(st: &Studio) -> Option<String> {
 /// The words of Run's refusal while a field of the case editor is being typed (ADR 0147); the field's path follows.
 pub const FINISH_EDITING: &str = "finish editing the field";
 
-/// Why a run of `case` must wait for the case editor (`None`: it need not): the editor holds `case` in conflict, with a
-/// field being typed (ADR 0147) or with unsaved edits (ADR 0141); a run uses the file on disk. Run's refusal, and the
-/// Start run dialog's for its case (ADR 0148, the maintainer's answer to ADR 0147 question 4).
+/// Why a run of `case` must wait for the case editor (`None`: it need not): the editor of `case` (the open one, or one
+/// kept with its unsaved edits while another case is selected, ADR 0149) holds it in conflict, with a field being typed
+/// (ADR 0147) or with unsaved edits (ADR 0141); a run uses the file on disk. Run's refusal, and the Start run dialog's
+/// for its case (ADR 0148, the maintainer's answer to ADR 0147 question 4).
 pub fn editor_blocks(st: &Studio, case: &str) -> Option<String> {
-    let ed = st.editor.as_ref().filter(|e| e.rel == case)?;
+    let ed = st.case_editor(case)?;
     if ed.in_conflict() {
         return Some(format!("{case}: resolve the conflict in the case editor first"));
     }
@@ -265,6 +276,15 @@ pub fn blocked(st: &Studio) -> Option<String> {
     if let Some(why) = editor_blocks(st, &case) {
         return Some(why);
     }
+    // ADR 0149 (the maintainer's answer to ADR 0148 question 6): a benchmark descriptor, known from its read, is never
+    // startable: ADR 0147's one line
+    if let Some((_, line)) = st
+        .not_a_case
+        .as_ref()
+        .filter(|(c, _)| *c == case && !st.quick.switches.cases_as_toml)
+    {
+        return Some(line.clone());
+    }
     if let Some(s) = &st.quick.starting {
         return Some(format!("a start of {} is in progress ({})", s.case, s.stage));
     }
@@ -293,6 +313,7 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
         case,
         search: q.search.clone(),
         tail_always: q.switches.tail_always,
+        toml_only: q.switches.cases_as_toml,
     };
     let (tx, wake) = (q.tx.clone(), st.wake.clone());
     spawn("rcfd-studio-quick-start", move || start_job(job, tx, wake));
@@ -305,6 +326,8 @@ struct Job {
     case: String,
     search: Search,
     tail_always: bool,
+    /// [`Switches::cases_as_toml`].
+    toml_only: bool,
 }
 
 /// The last lines of `.rcfd/runner.log` (the runner has no console; since ADR 0146 its standard output and error go
@@ -373,7 +396,7 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
         .map_err(|e| format!("{}: {e}", job.case))
         .and_then(|path| {
             let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            StartPlan::new(&job.case, &text, path.parent().unwrap_or(&job.root))
+            StartPlan::new_with(&job.case, &text, path.parent().unwrap_or(&job.root), job.toml_only)
         });
     let plan = match plan {
         Ok(p) => p,
@@ -480,11 +503,14 @@ fn apply(st: &mut Studio, m: Msg) {
                 s.stage = format!("queued run {id}; starting the runner");
             }
             st.quick.run = Some((id.clone(), *plan));
-            // ADR 0148: another case selected after the click keeps the Viewport on its mesh; the run is still selected
+            // ADR 0148: another case selected after the click keeps the Viewport on its mesh. ADR 0149: the run is not
+            // selected either, so that the selected run stays one of the selected case (the Run side, the strip and the
+            // plots agree with the Project panel); it is listed in the Runs panel and named in the status bar. With
+            // `case_run_unlinked`, ADR 0148's rule: the run is selected without a switch of the Viewport.
             let moved_on =
                 !st.quick.switches.selection_from_editor && st.selected_case.as_deref() != Some(case.as_str());
             if moved_on {
-                if !st.quick.switches.no_select {
+                if st.quick.switches.case_run_unlinked && !st.quick.switches.no_select {
                     st.select_run_keep_view(&id);
                 }
                 return;

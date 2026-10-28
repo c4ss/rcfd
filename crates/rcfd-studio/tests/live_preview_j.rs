@@ -87,6 +87,9 @@ fn until_mesh(st: &mut Studio) {
 #[test]
 fn j1_the_toggle_follows_case_and_run_selection() {
     let (_root, mut st) = b1("j1", true);
+    // ADR 0149 (registered set-up change): the toggle's mechanics as ADR 0144 registered them, with the case and its runs
+    // not linked (the linked machine is ADR 0149's O1 and O2)
+    st.quick.switches.case_run_unlinked = true;
     let (fin, running, queued, failed) = (
         run_in(&st, RunState::Finished),
         run_in(&st, RunState::Running),
@@ -205,6 +208,8 @@ fn round_trip(st: &mut Studio, id: &str, no_reexplain: bool) -> (String, Option<
 #[test]
 fn j1_controls_run_always_wins_and_no_reexplain() {
     let (_root, mut st) = b1("j1c", true);
+    // ADR 0149 (registered set-up change): as J1
+    st.quick.switches.case_run_unlinked = true;
     let (fin, failed) = (run_in(&st, RunState::Finished), run_in(&st, RunState::Failed));
     st.view.switches.run_always_wins = true;
     assert_eq!(lj::open(&mut st, "cases/a.toml"), Status::Ready);
@@ -238,7 +243,9 @@ fn j1_controls_run_always_wins_and_no_reexplain() {
 /// and clicks on Mesh and Run switch the drawn panel.
 #[test]
 fn j11_the_toggle_is_drawn_disabled_with_its_reason_and_clicked() {
-    let (_root, st) = b1("j11", false);
+    let (_root, mut st) = b1("j11", false);
+    // ADR 0149 (registered set-up change): as J1
+    st.quick.switches.case_run_unlinked = true;
     let fin = run_in(&st, RunState::Finished);
     let mut app = StudioApp::new(st, None);
     let ctx = egui::Context::default();
