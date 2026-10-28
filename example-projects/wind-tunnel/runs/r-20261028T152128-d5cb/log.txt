@@ -1,0 +1,5 @@
+E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-d5cb\case.snapshot: ok, 3072 cells
+3072 cells, algorithm piso
+checkpoint written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-d5cb\output\restart.rcfd
+results written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-d5cb\output
+finished after 1280 iterations/steps (finished: end time 80 reached)

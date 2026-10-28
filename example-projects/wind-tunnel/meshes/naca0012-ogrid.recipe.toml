@@ -1,0 +1,20 @@
+# Recipe of meshes/naca0012-ogrid (ADR 0142): NOT a case to run.
+# scripts/make_example_projects.py builds the cylinder O-grid below with `rcfd convert` (the repository's
+# cylinder_ogrid generator, written as an OpenFOAM polyMesh) and moves every point onto the NACA 0012 aerofoil exactly
+# as the registry set-up of ADR 0092 does (crates/rcfd-api/tests/registry_setups_w39a.rs, naca0012_mesh):
+#   theta = atan2(y, x), s = (r - r_in) / (r_out - r_in) in [0, 1] (the generator's graded radial coordinate),
+#   aerofoil point x_a = (1 + cos theta) / 2, y_a = +-y_t(x_a) with the closed-trailing-edge NACA 4-digit thickness
+#   y_t = 5 t (0.2969 sqrt x - 0.1260 x - 0.3516 x^2 + 0.2843 x^3 - 0.1036 x^4), t = 0.12,
+#   far-field point (0.5 + 20 cos theta, 20 sin theta) (a circle of 20 chords about mid-chord),
+#   new point = (1 - s) aerofoil point + s far-field point; the patch `cylinder` is renamed `airfoil`.
+# Result: 6144 cells (128 around, 48 radial), patches airfoil (wall), farfield, frontAndBack (empty).
+title = "recipe of the NACA 0012 O-grid (not a case)"
+
+[mesh]
+generator = "cylinder_ogrid"
+nx = 128
+ny = 48
+r_in = 1.0
+r_out = 2.0
+grading = 200.0
+depth = 0.1

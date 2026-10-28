@@ -1,0 +1,5 @@
+E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\quick-start\runs\r-20261028T152641-97f1\case.snapshot: ok, 1024 cells
+1024 cells, algorithm simplec
+checkpoint written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\quick-start\runs\r-20261028T152641-97f1\output\restart.rcfd
+results written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\quick-start\runs\r-20261028T152641-97f1\output
+finished after 158 iterations/steps (converged: residual targets met: res_u 6.485e-7 < 1.000e-6, res_p 9.796e-7 < 1.000e-6)

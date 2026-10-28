@@ -1,0 +1,15 @@
+{
+  "id": "r-20261028T152641-5cc1",
+  "case": "cases/heated-cavity-ra1e3.toml",
+  "case_snapshot_hash": "fnv64:b83260cda827874e",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-28T15:26:41.703353700Z",
+  "case_source": "E:\\projects\\cfd\\rcfd\\.claude\\worktrees\\agent-a62d8ecd6bf092d6d\\example-projects\\quick-start\\cases\\heated-cavity-ra1e3.toml",
+  "case_dir": "E:\\projects\\cfd\\rcfd\\.claude\\worktrees\\agent-a62d8ecd6bf092d6d\\example-projects\\quick-start\\cases"
+}
