@@ -317,6 +317,25 @@ dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 
+**Found, not fixed (affects users, not only these examples).** A transient run whose `solver.end_time` is not reached
+exactly by a whole number of steps (for example dt 0.05 and end time 100: 2000 steps reach 99.999999999996) takes a
+remainder step of the leftover (3.5e-12 s in the smoke) whose pressure is spoiled (C_D -4e5, C_L 9e5 at that step), and
+that state is the run's final result, its last stored snapshot and its final report values. Any Studio-started transient
+run with such a dt is affected. The examples avoid it with dt = 0.0625 (question 6).
+
+**Checks of the committed tree, not only the working tree.** `git archive HEAD` extracted to a temporary folder:
+`--check --root <copy>/example-projects` 0 problems, `python -m unittest scripts/test_make_example_projects.py` 8
+passed, `.rcfd/.gitignore` present in both projects, 31 658 565 bytes, the same as the working tree. The Rust tests
+were not run from the archive copy (a full build there); they read the same files.
+
+**`scripts/limit_audit.py`** on the new test files: two class (iii) hits, `s1_controls_tampered_copies_are_reported`
+and `s7_control_a_missing_file_is_reported`. Each control asserts the failure it shows as a positive fact (the problem
+list contains the expected report), the form the heuristic does not recognise, as in ADRs 0131 and 0139. No other hit.
+
+**Local runs.** A run a user starts inside the checkout leaves the runner's files in `.rcfd/` (lock, log, config;
+ignored by git); S2 and `--check` then report them locally (`.rcfd` must hold only `.gitignore`) although the
+committed tree is fresh. The gate and CI never see them (D6, question 3).
+
 **Code after the registered runs** (behaviour-neutral): `cargo clippy --release -p rcfd-mcp -p rcfd-studio --tests -- -D
 warnings` found two lints in the new staleness test (`type_complexity`, `neg_cmp_op_on_partial_ord`), fixed with a type
 alias and `partial_cmp`; clippy is then clean and `cargo fmt -p rcfd-mcp -p rcfd-studio -- --check` passes. The staleness
@@ -344,6 +363,14 @@ for byte equal and only `manifest.json`'s byte counts changed; `--check` and the
    of a 2D case, or offer a "fit to patch" control (a Studio change)?
 8. Add the two cavity cases to `cases/` (ADR 0139 question 2) so that the case starter offers them too?
 9. Should the examples be rebuilt in a scheduled job (the solver changes them slowly), or only by hand?
+10. **Merge:** the main checkout holds an untracked `example-projects/wind-tunnel/` made with the Studio's New project
+    (`rcfd-project.json` and empty folders). Merging this branch adds a tracked `example-projects/wind-tunnel/rcfd-project.json`,
+    so git refuses the merge until that untracked folder is moved aside. Does the committed example replace it (this job
+    did not touch it)?
+11. **Merge with 48G job 1 (mesh preview):** if that job makes the Case editor resolve relative paths against the case's
+    folder, H1's aerofoil branch (which asserts the editor's failure) turns red and E1's ignored known miss passes. The
+    intended follow-up then: un-ignore `e1_mesh_file_cases_validate_through_the_editor_calls_known_miss` and turn H1's
+    aerofoil branch into the positive check, with a note in this ADR.
 
 ## Files
 
