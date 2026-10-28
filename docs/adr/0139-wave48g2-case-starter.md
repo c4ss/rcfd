@@ -138,6 +138,21 @@ All in `crates/rcfd-studio/tests/case_starter_g2.rs`, release build, `--test-thr
 | CS13 | First build of the description list (9 texts parsed with `Case::parse_toml`, on the UI thread at the first open of the dialog) | at most 100 ms, the largest of 5 uncached builds | the same build plus `settings.validate` of each example through the service (what deriving the cell count at run time costs) exceeds 100 ms |
 | CS14 | Nothing else moves | the existing `rcfd-studio` tests pass (the process tests where `rcfd-runner` and `rcfd` of the same profile are built, else listed as not run); `cargo clippy -p rcfd-studio --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio --check` clean | (their own controls) |
 
+## Amendment 1 (2026-10-28, before the corrected run): set-up of CS1's validate-stage control
+
+The first registered run of `case_starter_g2.rs` (23 of 24 tests passed; its numbers are in the addendum) stopped in a negative
+control's set-up: `kepsilon_inlet.toml` without its `[boundaries.walls]` table does not open ("cases/kepsilon_inlet.toml:
+turbulence.model: k-epsilon needs at least one wall patch (a boundary with a fixed zero velocity or turbulence = "wall");
+reports.yplus_walls.patch: y_plus needs a wall patch with a boundary entry, 'walls' is not one"). The k-epsilon model and the y+
+report refuse the text when it is parsed, so the control never reached `validate()`, the stage it was registered to show. The
+editor's service did refuse the broken example, but at the open stage, which the other control already shows.
+
+Corrected set-up (the limits and the open-stage control are unchanged): the validate-stage control uses
+`rotating_channel/rotating_channel.toml` (laminar, no reports) without its `[boundaries.ymax]` table. It must open, and `validate()`
+must be false with a diagnostic on `boundaries.ymax`. That diagnostic comes from the boundary-coverage loop of `Simulation::new`
+(`crates/rcfd-api/src/sim.rs` lines 1053-1064). The loop skips cyclic and empty patches, so of this mesh's patches only `ymin` and
+`ymax` need a boundary entry. What I knew when writing this: the message above and that code. The corrected text had not been run.
+
 ## Not in CI (by hand, recorded in the addendum)
 
 The real window: the menu entry and the Project panel button, the dialog's layout at 1280 x 800 and high-DPI, keyboard focus in the

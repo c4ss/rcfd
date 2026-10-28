@@ -94,15 +94,21 @@ fn cs1_control_broken_examples_fail_the_same_function() {
         .expect("a string for mesh.nx must not open");
     eprintln!("cs1 control (open): {m}");
     assert!(m.contains("mesh.nx"), "{m}");
-    let inlet = example("channel/kepsilon_inlet.toml").text;
-    let walls = "[boundaries.walls]\nvelocity = \"fixed\"\n";
-    assert!(inlet.contains(walls));
-    let cut = inlet.replace(walls, "");
-    let mut ed = CaseEditor::from_bytes(st.svc.clone(), "cases/kepsilon_inlet.toml", cut.as_bytes())
-        .expect("opens without the walls table");
+    // ADR 0139 amendment 1: a laminar case without reports, so the text opens and only validate() can refuse it
+    let channel = example("rotating_channel/rotating_channel.toml").text;
+    let ymax = "[boundaries.ymax]\nvelocity = \"fixed\"\n";
+    assert!(channel.contains(ymax));
+    let cut = channel.replace(ymax, "");
+    let mut ed = CaseEditor::from_bytes(st.svc.clone(), "cases/rotating_channel.toml", cut.as_bytes())
+        .expect("opens without the ymax table");
     let ok = ed.validate();
     eprintln!("cs1 control (validate): {ok} {:?}", ed.diagnostics);
     assert!(!ok);
+    assert!(
+        ed.diagnostics.iter().any(|d| d.starts_with("boundaries.ymax:")),
+        "{:?}",
+        ed.diagnostics
+    );
 }
 
 // ---------------------------------------------------------------- CS2
