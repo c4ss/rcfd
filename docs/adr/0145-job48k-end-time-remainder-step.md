@@ -184,6 +184,65 @@ solver.end_time=100` (or start it from the Studio with those values): the run en
 is about 1.3, the last stored snapshot is at t = 100. With `solver.end_time = 100.001` it ends with a step of 0.001 s
 (2 % of the step) and the warning `short_last_step` on stderr and in the run's events.
 
+## Addendum: results (2026-10-28, branch `worktree-agent-a4bbf65b8948d69c9`, release builds)
+
+Commits: d2decfd (registration: this ADR and the test file), 52c5620 (R2: the pre-fix states recorded, no other change),
+1ab5a65 (the fix, D1-D4, and the `docs/case-schema.md` paragraph), 88936fe (amendment 1), then this addendum. R1-R3 and
+F1 ran in this worktree, `--test-threads 1`, output to files; B4 ran in a scratch copy (amendment 1). The machine was
+shared with other agents' builds.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| C1, unfixed tree (R1) | predicted to fail (b), (d), (e), (f) | exit 0, `finished`, "end time 100 reached", final time 100.0; **2001 steps**, the last 3.538503e-12 s; `cd` -4.052611e5 against [1.316275, 1.333087] over the 200 steps before it (change 4.053e5, limit 5 x 8.135e-4); `cl` 9.444015e5 against [-0.3057595, 0.3057128]; the store **101 snapshots**, the last (step 2001, t 100.0) with largest abs `p` 9.625909e7 against 0.5856598 in the one before; no warning; 21.1 s | fails as predicted: the control reproduces the defect of ADR 0142 |
+| C1, fixed tree (R3) | (a)-(g) | exit 0, `finished`, "end time 100 reached"; 2000 steps; final time 100.0 bit for bit; steps 1-1999 0.05, step 2000 0.0500000000035357 = `100 - t_1999` bit for bit; `cd` 1.327161 in [1.316275, 1.333087], change 7.577e-4 (limit 5 x 8.135e-4); `cl` -0.1489288 in [-0.3057595, 0.3057128], change 1.260e-2 (limit 5 x 1.470e-2); the store 100 snapshots, the last (2000, 100.0) with largest abs `p` 0.5856598 against 0.6270961 before it; no warning; 20.6 s | pass |
+| L1-L5, unfixed tree | T predicted to fail on all five paths | T: 4 steps on every path, the last 0.9e-6 dt (9.0e-9, 9.0e-9, 2.25e-9, 4.5e-8, 9.0e-10 s); E 3 steps, J and N 4 steps with the registered times | as predicted |
+| L1-L5, fixed tree | E: n steps; T: n steps ending on the end time; J, N: n + 1 steps (today's remainder) | as registered, bit for bit, on all five paths; T ends with a step of 1.0000009 dt | pass |
+| L6, unfixed tree | J predicted to fail on 4 paths | no warning | as predicted |
+| L6, fixed tree | one `short_last_step` for J on 4 paths, `fraction` within 1e-6 relative of 1.1e-6; none otherwise | fractions 1.100000000114898e-6 (PISO and PISO Courant), 1.09999999997612e-6 (variable density), 1.0999999999414256e-6 (VOF); none for E, T, N; none on prescribed flow | pass |
+| W1, unfixed tree | predicted to fail | no warning event | as predicted |
+| W1, fixed tree | exit 0; one event for J and W-; none for E, T, N, W+ | as registered; the J event: "the last step is 1.100e-8 s, 1.10e-6 of the step 0.01 s, because solver.end_time 0.030000011 is not a whole number of steps away: the pressure of a much shorter step can be inaccurate (ADR 0145); choose solver.end_time as a whole number of steps of solver.dt"; W-: "the last step is 4.900e-4 s, 4.90e-2 of the step 0.01 s, ..." | pass |
+| B1 | `baseline_hashes.rs` passes unchanged | 3 passed, 1 ignored (the known-differs test) | pass |
+| B2, R1 (unfixed) | recording run | 22 values printed; the test fails for want of recorded values, as registered | as predicted |
+| B2, R2 (unfixed, again) | E, J, N, W reproduce; T fails its "differs" check | 17 of 17 reproduce; T fails on all 5 paths | as predicted |
+| B2, R3 (fixed) | E, J, N, W equal their pre-fix values (Windows x86_64); T differs | 17 of 17 equal; T differs on all 5 paths (3 steps instead of 4) | pass |
+| B3 | `timectl_tree.rs` passes | 4 passed | pass |
+| B4 | (a) 0 D1 lines from processes other than the new test file; (b) 0 failed | (pending) | (pending) |
+| F1 | fmt and clippy clean; `limit_audit.py` 0 hits in the new file | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `limit_audit.py` (exit 0): 118 hits in the repository ((i) 23, (ii) 2, (iii) 25, (iv) 68, (v) 0), none in the new file | pass |
+
+**Observations.** The PISO and PISO Courant set-ups give identical states for every variant: with `max_courant = 1e6`
+the legacy controller proposes exactly `solver.dt`, so both paths do the same arithmetic. The largest abs `p` of the
+fixed run's last snapshot (0.5856598, stored in f32) equals that of the unfixed run's snapshot of step 2000 (t = 100 -
+3.5e-12): stretching the last step by 3.5e-12 s changes the state far below the resolution of the f32 store.
+
+**Deviations.**
+1. Amendment 1: B4's registered command line was rejected by the script's argument parser; corrected with `--` before
+   any run of B4.
+2. B4's probe was registered as "one statement added in `fixed_step`"; it was added as a small helper (`w48k_probe`,
+   13 lines) and two calls of it, 17 added lines in all (`git diff --no-index --stat` of the scratch copy's `sim.rs`
+   against the fixed commit), written by a Python script because the editing tool works only inside this worktree. It
+   only appends a line to a file when `RCFD_W48K_PROBE` is set; behaviour-neutral, never committed.
+3. D4 says the warning reaches "the Studio's event list". Checked by reading the code, not in the Studio: the run
+   service writes every solver event that is not an iteration into `events.jsonl` as a `solver` line
+   (`{"solver_seq": n, "solver": <event>}`, `runner.rs`), the Studio parses it as `EventKind::Other` and shows its JSON
+   (keys sorted, serde_json without `preserve_order`; the line's `t` removed) cut at 160 characters (`ui.rs`
+   `event_text`). For the W1 J event that text is, computed from the code and the key order (Python's shortest repr,
+   serde_json's exponent form): `solver {"solver":{"dt":1.100000000114898e-8,"dt_proposed":0.01,"end_time":0.030000011,
+   "event":"warning","format":"rcfd-status","fraction":1.100000000114898e-6,"kind":"...` (without the line breaks): the
+   Studio shows an event with `"event":"warning"` and the numbers of the step; the cut falls inside `kind`, so neither
+   `short_last_step` nor the message is visible there. `rcfd run` prints the full message on stderr and the run's
+   `events.jsonl` holds it in full (question 5).
+
+**Not run.** The workspace gate over the crates outside B4's selection (they do not link rcfd-api and do not start the
+`rcfd` binary); workspace-wide clippy (`-p rcfd-api` only); Linux (B2 only prints there; the landing, warning and C1
+limits do not depend on the platform's last bits); the real Studio binary and the "Not in CI" checklist; `cargo deny`
+(no new dependency).
+
+**New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
+
+**Merge.** The 48I (ADR 0143, `worktree-agent-a98eb23fe1cbd35b3`) and 48J (ADR 0144, `worktree-agent-a5dd4bf5202a803c8`)
+branches, and every other agent branch ahead of main, change none of `crates/rcfd-api/src/sim.rs`,
+`crates/rcfd-api/src/runctl.rs`, `docs/case-schema.md` (checked with `git diff --name-only main...<branch>`).
+
 ## Out of scope
 
 The compressible engine's landing; the adaptive controller; a check-time warning; the Studio's store-count estimate
