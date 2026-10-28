@@ -280,6 +280,16 @@ integration tests `service_tcp`, `tables`, `workflow`, `physics_service`, `mesh_
 tables or replay journals) and `baseline_hashes` (unchanged, not re-recorded): pass as before. The rest of `rcfd-api`
 and of `rcfd-mcp` is left to the maintainer's gate.
 
+## Amendment 4 (2026-10-28, the maintainer's decision on ADR 0141's tests; before the corrected runs)
+
+Main (with 48I, ADR 0143, merged as 9052841) was merged into this branch first (0d547c2; no conflict). The maintainer
+chose to amend ADR 0141's three tests that fail on main from the 48G merges (amendment 2 of ADR 0141), limits as strict
+as registered, none a known miss: [ADR 0141 amendment 3](0141-wave48g4-one-click-run-and-follow.md). G1b counts (g)'s
+upload and renders from the frame where the run is first listed and reads frames of the run only; the G4 control reads
+the viewport without ADR 0140's empty-state text; the G1 control as before (a frame of a run). J14's exception for the
+G4 control is withdrawn: J14 is the whole `rcfd-studio` suite passing (the known misses ignored as before: ADR 0131 B9,
+ADR 0133 R6, ADR 0141 G1, and this ADR's J3b), with ADR 0143's new `native_start_w48i` among them.
+
 ## Not in CI (by hand)
 
 A person at the real window: the toggle's look and its disabled tooltips, the stale line and badge, typing into the

@@ -297,6 +297,22 @@ runs. ADR 0144's baseline run of the `rcfd-studio` suite on main e11c656 (before
    0140's empty-state text (`Run <id> failed before it stored its first snapshot: <reason>`). It does not involve the
    preview or the toggle and is not changed here: ADR 0144 question 8.
 
+## Amendment 3 (2026-10-28, the maintainer's decision; with ADR 0144 amendment 4, before the corrected runs)
+
+The maintainer chose to amend the three tests of amendment 2 rather than leave them to other changes, with every limit
+as strict as registered and none turned into a known miss. This supersedes amendment 2's items 2 and 3.
+
+1. **G1 control**: as amendment 2 item 1 (a frame of a run).
+2. **G1b** (`oneclick_e2e_g4.rs`, also the ignored G1 known miss, which shares the procedure): counted from the frame
+   where the run is first listed (selected and in the run list). (g): one upload and at least one render since that
+   frame (the GPU counts of that frame are subtracted); the frames read for (c), (d) and (e) are frames of the run
+   (`viewport.run` is the run). The Mesh side's upload and frame of the case's preview before the selection are not
+   counted. Limits unchanged.
+3. **G4 control** (`oneclick_g4.rs`): the viewport's text is read without ADR 0140's empty-state explanation (the
+   `NoStore` message equal to `Viewport::empty`'s, which names the run's reason by itself); the limit (the reason not
+   shown within 5.0 s, the strip check not met) unchanged. G4 itself reads the same function; its text there is this
+   ADR's own (`Failed`), so its limits are unchanged too.
+
 ## Not in CI (by hand)
 
 The real window: the toolbar, the strip and the "follow latest" box on DX12 and Vulkan, at high DPI; F5 while a text field

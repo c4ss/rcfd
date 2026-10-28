@@ -37,6 +37,9 @@ struct Seen {
     focus_after_listed: Option<(bool, bool, bool)>,
     rendered_first: Option<(u64, Option<String>)>,
     newest_after: Option<f64>,
+    /// GPU uploads and renders in the frame where the run is first listed (ADR 0141 amendment 3: (g) counts from there,
+    /// not the Mesh side's upload of the case's preview before it).
+    gpu_at_listed: Option<(u64, u64)>,
 }
 
 /// G1 missed (h) in its registered run (amendment 1): the reopened Viewport took the Plots' place. Kept with the
@@ -90,6 +93,7 @@ fn g1(tag: &str, reopen_in_focused_leaf: bool) {
                     g4::in_front(&app, Panel::Viewport),
                     g4::in_front(&app, Panel::Plots),
                 ));
+                s.gpu_at_listed = st.viewport.gpu().map(|g| (g.uploads, g.renders));
             }
         }
         let Some(rid) = id.clone() else {
@@ -115,7 +119,12 @@ fn g1(tag: &str, reopen_in_focused_leaf: bool) {
                 s.lengths_running.push(len);
             }
         }
-        if let Some(f) = vpm.frame.as_ref().filter(|_| !vpm.pending()) {
+        // ADR 0141 amendment 3: frames of the run only (the Mesh side's preview of the case has a frame of its own)
+        if let Some(f) = vpm
+            .frame
+            .as_ref()
+            .filter(|_| !vpm.pending() && vpm.run.as_deref() == Some(rid.as_str()))
+        {
             if s.frame_first.is_none() {
                 s.frame_first = Some(since(now));
                 s.rendered_first = vpm
@@ -225,20 +234,22 @@ fn g1(tag: &str, reopen_in_focused_leaf: bool) {
         .iter()
         .any(|t| t.contains(&format!("step {}", disk.step)) && t.contains("finished")));
     assert_eq!(frame.step, disk.step as f64);
-    // (g)
+    // (g), counted from the frame where the run is first listed (ADR 0141 amendment 3)
     if gpu.is_some() {
         let (renders, err) = s.rendered_first.clone().unwrap_or((0, Some("no GPU".into())));
         let g = app.st.viewport.gpu().unwrap();
+        let (u0, r0) = s.gpu_at_listed.unwrap_or((0, 0));
         eprintln!(
-            "G1 (g): renders at the first frame {renders}, at the end {}, error {err:?}",
-            g.renders
+            "G1 (g): renders at the first frame {renders}, at the end {}, error {err:?}; at the listing uploads {u0} \
+             renders {r0}, at the end uploads {}",
+            g.renders, g.uploads
         );
         assert!(err.is_none(), "{err:?}");
         assert!(
-            g.renders >= 1 && g.uploads == 1,
-            "renders {} uploads {}",
-            g.renders,
-            g.uploads
+            g.renders > r0 && g.uploads - u0 == 1,
+            "since the listing: renders {} uploads {}",
+            g.renders - r0,
+            g.uploads - u0
         );
     }
     // (h)

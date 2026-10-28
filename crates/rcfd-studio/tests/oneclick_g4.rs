@@ -26,6 +26,17 @@ fn viewport_text(app: &StudioApp) -> String {
     }
 }
 
+/// The viewport's text without ADR 0140's empty-state explanation (ADR 0141 amendment 3): that text (the `NoStore`
+/// message equal to `Viewport::empty`'s) names a failed run's reason by itself since ADR 0140, also with this ADR's
+/// explanation switched off. Empty when the viewport shows only that.
+fn viewport_text_without_0140(app: &StudioApp) -> String {
+    let vp = &app.st.viewport;
+    match &vp.status {
+        Status::NoStore(m) if vp.empty.as_ref().is_some_and(|e| e.message() == *m) => String::new(),
+        _ => viewport_text(app),
+    }
+}
+
 // ---------------------------------------------------------------- G4: a refused start
 
 /// Click Run on the missing-mesh case; frames until the strip shows the failed run's reason or the limit passes.
@@ -62,7 +73,15 @@ fn g4(tag: &str, quiet: bool) -> (Option<f64>, Option<String>, String, String, S
     let drawn = g4::texts(&common::frame(&mut app, &ctx));
     let log_front = g4::in_front(&app, Panel::Log);
     let strip = strip_view(&app.st).text();
-    (dt, id, reason, strip, viewport_text(&app), drawn, log_front)
+    (
+        dt,
+        id,
+        reason,
+        strip,
+        viewport_text_without_0140(&app),
+        drawn,
+        log_front,
+    )
 }
 
 #[test]
@@ -83,10 +102,11 @@ fn g4_a_refused_start_shows_the_runners_reason_within_5_s() {
     assert!(log_front, "the Log panel is not in front after the failure");
 }
 
+/// The control (ADR 0141 amendment 3: the viewport read without ADR 0140's explanation, the limit unchanged).
 #[test]
 fn g4_control_without_the_explanation_the_reason_is_not_shown() {
     let (dt, id, reason, strip, vp, _, _) = g4("g4ctl", true);
-    eprintln!("G4 control: shown {dt:?}; run {id:?}; reason {reason}\n  strip: {strip}\n  viewport: {vp}");
+    eprintln!("G4 control: shown {dt:?}; run {id:?}; reason {reason}\n  strip: {strip}\n  viewport without ADR 0140's text: {vp:?}");
     assert!(dt.is_none(), "the check passed without the explanation");
     assert!(!reason.is_empty(), "the run did not fail at all");
     assert!(!vp.contains(&reason));
