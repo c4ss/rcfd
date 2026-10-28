@@ -121,6 +121,12 @@ Notes on Table B1:
 * **First cell.** Where the first cell is not scaled, the near-wall cells leave the refinement family. That covers wall functions at
   every tier, and low on wall-resolved meshes. The wall-normal error is then outside every band, as in ADR 0086, and low's pair
   estimate is refused (`not_in_family`, V-f).
+* **Wall layers (what `expand` does to them).**
+  * The layer count and growth stay as written at every tier: `mesh.wall_layers` and `mesh.layer_growth`, and the fan passage's
+    `mesh.fan.n_bl` and `growth`.
+  * Where y+ <= 1, xhigh and high scale the first layer by the cell-size factor. That is `mesh.first_layer_height`, or
+    `mesh.target_y_plus` where the case sets that instead; for the fan passage, `mesh.fan.first_cell_height` or `mesh.fan.y_plus`.
+  * On wall-function meshes no wall-layer key is scaled.
 
 Table B2, class F presets (absolute, delivered in T5, definitions per F-9):
 
@@ -362,9 +368,15 @@ The full procedure is the validation plan below; this section states its rules i
   check F1.
 * **Ledger rule.**
   * Every entry from a tiered run or an xlow evaluation carries its tier.
-  * A design is reported as chosen only with a `cross_tier_check` entry at high or above [F-8 (b)]. A new function writes it,
-    comparing the higher tier's metrics against the lower tier's budget; `rerun_check` refuses other evaluator versions, so it is
-    not reused.
+  * A design is reported as chosen only with a `cross_tier_check` entry at high or above [F-8 (b)] whose verdict is
+    `within_budget`. A new function writes it; `rerun_check` refuses other evaluator versions, so it is not reused.
+  * **Verdict rule**, per quantity. d is the difference between the lower run (budget b_l against xhigh) and the higher run
+    (budget b_h).
+    * Against xhigh: `within_budget` if `abs(d) <= b_l`, otherwise `budget_exceeded`.
+    * Against a tier below xhigh, by the triangle inequality: `within_budget` if `abs(d) <= b_l - b_h`; `budget_exceeded` if
+      `abs(d) > b_l + b_h`; otherwise `undecided`.
+
+    This relies on the higher tier's own claim; while that claim is not calibrated, the verdict says so.
   * The report names both tiers; Pareto and best refuse sets that mix tiers. VL1 checks the rule.
 
 ### D9 Tier access through the MCP project tools (F-13, decided by the maintainer)
@@ -379,11 +391,11 @@ Decision (maintainer, 2026-10-28): the tier must be reachable through the MCP to
 | `list_runs` | changed | read | none | `tier` on each tiered row, omitted for untiered rows |
 | `run_status` | unchanged | read | none | `settings.fidelity` is already visible in `settings` |
 | `list_tiers` | new | read | `case`, `tier` (both optional; `tier` needs `case`) | the presets version; per tier the knob rules, Table C budgets, Table D bands, and the claim status per class and quantity with its check ids (V-c); with `case` and `tier`, the dry run: expansion, knobs not applied, estimated cost multiplier; nothing written |
-| `tier_report` | new | read | `run`; `against` (optional, 1 to 5 higher-tier runs of the same case snapshot) | the recorded expansion and claim; per quantity the budget, and the estimate with its confidence statement (V-f) or `estimate: null` with refusal codes; with `against`, the measured differences and pass or fail against the budget |
+| `tier_report` | new | read | `run`; `against` (optional, 1 to 5 higher-tier runs of the same case snapshot) | the recorded expansion and claim; per quantity the budget, and the estimate with its confidence statement (V-f) or `estimate: null` with refusal codes; with `against`, the measured differences and the D8 verdict per quantity |
 | `evaluate_xlow` | new | read | `case` (an `axial_fan_sector` case), `conditions` (1 to 20, each of `rpm`, `rho`, `nu`, `system_k`, `system_l`), `flows` (optional) | strip-model results built by `fan_case::fan_of` (`crates/rcfd-api/src/fan_case.rs` line 187) and `RomFan::from_axial_fan` (`crates/rcfd-post/src/fan_rom.rs` line 65), with `RomModel::default()` (line 190) and the ADR 0119 evaluator's tone settings (`c0`, observer, `crates/rcfd-api/src/design/fan_rom_eval.rs` lines 25-29). With `flows`: curve points from `FanRom::curve` (line 524), each with its stalled strips (line 309), and points with stalled strips carry `no_claim_zone`. Without `flows`: operating points from `operating_point` (line 530), where a stalled point or a rising characteristic is a located refusal, not a number (lines 529-546). Values: `q`, `dp_s`, `dp_t`, `power`, `torque`, `eta_s`, `eta_t`, `tone1_pa`. Nothing written |
 | `query_designs` | new | read | `ledger` (a path under `designs/`); `tier`, `study`, `pareto` ([{metric, sense}]), `chosen` (all optional) | entries with their tier; Pareto and best within one tier, mixed tiers refused; with `chosen`, exactly the designs that have a `cross_tier_check` at high or above with verdict `within_budget` (D8), with those entries |
 | `record_design` | new | write_files | `ledger`, `study`, `variant`, `params`, and `run` or an `evaluate_xlow` result | one appended entry with `tier` and the suffixed evaluator id; its index |
-| `verify_design` | new | write_files | `ledger`, `entry` (index of a lower-tier entry), `run` (a higher-tier run of the same case snapshot) | one appended `cross_tier_check` entry: both tiers, per-quantity differences, the lower tier's budgets, verdict `within_budget` or `budget_exceeded`; a run of another snapshot, or at the same or a lower tier, is refused. A check at medium is recorded, but only one at high or above makes the design chosen |
+| `verify_design` | new | write_files | `ledger`, `entry` (index of a lower-tier entry), `run` (a higher-tier run of the same case snapshot) | one appended `cross_tier_check` entry: both tiers, per-quantity differences, both budgets, and the D8 verdict (`within_budget`, `undecided` or `budget_exceeded`); a run of another snapshot, or at the same or a lower tier, is refused. A check at medium is recorded but chooses nothing; only `within_budget` at high or above makes the design chosen |
 
 Names, allow-list and tests:
 * **Names.** Every name passes the `AllowRule::Tool` rule (an ASCII letter, then letters, digits and `_`; `crates/rcfd-claude/src/allow.rs`
@@ -467,16 +479,16 @@ tree.
 | S, 2D steady | lid-driven cavity Re 100, 400 and 1000 (`crates/rcfd-api/tests/validation_cavity_ghia.rs`, ADR 0060) | yes: `cavity_2d`, as in `crates/rcfd-api/tests/baseline_hashes.rs` line 16 | velocity extremum (u_min) | medium is the coarsest registered mesh; xhigh (2n) and the partner (4n) are the registered ratio-2 members; high and low are new |
 | S, 2D steady | heated cavity Ra 1e3, 1e4, 1e5 and 1e6 (`crates/rcfd-fv/tests/validation_natural_convection.rs`, ADRs 0061, 0062) | yes: `box_2d` with energy, as in the case-tree test at `crates/rcfd-api/src/sim.rs` line 4380 (Ra 1e3) | mean Nu; velocity extremum (u_max) | as the cavity |
 | S, 2D steady | Poiseuille channel (`crates/rcfd-cli/tests/study_w20c.rs`, ADR 0034; observed order about 2.7, from 1.90 % at ny 10 and 0.29 % at ny 20, ADR 0099 lines 31-32) | yes | pressure drop | new members from `expand` |
-| S, 2D steady | developing turbulent channel (`cases/channel/kepsilon_inlet.toml`) | yes | pressure drop | new members |
+| S, 2D steady | developing turbulent channel (`cases/channel/kepsilon_inlet.toml`) | yes, a native case file: no harness, so no VC0 and no VR6 reference; a pressure-drop report is to be added (the file carries k, y+ and mass-flow reports) | pressure drop | new members |
 | S, 3D steady | swept pipe (`crates/rcfd-api/tests/pipe_sweep.rs`, ADR 0047) | yes | flow resistance (U_b at fixed forcing); VR6's bias case | new members: the registered nx 5, 9, 17, 33 are not `expand`'s counts |
-| S, 2D steady | SST and k-epsilon channels, Re_tau 395 (`cases/channel/sst_channel.toml`, `kepsilon_channel.toml`) | yes | skin friction | new members |
-| S, 2D transient | cylinder Re 100 (`validation_cylinder_re100_w31.rs`, ADR 0062), written with `time_scheme = bdf2` as the ADR 0069 run | yes: `cylinder_ogrid` (`crates/rcfd-api/src/schema.rs` line 78), equivalence by VC0 | drag, Strouhal | medium 64x50, xhigh 128x100 and partner 181x141 are registered meshes; high is `expand`'s 90x71 (the registered study used 90x70); low is 45x35 |
+| S, 2D steady | SST and k-epsilon channels, Re_tau 395 (`cases/channel/sst_channel.toml`, `kepsilon_channel.toml`) | yes, native case files: no VC0, no VR6 reference. A skin-friction report is to be added (the files carry y+ reports only). The SST channel's 16 layers, growth 1.1 and target y+ 1.0 follow the wall-layer note of Table B1 | skin friction | new members |
+| S, 2D transient | cylinder Re 100, written with `time_scheme = bdf2`. VC0 reference: the BDF2 run `validation_cylinder_re100_w33b.rs` (128x100, dt 0.05, St 0.16480, C_D 1.35247; ADR 0069 line 298) | to be shown: `cylinder_ogrid` (`crates/rcfd-api/src/schema.rs` line 78); whether it reproduces the harness meshes is VC0's question | drag, Strouhal | counts from the ADR 0062 study (`validation_cylinder_re100_w31.rs`), reused for their counts only: medium 64x50, xhigh 128x100, partner 181x141; high is `expand`'s 90x71 (the study used 90x70), low 45x35 |
 | S, 3D steady, fixed SST closure | FAN-01 passage (`crates/rcfd-api/tests/fan01_gci_w37c.rs`, ADR 0086); a 500 mm fan, not a computer fan | yes | torque, pressure rise | B3, B2 and B1 as medium, high and xhigh (a sqrt 2 family), re-run at the T2 commit (about 1.5 h, by hand). There is no partner (a finer member exceeds the 60-minute guard), so there is no band and every check is reported, not limited |
 | S, 2D steady | laminar step Re_D 800 (`validation_bfs_step.rs`, ADR 0060) and Re 200 and 400 (`crates/rcfd-fv/tests/step_laminar.rs`) | no: the case tree has no step generator | reattachment | after a case-file equivalent passes VC0 |
 | S, 2D steady, separated RANS | turbulent step BFS-C, RNG k-epsilon (`crates/rcfd-turb/tests/step_kepsilon_corrected.rs`, ADR 0015) | no: needs a step geometry and the measured inlet profile | reattachment | as above; its own grid study has ratio 1.5, not `expand`'s steps |
 | S, 2D steady | Blasius, SST and SA plates (`validation_blasius_plate.rs`, ADR 0060; `crates/rcfd-turb/tests/validation_w33c_sst_plate.rs`, ADR 0070; `crates/rcfd-turb/tests/flat_plate_sa.rs`, ADR 0014) | to be shown: `box_2d` with wall layers; the SST family also scales the layer count and growth, which no tier knob does | skin friction | after VC0 |
 | S, 2D steady | Graetz plates (`crates/rcfd-fv/tests/validation_graetz.rs`, ADR 0061) | no: a prescribed analytic velocity | local Nu_x, no Table C row | excluded |
-| S, ranking | 8 heated-cavity variants at Ra 1e5 and 8 at Ra 1e4, aspect ratios 0.85 to 1.2 (`box_2d`, `lx`, `ly`). Adjacent xhigh values must differ by 0.5 to 2 low budgets, checked on the xhigh runs before the lower tiers run; an amendment re-spaces a set that misses | yes | ranking | all new (cheap) |
+| S, ranking | three sets of 8 heated-cavity variants, at Ra 1e3, 1e4 and 1e5, aspect ratios 0.85 to 1.2 (`box_2d`, `lx`, `ly`). Adjacent xhigh values must differ by 0.5 to 2 low budgets, checked on the xhigh runs before the lower tiers run; an amendment re-spaces a set that misses | yes | ranking | all new (cheap) |
 | F, model axis | the computer fan (T5) | | the fan rows of Table C, tones, stall onset, ranking | blocked on the T5 prerequisites and measured data |
 | xlow evidence | strip model against FAN-01 measurements (ADR 0119 V1) | | pressure rise, power | reported against reality, not against xhigh |
 
@@ -487,7 +499,8 @@ Cases per Table C row that can be discriminating, from case files today (and aft
 * skin friction: 2 (5);
 * reattachment: 0 (4);
 * drag: 1;
-* Strouhal number: 1.
+* Strouhal number: 1;
+* ranking: 3 sets (for ranking, a case is a variant set).
 
 A row needs at least 3 discriminating cases for a claim (V-c). Drag and Strouhal therefore need new cases: proposed, the cylinder at Re 40 (steady drag) and at Re 200 (transient), both with `cylinder_ogrid`. Reattachment needs the harness-only cases to pass VC0.
 
@@ -612,7 +625,7 @@ and the old file is kept. Limit: each within its budget. A failure follows the h
 
 | Id | Check | Set-up | Limit | Negative control |
 |---|---|---|---|---|
-| VL1 | the ledger records re-verification | through the MCP project tools on a fixture project: 8 cavity variants (lid Re 100 to 400) recorded at low with `record_design`; the best by `query_designs` (tier low); `verify_design` against a high run of that variant | one `cross_tier_check` entry naming the low entry's index, the high run id, both tiers, per-quantity differences, the low budgets and the verdict; `query_designs` with `chosen` lists exactly this design, with both tiers | `chosen` excludes a design whose only check is at medium, and one whose check reads `budget_exceeded`; `verify_design` refuses a run of another snapshot and a run at the same tier, with located messages |
+| VL1 | the ledger records re-verification | through the MCP project tools on a fixture project: 8 cavity variants (lid Re 100 to 400) recorded at low with `record_design`; the best by `query_designs` (tier low); `verify_design` against a high run of that variant | one `cross_tier_check` entry naming the low entry's index, the high run id, both tiers, per-quantity differences, the low budgets and the verdict; `query_designs` with `chosen` lists exactly this design, with both tiers | `chosen` excludes a design whose only check is at medium, one whose check reads `budget_exceeded`, and one whose difference lies between `b_l - b_h` and `b_l` (it reads `undecided`, not `within_budget`); `verify_design` refuses a run of another snapshot and a run at the same tier, with located messages |
 | VL2 | the tier on every entry | every entry written in VL1 | each carries `tier` and the suffixed evaluator; main a89ccb3's reader skips none and refuses a Pareto set that mixes tiers | an entry written with `fidelity: "low"` is skipped by the old reader (T1-4) |
 
 ### V-i What the validation cannot prove
