@@ -5,7 +5,7 @@ Usage (from the workspace root):
     python scripts/release_notes.py v0.1.0 [--out notes.md]
 Fails (exit 1, reason on stderr) unless:
   * the tag is vX.Y.Z,
-  * X.Y.Z is the version in Cargo.toml [workspace.package], python/rcfd/__init__.py and the Claude Code plugin manifest,
+  * X.Y.Z is the version in Cargo.toml [workspace.package], python/rcfd/__init__.py and the two Claude Code plugin manifests,
   * CHANGELOG.md has a heading "## X.Y.Z - YYYY-MM-DD" (a real date) with a non-empty body.
 The notes are that section's body, up to the next "## " heading. Python 3.9 or later, standard library only.
 """
@@ -15,6 +15,7 @@ import re
 import sys
 
 PLUGIN = "clients/claude-panel/.claude-plugin/plugin.json"
+PLUGIN_RCFD = "clients/claude-plugin/.claude-plugin/plugin.json"  # ADR 0135 W48-14
 
 
 def workspace_version(cargo_toml):
@@ -37,7 +38,7 @@ def changelog_section(changelog, version):
     return None
 
 
-def check(tag, cargo_toml, py_init, plugin_json, changelog):
+def check(tag, cargo_toml, py_init, plugin_json, changelog, plugin_rcfd_json):
     """Returns (notes, []) or (None, [reasons])."""
     m = re.fullmatch(r"v(\d+\.\d+\.\d+)", tag)
     if not m:
@@ -48,6 +49,7 @@ def check(tag, cargo_toml, py_init, plugin_json, changelog):
         "Cargo.toml [workspace.package]": workspace_version(cargo_toml),
         "python/rcfd/__init__.py": (re.search(r'^__version__\s*=\s*"([^"]+)"', py_init, re.M) or [None, None])[1],
         PLUGIN: json.loads(plugin_json).get("version"),
+        PLUGIN_RCFD: json.loads(plugin_rcfd_json).get("version"),
     }
     errs += [f"{where} has version {got!r}, the tag says {v}" for where, got in found.items() if got != v]
     notes = changelog_section(changelog, v)
@@ -67,7 +69,8 @@ def main():
     def read(p):
         return open(p, encoding="utf-8").read()
 
-    notes, errs = check(a.tag, read("Cargo.toml"), read("python/rcfd/__init__.py"), read(PLUGIN), read("CHANGELOG.md"))
+    notes, errs = check(a.tag, read("Cargo.toml"), read("python/rcfd/__init__.py"), read(PLUGIN), read("CHANGELOG.md"),
+                        read(PLUGIN_RCFD))
     if errs:
         for e in errs:
             print(f"release_notes: {e}", file=sys.stderr)

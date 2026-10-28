@@ -208,6 +208,161 @@ fn to_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<Vec<u8>> {
     Ok(v)
 }
 
+/// A cooperative edit lock older than this is taken to be left by a crashed writer and is removed (ADR 0135 W48-15).
+pub const EDIT_LOCK_STALE: Duration = Duration::from_secs(30);
+/// How long [`replace_if_hash`] waits for a busy edit lock before it gives up with [`ProjectError::LockBusy`].
+pub const EDIT_LOCK_WAIT: Duration = Duration::from_secs(2);
+/// Project-relative edit log: one JSON line per accepted cooperative edit and per broken stale lock.
+pub const EDIT_LOG: &str = ".rcfd/edits.jsonl";
+
+/// What [`replace_if_hash`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Replaced {
+    /// The file written.
+    pub path: PathBuf,
+    /// Its project-relative form (`/` separators), as the edit log records it.
+    pub rel: String,
+    /// Hash of the replaced content (`None`: the file was created).
+    pub old_hash: Option<String>,
+    /// Hash of the new content.
+    pub new_hash: String,
+    /// True when a stale lock of another writer was removed first.
+    pub broke_stale_lock: bool,
+}
+
+/// The edit lock of the project-relative file `rel` (normalised, `/` separators): `.rcfd/locks/<fnv64>.lock`. On
+/// Windows the key is lower-cased, since names differing only in case are one file there.
+pub fn edit_lock_path(root: &Path, rel: &str) -> PathBuf {
+    let key = if cfg!(windows) {
+        rel.to_lowercase()
+    } else {
+        rel.to_string()
+    };
+    root.join(".rcfd")
+        .join("locks")
+        .join(format!("{:016x}.lock", rcfd_core::hash::fnv64(key.as_bytes())))
+}
+
+struct EditLock(PathBuf);
+
+impl Drop for EditLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+/// Append one line to the edit log in a single write (no torn-tail repair: other writers append concurrently).
+/// Best effort: the log is informative, a failure to write it does not undo the edit.
+fn log_edit(root: &Path, line: serde_json::Value) {
+    let path = root.join(EDIT_LOG);
+    let _ = (|| -> io::Result<()> {
+        if let Some(d) = path.parent() {
+            fs::create_dir_all(d)?;
+        }
+        let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
+        f.write_all(format!("{line}\n").as_bytes())
+    })();
+}
+
+fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, bool)> {
+    let lock = edit_lock_path(root, rel);
+    let t0 = std::time::Instant::now();
+    let mut broke = false;
+    loop {
+        match OpenOptions::new().write(true).create_new(true).open(&lock) {
+            Ok(mut f) => {
+                let _ = writeln!(f, "{} {} {}", std::process::id(), who, crate::time::now());
+                return Ok((EditLock(lock), broke));
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                if let Some(d) = lock.parent() {
+                    fs::create_dir_all(d).map_err(io_err("create directory", d))?;
+                }
+                continue;
+            }
+            // AlreadyExists, or a lock being deleted right now (Windows reports that as access denied)
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists || is_transient(&e) => {
+                let age = fs::metadata(&lock)
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|m| m.elapsed().ok());
+                if age.is_some_and(|a| a > EDIT_LOCK_STALE) && fs::remove_file(&lock).is_ok() {
+                    broke = true;
+                    log_edit(
+                        root,
+                        serde_json::json!({"t": crate::time::now(), "kind": "stale_lock_broken", "who": who,
+                            "path": rel, "age_s": age.map(|a| a.as_secs_f64())}),
+                    );
+                    continue;
+                }
+                if t0.elapsed() >= EDIT_LOCK_WAIT {
+                    return Err(ProjectError::LockBusy {
+                        path: file.to_path_buf(),
+                        lock,
+                    });
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Err(e) => {
+                return Err(ProjectError::Io {
+                    op: "create edit lock",
+                    path: lock,
+                    source: e,
+                })
+            }
+        }
+    }
+}
+
+/// Cooperative compare-and-replace (ADR 0135 W48-15 (a)): under the file's edit lock ([`edit_lock_path`]), replace the
+/// project-relative file `rel` with `bytes` only if its content still has the hash `base` (`fnv64:` or the legacy
+/// `fnv1a64:` spelling); `base = None` means the file must not exist yet. A mismatch is [`ProjectError::Conflict`]
+/// naming the current hash; nothing is written. Parent directories are created. Every accepted write appends
+/// `{t, kind: "edit", who, path, old_hash, new_hash}` to [`EDIT_LOG`].
+///
+/// Limits: only writers that use this function take the lock. A writer that does not (an editor, Claude Code's own
+/// file tools) can still replace the file between the check and the rename; the watcher sees such edits afterwards.
+/// Breaking a stale lock is not atomic against a second writer breaking the same stale lock at the same moment.
+pub fn replace_if_hash(root: &Path, rel: &str, base: Option<&str>, bytes: &[u8], who: &str) -> Result<Replaced> {
+    let path = crate::paths::resolve_in(root, rel)?;
+    let norm = crate::paths::rel_string(root, &path).unwrap_or_else(|| rel.to_string());
+    let (_lock, broke) = acquire(root, &norm, &path, who)?;
+    let current = match read(&path) {
+        Ok(b) => Some(b),
+        Err(ProjectError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e),
+    };
+    let ok = match (base, &current) {
+        (None, None) => true,
+        (Some(h), Some(b)) => crate::records::hash_matches(h, b),
+        _ => false,
+    };
+    let old_hash = current.as_deref().map(crate::records::hash_bytes);
+    if !ok {
+        return Err(ProjectError::Conflict {
+            path,
+            current: old_hash,
+        });
+    }
+    if let Some(d) = path.parent() {
+        mkdirs(d)?;
+    }
+    atomic_write(&path, bytes)?;
+    let new_hash = crate::records::hash_bytes(bytes);
+    log_edit(
+        root,
+        serde_json::json!({"t": crate::time::now(), "kind": "edit", "who": who, "path": norm,
+            "old_hash": old_hash, "new_hash": new_hash}),
+    );
+    Ok(Replaced {
+        path,
+        rel: norm,
+        old_hash,
+        new_hash,
+        broke_stale_lock: broke,
+    })
+}
+
 /// Create a directory and its parents.
 pub(crate) fn mkdirs(path: &Path) -> Result<()> {
     fs::create_dir_all(path).map_err(io_err("create directory", path))

@@ -179,6 +179,163 @@ installers.
 * Adding three crates to `rcfd-mcp` lengthens the build of `rcfd-assistant` and `rcfd-gui` slightly; measured and reported.
 * `--root` and `--project` both point at the project: the existing tools then work on project files too, under the same sandbox.
 
+## Amendment 1 (2026-10-28, 48F server part, before any registered run): set-ups and the checks not run
+
+Written by the 48F server implementer after reading the code and before building or running anything of 48F. What I knew: the
+code reading below; no 48F code existed. Limits are unchanged. Decisions W48-12 (a), W48-13 (a), W48-14 (a), W48-15 (a) as
+accepted.
+
+1. **F1 golden.** Recorded at main 15b00ef (the base of this branch), not at 1248a76: `git diff 1248a76 15b00ef -- crates/rcfd-mcp`
+   is empty and `tools/list` is built only from `rcfd-mcp`'s static `tools()`, so the two commits give the same bytes. The golden
+   (`crates/rcfd-mcp/tests/golden/tools_list_default.json`, the `result` of `tools/list` as serde_json writes it) and its comparing
+   test are committed before any `rcfd-mcp` source changes; the golden is never re-recorded. The test also checks that `initialize`
+   without `--project` is unchanged (same `capabilities`, `serverInfo` and `instructions` text).
+2. **F2** uses the real `rcfd_claude::allow::AllowRule::validate` through a new dev-dependency `rcfd-mcp -> rcfd-claude` (layer 2
+   under 6; `rcfd-claude` is read, not edited). Added, not limited: the read-class project tools equal
+   `rcfd_claude::allow::PROJECT_READ_TOOLS` (11 names).
+3. **F3 result shapes.** "Shape" is the JSON value with every leaf replaced by its type name (`string`, `number`, `bool`, `null`),
+   objects with their keys, arrays by the shape of their first element (`[]` when empty). The golden shapes
+   (`crates/rcfd-mcp/tests/golden/project_shapes.json`) are written by hand from the result description in
+   [`docs/mcp-tools.md`](../mcp-tools.md) before the first run, not recorded from the implementation. The fixture project is made
+   through 48A's runner: the `rcfd-mcp` binary with `--project` starts a 30-step cavity with the field store on
+   (`output.store_interval`) through `start_run`, which starts `rcfd-runner` next to it (W48-13 (a) install layout: `rcfd`,
+   `rcfd-runner` and `rcfd-mcp` in one target folder). The test runs the binaries of one `cargo build` profile (debug) and fails with
+   a located message if `rcfd` or `rcfd-runner` is missing.
+4. **F4 inputs.** The 17 inputs of ADR 0122 P1 (13 escapes with the junction on Windows, 4 refusal-only) go to every path argument:
+   `read_project_file.path`, `edit_case.path`, `write_note.path`, `start_run.case`. "Create nothing": the sorted file list of the
+   project folder and of the outside folder are equal before and after. Run arguments are not paths: a string that is not a run id
+   (`runid::is_run_id`) is refused with 1004 as well (reported, not part of the 17 x 4).
+5. **F5.** The edited file is written in the smallest form that re-parses to the edited case: the `key = value` line is replaced (or
+   added) in the TOML text, comments kept; when the re-parsed text does not give exactly the expected settings tree (the original
+   case with `Case::set` applied, which is what `settings.set` calls), the file is written in the canonical form of `Case::to_toml`
+   / `Case::to_json_string` instead (as `design_create_variant` and the frozen GUI write cases). The result names the form.
+6. **F6 and F7 are not run in this sub-wave.** Both name the Studio: F6 "the Studio model", F7 "the Studio editor is dirty" (ADR 0131
+   B6), and the Studio crate is being built in parallel (48B). They run with the conflict part after 48B merges. Reported, not
+   registered, here: a library-level run of `rcfd_project::atomic::replace_if_hash` with two writer threads, 200 interleaved edits
+   each, with the same 0-lost-updates criterion, and a no-lock control (plain read, modify, write) that is expected to lose updates.
+7. **F8 set-up.** The 500-run fixture and the 100 000-step `residuals.jsonl` are written directly with `rcfd-project` (records,
+   status files and lines), not by solver runs. "Each result's text" is the sum of the lengths of every `content[*].text` and
+   `content[*].data` (base64 image bytes) of the tool result; `structuredContent` repeats the text and is not counted (whether Claude
+   Code counts it is UNVERIFIED). Every read tool is called on the fixture with its default arguments and with its largest allowed
+   page or point count. `read_project_file` pages a file by byte `offset` and `limit` (at most 32 000 bytes per call), so a large
+   file is read in pieces; `render_field` writes the PNG to `runs/<id>/renders/` and returns the path when the base64 image would
+   pass the 40 000-byte limit. The negative control calls the residual reader with decimation off (`max_points` = the line count).
+8. **F9 procedure.** One service session runs the cavity template with `output.store_interval` set and an `out_dir`
+   (`run_headless`); the hook writes the final state at the run end in f64. `render.png` with `field = "p"` and width 640 on that
+   session is compared with `render_field` with `field = "p"`, width 640, on the store's last snapshot (the store copied to
+   `runs/<id>/fields/` of a project run). `speed`, the default of `render.png`, is not stored, so F9 uses a stored field. The
+   negative control renders the snapshot before the last.
+9. **F9 "2D cases only".** `render_field` refuses a mesh where the CPU renderer's view plane does not cut every cell
+   (`cells_drawn != n_cells`, i.e. more than one cell layer), with a located message; this is how "2D" is tested.
+10. **F10.** The test computes its reference with its own Neumaier-compensated sums of `v_i V_i` and `V_i`; min and max are over the
+    finite values (the summary reports the count of non-finite values).
+11. **F11 and `wait_run`.** `wait_run {run, timeout_s <= 60, from?}` returns as soon as the run's state differs from `from` (default:
+    the state at the call) or the run is terminal, else at the timeout with `changed: false`. F11 calls `wait_run` in a loop (each
+    call 60 s or less) until the state is terminal; the 30-step run must reach `finished`, and the `cancelled` state after
+    `cancel_run` on a long run must be read within 5.0 s of the `cancel_run` call.
+12. **New error codes** (tool results with `isError`, as today): 1200 edit conflict (`data.current_hash`, null when the file does not
+    exist), 1201 file lock busy, 1202 not found (run, file, field, snapshot). Existing codes keep their meaning: 1002 wrong run state,
+    1003 validation, 1004 path refused.
+13. **Edge `rcfd-mcp -> rcfd-post`** (layer 4), not in the Placement list: `render_field` calls `rcfd_post::render::render_scalar`
+    directly, because `rcfd-api` does not re-export `rcfd-post`. Acyclic; recorded in [`docs/architecture.md`](../architecture.md).
+    No new third-party crate.
+14. **Lock helper.** `rcfd_project::atomic::replace_if_hash(root, rel, base, bytes, who)`: `base = None` means "the file must not
+    exist"; the lock is `.rcfd/locks/<fnv64 of the project-relative path>.lock` (`create_new`); a busy lock is retried for up to 2 s,
+    then 1201; a lock older than 30 s is removed and a `stale_lock_broken` line is appended to `.rcfd/edits.jsonl`; every accepted
+    write appends `{t, kind: "edit", who, path, old_hash, new_hash}` there (`who` is the tool name for the MCP server).
+15. **Not in CI, not run here:** `claude plugin validate`, the real `--plugin-dir` session and the marketplace install (they need the
+    Claude Code CLI and a person; the maintainer runs them).
+
+## Amendment 2 (2026-10-28, 48F server part, before any registered run): F3 shape rule for passed-through and data-keyed parts
+
+Written after the tools and `docs/mcp-tools.md` were written and before the F3 golden and any registered run. Reading the runner
+while writing the golden showed that several result parts are documents of ADR 0130's contract passed through unchanged, whose
+fields are the runner's (for example `metrics.json` holds the runner's run summary with the solver's `finish` event, not report
+values), and that some objects are keyed by data (run ids, metric and series names). Amendment 1 item 3 is refined; the limit is
+unchanged:
+
+1. Passed-through documents are shaped as the leaf `object`: `run_status` `/settings`, `/last_residual` and each `/events/*`;
+   `read_metrics` `/metrics/*`. Their shapes are checked by ADR 0130's tests, not here.
+2. Data-keyed objects are shaped as `{"*": <shape of their first value>}`: `project_info` `/runs_by_state`; `list_runs`
+   `/runs/*/metrics`; `read_metrics` `/metrics`; `read_residuals` `/series`; `compare_runs` `/metrics`, `/metrics/*`,
+   `/differences`, `/differences/*`; `edit_case` `/values`.
+3. The shape of `render_field` is that of the whole tool result (`content` with the image block, `structuredContent`), of the
+   other tools that of `structuredContent`.
+4. F3's fixture: two finished runs of the 12 x 12 cavity with the `lid_drag` report and `output.store_interval = 10` (30 steps and,
+   for `compare_runs`, 20 steps through `start_run`'s `set`), and a third long run for the control tools (paused, resumed,
+   cancelled; F11's 5.0 s limit). `run_status` is called with `events: 1`, `read_residuals` with `max_points: 10`, `render_field`
+   with `width: 128` (an inline image), `field_summary` and `render_field` with `field: "p"`.
+
+## Addendum: 48F server part results (2026-10-28, branch `worktree-agent-a3111463805750a3f`, debug builds on the gate host)
+
+Decisions applied as accepted: W48-12 (a), W48-13 (a), W48-14 (a), W48-15 (a). Base main 15b00ef. New workspace edges
+`rcfd-mcp -> rcfd-project, rcfd-runner, rcfd-tsstore, rcfd-post` and the dev-only `rcfd-mcp -> rcfd-claude` (all lower layers;
+`workspace_graph` 3 passed; `docs/architecture.md` updated). No new third-party crate. `rcfd-claude` and the Studio crate were
+not edited. The workspace gate was not run (the maintainer runs it); `rcfd-project` and `rcfd-mcp` were tested and linted alone,
+and `rcfd-assistant`, `rcfd-gui`, `rcfd-runner`, `rcfd-claude` pass `cargo check --all-targets`.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| F1 | `tools/list` without `--project` byte-identical to the golden of 15b00ef | 33 tools, 27 188 bytes, identical with no flags, `--root .` and `--read-only`; `initialize` unchanged | pass |
+| F1 control | the list with `--project` differs | 50 tools with `--project` (F3, F13) | fails as required |
+| F2 | both name forms valid for `AllowRule::Tool`, <= 128 characters; no `-` in plugin, server, app-owned server | 17 x 2 names valid, longest 43; `rcfd`, `project`, `rcfd_project` | pass |
+| F2 control | a name with `-` is refused | `mcp__plugin_rcfd-panel_project__list_runs` refused | fails as required |
+| F3 | result shapes equal the golden; access classes and `_meta` as listed; read-only 1100; unknown argument -32602 | 19 of 19 shapes equal the hand-written golden (runs made by `start_run` through the runner); 17 access classes as listed; 6 non-read tools refused read-only with 1100, project unchanged; 17 unknown-argument calls -32602 | pass |
+| F4 | 17 inputs x every path argument refused with 1004, nothing created | 17 x 4 = 68 calls refused with 1004 (junction made); project and outside folder trees unchanged; 5 non-run-id strings refused with 1004 | pass |
+| F4 control | `notes/a.md` accepted | written | as required |
+| F5 | `physics.nu = -1` refused with the located message, hash unchanged; a valid edit written and re-parsed | 1003 "cases/cavity.toml: physics.nu = -1 refused: ... -1 outside [Some(0.0), None]", hash unchanged; edit of nu 0.02 and max_iterations 40 written in the minimal form (comments kept), re-parsed to 0.02 and 40; stale base 1200 naming the current hash; a JSON case edited | pass |
+| F5 control | a naive writer of the invalid value changes the hash | changed, and the file no longer parses | fails as required |
+| F6 | Studio model and MCP client, 200 edits each | not run (needs the 48B Studio model, amendment 1 item 6) | not run |
+| F6 stand-in (reported) | 0 lost updates | two library writers, 200 each: 400 accepted, 227 conflicts, 400 lines, 0 lost; the edit log chains `old_hash` to the previous `new_hash` | reported |
+| F6 stand-in control | loses >= 1 update | plain read-modify-write: 400 writes, 200 lines, 200 lost | fails as expected |
+| F7 | non-cooperating edit, dirty Studio editor | not run (needs the 48B editor, ADR 0131 B6) | not run |
+| F8 | every read tool <= 40 000 bytes or a path | 20 calls on 500 runs; largest 35 897 bytes (`list_changes` over 2 001 changes, truncated), `list_runs` limit 100: 35 701 (paged); `read_residuals` max_points 2000 and `render_field` width 4096 returned paths | pass |
+| F8 control | `read_residuals` without decimation > 40 000 | 100 000 lines: 12 802 924 bytes | fails as required |
+| F9 | PNG bytes equal `render.png` | 5 084 base64 bytes, equal (p, width 640, last snapshot step 30) | pass |
+| F9 control | the snapshot before differs | differs | fails as required |
+| F10 | min, max exact; mean within 1e-12 relative | p, ux, uy on 24 x 24: min and max bit-equal, mean relative difference 0 | pass |
+| F10 control | another snapshot's summary differs | differs for all three | fails as required |
+| F11 | 30-step cavity reaches `finished`; `cancelled` within 5.0 s | finished at step 30 in 0.36 s; cancelled 0.152 s after `cancel_run` (step 38); pause seen in 0.116 s; control on an ended run 1002 | pass |
+| F11 control | `wait_run` with 0 s returns at once | under 1 s, `changed: false` | as required |
+| F12 | `plugin.json` name `rcfd`, version = workspace; `.mcp.json` args with `${CLAUDE_PROJECT_DIR}`; skills valid; release check | as listed, 3 skills; `scripts/test_release_notes.py` 6 passed (4 version places, the new plugin alone named) | pass |
+| F12 control | a skill naming an unknown tool fails | refused naming `no_such_tool` | fails as required |
+| F13 | not a project: non-zero, names the path; a project answers `initialize` | exit 2, message names the folder; `initialize` and 50 tools | pass |
+
+No known miss. Not run here: F6, F7 (Studio), the "Not in CI" items (`claude plugin validate`, a real `--plugin-dir` session, the
+marketplace install), Linux, and the build-cost measurement of the Risks section (only an incremental `cargo check` of
+`rcfd-assistant` and `rcfd-gui`, 17.5 s, which is not a cost measurement).
+
+Deviations and notes:
+* The first run of the F8, F9 and F10 tests stopped in their set-up before measuring anything: the store helper gave the service a
+  sandbox folder that did not exist (1004). A test-code defect, fixed (the folder is created), then all three ran as counted above.
+* `rcfd-mcp`'s existing test `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` fails on this host because
+  `%TEMP%\x` exists (created 2026-10-15, not by this branch); it asserts that path is absent. The failing assertion reads only
+  that folder and the test is unchanged (not re-run on 15b00ef); skipped in the runs above.
+* `rcfd-mcp --help` gained one line for `--project`.
+* After the counted runs, for the gate: `scripts/limit_audit.py` flagged the F6 stand-in control (class iii, no failing
+  assertion); it now asserts that at least one update is lost (it lost 200 of 400). Two unregistered timing bounds of these tests
+  were widened against gate load: the busy-lock wait upper bound 6 s to 30 s (the lower bound of 2 s is the check), and the
+  `wait_run` 0 s control from 1 s to 5 s (the default wait is 30 s). The registered 5.0 s of F11 is unchanged. `edit_case`'s
+  refusal of `runs/`, `.rcfd/` and the manifest compares case-insensitively on Windows, as the edit lock does. The affected tests
+  were re-run and pass; the audit has no hit in the new tests. The gate builds `rcfd` and `rcfd-runner` with every workspace
+  binary (`cargo test --workspace --release --no-run`), which F3 and F11 need.
+* The edit lock, edit log and conflict codes are as amendment 1 items 12 and 14. Read tools write a file under `runs/<id>/mcp/` or
+  `runs/<id>/renders/` when a result is over the budget, also with `--read-only` (as the Design section says for large outputs).
+
+Questions for the maintainer:
+1. The runner's `metrics.json` holds the run summary (`state`, `reason`, `exit_code`, `steps`, `time`, `solver_finish`,
+   `last_residuals`), not the "final report values" of the plan's contract; report values are in `output/monitors.json`. So
+   `list_runs` and `compare_runs` compare `exit_code`, `steps` and `time`. Should the runner also write the final report values
+   into `metrics.json` (an ADR 0130 change), or should the tools read `output/monitors.json`?
+2. W48-13 (a) mentions an optional `RCFD_MCP` path in `env`; Claude Code's documentation does not say that `env` can replace
+   `command`, so it was not built. Keep PATH only?
+3. Should `--project` imply `--root <project>` when `--root` is not given? Now the existing tools keep their sandbox as given
+   (the plugin passes both).
+4. When the minimal TOML edit cannot be placed (a multi-line value, a key set through an inline table), `edit_case` writes the
+   canonical form, which spells out every default. Acceptable, or refuse such edits?
+5. Marketplace name `rcfd` and owner name "rcfd maintainers" in `.claude-plugin/marketplace.json`: confirm or replace.
+6. Error codes 1200 (conflict), 1201 (lock busy), 1202 (not found): confirm the numbers.
+
 ## Files
 
 `crates/rcfd-mcp/src/{lib,main}.rs`, new `src/project.rs` and tests, `crates/rcfd-mcp/Cargo.toml`, `crates/rcfd-project/src/atomic.rs`,

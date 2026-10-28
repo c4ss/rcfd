@@ -15,6 +15,16 @@ workspace = true
 rcfd-api.workspace = true
 rcfd-io.workspace = true
 serde_json.workspace = true
+# Project tools behind --project (ADR 0135 W48-12 (a)): project folder, run service client, field store reader, and
+# the CPU renderer of render_image (amendment 1 item 13). All lower layers, no third-party crate added.
+rcfd-project.workspace = true
+rcfd-runner = { path = "../rcfd-runner" }
+rcfd-tsstore.workspace = true
+rcfd-post.workspace = true
+
+[dev-dependencies]
+# F2 (ADR 0135): tool names checked with the allow-list rules of the Claude Code bridge (read only, layer 2).
+rcfd-claude = { path = "../rcfd-claude" }
 
 [[bin]]
 name = "rcfd-mcp"

@@ -23,7 +23,7 @@ rcfd-turb   -> core, mesh, fv
 rcfd-post   -> core, mesh
 rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
 rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
-rcfd-mcp    -> api
+rcfd-mcp    -> api, project, runner, tsstore, post   (project tools behind --project: folder, run service, stored fields, CPU render; ADR 0135)
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
 rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)

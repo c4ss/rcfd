@@ -1,0 +1,6 @@
+{
+  "name": "rcfd",
+  "version": "0.1.0",
+  "description": "Project tools of the rcfd CFD solver for Claude Code: runs, residuals, stored fields, case edits with conflict checks, and the project's run service (needs rcfd-mcp, rcfd-runner and rcfd on PATH)",
+  "license": "AGPL-3.0-only"
+}

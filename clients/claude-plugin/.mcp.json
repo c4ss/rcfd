@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "project": {
+      "type": "stdio",
+      "command": "rcfd-mcp",
+      "args": ["--project", "${CLAUDE_PROJECT_DIR}", "--root", "${CLAUDE_PROJECT_DIR}"]
+    }
+  }
+}
