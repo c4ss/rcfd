@@ -141,8 +141,9 @@ pub fn apply(case: &Case, mesh: Mesh) -> Result<Mesh, Vec<Diagnostic>> {
     rcfd_mesh::transform::rotate_z(&mesh, r.deg, o).map_err(|e| vec![diag("mesh.transform", e.to_string())])
 }
 
-/// Last path segments of the settings that hold a point, a box corner or an axis (D6).
-const POSITION_KEYS: [&str; 12] = [
+/// Last path segments of the settings that hold a point, a box corner or an axis (D6, corrected by amendment 2: sample
+/// lines and planes, VOF half-space normals, dynamic-mesh bodies, actuator disks, particle injection cones).
+const POSITION_KEYS: [&str; 23] = [
     "point",
     "origin",
     "position",
@@ -155,6 +156,17 @@ const POSITION_KEYS: [&str; 12] = [
     "wall_rotation_axis",
     "axis",
     "reference_point",
+    "p0",
+    "p1",
+    "e1",
+    "e2",
+    "normal",
+    "pivot",
+    "rest_position",
+    "orientation_axis",
+    "disk_centre",
+    "disk_axis",
+    "cone_axis",
 ];
 
 fn get_s(case: &Case, path: &str) -> String {
@@ -240,6 +252,15 @@ pub fn world_coordinate_warnings(case: &Case) -> Vec<RuleDiagnostic> {
             }
             _ => {}
         }
+    }
+    for n in names("postprocessing.samples") {
+        let key = if get_s(case, &format!("postprocessing.samples.{n}.type")) == "plane" {
+            "origin"
+        } else {
+            "p0"
+        };
+        out.entry(format!("postprocessing.samples.{n}.{key}"))
+            .or_insert_with(|| "the sample".into());
     }
     for n in names("sources") {
         if matches!(

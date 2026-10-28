@@ -527,6 +527,64 @@ fn w1_world_coordinate_settings_are_warned() {
     }
 }
 
+const W1B_CASE: &str = r#"
+[mesh]
+generator = "cavity_2d"
+nx = 8
+ny = 8
+
+[physics]
+nu = 0.01
+
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+
+[boundaries.walls]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+
+[postprocessing.samples.line]
+type = "line"
+p0 = [0.1, 0.5, 0.05]
+p1 = [0.9, 0.5, 0.05]
+
+[postprocessing.samples.plane]
+type = "plane"
+
+[sources.disk]
+type = "actuator_disk"
+thrust = 0.1
+direction = [1.0, 0.0, 0.0]
+disk_centre = [0.5, 0.5, 0.05]
+disk_axis = [1.0, 0.0, 0.0]
+"#;
+
+/// W1b (amendment 2): sample lines and planes and actuator-disk points get MT101 too; control: none without the table.
+#[test]
+fn w1b_samples_and_disk_points_are_warned() {
+    let rotated = case(&format!("{W1B_CASE}{}", table(-4.0, [0.0; 3])));
+    for d in rcfd_api::rules::check_case(&rotated, None)
+        .iter()
+        .filter(|d| d.id == "MT101")
+    {
+        println!("W1b {d}");
+    }
+    assert_eq!(
+        mt101(&rotated),
+        [
+            "postprocessing.samples.line.p0",
+            "postprocessing.samples.line.p1",
+            "postprocessing.samples.plane.origin",
+            "sources.disk.disk_axis",
+            "sources.disk.disk_centre",
+        ]
+    );
+    assert!(mt101(&case(W1B_CASE)).is_empty(), "control");
+}
+
 // ------------------------------------------------------------------------------------------------ E3 (geometric)
 
 /// E3, geometric: rotated by -4 degrees about the quarter chord, the leading edge (the airfoil point at x = 0) moves up
