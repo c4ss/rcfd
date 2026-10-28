@@ -61,9 +61,6 @@ pub const SINGLE: [u8; 3] = [200, 200, 200];
 /// Colour of the drawn front of a 2D case.
 pub const FRONT_2D: [u8; 3] = [222, 222, 222];
 
-/// Number of builds that reached `build_mesh` (tests: a refusal before building leaves it unchanged).
-pub static MESHES_BUILT: AtomicU64 = AtomicU64::new(0);
-
 /// Size limits of the preview (the app uses [`Limits::default`]; tests lower them to reach the "anyway" paths).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
@@ -158,6 +155,8 @@ pub enum Refusal {
 pub struct Outcome {
     /// `hash_bytes` of the case file, when it was read.
     pub read_hash: Option<String>,
+    /// True when the build called `build_mesh` (a refusal before building, or a parse failure, did not).
+    pub called_build_mesh: bool,
     /// The preview or why there is none.
     pub result: Result<Built, Refusal>,
 }
@@ -357,6 +356,7 @@ pub fn build(root: &Path, rel: &str, limits: &Limits, force: bool, cancelled: &d
     let t0 = Instant::now();
     let fail = |m: String| Outcome {
         read_hash: None,
+        called_build_mesh: false,
         result: Err(Refusal::Failed(m)),
     };
     if !plain(rel) {
@@ -370,26 +370,27 @@ pub fn build(root: &Path, rel: &str, limits: &Limits, force: bool, cancelled: &d
         Err(e) => return fail(format!("{rel}: {}: {e}", file.display())),
     };
     let read_hash = Some(rcfd_project::records::hash_bytes(&bytes));
-    let out = |result: Result<Built, Refusal>| Outcome {
+    let out = |called_build_mesh: bool, result: Result<Built, Refusal>| Outcome {
         read_hash: read_hash.clone(),
+        called_build_mesh,
         result,
     };
     let src = match std::str::from_utf8(&bytes) {
         Ok(t) => t,
-        Err(e) => return out(Err(Refusal::Failed(format!("{rel}: not UTF-8 text: {e}")))),
+        Err(e) => return out(false, Err(Refusal::Failed(format!("{rel}: not UTF-8 text: {e}")))),
     };
     let dir = file.parent().map_or_else(|| root.to_path_buf(), Path::to_path_buf);
     let case = match parse_case(src, &dir) {
         Ok(c) => c,
-        Err(d) => return out(Err(Refusal::Failed(located(rel, &d)))),
+        Err(d) => return out(false, Err(Refusal::Failed(located(rel, &d)))),
     };
     if cancelled() {
-        return out(Err(Refusal::Cancelled));
+        return out(false, Err(Refusal::Cancelled));
     }
     if !force {
         match estimate(&case) {
             Estimate::Cells(n) if n > limits.cells => {
-                return out(Err(Refusal::TooLarge(format!(
+                return out(false, Err(Refusal::TooLarge(format!(
                     "{rel}: about {} cells (from the mesh.n* counts of generator \"{}\"), more than the preview limit of {}",
                     with_commas(n),
                     text(&case, "mesh.generator"),
@@ -397,7 +398,7 @@ pub fn build(root: &Path, rel: &str, limits: &Limits, force: bool, cancelled: &d
                 ))))
             }
             Estimate::FileBytes(b) if b > limits.file_bytes => {
-                return out(Err(Refusal::TooLarge(format!(
+                return out(false, Err(Refusal::TooLarge(format!(
                     "{rel}: mesh.file {} is {} bytes, more than the preview limit of {}",
                     mesh_file_of(&case).unwrap_or_default().display(),
                     with_commas(b),
@@ -407,52 +408,57 @@ pub fn build(root: &Path, rel: &str, limits: &Limits, force: bool, cancelled: &d
             _ => {}
         }
     }
-    MESHES_BUILT.fetch_add(1, Ordering::Relaxed);
     let mesh = match rcfd_api::sim::build_mesh(&case) {
         Ok(m) => m,
-        Err(d) => return out(Err(Refusal::Failed(located(rel, &d)))),
+        Err(d) => return out(true, Err(Refusal::Failed(located(rel, &d)))),
     };
     if cancelled() {
-        return out(Err(Refusal::Cancelled));
+        return out(true, Err(Refusal::Cancelled));
     }
     let (surface, two_d) = match surface_of(&mesh) {
         Ok(s) => s,
-        Err(e) => return out(Err(Refusal::Failed(format!("{rel}: surface: {e}")))),
+        Err(e) => return out(true, Err(Refusal::Failed(format!("{rel}: surface: {e}")))),
     };
     if surface.n_faces() == 0 {
-        return out(Err(Refusal::Failed(format!(
-            "{rel}: the mesh has no boundary surface to draw"
-        ))));
+        return out(
+            true,
+            Err(Refusal::Failed(format!(
+                "{rel}: the mesh has no boundary surface to draw"
+            ))),
+        );
     }
     let (patches, part_patch) = patch_list(&mesh, &surface);
     let (edges, n_edges, outlines) = if two_d {
         match overlay_2d(&mesh, &surface, &patches, limits.overlay_edges, cancelled) {
             Some(o) => o,
-            None => return out(Err(Refusal::Cancelled)),
+            None => return out(true, Err(Refusal::Cancelled)),
         }
     } else {
         (Vec::new(), 0, Vec::new())
     };
     let triangles = surface.triangles().count();
-    out(Ok(Built {
-        rel: rel.to_string(),
-        file,
-        case_hash: read_hash.clone().unwrap_or_default(),
-        mesh_hash: mesh.content_hash(),
-        cells: mesh.n_cells(),
-        faces: mesh.n_faces(),
-        points: mesh.n_points(),
-        surface: Arc::new(surface),
-        two_d,
-        patches,
-        part_patch,
-        triangles,
-        edges: Arc::new(edges),
-        n_edges,
-        outlines: Arc::new(outlines),
-        mesh_file: mesh_file_of(&case),
-        build_s: t0.elapsed().as_secs_f64(),
-    }))
+    out(
+        true,
+        Ok(Built {
+            rel: rel.to_string(),
+            file,
+            case_hash: read_hash.clone().unwrap_or_default(),
+            mesh_hash: mesh.content_hash(),
+            cells: mesh.n_cells(),
+            faces: mesh.n_faces(),
+            points: mesh.n_points(),
+            surface: Arc::new(surface),
+            two_d,
+            patches,
+            part_patch,
+            triangles,
+            edges: Arc::new(edges),
+            n_edges,
+            outlines: Arc::new(outlines),
+            mesh_file: mesh_file_of(&case),
+            build_s: t0.elapsed().as_secs_f64(),
+        }),
+    )
 }
 
 // ---------------------------------------------------------------- picking and overlay geometry
@@ -587,6 +593,8 @@ pub struct Stats {
     pub discarded: u64,
     /// Surfaces handed to the viewport.
     pub installs: u64,
+    /// Results received (current or discarded) whose build called `build_mesh` (ADR 0138 amendment 2).
+    pub meshes_built: u64,
 }
 
 struct Msg {
@@ -770,6 +778,7 @@ impl Preview {
                 rel: self.case.clone().unwrap_or_default(),
                 outcome: Outcome {
                     read_hash: None,
+                    called_build_mesh: false,
                     result: Err(Refusal::Failed(format!("preview: no build thread: {e}"))),
                 },
             });
@@ -781,12 +790,13 @@ impl Preview {
         let msgs: Vec<Msg> = self.rx.try_iter().collect();
         let n = msgs.len();
         for m in msgs {
+            self.stats.meshes_built += u64::from(m.outcome.called_build_mesh);
             let current = m.gen == self.gen.load(Ordering::SeqCst) && self.case.as_deref() == Some(m.rel.as_str());
             if !current && !self.switches.ignore_generation {
                 self.stats.discarded += 1;
                 continue;
             }
-            let Outcome { read_hash, result } = m.outcome;
+            let Outcome { read_hash, result, .. } = m.outcome;
             match result {
                 Err(Refusal::Cancelled) => {}
                 Ok(b) => {

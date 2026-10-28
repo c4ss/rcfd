@@ -13,7 +13,6 @@ use rcfd_studio::viewport::{surface_of, CameraState, StoreView, ViewGpu};
 use rcfd_studio::StudioApp;
 use rcfd_tsstore::{Location, Precision, WriteOptions, Writer};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -72,6 +71,30 @@ fn assert_same(b: &Built, mesh: &rcfd_mesh::Mesh, what: &str) {
     );
 }
 
+/// The TOML case files under `cases/` at main f3bf005 (ADR 0138 amendment 2).
+const AT_F3BF005_TOML: [&str; 10] = [
+    "cases/axial_fan_cgrid/axial_fan_cgrid.toml",
+    "cases/axial_fan_sector/axial_fan_sector.toml",
+    "cases/channel/kepsilon_channel.toml",
+    "cases/channel/kepsilon_inlet.toml",
+    "cases/channel/profile_inlet.toml",
+    "cases/channel/sst_channel.toml",
+    "cases/packed_bed/packed_bed.toml",
+    "cases/rotating_channel/rotating_channel.toml",
+    "cases/sod/sod.toml",
+    "cases/wedge/wedge.toml",
+];
+
+/// The benchmark descriptors under `cases/` at main f3bf005.
+const AT_F3BF005_JSON: [&str; 6] = [
+    "cases/backward_step/case.json",
+    "cases/cavity/case.json",
+    "cases/channel/case.json",
+    "cases/flat_plate/case.json",
+    "cases/heated_cavity/case.json",
+    "cases/naca0012/case.json",
+];
+
 /// The shipped case files: `cases/*/*.toml` (cases) and `cases/*/case.json` (benchmark descriptors), sorted.
 fn shipped() -> (Vec<String>, Vec<String>) {
     let root = pv::repo_root();
@@ -103,10 +126,17 @@ fn shipped() -> (Vec<String>, Vec<String>) {
 fn g1_g7_shipped_cases_preview_the_solvers_mesh() {
     let root = pv::repo_root();
     let (tomls, jsons) = shipped();
-    assert_eq!(
-        (tomls.len(), jsons.len()),
-        (10, 6),
-        "set-up: shipped case files {tomls:?} {jsons:?}"
+    // amendment 2: the case files of f3bf005 must all be there; files added later are checked the same way
+    for rel in AT_F3BF005_TOML {
+        assert!(tomls.iter().any(|t| t == rel), "set-up: {rel} missing from {tomls:?}");
+    }
+    for rel in AT_F3BF005_JSON {
+        assert!(jsons.iter().any(|t| t == rel), "set-up: {rel} missing from {jsons:?}");
+    }
+    eprintln!(
+        "G1/G7 set-up: {} TOML cases and {} descriptors found (10 and 6 at f3bf005)",
+        tomls.len(),
+        jsons.len()
     );
     for rel in &tomls {
         let t = Instant::now();
@@ -284,7 +314,7 @@ fn g4_failure_paths_are_located() {
     assert!(m.starts_with("cases/sector.toml: mesh.r_out: "), "{m}");
     eprintln!("G4b: {m}");
     // (c) over the cell limit: refused before building, at once; "build anyway" builds
-    let n0 = preview::MESHES_BUILT.load(Ordering::SeqCst);
+    let n0 = st.preview.stats.meshes_built;
     let t = Instant::now();
     let s = pv::show_case(&mut st, "cases/huge.toml");
     let dt = t.elapsed().as_secs_f64();
@@ -299,19 +329,15 @@ fn g4_failure_paths_are_located() {
         other => panic!("{other:?}"),
     }
     assert!(dt < 5.0, "the refusal took {dt} s");
-    assert_eq!(preview::MESHES_BUILT.load(Ordering::SeqCst), n0, "a mesh was built");
+    assert_eq!(st.preview.stats.meshes_built, n0, "a mesh was built");
     st.preview.limits.cells = 100;
     let s = pv::show_case(&mut st, "cases/cavity.toml");
     assert!(matches!(s, Status::TooLarge { rebuild: true, .. }), "{s:?}");
-    assert_eq!(preview::MESHES_BUILT.load(Ordering::SeqCst), n0);
+    assert_eq!(st.preview.stats.meshes_built, n0);
     st.preview.anyway();
     assert!(st.drain_until(pv::WAIT, |s| s.preview.status == Status::Ready));
     assert_eq!(pv::built(&st).cells, 256);
-    assert_eq!(
-        preview::MESHES_BUILT.load(Ordering::SeqCst),
-        n0 + 1,
-        "built once, anyway"
-    );
+    assert_eq!(st.preview.stats.meshes_built, n0 + 1, "built once, anyway");
     eprintln!("G4c: limit 100 cells: cavity (256) refused; build anyway: 256 cells shown");
     // (d) over the triangle limit: built, not shown; "show anyway" shows it without a rebuild
     st.preview.limits = Limits {
@@ -333,7 +359,7 @@ fn g4_failure_paths_are_located() {
         other => panic!("{other:?}"),
     }
     assert!(st.viewport.surface.is_none(), "over the limit: not shown");
-    let (n1, req) = (preview::MESHES_BUILT.load(Ordering::SeqCst), st.preview.stats.requests);
+    let (n1, req) = (st.preview.stats.meshes_built, st.preview.stats.requests);
     st.preview.anyway();
     assert!(st.drain_until(pv::WAIT, |s| s.viewport.surface.is_some()));
     assert!(Arc::ptr_eq(
@@ -341,7 +367,7 @@ fn g4_failure_paths_are_located() {
         &pv::built(&st).surface
     ));
     assert_eq!(
-        (preview::MESHES_BUILT.load(Ordering::SeqCst), st.preview.stats.requests),
+        (st.preview.stats.meshes_built, st.preview.stats.requests),
         (n1, req),
         "shown without a rebuild"
     );

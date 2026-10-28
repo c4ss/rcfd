@@ -127,6 +127,25 @@ snapshots (steps 1 and 2, from `output.store_interval=1`); the mesh-hash and sur
 in that run G1a, G1b, G4 (a-e), G5, G7, G9 and the estimate test passed (the addendum reports them); G1c's stderr was
 "checkpoint written to ...; warning: stopped after 2 iterations without meeting the tolerances".
 
+## Amendment 2 (2026-10-28, after the registered runs, before the reruns below)
+
+Found in review after the addendum's runs, not by a failing run. Limits unchanged.
+
+1. G4 (c) and (d) count "no mesh built" with the process-wide counter `preview::MESHES_BUILT`. Other tests of the same
+   binary (G1a, G1b, G1c, G5, G9, the rebuild test) also build meshes through `preview::build`, so under the default
+   `cargo test` (several test threads in one process) G4 could see another test's build: a set-up defect that the
+   registered `--test-threads 1` runs could not show. Corrected: the static is removed; `Outcome::called_build_mesh`
+   says whether a build reached `build_mesh`, and each `Preview` counts its own (`Stats::meshes_built`, counted when a
+   result arrives, also a discarded one). G4 (c) and (d) assert on that count.
+2. G1a and G7 assert exactly 10 TOML cases and 6 descriptors under `cases/`. The parallel 48G item 2 (case starter menu)
+   may add case files there, which would fail that set-up after a merge without anything being wrong. Corrected: the 10
+   TOML cases and 6 descriptors of f3bf005, by name, must all be present; every `cases/*/*.toml` found must meet G1a's
+   limit and every `cases/*/case.json` found G7's.
+3. Reruns: `tests/preview_g1.rs` with `--test-threads 1` (the registered numbers) and once with the default threads; the
+   three `preview_*` binaries once with the default threads; `scripts/gate_test.py --jobs 5 -- -p rcfd-studio` (one
+   process per test, five at once, the gate's way) and `scripts/limit_audit.py` on the final commit. A timing limit
+   missed only under that parallel load is reported as a finding; the limits stay.
+
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a1e32b5483f27b132` on main f3bf005. Registered runs: release, `--test-threads 1`, output to files,
