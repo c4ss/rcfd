@@ -31,6 +31,18 @@ pub struct Browser {
     pub summaries_read: usize,
 }
 
+/// The order of runs everywhere the Studio lists them, as `Project::runs` orders them: by `created` (`run.json`), then
+/// by id, so that runs of the same second (whose ids sort by their random suffix) are in creation order, and runs of
+/// the same `created` time in one fixed order (ADR 0147, the maintainer's answer to ADR 0144 question 12).
+pub fn run_order(a: &RunSummary, b: &RunSummary) -> std::cmp::Ordering {
+    (&a.created, &a.id).cmp(&(&b.created, &b.id))
+}
+
+/// The newest listed run by [`run_order`] (not the largest id).
+pub fn newest_run(b: &Browser) -> Option<&str> {
+    b.runs.iter().max_by(|x, y| run_order(x, y)).map(|r| r.id.as_str())
+}
+
 /// The run id of a project-relative path under `runs/<id>/`, if it names a run folder.
 pub fn run_of(path: &str) -> Option<&str> {
     let rest = path.strip_prefix("runs/")?;
@@ -124,7 +136,7 @@ impl Browser {
             }
         }
         // the orders of Project::runs: runs by (created, id), skipped by id
-        self.runs.sort_by(|a, b| (&a.created, &a.id).cmp(&(&b.created, &b.id)));
+        self.runs.sort_by(run_order);
         self.skipped.sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
         true
     }

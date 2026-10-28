@@ -49,14 +49,16 @@ pub enum Command {
         /// New content.
         bytes: Vec<u8>,
     },
-    /// Create a case file that does not exist yet ([`crate::case_starter::create`], never replaces one), send the lists
-    /// that hold it and [`Event::Created`]; with `open`, stop reporting `untrack`, report the new file from now on and
-    /// send it as [`Event::Loaded`] (ADR 0139 D5).
+    /// Create a case file that does not exist yet, with its data files ([`crate::case_starter::create_with`], never
+    /// replaces one), send the lists that hold it and [`Event::Created`]; with `open`, stop reporting `untrack`, report
+    /// the new file from now on and send it as [`Event::Loaded`] (ADR 0139 D5, ADR 0147).
     Create {
         /// Project-relative path (`cases/<name>.toml`).
         rel: String,
         /// Content.
         bytes: Vec<u8>,
+        /// Data files the case reads, written next to it: project-relative path (`cases/<file name>`) and content.
+        companions: Vec<(String, Vec<u8>)>,
         /// Open it in the editor.
         open: bool,
         /// The file the editor had open, no longer reported once the new one is open.
@@ -111,6 +113,8 @@ pub enum Event {
         rel: String,
         /// It is being opened: [`Event::Loaded`] follows.
         opened: bool,
+        /// Its data files, each with whether it was written (`false`: it was there with the same bytes).
+        companions: Vec<(String, bool)>,
     },
 }
 
@@ -242,15 +246,17 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                     Command::Create {
                         rel,
                         bytes,
+                        companions,
                         open,
                         untrack,
-                    } => match crate::case_starter::create(&project, &rel, &bytes) {
-                        Ok(()) => {
+                    } => match crate::case_starter::create_with(&project, &rel, &bytes, &companions) {
+                        Ok(companions) => {
                             current = Browser::load(&project);
                             let mut ok = send(Event::Listing(current.clone()));
                             ok &= send(Event::Created {
                                 rel: rel.clone(),
                                 opened: open,
+                                companions,
                             });
                             if open {
                                 if let Some(old) = untrack {

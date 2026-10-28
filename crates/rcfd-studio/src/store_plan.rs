@@ -351,16 +351,36 @@ pub struct Count {
     pub kind: CountKind,
 }
 
+/// The fraction of a step below which a fixed-step transient run takes no separate step for the remainder to its end
+/// time but stretches its last whole step to it (ADR 0145 D1, D2: `REMAINDER_ABSORB` in `rcfd-api`'s `sim.rs`). The step
+/// count of [`count`] follows it (ADR 0147 amendment 3, the maintainer's answer to ADR 0145 question 3).
+pub const STEP_REMAINDER: f64 = 1e-6;
+
+/// The slack of the step count before ADR 0147 amendment 3 (the route [`count_with`] keeps for its control).
+pub const OLD_STEP_SLACK: f64 = 1e-9;
+
+fn ceil_slack(x: f64, slack: f64) -> u64 {
+    (x - slack).ceil().max(0.0) as u64
+}
+
+/// Whole intervals in `x` with the store's slack (its time slots are `floor(t / interval + 1e-9)`, `fieldstore.rs`).
 fn ceil_eps(x: f64) -> u64 {
-    (x - 1e-9).ceil().max(0.0) as u64
+    ceil_slack(x, 1e-9)
 }
 
 fn integral(x: f64) -> bool {
     (x - x.round()).abs() <= 1e-9 * x.abs().max(1.0)
 }
 
-/// The snapshot count of D3 (`None` when the store is off or the count cannot be known).
+/// The snapshot count of D3 (`None` when the store is off or the count cannot be known). A fixed step takes
+/// `ceil(end_time / dt - STEP_REMAINDER)` steps: a remainder below [`STEP_REMAINDER`] of a step is no step (ADR 0145).
 pub fn count(e: &Effective) -> Option<Count> {
+    count_with(e, STEP_REMAINDER)
+}
+
+/// [`count`] with `step_slack` in place of [`STEP_REMAINDER`] in the step count ([`OLD_STEP_SLACK`]: the route before
+/// ADR 0147 amendment 3).
+pub fn count_with(e: &Effective, step_slack: f64) -> Option<Count> {
     if !e.on() {
         return None;
     }
@@ -373,8 +393,8 @@ pub fn count(e: &Effective) -> Option<Count> {
             kind: CountKind::Steady,
         });
     }
-    let n_steps =
-        (e.fixed_dt && !e.compressible && e.dt > 0.0 && e.end_time > 0.0).then(|| ceil_eps(e.end_time / e.dt));
+    let n_steps = (e.fixed_dt && !e.compressible && e.dt > 0.0 && e.end_time > 0.0)
+        .then(|| ceil_slack(e.end_time / e.dt, step_slack));
     let loose = if e.compressible {
         CountKind::Cfl
     } else {

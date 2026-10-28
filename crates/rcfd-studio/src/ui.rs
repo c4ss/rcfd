@@ -904,7 +904,17 @@ fn log_panel(ui: &mut egui::Ui, st: &mut Studio) {
         });
 }
 
-fn event_text(k: &rcfd_project::records::EventKind) -> String {
+/// The text of a run event in the Log panel's event list. A warning of the solver (a `solver` event whose
+/// `solver.event` is `warning` with a `message`, such as ADR 0145's `short_last_step`, the field store's and the
+/// pressure-lag warnings) is shown in full as `warning: <message>` (ADR 0147 amendment 3, the maintainer's answer to ADR
+/// 0145 question 5); any other event the run service records is shown as its JSON, cut at 160 characters.
+pub fn event_text(k: &rcfd_project::records::EventKind) -> String {
+    event_text_with(k, true)
+}
+
+/// [`event_text`]; with `warnings_in_full` false, the route before ADR 0147 amendment 3 (a solver warning cut as JSON
+/// at 160 characters too).
+pub fn event_text_with(k: &rcfd_project::records::EventKind, warnings_in_full: bool) -> String {
     use rcfd_project::records::EventKind;
     let name = |s: &rcfd_project::RunState| crate::runs::state_name(*s);
     match k {
@@ -917,6 +927,14 @@ fn event_text(k: &rcfd_project::records::EventKind) -> String {
         EventKind::Warning { message } => format!("warning: {message}"),
         EventKind::Stop { reason } => format!("stop: {reason}"),
         EventKind::Other { kind, body } => {
+            let warning = (warnings_in_full && kind == "solver")
+                .then(|| body.get("solver"))
+                .flatten()
+                .filter(|s| s["event"] == "warning")
+                .and_then(|s| s["message"].as_str());
+            if let Some(m) = warning {
+                return format!("warning: {m}");
+            }
             let mut s = body.to_string();
             if s.len() > 160 {
                 let mut cut = 160;

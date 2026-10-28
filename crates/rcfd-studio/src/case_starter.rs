@@ -3,14 +3,43 @@
 //! install; reference and validation data are never embedded.
 //!
 //! Model only, no drawing ([`crate::case_starter_ui`] draws). [`check_name`] decides whether a typed name may become
-//! `cases/<name>.toml`; [`create`] is the write the project worker runs (it never replaces a file);
-//! [`Studio::create_case_from_example`] ties them to the worker and the editor.
+//! `cases/<name>.toml`; [`create`] and [`create_with`] are the write the project worker runs (they never replace a
+//! file); [`Studio::create_case_from_example`] ties them to the worker and the editor.
+//!
+//! An example that reads a data file by a relative path in its own folder (`channel/profile_inlet.toml` reads
+//! `profile_inlet.csv`) has it as a [`Companion`]: embedded too, and written next to the new case under the same file
+//! name, so the case's text stays byte-equal to the example's (ADR 0147, the maintainer's answer to ADR 0139
+//! question 3 and ADR 0144 question 11).
 
 use crate::studio::Studio;
 use crate::watch::Command;
 use rcfd_api::case::Case;
 use rcfd_project::Project;
+use serde_json::Value;
+use std::path::Path;
 use std::sync::OnceLock;
+
+/// A data file an example reads by its file name from its own folder, embedded with it and written next to a case made
+/// from it (ADR 0147).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Companion {
+    /// Path under the repository's `cases/` folder, in the example's folder (`channel/profile_inlet.csv`).
+    pub source: &'static str,
+    /// The file's text, embedded at build time; written unchanged.
+    pub text: &'static str,
+}
+
+impl Companion {
+    /// The file name (`profile_inlet.csv`): the name the example's text gives, and the file written next to the case.
+    pub fn name(&self) -> &'static str {
+        self.source.rsplit('/').next().unwrap_or(self.source)
+    }
+
+    /// The bytes written.
+    pub fn bytes(&self) -> &'static [u8] {
+        self.text.as_bytes()
+    }
+}
 
 /// One example case shipped in `cases/` and embedded in the Studio.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -25,16 +54,25 @@ pub struct Example {
     pub dim: &'static str,
     /// Cells of the mesh. Curated for the same reason; CS7 checks it against the mesh build.
     pub cells: u64,
+    /// Data files it reads from its own folder, written next to a new case made from it (ADR 0147).
+    pub companions: &'static [Companion],
 }
 
 macro_rules! example {
     ($source:literal, $dim:literal, $cells:literal, $shows:literal) => {
+        example!($source, $dim, $cells, $shows, [])
+    };
+    ($source:literal, $dim:literal, $cells:literal, $shows:literal, [$($companion:literal),*]) => {
         Example {
             source: $source,
             text: include_str!(concat!("../../../cases/", $source)),
             shows: $shows,
             dim: $dim,
             cells: $cells,
+            companions: &[$(Companion {
+                source: $companion,
+                text: include_str!(concat!("../../../cases/", $companion)),
+            }),*],
         }
     };
 }
@@ -79,6 +117,13 @@ pub const EXAMPLES: &[Example] = &[
         "Air through a packed bed of spheres (Ergun porous resistance); stops at its iteration cap without converging"
     ),
     example!(
+        "channel/profile_inlet.toml",
+        "2D",
+        480,
+        "Laminar channel whose inlet velocity is read from a CSV profile, copied next to the case as profile_inlet.csv; fully developed plane Poiseuille flow",
+        ["channel/profile_inlet.csv"]
+    ),
+    example!(
         "wedge/wedge.toml",
         "2D",
         1200,
@@ -103,7 +148,8 @@ const DESCRIPTOR: &str =
      read by `rcfd cases`), not a case file: the case editor refuses its keys and `rcfd run` refuses it";
 
 /// Files of `cases/` that are not offered, with the reason (ADR 0139 D1). Files inside a folder named `reference` are
-/// reference data and are left out by rule ([`is_reference`]).
+/// reference data and are left out by rule ([`is_reference`]); a [`Companion`] of an offered example is written with it
+/// and is not offered by itself (ADR 0147).
 pub const EXCLUDED: &[(&str, &str)] = &[
     ("backward_step/case.json", DESCRIPTOR),
     ("cavity/case.json", DESCRIPTOR),
@@ -111,15 +157,6 @@ pub const EXCLUDED: &[(&str, &str)] = &[
     ("flat_plate/case.json", DESCRIPTOR),
     ("heated_cavity/case.json", DESCRIPTOR),
     ("naca0012/case.json", DESCRIPTOR),
-    (
-        "channel/profile_inlet.toml",
-        "reads its inlet profile from profile_inlet.csv by a relative path, which the starter does not copy: a copy of \
-         the one file does not open in the case editor (the table is looked for in the case's folder since ADR 0144)",
-    ),
-    (
-        "channel/profile_inlet.csv",
-        "input table of channel/profile_inlet.toml, not a case",
-    ),
 ];
 
 /// True for a path relative to `cases/` (`/` separators) inside a folder named `reference`: reference data, never offered
@@ -158,10 +195,29 @@ impl Example {
         self.text.as_bytes()
     }
 
+    /// The example's text parsed as a case, without files: a table it reads from a [`Companion`] gets that companion's
+    /// text inline (`data` in place of `file`), so no file is read; `None` when it does not parse.
+    pub fn parse(&self) -> Option<Case> {
+        if self.companions.is_empty() {
+            return Case::parse_toml(self.text).ok();
+        }
+        let mut v: Value = toml::from_str(self.text).ok()?;
+        if let Some(tables) = v.get_mut("tables").and_then(Value::as_object_mut) {
+            for t in tables.values_mut().filter_map(Value::as_object_mut) {
+                let file = t.get("file").and_then(Value::as_str).unwrap_or_default().to_string();
+                if let Some(c) = self.companions.iter().find(|c| c.name() == file) {
+                    t.remove("file");
+                    t.insert("data".into(), Value::String(c.text.to_string()));
+                }
+            }
+        }
+        Case::from_json_in(&v, Path::new(".")).ok()
+    }
+
     /// Describe it: the title and the run length are read from the text (the defaults of keys it does not set come from
     /// the schema); [`descriptions`] keeps the result for the dialog.
     pub fn describe(&self) -> Description {
-        let (title, run) = match Case::parse_toml(self.text) {
+        let (title, run) = match self.parse().ok_or(()) {
             Ok(c) => {
                 let text = |k: &str| c.get(k).ok().and_then(|v| v.as_str().map(str::to_string));
                 let title = text("title")
@@ -280,6 +336,20 @@ pub fn suggest_name(stem: &str, ext: &str, cases: &[String]) -> String {
 /// missing; the file is created atomically and an existing file is never replaced (`rcfd_project::atomic::write_new`,
 /// a hard link that fails when the target exists). Errors are located.
 pub fn create(project: &Project, rel: &str, bytes: &[u8]) -> Result<(), String> {
+    create_with(project, rel, bytes, &[]).map(|_| ())
+}
+
+/// [`create`] with the data files of the example (its [`Companion`]s, `(cases/<file name>, bytes)`), written next to the
+/// case first (ADR 0147). A data file that is there already with the same bytes is used as it is (a second case made from
+/// the same example shares it); one with other bytes refuses the creation before anything is written, because the new
+/// case would read it; none is ever replaced. When the case file cannot be written, the data files this call wrote are
+/// removed again. Returns each data file with whether this call wrote it.
+pub fn create_with(
+    project: &Project,
+    rel: &str,
+    bytes: &[u8],
+    companions: &[(String, Vec<u8>)],
+) -> Result<Vec<(String, bool)>, String> {
     let file = rel
         .strip_prefix("cases/")
         .filter(|f| !f.contains(['/', '\\']))
@@ -293,32 +363,114 @@ pub fn create(project: &Project, rel: &str, bytes: &[u8]) -> Result<(), String> 
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    rcfd_project::atomic::write_new(&path, bytes).map_err(|e| e.to_string())
+    if companions.is_empty() {
+        rcfd_project::atomic::write_new(&path, bytes).map_err(|e| e.to_string())?;
+        return Ok(Vec::new());
+    }
+    // checked before anything is written: the case file is new, every data file new or equal
+    if std::fs::symlink_metadata(&path).is_ok() {
+        return Err(format!("{}: already exists", path.display()));
+    }
+    let mut plan = Vec::new();
+    for (crel, cbytes) in companions {
+        let plain = crel
+            .strip_prefix("cases/")
+            .is_some_and(|f| !f.is_empty() && !f.contains(['/', '\\']));
+        if !plain || crel.eq_ignore_ascii_case(rel) {
+            return Err(format!(
+                "{crel}: a data file of a new case is written directly in cases/, under another name than the case"
+            ));
+        }
+        let cpath = project.resolve(crel).map_err(|e| e.to_string())?;
+        match std::fs::read(&cpath) {
+            Ok(old) if old == *cbytes => plan.push((crel.clone(), cpath, false)),
+            Ok(_) => {
+                return Err(format!(
+                    "{crel} exists with other content: {rel} would read its table from that file; rename or remove \
+                     {crel}, then create the case again"
+                ))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => plan.push((crel.clone(), cpath, true)),
+            Err(e) => return Err(format!("{}: {e}", cpath.display())),
+        }
+    }
+    let mut written: Vec<&Path> = Vec::new();
+    let undo = |written: &[&Path]| {
+        for p in written {
+            let _ = std::fs::remove_file(p);
+        }
+    };
+    for ((crel, cpath, new), (_, cbytes)) in plan.iter().zip(companions) {
+        if *new {
+            if let Err(e) = rcfd_project::atomic::write_new(cpath, cbytes) {
+                undo(&written);
+                return Err(format!("{crel}: {e}"));
+            }
+            written.push(cpath.as_path());
+        }
+    }
+    if let Err(e) = rcfd_project::atomic::write_new(&path, bytes) {
+        undo(&written);
+        return Err(e.to_string());
+    }
+    Ok(plan.into_iter().map(|(crel, _, new)| (crel, new)).collect())
+}
+
+/// The line under the dialog's name field: the file the case becomes and the data files written with it (ADR 0147);
+/// `cases` is the browser's list of the project's files under `cases/`.
+pub fn target_line(rel: &str, example: &Example, cases: &[String]) -> String {
+    let mut s = format!("creates {rel}");
+    let (new, there): (Vec<String>, Vec<String>) = example
+        .companions
+        .iter()
+        .map(|c| format!("cases/{}", c.name()))
+        .partition(|c| !cases.iter().any(|x| x.eq_ignore_ascii_case(c)));
+    for c in &new {
+        s.push_str(&format!(" and its data file {c}"));
+    }
+    s.push_str(&format!(" from the example {}", example.source));
+    for c in &there {
+        s.push_str(&format!(
+            "; {c} is in the project already: used when it holds the example's bytes, else the creation is refused"
+        ));
+    }
+    s
 }
 
 /// What the Studio does with [`crate::watch::Event::Created`] (called from `Studio::apply`): a message. When `opened`,
 /// the `Loaded` event that follows opens the file in the editor, and the preview shows it on the Viewport's Mesh side
 /// (ADR 0144: the file exists now; `Studio::open_case` itself would load it a second time).
-pub(crate) fn on_created(st: &mut Studio, rel: &str, opened: bool) {
+pub(crate) fn on_created(st: &mut Studio, rel: &str, opened: bool, companions: &[(String, bool)]) {
+    let mut m = format!("created {rel}");
+    for (c, written) in companions {
+        if *written {
+            m.push_str(&format!(" and its data file {c}"));
+        } else {
+            m.push_str(&format!(
+                "; its data file {c} was in the project already, with the example's bytes"
+            ));
+        }
+    }
     if opened {
         if !st.view.switches.starter_skips_preview {
             st.show_case_mesh(rel);
         }
-        st.say(format!("created {rel}"));
+        st.say(m);
     } else {
         st.say(format!(
-            "created {rel}; not opened, because the open case has unsaved edits or a conflict (save or resolve them, then \
-             select {rel} in the Project panel)"
+            "{m}; not opened, because the open case has unsaved edits or a conflict (save or resolve them, then select \
+             {rel} in the Project panel)"
         ));
     }
 }
 
 impl Studio {
-    /// Create `cases/<name>.<ext>` in the open project from `example`, its bytes unchanged (ADR 0139 D5). The name is
-    /// checked against the browser's list ([`check_name`]); the project worker writes the file without replacing one,
-    /// sends the lists that hold it and, unless the editor holds unsaved edits, a conflict or a save in flight, opens it
-    /// in the editor. Returns the path asked for; the outcome arrives through [`Studio::drain`] as a message
-    /// ("created ..." or the located failure).
+    /// Create `cases/<name>.<ext>` in the open project from `example`, its bytes unchanged (ADR 0139 D5), with the
+    /// example's data files next to it ([`create_with`], ADR 0147). The name is checked against the browser's list
+    /// ([`check_name`]); the project worker writes the files without replacing one, sends the lists that hold them and,
+    /// unless the editor holds unsaved edits, a conflict or a save in flight, opens the case in the editor. Returns the
+    /// path asked for; the outcome arrives through [`Studio::drain`] as a message ("created ..." or the located
+    /// failure).
     pub fn create_case_from_example(&mut self, example: &Example, name: &str) -> Result<String, String> {
         let rel = {
             let b = self
@@ -338,9 +490,20 @@ impl Studio {
         let Some(p) = &self.project else {
             return Err("no project is open".into());
         };
+        // ADR 0147: its data files go next to it, under the names its text gives (the route before: the case alone)
+        let companions = if self.view.switches.starter_no_companions {
+            Vec::new()
+        } else {
+            example
+                .companions
+                .iter()
+                .map(|c| (format!("cases/{}", c.name()), c.bytes().to_vec()))
+                .collect()
+        };
         p.worker.send(Command::Create {
             rel: rel.clone(),
             bytes: example.bytes().to_vec(),
+            companions,
             open: !busy,
             untrack,
         });

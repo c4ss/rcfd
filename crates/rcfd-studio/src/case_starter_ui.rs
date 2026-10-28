@@ -109,7 +109,7 @@ pub fn dialog(ctx: &egui::Context, st: &mut Studio, state: &mut Option<StarterDi
             });
             let check = case_starter::check_name(&d.name, example.ext(), cases);
             match &check {
-                Ok(rel) => ui.weak(format!("creates {rel} from the example {}", example.source)),
+                Ok(rel) => ui.weak(case_starter::target_line(rel, example, cases)),
                 Err(m) => ui.colored_label(ERR, m),
             };
             ui.horizontal(|ui| {

@@ -19,6 +19,9 @@
 //!   and offers to go on anyway. The limits hold for the editor's text as for the file.
 //! * A build that fails or is over a limit leaves the last mesh that built for the case on screen, marked stale
 //!   ([`Preview::stale`]), with the located reason (ADR 0144).
+//! * A build the debounce asks for is skipped when the editor's text is byte-identical to the text of the mesh on screen
+//!   and that mesh's file (if any) is unchanged ([`Refusal::Unchanged`], ADR 0147); a rebuild of the same case keeps the
+//!   camera while the bounds stay the same ([`crate::viewport::Viewport::replace_surface`], ADR 0147).
 //! * Drawing reuses the run viewport ([`crate::viewport::Viewport::show_surface`]): the same `ViewGpu`, texture, camera
 //!   mapping and pick pass, every face at value 0 and one solid colour per patch (`PartStyle::Solid`). A 2D case's
 //!   boundary patches are edges in its face-on view; they are drawn as coloured segments over the image by
@@ -26,7 +29,7 @@
 
 use crate::schema_model::{parse_input, Kind};
 use crate::studio::Studio;
-use crate::viewport::surface_of;
+use crate::viewport::{surface_of, CameraChange};
 use crate::watch::Wake;
 use rcfd_api::case::{Case, Diagnostic};
 use rcfd_core::vec3::Vec3;
@@ -39,7 +42,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 /// Default cell limit of the estimate made before building a recipe mesh (ADR 0138 G-limits).
 pub const MAX_CELLS: u64 = 2_000_000;
@@ -148,8 +151,31 @@ pub struct Built {
     pub outlines: Arc<Vec<(usize, [Vec3; 2])>>,
     /// The mesh file when `mesh.source = "file"` (absolute).
     pub mesh_file: Option<PathBuf>,
+    /// Size and modification time of [`Built::mesh_file`], read before the mesh was built (`None`: no mesh file, or not
+    /// a regular file, such as an OpenFOAM folder). An identical text is not built again only while this holds (ADR
+    /// 0147).
+    pub mesh_stamp: Option<FileStamp>,
     /// Wall time of the build, seconds.
     pub build_s: f64,
+}
+
+/// Size in bytes and modification time of a regular file.
+pub type FileStamp = (u64, SystemTime);
+
+/// The [`FileStamp`] of `path` when it is a regular file with a modification time.
+pub fn file_stamp(path: &Path) -> Option<FileStamp> {
+    let m = std::fs::metadata(path).ok().filter(|m| m.is_file())?;
+    Some((m.len(), m.modified().ok()?))
+}
+
+/// True when the mesh `b` was built from holds nothing that changed since: a recipe (the text is the whole mesh), or a
+/// mesh file whose [`FileStamp`] is the one read before `b` was built (ADR 0147: "the mesh-relevant content is
+/// unchanged"). A mesh folder or a file without a stamp is never taken as unchanged.
+pub fn mesh_input_unchanged(b: &Built) -> bool {
+    match &b.mesh_file {
+        None => true,
+        Some(f) => b.mesh_stamp.is_some() && file_stamp(f) == b.mesh_stamp,
+    }
 }
 
 /// Why a build gave no preview.
@@ -161,6 +187,9 @@ pub enum Refusal {
     Failed(String),
     /// A newer request came first.
     Cancelled,
+    /// Not built: the text is byte-identical to the text of the mesh on screen, whose `case_hash` this is, and that
+    /// mesh's file is unchanged (ADR 0147, the maintainer's answer to ADR 0144 question 6).
+    Unchanged(String),
 }
 
 /// What a build returns: the hash of the bytes read (when the file was read) and the result.
@@ -485,6 +514,21 @@ pub fn build_source(
     force: bool,
     cancelled: &dyn Fn() -> bool,
 ) -> Outcome {
+    build_source_unless(root, rel, source, limits, force, cancelled, None)
+}
+
+/// [`build_source`], unless the editor's text is the text of `shown`, the mesh on screen: when the bytes the build
+/// would parse hash to `shown.case_hash` and `shown`'s mesh file is unchanged ([`mesh_input_unchanged`]), nothing is
+/// parsed or built and the result is [`Refusal::Unchanged`] (ADR 0147). `shown` applies to the editor's text only.
+pub fn build_source_unless(
+    root: &Path,
+    rel: &str,
+    source: &Source,
+    limits: &Limits,
+    force: bool,
+    cancelled: &dyn Fn() -> bool,
+    shown: Option<&Built>,
+) -> Outcome {
     let e = match source {
         Source::Disk => return build(root, rel, limits, force, cancelled),
         Source::Editor(e) => e,
@@ -495,7 +539,20 @@ pub fn build_source(
     let file = root.join(rel);
     let dir = file.parent().map_or_else(|| root.to_path_buf(), Path::to_path_buf);
     match editor_bytes(rel, &dir, e) {
-        Ok(bytes) => build_text(root, rel, &bytes, true, limits, force, cancelled),
+        Ok(bytes) => {
+            if let Some(s) = shown.filter(|s| s.rel == rel) {
+                let hash = rcfd_project::records::hash_bytes(&bytes);
+                if hash == s.case_hash && mesh_input_unchanged(s) {
+                    return Outcome {
+                        read_hash: None,
+                        called_build_mesh: false,
+                        from_editor: true,
+                        result: Err(Refusal::Unchanged(hash)),
+                    };
+                }
+            }
+            build_text(root, rel, &bytes, true, limits, force, cancelled)
+        }
         Err(m) => Outcome {
             read_hash: None,
             called_build_mesh: false,
@@ -576,6 +633,9 @@ fn build_text(
             _ => {}
         }
     }
+    // read before the build: a change of the file during it shows as a changed stamp later (ADR 0147)
+    let mesh_file = mesh_file_of(&case);
+    let mesh_stamp = mesh_file.as_deref().and_then(file_stamp);
     let mesh = match rcfd_api::sim::build_mesh(&case) {
         Ok(m) => m,
         Err(d) => return out(true, Err(Refusal::Failed(located(rel, &d)))),
@@ -624,7 +684,8 @@ fn build_text(
             edges: Arc::new(edges),
             n_edges,
             outlines: Arc::new(outlines),
-            mesh_file: mesh_file_of(&case),
+            mesh_file,
+            mesh_stamp,
             build_s: t0.elapsed().as_secs_f64(),
         }),
     )
@@ -758,6 +819,13 @@ pub struct Switches {
     /// The frame asked for when typing pauses is not lengthened by egui's predicted frame time, so it comes one frame
     /// before the debounce ends (the code of ADR 0144 J3b's known miss, amendment 2).
     pub uncompensated_repaint: bool,
+    /// ADR 0144's rule: every build the debounce asks for builds, also of a text identical to the shown mesh's.
+    pub no_skip: bool,
+    /// ADR 0138's rule: every new surface of the case gets the start camera (no camera kept or refit).
+    pub restart_camera: bool,
+    /// The case editor's message for a benchmark descriptor lists its unknown keys, as before ADR 0147 (the status bar
+    /// then shows that long message instead of [`descriptor_message`]).
+    pub editor_lists_descriptor_keys: bool,
 }
 
 /// Counters for the tests.
@@ -775,6 +843,13 @@ pub struct Stats {
     pub meshes_built: u64,
     /// Most build threads alive at once, seen by [`Preview::drain`] and [`Preview::request`].
     pub most_running: usize,
+    /// Results of builds skipped because the editor's text was the shown mesh's and its mesh file unchanged
+    /// ([`Refusal::Unchanged`], ADR 0147).
+    pub skipped_identical: u64,
+    /// Installs of a rebuilt surface of the same case that kept the camera (ADR 0147).
+    pub camera_kept: u64,
+    /// Installs of a rebuilt surface of the same case that fitted the camera to new bounds (ADR 0147).
+    pub camera_refit: u64,
 }
 
 struct Msg {
@@ -815,7 +890,8 @@ pub struct Preview {
     want: bool,
     force_cells: bool,
     force_triangles: bool,
-    queued: Option<Source>,
+    /// A request waiting for a build thread: its source, and whether only the debounce asked for it (ADR 0147).
+    queued: Option<(Source, bool)>,
     due: Option<Instant>,
     gen: Arc<AtomicU64>,
     running: Arc<AtomicUsize>,
@@ -824,6 +900,8 @@ pub struct Preview {
     changes_seen: Option<Instant>,
     editor_seen: Option<(String, String)>,
     editor_rev: Option<(String, u64)>,
+    /// The case whose surface was handed to the viewport last (ADR 0147: a rebuild of it may keep the camera).
+    installed: Option<String>,
 }
 
 impl Default for Preview {
@@ -855,6 +933,7 @@ impl Default for Preview {
             changes_seen: None,
             editor_seen: None,
             editor_rev: None,
+            installed: None,
         }
     }
 }
@@ -885,6 +964,7 @@ impl Preview {
         self.force_triangles = false;
         self.editor_seen = None;
         self.editor_rev = None;
+        self.installed = None;
     }
 
     /// Forget the case and the project (builds still running end on their own; their results are dropped).
@@ -960,7 +1040,18 @@ impl Preview {
         self.stats.most_running = self.stats.most_running.max(self.running());
     }
 
-    fn request(&mut self, wake: &Wake, source: Source) {
+    /// The mesh on screen that a build of the editor's text is compared with before building (ADR 0147): only for a
+    /// request the debounce alone asked for (not a new case, a change on disk, a save or reload, "Rebuild" or
+    /// "anyway"), and not with [`Switches::no_skip`].
+    fn compare_with(&self, skippable: bool, source: &Source) -> Option<Arc<Built>> {
+        if skippable && !self.switches.no_skip && matches!(source, Source::Editor(_)) {
+            self.shown.clone()
+        } else {
+            None
+        }
+    }
+
+    fn request(&mut self, wake: &Wake, source: Source, skippable: bool) {
         let (Some(root), Some(rel)) = (self.root.clone(), self.case.clone()) else {
             return;
         };
@@ -971,31 +1062,40 @@ impl Preview {
         }
         self.status = Status::Building { since: Instant::now() };
         if self.switches.build_on_ui_thread {
-            let outcome = build_source(&root, &rel, &source, &self.limits, self.force_cells, &|| false);
+            let shown = self.compare_with(skippable, &source);
+            let outcome = build_source_unless(
+                &root,
+                &rel,
+                &source,
+                &self.limits,
+                self.force_cells,
+                &|| false,
+                shown.as_deref(),
+            );
             let _ = self.tx.send(Msg { gen, rel, outcome });
             return;
         }
         if self.running() >= MAX_BUILDS {
-            self.queued = Some(source);
+            self.queued = Some((source, skippable));
             return;
         }
         self.queued = None;
-        self.spawn(root, rel, gen, source, wake.clone());
+        self.spawn(root, rel, gen, source, skippable, wake.clone());
         self.note_running();
     }
 
-    fn spawn(&self, root: PathBuf, rel: String, gen: u64, source: Source, wake: Wake) {
+    fn spawn(&self, root: PathBuf, rel: String, gen: u64, source: Source, skippable: bool, wake: Wake) {
         let (latest, running, tx) = (self.gen.clone(), self.running.clone(), self.tx.clone());
         let (limits, force) = (self.limits, self.force_cells);
         let checked = !self.switches.ignore_generation;
         let from_editor = matches!(source, Source::Editor(_));
+        let shown = self.compare_with(skippable, &source);
         running.fetch_add(1, Ordering::SeqCst);
         let spawned = std::thread::Builder::new()
             .name("rcfd-studio-preview".into())
             .spawn(move || {
-                let outcome = build_source(&root, &rel, &source, &limits, force, &|| {
-                    checked && latest.load(Ordering::SeqCst) != gen
-                });
+                let cancelled = || checked && latest.load(Ordering::SeqCst) != gen;
+                let outcome = build_source_unless(&root, &rel, &source, &limits, force, &cancelled, shown.as_deref());
                 let _ = tx.send(Msg { gen, rel, outcome });
                 running.fetch_sub(1, Ordering::SeqCst);
                 wake();
@@ -1038,6 +1138,18 @@ impl Preview {
             }
             match result {
                 Err(Refusal::Cancelled) => {}
+                Err(Refusal::Unchanged(hash)) => {
+                    // ADR 0147: the editor's text is the shown mesh's; nothing was built and the picture is current
+                    self.stats.skipped_identical += 1;
+                    match self.shown.clone() {
+                        Some(s) if s.case_hash == hash => {
+                            self.built = Some(s);
+                            self.status = Status::Ready;
+                        }
+                        // the shown mesh changed while the check ran ("show anyway"): build the text after all
+                        _ => self.want = true,
+                    }
+                }
                 Ok(mut b) => {
                     // the same mesh again (a rebuild, a typo undone, the saved text) keeps its surface: no new upload,
                     // the camera stays; the rest (source, hash, time) is the new build's
@@ -1078,9 +1190,11 @@ impl Preview {
             }
         }
         if self.running() < MAX_BUILDS {
-            if let (Some(source), Some(root), Some(rel)) = (self.queued.take(), self.root.clone(), self.case.clone()) {
+            if let (Some((source, skippable)), Some(root), Some(rel)) =
+                (self.queued.take(), self.root.clone(), self.case.clone())
+            {
                 let gen = self.gen.load(Ordering::SeqCst);
-                self.spawn(root, rel, gen, source, wake.clone());
+                self.spawn(root, rel, gen, source, skippable, wake.clone());
                 self.note_running();
             }
         }
@@ -1218,23 +1332,26 @@ pub fn follow(st: &mut Studio, wake: &Wake) -> usize {
     if let Some(op) = &st.project {
         p.changes_seen = op.changes.last().map(|(t, _)| *t).or(p.changes_seen);
     }
-    if p.due.is_some_and(|d| now >= d) {
-        p.want = true;
-    }
-    if p.want {
+    let debounced = p.due.is_some_and(|d| now >= d);
+    if p.want || debounced {
         // a newer request supersedes a running build (its result is dropped); it builds the current text, so an edit
-        // still waiting for its debounce is built by it too
+        // still waiting for its debounce is built by it too. Only a request the debounce alone asked for may find the
+        // text unchanged and skip the build (ADR 0147).
+        let skippable = !p.want;
         p.want = false;
         p.due = None;
         let source = current_source(st);
-        st.preview.request(wake, source);
+        st.preview.request(wake, source, skippable);
     }
     let n = st.preview.drain(wake);
     install(st);
     n
 }
 
-/// Hand the shown surface to the viewport (only on the Mesh side: no run shown), or take it away.
+/// Hand the shown surface to the viewport (only on the Mesh side: no run shown), or take it away. A new surface of the
+/// case already on the viewport keeps its camera while the bounds stay the same and is refit when they change; another
+/// case, or a viewport that showed nothing (a project opened, the Run side shown in between), starts with the start
+/// camera (ADR 0147, the maintainer's answer to ADR 0144 question 5).
 fn install(st: &mut Studio) {
     if st.viewport.run.is_some() {
         return;
@@ -1248,7 +1365,19 @@ fn install(st: &mut Studio) {
             if same {
                 st.viewport.set_part_styles(styles);
             } else {
-                st.viewport.show_surface(b.surface.clone(), b.two_d, styles);
+                let rebuilt = st.preview.installed.as_deref() == Some(b.rel.as_str())
+                    && st.viewport.surface.is_some()
+                    && !st.preview.switches.restart_camera;
+                if rebuilt {
+                    match st.viewport.replace_surface(b.surface.clone(), b.two_d, styles) {
+                        CameraChange::Kept => st.preview.stats.camera_kept += 1,
+                        CameraChange::Refit => st.preview.stats.camera_refit += 1,
+                        CameraChange::Start => {}
+                    }
+                } else {
+                    st.viewport.show_surface(b.surface.clone(), b.two_d, styles);
+                }
+                st.preview.installed = Some(b.rel.clone());
                 st.preview.stats.installs += 1;
             }
         }
@@ -1256,6 +1385,7 @@ fn install(st: &mut Studio) {
             if st.viewport.surface.is_some() {
                 st.viewport.clear_surface();
             }
+            st.preview.installed = None;
         }
     }
 }

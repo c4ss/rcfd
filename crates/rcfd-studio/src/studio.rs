@@ -582,7 +582,15 @@ impl Studio {
                 };
                 match ed {
                     Ok(ed) => self.editor = Some(ed),
-                    Err(m) => self.say(m),
+                    Err(m) => {
+                        // ADR 0147 (the maintainer's answer to ADR 0144 question 4): a benchmark descriptor gets the
+                        // preview's one-line "not a case file" message, not the list of its unknown keys
+                        let short = std::str::from_utf8(&bytes)
+                            .ok()
+                            .and_then(|t| crate::preview::descriptor_message(&rel, t))
+                            .filter(|_| !self.preview.switches.editor_lists_descriptor_keys);
+                        self.say(short.unwrap_or(m));
+                    }
                 }
             }
             Event::Failed(m) => {
@@ -606,7 +614,11 @@ impl Studio {
                     "{rel}: not saved, the file changed on disk; resolve the conflict"
                 ));
             }
-            Event::Created { rel, opened } => crate::case_starter::on_created(self, &rel, opened),
+            Event::Created {
+                rel,
+                opened,
+                companions,
+            } => crate::case_starter::on_created(self, &rel, opened, &companions),
         }
     }
 
