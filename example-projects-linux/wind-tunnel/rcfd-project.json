@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "Wind tunnel: cylinder, NACA 0012 aerofoil and backward-facing step",
+  "created": "2026-10-28T15:21:28.000Z",
+  "solver_version_created": "rcfd 0.1.0"
+}

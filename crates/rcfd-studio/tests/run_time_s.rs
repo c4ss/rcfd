@@ -460,11 +460,10 @@ fn g_a_case_without_a_speed_scale_runs_under_the_controller() {
         hover.contains("no inflow, moving wall or initial velocity"),
         "(g) hover: {hover}"
     );
+    // the example sets its own store (every 10 steps, f32): no store entry
     assert_eq!(
         run_set(&p, &id),
         vec![
-            "output.store_time_interval=0.02",
-            "output.store_precision=f32",
             "solver.end_time=2",
             "solver.dt=0.01",
             "solver.max_courant=0.5",

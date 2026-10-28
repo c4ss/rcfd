@@ -363,6 +363,14 @@ case as `rcfd run` does (the maintainer's answer to ADR 0148 question 6), so SF1
 0147's one line (`<case>: not a case file: this is a benchmark descriptor ...`) instead of `<case>: not TOML: ...`; SF1's
 limit for them is changed accordingly there (registered before its run).
 
+Note (2026-10-28, [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md)): a store key at its schema
+default (`store_interval` 0, `store_time_interval` 0.0, `store_fields` `[]`, `store_precision` `"f64"`) is no longer the
+case's own (the maintainer's answer to ADR 0149 question 9): a case saved by the Studio gets the proposal. So context gap
+5's "a case setting `store_interval = 0` turns the store off" and the first half of "a case setting `store_precision =
+"f64"` ..." no longer apply to the Studio's plan; W-case-off and its fix are reached only through ADR 0152's route before;
+SF9 (c) and SF9 (k) changed as registered there (their registered limits kept with the route before); D8's explanation
+(`run_fields`) is unchanged (ADR 0152 question 3).
+
 ## Files
 
 This ADR. `crates/rcfd-studio/src/{store_plan,run_fields,fields_ui}.rs` (new), `crates/rcfd-studio/src/{runs,poll,studio,viewport,

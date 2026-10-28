@@ -1,10 +1,18 @@
-//! ADR 0142 (wave 48H): the finished example projects in `example-projects/` are fresh.
+//! ADR 0142 (wave 48H): the finished example projects are fresh; ADR 0150 (job 48P): in both committed trees.
 //!
 //! The examples were made by `scripts/make_example_projects.py` (the real solver through the real run service). These
 //! tests fail when a committed example goes stale: a case changed after its run, a run record or field store that the
 //! readers refuse, a ledger that no longer matches its runs, notes naming files that are gone, or a folder that grew past
 //! its registered size cap. The crate already depends on `rcfd-project`, `rcfd-api`, `rcfd-tsstore` and `rcfd-io`, so the
 //! tests add no edge to the crate graph. Negative controls tamper a temporary copy.
+//!
+//! ADR 0150: the projects exist twice. `example-projects/` holds runs built on Windows (ADR 0142); `example-projects-linux/`
+//! holds the same inputs with runs built on x86_64 Linux by the same script (in Docker, Ubuntu 24.04). Mesh generators
+//! call the C library's libm, whose last bits differ per platform (ADR 0137), so a store's mesh equals the mesh a platform
+//! builds from the run's case only in that platform's tree. Every check runs on both trees on every platform, except that
+//! one comparison (S5's mesh hash), which is asserted for the tree of this platform and printed for the other. T1-T3
+//! check that the trees share their inputs, that each was built on its platform, and that the other platform's stores
+//! do not fit this one.
 
 use rcfd_api::case::Case;
 use rcfd_api::design::ledger;
@@ -16,19 +24,38 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-/// Registered caps (ADR 0142 D7): bytes of every file of a project folder (committed runs only), and of both.
+/// Registered caps (ADR 0142 D7, per tree since ADR 0150): bytes of every file of a project folder (committed runs only),
+/// and of a whole tree.
 const CAP_TOTAL: u64 = 40_000_000;
 const CAP_PROJECTS: [(&str, u64); 2] = [("wind-tunnel", 35_000_000), ("quick-start", 6_000_000)];
 const MAX_SNAPSHOTS: usize = 100;
 /// The aerofoil cases name a mesh file; every other case uses a generator (ADR 0142 D3, E1 known miss).
 const MESH_FILE_CASES: [&str; 2] = ["cases/naca0012-aoa4.toml", "cases/naca0012-aoa2.toml"];
+/// The committed trees (ADR 0150): (folder, platform its runs were built on). The Windows tree holds the inputs.
+const TREES: [(&str, &str); 2] = [("example-projects", "windows"), ("example-projects-linux", "linux")];
+/// The generated run table of a project's `notes/README.md` (the only part of an input a rebuild writes).
+const RUNS_BEGIN: &str = "<!-- generated: runs (scripts/make_example_projects.py) -->";
+const RUNS_END: &str = "<!-- end of generated runs -->";
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
 }
 
+/// The tree whose runs were built on this platform (ADR 0150): Windows, or x86_64 Linux; `None` elsewhere (S5's mesh
+/// hashes are then printed, not compared, as ADR 0137's per-platform values do).
+fn native_tree() -> Option<&'static str> {
+    if cfg!(windows) {
+        Some(TREES[0].0)
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some(TREES[1].0)
+    } else {
+        None
+    }
+}
+
+/// The tree of this platform, or the Windows tree where none was built (the controls tamper a copy of it).
 fn examples() -> PathBuf {
-    repo().join("example-projects")
+    repo().join(native_tree().unwrap_or(TREES[0].0))
 }
 
 fn read_json(p: &Path) -> Value {
@@ -167,13 +194,38 @@ fn project_problems(dir: &Path, runs: &[(String, String)]) -> Vec<String> {
 /// (run id, case) of the committed runs of one project.
 type Committed = Vec<(String, String)>;
 
-/// Every example project: (name, folder, committed runs).
-fn all_projects() -> Vec<(String, PathBuf, Committed)> {
-    let root = examples();
+/// One example project of one tree.
+struct Example {
+    /// The tree's folder name (`example-projects`, `example-projects-linux`).
+    tree: &'static str,
+    name: String,
+    dir: PathBuf,
+    runs: Committed,
+}
+
+impl Example {
+    fn label(&self) -> String {
+        format!("{}/{}", self.tree, self.name)
+    }
+}
+
+/// The projects of one tree, from its `manifest.json`.
+fn tree_projects(tree: &'static str) -> Vec<Example> {
+    let root = repo().join(tree);
     manifest(&root)
         .into_iter()
-        .map(|(name, runs)| (name.clone(), root.join(&name), runs))
+        .map(|(name, runs)| Example {
+            tree,
+            dir: root.join(&name),
+            name,
+            runs,
+        })
         .collect()
+}
+
+/// Every example project of both trees.
+fn all_projects() -> Vec<Example> {
+    TREES.into_iter().flat_map(|(t, _)| tree_projects(t)).collect()
 }
 
 fn case_files(dir: &Path) -> Vec<String> {
@@ -207,23 +259,27 @@ fn tmp(tag: &str) -> PathBuf {
 /// with its footer, verifies, and agrees with its `index.json`.
 #[test]
 fn s1_projects_open_validate_and_list_every_committed_run() {
-    let ps = all_projects();
-    assert_eq!(ps.len(), 2, "two example projects");
-    for (name, dir, runs) in &ps {
-        let probs = project_problems(dir, runs);
-        println!("S1 {name}: {} runs, {} problems", runs.len(), probs.len());
-        assert!(probs.is_empty(), "{name}: {probs:#?}");
+    for (tree, _) in TREES {
+        let ps = tree_projects(tree);
+        assert_eq!(ps.len(), 2, "{tree}: two example projects");
+        for ex in &ps {
+            let probs = project_problems(&ex.dir, &ex.runs);
+            println!("S1 {}: {} runs, {} problems", ex.label(), ex.runs.len(), probs.len());
+            assert!(probs.is_empty(), "{}: {probs:#?}", ex.label());
+        }
     }
 }
 
-/// S1 controls on a copy: (a) a changed byte in a run's case.snapshot (hash mismatch), (b) the last snapshot of a store
-/// cut off, (c) schema_version 0 (stale) and 2 (newer), (d) a changed case file: each is reported.
+/// S1 controls on a copy (of this platform's tree): (a) a changed byte in a run's case.snapshot (hash mismatch), (b) the
+/// last snapshot of a store cut off, (c) schema_version 0 (stale) and 2 (newer), (d) a changed case file: each is
+/// reported.
 #[test]
 fn s1_controls_tampered_copies_are_reported() {
-    let (_, dir, runs) = all_projects()
+    let ex = all_projects()
         .into_iter()
-        .find(|(n, _, _)| n == "quick-start")
+        .find(|e| examples().ends_with(e.tree) && e.name == "quick-start")
         .expect("quick-start");
+    let (dir, runs) = (ex.dir, ex.runs);
     let (id, case) = runs[0].clone();
     let fresh = |tag: &str| {
         let d = tmp(tag);
@@ -294,14 +350,15 @@ fn s1_controls_tampered_copies_are_reported() {
 /// solver stream, a VTU file or a checkpoint.
 #[test]
 fn s2_no_runtime_state_or_pruned_files() {
-    for (name, dir, runs) in all_projects() {
-        let dot: Vec<String> = std::fs::read_dir(dir.join(".rcfd"))
+    for ex in all_projects() {
+        let name = ex.label();
+        let dot: Vec<String> = std::fs::read_dir(ex.dir.join(".rcfd"))
             .unwrap()
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         assert_eq!(dot, vec![".gitignore".to_string()], "{name}/.rcfd");
-        for (id, _) in &runs {
-            let run = dir.join("runs").join(id);
+        for (id, _) in &ex.runs {
+            let run = ex.dir.join("runs").join(id);
             assert!(!run.join("solver-status.jsonl").exists(), "{name}/{id}");
             for e in std::fs::read_dir(run.join("output")).unwrap() {
                 let f = e.unwrap().file_name().to_string_lossy().into_owned();
@@ -317,23 +374,26 @@ fn s2_no_runtime_state_or_pruned_files() {
 /// `runctl::check_only`: exit 0 and no error-level set-up rule), and its mesh builds.
 #[test]
 fn s3_every_case_validates_through_rcfd_api() {
-    let mut n = 0;
-    for (name, dir, _) in all_projects() {
-        for rel in case_files(&dir) {
-            let case = Case::load(dir.join(&rel)).unwrap_or_else(|d| panic!("{name}/{rel}: {d:?}"));
-            let (code, ev) = rcfd_api::runctl::check_only(&case);
-            let errors = ev["rules"]
-                .as_array()
-                .map_or(0, |r| r.iter().filter(|x| x["severity"] == "error").count());
-            println!(
-                "S3 {name}/{rel}: exit {code}, cells {}, error rules {errors}",
-                ev["cells"]
-            );
-            assert!(code == 0 && errors == 0, "{name}/{rel}: exit {code}, {}", ev);
-            n += 1;
+    for (tree, _) in TREES {
+        let mut n = 0;
+        for ex in tree_projects(tree) {
+            let (name, dir) = (ex.label(), ex.dir);
+            for rel in case_files(&dir) {
+                let case = Case::load(dir.join(&rel)).unwrap_or_else(|d| panic!("{name}/{rel}: {d:?}"));
+                let (code, ev) = rcfd_api::runctl::check_only(&case);
+                let errors = ev["rules"]
+                    .as_array()
+                    .map_or(0, |r| r.iter().filter(|x| x["severity"] == "error").count());
+                println!(
+                    "S3 {name}/{rel}: exit {code}, cells {}, error rules {errors}",
+                    ev["cells"]
+                );
+                assert!(code == 0 && errors == 0, "{name}/{rel}: exit {code}, {}", ev);
+                n += 1;
+            }
         }
+        assert_eq!(n, 10, "{tree}: ten case files");
     }
-    assert_eq!(n, 10, "ten case files");
 }
 
 /// A default service, `session.create` with the text (and `base_dir` when given), `settings.validate`. Returns
@@ -368,20 +428,23 @@ fn case_dir(dir: &Path, rel: &str) -> PathBuf {
 /// E1: the eight generator cases open and validate through the Studio editor's calls.
 #[test]
 fn e1_generator_cases_validate_through_the_editor_calls() {
-    let mut n = 0;
-    for (name, dir, _) in all_projects() {
-        for rel in case_files(&dir)
-            .into_iter()
-            .filter(|r| !MESH_FILE_CASES.contains(&r.as_str()))
-        {
-            let (open, ok, diag) =
-                editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap(), &case_dir(&dir, &rel));
-            println!("E1 {name}/{rel}: open {open}, valid {ok} {diag}");
-            assert!(open && ok, "{name}/{rel}: {diag}");
-            n += 1;
+    for (tree, _) in TREES {
+        let mut n = 0;
+        for ex in tree_projects(tree) {
+            let (name, dir) = (ex.label(), ex.dir);
+            for rel in case_files(&dir)
+                .into_iter()
+                .filter(|r| !MESH_FILE_CASES.contains(&r.as_str()))
+            {
+                let (open, ok, diag) =
+                    editor_validate(&std::fs::read_to_string(dir.join(&rel)).unwrap(), &case_dir(&dir, &rel));
+                println!("E1 {name}/{rel}: open {open}, valid {ok} {diag}");
+                assert!(open && ok, "{name}/{rel}: {diag}");
+                n += 1;
+            }
         }
+        assert_eq!(n, 8, "{tree}");
     }
-    assert_eq!(n, 8);
 }
 
 /// E1 for the two aerofoil cases (registered limit: every case validates through the editor's calls). They name
@@ -390,7 +453,8 @@ fn e1_generator_cases_validate_through_the_editor_calls() {
 /// case's folder (`base_dir`), as `rcfd run` and the run service do.
 #[test]
 fn e1_mesh_file_cases_validate_through_the_editor_calls() {
-    for (name, dir, _) in all_projects() {
+    for ex in all_projects() {
+        let (name, dir) = (ex.label(), ex.dir);
         for rel in case_files(&dir)
             .into_iter()
             .filter(|r| MESH_FILE_CASES.contains(&r.as_str()))
@@ -408,29 +472,37 @@ fn e1_mesh_file_cases_validate_through_the_editor_calls() {
 /// service's rule for text, and the editor's call before ADR 0144) they open but fail at `mesh.file`.
 #[test]
 fn e2_mesh_file_cases_validate_when_resolved_against_their_folder() {
-    let dir = examples().join("wind-tunnel");
-    for rel in MESH_FILE_CASES {
-        let path = dir.join(rel).canonicalize().unwrap();
-        let svc = Service::new(ServiceConfig::default());
-        let s = svc
-            .call("session.create", &json!({"path": path.display().to_string()}))
-            .unwrap_or_else(|e| panic!("{rel}: {}", e.message));
-        let v = svc
-            .call("settings.validate", &json!({"session": s["session"]}))
-            .unwrap();
-        println!("E2 {rel} by path: valid {} {}", v["ok"], v["diagnostics"]);
-        assert_eq!(v["ok"], true, "{rel}: {}", v["diagnostics"]);
-        let (open, ok, diag) = text_validate(&std::fs::read_to_string(dir.join(rel)).unwrap(), None);
-        println!("E2 {rel} by text: open {open}, valid {ok} {diag}");
-        assert!(open && !ok && diag.contains("mesh.file"), "{rel}: {diag}");
+    for (tree, _) in TREES {
+        let dir = repo().join(tree).join("wind-tunnel");
+        for rel in MESH_FILE_CASES {
+            let path = dir.join(rel).canonicalize().unwrap();
+            let svc = Service::new(ServiceConfig::default());
+            let s = svc
+                .call("session.create", &json!({"path": path.display().to_string()}))
+                .unwrap_or_else(|e| panic!("{tree}/{rel}: {}", e.message));
+            let v = svc
+                .call("settings.validate", &json!({"session": s["session"]}))
+                .unwrap();
+            println!("E2 {tree}/{rel} by path: valid {} {}", v["ok"], v["diagnostics"]);
+            assert_eq!(v["ok"], true, "{tree}/{rel}: {}", v["diagnostics"]);
+            let (open, ok, diag) = text_validate(&std::fs::read_to_string(dir.join(rel)).unwrap(), None);
+            println!("E2 {tree}/{rel} by text: open {open}, valid {ok} {diag}");
+            assert!(open && !ok && diag.contains("mesh.file"), "{tree}/{rel}: {diag}");
+        }
     }
 }
 
 /// S4: the aerofoil cases agree with themselves: the angle of the initial velocity equals the far-field velocity's, the
-/// lift and drag directions are normal and parallel to it, and it equals the ledger's `alpha`.
+/// lift and drag directions are normal and parallel to it, and it equals the ledger's `alpha` (each tree's ledger).
 #[test]
 fn s4_aerofoil_angle_of_attack_is_consistent() {
-    let dir = examples().join("wind-tunnel");
+    for (tree, _) in TREES {
+        s4_tree(tree);
+    }
+}
+
+fn s4_tree(tree: &str) {
+    let dir = repo().join(tree).join("wind-tunnel");
     let entries = ledger_entries(&dir);
     for rel in MESH_FILE_CASES {
         let case = Case::load(dir.join(rel)).unwrap();
@@ -454,12 +526,12 @@ fn s4_aerofoil_angle_of_attack_is_consistent() {
         let e = entries.iter().find(|e| e.variant == stem).expect("ledger entry");
         let a = e.param("alpha").expect("alpha").value;
         println!(
-            "S4 {rel}: alpha {} deg from the case, {a} in the ledger",
+            "S4 {tree}/{rel}: alpha {} deg from the case, {a} in the ledger",
             alpha.to_degrees()
         );
         assert!(
             (alpha.to_degrees() - a).abs() <= 1e-12,
-            "{rel}: {} vs {a}",
+            "{tree}/{rel}: {} vs {a}",
             alpha.to_degrees()
         );
     }
@@ -467,22 +539,41 @@ fn s4_aerofoil_angle_of_attack_is_consistent() {
 
 // ------------------------------------------------------------------------------------------------ S5, S6: runs
 
+/// The case of a run (its `case.snapshot`, base: the case's folder), and the content hash and cell count of the mesh
+/// this platform builds from it.
+fn run_case_and_mesh(dir: &Path, id: &str, case_rel: &str) -> (Case, u64, usize) {
+    let text = std::fs::read_to_string(dir.join("runs").join(id).join("case.snapshot")).unwrap();
+    let base = dir.join(case_rel).parent().unwrap().to_path_buf();
+    let case = Case::parse_toml_in(&text, &base).unwrap_or_else(|d| panic!("{id}: {d:?}"));
+    let mesh = rcfd_api::sim::build_mesh(&case).unwrap_or_else(|d| panic!("{id}: {d:?}"));
+    (case, mesh.content_hash(), mesh.n_cells())
+}
+
 /// S5: per committed run: the store's mesh hash equals the content hash of the mesh built from `case.snapshot` (base:
 /// the case's folder) and its cell count; 1 to 100 snapshots, each holding exactly the case's `output.store_fields` in
 /// f32; `residuals.jsonl` reads with no torn tail, steps 1..N with N the step of `status.json`; a transient run ends at
-/// its `solver.end_time`; `metrics.json` `reports` equal the last residual line's monitors bit for bit.
+/// its `solver.end_time`; `metrics.json` `reports` equal the last residual line's monitors bit for bit. ADR 0150: the
+/// mesh hash is compared for the tree of this platform only (the other tree's stores were built with the other
+/// platform's libm; T3 shows they differ); for the other tree it is printed. Every other limit holds for both trees.
 #[test]
 fn s5_run_stores_residuals_and_metrics_match_their_case() {
-    for (name, dir, runs) in all_projects() {
-        for (id, case_rel) in &runs {
+    let native = native_tree();
+    for ex in all_projects() {
+        let (name, dir, runs) = (ex.label(), &ex.dir, &ex.runs);
+        for (id, case_rel) in runs {
             let run = dir.join("runs").join(id);
-            let text = std::fs::read_to_string(run.join("case.snapshot")).unwrap();
-            let base = dir.join(case_rel).parent().unwrap().to_path_buf();
-            let case = Case::parse_toml_in(&text, &base).unwrap_or_else(|d| panic!("{id}: {d:?}"));
-            let mesh = rcfd_api::sim::build_mesh(&case).unwrap_or_else(|d| panic!("{id}: {d:?}"));
+            let (case, mesh_hash, n_cells) = run_case_and_mesh(dir, id, case_rel);
             let mut r = Reader::open(&run.join("fields")).unwrap();
-            assert_eq!(r.mesh_hash(), mesh.content_hash(), "{name}/{id}: store mesh hash");
-            assert_eq!(r.n_cells(), mesh.n_cells(), "{name}/{id}: cells");
+            if native == Some(ex.tree) {
+                assert_eq!(r.mesh_hash(), mesh_hash, "{name}/{id}: store mesh hash");
+            } else {
+                println!(
+                    "S5 {name}/{id}: store mesh hash {}, the mesh built here {mesh_hash} (not compared: the stores of {} were built on another platform, ADR 0150)",
+                    r.mesh_hash(),
+                    ex.tree
+                );
+            }
+            assert_eq!(r.n_cells(), n_cells, "{name}/{id}: cells");
             let n = r.snapshots().len();
             assert!((1..=MAX_SNAPSHOTS).contains(&n), "{name}/{id}: {n} snapshots");
             let want: Vec<String> = serde_json::from_value(case.get("output.store_fields").unwrap()).unwrap();
@@ -519,13 +610,50 @@ fn s5_run_stores_residuals_and_metrics_match_their_case() {
                 );
             }
             println!(
-                "S5 {name}/{id} {case_rel}: {} cells, {n} snapshots {want:?} f32, {last} steps, end time {}, {} reports",
-                mesh.n_cells(),
+                "S5 {name}/{id} {case_rel}: {n_cells} cells, {n} snapshots {want:?} f32, {last} steps, end time {}, {} reports",
                 end.time,
                 reports.len()
             );
         }
     }
+}
+
+/// T3 (ADR 0150), the standing control of S5's per-tree comparison: on Windows and on x86_64 Linux, the stores of the
+/// other platform's tree do not fit this platform: the store mesh hash of both cylinder runs (the `cylinder_ogrid`
+/// generator with its graded spacing calls libm) differs from the mesh built here from their case. Every run's pair is
+/// printed. Elsewhere (no tree of its own) nothing is compared.
+#[test]
+fn t3_the_other_platforms_cylinder_stores_differ_from_the_mesh_built_here() {
+    let Some(native) = native_tree() else {
+        println!("T3: no tree was built on this platform; nothing compared");
+        return;
+    };
+    let mut cylinders = 0;
+    for (tree, _) in TREES.into_iter().filter(|(t, _)| *t != native) {
+        for ex in tree_projects(tree) {
+            for (id, case_rel) in &ex.runs {
+                let (_, built, _) = run_case_and_mesh(&ex.dir, id, case_rel);
+                let stored = Reader::open(&ex.dir.join("runs").join(id).join("fields"))
+                    .unwrap()
+                    .mesh_hash();
+                println!(
+                    "T3 {}/{id} {case_rel}: stored {stored}, built here {built}: {}",
+                    ex.label(),
+                    if stored == built { "equal" } else { "differ" }
+                );
+                if case_rel.contains("cylinder") {
+                    assert_ne!(
+                        stored,
+                        built,
+                        "{}/{id}: the other platform's store fits here",
+                        ex.label()
+                    );
+                    cylinders += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(cylinders, 2, "two cylinder runs in the other tree");
 }
 
 fn ledger_entries(dir: &Path) -> Vec<ledger::Entry> {
@@ -598,7 +726,8 @@ fn row_sign_changes(mesh_centres: &[[f64; 3]], ux: &[f64], y: f64) -> Vec<f64> {
 /// `output/monitors.json`, reattachment from the last stored `ux` on the stored mesh's cell centres) within 1e-9.
 #[test]
 fn s6_ledger_matches_the_runs() {
-    for (name, dir, runs) in all_projects() {
+    for ex in all_projects() {
+        let (name, dir, runs) = (ex.label(), ex.dir, ex.runs);
         let entries = ledger_entries(&dir);
         assert_eq!(entries.len(), runs.len(), "{name}: one entry per run");
         for (id, case_rel) in &runs {
@@ -689,11 +818,18 @@ fn metric(entries: &[ledger::Entry], variant: &str, name: &str) -> f64 {
 }
 
 /// G1, G2: every committed run finished with the registered solver state and step; each run's wall time (launched to
-/// final state, the ledger's `wall_s`) at most 180 s, the sum at most 20 min.
+/// final state, the ledger's `wall_s`) at most 180 s, the sum at most 20 min (per tree: each tree is one rebuild).
 #[test]
 fn g1_g2_runs_finished_as_registered_within_their_time() {
+    for (tree, _) in TREES {
+        g1_g2_tree(tree);
+    }
+}
+
+fn g1_g2_tree(tree: &'static str) {
     let mut total = 0.0;
-    for (name, dir, runs) in all_projects() {
+    for ex in tree_projects(tree) {
+        let (name, dir, runs) = (ex.label(), ex.dir, ex.runs);
         let entries = ledger_entries(&dir);
         for (id, case_rel) in &runs {
             let met = read_json(&dir.join("runs").join(id).join("metrics.json"));
@@ -730,8 +866,8 @@ fn g1_g2_runs_finished_as_registered_within_their_time() {
             total += wall;
         }
     }
-    println!("G2 total: {total:.1} s");
-    assert!(total <= 1200.0, "{total} s");
+    println!("G2 {tree} total: {total:.1} s");
+    assert!(total <= 1200.0, "{tree}: {total} s");
 }
 
 /// The G3 comparisons on the given values: (lower, higher) pairs that must be strictly ordered.
@@ -745,11 +881,22 @@ fn g3_ordered(pairs: &[(&str, f64, f64)]) -> Vec<String> {
 
 /// G3, crossing count (registered limit: at least 7 upward crossings of `cl` through its mean in the second half of each
 /// cylinder run). Known miss (ADR 0142 amendment 1): the Re 100 run has 6, because about 6 periods fit into the second
-/// half of an 80 D/U run. The limit is kept.
+/// half of an 80 D/U run. The limit is kept. Every cylinder run of both trees is counted and printed before the limit is
+/// asserted (ADR 0150); the Linux tree's Re 100 run crosses 6 times too, the same known miss (ADR 0150 L3).
 #[test]
 #[ignore = "known miss (ADR 0142 amendment 1): the Re 100 cylinder run crosses 6 times in its second half, limit 7"]
 fn g3_cylinders_cross_at_least_7_times_known_miss() {
-    let root = examples();
+    let mut counts = Vec::new();
+    for (tree, _) in TREES {
+        g3_crossings_tree(tree, &mut counts);
+    }
+    for (what, ups) in &counts {
+        assert!(*ups >= 7, "{what}: {ups} crossings");
+    }
+}
+
+fn g3_crossings_tree(tree: &str, counts: &mut Vec<(String, usize)>) {
+    let root = repo().join(tree);
     for (id, case_rel) in &manifest(&root)["wind-tunnel"] {
         if case_rel.contains("cylinder") {
             let m = read_json(
@@ -774,8 +921,8 @@ fn g3_cylinders_cross_at_least_7_times_known_miss() {
                 .windows(2)
                 .filter(|w| w[0] - mean < 0.0 && 0.0 <= w[1] - mean)
                 .count();
-            println!("G3 {case_rel}: {ups} upward crossings of cl in the second half");
-            assert!(ups >= 7, "{case_rel}: {ups} crossings");
+            println!("G3 {tree}/{case_rel}: {ups} upward crossings of cl in the second half");
+            counts.push((format!("{tree}/{case_rel}"), ups));
         }
     }
 }
@@ -783,10 +930,16 @@ fn g3_cylinders_cross_at_least_7_times_known_miss() {
 /// G3: the examples show their flow (sanity, not validation): the cylinders' `cl` amplitude above 0.1 and St rising with
 /// Re; 0 < `cl`(2 deg) < `cl`(4 deg); 0 < `x_reattach`(400) < `x_reattach`(800) < 15; 1 < `nu_hot`(1e3) < `nu_hot`(1e4);
 /// `lid_drag` < 0. Control: the four variant comparisons with the two runs swapped fail. (The crossing count is the
-/// known miss above.)
+/// known miss above.) Each tree's runs (ADR 0150: the limits apply to the Linux runs unchanged).
 #[test]
 fn g3_examples_show_their_flow_and_swapped_variants_fail() {
-    let root = examples();
+    for (tree, _) in TREES {
+        g3_flow_tree(tree);
+    }
+}
+
+fn g3_flow_tree(tree: &str) {
+    let root = repo().join(tree);
     let wt = ledger_entries(&root.join("wind-tunnel"));
     let qs = ledger_entries(&root.join("quick-start"));
     let v = |e: &[ledger::Entry], var: &str, n: &str| metric(e, var, n);
@@ -829,10 +982,10 @@ fn g3_examples_show_their_flow_and_swapped_variants_fail() {
         ("lid_drag(400) < 0", v(&qs, "cavity-re400", "lid_drag"), 0.0),
     ];
     for (what, lo, hi) in &pairs {
-        println!("G3 {what}: {lo} < {hi}");
+        println!("G3 {tree} {what}: {lo} < {hi}");
     }
     let probs = g3_ordered(&pairs);
-    assert!(probs.is_empty(), "{probs:#?}");
+    assert!(probs.is_empty(), "{tree}: {probs:#?}");
     // control: the variant comparisons with the two runs swapped
     let swapped: Vec<(&str, f64, f64)> = pairs
         .iter()
@@ -847,12 +1000,12 @@ fn g3_examples_show_their_flow_and_swapped_variants_fail() {
         .collect();
     let failed = g3_ordered(&swapped);
     println!(
-        "G3 control: {} of {} swapped comparisons fail",
+        "G3 {tree} control: {} of {} swapped comparisons fail",
         failed.len(),
         swapped.len()
     );
     assert_eq!(swapped.len(), 4);
-    assert_eq!(failed.len(), swapped.len(), "{failed:#?}");
+    assert_eq!(failed.len(), swapped.len(), "{tree}: {failed:#?}");
 }
 
 // ------------------------------------------------------------------------------------------------ S7, S8, S9
@@ -888,7 +1041,8 @@ fn notes_problems(dir: &Path) -> Vec<String> {
 /// the generated run table names every committed run.
 #[test]
 fn s7_notes_name_existing_files() {
-    for (name, dir, runs) in all_projects() {
+    for ex in all_projects() {
+        let (name, dir, runs) = (ex.label(), ex.dir, ex.runs);
         let probs = notes_problems(&dir);
         assert!(probs.is_empty(), "{name}: {probs:#?}");
         let readme = std::fs::read_to_string(dir.join("notes").join("README.md")).unwrap();
@@ -926,31 +1080,49 @@ fn s7_control_a_missing_file_is_reported() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// S8: sizes stay under the registered caps (committed runs only).
+/// S8: sizes stay under the registered caps (committed runs only). ADR 0150: the caps apply to each tree on its own
+/// (each project under its cap, each whole tree under 40 MB); the two trees together are not capped.
 #[test]
 fn s8_sizes_under_the_registered_caps() {
-    let mut total = 0;
-    for (name, dir, runs) in all_projects() {
-        let size = project_size(&dir, &runs);
-        let cap = CAP_PROJECTS.iter().find(|(n, _)| *n == name).expect("cap").1;
-        println!("S8 {name}: {size} bytes (cap {cap})");
-        assert!(size <= cap, "{name}: {size} > {cap}");
-        total += size;
+    for (tree, _) in TREES {
+        let mut total = 0;
+        for ex in tree_projects(tree) {
+            let size = project_size(&ex.dir, &ex.runs);
+            let cap = CAP_PROJECTS.iter().find(|(n, _)| *n == ex.name).expect("cap").1;
+            println!("S8 {}: {size} bytes (cap {cap})", ex.label());
+            assert!(size <= cap, "{}: {size} > {cap}", ex.label());
+            total += size;
+        }
+        let root = repo().join(tree);
+        let extra = tree_size(&root.join("manifest.json"))
+            + tree_size(&root.join("README.md"))
+            + tree_size(&root.join(".gitattributes"));
+        total += extra;
+        println!("S8 {tree} total: {total} bytes (cap {CAP_TOTAL})");
+        assert!(total <= CAP_TOTAL, "{tree}: {total} > {CAP_TOTAL}");
     }
-    let extra = tree_size(&examples().join("manifest.json"))
-        + tree_size(&examples().join("README.md"))
-        + tree_size(&examples().join(".gitattributes"));
-    total += extra;
-    println!("S8 total: {total} bytes (cap {CAP_TOTAL})");
-    assert!(total <= CAP_TOTAL, "{total} > {CAP_TOTAL}");
 }
 
 /// S9: the aerofoil mesh is the recipe's: it reads as a polyMesh with 6144 cells and the patches `airfoil`, `farfield`,
 /// `frontAndBack`; every point of the `airfoil` patch lies on the closed-trailing-edge NACA 0012 surface (|y| = y_t(x)
-/// within 1e-12) and every point of `farfield` on the circle of radius 20 about (0.5, 0) within 1e-12.
+/// within 1e-12) and every point of `farfield` on the circle of radius 20 about (0.5, 0) within 1e-12. Each tree's
+/// mesh (ADR 0150: each tree builds its own from the recipe).
 #[test]
 fn s9_aerofoil_mesh_matches_its_recipe() {
-    let m = rcfd_io::openfoam::read_dir(examples().join("wind-tunnel").join("meshes").join("naca0012-ogrid")).unwrap();
+    for (tree, _) in TREES {
+        s9_tree(tree);
+    }
+}
+
+fn s9_tree(tree: &str) {
+    let m = rcfd_io::openfoam::read_dir(
+        repo()
+            .join(tree)
+            .join("wind-tunnel")
+            .join("meshes")
+            .join("naca0012-ogrid"),
+    )
+    .unwrap();
     assert_eq!(m.n_cells(), 6144);
     let yt = |x: f64| 0.6 * (0.2969 * x.sqrt() - 0.1260 * x - 0.3516 * x * x + 0.2843 * x.powi(3) - 0.1036 * x.powi(4));
     let pts = m.points();
@@ -975,8 +1147,242 @@ fn s9_aerofoil_mesh_matches_its_recipe() {
     }
     assert!(m.patch("frontAndBack").is_some());
     println!(
-        "S9: 6144 cells; airfoil points off the surface by at most {:.3e}, far field off the circle by {:.3e}",
+        "S9 {tree}: 6144 cells; airfoil points off the surface by at most {:.3e}, far field off the circle by {:.3e}",
         worst.0, worst.1
     );
-    assert!(worst.0 <= 1e-12 && worst.1 <= 1e-12, "{worst:?}");
+    assert!(worst.0 <= 1e-12 && worst.1 <= 1e-12, "{tree}: {worst:?}");
+}
+
+// ------------------------------------------------------------------------------------------------ T1, T2: the trees
+
+/// The project-relative path (with `/`) of every file under `dir`.
+fn files_under(dir: &Path) -> Vec<String> {
+    fn walk(root: &Path, d: &Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(d).unwrap().filter_map(|e| e.ok()) {
+            let p = e.path();
+            if p.is_dir() {
+                walk(root, &p, out);
+            } else {
+                let rel: Vec<String> = p
+                    .strip_prefix(root)
+                    .unwrap()
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect();
+                out.push(rel.join("/"));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
+/// A file a rebuild writes (ADR 0150): under `runs/` or `.rcfd/`, the ledger, or in a mesh folder built from a recipe
+/// (`meshes/<name>/` next to `meshes/<name>.recipe.toml`). Every other file of a project folder is an input.
+fn generated(dir: &Path, rel: &str) -> bool {
+    let parts: Vec<&str> = rel.split('/').collect();
+    parts[0] == "runs"
+        || parts[0] == ".rcfd"
+        || rel == "designs/variants.ledger.jsonl"
+        || (parts.len() >= 3
+            && parts[0] == "meshes"
+            && dir.join("meshes").join(format!("{}.recipe.toml", parts[1])).is_file())
+}
+
+/// The bytes the trees share of an input: a notes file without its generated run table.
+fn comparable(rel: &str, data: Vec<u8>) -> Vec<u8> {
+    if rel.starts_with("notes/") {
+        if let Ok(t) = std::str::from_utf8(&data) {
+            if let (Some(a), Some(b)) = (t.find(RUNS_BEGIN), t.find(RUNS_END)) {
+                if a < b {
+                    return format!("{}{}", &t[..a], &t[b + RUNS_END.len()..]).into_bytes();
+                }
+            }
+        }
+    }
+    data
+}
+
+/// Inputs of project folder `other` that differ from those of `win` (the Windows tree's, which a Linux rebuild copies).
+fn inputs_problems(win: &Path, other: &Path) -> Vec<String> {
+    let inputs = |d: &Path| -> Vec<String> { files_under(d).into_iter().filter(|r| !generated(d, r)).collect() };
+    let (a, b) = (inputs(win), inputs(other));
+    let mut out = Vec::new();
+    for r in a.iter().filter(|r| !b.contains(r)) {
+        out.push(format!("{r}: missing in {}", other.display()));
+    }
+    for r in b.iter().filter(|r| !a.contains(r)) {
+        out.push(format!(
+            "{r}: in {} but not an input of {}",
+            other.display(),
+            win.display()
+        ));
+    }
+    for r in a.iter().filter(|r| b.contains(r)) {
+        let read = |d: &Path| comparable(r, std::fs::read(d.join(r)).unwrap());
+        if read(win) != read(other) {
+            out.push(format!(
+                "{r}: differs between {} and {}",
+                win.display(),
+                other.display()
+            ));
+        }
+    }
+    out
+}
+
+/// T1 (ADR 0150): the Linux tree holds the Windows tree's inputs: every project has the same input files (case files,
+/// mesh recipe, notes, `rcfd-project.json`, `.rcfd`-free) byte for byte, the notes outside their generated run table;
+/// the trees' `.gitattributes` are equal.
+#[test]
+fn t1_the_trees_share_their_inputs() {
+    let (win, lin) = (repo().join(TREES[0].0), repo().join(TREES[1].0));
+    assert_eq!(
+        std::fs::read(win.join(".gitattributes")).unwrap(),
+        std::fs::read(lin.join(".gitattributes")).unwrap(),
+        ".gitattributes"
+    );
+    let mut n = 0;
+    for ex in tree_projects(TREES[0].0) {
+        let other = lin.join(&ex.name);
+        let probs = inputs_problems(&ex.dir, &other);
+        let count = files_under(&ex.dir).iter().filter(|r| !generated(&ex.dir, r)).count();
+        println!("T1 {}: {count} inputs, {} differ", ex.name, probs.len());
+        assert!(probs.is_empty(), "{}: {probs:#?}", ex.name);
+        n += 1;
+    }
+    assert_eq!(n, 2);
+}
+
+/// T1 control on copies of the Linux tree's quick-start: (a) a case edited, (b) an extra case, (c) a notes line outside
+/// the run table changed: each is reported; (d) a change inside the run table only is not.
+#[test]
+fn t1_control_inputs_that_differ_are_reported() {
+    let win = repo().join(TREES[0].0).join("quick-start");
+    let lin = repo().join(TREES[1].0).join("quick-start");
+    let case = manifest(&repo().join(TREES[1].0))["quick-start"][0].1.clone();
+    let edit = |tag: &str, f: &dyn Fn(&Path)| -> Vec<String> {
+        let d = tmp(&format!("t1{tag}"));
+        copy_dir(&lin, &d);
+        f(&d);
+        let probs = inputs_problems(&win, &d);
+        println!("T1 control ({tag}): {probs:?}");
+        let _ = std::fs::remove_dir_all(&d);
+        probs
+    };
+    let a = edit("a", &|d| {
+        let mut t = std::fs::read_to_string(d.join(&case)).unwrap();
+        t.push_str("# edited in the Linux tree\n");
+        std::fs::write(d.join(&case), t).unwrap();
+    });
+    assert!(a.iter().any(|p| p.starts_with(&format!("{case}: differs"))), "{a:#?}");
+    let b = edit("b", &|d| {
+        std::fs::write(d.join("cases").join("extra.toml"), "# extra\n").unwrap()
+    });
+    assert!(b.iter().any(|p| p.starts_with("cases/extra.toml: in ")), "{b:#?}");
+    let readme = |d: &Path| d.join("notes").join("README.md");
+    let c = edit("c", &|d| {
+        let t = std::fs::read_to_string(readme(d)).unwrap();
+        std::fs::write(readme(d), format!("{t}\nA line only the Linux tree has.\n")).unwrap();
+    });
+    assert!(c.iter().any(|p| p.starts_with("notes/README.md: differs")), "{c:#?}");
+    let dd = edit("d", &|d| {
+        let t = std::fs::read_to_string(readme(d)).unwrap();
+        let at = t.find(RUNS_END).unwrap();
+        std::fs::write(readme(d), format!("{}| a row in the table |\n{}", &t[..at], &t[at..])).unwrap();
+    });
+    assert!(dd.is_empty(), "{dd:#?}");
+}
+
+/// Signs that the tree `tree` (folder name) at `root` was not built on `platform` (ADR 0150 T2): the manifest's
+/// platform, and the absolute case paths every `run.json` records.
+fn provenance_problems(tree: &str, platform: &str, root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let m = read_json(&root.join("manifest.json"));
+    match m.get("platform") {
+        // ADR 0142's tree predates the field; it was built on Windows (its addendum)
+        None if platform == "windows" => {}
+        None => out.push("manifest.json: no platform".to_string()),
+        Some(p) => {
+            if p["os"] != platform || p["arch"] != "x86_64" {
+                out.push(format!("manifest.json: built on {} {}", p["os"], p["arch"]));
+            }
+            if platform == "linux" && !p["libc"].as_str().unwrap_or("").starts_with("glibc") {
+                out.push(format!("manifest.json: libc {}", p["libc"]));
+            }
+        }
+    }
+    for (pname, runs) in manifest(root) {
+        for (id, _) in runs {
+            let rec = read_json(&root.join(&pname).join("runs").join(&id).join("run.json"));
+            for key in ["case_dir", "case_source"] {
+                let v = rec[key].as_str().unwrap_or("");
+                let ok = if platform == "linux" {
+                    v.starts_with('/') && v.contains(&format!("/{tree}/{pname}/cases"))
+                } else {
+                    let b = v.as_bytes();
+                    b.len() > 3
+                        && b[0].is_ascii_alphabetic()
+                        && &b[1..3] == b":\\"
+                        && v.contains(&format!("\\{tree}\\{pname}\\cases"))
+                };
+                if !ok {
+                    out.push(format!("{pname}/runs/{id}/run.json: {key} {v:?}"));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// T2 (ADR 0150): each tree was built on its platform: the Linux tree's manifest records os `linux`, arch `x86_64` and
+/// a glibc (the Windows tree's predates the field); every committed run's `run.json` names its case by an absolute path
+/// of that platform inside that tree's project folder (`/.../example-projects-linux/<project>/cases`,
+/// `X:\...\example-projects\<project>\cases`), so no run was copied in from the other tree.
+#[test]
+fn t2_each_tree_was_built_on_its_platform() {
+    for (tree, platform) in TREES {
+        let probs = provenance_problems(tree, platform, &repo().join(tree));
+        let m = read_json(&repo().join(tree).join("manifest.json"));
+        println!("T2 {tree}: platform {}, {} problems", m["platform"], probs.len());
+        assert!(probs.is_empty(), "{tree}: {probs:#?}");
+    }
+}
+
+/// T2 control on a copy of the Linux tree's manifest and quick-start: (a) the manifest's os `windows`, (b) a run's
+/// `case_dir` a Windows path: each is reported.
+#[test]
+fn t2_control_a_foreign_build_is_reported() {
+    let (tree, platform) = TREES[1];
+    let src = repo().join(tree);
+    let probe = |tag: &str, f: &dyn Fn(&Path)| -> Vec<String> {
+        let root = tmp(&format!("t2{tag}")).join(tree);
+        copy_dir(&src.join("quick-start"), &root.join("quick-start"));
+        let mut m = read_json(&src.join("manifest.json"));
+        m["projects"].as_object_mut().unwrap().retain(|k, _| k == "quick-start");
+        std::fs::write(root.join("manifest.json"), serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        f(&root);
+        let probs = provenance_problems(tree, platform, &root);
+        println!("T2 control ({tag}): {probs:?}");
+        let _ = std::fs::remove_dir_all(root.parent().unwrap());
+        probs
+    };
+    let clean = probe("0", &|_| {});
+    assert!(clean.is_empty(), "the unchanged copy: {clean:#?}");
+    let a = probe("a", &|r| {
+        let mut m = read_json(&r.join("manifest.json"));
+        m["platform"]["os"] = json!("windows");
+        std::fs::write(r.join("manifest.json"), serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    });
+    assert!(a.iter().any(|p| p.contains("built on \"windows\"")), "{a:#?}");
+    let b = probe("b", &|r| {
+        let id = manifest(r)["quick-start"][0].0.clone();
+        let p = r.join("quick-start").join("runs").join(&id).join("run.json");
+        let mut rec = read_json(&p);
+        rec["case_dir"] = json!(format!("E:\\x\\{tree}\\quick-start\\cases"));
+        std::fs::write(&p, serde_json::to_vec_pretty(&rec).unwrap()).unwrap();
+    });
+    assert!(b.iter().any(|p| p.contains("case_dir")), "{b:#?}");
 }

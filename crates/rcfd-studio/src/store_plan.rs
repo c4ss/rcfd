@@ -6,13 +6,14 @@
 //! Pure functions of a [`StartPlan`] (and of files for the cell count and the re-run); no UI and no threads. The proposal
 //! itself stays in [`crate::runs::propose_store`] (D1).
 
-use crate::runs::{propose_store, StartPlan, StoreEvery, StorePlan, STORE_SNAPSHOTS};
+use crate::runs::{propose_store, PlanRoute, StartPlan, StoreEvery, StorePlan, STORE_SNAPSHOTS};
 use rcfd_api::case::Case;
 use rcfd_project::records::RunRecord;
 use rcfd_runner::client::Client;
 use rcfd_runner::records::RunSettings;
 use serde_json::Value;
 use std::path::Path;
+use std::sync::OnceLock;
 
 /// Estimates above this many bytes are "huge" (D6: 1 GB, decimal).
 pub const HUGE_BYTES: u64 = 1_000_000_000;
@@ -87,7 +88,8 @@ pub enum CellsState {
 pub struct CaseExtra {
     /// `compressible.mode = "steady"` with `solver.algorithm = "compressible"`.
     pub compressible_steady: bool,
-    /// The store keys the case text sets, in [`STORE_KEYS`] order, with their values.
+    /// The store keys the case sets itself ([`store_key_set`]: a value other than the schema default, ADR 0152), in
+    /// [`STORE_KEYS`] order, with their values.
     pub case_store: Vec<(String, Value)>,
     /// Other `output.*` keys the text sets, sorted.
     pub output_keys: Vec<String>,
@@ -111,16 +113,59 @@ fn set_value(v: &Value) -> bool {
     v.as_f64().is_some_and(|x| x != 0.0) || v.as_bool() == Some(true) || v.as_array().is_some_and(|a| !a.is_empty())
 }
 
+// ---------------------------------------------------------------- the case's own store keys (ADR 0152)
+
+/// The schema defaults of the [`STORE_KEYS`], read once from `rcfd-api`'s case schema (a case with every default):
+/// `output.store_interval` 0, `output.store_time_interval` 0.0, `output.store_fields` `[]`, `output.store_precision`
+/// `"f64"`.
+pub fn store_defaults() -> &'static [(&'static str, Value)] {
+    static DEFAULTS: OnceLock<Vec<(&'static str, Value)>> = OnceLock::new();
+    DEFAULTS.get_or_init(|| {
+        let c = Case::new();
+        STORE_KEYS
+            .iter()
+            .map(|k| (*k, c.get(k).unwrap_or(Value::Null)))
+            .collect()
+    })
+}
+
+/// True when `v` equals the schema default of store key `key` (ADR 0152): for numbers the same value (`0`, `0.0` and
+/// `-0.0` are one), otherwise the same JSON value. False for a path that is not one of the [`STORE_KEYS`].
+pub fn is_store_default(key: &str, v: &Value) -> bool {
+    let Some((_, d)) = store_defaults().iter().find(|(k, _)| *k == key) else {
+        return false;
+    };
+    match (v.as_f64(), d.as_f64()) {
+        (Some(a), Some(b)) => a == b,
+        _ => v == d,
+    }
+}
+
+/// True when the case sets store key `key` itself (ADR 0152, the maintainer's answer to ADR 0149 question 9): its value,
+/// as `rcfd-api` resolves the case (`case`), differs from the schema default ([`is_store_default`]). A key the text does
+/// not set and a key it sets to the default (as a case saved by the Studio, or written by `rcfd-api`'s writer, spells
+/// every key out) are both "not set", so the Studio's store proposal applies: an explicit `store_interval = 0` (or
+/// `store_precision = "f64"`) cannot be told from the default, and the Start run dialog's "Store fields" tick (and its
+/// precision radios) are its override. The same for TOML and JSON cases. With `route.default_store_keys_set` (the route
+/// before): the case text (`raw`) has the key, whatever its value.
+pub fn store_key_set(raw: &Value, case: &Case, key: &str, route: PlanRoute) -> bool {
+    if route.default_store_keys_set {
+        let field = key.trim_start_matches("output.");
+        return raw.get("output").and_then(|o| o.get(field)).is_some();
+    }
+    case.get(key).is_ok_and(|v| !is_store_default(key, &v))
+}
+
 /// Read [`CaseExtra`] from the keys the case text sets (its TOML or JSON as a tree, nothing resolved) and the parsed case
-/// (`counted`: the generator's counts gave the cells).
-pub fn case_extra(raw: &Value, case: &Case, counted: bool) -> CaseExtra {
+/// (`counted`: the generator's counts gave the cells). The case's own store keys are those [`store_key_set`] finds by
+/// `route`.
+pub fn case_extra(raw: &Value, case: &Case, counted: bool, route: PlanRoute) -> CaseExtra {
     let get = |p: &str| case.get(p).unwrap_or(Value::Null);
     let num = |p: &str| get(p).as_f64().unwrap_or(0.0);
     let output = raw.get("output").and_then(Value::as_object);
-    let in_text = |key: &str| output.is_some_and(|t| t.contains_key(key));
     let case_store = STORE_KEYS
         .iter()
-        .filter(|k| in_text(k.trim_start_matches("output.")))
+        .filter(|k| store_key_set(raw, case, k, route))
         .map(|k| (k.to_string(), get(k)))
         .collect();
     let mut output_keys: Vec<String> = output
@@ -545,7 +590,9 @@ fn value_text(v: &Value) -> String {
     }
 }
 
-/// The interval key the case text sets to 0 (the store turned off by the case), if any and no interval is above 0.
+/// The interval key the case sets to 0 (the store turned off by the case), if any and no interval is above 0. Since ADR
+/// 0152 a 0 is the default and not the case's own ([`store_key_set`]), so a valid case text gives `None`; the key is
+/// found only with [`PlanRoute::default_store_keys_set`] (the route before).
 pub fn case_off_key(plan: &StartPlan) -> Option<String> {
     let cs = &plan.facts.extra.case_store;
     let interval = |k: &str| cs.iter().find(|(p, _)| p == k).map(|(_, v)| v.as_f64().unwrap_or(0.0));

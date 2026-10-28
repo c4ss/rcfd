@@ -23,7 +23,7 @@
 
 use crate::bins::{self, Found, Search};
 use crate::layout::{self, Panel};
-use crate::runs::{RunRow, StartPlan, StoreEvery};
+use crate::runs::{PlanRoute, RunRow, StartPlan, StoreEvery};
 use crate::studio::Studio;
 use crate::time_step::{self, Facts, Kind, RunTime, StepMode, TimePlan};
 use crate::viewport::Status;
@@ -78,6 +78,10 @@ pub struct Switches {
     /// The route before ADR 0149 (the maintainer's answer to ADR 0148 question 6): Run and its plan read a case as TOML
     /// only (a `.json` case is refused with `not TOML: ...`) and Run is not greyed out for a benchmark descriptor.
     pub cases_as_toml: bool,
+    /// The route before ADR 0152 (the maintainer's answer to ADR 0149 question 9): Run's plan takes a store key in the
+    /// case text as the case's own whatever its value, so a case saved by the Studio (`store_interval = 0` spelled out)
+    /// is run without stored fields ([`crate::runs::PlanRoute::default_store_keys_set`]).
+    pub default_store_keys_set: bool,
     /// The route before ADR 0153: Run takes the case's own `solver.dt` and `solver.end_time` (no time settings are
     /// added to its plan), the toolbar has no time row and the Mesh side no time-step line.
     pub case_time: bool,
@@ -354,7 +358,10 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
         case,
         search: q.search.clone(),
         tail_always: q.switches.tail_always,
-        toml_only: q.switches.cases_as_toml,
+        route: PlanRoute {
+            toml_only: q.switches.cases_as_toml,
+            default_store_keys_set: q.switches.default_store_keys_set,
+        },
         case_time: q.switches.case_time,
         rt,
         cached,
@@ -370,8 +377,8 @@ struct Job {
     case: String,
     search: Search,
     tail_always: bool,
-    /// [`Switches::cases_as_toml`].
-    toml_only: bool,
+    /// [`Switches::cases_as_toml`] and [`Switches::default_store_keys_set`].
+    route: PlanRoute,
     /// [`Switches::case_time`].
     case_time: bool,
     /// The case's run-time settings at the click (ADR 0153).
@@ -447,7 +454,7 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
         .and_then(|path| {
             let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
             let dir = path.parent().unwrap_or(&job.root).to_path_buf();
-            let plan = StartPlan::new_with(&job.case, &text, &dir, job.toml_only)?;
+            let plan = StartPlan::new_route(&job.case, &text, &dir, job.route)?;
             Ok((plan, text, dir))
         });
     let (plan, text, dir) = match read {

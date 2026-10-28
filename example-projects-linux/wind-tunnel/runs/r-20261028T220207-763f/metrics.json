@@ -1,0 +1,38 @@
+{
+  "exit_code": 5,
+  "last_residuals": {
+    "monitors": {
+      "cd": 0.018876048983036194,
+      "cl": 0.19883331320623607
+    },
+    "residuals": {
+      "continuity": 2.1017393365910754e-12,
+      "p": 6.014780185124321e-7,
+      "u": 1.5787872855973958e-6
+    },
+    "step": 2000,
+    "time": 0.0
+  },
+  "reason": "not_converged: iteration limit 2000 reached without meeting the residual targets",
+  "reports": {
+    "cd": 0.018876048983036194,
+    "cl": 0.19883331320623607
+  },
+  "solver_finish": {
+    "elapsed_s": 98.668948687,
+    "event": "finish",
+    "exit_code": 5,
+    "format": "rcfd-status",
+    "iterations": 2000,
+    "ok": false,
+    "reason": "iteration limit 2000 reached without meeting the residual targets",
+    "seq": 2003,
+    "state": "not_converged",
+    "time": 0.0,
+    "version": 1,
+    "wall_s": 98.668948687
+  },
+  "state": "finished",
+  "steps": 2000,
+  "time": 0.0
+}

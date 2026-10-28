@@ -75,6 +75,11 @@ Studio on a project folder (the folder is optional):
     powershell -ExecutionPolicy Bypass -File scripts\studio.ps1 my-project
     sh scripts/studio.sh my-project
 
+Finished example projects that open straight to a picture are in
+`example-projects/` (runs made on Windows) and `example-projects-linux/` (the
+same projects, runs made on x86_64 Linux); open the folder of your platform,
+for example `sh scripts/studio.sh example-projects-linux/wind-tunnel`.
+
 ## Where to go next
 
 * Documentation, tutorials and the example gallery start at

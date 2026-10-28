@@ -1,0 +1,3 @@
+# Runtime state of the run service and the Studio (lock, logs, requests): never versioned.
+*
+!.gitignore

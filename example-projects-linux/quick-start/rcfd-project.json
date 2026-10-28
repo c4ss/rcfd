@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "Quick start: lid-driven cavity and heated cavity",
+  "created": "2026-10-28T15:26:41.000Z",
+  "solver_version_created": "rcfd 0.1.0"
+}

@@ -1,7 +1,7 @@
-"""Self-test of scripts/make_example_projects.py (ADR 0142 P1): python -m unittest scripts/test_make_example_projects.py
+"""Self-test of scripts/make_example_projects.py (ADR 0142 P1, ADR 0150): python -m unittest scripts/test_make_example_projects.py
 
-Pure helpers against known values, `--check` on the committed examples (no binary needed), and the same check on a
-tampered copy. The rebuild itself needs the solver and is not run here."""
+Pure helpers against known values, `--check` on both committed trees (no binary needed), and the same checks on
+tampered copies. The rebuild itself needs the solver and is not run here."""
 
 import datetime
 import json
@@ -32,6 +32,35 @@ class Helpers(unittest.TestCase):
         self.assertEqual(mx.rfc3339_ms("2026-10-28T15:11:10.832608100Z"), int(t.timestamp()) * 1000 + 832)
         with self.assertRaises(ValueError):
             mx.rfc3339_ms("2026-10-28 15:11:10")
+
+    def test_generated_files_and_inputs(self):
+        # ADR 0150: what a rebuild writes; everything else of a project folder is an input the trees share
+        for p in ["runs/r-1/run.json", ".rcfd/.gitignore", "designs/variants.ledger.jsonl",
+                  "meshes/naca0012-ogrid/points"]:
+            self.assertTrue(mx.is_generated("wind-tunnel", p), p)
+        for p in ["cases/cylinder-re100.toml", "meshes/naca0012-ogrid.recipe.toml", "notes/README.md",
+                  "rcfd-project.json", "designs/other.md"]:
+            self.assertFalse(mx.is_generated("wind-tunnel", p), p)
+        self.assertFalse(mx.is_generated("quick-start", "meshes/README.md"))
+        self.assertFalse(mx.is_generated("quick-start", "meshes/naca0012-ogrid/points"))
+
+    def test_comparable_cuts_only_the_run_table_of_a_note(self):
+        text = "head\n%s\n| a | b |\n%s\ntail\n" % (mx.RUNS_BEGIN, mx.RUNS_END)
+        other = "head\n%s\n| c |\n%s\ntail\n" % (mx.RUNS_BEGIN, mx.RUNS_END)
+        self.assertEqual(mx.comparable("notes/README.md", text.encode()), b"head\n\ntail\n")
+        self.assertEqual(mx.comparable("notes/README.md", text.encode()),
+                         mx.comparable("notes/README.md", other.encode()))
+        self.assertNotEqual(mx.comparable("cases/a.toml", text.encode()), mx.comparable("cases/a.toml", other.encode()))
+
+    def test_this_platform_has_a_tree_on_windows_and_linux(self):
+        p = mx.this_platform()
+        if os.name == "nt":
+            self.assertEqual(p, "windows")
+        elif sys.platform.startswith("linux") and mx.platform.machine().lower() in ("x86_64", "amd64"):
+            self.assertEqual(p, "linux")
+        else:
+            self.assertIsNone(p)
+        self.assertEqual(mx.platform_block()["os"], p or sys.platform)
 
     def test_readme_paths(self):
         text = "Open `cases/a.toml`, then `runs/<id>/fields` and `../../docs/x.md`; not `p` or `meshes/*`. `notes/b.md`."
@@ -70,6 +99,61 @@ class Committed(unittest.TestCase):
     def test_the_committed_examples_are_fresh(self):
         problems = mx.check(mx.EXAMPLES)
         self.assertEqual(problems, [])
+
+    def test_both_committed_trees_are_fresh_and_share_their_inputs(self):
+        # ADR 0150: each tree's own check, the platform it was built on, and the inputs it shares with the Windows tree
+        self.assertEqual(mx.check_trees(), [])
+
+    def test_a_linux_tree_out_of_step_is_reported(self):
+        def placeless(problems):
+            # copies outside the repository cannot resolve the notes' `../../` paths into it (ADR 0150 amendment 1)
+            return [p for p in problems if "names `../../" not in p]
+
+        with tempfile.TemporaryDirectory() as d:
+            roots = {t: os.path.join(d, os.path.basename(r)) for t, r in mx.TREES.items()}
+            for t, r in mx.TREES.items():
+                shutil.copytree(r, roots[t])
+            self.assertEqual(placeless(mx.check_trees(roots)), [], "the unchanged copies")
+            lin = roots["linux"]
+            man = mx.read_json(os.path.join(lin, "manifest.json"))
+            run = man["projects"]["quick-start"]["runs"][0]
+            # a case edited in the Windows tree only (its own run is then stale too)
+            with open(os.path.join(roots["windows"], "quick-start", run["case"]), "a", newline="\n") as fh:
+                fh.write("# edited after the Linux build\n")
+            # a note line that only the Linux tree has, outside the generated run table
+            with open(os.path.join(lin, "wind-tunnel", "notes", "README.md"), "a", newline="\n") as fh:
+                fh.write("\nA line only the Linux tree has.\n")
+            # an input the Windows tree does not have
+            with open(os.path.join(lin, "quick-start", "cases", "extra.toml"), "w", newline="\n") as fh:
+                fh.write("# extra\n")
+            # the manifest says Windows, and a run names a Windows path
+            man["platform"]["os"] = "windows"
+            with open(os.path.join(lin, "manifest.json"), "w", newline="\n") as fh:
+                json.dump(man, fh, indent=2)
+            rpath = os.path.join(lin, "quick-start", "runs", run["run"], "run.json")
+            rec = mx.read_json(rpath)
+            rec["case_dir"] = "E:\\x\\example-projects-linux\\quick-start\\cases"
+            with open(rpath, "w", newline="\n") as fh:
+                json.dump(rec, fh, indent=2)
+            problems = placeless(mx.check_trees(roots))
+        joined = "\n".join(problems)
+        self.assertIn("example-projects-linux/quick-start/%s differs from example-projects/quick-start/%s"
+                      % (run["case"], run["case"]), joined)
+        self.assertIn("example-projects-linux/wind-tunnel/notes/README.md differs", joined)
+        self.assertIn("example-projects-linux/quick-start/cases/extra.toml: not an input", joined)
+        self.assertIn("built on windows x86_64, expected linux x86_64", joined)
+        self.assertIn("case_dir 'E:\\\\x\\\\example-projects-linux", joined)
+        self.assertNotIn("missing (ADR 0150)", joined)
+
+    def test_a_rebuild_writes_only_the_tree_of_its_platform(self):
+        other = "linux" if mx.this_platform() == "windows" else "windows"
+        with self.assertRaises(SystemExit) as e:
+            mx.resolve_tree(other, None)
+        self.assertIn("build it there", str(e.exception))
+        if mx.this_platform() is not None:
+            self.assertEqual(mx.resolve_tree(None, None), (mx.this_platform(), mx.TREES[mx.this_platform()]))
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(mx.resolve_tree(None, d), (None, os.path.abspath(d)))
 
     def test_a_tampered_copy_is_reported(self):
         with tempfile.TemporaryDirectory() as d:

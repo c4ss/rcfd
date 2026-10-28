@@ -1,0 +1,15 @@
+{
+  "id": "r-20261028T220207-b94d",
+  "case": "cases/cylinder-re200.toml",
+  "case_snapshot_hash": "fnv64:6efee91c132380cf",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-28T22:02:07.721590206Z",
+  "case_source": "/src/example-projects-linux/wind-tunnel/cases/cylinder-re200.toml",
+  "case_dir": "/src/example-projects-linux/wind-tunnel/cases"
+}
