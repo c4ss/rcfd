@@ -221,6 +221,33 @@ deviation and no substitute is run without an amendment.
   (by cell count; its limit is the clean limit L3 on M_hf at t = 3, computed in Rust with the same definition, cross-checked
   against the script on that arm), and an ignored heavy test of the accepted workaround.
 
+## Amendment 1 (2026-10-28, before any run of DG1 or E1): the pressure-lag spectral radius with two correctors
+
+Seen before this amendment: S0, RU, D1 (R64, U3) and the metrics of R64, R128, B1, B11, RU and U1-U5; B2 and B2b diverged
+(steps 19 and 30). Nothing registered above changes. Added, because the case path enables the ADR 0073 pressure-lag check only
+with one corrector (`sim.rs`: `n_correctors == 1`) while the default PISO has two:
+
+* **Harness.** `crates/rcfd-api/tests/w48t_cylinder_spokes.rs`: the committed case with an arm's overrides is built by
+  `Simulation::new`; its geometry (`sim.geom`) and initial cell fields (`ux`, `uy`, `p`) seed a `PimpleSolver` with the case's
+  conditions (cylinder velocity fixed 0; far field `Freestream` for velocity and pressure, U_ref (1, 0, 0), p 0) and the
+  settings `rcfd-api` builds for this case (`PimpleSettings::piso(0.01)`, `linear_upwind`, `amg_pressure` above 2000 cells,
+  the arm's correctors / outer iterations / relaxation), plus `pressure_lag_check = LagCheck { start: 1, every: steps per unit
+  time, iterations: 60, action: Warn }` (an estimate does not change the solution: it runs on copies of the step's matrices).
+* **E1 (replica).** 64 x 48, dt 1/16: after 16 steps the harness's p and u equal `Simulation::step`'s bit for bit. A miss is a
+  deviation: DG1 is then reported as a close replica with the measured largest relative difference.
+* **DG1 (prints).** Run to t = 1 (or until the guard stops it); printed: rho and the radius and angle of the leading mode's
+  largest entry at every estimate (step 1 and t = 1), the maximum and mean pressure iterations per step (`StepInfo::p_iters`;
+  the cap is 3000 per corrector). Arms: G64 (64 x 48, 1/16), G128 (128 x 96, 1/32), G256x48 (256 x 48, 1/64), G64x256
+  (64 x 256, 1/64, estimates every 16 steps), G256 (256 x 256, 1/64), G256s (256 x 256, 1/256), G256g (256 x 256, grading
+  10.88, 1/64), G256c4 (G256 with 4 correctors), G256p2 (G256 with PIMPLE, n_outer 2, alpha_u = alpha_p = 0.9).
+* **Reading rule.** The ADR 0073 pressure-lag mechanism, extended to two correctors on this mesh, is **supported** if for every
+  DG1 arm whose `rcfd run` twin (R64, R128, B1, B2b, R256, B4c, B3, B8b, W1) is classified, `rho(step 1) >= 1` exactly when the
+  twin is spoky or diverged; **rejected** if a clean twin has `rho >= 1` or a spoky/diverged twin has `rho < 1` at both
+  estimates.
+
+A run that the guard stops before t = 1 has no metric; it is classified **diverged**, which fails "clean" (a reading of L3, not a
+change of it).
+
 ## Not changed by this job
 
 Solver numerics, defaults, schema, the Studio and the render core (a display fix only if D1 fails and the fix is small),
