@@ -1,7 +1,8 @@
 # ADR 0144: Wave 48J, the Mesh / Run toggle and a mesh preview that follows the case editor
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
-first; what had run before is listed under "What I already knew"). Job 48J, the maintainer's answers to the questions
+first; what had run before is listed under "What I already knew"); amendments 1-5 before their runs; results in the
+addendum (one known miss, J3b, with its change checked by J3c); not yet accepted by the maintainer. Job 48J, the maintainer's answers to the questions
 of [ADR 0138](0138-wave48g1-mesh-preview-from-case.md) (the mesh preview of a case), on main e11c656 (the four 48G jobs,
 ADRs 0138-0141, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed
 here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
@@ -302,6 +303,100 @@ runs had ascending suffixes. A set-up defect, not a double start: a throwaway di
 made one run per click in 26 of 26 attempts. Corrected (registered here, before the corrected run): the new run is the
 run id that was not there before the click. Limits and controls unchanged.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a5dd4bf5202a803c8`. Commits: registration 0922e73 (on main e11c656); amendment 1 7b1d532;
+amendment 2 b030117; main with 48H merged e38ef9c; amendment 3 ddd96d4; main with 48I merged 0d547c2; amendment 4
+392d9d7; amendment 5 f5a3cf3; this addendum. Every run: release, `--test-threads 1`, `--nocapture`, output to files,
+this host (Windows 11,
+16 threads, about 30-40 GB free; other agents built at the same time), target folder of this job; `rcfd`, `rcfd-runner`
+and `fake-claude` built from the same commit as the tests. GPU checks on the five adapters of ADR 0125 step 0 (NVIDIA RTX
+5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); none took the SKIP branch.
+
+Registered runs: the eight files of the registration on 0922e73 (J3b failed there: amendment 1); J3b again on 7b1d532
+(missed: amendment 2); then everything once more on the final code f5a3cf3 (after amendment 5): the whole `rcfd-studio` suite (J14, which
+holds J1-J13, J15, J18 and ADR 0141's amended tests), J3b's known miss with `--ignored`, `rcfd-api`'s J16 and J14 tests,
+`rcfd-mcp`'s `example_projects_w48h` (J17), `workspace_graph` and the licence check. The table gives the first registered
+run of each check; the final run's numbers follow it where they differ in kind.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| J1 | (a)-(k) as registered; (j) the same text within 5 s, held 0.5 s | (a)-(k) as registered; (j) `Run <id> failed before writing its first stored snapshot: test failure.` before and after the round trip | pass |
+| J1 controls | the run still in the viewport after Mesh; no re-explanation: not back | run always wins: viewport run still the selected run after the toggle to Mesh; `no_reexplain`: after the round trip the viewport kept ADR 0140's `... was started without storing fields, so there is nothing to show.` | fail as required |
+| J2 | (b), (d) 5.0 s; (a), (c) Mesh; (e) "save it first" | run 1 selected and shown on the Run side 0.067 s after the click, run 2 0.141 s; Mesh with the preview after the case click, run 1 still selected; (e) typed only: not refused (`None`); committed: `cases/live.toml has unsaved edits: save it first (Case > Save); a run uses the file on disk` | pass |
+| J2 control | no switch within 5.0 s of the queued run | Mesh, no run in the viewport, 5.003 s | fails as required |
+| J3 | one build, 0.50-0.75 s after the last keystroke; 320 cells from the editor; no build in 1 s idle | one build (of the editor's text) 0.501 s after the last keystroke; 320 cells from the editor; none more | pass |
+| J3 control | at least 2 builds | 2 | fails as required |
+| J3b | (registered) the frame at the asked time asks for the build | 0922e73: the frame drawn at the reported 483.33 ms came 16.7 ms early (egui shortens the delay by its frame time) and asked for no build: amendment 1. 7b1d532 (amendment 1's chain): build asked 0.5009 s after the keystroke, but after 44 frames drawn back to back with delay 0, more than 3 | **miss**: `j3b_..._known_miss`, ignored, limits intact (amendment 2) |
+| J3c | (amendment 2) delay at most 500 ms; the first frame at it asks for the build; 0.50-0.75 s | the frame after the keystroke asked for the next after 499.998 ms; the first frame drawn then asked for the build, 0.504 s after the keystroke (final run: 499.999 ms, 0.503 s) | pass |
+| J4 | A never after B; B within 2 s; >= 1 discarded; <= 2 threads; A >= 0.5 s | A applied after B was typed in 0 drains; B shown 0.114 s after its request; 1 discarded; at most 2 threads; A's thread 3.204 s | pass |
+| J4 control | A applied | in 2 drains (A's thread 3.305 s) | fails as required |
+| J5 | exact messages; kept and stale; no build (a, b), build reached (c); drawn; (d) not stale | (a) `cases/cavity.toml: mesh.nx: '1e' is not a whole number`; (b) `cases/cavity.toml: mesh.nx: 0 is below the minimum 1`; (c) `cases/cavity.toml: mesh.file: <project>\cases\missing.msh: io error: The system cannot find the file specified. (os error 2)`, one mesh build; (a)-(c) the 256-cell mesh kept (same `Arc`, no upload), stale; settings and file unchanged; (a) drawn: message, `Stale: the picture is the last mesh that built: the current text does not build (above).`, `stale`; (d) 192 cells from the editor, not stale, nothing drawn | pass |
+| J5 control | nothing shown | the viewport's surface gone after (a) | fails as required |
+| J6 | exact texts; 5 s; no build; kept; show anyway without a rebuild | (a) the cells message 0.006 s after its request, no build, kept; `cases/tall.toml: mesh.nx: 1000000 is above the maximum 100000`, no build, kept; (b) `cases/hex.toml: mesh.file <project>\cases\../meshes/big.msh is 20,000 bytes, more than the preview limit of 10,000`, no build, kept; (c) `cases/c4.toml: the surface has 160 triangles, more than the preview limit of 100 (uploading it pauses the window)`, the 4 x 4 kept; shown anyway: 80 cells, no request, no build | pass |
+| J6 control | ready with the file's 20,000 cells | ready, 20,000 cells, no build of the text | fails as required |
+| J7 | the save's bytes = the preview's; `Simulation::new`'s mesh; the run's mesh | the save's bytes fnv64:f7ff6501986ae5dd (17,476 bytes) = the bytes built; mesh 6fe5fc840816b25b (81176da887c0f68b before the edit) = `Simulation::new` of the bytes against `cases/` (hash, counts, patches, surface bit for bit) = the run's (exit 5, the store's surface bit for bit) | pass |
+| J7 control | base `.` does not build | `mesh.file: .\../meshes/hex.msh: io error: The system cannot find the path specified. (os error 3)` | fails as required |
+| J8 | one line with the id, 6 of 6; the same through the model, nothing shown | 6 of 6, e.g. `cases/cavity/case.json: not a case file: this is a benchmark descriptor (id "cavity") (the reference data and tolerances of a validation case, read by rcfd cases), which rcfd run refuses too; Case > New case from example... makes a case file`; through the model the same, nothing shown | pass |
+| J8 controls | located diagnostics; >= 2 lines; >= 7 lines | `cases/bad.json: mesh.nx: expected integer, got "abc"`; 8 lines; ADR 0138's message 8 lines | as required |
+| J9 | 30 s; 100 cells, 2D, the file's mesh, Mesh | previewed 0.012 s after the call: 100 cells, 2D, the file's mesh hash, installed, Mesh | pass |
+| J9 controls | the preview stays; not opened, side stays | before the change: the editor on `cases/second.toml`, the preview on `cases/first.toml`; unsaved edits: the preview on `cases/first.toml`, side Run | fail as required |
+| J10 | median <= 8 ms, max <= 250 ms; set-up | 1,147 frames over 7.55 s, median 1.248 ms, max 7.5 ms; drafts `501`, `502`, `503`, `504`; 4 builds; the last 3.56 s; at most 2 threads | pass |
+| J10 control | a frame > 250 ms | max 3,655.7 ms | fails as required |
+| J11 | (a)-(e) | both disabled with the two reasons drawn on hover; a click on the disabled Run refused; Mesh only with a case; both with a run, its caption drawn; the clicks switch the panel | pass |
+| J12 | byte-identical after each step, 5 adapters | 20 of 20 equal (Mesh 461 x 313, Run 531 x 328; uploads 1, 2, 3, 4) | pass |
+| J12 control | the sides differ | 80,206 pixels on every adapter | fails as required |
+| J13 | ADR 0138 G3, G5 limits at 500 x 500 | G3: 395 frames over 2.35 s (build 2.35 s), median 0.583 ms, max 2.6 ms, control one frame of 2,501 ms; G5: B shown 0.007 s after its request, A's thread 2.125 s, A shown after B in 0 drains, 1 discarded, control 2 drains | pass |
+| J14 | the whole suite and the rest | on f5a3cf3: the whole `rcfd-studio` suite 174 passed, 0 failed, 4 ignored (ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and J3b, the known misses), 358 s; B7 median 0.351 ms (control 13.651 ms); `gate_test.py --jobs 5 -- -p rcfd-studio`: 170 test processes in 41 binaries pass, wall 98.1 s, peak summed working set 3,039 MB, largest time/limit 0.016. On 392d9d7 (the same `rcfd-api` and `rcfd-mcp` code): `rcfd-api` lib 104 passed and 2 ignored as before, `service_tcp`, `tables`, `workflow`, `physics_service`, `mesh_quality` pass, `baseline_hashes` 3 passed and 1 ignored as before; `workspace_graph` 3 passed; THIRD_PARTY_LICENSES.md up to date; clippy (`rcfd-studio` all targets, `rcfd-api` lib and J16, `rcfd-mcp` J17) and `cargo fmt --check` of the three crates clean | pass |
+| J15 | (a), (b) | (a) the editor's folder `<project>/cases`, `validate()` true, no diagnostic; (b) opened, `validate()` true, no diagnostic, the save clean, the saved file loads with `max_iterations = 7` | pass |
+| J15 controls | base `.` | hex: `mesh.file: .\../meshes/hex.msh: io error: The system cannot find the path specified. (os error 3)`; profile: `cases/profile_inlet.toml: tables.inlet_u.file: cannot read table file .\profile_inlet.csv: The system cannot find the file specified. (os error 2)` | fail as required |
+| J16 | (i)-(iii) | (i) text and settings valid, no diagnostic; (ii) the create entry holds `base_dir`, the replayed session valid, `matches` true; (iii) inside valid; outside: error 1004 `path '<temp>\rcfd-api-tests' is outside the sandbox` | pass |
+| J16 control | defaults | without `base_dir`: opened, not valid, `mesh.file: .\../meshes/hex.msh: io error: ...`; the create entry has no `base_dir` key | as required |
+| J17 | E1 with the case's folder; the rest of the file | `example_projects_w48h`: 16 passed, 1 ignored (ADR 0142's G3 crossing-count known miss); E1: the 2 aerofoil and the 8 generator cases open and validate through the editor's calls; E2: by path valid, by text without a base folder not valid at `mesh.file` | pass |
+| J18 | H1, aerofoil branch positive | H1 passes: the projects, runs and snapshots as registered; the 2 aerofoil cases validate in the Studio's editor with no diagnostic, like the 8 others | pass |
+
+**J2 after amendment 5.** The whole-suite run on 392d9d7 and one of two diagnostic reruns failed J2 at its second click
+(amendment 5: the newest run taken in name order). Corrected J2, three runs on f5a3cf3: runs selected and shown on the
+Run side 0.059 / 0.062 s, 0.058 / 0.057 s and 0.050 / 0.049 s after the clicks (the first of them had the order that
+failed before: `...-1fde` sorted before `...-624b`), the control 5.004 s without a switch; and once more in the final
+suite (0.158 / 0.044 s).
+
+**J13, time and memory.** Under `gate_test.py --jobs 5` (one process per test, five at once) G3 took 5.3 s at a peak of
+699 MB and G5 5.4 s at 695 MB, against 32.0 s and 26.9 s at about 2.7 GB each with the 1000 x 1000 box (ADR 0138's
+addendum); the heaviest test of the run is now G10 (58.4 s, 1,911 MB), then J10 (27.6 s, 1,308 MB) and J4 (12.9 s,
+700 MB).
+
+**Baseline and the merged tests.** Before any change of this job, ADR 0141's G1b, G1 control and G4 control failed on
+main e11c656 (What I already knew). With ADR 0141 amendments 2 and 3 (the maintainer's decision, limits unchanged) and
+this job's change they pass: G1b on 0922e73 already passed without its amendment (1 upload, renders 1 at the first frame and 9 at the end), and again with it
+(on f5a3cf3, since the listing: 1 upload, 8 renders; at the listing 0 uploads); the G1 control found no frame of a run within 5.005 s; the G4 control found no reason in the viewport without ADR 0140's text and no strip line within 5.0 s.
+
+**Deviations and notes.**
+1. Amendment 1 read J3b's first failure as a set-up defect (egui shortens a requested repaint delay by its predicted
+   frame time, `context.rs` lines 149-152); its corrected run then missed the frame limit (frames back to back for the
+   last 1/60 s before the debounce ended): amendment 2 keeps that as the ignored known miss with its limits, changes the
+   code (the repaint is asked for egui's frame time later) and registers J3c, which passed.
+2. Earlier tests changed, each registered before its run: ADR 0138's unregistered rebuild test (decision Q2), G3 and
+   G5 at 500 x 500 (ADR 0138 amendment 3, decision Q8), ADR 0141's G1 control, G1b and G4 control (ADR 0141 amendments 2
+   and 3, the maintainer's decision); ADR 0142's E1 known miss un-ignored and renamed, its helper and E2's wording, and
+   H1's aerofoil branch (amendment 3, the maintainer's decision).
+3. Amendment 5: J2 (passing in its registered run) failed in the whole-suite run and once in two reruns, at the second
+   click; the two runs of each failing project were the two clicks' (no double start: a throwaway diagnostic, deleted,
+   made one run per click 26 times). The test's set-up took the newest run in name order; corrected before its rerun.
+4. Amendment 3 changes `rcfd-api` (an opt-in `session.create` parameter) beyond the Studio; without the parameter the
+   service behaves as before (J16's controls; the J14 `rcfd-api` tests and `baseline_hashes` unchanged).
+5. `case_starter::EXCLUDED`'s reason for `channel/profile_inlet.toml` was corrected (its cause, the working folder, is
+   gone; the table not being copied remains).
+6. `scripts/limit_audit.py` hits in the new and changed tests, read: the debug-build skips of J4 and J10 (each with a
+   `SKIP` line; the limits are for release, the gate is release); J10's two hang guards (`elapsed() < WAIT`), not its
+   limits; `j6_control_adr0138_rule_builds_the_file_not_the_text`, a control asserting the pre-change behaviour as a
+   positive fact (the form the heuristic does not recognise, as ADR 0139's controls).
+
+**Not run.** A person at the real window (the checklist); Linux (none of the new tests, J2's and J7's processes among
+them, has run there); debug builds of the new tests (J4 and J10 print `SKIP` there); the workspace gate and
+workspace-wide clippy (run: `rcfd-studio` all targets, `rcfd-api` lib and J16's file, `rcfd-mcp`'s
+`example_projects_w48h`); the rest of `rcfd-api`'s and `rcfd-mcp`'s tests; `cargo deny` (no dependency changed).
+
 ## Not in CI (by hand)
 
 A person at the real window: the toggle's look and its disabled tooltips, the stale line and badge, typing into the
@@ -325,7 +420,9 @@ editor's fields with the preview following (the feel of the 500 ms pause), DX12 
 7. Case > New case from example..., create one: the editor and the Viewport show the new case's mesh.
 8. Copy a `cases/<id>/case.json` of the repository into the project's `cases/` and click it: one line "not a case
    file: this is a benchmark descriptor ...".
-9. Report anything slow, confusing or wrong, with the case, the adapter and what was done.
+9. Open `example-projects/wind-tunnel` and select an aerofoil case (`naca0012-aoa4`): Case > Validate reports no
+   problem (its `../meshes/naca0012-ogrid` is found from the case's folder), and its mesh shows on the Mesh side.
+10. Report anything slow, confusing or wrong, with the case, the adapter and what was done.
 
 ## Questions for the maintainer (not decided here)
 
@@ -346,19 +443,24 @@ editor's fields with the preview following (the feel of the 500 ms pause), DX12 
    `physics.nu` through wall layers, so filtering by key is not safe); a large mesh then builds again for each pause.
    Options: (a) keep; (b) skip the build when the text equals the text of the shown mesh (exact). Recommendation: (b).
 7. The debounce is 500 ms (the range given: 400-800 ms). Accept?
-8. ADR 0141's G4 control has failed on main since ADR 0140 was merged: its premise, that without ADR 0141's explanation
-   the viewport lacks the run's reason, no longer holds (ADR 0140's empty state names it). Options: (a) amend the
-   control to assert that ADR 0141's own text ("failed before writing its first stored snapshot") is absent, limits
-   unchanged; (b) keep it failing as a known miss. Recommendation: (a), by an amendment of ADR 0141.
+8. Decided after the registration: ADR 0141's G4 control is amended (ADR 0141 amendment 3, amendment 4 here).
 9. The toggle's `Run` sits below the toolbar's green Run button. Keep the labels `Mesh` / `Run` (the maintainer's
    wording) or name the toggle's side `Run fields`? Recommendation: keep.
-10. `channel/profile_inlet.toml` (a relative table) cannot be opened in the case editor (ADR 0131 question 3), so its
-    edits cannot be previewed; the preview resolves the editor's text against the case's folder, the editor's save
-    path against `.`. Recommendation: settle ADR 0131 question 3 (the editor's service with the case's folder as base).
+10. Decided after the registration: the case editor resolves relative paths against the case's folder (amendment 3).
+11. The case starter (ADR 0139) leaves out `channel/profile_inlet.toml` because it does not copy its table. With the
+    editor now reading tables from the case's folder, the starter could offer it by copying both files; the table would
+    then be listed in the Project panel too (`Project::cases()` lists every file under `cases/`). Options: (a) keep it
+    out; (b) offer it, copying the table, and list only `.toml` / `.json` files as cases. Recommendation: (b).
+12. Run ids of the same second sort by their random suffix (J2's set-up defect, amendment 5), so "the newest run by
+    name" can be wrong in any tool or test that assumes it. Options: (a) keep, and order by the run's `created` time
+    where order matters; (b) add sub-second digits to new run ids (an ADR 0130 contract change). Recommendation: (a).
 
 ## Files
 
 This ADR; `crates/rcfd-studio/src/view_toggle.rs` (new); hunks in `crates/rcfd-studio/src/{lib,studio,preview,
-preview_ui,viewport_ui,case_edit,ui,case_starter,quick_run}.rs`; tests `crates/rcfd-studio/tests/{live_preview_j,
-live_preview_cost_j,live_preview_gpu_j,live_preview_run_j}.rs` and `tests/lj/mod.rs` (new); changed tests
-`crates/rcfd-studio/tests/{preview_g1,preview_cost_g1,oneclick_g4}.rs`; ADR 0138 amendment 3, ADR 0141 amendment 2.
+preview_ui,viewport_ui,case_edit,ui,case_starter,quick_run}.rs`; `crates/rcfd-api/src/service.rs` (`session.create`'s
+`base_dir`) and `docs/service-protocol.md`; tests `crates/rcfd-studio/tests/{live_preview_j,live_preview_cost_j,
+live_preview_gpu_j,live_preview_run_j}.rs`, `tests/lj/mod.rs` and `crates/rcfd-api/tests/service_base_dir_w48j.rs` (new);
+changed tests `crates/rcfd-studio/tests/{preview_g1,preview_cost_g1,oneclick_g4,oneclick_e2e_g4,example_projects_h}.rs`
+and `crates/rcfd-mcp/tests/example_projects_w48h.rs`; ADR 0138 amendment 3, ADR 0141 amendments 2 and 3, a note in ADR
+0142.
