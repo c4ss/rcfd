@@ -229,8 +229,77 @@ manifest (no compile). Limits are unchanged.
     (48E, ADR 0134) are ignored `*_known_miss` tests naming their sub-wave. The tutorials item is ignored with the reason that
     rewriting or keeping them is the user's call at the parity step (this ADR).
 
+## Addendum: 48B results (2026-10-28, branch `worktree-agent-a3d28c7c2cfa896cd`, release build on the gate host)
+
+Decisions applied as accepted: W48-1 (b), W48-2 (a) with eframe 0.36.2 (amendment 1), W48-3 (a), W48-9 (a). Commits 5cbebb0
+(step 0, amendment 1) to 945e143 on main 15b00ef. Two set-up details were changed in code after amendment 1 and before any test ran,
+both in 61690d0: `layout::to_json` writes positions that are not laid out (NaN, written as `null`) as 0, as `from_json` reads them, so
+a saved layout reads back to the same text (B8 compares the text); `Studio::save_case` refuses a clean editor ("nothing to save"),
+which is how B5's control leaves the file untouched (a save of an unedited case would rewrite it as canonical TOML, see below). All
+tests ran once, in release, `--test-threads 1`; B6 was run three times in all. The workspace gate was not run (the maintainer runs it).
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| B1 | lists equal `cases()`, `meshes()`, `runs()` (8) and `skipped` (1, with its reason) | equal; 3 cases, 2 meshes, 8 runs (2 each queued, running, finished, failed), skipped 1: the half-created run, "read .../runs/r-20261028T120000-beef/run.json: The system cannot find the file specified" | pass |
+| B1 control | `run_ids()` lists 9 | 9 | fails as required |
+| B2 | `validate()` 0 issues; name and version as entered | 0 issues, "Fan study", "rcfd 0.1.0" | pass |
+| B2 control | located error | ".../rcfd-project.json: already exists"; the first manifest kept | as required |
+| B3 newer | located message, nothing written | ".../rcfd-project.json: schema_version 2 is newer than supported 1"; every file byte-equal before and after; the model closed the project | pass |
+| B3 v0 | migrated in memory, "unsaved migration" shown | `migrated_from` 0, name from `title`; the notice is in the status message and drawn in the Project panel; manifest and every file byte-equal | pass |
+| B4 | 200 frames, no panic, one instance per panel | 200 frames (100 dark, 100 light), project and case open, every panel hidden, shown and floated in turn; at most one instance after every frame, exactly one after show and float; at least 17 shapes per frame | pass |
+| B4 control | duplicated panel fails the instance check | `count` 2; `from_json`: "layout lists a panel twice" | fails as required |
+| B5 | every leaf reachable and its default parses; refusals name the path; save round trip | 568 leaves, 476 defaults parsed (the rest text, lists or no default); "mesh.nx: 'abc' is not a whole number", "mesh.nx: -4 is below the minimum 1", unknown setting and empty entry name refused with their path, value unchanged; saved through the worker (base hash checked), the file parses, its content hash equals the settings', a fresh editor reads the edited values | pass |
+| B5 control | refused edit leaves the file hash unchanged | service refusal "mesh.nx: invalid value at 'mesh.nx': expected integer, got \"abc\""; editor clean; save refused ("nothing to save"); hash fnv64:a1968111d28ff100 before and after | as required |
+| B6 | report within 2.0 s; clean reloads; dirty enters conflict | clean: 0.334, 0.314, 0.294 s, reloaded (nx 16 -> 24), clean; dirty: 0.310, 0.320, 0.308 s, conflict with the disk bytes, the edit (nx 10) kept; then "keep my edits" and a save write nx 10 | pass |
+| B6 control | watcher off: no report after 5 s | no report after 5.0 s (3 of 3), editor unchanged | fails as required |
+| B7 | median of 100 frames <= 8 ms | median 0.327 ms (min 0.311, p90 0.480, max 0.768), 500 runs listed, 17 rows built per frame | pass |
+| B7 control | 1 ms per built row exceeds 8 ms | median 17.665 ms, 17 rows | fails as required |
+| B8 | round trip exact | theme, recent list (10, most recent first, no duplicate) and layout text equal; saving the loaded preferences writes the same 3,088 bytes | pass |
+| B8 controls | corrupt file: default layout and a message, no panic | garbage: ".../studio-prefs.json: invalid type: integer `12`, expected a string at line 1 column 30; default preferences used"; duplicated panel: "...: layout: layout lists a panel twice; default layout used", theme and recent list kept | as required |
+| B9 | one named test per item, passing or an ignored `*_known_miss` | `parity_open_and_save_a_case` and `parity_settings_editor_with_schema_validation` pass; live monitors (48D), 2D field view (48C), assistant access (48E) and the tutorials (the user's call) are ignored `*_known_miss` with their reason | pass |
+
+Also run: the ported tests M1 (worst inverse relative error 4.219e-15), M2, M3, M4, M6, `monitors_merge_is_idempotent_and_incremental`,
+`layout_keeps_exactly_one_instance_per_panel` (Plots and Chat stand in for the frozen GUI's Monitors and Assistant), and B6's extra
+case "a save over a changed file is a conflict and writes nothing": pass. `workspace_graph` 3 passed with `rcfd-studio` at layer 9; a
+throwaway layer 5 for it fails `layering_matches_architecture_doc` ("rcfd-studio must not depend on rcfd-api"), restored.
+`cargo clippy --workspace --all-targets --locked -- -D warnings` (Rust 1.99) is clean, `rcfd-gui` included; `cargo fmt --check` of
+`rcfd-studio` and `rcfd-cli` is clean; `scripts/third_party_licenses.py --check` up to date.
+
+No known miss. Reported, not limited (ADR 0130 asks for the first Studio build with `--timings`): release build of the Studio and its
+tests in an empty target folder, `-j 6` on 16 threads, nothing else building: 2 min 00 s wall clock, 256 units, 658 s summed unit
+time; longest units wgpu-core 40.2 s, naga 39.9 s, egui 36.7 s, rcfd-mesh 31.1 s, vello_cpu 29.8 s, rcfd-fv 25.3 s, rcfd-api 22.6 s,
+read-fonts 21.1 s, image 20.4 s, wgpu-hal 19.4 s; release target folder 1.2 GB.
+
+Deviations and notes:
+* `deny.toml` gets an exception for `epaint_default_fonts` (amendment 1); `font-types` is held at 0.12.6 (two-week rule);
+  `rcfd-studio` lists `wgpu =30.0.1` itself only to pin the back ends (amendment 1). `egui_plot` is in the build although only the
+  Plots panel uses it (drawing a monitor store, as M6 needs); 48D fills the store (ADR 0133 Placement expects it here).
+* A save writes `Case::to_toml` of the whole settings tree, as the frozen GUI did: the 23-line cavity case (419 bytes) is saved as 15,898 bytes
+  with every default written out, and comments and order are lost.
+* The editor's in-process service has no sandbox root, and the case text is parsed with base folder `.` (the service's rule for
+  text); a case that names a relative data file (a lookup table) resolves it against the working folder, not the case's folder.
+  Opening by path would fix this but makes the service read the file on the UI thread.
+* Docs touched beyond the Files list: `docs/glossary.md` (the Studio entry said "It has no window yet") and `docs/releasing.md` (what
+  the 1.90 job proves).
+* M5 and M7 are not ported (amendment 1 item 1).
+
+Not run: a real window (DX12, Vulkan, WARP; resizing, high-DPI, keyboard focus), the native `rfd` dialogs and the by-hand
+view-and-report checklist; `cargo deny` (not installed; licences checked from `cargo metadata`); the CI `min-toolchain` job
+(`cargo check --workspace --all-targets --locked --exclude rcfd-studio` on 1.90.0; 1.90 is not installed here); a Linux build
+(the `x11` and `wayland` features of eframe and `rfd` 0.15.4 on Linux, as `rcfd-gui` already uses them, not checked); the full gate;
+the `rcfd-render` GPU tests (unchanged code, and `cargo tree` shows the same wgpu features).
+
+Questions for the maintainer:
+1. Is the `deny.toml` exception for `epaint_default_fonts` (OFL-1.1, Ubuntu-font-1.0) accepted?
+2. Should a save keep the user's file text (comments, only the changed keys), which needs a TOML editing crate the ADR does not
+   name, or is the canonical full TOML of the frozen GUI acceptable?
+3. Should relative data paths in an edited case resolve against the case's folder (a change in `rcfd_api`'s `session.create` for
+   text with a base folder), or is the working-folder rule acceptable until 48D starts runs through the runner?
+4. Move to eframe 0.37.0 once it passes the two-week rule (2026-10-29), or stay on 0.36.2 for wave 48?
+
 ## Files
 
 `crates/rcfd-studio/` (new), root `Cargo.toml` (member), `Cargo.lock`, `crates/rcfd-cli/tests/workspace_graph.rs`,
 `docs/architecture.md`, `.github/workflows/ci.yml` (only with W48-1 (b)), `README.md` (toolchain line), `THIRD_PARTY_LICENSES.md`
-(regenerated by `scripts/third_party_licenses.py`), this ADR.
+(regenerated by `scripts/third_party_licenses.py`), this ADR. Also touched (amendment 1, addendum): `deny.toml`, `scripts/third_party_licenses.py`,
+`docs/glossary.md`, `docs/releasing.md`.
