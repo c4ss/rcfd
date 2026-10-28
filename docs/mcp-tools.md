@@ -95,7 +95,7 @@ entry.
 `rcfd-mcp --project <dir>` adds 17 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
 folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8). Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
-`clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH; the run tools
+`clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only; without `--root`, `--project` also confines the existing tools' file access to the project); the run tools
 also need `rcfd-runner` and `rcfd` in the same folder as `rcfd-mcp` (as `cargo install` or a build directory gives).
 
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
@@ -108,16 +108,16 @@ are paged, series decimated, files read in pages; a residual set or image over t
 | Tool | Access | Result |
 |---|---|---|
 | `project_info` | read | `name`, `root`, `schema_version`, `created`, `solver_version_created`, `migrated_from`, `counts` {`cases`, `meshes`, `designs`, `notes`, `runs`, `skipped_runs`}, `runs_by_state` {state: count}, `issues` [{`path`, `message`}] (at most 50), `issues_total` |
-| `list_runs` | read | `runs` [{`id`, `case`, `created`, `state`, `step`, `time`, `metrics` {name: number}}] oldest first, `total`, `offset`, `next_offset` (null on the last page), `skipped` [{`path`, `message`}], `skipped_total`; arguments `state`, `case`, `offset`, `limit` (1-100, default 50) |
+| `list_runs` | read | `runs` [{`id`, `case`, `created`, `state`, `step`, `time`, `metrics` {name: number}}] oldest first (`metrics`: the final report values, `reports` of `metrics.json`; for an older record without it, the numeric top-level entries), `total`, `offset`, `next_offset` (null on the last page), `skipped` [{`path`, `message`}], `skipped_total`; arguments `state`, `case`, `offset`, `limit` (1-100, default 50) |
 | `run_status` | read | `run`, `case`, `created`, `solver_version`, `settings`, `status` {`state`, `step`, `time`, `pid`, `updated`, `reason`?, `exit_code`?}, `last_residual` (the last line of `residuals.jsonl` or null), `events` (the last `events` lines, default 10) |
 | `read_metrics` | read | `metrics` {run id: `metrics.json` or null}, `omitted` [run ids over the size budget]; 1 to 50 runs |
 | `read_residuals` | read | `run`, `lines`, `skipped_lines`, `max_points`, `decimated`, `unknown_names`, `series` {`residuals.<eq>` or `monitors.<name>`: {`x` steps, `y` values}}; each series at most `max_points` (default 200, at most 2000) keeping first, last and each bucket's minimum and maximum (ADR 0025 M3); over the budget `series_names`, `path`, `bytes` instead of `series` |
 | `field_summary` | read | `run`, `field`, `unit`, `location`, `precision`, `snapshot` {`index`, `step`, `time`, `upper`?, `weight`?}, `interpolated`, `n`, `finite`, `min`, `max`, `mean` (cell-volume weighted for cell fields: `weighting` `cell_volume`, else `none`); `step` or `time` with `pick` `nearest` (default), `floor` or `linear` (time only); default the last snapshot |
 | `render_field` | read | an image block (PNG) and the text {`run`, `field`, `snapshot`, `interpolated`, `min`, `max`, `width`, `height`, `png_bytes`}; or, over the budget, the text with `path` and `note`. Cell fields of 2D (one cell layer) meshes only; same renderer and options as `render_image` |
-| `compare_runs` | read | `baseline` (the first id), `runs` [{`id`, `case`, `state`, `step`, `time`, `residual_lines`}], `metrics` {name: {run id: value}}, `differences` {name: {run id: value minus the baseline's}}, `metrics_total`, `metrics_omitted`; 2 to 10 runs |
+| `compare_runs` | read | `baseline` (the first id), `runs` [{`id`, `case`, `state`, `step`, `time`, `residual_lines`}], `metrics` {report name: {run id: value}} (as in `list_runs`), `differences` {name: {run id: value minus the baseline's}}, `metrics_total`, `metrics_omitted`; 2 to 10 runs |
 | `list_changes` | read | `token`, `changes` [paths], `total`, `truncated`, and `since` when given; call without `since` to get a token (`.rcfd/` is not watched) |
 | `read_project_file` | read | `path`, `hash` (of the whole file; the `base_hash` for edits), `size`, `offset`, `text`, `next_offset` (null at the end); pages of at most 32 000 bytes |
-| `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; `canonical`: the whole case written as `design_create_variant` writes it), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run` |
+| `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; an edit that cannot be placed in the file's own lines, such as a value written over several lines, is refused with 1003 and nothing is written), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run` |
 | `write_note` | write_files | `path`, `created`, `old_hash`, `new_hash`; under `notes/` only; no `base_hash` means "create, the file must not exist" |
 | `start_run` | execute | `run`, `case`, `state`; arguments `case`, `set` [`path=value`], `priority`, `threads`, `mem_mb`; starts the project's `rcfd-runner` when none is alive |
 | `pause_run`, `resume_run`, `cancel_run` | execute | `run`, `requested`, `state`; 1002 for a run that already ended |

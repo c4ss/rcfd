@@ -366,6 +366,23 @@ confirmed. Written at main 64732bb before any code of these changes. Set-ups and
    written. **Control:** the single-line edit of F5 is still written. The canonical form is no longer written; `form` is always
    `minimal`.
 
+## Addendum 2: results of amendment 3 (2026-10-28, on main 64732bb, debug builds on the gate host)
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| M1 | `reports.lid_drag` bit-equal to the last `y` of `output/monitors.json`; existing keys kept; `list_runs`, `compare_runs` give exactly `{lid_drag}` | both F3 runs: -1.025564180656281e-2 and -1.0255874488778053e-2, bit-equal; all 7 earlier keys present, `reports` has 1 entry; `list_runs` and `compare_runs` metrics exactly `{lid_drag}`, difference bit-exact | pass |
+| M1 control | without `reports`: the numeric top-level entries | `{exit_code, steps, time}` | as required |
+| M1 runner tests | pass as before | unit 7, `contract_w48a` 2, `runner_w47b` 13 (S5 ignored), `runner_wfix` 6, `no_window_scan` 1 | pass |
+| R1 | `--project` without `--root` resolves in the project from another working folder; `../x` 1004 | `create_case {path: cases/cavity.toml}` succeeds; `../x.toml` 1004 | pass |
+| R1 control | explicit `--root <other>` is used | the same `create_case` fails | as required |
+| E1 | a multi-line value refused with 1003 naming the setting, hash unchanged, no log line | refused, message names `boundaries.lid.velocity_value` and says to edit by hand; hash unchanged; no `.rcfd/edits.jsonl` | pass |
+| E1 control | the single-line edit is written | written, form `minimal` | as required |
+
+F1 to F13 re-run on this commit: F1 2 passed; F2 to F5 and F8 to F10, F12 pass; F3 19 of 19 shapes; F11 finished at step 30, cancelled
+0.153 s after `cancel_run`; F13 passes. The solver was not changed (no file of `rcfd-api` or `rcfd-cli`), so its outputs are
+bit-identical. `docs/mcp-tools.md` describes the three changes. Still open: the marketplace owner name ("rcfd maintainers" is a
+placeholder). Still not run: F6, F7 (Studio), the Not-in-CI items, the gate, Linux.
+
 ## Files
 
 `crates/rcfd-mcp/src/{lib,main}.rs`, new `src/project.rs` and tests, `crates/rcfd-mcp/Cargo.toml`, `crates/rcfd-project/src/atomic.rs`,
