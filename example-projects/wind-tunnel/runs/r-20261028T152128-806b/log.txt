@@ -1,0 +1,5 @@
+E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-806b\case.snapshot: ok, 8000 cells
+8000 cells, algorithm simplec
+checkpoint written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-806b\output\restart.rcfd
+results written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-806b\output
+finished after 740 iterations/steps (converged: residual targets met: res_u 9.934e-7 < 1.000e-6, res_p 3.820e-7 < 1.000e-6)

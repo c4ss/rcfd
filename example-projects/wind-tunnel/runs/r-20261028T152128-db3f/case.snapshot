@@ -1,0 +1,55 @@
+# Variant of cylinder-re100.toml: the same cylinder at Re = U D / nu = 200 (nu halved, everything else equal) (ADR 0142).
+# Units: diameter D = 1 m, free stream U = 1 m/s, so time is in convective units D / U.
+# A real cylinder wake becomes three-dimensional near Re 190; this two-dimensional run cannot show that.
+title = "Cylinder in cross-flow, Re 200 (variant of Re 100)"
+
+[mesh]
+# O-grid around the cylinder: 64 cells around, 48 radial cells graded towards the wall, far field at 15 D.
+generator = "cylinder_ogrid"
+nx = 64
+ny = 48
+r_in = 0.5
+r_out = 15.0
+grading = 100.0
+depth = 0.1
+
+[physics]
+nu = 0.005   # Re = 1 x 1 / 0.005 = 200
+
+[initial]
+# Uniform flow plus a sideways push behind the cylinder, as in the Re 100 case.
+velocity_expression_x = "1 [m/s]"
+velocity_expression_y = "0.5 [m/s] * exp(-((x - 1.5 [m])^2 + y^2) / 1 [m^2])"
+
+[boundaries.cylinder]
+velocity = "fixed"   # no-slip wall
+
+[boundaries.farfield]
+velocity = "freestream"
+velocity_value = [1.0, 0.0, 0.0]
+pressure = "freestream"
+
+[solver]
+algorithm = "piso"
+convection = "linear_upwind"
+dt = 0.0625      # a power of two, so 1280 steps land exactly on end_time (ADR 0142)
+end_time = 80.0
+
+[output]
+store_time_interval = 1.0   # one snapshot per D / U, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "p", "vorticity_z"]
+
+[reports.cd]
+type = "force_coefficient"
+patch = "cylinder"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.1   # D x depth
+u_ref = 1.0
+
+[reports.cl]
+type = "force_coefficient"
+patch = "cylinder"
+direction = [0.0, 1.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0

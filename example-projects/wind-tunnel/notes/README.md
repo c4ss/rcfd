@@ -45,6 +45,16 @@ The table is written by `scripts/make_example_projects.py` from the run folders;
 on the machine that made them (see `designs/variants.ledger.jsonl` for every value with its unit).
 
 <!-- generated: runs (scripts/make_example_projects.py) -->
+
+| Case | Run | State | Steps | Wall time | Snapshots | Results (final values) |
+|---|---|---|---|---|---|---|
+| `cases/cylinder-re100.toml` | `runs/r-20261028T152128-d5cb` | finished (finished) | 1280 | 18.4 s | 80 | cd 1.327, cl -0.3034, strouhal 0.1517, cd_mean 1.323, cl_amplitude 0.3091, periods 5 |
+| `cases/cylinder-re200.toml` | `runs/r-20261028T152128-db3f` | finished (finished) | 1280 | 16.4 s | 80 | cd 1.286, cl 0.244, strouhal 0.1751, cd_mean 1.291, cl_amplitude 0.6303, periods 6 |
+| `cases/naca0012-aoa4.toml` | `runs/r-20261028T152128-cb3a` | finished (not_converged) | 2000 | 58.6 s | 10 | cd 0.02536, cl 0.3482 |
+| `cases/naca0012-aoa2.toml` | `runs/r-20261028T152128-78e0` | finished (not_converged) | 2000 | 55.7 s | 10 | cd 0.01888, cl 0.1988 |
+| `cases/step-re800.toml` | `runs/r-20261028T152128-806b` | finished (converged) | 740 | 23.4 s | 19 | p_inlet -0.2276, x_reattach 5.888, x_top_separation 4.652, x_top_reattach 10.42 |
+| `cases/step-re400.toml` | `runs/r-20261028T152128-37c8` | finished (converged) | 429 | 13.4 s | 11 | p_inlet -0.1471, x_reattach 4.248, x_top_separation 3.856, x_top_reattach 5.271 |
+
 <!-- end of generated runs -->
 
 ## Limits (read before using a number)

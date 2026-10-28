@@ -37,6 +37,14 @@ The design ledger `designs/variants.ledger.jsonl` (ADR 0121) holds the parameter
 Written by `scripts/make_example_projects.py` from the run folders; wall-clock times of the machine that made them.
 
 <!-- generated: runs (scripts/make_example_projects.py) -->
+
+| Case | Run | State | Steps | Wall time | Snapshots | Results (final values) |
+|---|---|---|---|---|---|---|
+| `cases/cavity-re100.toml` | `runs/r-20261028T152641-f8c2` | finished (converged) | 121 | 0.6 s | 25 | lid_drag -0.004911 |
+| `cases/cavity-re400.toml` | `runs/r-20261028T152641-97f1` | finished (converged) | 158 | 0.7 s | 32 | lid_drag -0.001609 |
+| `cases/heated-cavity-ra1e3.toml` | `runs/r-20261028T152641-5cc1` | finished (converged) | 339 | 2.0 s | 34 | nu_hot 1.119, q_hot -0.02797 |
+| `cases/heated-cavity-ra1e4.toml` | `runs/r-20261028T152641-3900` | finished (converged) | 278 | 2.1 s | 28 | nu_hot 2.257, q_hot -0.05643 |
+
 <!-- end of generated runs -->
 
 ## Limits

@@ -11,7 +11,7 @@ street); the lift force then oscillates at the shedding frequency f, given as th
   at 15 D (3072 cells), with free-stream conditions on the far field.
 * Solver: PISO, second-order upwind convection, time step 0.0625 D / U, 80 D / U (1280 steps). The start is uniform flow
   plus a sideways push behind the cylinder, so shedding starts within about 40 D / U instead of waiting for round-off.
-* Stored: `ux`, `uy`, `p` and `vorticity_z` once per D / U (81 snapshots), single precision.
+* Stored: `ux`, `uy`, `p` and `vorticity_z` once per D / U from t = 1 (80 snapshots), single precision.
 * Reports: drag and lift coefficients `cd` and `cl` (reference area D x depth), every step.
 
 ## What to click
