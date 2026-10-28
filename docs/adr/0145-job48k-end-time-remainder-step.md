@@ -314,6 +314,9 @@ pressure-lag warnings readable in the Studio, where today every solver warning s
 separate job with its own registration, starting from the three failing assertions (they fail alone, so they are not
 load effects), before the next Studio merge.
 
+Decided 2026-10-28: 3 and 5 as recommended, done in
+[ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md) amendment 3 (checks M9 and M10).
+
 ## Files
 
 This ADR; `crates/rcfd-api/src/sim.rs`; `crates/rcfd-api/tests/end_time_landing_w48k.rs`; `docs/case-schema.md`.

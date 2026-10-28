@@ -2,8 +2,9 @@
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (M1's hover set-up) before its corrected
-run, amendment 2 (M7 (b) a Windows fixture); results in the addendum: every check met its limit, no known miss; not yet
-accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
+run, amendment 2 (M7 (b) a Windows fixture), amendment 3 (two more items after 48K: the step count and solver warnings in
+full, M9 and M10, registered before their runs); results in the addendum: every check met its limit, no known miss; not
+yet accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
 [ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md) (the Mesh / Run toggle and the live preview), and the extra
 scope of [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) question 5. On main ec6a443 (48J,
 ADR 0144, and 48L, ADR 0146, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are
@@ -282,7 +283,8 @@ check had run.
 
 Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
 (M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2); 96b165f (this addendum's first part);
-amendment 2 f208b07; this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files, this host
+amendment 2 f208b07; 16c8ac8 (this addendum through M8); 55e4531 (main with 48K merged); amendment 3 bf33373; then the
+results of amendment 3 below. Every run: release, `--test-threads 1 --nocapture`, output to files, this host
 (Windows 11, 16 threads, 93.6 GB; other agents' work held 50-55 GB in WSL during these runs, so free memory was 1-8 GB);
 target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same commit as the tests. The table
 gives the registered run of each check: `followups_m.rs` on 0bc172f, its corrected run on 7d115fc (M1's control; every
@@ -310,9 +312,24 @@ end).
 | CS (ADR 0139 amendment 2) | as amended | `case_starter_g2` 25 of 25: CS1 10 of 10 (the profile case opens with its folder, valid, 0.005 s); CS2 10 of 10 and `cases/profile_inlet.csv` 251 bytes = `cases/channel/profile_inlet.csv`, 11 files listed; CS2 control 10 of 10 differ (the profile case's save 17,560 bytes); CS5 24 files, 10 offered, 6 excluded, 7 reference, 0 problems, its 6 controls one problem each; CS6 6 of 6 refused; CS7 10 of 10 (`channel with a profile-file inlet: ... 2D, 480 cells, simplec, at most 2000 iterations.`); CS11 12,823 bytes; CS12 10 rows; CS13 8.611 ms (control 215.108 ms) | pass |
 | M8 | the whole suite; `workspace_graph`; clippy; fmt; licences | `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1 --nocapture` on f208b07: 48 test binaries, **187 passed, 0 failed, 4 ignored** (the four known misses: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b), 461 s; against the baseline's 175 passed on 84ee864, the 12 new tests of this ADR. Values of the timing checks in that run, under the memory pressure above: B7 median 0.404 ms (control 13.647 ms); J3 0.505 s; J3c 0.504 s, one frame; J4 B shown 0.091 s; J10 median 0.976 ms, max 5.2 ms (control 3,061.3 ms); J2 0.098 / 0.082 s; ADR 0138 G3 median 0.773 ms, max 3.1 ms; G10 NVIDIA Vulkan 46.1 ms, DX12 39.2 ms. `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean on f208b07; `scripts/third_party_licenses.py --check`: up to date | pass |
 
+**Amendment 3's checks**, on bf33373 (main with 48K merged; `rcfd` rebuilt with 48K's solver; 6.7 GB free at the start):
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| M9 | no proposal; finished at step 10, 10 snapshots, no warning; the count `Exact` and equal to the snapshots | the plan's `set()` empty (the case sets its store); estimate 10, `Exact`; the run finished at step 10 with 10 stored snapshots and no `short_last_step` warning | pass |
+| M9 control | the slack before counts 11 | 11 | fails as required |
+| M10 | one warning longer than 160 characters; in the event list; `warning: <message>` exactly; drawn | the run finished; one `short_last_step` warning, its message 253 characters (`the last step is 2.000e-4 s, 2.00e-2 of the step 0.01 s, because solver.end_time 0.0302 is not a whole number of steps away: the pressure of a much shorter step can be inaccurate (ADR 0145); choose solver.end_time as a whole number of steps of solver.dt`); in the Studio's event list; `event_text` is `warning: ` and that message; drawn in the opened event list | pass |
+| M10 control | cut JSON without the message | `solver {"solver":{"dt":0.00020000000000000226,"dt_proposed":0.01,"end_time":0.0302,"event":"warning","format":"rcfd-status","fraction":0.020000000000000226,"kind":"sho...` | fails as required |
+| M8 again | the whole suite and the rest | on bf33373: 49 test binaries, **189 passed, 0 failed, 4 ignored** (the same four known misses; M9 and M10 the two new), 544 s (5.1 GB free at the start); B7 median 0.375 ms; J3 0.500 s; J3c 0.502 s, one frame; J4 0.101 s; J10 median 1.152 ms, max 10.2 ms; J2 0.158 / 0.089 s; G3 median 1.229 ms, max 10.1 ms; G10 NVIDIA Vulkan 74.8 ms, DX12 73.3 ms (limit 100 ms; 46.1 and 39.2 ms in the first M8 run, not investigated); M4 (b) 0.140 / 0.682 s; M7 (b) 0.083 s; `workspace_graph` 3 passed; clippy and fmt clean; licences up to date | pass |
+
 **Leftover processes** after all runs: none running from this job's target folder (any program, `rcfd.exe`,
-`rcfd-runner.exe` and `fake-claude.exe` among them). M4's control and M7 (b) leave runs queued in their temporary projects,
-with no runner.
+`rcfd-runner.exe` and `fake-claude.exe` among them), checked after the first M8 run and again after the last. M4's control
+and M7 (b) leave runs queued in their temporary projects, with no runner.
+
+**ADR 0145 question 6** (three rcfd-studio one-click tests of ADR 0141 failing on main 0a69af4's code in 48K's scratch
+copy): `oneclick_g4`'s G1 and G4 controls and `oneclick_e2e_g4`'s G1b passed in all three whole-suite runs of this job
+(the baseline on 84ee864, M8 on f208b07 and on bf33373); 48J's merge amended and fixed them (ADR 0141 amendment 3, ADR 0144
+amendment 4).
 
 **Deviations and notes.**
 1. Amendment 1: the M1 control's hover helper drew 5 frames, fewer than egui needs before a first tooltip once the
@@ -343,12 +360,18 @@ with no runner.
     (as ADR 0139's and 0144's controls); in `case_starter_g2.rs` the same five class (iii) controls and two class (iv)
     debug skips (CS13) that ADR 0139 read. None in `starter_run_m.rs`.
 11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed: `rcfd-project`, `rcfd-runner` and the other crates were
-    read, not edited; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` are unchanged.
+    read, not edited; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` are unchanged. The merge
+    of main (55e4531) brought 48K's own files; this job edited none of them.
+12. Amendment 3 came after the first whole-suite run (f208b07); the suite ran again on the final code (bf33373), with M9
+    and M10 in it.
+13. Decision 9 changes the step count only. The count of time-interval snapshots keeps the store's 1e-9 slack, so a store
+    by time interval on a run with a tiny remainder still says "at most" where the snapshots do not line up (ADR 0140 D3's
+    `AtMost`), as before.
 
 **Not run.** A person at the real window (the checklist); Linux (none of the new tests; M7 (b) would be ignored there by
 amendment 2); debug builds of the new tests; the workspace gate and workspace-wide clippy (only `rcfd-studio` changed);
-`rcfd-project`'s, `rcfd-runner`'s and `rcfd-mcp`'s own tests (not changed; M5 (a) reads `rcfd-project`'s listing and M7
-the runner client); `cargo deny` (no dependency changed).
+`rcfd-project`'s, `rcfd-runner`'s, `rcfd-mcp`'s and `rcfd-api`'s own tests (not changed by this job; M5 (a) reads
+`rcfd-project`'s listing, M7 the runner client, M9 and M10 48K's solver); `cargo deny` (no dependency changed).
 
 ## Not in CI (by hand)
 
@@ -370,7 +393,10 @@ the starter's dialog line and the data file in the Project panel, the strip's er
    too (question 3).
 6. Copy a `cases/<id>/case.json` of the repository into the project's `cases/` and click it: the status bar shows the one
    line "not a case file: ...".
-7. Report anything slow, confusing or wrong, with the case and what was done.
+7. (Amendment 3) A transient case with `solver.dt = 0.01`, `solver.end_time = 0.0302` and `[output] store_interval = 1`:
+   Run it, select it, open the Log panel's "events" list: one line reads `warning: the last step is 2.000e-4 s, ...` in
+   full. With `solver.end_time = 0.100000005` the Start dialog says 10 snapshots, and the run stores 10.
+8. Report anything slow, confusing or wrong, with the case and what was done.
 
 ## Questions for the maintainer (not decided here)
 
@@ -404,5 +430,6 @@ the starter's dialog line and the data file in the Project panel, the strip's er
 ## Files
 
 This ADR; hunks in `crates/rcfd-studio/src/{preview,viewport,quick_run,case_starter,case_starter_ui,watch,studio,
-view_toggle,project_view,main}.rs`; new tests `crates/rcfd-studio/tests/{followups_m,starter_run_m}.rs`; changed tests
+view_toggle,project_view,main,store_plan,ui}.rs` (`store_plan` and `ui` by amendment 3); new tests
+`crates/rcfd-studio/tests/{followups_m,starter_run_m,solver_followups_m}.rs`; changed tests
 `crates/rcfd-studio/tests/case_starter_g2.rs`; ADR 0139 amendment 2; notes in ADRs 0144 and 0146.
