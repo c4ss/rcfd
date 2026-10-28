@@ -175,7 +175,9 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
             None
         }
     };
-    if !send(Event::Opened(Browser::load(&project))) {
+    // the lists as last sent; a change under runs/ re-reads only the runs it touches (ADR 0133 R12)
+    let mut current = Browser::load(&project);
+    if !send(Event::Opened(current.clone())) {
         return;
     }
     let mut tracked: BTreeSet<String> = BTreeSet::new();
@@ -186,7 +188,10 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
         match rx.recv_timeout(wait) {
             Ok(cmd) => {
                 let ev = match cmd {
-                    Command::Refresh => Event::Listing(Browser::load(&project)),
+                    Command::Refresh => {
+                        current = Browser::load(&project);
+                        Event::Listing(current.clone())
+                    }
                     Command::Load(rel) => match project
                         .resolve(&rel)
                         .map_err(|e| e.to_string())
@@ -235,11 +240,14 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                                 bytes: read_opt(&project, rel),
                             })
                             .collect();
+                        let read = current.refresh(&project, &changed);
                         let mut ok = send(Event::Changed(changed));
                         for f in files {
                             ok &= send(f);
                         }
-                        ok &= send(Event::Listing(Browser::load(&project)));
+                        if read {
+                            ok &= send(Event::Listing(current.clone()));
+                        }
                         if !ok {
                             return;
                         }

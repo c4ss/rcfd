@@ -205,6 +205,21 @@ addendum before the counted runs.
 B1-B9 of ADR 0131 are re-run unchanged. B9's live-monitor item becomes a real test (R8 through the drawn app) instead of an
 ignored `*_known_miss`.
 
+## Amendment 2 (2026-10-28, 48D, after the code was written and before any R1-R12 run counted)
+
+What I knew: R11 had run (it was written and run before the Studio code, results in the addendum); the Studio crate and
+its tests compile; a rule-d smoke outside any test: `rcfd run` of the 12 x 12 lid cavity with `--status-every 1
+--status-monitors`, 5000 steps in 4.34 s (release, 0.87 ms per step). No Studio test had run. Limits unchanged.
+
+1. Step counts (from the smoke, debug builds use a quarter): R1 5 runs of 2000 steps (about 1.7 s each, so two overlap and
+   three wait); R2 and R3 15 000 steps (about 13 s, longer than the 2 s gap plus reopening, and than pause, 2 s hold, resume
+   and cancel); R8 400 steps (the case's `max_iterations`, so the proposal is `store_interval = 4`); R9 2000 steps; the B9
+   live-monitor parity test 3000 steps.
+2. Code set-up details not in amendment 1: `rcfd-studio` uses the workspace's `toml` (already locked for `rcfd-api`) to read
+   which store keys a case text sets (R10), and `rcfd-tsstore` as a dev-dependency for R8 (an edge ADR 0131 Placement plans);
+   `Cargo.lock` gains two dependency lines, no package. `Browser` gains `summaries_read` (R12's counter).
+3. R2's "first snapshot" is the model's state when it first holds the browser and a worker tick after opening.
+
 ## Files
 
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,

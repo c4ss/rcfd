@@ -43,6 +43,23 @@ pub struct UiState {
     pub row_cost: Duration,
     /// Run-list rows built in the last frame (reported by B7).
     pub rows_built: usize,
+    /// Open start dialog (ADR 0133).
+    pub start_dialog: Option<StartDialog>,
+    /// Edit buffer of the runner budgets (`None`: closed).
+    pub budgets: Option<rcfd_runner::runner::Config>,
+}
+
+/// UI fields of the start dialog; the plan itself is in the model ([`crate::runs::RunsView::plan`]).
+#[derive(Debug, Clone, Default)]
+pub struct StartDialog {
+    /// Case chosen (project-relative).
+    pub case: String,
+    /// The case whose plan was asked for.
+    pub asked: Option<String>,
+    /// `path=value` overrides, one per line.
+    pub overrides: String,
+    /// Memory need in MB as typed (empty: estimated by the runner).
+    pub mem: String,
 }
 
 /// The application: model plus UI state.
@@ -268,6 +285,8 @@ impl StudioApp {
                 self.ui_state.new_dialog = Some(d);
             }
         }
+        start_dialog(ctx, &mut self.st, &mut self.ui_state);
+        budgets_dialog(ctx, &mut self.st, &mut self.ui_state);
         if let Some(mut path) = self.ui_state.open_dialog.take() {
             let mut open = true;
             let mut done = false;
@@ -422,15 +441,49 @@ fn browser_panel(ui: &mut egui::Ui, st: &mut Studio) {
 
 // ---------------------------------------------------------------- runs
 
+/// One drawn row of the run list: the browser's summary with the run worker's row laid over it (ADR 0133 amendment 1
+/// item 6).
+fn row_line(r: &rcfd_project::RunSummary, live: Option<&crate::runs::RunRow>) -> String {
+    match live {
+        Some(l) => live_line(l),
+        None => format!(
+            "{:<23} {:<9} {:>8} {:>11.4e}  {}",
+            r.id,
+            format!("{:?}", r.state).to_lowercase(),
+            r.step,
+            r.time,
+            r.case
+        ),
+    }
+}
+
+fn live_line(l: &crate::runs::RunRow) -> String {
+    let res = |k: &str| l.last_residuals.get(k).map_or("-".to_string(), |v| format!("{v:.2e}"));
+    let queue = l.queue_pos.map_or(String::new(), |q| format!(" #{q}"));
+    format!(
+        "{:<23} {:<9} {:>8} {:>11.4e}  {:>9} {:>9}  {}{queue}",
+        l.id,
+        l.state_label(),
+        l.step,
+        l.time,
+        res("res_u"),
+        res("res_p"),
+        l.case
+    )
+}
+
 fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
-    let Some(b) = st.browser() else {
+    if st.browser().is_none() {
         ui.weak("No project open.");
         return;
-    };
-    ui.label(format!("{} runs", b.runs.len()));
+    }
+    runs_toolbar(ui, st, us);
+    let Some(b) = st.browser() else { return };
+    let (n_b, n_x) = (b.runs.len(), st.runs.extra.len());
+    ui.label(format!("{} runs; {} running or paused", n_b + n_x, st.runs.active()));
     ui.monospace(format!(
-        "{:<23} {:<9} {:>8} {:>11}  case",
-        "id", "state", "step", "time"
+        "{:<23} {:<9} {:>8} {:>11}  {:>9} {:>9}  case",
+        "id", "state", "step", "time", "res u", "res p"
     ));
     let row_h = ui.text_style_height(&egui::TextStyle::Monospace);
     let mut select: Option<String> = None;
@@ -440,8 +493,8 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     egui::ScrollArea::vertical()
         .id_salt("runs")
         .auto_shrink([false; 2])
-        .show_rows(ui, row_h, b.runs.len(), |ui, range| {
-            for r in &b.runs[range] {
+        .show_rows(ui, row_h, n_b + n_x, |ui, range| {
+            for i in range {
                 built += 1;
                 if !cost.is_zero() {
                     let t = Instant::now();
@@ -449,26 +502,260 @@ fn runs_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
                         std::hint::spin_loop();
                     }
                 }
-                let line = format!(
-                    "{:<23} {:<9} {:>8} {:>11.4e}  {}",
-                    r.id,
-                    format!("{:?}", r.state).to_lowercase(),
-                    r.step,
-                    r.time,
-                    r.case
-                );
+                let (id, line) = if i < n_b {
+                    let r = &b.runs[i];
+                    (r.id.as_str(), row_line(r, st.runs.row(&r.id)))
+                } else {
+                    let Some(l) = st.runs.row(&st.runs.extra[i - n_b]) else {
+                        continue;
+                    };
+                    (l.id.as_str(), live_line(l))
+                };
                 let text = RichText::new(line).monospace();
-                if ui
-                    .selectable_label(selected.as_deref() == Some(r.id.as_str()), text)
-                    .clicked()
-                {
-                    select = Some(r.id.clone());
+                if ui.selectable_label(selected.as_deref() == Some(id), text).clicked() {
+                    select = Some(id.to_string());
                 }
             }
         });
     us.rows_built += built;
     if let Some(id) = select {
-        st.selected_run = Some(id);
+        st.select_run(&id);
+    }
+}
+
+fn runs_toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
+    let mut act: Option<&str> = None;
+    ui.horizontal(|ui| {
+        if ui.button("Start run...").clicked() {
+            us.start_dialog = Some(StartDialog {
+                case: st.editor.as_ref().map(|e| e.rel.clone()).unwrap_or_default(),
+                ..Default::default()
+            });
+        }
+        let sel = st.selected_run.clone();
+        let row = sel.as_deref().and_then(|id| st.runs.row(id));
+        let live = row.is_some_and(|r| !r.state.is_terminal());
+        let paused = row.is_some_and(|r| r.held || r.state == rcfd_project::RunState::Paused);
+        if ui.add_enabled(live && !paused, egui::Button::new("Pause")).clicked() {
+            act = Some("pause");
+        }
+        if ui.add_enabled(live && paused, egui::Button::new("Resume")).clicked() {
+            act = Some("resume");
+        }
+        if ui.add_enabled(live, egui::Button::new("Cancel")).clicked() {
+            act = Some("cancel");
+        }
+        if ui.button("Budgets...").clicked() {
+            let _ = st.load_budgets();
+            us.budgets = Some(match &st.runs.config {
+                Some(Ok(c)) => c.clone(),
+                _ => rcfd_runner::runner::Config::default(),
+            });
+        }
+    });
+    ui.horizontal(|ui| match st.runs.runner_running {
+        Some(true) => {
+            ui.label("Runner running");
+        }
+        Some(false) => {
+            ui.colored_label(WARN, "Runner not running; queued runs wait");
+            let busy = st.runs.starting_runner;
+            if ui
+                .add_enabled(
+                    !busy,
+                    egui::Button::new(if busy { "Starting..." } else { "Start runner" }),
+                )
+                .clicked()
+            {
+                if let Err(m) = st.start_runner() {
+                    st.say(m);
+                }
+            }
+        }
+        None => {
+            ui.weak("reading runs...");
+        }
+    });
+    if let Some(e) = &st.runs.runner_error {
+        ui.colored_label(ERR, e);
+    }
+    if let (Some(a), Some(id)) = (act, st.selected_run.clone()) {
+        let r = match a {
+            "pause" => st.pause_run(&id),
+            "resume" => st.resume_run(&id),
+            _ => st.cancel_run(&id),
+        };
+        if let Err(m) = r {
+            st.say(m);
+        }
+    }
+}
+
+fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
+    let Some(mut d) = us.start_dialog.take() else { return };
+    let mut open = true;
+    let mut done = false;
+    let cases = st.browser().map(|b| b.cases.clone()).unwrap_or_default();
+    egui::Window::new("Start run")
+        .open(&mut open)
+        .collapsible(false)
+        .show(ctx, |ui| {
+            egui::ComboBox::from_label("Case")
+                .selected_text(if d.case.is_empty() {
+                    "choose a case"
+                } else {
+                    d.case.as_str()
+                })
+                .show_ui(ui, |ui| {
+                    for c in &cases {
+                        ui.selectable_value(&mut d.case, c.clone(), c);
+                    }
+                });
+            if !d.case.is_empty() && d.asked.as_deref() != Some(d.case.as_str()) {
+                d.asked = Some(d.case.clone());
+                if let Err(m) = st.plan_start(&d.case) {
+                    st.say(m);
+                }
+            }
+            let mut start = false;
+            match st.runs.plan.as_mut() {
+                None if !d.case.is_empty() => {
+                    ui.weak("reading the case...");
+                }
+                None => {}
+                Some(Err(e)) => {
+                    ui.colored_label(ERR, e.as_str());
+                }
+                Some(Ok(plan)) if plan.case == d.case => {
+                    egui::Grid::new("start-plan").num_columns(2).show(ui, |ui| {
+                        ui.label("Priority");
+                        ui.add(egui::DragValue::new(&mut plan.priority));
+                        ui.end_row();
+                        ui.label("Threads");
+                        ui.add(egui::DragValue::new(&mut plan.threads).range(1..=256));
+                        ui.end_row();
+                        ui.label("Memory MB");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut d.mem)
+                                .hint_text("estimated")
+                                .desired_width(80.0),
+                        );
+                        ui.end_row();
+                    });
+                    store_ui(ui, plan);
+                    ui.label("Overrides (path=value, one per line)");
+                    ui.add(
+                        egui::TextEdit::multiline(&mut d.overrides)
+                            .desired_rows(3)
+                            .desired_width(360.0),
+                    );
+                    plan.extra_set = d
+                        .overrides
+                        .lines()
+                        .map(str::trim)
+                        .filter(|l| !l.is_empty())
+                        .map(String::from)
+                        .collect();
+                    plan.mem_mb = d.mem.trim().parse().ok();
+                    ui.weak(format!("rcfd run --set: {}", plan.set().join(" ")));
+                    start = ui.button("Start").clicked();
+                }
+                Some(Ok(_)) => {
+                    ui.weak("reading the case...");
+                }
+            }
+            if start {
+                if let Some(Ok(plan)) = st.runs.plan.clone() {
+                    match st.start_run(plan) {
+                        Ok(()) => done = true,
+                        Err(m) => st.say(m),
+                    }
+                }
+            }
+        });
+    if open && !done {
+        us.start_dialog = Some(d);
+    }
+}
+
+fn store_ui(ui: &mut egui::Ui, plan: &mut crate::runs::StartPlan) {
+    use crate::runs::StoreEvery;
+    if let Some(n) = &plan.note {
+        ui.weak(n.as_str());
+    }
+    let Some(s) = plan.store.as_mut() else { return };
+    ui.checkbox(&mut s.on, "Store fields for scrubbing (ux, uy, uz, p)");
+    if !s.on {
+        return;
+    }
+    ui.horizontal(|ui| match &mut s.every {
+        StoreEvery::Steps(k) => {
+            ui.label("every");
+            ui.add(egui::DragValue::new(k).range(1..=1_000_000_000u64));
+            ui.label("steps");
+        }
+        StoreEvery::Time(dt) => {
+            ui.label("every");
+            ui.add(egui::DragValue::new(dt).range(1e-12..=1e12).speed(0.0));
+            ui.label("s of simulated time");
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut s.f32, true, "f32 (lossy, half size)");
+        ui.radio_value(&mut s.f32, false, "f64 (exact)");
+    });
+    match (plan.snapshots(), plan.estimated_bytes()) {
+        (Some(n), Some(b)) => ui.weak(format!(
+            "about {n} snapshots, estimated {:.1} MB (cells x 4 fields x snapshots x {} bytes)",
+            b as f64 / 1e6,
+            if plan.store.as_ref().is_some_and(|s| s.f32) {
+                4
+            } else {
+                8
+            }
+        )),
+        (Some(n), None) => ui.weak(format!("about {n} snapshots; cell count unknown before the run")),
+        _ => ui.weak(""),
+    };
+}
+
+fn budgets_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
+    let Some(mut c) = us.budgets.take() else { return };
+    let mut open = true;
+    let mut done = false;
+    egui::Window::new("Runner budgets")
+        .open(&mut open)
+        .collapsible(false)
+        .show(ctx, |ui| {
+            if let Some(Err(e)) = &st.runs.config {
+                ui.colored_label(ERR, e.as_str());
+            }
+            egui::Grid::new("budgets").num_columns(2).show(ui, |ui| {
+                ui.label("Runs at once (max_runs)");
+                ui.add(egui::DragValue::new(&mut c.max_runs).range(1..=64));
+                ui.end_row();
+                ui.label("Threads (cpu_threads)");
+                ui.add(egui::DragValue::new(&mut c.cpu_threads).range(1..=1024));
+                ui.end_row();
+                ui.label("Memory MB (mem_budget_mb)");
+                ui.add(egui::DragValue::new(&mut c.mem_budget_mb));
+                ui.end_row();
+            });
+            if st.runs.runner_running == Some(true) {
+                ui.colored_label(
+                    WARN,
+                    "The runner reads the budgets when it starts: shut it down and start it again.",
+                );
+            }
+            if ui.button("Save").clicked() {
+                match st.save_budgets(c.clone()) {
+                    Ok(()) => done = true,
+                    Err(m) => st.say(m),
+                }
+            }
+        });
+    if open && !done {
+        us.budgets = Some(c);
     }
 }
 
@@ -477,15 +764,31 @@ fn outputs_panel(ui: &mut egui::Ui, st: &mut Studio) {
         ui.weak("Select a run in the Runs panel.");
         return;
     };
+    let live = st.runs.row(id);
     let Some(r) = b.runs.iter().find(|r| r.id == id) else {
-        ui.weak("The selected run is no longer listed.");
+        match live {
+            Some(l) => {
+                ui.label(RichText::new(&l.id).strong());
+                ui.label(format!("case {}  created {}", l.case, l.created));
+                ui.label(format!("{}, step {}, time {}", l.state_label(), l.step, l.time));
+            }
+            None => {
+                ui.weak("The selected run is no longer listed.");
+            }
+        }
         return;
     };
     ui.label(RichText::new(&r.id).strong());
     ui.label(format!("case {}  created {}", r.case, r.created));
-    ui.label(format!("{:?}, step {}, time {}", r.state, r.step, r.time).to_lowercase());
+    match live {
+        Some(l) => ui.label(format!("{}, step {}, time {}", l.state_label(), l.step, l.time)),
+        None => ui.label(format!("{:?}, step {}, time {}", r.state, r.step, r.time).to_lowercase()),
+    };
+    if let Some(reason) = live.and_then(|l| l.reason.as_deref()) {
+        ui.label(format!("reason: {reason}"));
+    }
     if r.metrics.is_empty() {
-        ui.weak("no metrics.json");
+        ui.weak("no numeric metrics.json entries");
     } else {
         egui::Grid::new("metrics").striped(true).show(ui, |ui| {
             for (k, v) in &r.metrics {
@@ -495,6 +798,15 @@ fn outputs_panel(ui: &mut egui::Ui, st: &mut Studio) {
             }
         });
     }
+    if let Some(Value::Object(m)) = &st.runs.metrics {
+        egui::CollapsingHeader::new("metrics.json")
+            .id_salt("metrics-json")
+            .show(ui, |ui| {
+                for (k, v) in m {
+                    ui.monospace(format!("{k}: {v}"));
+                }
+            });
+    }
     let report = b.root.join("runs").join(&r.id).join("output").join("report.html");
     ui.weak(format!("report: {}", report.display()));
 }
@@ -502,34 +814,97 @@ fn outputs_panel(ui: &mut egui::Ui, st: &mut Studio) {
 // ---------------------------------------------------------------- plots and log
 
 fn plots_panel(ui: &mut egui::Ui, st: &mut Studio) {
-    let m = &st.plots;
-    if m.series.is_empty() {
-        ui.weak("Residual and monitor plots of a run arrive with run monitoring (48D, ADR 0133).");
+    let (m, mon) = (&st.plots, &st.monitors);
+    for w in &st.runs.warnings {
+        ui.colored_label(WARN, w);
+    }
+    if m.series.is_empty() && mon.series.is_empty() {
+        ui.weak(match &st.selected_run {
+            Some(id) => format!("No residuals of run {id} yet."),
+            None => "Select a run in the Runs panel to plot its residuals and monitors.".into(),
+        });
         return;
     }
+    let marker = st.plot_marker;
     let h = (ui.available_height() / 2.0 - 8.0).max(80.0);
     ui.label("Residuals (log10)");
     egui_plot::Plot::new("residuals").height(h).show(ui, |p| {
-        for n in m.residual_names() {
-            p.line(egui_plot::Line::new(
-                n.clone(),
-                m.plot_points_decimated(&n, true, MAX_PLOT_POINTS),
-            ));
+        for (i, n) in m.residual_names().into_iter().enumerate() {
+            let colour = series_colour(i);
+            for seg in m.plot_segments(&n, true, MAX_PLOT_POINTS) {
+                p.line(egui_plot::Line::new(n.clone(), seg).color(colour));
+            }
+        }
+        if let Some(x) = marker {
+            p.vline(egui_plot::VLine::new("viewport step", x));
         }
     });
     ui.label("Monitors");
     egui_plot::Plot::new("reports").height(h).show(ui, |p| {
-        for n in m.report_names() {
-            p.line(egui_plot::Line::new(
-                n.clone(),
-                m.plot_points_decimated(&n, false, MAX_PLOT_POINTS),
-            ));
+        // monitors of the run, then any non-residual series put into the residual store
+        let mut k = 0;
+        let all: Vec<String> = mon.series.keys().cloned().collect();
+        for (store, names) in [(mon, all), (m, m.report_names())] {
+            for n in names {
+                let colour = series_colour(k);
+                k += 1;
+                for seg in store.plot_segments(&n, false, MAX_PLOT_POINTS) {
+                    p.line(egui_plot::Line::new(n.clone(), seg).color(colour));
+                }
+            }
+        }
+        if let Some(x) = marker {
+            p.vline(egui_plot::VLine::new("viewport step", x));
         }
     });
 }
 
+fn series_colour(i: usize) -> Color32 {
+    const C: [Color32; 6] = [
+        Color32::from_rgb(31, 119, 180),
+        Color32::from_rgb(255, 127, 14),
+        Color32::from_rgb(44, 160, 44),
+        Color32::from_rgb(214, 39, 40),
+        Color32::from_rgb(148, 103, 189),
+        Color32::from_rgb(140, 86, 75),
+    ];
+    C[i % C.len()]
+}
+
 fn log_panel(ui: &mut egui::Ui, st: &mut Studio) {
-    ui.weak("Studio messages. The solver log of a run arrives with run monitoring (48D, ADR 0133).");
+    if let Some(id) = &st.selected_run {
+        egui::CollapsingHeader::new(format!("log.txt of {id} (last {} lines)", crate::poll::LOG_LINES))
+            .id_salt("solver-log")
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("solver-log-text")
+                    .max_height(220.0)
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        for l in &st.runs.log {
+                            ui.monospace(l);
+                        }
+                    });
+            });
+        egui::CollapsingHeader::new(format!("events ({})", st.runs.events.len()))
+            .id_salt("run-events")
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("run-events-table")
+                    .max_height(220.0)
+                    .show(ui, |ui| {
+                        egui::Grid::new("events").striped(true).show(ui, |ui| {
+                            for e in &st.runs.events {
+                                ui.monospace(&e.t);
+                                ui.monospace(event_text(&e.kind));
+                                ui.end_row();
+                            }
+                        });
+                    });
+            });
+    }
+    ui.weak("Studio messages");
     egui::ScrollArea::vertical()
         .id_salt("log")
         .stick_to_bottom(true)
@@ -539,6 +914,33 @@ fn log_panel(ui: &mut egui::Ui, st: &mut Studio) {
                 ui.monospace(m);
             }
         });
+}
+
+fn event_text(k: &rcfd_project::records::EventKind) -> String {
+    use rcfd_project::records::EventKind;
+    let name = |s: &rcfd_project::RunState| crate::runs::state_name(*s);
+    match k {
+        EventKind::State { from, to, reason } => format!(
+            "state {} -> {}{}",
+            from.as_ref().map_or("-".into(), name),
+            name(to),
+            reason.as_ref().map_or(String::new(), |r| format!(": {r}"))
+        ),
+        EventKind::Warning { message } => format!("warning: {message}"),
+        EventKind::Stop { reason } => format!("stop: {reason}"),
+        EventKind::Other { kind, body } => {
+            let mut s = body.to_string();
+            if s.len() > 160 {
+                let mut cut = 160;
+                while !s.is_char_boundary(cut) {
+                    cut -= 1;
+                }
+                s.truncate(cut);
+                s.push_str("...");
+            }
+            format!("{kind} {s}")
+        }
+    }
 }
 
 // ---------------------------------------------------------------- case editor

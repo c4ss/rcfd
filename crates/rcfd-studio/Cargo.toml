@@ -15,8 +15,12 @@ workspace = true
 rcfd-api.workspace = true
 rcfd-core.workspace = true
 rcfd-project.workspace = true
+# Run control through the project's runner (ADR 0133 D1): client, records, budgets. Layer 2, no third-party crate.
+rcfd-runner = { path = "../rcfd-runner" }
 serde.workspace = true
 serde_json.workspace = true
+# Already in the workspace (rcfd-api): the start dialog reads which store keys a case text sets (ADR 0133 R10).
+toml.workspace = true
 # ADR 0131 W48-2 (a): eframe 0.36.2 (0.37.0 fails the two-week rule until 2026-10-29) on its wgpu back end.
 # `wgpu_no_default_features`: eframe's `wgpu` feature would turn on wgpu's default back ends (Metal, GLES, WebGL), which
 # feature unification would also give rcfd-render; the back ends are chosen by the wgpu entry below instead.
@@ -32,6 +36,10 @@ rfd = "=0.15.4"
 version = "=30.0.1"
 default-features = false
 features = ["std", "wgsl", "dx12", "vulkan"]
+
+[dev-dependencies]
+# ADR 0133 R8: reads the store of a Studio-started run (layer 4, already planned for the Studio by ADR 0131).
+rcfd-tsstore.workspace = true
 
 [[bin]]
 name = "rcfd-studio"
