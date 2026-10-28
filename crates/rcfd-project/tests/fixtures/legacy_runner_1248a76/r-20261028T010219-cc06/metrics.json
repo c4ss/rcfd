@@ -1,0 +1,31 @@
+{
+  "exit_code": 5,
+  "last_residuals": {
+    "monitors": {},
+    "residuals": {
+      "continuity": 6.506598562439064e-7,
+      "p": 0.0022323236608022775,
+      "u": 0.00221128346174321
+    },
+    "step": 20,
+    "time": 0.0
+  },
+  "reason": "not_converged: iteration limit 20 reached without meeting the residual targets",
+  "solver_finish": {
+    "elapsed_s": 0.0081068,
+    "event": "finish",
+    "exit_code": 5,
+    "format": "rcfd-status",
+    "iterations": 20,
+    "ok": false,
+    "reason": "iteration limit 20 reached without meeting the residual targets",
+    "seq": 23,
+    "state": "not_converged",
+    "time": 0.0,
+    "version": 1,
+    "wall_s": 0.0081068
+  },
+  "state": "finished",
+  "steps": 20,
+  "time": 0.0
+}

@@ -1,0 +1,17 @@
+{
+  "id": "r-20261028T010219-cc06",
+  "created": "2026-10-28T01:02:19.897517000Z",
+  "case_source": "E:\\projects\\cfd\\target-w48a\\a4\\proj\\cases\\cavity.toml",
+  "case_dir": "E:\\projects\\cfd\\target-w48a\\a4\\proj\\cases",
+  "case_snapshot_hash": "fnv1a64:bd02e5f14452c82f",
+  "mesh_hash": null,
+  "solver_version": null,
+  "settings": {
+    "priority": 0,
+    "threads": 1,
+    "mem_mb": null,
+    "set": [
+      "solver.max_iterations=20"
+    ]
+  }
+}
