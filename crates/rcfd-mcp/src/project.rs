@@ -1022,8 +1022,9 @@ impl ProjectTools {
         };
         let base = str_arg(args, "base_hash");
         let set = args["set"].as_object().cloned().unwrap_or_default();
-        if set.is_empty() {
-            return Err(err(PARAMS, "set: give at least one {setting path: value}"));
+        let dry_run = args.get("dry_run").and_then(Value::as_bool).unwrap_or(false);
+        if set.is_empty() && !dry_run {
+            return Err(err(PARAMS, "set: give at least one {setting path: value} (an empty set only with dry_run, which checks the file as it is)"));
         }
         let bytes = atomic::read(&path).map_err(perr)?;
         let old_hash = hash_bytes(&bytes);
@@ -1115,7 +1116,7 @@ impl ProjectTools {
             .map(|k| (k.clone(), expected.get(k).unwrap_or(Value::Null)))
             .collect();
         let new_hash = hash_bytes(new_text.as_bytes());
-        if args.get("dry_run").and_then(Value::as_bool).unwrap_or(false) {
+        if dry_run {
             return Ok(ok_result(
                 json!({"path": norm, "written": false, "valid": true, "form": form,
                 "old_hash": old_hash, "new_hash": new_hash, "values": values}),

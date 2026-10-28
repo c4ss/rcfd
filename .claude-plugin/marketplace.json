@@ -1,0 +1,13 @@
+{
+  "name": "rcfd",
+  "owner": {
+    "name": "rcfd maintainers"
+  },
+  "plugins": [
+    {
+      "name": "rcfd",
+      "source": "./clients/claude-plugin",
+      "description": "Project tools of the rcfd CFD solver for Claude Code (ADR 0135): runs, residuals, stored fields, case edits with conflict checks, the project's run service"
+    }
+  ]
+}

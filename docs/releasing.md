@@ -9,11 +9,12 @@ cut a release. How the gate itself works and how long it takes is in [the test p
 
 ## Version numbers
 
-One version number covers the whole repository. It is set in three places, which must always agree:
+One version number covers the whole repository. It is set in four places, which must always agree:
 
 * `version` under `[workspace.package]` in `Cargo.toml`; every crate inherits it (`version.workspace = true`), none sets its own;
 * `__version__` in `python/rcfd/__init__.py`;
-* `version` in `clients/claude-panel/.claude-plugin/plugin.json`.
+* `version` in `clients/claude-panel/.claude-plugin/plugin.json`;
+* `version` in `clients/claude-plugin/.claude-plugin/plugin.json` (the `rcfd` plugin, ADR 0135).
 
 `scripts/release_notes.py` fails if they differ from the tag. The `rcfd --version` output, the service and MCP `version` fields and
 the design ledger's solver string are built from the Cargo version.
@@ -67,7 +68,7 @@ Every step has a check; do not go on until it holds. `X.Y.Z` is the new version,
    number is already set everywhere. Check: every `Unreleased` entry fits the kind of version you chose (any entry that breaks one
    of the listed things means MINOR).
 3. **Prepare the release commit** on `main`:
-   * set `X.Y.Z` in the three places listed under "Version numbers";
+   * set `X.Y.Z` in the four places listed under "Version numbers";
    * run `cargo update --workspace` so `Cargo.lock` records the new crate versions; check: `cargo metadata --locked
      --format-version 1 > /dev/null` exits 0;
    * in CHANGELOG.md rename `## Unreleased` to `## X.Y.Z - YYYY-MM-DD` with today's date, and put a new, empty `## Unreleased`
