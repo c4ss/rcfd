@@ -1,0 +1,55 @@
+# Variant of naca0012-aoa4-rotated.toml: the same aerofoil and mesh at 2 degrees angle of attack, set by rotating the
+# mesh (ADR 0155). Every other setting is that of naca0012-aoa2.toml, which turns the flow instead.
+# Units: chord c = 1 m, free stream U = 1 m/s.
+title = "NACA 0012, alpha 2 deg by a rotated mesh, Re 6e6 (variant of alpha 4 deg)"
+
+[mesh]
+# An OpenFOAM polyMesh folder, relative to this file's folder; built from meshes/naca0012-ogrid.recipe.toml by
+# scripts/make_example_projects.py (the cylinder O-grid of ADR 0092 moved onto the NACA 0012 surface).
+source = "file"
+file = "../meshes/naca0012-ogrid"
+
+[mesh.transform]
+rotate_z_deg = -2.0                # angle of attack alpha = 2 deg: the aerofoil turns by -alpha (nose up)
+rotate_origin = [0.25, 0.0, 0.0]   # the quarter chord
+
+[physics]
+nu = 1.6666666666666667e-7   # Re = U c / nu = 6e6
+
+[initial]
+velocity = [1.0, 0.0, 0.0]   # along +x
+
+[boundaries.airfoil]
+velocity = "fixed"   # no-slip wall
+
+[boundaries.farfield]
+velocity = "freestream"
+velocity_value = [1.0, 0.0, 0.0]
+pressure = "freestream"
+
+[turbulence]
+model = "k_omega_sst"
+
+[solver]
+algorithm = "simplec"
+convection = "linear_upwind"
+max_iterations = 2000   # the run stops here: the residual targets are not reached on this mesh (ADR 0142)
+
+[output]
+store_interval = 200   # a snapshot every 200 iterations, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "p", "nut"]
+
+[reports.cl]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [0.0, 1.0, 0.0]   # lift: normal to the free stream (+y)
+a_ref = 0.1   # c x depth
+u_ref = 1.0
+
+[reports.cd]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [1.0, 0.0, 0.0]   # drag: along the free stream (+x)
+a_ref = 0.1
+u_ref = 1.0

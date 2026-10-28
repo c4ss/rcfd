@@ -62,7 +62,10 @@ fn case_files() -> Vec<PathBuf> {
 fn doc_blocks() -> Vec<(PathBuf, String)> {
     let mut files = Vec::new();
     fn md(dir: &Path, out: &mut Vec<PathBuf>) {
-        let mut es: Vec<PathBuf> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok().map(|e| e.path())).collect();
+        let mut es: Vec<PathBuf> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
         es.sort();
         for p in es {
             if p.is_dir() {
@@ -160,7 +163,11 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     if std::env::var("RCFD_W48U_RECORD").as_deref() == Ok("1") {
         let control = match Case::parse_toml(WITH_TABLE) {
             Ok(c) => format!("accepted, settings {:016x}", c.tree.content_hash()),
-            Err(d) => d.iter().map(|x| format!("{}: {}", x.path, x.message)).collect::<Vec<_>>().join(" | "),
+            Err(d) => d
+                .iter()
+                .map(|x| format!("{}: {}", x.path, x.message))
+                .collect::<Vec<_>>()
+                .join(" | "),
         };
         let mut text = format!(
             "# ADR 0155 R0: written by case_hashes_w48u.rs on the base code (RCFD_W48U_RECORD=1), {} lines\n# control [mesh.transform]: {control}\n",
@@ -194,7 +201,10 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
         lines.len(),
         problems.len()
     );
-    for l in lines.iter().filter(|l| !want.iter().any(|w| w.split('\t').next() == l.split('\t').next())) {
+    for l in lines
+        .iter()
+        .filter(|l| !want.iter().any(|w| w.split('\t').next() == l.split('\t').next()))
+    {
         println!("H1 not in the record (new): {l}");
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));

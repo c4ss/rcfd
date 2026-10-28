@@ -409,6 +409,55 @@ Impossible stacks (too many layers, layers thicker than the domain, no height in
 rejected with located diagnostics. Block meshes only: inflation on unstructured wall patches is
 not implemented.
 
+### Mesh transform (`[mesh.transform]`, ADR 0155)
+
+An optional table that rotates the mesh of every source (generator or file) after it is built or read, and after
+`mesh.scale`. A case without the table is exactly as before (its settings, written text, hash and mesh are unchanged).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `rotate_z_deg` | 0.0 | rotation of the mesh about the axis parallel to z through `rotate_origin`, in degrees, a plain number (a unit string is refused: `"-4 deg"` would be read in radians); range [-360, 360]; positive = counter-clockwise seen from +z (x to the right, y up); 0 or a multiple of 360 = no rotation, the mesh is bit-identical |
+| `rotate_origin` | `[]` (the origin) | a point `[x, y, z]` of the rotation axis, in m (unit strings such as `"25 cm"` are accepted) |
+
+Only the points move: the cells, faces, patches, zones and their order stay as they are, and every derived quantity
+(face areas and normals, cell volumes and centres, wall distance, non-orthogonality) is computed from the rotated points
+as for any mesh. z is copied unchanged, so a 2D mesh stays 2D. Nothing else in the case turns: velocities, force and
+report directions, gravity and body forces stay in world coordinates by intent. Settings that place something relative
+to the geometry stay in world coordinates too, and `rcfd check`, `rcfd validate`, `rcfd run` and `--check-only` warn
+about each of them with the rule id `MT101` (warning, category mesh) while the rotation is not 0: a point, origin,
+position, centre, box or axis given in the settings (outside `mesh`), probe and moment reports, `rotating_frame` and
+`mrf` sources, a rotating wall (`wall_rotation_rate`), expressions and profile tables in x, y or z, `dynamic_mesh`, the
+mixing plane and a geometric `decomposition` (the Studio's Case > Validate shows errors only, so not these warnings).
+Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches); a rotationally
+periodic pair (`annulus_3d_sector`, `axial_fan_sector`, imported cyclic patches with a rotation) only allows a rotation
+about its own axis, else the mesh is refused with a located error at `mesh.transform.rotate_origin`.
+
+**How to set the angle of attack** of an aerofoil (chord 1 along +x, leading edge at the origin), two equivalent ways:
+
+* Rotate the mesh, keep the flow along +x (lift along +y, drag along +x): the aerofoil turns nose up, which is clockwise
+  seen from +z, so `rotate_z_deg = -alpha`, about the quarter chord:
+
+  ```toml
+  [mesh.transform]
+  rotate_z_deg = -4.0                # alpha = 4 degrees
+  rotate_origin = [0.25, 0.0, 0.0]
+
+  [boundaries.farfield]
+  velocity = "freestream"
+  velocity_value = [1.0, 0.0, 0.0]
+
+  [reports.cl]
+  type = "force_coefficient"
+  patch = "airfoil"
+  direction = [0.0, 1.0, 0.0]
+  ```
+
+* Rotate the flow, keep the mesh: `initial.velocity` and the far-field `velocity_value` = `(cos alpha, sin alpha, 0)`,
+  lift direction `(-sin alpha, cos alpha, 0)`, drag direction `(cos alpha, sin alpha, 0)`: four settings that must
+  agree. A study can sweep the angle of the first form with one parameter (`study.parameters.<n>.path =
+  "mesh.transform.rotate_z_deg"`). The example project `example-projects/wind-tunnel` has both forms at 4 and 2 degrees
+  (`naca0012-aoa4.toml`, `naca0012-aoa4-rotated.toml`, ...) with their runs.
+
 ## `compressible` and `solver.algorithm = "compressible"`
 
 Selecting the algorithm switches to the explicit density-based Euler solver (no viscosity, no

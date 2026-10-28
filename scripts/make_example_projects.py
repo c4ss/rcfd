@@ -78,6 +78,9 @@ PROJECTS = {
             _naca(2, "cases/naca0012-aoa2.toml"),
             _step(800, "cases/step-re800.toml"),
             _step(400, "cases/step-re400.toml"),
+            # ADR 0155: the same angles set by rotating the mesh, the flow along +x (made with --add-missing)
+            _naca(4, "cases/naca0012-aoa4-rotated.toml"),
+            _naca(2, "cases/naca0012-aoa2-rotated.toml"),
         ],
     },
     "quick-start": {
@@ -494,6 +497,36 @@ def build_project(pname, bins, threads, root=EXAMPLES):
     return {"project": pname, "runs": ids, "meshes": meshes, "pruned": pruned}
 
 
+def build_missing(pname, bins, threads, root=EXAMPLES):
+    """Run only the spec's cases that have no run yet, through the run service exactly as a rebuild does, keep every
+    existing run (and the mesh files) byte for byte, then write the ledger and the run table of all runs (ADR 0155
+    D10)."""
+    spec = PROJECTS[pname]
+    pdir = os.path.join(root, pname)
+    ensure_project(pdir, spec["name"], bins)
+    missing = [r for r in spec["runs"] if run_of_case(pdir, r["case"]) is None]
+    runs_dir = os.path.join(pdir, "runs")
+    os.makedirs(runs_dir, exist_ok=True)
+    ids = []
+    if missing:
+        clean_dot(pdir)
+        runner = Runner(pdir, bins, threads)
+        runner.start()
+        try:
+            for r in missing:
+                ids.append(runner.submit(os.path.join(pdir, r["case"].replace("/", os.sep))))
+            for r, rid in zip(missing, ids):
+                runner.wait(rid, 3600)
+                st = read_json(os.path.join(runs_dir, rid, "status.json"))
+                print("  %s %s: %s, step %d, %s" % (rid, r["case"], st["state"], st["step"], st.get("reason", "")))
+        finally:
+            runner.stop()
+        clean_dot(pdir)
+    pruned = {rid: prune_run(os.path.join(runs_dir, rid)) for rid in ids}
+    summarise_existing(pname, root)
+    return {"project": pname, "runs": ids, "meshes": [], "pruned": pruned}
+
+
 def summarise_existing(pname, root=EXAMPLES):
     """Write the ledger and the run table of a project from its existing runs (no solver run; ADR 0142 amendment 1)."""
     spec = PROJECTS[pname]
@@ -810,6 +843,9 @@ def main(argv=None):
     ap.add_argument("--root", default=EXAMPLES, help="folder holding the projects (default: example-projects)")
     ap.add_argument("--summarise-only", action="store_true",
                     help="write the ledger and run tables of the existing runs (no solver run), then the manifest")
+    ap.add_argument("--add-missing", action="store_true",
+                    help="run only the cases without a run (the existing runs are kept), then the ledger, the run "
+                         "tables and the manifest (ADR 0155)")
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
     if a.check:
@@ -828,6 +864,11 @@ def main(argv=None):
     for pname in a.project or list(PROJECTS):
         if a.summarise_only:
             print("summarising %s: %s" % (pname, summarise_existing(pname, root)))
+            continue
+        if a.add_missing:
+            print("adding the missing runs of %s" % pname)
+            res = build_missing(pname, bins, a.threads, root)
+            print("  added %s; pruned %s" % (res["runs"], {k: [f for f, _ in v] for k, v in res["pruned"].items()}))
             continue
         print("building %s" % pname)
         t0 = time.time()
