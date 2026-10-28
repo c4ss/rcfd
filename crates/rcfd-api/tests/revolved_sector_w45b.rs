@@ -93,10 +93,21 @@ fn g6_fan_meshes_unchanged() {
         "G6 hashes: default {:016x}, B3 {:016x}, E3 {:016x}",
         got[0], got[1], got[2]
     );
-    assert_eq!(
-        got,
-        [0x8471_bf9a_1aef_1dd4, 0xbe64_f588_a252_d0b4, 0x04fb_abed_bad4_1768]
-    );
+    // Recorded on Windows. The fan mesh calls the platform's libm, so the hashes differ per platform: the x86_64 Linux values were
+    // produced at 511bed4 (e65b4ea in the current history) and at HEAD in one Linux container (ADR 0137); other platforms print and skip.
+    if cfg!(windows) {
+        assert_eq!(
+            got,
+            [0x8471_bf9a_1aef_1dd4, 0xbe64_f588_a252_d0b4, 0x04fb_abed_bad4_1768]
+        );
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        assert_eq!(
+            got,
+            [0x95aa_2af7_f4ed_8b6c, 0xb256_3dff_4908_6f53, 0xec27_db08_c015_4f65]
+        );
+    } else {
+        eprintln!("G6: no recorded hashes for this platform (printed above)");
+    }
 }
 
 // ------------------------------------------------------------------------------------------------------------ common set-up

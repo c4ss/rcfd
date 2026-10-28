@@ -1863,11 +1863,21 @@ fn w45a_hash(sim: &Simulation) -> u64 {
 /// ADR 0115 P5: the key absent, `none` and `barth_jespersen` give B3 after 30 iterations bit-identical to main 511bed4 (hashes recorded there).
 #[test]
 fn w45a_p5_defaults_are_bit_identical_to_main() {
+    // Recorded on Windows. The FAN-01 mesh calls the platform's libm, so the hashes differ per platform: the x86_64 Linux values
+    // were produced at 511bed4 (e65b4ea in the current history) and at HEAD in one Linux container, with the same guard outcome
+    // (ADR 0137); other platforms print and skip.
+    let (absent, bj) = if cfg!(windows) {
+        (Some(0xec72_1116_c096_3182u64), Some(0x26e5_a0c5_2495_7698u64))
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        (Some(0x971b_2e8a_e81e_e451), Some(0xbb74_8c1f_c0d9_3169))
+    } else {
+        (None, None)
+    };
     let mut miss = Vec::new();
     for (lim, want) in [
-        ("", 0xec72_1116_c096_3182u64),
-        ("linear_upwind_limiter = \"none\"\n", 0xec72_1116_c096_3182),
-        ("linear_upwind_limiter = \"barth_jespersen\"\n", 0x26e5_a0c5_2495_7698),
+        ("", absent),
+        ("linear_upwind_limiter = \"none\"\n", absent),
+        ("linear_upwind_limiter = \"barth_jespersen\"\n", bj),
     ] {
         let text = case_toml(F3, true, "", false).replace("linear_upwind_limiter = \"barth_jespersen\"\n", lim);
         let mut sim = Simulation::new(&Case::parse_toml(&text).unwrap()).unwrap();
@@ -1880,7 +1890,7 @@ fn w45a_p5_defaults_are_bit_identical_to_main() {
             lim.trim(),
             sim.steady_divergence().map(|d| d.kind)
         );
-        if h != want {
+        if want.is_some_and(|w| h != w) {
             miss.push(lim.trim());
         }
     }
