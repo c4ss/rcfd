@@ -347,7 +347,7 @@ run path (a), D2 and the other runs exercise.
 | Id | Limit | Measured | Result |
 |---|---|---|---|
 | D1 | R1-R3 (St within 3 %) | A: 4,663 steps, 85.9 s, end 80 bit for bit, dt 0.00602 to 0.0178, Courant 0.218 at step 1 and at most 0.4502 after step 10, last step 58 % of the one before; F: 13,272 steps of 0.006027727546714889 s, 193.9 s, end 80 bit for bit, Courant 0.218 and at most 0.204; St 0.15725 (A, 7 crossings, amplitude 0.295) against 0.15857 (F): 0.83 % | pass |
-| D2 | R1-R3 (`cd` within 2 %) | A: 891 steps, 409 s, end 3 bit for bit, dt 0.00116 to 0.00354, Courant 0.147 and at most 0.4501, last step 32 %; F: 2,567 steps of 0.001168679392286716 s, 1,151 s, **end 2.999999999999983**, Courant 0.148 and at most 0.174; `cd` 1.46727 against 1.46430 (0.20 %) | **miss** (F's R1): `d2_cylinder_256x256_known_miss`, ignored (amendment 3); A's limits met |
+| D2 | R1-R3 (`cd` within 2 %) | A: 891 steps, 409 s, end 3 bit for bit, dt 0.00116 to 0.00354, Courant 0.147 and at most 0.4501, last step 32 %; F: 2,567 steps of 0.001168679392286716 s, 1,151 s, **end 2.999999999999983**, Courant 0.148 and at most 0.174; `cd` 1.46727 against 1.46430 (0.20 %) | **miss** (F's R1): `d2_cylinder_256x256_known_miss`, ignored (amendment 3). A's limits met by the printed values: the test stopped at F's R1, so its assertions of A's step growth, R2 and R3 did not run |
 | D3 | R1-R3 (`lid_drag` within 1 %) | A: 633 steps, 2.2 s, end 10 bit for bit, dt 0.0156 to 0.0270 (smallest 0.01436), Courant 0.103 and at most 0.456; F: 640 steps of 0.015625 s, 2.2 s, Courant 0.103 and at most 0.452; `lid_drag` -0.00490209 against -0.00490212 (5e-6) | pass |
 | D4 | R1-R3 (`p_inlet` within 2 %) | A: 1,909 steps, 90.5 s, end 30 bit for bit, dt 0.00835 to 0.0192, Courant 0.389 and at most 0.452; F: 3,591 steps of 0.00835421888053467 s, 271.9 s, Courant 0.389 and at most 0.325; `p_inlet` -0.143926 against -0.143889 (0.03 %) | pass |
 | S-E | dt0 ratio in [0.47, 0.53], largest step unchanged | cylinder 0.00602 -> 0.00307 (0.5100; thinnest cell 0.013460 -> 0.006878, 0.5110), cavity 0.0156 -> 0.00781 (0.5006); largest steps 0.8 and 0.1 both times | pass |
@@ -410,10 +410,25 @@ estimate tight, 633 against 640. The results agree within 0.83 % (St), 0.20 % (`
 8. The adaptive run's snapshots are stored at the first step after each store interval, not on it ((c): 1.0027 to 7.0089),
    and its last step is between 5 % and 105 % of the proposal ((c): 6.3 %; ADR 0050's landing); both registered and met.
 9. (g1)'s Courant number reached 0.518 after step 10 (the buoyant flow accelerating faster than the controller's aim of
-   0.45), within the registered 0.55.
+   0.45), within the registered 0.55 but above the target 0.5: the hover's "keeps the largest cell Courant number at about
+   0.45 and at most 0.5" overstates it, since the controller reacts after each step. The text is left as it is (changing
+   it would change f3's expected hover and call for f3 and W again); question 11.
 10. P11 ran before the gravity rule; the table's heated cavity row is the code before it.
 11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed; `store_plan.rs` is untouched (job 48R's); `Cargo.toml`,
     `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` unchanged.
+
+**Reported without a limit.**
+
+* The estimate against the measured Courant number of the first step (the adaptive runs; the estimate at dt0 is about
+  0.5 by construction): the shipped cylinder 0.4994 against 0.218 (2.3 times high), 256 x 256 0.496 against 0.147 (3.4), the
+  cavity 0.499 against 0.103 (4.8: an impulsive start, the lid's cells only moving), the step 0.500 against 0.389 (1.3), the
+  heated cavity (gravity scale) 0.499 against 0.00058 (a flow at rest at its first step); the ramped lid none against
+  0.00047. The controller's largest step was 2.96 (D1) and 3.05 (D2) times the estimate's first step.
+* The hover's step and wall-time estimates (the first step's count, "or fewer") against the runs: (b) about 13,290 steps
+  and 3.2 min against 4,663 steps and 78 s; (c) 1,213 against 458; (g1) 13,514 and 1.7 min against 3,810 steps; D2's
+  adaptive run 2,587 against 891.
+* The last step of the adaptive runs as a fraction of the step before it: D1 58 %, D2 32 %, D3 92 %, D4 74 %, (c) 6.3 %.
+* (a): see its row.
 
 **Not run.** A person at the real window (the checklist); Linux and macOS; debug builds of the new tests; the workspace
 gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited); `cargo deny` (no
@@ -439,6 +454,10 @@ dependency change); the heavy tests outside this job (`--ignored` of earlier ADR
 10. **VOF and variable-density runs** take fixed steps only, so the automatic step is not offered there (D1). Options: (a)
     keep; (b) offer the fixed automatic step F for them, with its own checks. Recommendation: (a) until asked; (b) when a
     VOF case meets the same trouble as the cylinder.
+11. **The hover's "at most C"** (deviation 9): the controller reacts after each step, so a fast-accelerating flow can pass
+    the target for a few steps ((g1): 0.518 against 0.5). Options: (a) keep the words; (b) "about 0.9 C; the controller
+    reacts after each step, so a quickly accelerating flow can pass C for a few steps" (f3 and W run again). Recommendation:
+    (b), with the next Studio change.
 
 Recommendations for questions 1-5 of the registration: 1 keep 0.5 (it held the 256 x 256 cylinder through (a)'s 40 s and
 costs 2.85 times fewer steps than the fixed alternative on the shipped cylinder); 2 a solver job after job 48T's findings,
