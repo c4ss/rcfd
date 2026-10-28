@@ -633,6 +633,7 @@ pub struct ChatModel {
     own_sessions: BTreeSet<String>,
     provisional_from: Option<usize>,
     worker: Option<Worker>,
+    turn_thread: Option<JoinHandle<()>>,
     tx: Option<Sender<Update>>,
     rx: Option<Receiver<Update>>,
     wake: Option<Wake>,
@@ -664,6 +665,7 @@ impl Default for ChatModel {
             own_sessions: BTreeSet::new(),
             provisional_from: None,
             worker: None,
+            turn_thread: None,
             tx: None,
             rx: None,
             wake: None,
@@ -1124,10 +1126,11 @@ impl ChatModel {
         let cancel = turn.cancel.clone();
         self.turn = Some(turn);
         let prompt = prompt.to_string();
-        std::thread::Builder::new()
+        let h = std::thread::Builder::new()
             .name("rcfd-studio-chat-turn".into())
             .spawn(move || run_turn(claude, project, session, prompt, cancel, tx, wake))
             .map_err(|e| format!("cannot start the turn thread: {e}"))?;
+        self.turn_thread = Some(h);
         Ok(())
     }
 
@@ -1136,6 +1139,25 @@ impl ChatModel {
         if let Some(t) = &self.turn {
             t.cancel.store(true, Ordering::SeqCst);
         }
+    }
+
+    /// When the window closes: cancel a running turn and wait up to `timeout` for its thread, which kills the process
+    /// tree (threads are not unwound at process exit, so without this a turn's `claude` would outlive the Studio).
+    /// True when no turn thread is left.
+    pub fn shutdown(&mut self, timeout: Duration) -> bool {
+        self.cancel();
+        let Some(h) = self.turn_thread.take() else {
+            return true;
+        };
+        let t0 = Instant::now();
+        while !h.is_finished() && t0.elapsed() < timeout {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let done = h.is_finished();
+        if done {
+            let _ = h.join();
+        }
+        done
     }
 
     /// Accept the files shown in the confirmation dialog (recorded in the per-user trust record).

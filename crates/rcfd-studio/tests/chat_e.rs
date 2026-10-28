@@ -624,3 +624,46 @@ fn e11_control_a_folder_without_control_files_starts_at_once() {
     assert_eq!(finish_turn(&mut st), TurnState::Finished { code: Some(0) });
     assert_eq!(s.chat_argvs().len(), 1);
 }
+
+/// Not registered (added after the registered runs, ADR 0134 addendum 3): closing the window during a turn kills the
+/// turn's process tree before the frame returns (threads are not unwound at process exit).
+#[test]
+fn closing_the_window_during_a_turn_leaves_no_process() {
+    let s = ChatSetup::new(
+        "close",
+        Some("stream_allowlist_dontask.jsonl"),
+        Some(json!([])),
+        json!({"hang": true, "pidfile": "pids.json"}),
+    );
+    let mut st = s.studio();
+    st.chat.send("a long turn").unwrap();
+    let (child, grandchild) = read_pids(&s.project);
+    assert!(st.drain_until(WAIT, |s| matches!(
+        s.chat.turn.as_ref().map(|t| &t.state),
+        Some(TurnState::Running { .. })
+    )));
+    assert_eq!(live_pids(&[child, grandchild]).unwrap().len(), 2);
+    let mut app = app(st);
+    let ctx = egui::Context::default();
+    let mut input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
+        ..Default::default()
+    };
+    input
+        .viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .events
+        .push(egui::ViewportEvent::Close);
+    let t0 = Instant::now();
+    let _ = ctx.run_ui(input, |ui| app.ui(ui));
+    let dt = t0.elapsed();
+    let left = live_pids(&[child, grandchild]).unwrap();
+    let gone = wait_for(Duration::from_secs(1), || {
+        live_pids(&[child, grandchild]).unwrap().is_empty()
+    });
+    println!(
+        "window close during a turn: the frame took {dt:?}; listed right after it {left:?}; all gone after {gone:?}"
+    );
+    assert!(gone.is_some());
+}
