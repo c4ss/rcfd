@@ -6,7 +6,7 @@
 //! be established is not written to. The check happens right before spawn; a session opened by another process in
 //! the gap between the check and the spawn is not detected (registered limit).
 
-use crate::allow::{check_args, suggest, AllowList};
+use crate::allow::{check_args_in, suggest, AllowList};
 use crate::discover::{classify, live_pids, parse_agents, AgentEntry, Discovery};
 use crate::stream::{parse_line, StreamEvent};
 use crate::{is_uuid, new_uuid, Error};
@@ -30,6 +30,11 @@ pub struct Claude {
     pub model: Option<String>,
     /// Time limit of `claude agents --json`.
     pub listing_timeout: Duration,
+    /// App-owned MCP config file (ADR 0134 W48-10 (a)). When set, every chat gets
+    /// `--strict-mcp-config --mcp-config <file>`, so only the servers in that file start (not a project's
+    /// `.mcp.json`); the file must lie outside the project folder ([`check_args_in`]). `None` (the default of
+    /// [`Claude::new`]) leaves the argument list as before.
+    pub mcp_config: Option<PathBuf>,
 }
 
 impl Claude {
@@ -40,6 +45,7 @@ impl Claude {
             claude_home: claude_home.into(),
             model: None,
             listing_timeout: Duration::from_secs(20),
+            mcp_config: None,
         }
     }
 
@@ -126,7 +132,10 @@ impl Claude {
         classify(project, &self.claude_home, listing, &live)
     }
 
-    /// The full argument list for a chat process (checked by [`check_args`] before every spawn).
+    /// The full argument list for a chat process (checked by [`check_args_in`], which includes
+    /// [`check_args`](crate::allow::check_args),
+    /// before every spawn). With [`Claude::mcp_config`] set, `--strict-mcp-config --mcp-config <file>` comes right
+    /// before the permission flags.
     pub fn chat_args(&self, session_flag: &str, session_id: &str, allow: &AllowList) -> Vec<String> {
         let mut a: Vec<String> = [
             "-p",
@@ -141,6 +150,13 @@ impl Claude {
         .to_vec();
         if let Some(m) = &self.model {
             a.extend(["--model".to_string(), m.clone()]);
+        }
+        if let Some(cfg) = &self.mcp_config {
+            a.extend([
+                "--strict-mcp-config".to_string(),
+                "--mcp-config".to_string(),
+                cfg.to_string_lossy().into_owned(),
+            ]);
         }
         a.extend(allow.permission_args());
         a.extend([session_flag.to_string(), session_id.to_string()]);
@@ -197,7 +213,7 @@ impl Claude {
             }
         }
         let args = self.chat_args(flag, &session_id, allow);
-        check_args(&args)?;
+        check_args_in(&args, project)?; // the verdict of check_args when no MCP flag is present
         let mut child = self.chat_cmd(project, &args).0.spawn().map_err(|source| Error::Io {
             path: self.program.clone(),
             source,

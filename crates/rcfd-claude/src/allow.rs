@@ -165,7 +165,13 @@ impl AllowRule {
 
     /// Parses a flag value back into a rule (the inverse of [`AllowRule::to_flag_value`]); `None` if not rule-shaped.
     pub fn parse(s: &str) -> Option<AllowRule> {
-        let rule = match s.find('(') {
+        let rule = Self::parse_shape(s)?;
+        rule.validate().ok().map(|_| rule)
+    }
+
+    /// The rule a flag value has the shape of, not yet validated.
+    fn parse_shape(s: &str) -> Option<AllowRule> {
+        Some(match s.find('(') {
             None => AllowRule::Tool(s.to_string()),
             Some(open) => {
                 let inner = s.get(open + 1..)?.strip_suffix(')')?.to_string();
@@ -177,8 +183,17 @@ impl AllowRule {
                     _ => return None,
                 }
             }
-        };
-        rule.validate().ok().map(|_| rule)
+        })
+    }
+
+    /// The same rule with the `./` anchor of a file pattern removed (the form [`suggest`] gives), so a rule read back
+    /// from its flag value equals the rule that was written.
+    fn normalized(self) -> AllowRule {
+        match self {
+            AllowRule::Edit(p) => AllowRule::Edit(strip_dot(&p).to_string()),
+            AllowRule::Read(p) => AllowRule::Read(strip_dot(&p).to_string()),
+            r => r,
+        }
     }
 }
 
@@ -271,6 +286,322 @@ pub fn check_args(args: &[String]) -> Result<(), Error> {
         return bad("exactly one '--permission-mode dontAsk' and one '--permission-prompts none' are required");
     }
     Ok(())
+}
+
+/// Where the per-project allow-list file lives, relative to the project folder (ADR 0134 W48-11 (a)). `.rcfd/` is a
+/// control path that no rule can reach, so Claude cannot edit the file through the list.
+pub const ALLOW_FILE: &str = ".rcfd/claude-allow.json";
+
+/// Name of the one MCP server in the app-owned config file (ADR 0134 W48-10 (a)). It has no `-`, so the tool names
+/// `mcp__rcfd_project__<tool>` pass [`AllowRule::Tool`] validation unchanged.
+pub const PINNED_SERVER: &str = "rcfd_project";
+
+/// The read-class project tools of ADR 0135 (access `read` in its tool table): the first contents of a project's
+/// allow-list, under the app-owned server's names (ADR 0134 W48-11 (a)).
+pub const PROJECT_READ_TOOLS: [&str; 11] = [
+    "project_info",
+    "list_runs",
+    "run_status",
+    "read_metrics",
+    "read_residuals",
+    "field_summary",
+    "render_field",
+    "compare_runs",
+    "list_changes",
+    "read_project_file",
+    "wait_run",
+];
+
+/// Format version of the allow-list file.
+const FILE_VERSION: u64 = 1;
+
+/// The file's shape: `{"version": 1, "rules": ["<flag value>", ...]}`, nothing else (each rule is validated after the
+/// parse and located by [`rule_positions`]).
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileIn {
+    #[allow(dead_code)] // checked while it is read
+    version: FileVersion,
+    rules: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct FileOut<'a> {
+    version: u64,
+    rules: Vec<&'a str>,
+}
+
+struct FileVersion;
+
+impl<'de> serde::Deserialize<'de> for FileVersion {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = u64::deserialize(d)?;
+        if v != FILE_VERSION {
+            return Err(serde::de::Error::custom(format!(
+                "version {v} is not {FILE_VERSION}, the only version this build reads"
+            )));
+        }
+        Ok(FileVersion)
+    }
+}
+
+/// Line and column (1-based) of every string element of the top-level `"rules"` array of `text`, in order.
+/// `text` has already been parsed as JSON, so the scan only follows nesting and strings. serde_json's position of an
+/// error raised for one element lies after the next separator, possibly on a later line, so it is not used for rules.
+fn rule_positions(text: &str) -> Vec<(usize, usize)> {
+    let b = text.as_bytes();
+    let (mut i, mut line, mut line_start, mut depth) = (0usize, 1usize, 0usize, 0usize);
+    let (mut expect_key, mut last_key, mut in_rules) = (false, None::<String>, false);
+    let mut out = Vec::new();
+    while i < b.len() {
+        match b[i] {
+            b'\n' => {
+                line += 1;
+                line_start = i + 1;
+            }
+            b'{' => {
+                depth += 1;
+                expect_key = depth == 1;
+            }
+            b'}' => depth = depth.saturating_sub(1),
+            b'[' => {
+                depth += 1;
+                in_rules = depth == 2 && last_key.as_deref() == Some("rules");
+            }
+            b']' => {
+                if depth == 2 {
+                    in_rules = false;
+                }
+                depth = depth.saturating_sub(1);
+            }
+            b',' if depth == 1 => expect_key = true,
+            b':' if depth == 1 => expect_key = false,
+            b'"' => {
+                let (start, col) = (i, i - line_start + 1);
+                i += 1;
+                while i < b.len() && b[i] != b'"' {
+                    i += if b[i] == b'\\' { 2 } else { 1 };
+                }
+                if depth == 1 && expect_key {
+                    last_key = text.get(start..=i).and_then(|t| serde_json::from_str(t).ok());
+                } else if depth == 2 && in_rules {
+                    out.push((line, col));
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+impl AllowList {
+    /// The first allow-list of a project: the read-class project tools of ADR 0135 as `mcp__rcfd_project__<tool>`,
+    /// nothing else (ADR 0134 W48-11 (a)).
+    pub fn project_initial() -> Self {
+        let mut l = Self::new();
+        for t in PROJECT_READ_TOOLS {
+            l.add(AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
+                .expect("project tool names are valid rules");
+        }
+        l
+    }
+
+    /// The allow-list file of `project` ([`ALLOW_FILE`]).
+    pub fn file_of(project: &Path) -> std::path::PathBuf {
+        project.join(ALLOW_FILE)
+    }
+
+    /// The file contents: pretty JSON, one rule (its flag value) per line, ending in a newline.
+    pub fn to_file_bytes(&self) -> Vec<u8> {
+        let values: Vec<String> = self.rules.iter().map(AllowRule::to_flag_value).collect();
+        let out = FileOut {
+            version: FILE_VERSION,
+            rules: values.iter().map(String::as_str).collect(),
+        };
+        let mut v = serde_json::to_vec_pretty(&out).expect("strings serialize");
+        v.push(b'\n');
+        v
+    }
+
+    /// Reads a list from file contents. Every rule is re-validated by the same policy as [`AllowList::add`]; one
+    /// invalid rule, an unknown key, another version or malformed JSON refuses the whole file with its line and
+    /// column ([`Error::AllowFile`]), so nothing from a tampered file is passed. `path` only names the file in errors.
+    pub fn from_file_bytes(path: &Path, bytes: &[u8]) -> Result<Self, Error> {
+        let file: FileIn = serde_json::from_slice(bytes).map_err(|e| {
+            let (line, column) = (e.line(), e.column());
+            let text = e.to_string();
+            let suffix = format!(" at line {line} column {column}");
+            Error::AllowFile {
+                path: path.to_path_buf(),
+                line,
+                column,
+                reason: text.strip_suffix(&suffix).unwrap_or(&text).to_string(),
+            }
+        })?;
+        let refuse = |k: usize, reason: String| {
+            let text = std::str::from_utf8(bytes).unwrap_or("");
+            let (line, column) = rule_positions(text).get(k).copied().unwrap_or((0, 0));
+            Error::AllowFile {
+                path: path.to_path_buf(),
+                line,
+                column,
+                reason,
+            }
+        };
+        let mut l = Self::new();
+        for (k, s) in file.rules.iter().enumerate() {
+            let rule = AllowRule::parse_shape(s).ok_or_else(|| {
+                refuse(
+                    k,
+                    format!("{s:?} is not a rule (a tool name, Bash(..), PowerShell(..), Edit(..) or Read(..))"),
+                )
+            })?;
+            rule.validate().map_err(|e| refuse(k, e.to_string()))?;
+            l.add(rule.normalized()).map_err(|e| refuse(k, e.to_string()))?; // duplicates collapse
+        }
+        Ok(l)
+    }
+
+    /// Reads the allow-list file at `path` (see [`AllowList::from_file_bytes`]). A missing file is an
+    /// [`Error::Io`] with kind `NotFound`.
+    pub fn from_file(path: &Path) -> Result<Self, Error> {
+        let bytes = rcfd_project::atomic::read(path).map_err(|e| project_err(path, e))?;
+        Self::from_file_bytes(path, &bytes)
+    }
+
+    /// Replaces the allow-list file at `path` atomically (`rcfd_project::atomic`), creating its folder.
+    pub fn to_file(&self, path: &Path) -> Result<(), Error> {
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir).map_err(|source| Error::Io {
+                path: dir.to_path_buf(),
+                source,
+            })?;
+        }
+        rcfd_project::atomic::atomic_write(path, &self.to_file_bytes()).map_err(|e| project_err(path, e))
+    }
+}
+
+/// An `rcfd-project` file error as a bridge error, keeping the I/O error (and so its kind) where there is one.
+fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
+    use rcfd_project::ProjectError as P;
+    match e {
+        P::Io { path, source, .. } | P::Retry { path, source, .. } => Error::Io { path, source },
+        other => Error::Io {
+            path: path.to_path_buf(),
+            source: std::io::Error::other(other.to_string()),
+        },
+    }
+}
+
+/// The app-owned MCP config for `--mcp-config` (ADR 0134 W48-10 (a)): one stdio server named [`PINNED_SERVER`] that
+/// starts `rcfd_mcp --project <project> --root <project>` (ADR 0135 W48-13 (a)). The Studio writes it into its own
+/// config folder, never into the project.
+pub fn pinned_mcp_config(rcfd_mcp: &Path, project: &Path) -> String {
+    let p = project.to_string_lossy();
+    let v = serde_json::json!({
+        "mcpServers": {
+            PINNED_SERVER: {
+                "type": "stdio",
+                "command": rcfd_mcp.to_string_lossy(),
+                "args": ["--project", p, "--root", p],
+            }
+        }
+    });
+    serde_json::to_string_pretty(&v).expect("strings serialize") + "\n"
+}
+
+/// [`check_args`] plus the MCP pinning rules of ADR 0134 W48-10 (a) for a chat whose working folder is `project`.
+/// `--strict-mcp-config` and `--mcp-config` are accepted only as separate arguments, each at most once, and
+/// `--mcp-config` only together with `--strict-mcp-config` and followed by exactly one value: an absolute path of an
+/// existing file outside `project`, lexically and after resolving links and short names. Inline JSON, a relative path
+/// (it would resolve inside the project) and the `=` forms are refused. Argument lists without these flags get exactly
+/// the verdict of [`check_args`].
+pub fn check_args_in(args: &[String], project: &Path) -> Result<(), Error> {
+    check_args(args)?;
+    let bad = |a: &str| Err(Error::ForbiddenArgument(a.to_string()));
+    let (mut strict, mut configs) = (0, 0);
+    for (i, a) in args.iter().enumerate() {
+        let low = a.to_ascii_lowercase();
+        if low.starts_with("--strict-mcp-config") {
+            if a != "--strict-mcp-config" {
+                return bad(a);
+            }
+            strict += 1;
+        } else if low.starts_with("--mcp-config") {
+            if a != "--mcp-config" {
+                return bad(a);
+            }
+            configs += 1;
+            let Some(value) = args.get(i + 1) else {
+                return bad("--mcp-config without a file");
+            };
+            if let Some(next) = args.get(i + 2).filter(|n| !n.starts_with('-')) {
+                return bad(next); // the option takes several values; exactly one file is passed
+            }
+            if let Err(why) = mcp_config_outside(value, project) {
+                return Err(Error::ForbiddenArgument(format!("--mcp-config {value}: {why}")));
+            }
+        }
+    }
+    if strict > 1 || configs > 1 {
+        return bad("--strict-mcp-config and --mcp-config may each appear only once");
+    }
+    if configs == 1 && strict == 0 {
+        return bad("--mcp-config without --strict-mcp-config");
+    }
+    Ok(())
+}
+
+/// Is `value` an absolute path of an existing file outside `project`?
+fn mcp_config_outside(value: &str, project: &Path) -> Result<(), String> {
+    let t = value.trim_start();
+    if t.is_empty() || t.starts_with(['-', '{', '[']) {
+        return Err("a config file path is required (no inline JSON, no flag)".into());
+    }
+    let path = Path::new(value);
+    if !path.is_absolute() {
+        return Err("the path must be absolute (a relative one resolves inside the project folder)".into());
+    }
+    if inside(&lexical(project), &lexical(path)) {
+        return Err("the file is inside the project folder".into());
+    }
+    let canon = |p: &Path| rcfd_project::paths::canonicalize(p).map_err(|e| format!("{}: {e}", p.display()));
+    let (cp, cf) = (canon(project)?, canon(path)?);
+    if !std::fs::metadata(&cf).is_ok_and(|m| m.is_file()) {
+        return Err("not a file".into());
+    }
+    if inside(&lexical(&cp), &lexical(&cf)) {
+        return Err("the file resolves inside the project folder".into());
+    }
+    Ok(())
+}
+
+/// The components of `p` with `.` dropped and `..` applied, as strings (ASCII-lowercased on Windows).
+fn lexical(p: &Path) -> Vec<String> {
+    use std::path::Component;
+    let (mut out, mut roots): (Vec<String>, usize) = (Vec::new(), 0);
+    for c in p.components() {
+        match c {
+            Component::CurDir => continue,
+            Component::ParentDir => {
+                if out.len() > roots {
+                    out.pop(); // never above the root
+                }
+                continue;
+            }
+            Component::Prefix(_) | Component::RootDir => roots += 1,
+            Component::Normal(_) => {}
+        }
+        let s = c.as_os_str().to_string_lossy().replace('\\', "/");
+        out.push(if cfg!(windows) { s.to_ascii_lowercase() } else { s });
+    }
+    out
+}
+
+/// Is `p` equal to `base` or below it (whole components, so `proj2` is not below `proj`)?
+fn inside(base: &[String], p: &[String]) -> bool {
+    p.len() >= base.len() && p[..base.len()] == *base
 }
 
 /// The narrowest rule that would allow a denied call, for an "allow this" button. `None` when no safe exact rule

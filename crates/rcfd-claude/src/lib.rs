@@ -83,6 +83,17 @@ pub enum Error {
     },
     /// `claude agents --json` failed or returned something unreadable.
     Listing(String),
+    /// An allow-list file was refused as a whole (ADR 0134 W48-11 (a)); nothing from it is used.
+    AllowFile {
+        /// The file.
+        path: PathBuf,
+        /// 1-based line of the refused rule or syntax error (0 when not known).
+        line: usize,
+        /// 1-based column.
+        column: usize,
+        /// Why.
+        reason: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -101,6 +112,16 @@ impl fmt::Display for Error {
             Error::ForbiddenArgument(a) => write!(f, "refusing to start claude: forbidden argument {a:?}"),
             Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Error::Listing(s) => write!(f, "claude agents --json: {s}"),
+            Error::AllowFile {
+                path,
+                line,
+                column,
+                reason,
+            } => write!(
+                f,
+                "{}: line {line}, column {column}: {reason}; the allow-list file is not used",
+                path.display()
+            ),
         }
     }
 }
