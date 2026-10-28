@@ -241,6 +241,25 @@ fn turn_status(ui: &mut egui::Ui, c: &mut ChatModel) {
             ui.weak(format!("session total here ${total:.6}"));
         }
     });
+    // for the by-hand checks (ADR 0134 H1-H5): what was started, and what the CLI reported
+    egui::CollapsingHeader::new("turn details")
+        .id_salt("chat-turn-details")
+        .show(ui, |ui| {
+            if let Some((mode, version, model)) = &t.init {
+                ui.monospace(format!(
+                    "system/init: permissionMode {}, version {}, model {}",
+                    mode.as_deref().unwrap_or("-"),
+                    version.as_deref().unwrap_or("-"),
+                    model.as_deref().unwrap_or("-")
+                ));
+            }
+            if !t.args.is_empty() {
+                ui.monospace(format!("claude {}", t.args.join(" ")));
+            }
+            if !t.stderr.trim().is_empty() {
+                ui.monospace(format!("stderr: {}", t.stderr.trim()));
+            }
+        });
     if cancel {
         c.cancel();
     }
