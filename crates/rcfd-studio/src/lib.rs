@@ -33,6 +33,7 @@ pub mod schema_model;
 pub mod store_plan;
 pub mod studio;
 pub mod theme;
+pub mod time_step;
 pub mod ui;
 pub mod view_toggle;
 pub mod viewport;

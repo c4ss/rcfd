@@ -202,6 +202,10 @@ pub struct StartPlan {
     pub mem_mb: Option<u64>,
     /// The user's own `path=value` overrides, applied after the store keys.
     pub extra_set: Vec<String>,
+    /// The run-time time settings Run adds (ADR 0153: "Simulate for" and the automatic time step), applied after the
+    /// store keys and before the user's overrides. `None` for every plan but Run's of a transient case. Boxed so that
+    /// the run worker's updates stay small.
+    pub time: Option<Box<crate::time_step::TimePlan>>,
 }
 
 fn steady(alg: &str) -> bool {
@@ -222,7 +226,7 @@ fn text_sets(raw: &Value, path: &[&str]) -> bool {
 /// The keys a case text sets, as a tree (no defaults, nothing resolved): JSON when the text starts with `{`, else TOML
 /// ([`crate::preview::is_json_text`], the rule of `rcfd run`, ADR 0149). With `toml_only` (the route before ADR 0149),
 /// TOML whatever the text.
-fn text_tree(text: &str, toml_only: bool) -> Result<Value, String> {
+pub(crate) fn text_tree(text: &str, toml_only: bool) -> Result<Value, String> {
     if !toml_only && crate::preview::is_json_text(text) {
         return serde_json::from_str(text).map_err(|e| format!("not JSON: {e}"));
     }
@@ -336,11 +340,12 @@ impl StartPlan {
             threads: 1,
             mem_mb: None,
             extra_set: Vec::new(),
+            time: None,
         })
     }
 
-    /// The `rcfd run --set` entries: the store keys (when the proposal is on), then the user's overrides. f64 is the
-    /// store's default, so it adds no key.
+    /// The `rcfd run --set` entries: the store keys (when the proposal is on), then the run-time time settings of Run
+    /// (ADR 0153, when set), then the user's overrides. f64 is the store's default, so it adds no key.
     pub fn set(&self) -> Vec<String> {
         let mut v = Vec::new();
         if let Some(s) = self.store.as_ref().filter(|s| s.on) {
@@ -352,8 +357,23 @@ impl StartPlan {
                 v.push("output.store_precision=f32".into());
             }
         }
+        if let Some(t) = &self.time {
+            v.extend(t.entries.iter().cloned());
+        }
         v.extend(self.extra_set.iter().filter(|s| !s.trim().is_empty()).cloned());
         v
+    }
+
+    /// Add Run's time settings (ADR 0153) to the plan: its `--set` entries, and the store proposal made again for the
+    /// simulated time `t.end_time` (the case's `solver.end_time` gave it), when the case sets no store itself.
+    pub fn with_time(mut self, t: crate::time_step::TimePlan) -> StartPlan {
+        if !self.facts.sets_store && !self.facts.dynamic_mesh {
+            let mut f = self.facts.clone();
+            f.end_time = t.end_time;
+            (self.store, self.note) = propose_store(&f);
+        }
+        self.time = Some(Box::new(t));
+        self
     }
 
     /// The runner's settings of this plan.

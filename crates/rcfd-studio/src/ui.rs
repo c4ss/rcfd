@@ -806,6 +806,9 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
             // ADR 0148 (the maintainer's answer to ADR 0147 question 4): Start is greyed out as Run is, while the case
             // editor holds this case with a field being typed, unsaved edits or a conflict
             let start_why = crate::quick_run::start_blocked(st, &d.case);
+            let time_facts = crate::quick_run::latest_facts(st, &d.case)
+                .filter(|_| !st.quick.switches.case_time)
+                .cloned();
             let mut start = false;
             match st.runs.plan.as_mut() {
                 None if !d.case.is_empty() => {
@@ -846,6 +849,16 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
                         .map(String::from)
                         .collect();
                     plan.mem_mb = d.mem.trim().parse().ok();
+                    // ADR 0153: this dialog runs the case's own time settings; their Courant estimate is warned about
+                    if let Some(f) = &time_facts {
+                        for (warn, line) in crate::time_step::dialog_lines(&d.case, f, &plan.set()) {
+                            if warn {
+                                ui.colored_label(WARN, line);
+                            } else {
+                                ui.weak(line);
+                            }
+                        }
+                    }
                     ui.weak(format!("rcfd run --set: {}", plan.set().join(" ")));
                     let why = start_why.clone();
                     let r = ui
