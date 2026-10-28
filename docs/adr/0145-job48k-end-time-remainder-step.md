@@ -168,6 +168,15 @@ and those below 0.05 (they now carry the D4 warning); C1's wall time; C1's value
 
 Results go into an addendum; a miss or a defective set-up is handled by the house rules above.
 
+## Amendment 1 (2026-10-28, after R1-R3, before B4 ran)
+
+What I knew when writing this: R1, R2 and R3 had run (results in the addendum). The first B4 attempt stopped at once:
+`gate_test.py`'s argument parser read the registered `-p rcfd-api ...` as unknown options (`error: unrecognized
+arguments: -p -p rcfd-cli ...`, exit 2); nothing was built, run or logged. The set-up was defective in its command line
+only. Corrected B4 command, with the same selection, options and probe: `python scripts/gate_test.py --jobs 3 --tsv
+<file> -- -p rcfd-api -p rcfd-cli -p rcfd-mcp -p rcfd-studio -p rcfd-runner -p rcfd-gui -p rcfd-assistant` (`--` ends the
+script's options; `--tsv` only records the per-test times). B4's limits are unchanged.
+
 ## Not in CI (for the maintainer)
 
 `cargo build --release -p rcfd-cli`, then `rcfd run` the cylinder case with `--set solver.dt=0.05 --set
