@@ -427,10 +427,11 @@ fn s4c_clean_shutdown_and_restart_adopts() {
 
 /// S5: the runner survives the client process that started it; the client's captured output reaches EOF
 /// (the runner holds no handle of it). Negative control: the lock probe reads false before and after.
-/// Known miss (ADR 0123 amendments 2 and 3): the EOF part fails while the host's `powershell.exe` hangs and
-/// `ensure_runner` falls back to a direct start; the survival part is S5a.
+/// Known miss (ADR 0123 amendments 2 and 3, ADR 0143): on Windows the direct start, the only route since ADR 0143,
+/// hands the runner the client's inheritable handles, so the client's piped stdout does not reach EOF while the runner
+/// lives; the survival part is S5a.
 #[test]
-#[ignore = "ADR 0123 amendment 3: fails while powershell.exe hangs on the host (direct-start fallback inherits the pipe)"]
+#[ignore = "ADR 0123 amendment 3, ADR 0143: on Windows the direct start (the only route) hands the runner the client's piped stdout"]
 fn s5_runner_survives_the_client_known_miss() {
     let p = Project::new("s5", base_config(1));
     assert!(!p.client.runner_running(), "probe reads a runner before any start");

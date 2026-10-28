@@ -52,28 +52,28 @@ impl Client {
 
     /// Start the project's runner, detached, unless one is alive; waits up to 10 s for it to hold the lock.
     pub fn ensure_runner(&self) -> Result<(), String> {
+        self.ensure_runner_pid().map(|_| ())
+    }
+
+    /// [`Client::ensure_runner`], returning the pid of the process this call started (`None`: a runner was alive).
+    /// That process is `rcfd-runner serve` itself, started directly (ADR 0143: no PowerShell or shell in between); it
+    /// may have lost a start race and exited (exit 3) while the other runner holds the lock. It is kept, so that it is
+    /// reaped when it exits (`sys::keep_started`).
+    // shortcut (Windows): the direct start hands the runner the caller's inheritable handles (ADR 0143 decision 1).
+    pub fn ensure_runner_pid(&self) -> Result<Option<u32>, String> {
         if self.runner_running() {
-            return Ok(());
+            return Ok(None);
         }
         let dot = dot_dir(self.project());
         std::fs::create_dir_all(&dot).map_err(err)?;
         let project = std::env::current_dir().map_err(err)?.join(self.project());
         let args = ["serve".into(), "--project".into(), project.display().to_string()];
-        let cannot = |e: std::io::Error| format!("cannot start {}: {e}", self.runner_exe.display());
-        let mut launcher = sys::spawn_detached(&self.runner_exe, &args).map_err(cannot)?;
-        if self.wait_lock(Duration::from_secs(if cfg!(windows) { 5 } else { 10 })) {
-            let _ = launcher.try_wait();
-            return Ok(());
-        }
-        if cfg!(windows) {
-            // PowerShell did not start the runner in time (seen hung on a loaded host, ADR 0123 amendment 2):
-            // start it directly. shortcut: this route hands the runner the caller's inheritable handles.
-            let _ = launcher.kill();
-            let _ = launcher.wait();
-            let _ = sys::spawn_direct(&self.runner_exe, &args).map_err(cannot)?;
-            if self.wait_lock(Duration::from_secs(10)) {
-                return Ok(());
-            }
+        let child = sys::spawn_detached(&self.runner_exe, &args)
+            .map_err(|e| format!("cannot start {}: {e}", self.runner_exe.display()))?;
+        let pid = child.id();
+        sys::keep_started(child);
+        if self.wait_lock(Duration::from_secs(10)) {
+            return Ok(Some(pid));
         }
         Err(format!(
             "the runner did not take the lock in time (see {})",

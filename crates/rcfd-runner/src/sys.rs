@@ -5,7 +5,8 @@ use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Windows `CreateProcess` flag: a console program gets a console without a window.
@@ -48,7 +49,8 @@ fn probe_cmd(pid: u32) -> (Command, u32) {
         (c, f)
     } else {
         let (mut c, f) = console("ps", 0);
-        c.args(["-p", &pid.to_string(), "-o", "comm="]);
+        // the state too: a zombie keeps its name (ADR 0143)
+        c.args(["-p", &pid.to_string(), "-o", "stat=", "-o", "comm="]);
         (c, f)
     };
     c.stdin(Stdio::null()).stderr(Stdio::null());
@@ -56,9 +58,11 @@ fn probe_cmd(pid: u32) -> (Command, u32) {
 }
 
 /// Is process `pid` alive and its executable named `name` (without `.exe`)? The name check guards against a
-/// recycled pid of an unrelated program.
+/// recycled pid of an unrelated program. The processes this process started and that have exited are reaped first
+/// ([`reap_started`]). Unix: a zombie or a dead process is not alive ([`ps_alive`], ADR 0143).
 // shortcut: a recycled pid of another process with the same name reads as alive; a per-process handle would fix it.
 pub fn pid_alive(pid: u32, name: &str) -> bool {
+    reap_started();
     #[cfg(windows)]
     {
         let Ok(o) = probe_cmd(pid).0.output() else {
@@ -74,9 +78,22 @@ pub fn pid_alive(pid: u32, name: &str) -> bool {
         probe_cmd(pid)
             .0
             .output()
-            .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim().ends_with(name))
+            .map(|o| o.status.success() && ps_alive(&String::from_utf8_lossy(&o.stdout), name))
             .unwrap_or(false)
     }
+}
+
+/// The verdict of [`pid_alive`] on Unix from the output of `ps -p <pid> -o stat= -o comm=`: alive when the first
+/// non-blank line holds a state that does not start with `Z` (zombie) or `X` (dead) and a name that ends with `name`.
+/// Plain text in, so that it is tested on every platform (ADR 0143 Z0).
+pub fn ps_alive(out: &str, name: &str) -> bool {
+    let Some(line) = out.lines().map(str::trim).find(|l| !l.is_empty()) else {
+        return false;
+    };
+    let Some((stat, comm)) = line.split_once(char::is_whitespace) else {
+        return false;
+    };
+    !stat.starts_with(['Z', 'X']) && comm.trim().ends_with(name)
 }
 
 /// The command of [`kill`] and its creation flags.
@@ -103,85 +120,11 @@ pub fn kill(pid: u32) -> bool {
         .is_ok_and(|s| s.success())
 }
 
-/// Start `exe args` detached from the caller, with no stdio, so the caller's exit, Ctrl+C or captured
-/// output does not tie it. Returns the launcher process (Windows: a short-lived PowerShell; Unix: `exe`).
-///
-/// Windows: a std spawn passes the new process every inheritable handle of the caller (for example the pipe
-/// a shell reads the caller's output from, so `$id = rcfd-runner start ...` would wait for the runner to
-/// exit). `Start-Process` without redirection uses ShellExecute, which passes no handles; the script goes
-/// base64-encoded (`-EncodedCommand`) so paths need no quoting rules.
-pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
-    #[cfg(windows)]
-    {
-        launcher_cmd(&start_script(exe, args)).0.spawn()
-    }
-    #[cfg(not(windows))]
-    {
-        spawn_direct(exe, args)
-    }
-}
-
-/// The PowerShell launcher of [`spawn_detached`] running `script`, and its creation flags: detached from the
-/// caller's console and Ctrl+C like [`spawn_direct`], no window.
-#[cfg(windows)]
-fn launcher_cmd(script: &str) -> (Command, u32) {
-    let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    let (mut c, flags) = console("powershell", DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
-    c.args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &base64(&utf16)])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    (c, flags)
-}
-
-/// The Windows command line of `args`: each argument in double quotes by the `CommandLineToArgvW` rules (backslashes
-/// before a quote or at the end are doubled, a quote is escaped), separated by spaces. A project path ending in `\`
-/// (or `C:\`) stays one argument; trimming it instead would turn `C:\` into `C:` (ADR 0128 finding 15).
-pub fn command_line(args: &[String]) -> String {
-    let quote = |a: &String| {
-        let mut out = String::from("\"");
-        let mut slashes = 0;
-        for c in a.chars() {
-            match c {
-                '\\' => slashes += 1,
-                '"' => {
-                    out.extend(std::iter::repeat('\\').take(2 * slashes + 1));
-                    out.push('"');
-                    slashes = 0;
-                }
-                c => {
-                    out.extend(std::iter::repeat('\\').take(slashes));
-                    out.push(c);
-                    slashes = 0;
-                }
-            }
-        }
-        out.extend(std::iter::repeat('\\').take(2 * slashes));
-        out.push('"');
-        out
-    };
-    args.iter().map(quote).collect::<Vec<_>>().join(" ")
-}
-
-/// The PowerShell script of [`spawn_detached`]: the whole command line as one `-ArgumentList` string (PowerShell
-/// passes a single string through as the command line), single quotes doubled for PowerShell.
-pub fn start_script(exe: &Path, args: &[String]) -> String {
-    let q = |s: &str| s.replace('\'', "''");
-    format!(
-        "Start-Process -FilePath '{}' -ArgumentList '{}' -WindowStyle Hidden",
-        q(&exe.display().to_string()),
-        q(&command_line(args))
-    )
-}
-
-/// Start `exe args` directly, with null stdio, in its own process group (Windows: also without a console).
-/// On Windows it inherits the caller's inheritable handles (see [`spawn_detached`]).
-pub fn spawn_direct(exe: &Path, args: &[String]) -> io::Result<std::process::Child> {
-    direct_cmd(exe, args).0.spawn()
-}
-
-/// The command of [`spawn_direct`] and its creation flags.
-fn direct_cmd(exe: &Path, args: &[String]) -> (Command, u32) {
+/// The command of [`spawn_detached`] and its creation flags: `exe args` itself, with null stdio and nothing in
+/// between. Windows: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` (and `CREATE_NO_WINDOW`, see [`console`]): no
+/// console, and the caller's Ctrl+C does not reach it. Unix: its own process group (`process_group(0)`); a new session
+/// would need `setsid`, which std offers only unstable or through unsafe code.
+pub fn detached_command(exe: &Path, args: &[String]) -> (Command, u32) {
     let (mut cmd, flags) = console(exe, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     cmd.args(args)
         .stdin(Stdio::null())
@@ -195,22 +138,32 @@ fn direct_cmd(exe: &Path, args: &[String]) -> (Command, u32) {
     (cmd, flags)
 }
 
-/// Standard base64 with padding.
-pub fn base64(bytes: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for c in bytes.chunks(3) {
-        let n =
-            (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
-        for k in 0..4 {
-            s.push(if k <= c.len() {
-                T[(n >> (18 - 6 * k) & 63) as usize] as char
-            } else {
-                '='
-            });
-        }
-    }
-    s
+/// Start `exe args` detached from the caller ([`detached_command`]), so that the caller's exit or Ctrl+C does not end
+/// it: the only start route (ADR 0143). Hand the child to [`keep_started`] so that it is reaped when it exits.
+///
+/// Windows: std's spawn passes the new process every inheritable handle of the caller (std's switch for it is
+/// unstable, and the workspace forbids unsafe code). A caller whose stdout is a pipe that another process reads to the
+/// end (a shell capturing `rcfd-runner start ...`) therefore keeps that reader waiting until the new process exits.
+pub fn spawn_detached(exe: &Path, args: &[String]) -> io::Result<Child> {
+    detached_command(exe, args).0.spawn()
+}
+
+/// The processes this process started with [`spawn_detached`] and still owns, until they exit (ADR 0143).
+static STARTED: Mutex<Vec<Child>> = Mutex::new(Vec::new());
+
+/// Keep `child` until it exits; [`reap_started`] collects it then.
+pub fn keep_started(child: Child) {
+    STARTED.lock().unwrap_or_else(|e| e.into_inner()).push(child);
+}
+
+/// Reap the kept processes that have exited (`try_wait`, never blocking) and drop them; returns how many. Unix: a
+/// dead runner that this process started does not stay its zombie; Windows: its process handle is released.
+/// [`lock_held`] and [`pid_alive`] call it first.
+pub fn reap_started() -> usize {
+    let mut kept = STARTED.lock().unwrap_or_else(|e| e.into_inner());
+    let before = kept.len();
+    kept.retain_mut(|c| matches!(c.try_wait(), Ok(None)));
+    before - kept.len()
 }
 
 /// A console program started by the (console-less) runner must not open a window (see [`console`]).
@@ -316,8 +269,10 @@ fn unix_takeover(path: &Path) {
     }
 }
 
-/// Is a live runner holding the lock at `path`?
+/// Is a live runner holding the lock at `path`? The processes this process started and that have exited are reaped
+/// first ([`reap_started`]).
 pub fn lock_held(path: &Path) -> bool {
+    reap_started();
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
@@ -341,7 +296,8 @@ pub fn lock_held(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     /// ADR 0128 finding 17 (a, b): every console program the runner and its client start is built with
-    /// `CREATE_NO_WINDOW`; the PowerShell launcher and the direct start keep `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`.
+    /// `CREATE_NO_WINDOW`; the runner start keeps `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`. ADR 0143: the PowerShell
+    /// launcher went with its route.
     #[cfg(windows)]
     #[test]
     fn no_window_flags_on_every_console_spawn() {
@@ -353,8 +309,7 @@ mod tests {
         let sites = [
             ("tasklist (pid_alive)", probe_cmd(1).1),
             ("taskkill (kill)", kill_cmd(1).1),
-            ("powershell (spawn_detached)", launcher_cmd("x").1),
-            ("runner (spawn_direct)", direct_cmd(exe, &[]).1),
+            ("runner (spawn_detached)", detached_command(exe, &[]).1),
             ("rcfd --version (Client::submit)", crate::client::version_cmd(exe).1),
         ];
         eprintln!(
@@ -364,18 +319,78 @@ mod tests {
         for (name, f) in sites {
             assert!(hidden(f), "{name}: flags {f:#x} lack CREATE_NO_WINDOW");
         }
-        assert!(detached(launcher_cmd("x").1) && detached(direct_cmd(exe, &[]).1));
+        assert!(detached(detached_command(exe, &[]).1));
         // negative control: a command built without the helper carries no flags and fails the same check
         let _plain = Command::new("tasklist");
         assert!(!hidden(0));
     }
 
+    /// ADR 0143 N4 (b): the start command is the runner executable itself, with nothing in between; on Windows it is
+    /// detached and opens no window.
     #[test]
-    fn base64_matches_rfc4648_vectors() {
-        let v: Vec<String> = ["", "f", "fo", "foo", "foob", "fooba", "foobar"]
+    fn n4_the_start_command_is_the_runner_itself() {
+        use super::*;
+        let exe = Path::new(if cfg!(windows) {
+            r"C:\x y\rcfd-runner.exe"
+        } else {
+            "/x y/rcfd-runner"
+        });
+        let args = ["serve".to_string(), "--project".into(), "p".into()];
+        let (cmd, flags) = detached_command(exe, &args);
+        let got: Vec<&OsStr> = cmd.get_args().collect();
+        eprintln!(
+            "N4 (b): program {:?}, arguments {got:?}, flags {flags:#x}",
+            cmd.get_program()
+        );
+        assert_eq!(cmd.get_program(), exe.as_os_str());
+        assert_eq!(got, ["serve", "--project", "p"]);
+        if cfg!(windows) {
+            let want = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW;
+            assert_eq!(flags & want, want, "{flags:#x}");
+        } else {
+            assert_eq!(flags, 0);
+        }
+    }
+
+    /// ADR 0143 Z0: `ps_alive` on simulated `ps -o stat= -o comm=` output; zombie and dead states are not alive.
+    /// Negative control: the pre-change rule (the trimmed output ends with the name) reads the zombie as alive.
+    #[test]
+    fn z0_ps_zombie_and_dead_states_are_not_alive() {
+        use super::ps_alive;
+        let alive = [
+            ("S    rcfd-runner", "rcfd-runner"),
+            ("Ssl  rcfd-runner", "rcfd-runner"),
+            ("R+   rcfd", "rcfd"),
+            ("D    rcfd", "rcfd"),
+            ("T    rcfd", "rcfd"),
+            ("I    rcfd-runner", "rcfd-runner"),
+            ("  S rcfd-runner\n", "rcfd-runner"),
+        ];
+        let dead = [
+            ("Z    rcfd-runner", "rcfd-runner"),
+            ("Z+   rcfd-runner", "rcfd-runner"),
+            ("X    rcfd-runner", "rcfd-runner"),
+            ("Z    rcfd-runner <defunct>", "rcfd-runner"),
+            ("S    other", "rcfd-runner"),
+            ("S", "rcfd-runner"),
+            ("", "rcfd-runner"),
+            ("\n", "rcfd-runner"),
+        ];
+        let wrong: Vec<_> = alive
             .iter()
-            .map(|s| super::base64(s.as_bytes()))
+            .filter(|(o, n)| !ps_alive(o, n))
+            .chain(dead.iter().filter(|(o, n)| ps_alive(o, n)))
             .collect();
-        assert_eq!(v, ["", "Zg==", "Zm8=", "Zm9v", "Zm9vYg==", "Zm9vYmE=", "Zm9vYmFy"]);
+        eprintln!(
+            "Z0: {} outputs read alive, {} dead; wrong verdicts {wrong:?}",
+            alive.len(),
+            dead.len()
+        );
+        assert!(wrong.is_empty(), "{wrong:?}");
+        let old = |out: &str, name: &str| out.trim().ends_with(name);
+        assert!(
+            old("Z    rcfd-runner", "rcfd-runner"),
+            "negative control: the pre-change rule does not read the zombie as alive"
+        );
     }
 }

@@ -53,9 +53,10 @@ fn n1_first_run_of_a_session_starts_the_solver_within_1_5_s() {
                 check = Some(since(now));
             }
             if started.is_none() {
-                if let Some(s) = p.status(&rid).filter(|s| {
-                    (s.state == RunState::Running && s.pid.is_some()) || s.state.is_terminal()
-                }) {
+                if let Some(s) = p
+                    .status(&rid)
+                    .filter(|s| (s.state == RunState::Running && s.pid.is_some()) || s.state.is_terminal())
+                {
                     started = Some(since(now));
                     first = Some(s);
                 }
@@ -183,7 +184,10 @@ fn n2_the_runner_survives_the_studio_process() {
          runner {alive_after_exit}, run {state_after_exit:?}",
         t0.elapsed().as_secs_f64()
     );
-    assert!(!before, "negative control: the lock probe reads a runner before the start");
+    assert!(
+        !before,
+        "negative control: the lock probe reads a runner before the start"
+    );
     assert!(
         code.success(),
         "N2: the child failed ({code:?}); stdout: {text}; stderr: {}",

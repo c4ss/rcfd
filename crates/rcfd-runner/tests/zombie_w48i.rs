@@ -80,7 +80,11 @@ fn z1_a_killed_runner_child_reads_as_gone() {
         "Z1: runner {pid}: before the kill (runner_running, pid_alive) {before:?}; gone after {gone:?} s; last \
          probes {last:?}"
     );
-    assert_eq!(before, (true, true), "negative control: the probes do not see the live runner");
+    assert_eq!(
+        before,
+        (true, true),
+        "negative control: the probes do not see the live runner"
+    );
     let dt = gone.unwrap_or(f64::INFINITY);
     assert!(
         dt <= GONE_S,

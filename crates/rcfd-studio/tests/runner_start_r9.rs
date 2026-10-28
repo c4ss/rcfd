@@ -1,6 +1,6 @@
 //! ADR 0133 R9 (set-up: amendment 1): no runner alive; the model shows "runner not running" with the queued run, then
-//! its start-runner action (`ensure_runner`, either route) shows the runner and the run running within 15 s. Run this
-//! binary with its output going to a file (ADR 0123 S5a): the direct-start fallback hands the runner the caller's
+//! its start-runner action (`ensure_runner`, the direct start of ADR 0143) shows the runner and the run running within
+//! 15 s. Run this binary with its output going to a file (ADR 0123 S5a): the direct start hands the runner the caller's
 //! inheritable handles. The drop guard of `RunnerProject` shuts the runner down and kills only the run's solver.
 
 mod common;

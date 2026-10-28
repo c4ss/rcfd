@@ -1,6 +1,6 @@
 //! ADR 0141 G1: one click from a case to a picture, end to end through the drawn app with the real `rcfd-runner` and
-//! `rcfd`, and no runner alive before the click (the click starts it through `ensure_runner`, either route, as ADR
-//! 0133 R9). Run this binary with its output going to a file (ADR 0123 S5a): the direct-start fallback hands the
+//! `rcfd`, and no runner alive before the click (the click starts it through `ensure_runner`, the direct start of ADR
+//! 0143, as ADR 0133 R9). Run this binary with its output going to a file (ADR 0123 S5a): the direct start hands the
 //! runner the caller's inheritable handles. The drop guard of `RunnerProject` shuts the runner down and kills only the
 //! run's solver.
 
