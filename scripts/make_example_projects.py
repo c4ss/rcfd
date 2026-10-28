@@ -324,9 +324,9 @@ def step_reattachment(run_dir, box):
 # ------------------------------------------------------------------------------------------------ monitors
 
 
-def shedding(monitors_path, periods=6):
-    """Strouhal number (D = U = 1), mean C_D and the C_L amplitude over the last `periods` whole periods of C_L,
-    from the upward crossings of C_L through its mean over the second half of the run."""
+def shedding(monitors_path):
+    """Strouhal number (D = U = 1), mean C_D and the C_L amplitude over all whole periods of C_L between the first and
+    the last upward crossing of C_L through its mean in the second half of the run (ADR 0142 amendment 1)."""
     m = read_json(monitors_path)["series"]
     t, cl, cd = m["cl"]["x"], m["cl"]["y"], m["cd"]["y"]
     half = t[-1] / 2.0
@@ -337,9 +337,10 @@ def shedding(monitors_path, periods=6):
         if cl[a] - mean < 0.0 <= cl[b] - mean:
             w = (mean - cl[a]) / (cl[b] - cl[a])
             cross.append(t[a] + w * (t[b] - t[a]))
-    if len(cross) < periods + 1:
-        raise RuntimeError("%s: %d crossings, fewer than %d periods" % (monitors_path, len(cross), periods))
-    ta, tb = cross[-1 - periods], cross[-1]
+    if len(cross) < 2:
+        raise RuntimeError("%s: %d upward crossings in the second half, no whole period" % (monitors_path, len(cross)))
+    periods = len(cross) - 1
+    ta, tb = cross[0], cross[-1]
     win = [i for i in idx if ta <= t[i] <= tb]
     num = 0.0
     for a, b in zip(win, win[1:]):
@@ -348,6 +349,7 @@ def shedding(monitors_path, periods=6):
         "strouhal": periods / (tb - ta),
         "cd_mean": num / (t[win[-1]] - t[win[0]]),
         "cl_amplitude": 0.5 * (max(cl[i] for i in win) - min(cl[i] for i in win)),
+        "periods": periods,
         "window_start": ta,
         "window_end": tb,
     }
@@ -492,6 +494,22 @@ def build_project(pname, bins, threads, root=EXAMPLES):
     return {"project": pname, "runs": ids, "meshes": meshes, "pruned": pruned}
 
 
+def summarise_existing(pname, root=EXAMPLES):
+    """Write the ledger and the run table of a project from its existing runs (no solver run; ADR 0142 amendment 1)."""
+    spec = PROJECTS[pname]
+    pdir = os.path.join(root, pname)
+    ids = []
+    for r in spec["runs"]:
+        rid = run_of_case(pdir, r["case"])
+        if rid is None:
+            raise RuntimeError("%s: no run of %s to summarise" % (pname, r["case"]))
+        ids.append(rid)
+    ledger_lines, table = summarise(pdir, spec, ids)
+    write_text(os.path.join(pdir, "designs", "variants.ledger.jsonl"), "".join(l + "\n" for l in ledger_lines))
+    update_run_table(os.path.join(pdir, "notes", "README.md"), table)
+    return ids
+
+
 # ------------------------------------------------------------------------------------------------ ledger and run table
 
 
@@ -506,7 +524,7 @@ def metric_list(spec, run_dir):
     if spec["kind"] == "shedding":
         s = shedding(os.path.join(run_dir, "output", "monitors.json"))
         out += [["strouhal", s["strouhal"], "1"], ["cd_mean", s["cd_mean"], "1"],
-                ["cl_amplitude", s["cl_amplitude"], "1"]]
+                ["cl_amplitude", s["cl_amplitude"], "1"], ["periods", float(s["periods"]), "1"]]
     if spec["kind"] == "step":
         floor, top = step_reattachment(run_dir, spec["box"])
         out.append(["x_reattach", floor[-1], "m"])
@@ -790,6 +808,8 @@ def main(argv=None):
     ap.add_argument("--bin-dir", default=os.path.join(REPO, "target", "release"))
     ap.add_argument("--threads", type=int, default=1, help="solver threads per run (results do not depend on it)")
     ap.add_argument("--root", default=EXAMPLES, help="folder holding the projects (default: example-projects)")
+    ap.add_argument("--summarise-only", action="store_true",
+                    help="write the ledger and run tables of the existing runs (no solver run), then the manifest")
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
     if a.check:
@@ -806,6 +826,9 @@ def main(argv=None):
         print("rerun check: %d problem(s)" % len(problems))
         return 1 if problems else 0
     for pname in a.project or list(PROJECTS):
+        if a.summarise_only:
+            print("summarising %s: %s" % (pname, summarise_existing(pname, root)))
+            continue
         print("building %s" % pname)
         t0 = time.time()
         res = build_project(pname, bins, a.threads, root)

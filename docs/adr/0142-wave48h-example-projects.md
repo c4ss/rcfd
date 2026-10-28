@@ -203,6 +203,28 @@ Side-by-side comparison of runs in the Studio (wave 49); a NACA or step generato
 aerofoil mesh; validation of any of these flows; the mesh preview, store default and start-and-follow jobs of 48G; the
 transonic NACA 0012 condition of the descriptor.
 
+## Amendment 1 (2026-10-28, after the counted rebuild's solver runs, before its post-processing ran again)
+
+What I knew when writing this: the counted rebuild (registration acc912b) ran the six wind-tunnel runs through the run
+service and they ended as G1 registers (cylinders `finished` at step 1280, aerofoils `not_converged` at 2000, steps
+`converged` at 740 and 429; from the script's printout); the script then stopped in its post-processing with "6
+crossings, fewer than 6 periods" for the run of `cases/cylinder-re100.toml`. So the ledger, the run tables, the manifest
+and the quick-start project were not written. Nothing else of the runs was looked at.
+
+1. **D8 was defective**: "over the last 6 whole periods of `cl`" needs 7 upward crossings in the second half of the run,
+   but at St about 0.15 the second half of an 80 D/U run holds about 6 periods. Corrected rule (for both cylinder runs,
+   in the script and in S6's recomputation alike): the shedding statistics are taken over **all whole periods between
+   the first and the last upward crossing of `cl` through its mean in the second half of the run**, at least one;
+   `strouhal` = (number of crossings - 1) / (last - first crossing time), `cd_mean` the trapezoidal mean of `cd` over that
+   window, `cl_amplitude` half the range of `cl` in it. The ledger gains the metric `periods` (unit 1), the number used.
+   The solver runs are not repeated: the post-processing runs again on the run folders of the counted rebuild (a new
+   script option `--summarise-only`, which writes the ledger and run tables of existing runs), and the quick-start
+   project is then built by the script as registered.
+2. **G3's crossing count is a predicted miss** for the Re 100 run (6 upward crossings in the second half, limit 7). The
+   limit stays; that part of G3 becomes the ignored test `g3_cylinders_cross_at_least_7_times_known_miss`; the other G3
+   comparisons are a separate test with their limits unchanged.
+3. The cylinder note's sentence on the method follows the corrected rule.
+
 ## Questions for the maintainer (open at registration; the addendum may add to them)
 
 1. The stores are binary (about 30 MB in all); every regeneration adds a new copy to the git history. Keep them in the

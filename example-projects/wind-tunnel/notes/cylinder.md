@@ -29,6 +29,7 @@ The repository's validation runs of this flow (ADR 0062, ADR 0069, `crates/rcfd-
 128 x 100 cells, far field at 20 D, 160 D / U) measured St 0.159 to 0.165 and a mean drag coefficient 1.31 to 1.34 at
 Re 100. This example uses about a quarter of those cells and half the time; its Strouhal number and mean drag are in the
 run table of `notes/README.md` and in `designs/variants.ledger.jsonl` (computed by `scripts/make_example_projects.py` from
-the `cl` and `cd` series over the last six whole periods). They are not a validation: one coarse mesh, one time step, no
+the `cl` and `cd` series over the whole shedding periods of the second half of the run, ADR 0142 amendment 1; only about
+six periods fit, so the Strouhal number is known to a few percent at best). They are not a validation: one coarse mesh, one time step, no
 uncertainty estimate. A real cylinder wake becomes three-dimensional near Re 190, which a two-dimensional run cannot show,
 so the Re 200 run is a two-dimensional model of that flow.

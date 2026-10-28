@@ -11,7 +11,10 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 fn examples() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("example-projects")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("example-projects")
 }
 
 /// (run id, case) of the committed runs of `project`, from `example-projects/manifest.json`.
@@ -21,7 +24,12 @@ fn committed(project: &str) -> Vec<(String, String)> {
         .as_array()
         .unwrap()
         .iter()
-        .map(|r| (r["run"].as_str().unwrap().to_string(), r["case"].as_str().unwrap().to_string()))
+        .map(|r| {
+            (
+                r["run"].as_str().unwrap().to_string(),
+                r["case"].as_str().unwrap().to_string(),
+            )
+        })
         .collect()
 }
 
@@ -34,10 +42,17 @@ fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
         st.poll = None;
         st.run_poll = None;
         st.open_project(&root);
-        assert!(st.drain_until(vp::WAIT, |s| s.browser().is_some()), "{name}: did not open");
+        assert!(
+            st.drain_until(vp::WAIT, |s| s.browser().is_some()),
+            "{name}: did not open"
+        );
         let b = st.browser().unwrap();
         let (cases, listed, skipped) = (b.cases.clone(), b.runs.len(), b.skipped.len());
-        println!("H1 {name}: {} cases, {listed} runs, {skipped} skipped, errors {:?}", cases.len(), b.errors);
+        println!(
+            "H1 {name}: {} cases, {listed} runs, {skipped} skipped, errors {:?}",
+            cases.len(),
+            b.errors
+        );
         assert_eq!(cases.len(), n_cases, "{name}: cases {cases:?}");
         assert_eq!(listed, runs.len(), "{name}: runs");
         assert_eq!(skipped, 0, "{name}: skipped {:?}", b.skipped);
@@ -86,7 +101,10 @@ fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
             println!("H1 {name}/{case}: editor validate {ok} {:?}", ed.diagnostics);
             if mesh_file {
                 // E1's predicted miss, through the Studio's own editor
-                assert!(!ok && ed.diagnostics.iter().any(|d| d.contains("mesh.file")), "{name}/{case}");
+                assert!(
+                    !ok && ed.diagnostics.iter().any(|d| d.contains("mesh.file")),
+                    "{name}/{case}"
+                );
             } else {
                 assert!(ok, "{name}/{case}: {:?}", ed.diagnostics);
             }
