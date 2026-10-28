@@ -376,10 +376,11 @@ and V9 had passed in their own run.
 
 Branch `worktree-agent-a90090d61490b5d71` on main 7486ecb. Registered runs: release, `--test-threads 1`, output to files, this
 machine, the five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no
-test took the SKIP branch. V3, V9 and V4, V5, V8, V11 ran on 87b8552, V10 on 801a378 (after amendment 2), V2 and the whole
-`rcfd-studio` suite on 801a378. After two later commits (39cc8e8: a live-store fix and "Save PNG", below; e9d3e8e: the smoke hook
-prints once) the viewport tests, parity, B4 and B7 were run again: all pass with the same values. The workspace gate was not run
-(the maintainer runs it).
+test took the SKIP branch. V3, V9 and V4, V5, V8, V11 ran on the working tree committed as 87b8552, V10 and V2 on 801a378 (after
+amendment 2). After the later commits (39cc8e8: a live-store fix and "Save PNG", below; e9d3e8e: the smoke hook prints once;
+formatting) the whole `rcfd-studio` suite was run again on a28007b (the tree of this addendum, before this provenance edit):
+every test passes with the same values (B7 median 0.324 ms; V10 byte-identical on all five adapters). The workspace gate was not
+run (the maintainer runs it).
 
 | Id | Measured | Limit | Status |
 |---|---|---|---|
@@ -402,7 +403,7 @@ prints once) the viewport tests, parity, B4 and B7 were run again: all pass with
 | V11 control | marker != snapshot index | differ | fails as required |
 | B9 parity | `parity_2d_field_view_with_colour_map_legend_and_hover` on NVIDIA Vulkan: rendered, legend end labels drawn, hover `value 1.1092974268256817  (face 0, cell 0)` drawn (the stored value) | as registered | pass |
 
-No known miss. ADR 0131 and 0133 checks re-run unchanged in the same suite (801a378): B1-B9 (B7 median 0.329 ms, control 14.7 ms),
+No known miss. ADR 0131 and 0133 checks re-run unchanged in the same suite (801a378, and again on a28007b): B1-B9 (B7 median 0.329 ms, control 14.7 ms),
 R1-R5, R6b, R7-R12 and the live-monitor parity test pass, R6 stays the ignored known miss. `workspace_graph` 3 passed; `cargo clippy
 --release -p rcfd-studio --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean;
 `scripts/third_party_licenses.py --check` up to date.
