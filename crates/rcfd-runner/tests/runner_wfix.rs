@@ -332,12 +332,13 @@ fn f11_bad_wait_timeouts_are_clean_errors() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// F15: the command line built for the detached (PowerShell) start parses back, by the real argv rules of the runner
-/// binary, into exactly the arguments given: trailing backslashes, `C:\`, quotes, spaces, an empty argument.
+/// F15: the arguments of the detached start parse back, by the real argv rules of the runner binary, into exactly the
+/// arguments given: trailing backslashes, `C:\`, quotes, spaces, an empty argument. ADR 0143: the start is the runner
+/// itself through `sys::detached_command` (std's quoting); the hand-built PowerShell command line and its script are
+/// gone with that route.
 #[cfg(windows)]
 #[test]
 fn f15_command_line_round_trips_through_the_real_argv_parser() {
-    use std::os::windows::process::CommandExt;
     let dir = project("f15", json!({}));
     let proj = dir.display().to_string();
     let mut bad = Vec::new();
@@ -359,26 +360,17 @@ fn f15_command_line_round_trips_through_the_real_argv_parser() {
             "--project".into(),
             proj.clone(),
         ];
-        let line = rcfd_runner::sys::command_line(&args);
-        let o = Command::new(RUNNER).raw_arg(&line).output().unwrap();
+        let (mut cmd, _) = rcfd_runner::sys::detached_command(Path::new(RUNNER), &args);
+        let o = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).output().unwrap();
         let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
         // `start` reads the case file first; its error names the case path exactly as parsed
         let ok = o.status.code() == Some(1) && err.starts_with(&format!("rcfd-runner: {arg}: "));
-        eprintln!("F15 {arg:?}: command line {line}: {err} ({ok})");
+        eprintln!("F15 {arg:?}: {err} ({ok})");
         if !ok {
             bad.push(arg);
         }
     }
     assert!(bad.is_empty(), "arguments that do not round-trip: {bad:?}");
-    let script = rcfd_runner::sys::start_script(
-        Path::new(r"C:\o'k\rcfd-runner.exe"),
-        &["serve".into(), r"C:\it's\".into()],
-    );
-    eprintln!("F15 script: {script}");
-    assert_eq!(
-        script,
-        r#"Start-Process -FilePath 'C:\o''k\rcfd-runner.exe' -ArgumentList '"serve" "C:\it''s\\"' -WindowStyle Hidden"#
-    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

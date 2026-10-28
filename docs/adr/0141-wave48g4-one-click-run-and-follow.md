@@ -348,6 +348,8 @@ has the focus; the scripts on the maintainer's shells; the Linux runs of every p
     5.166 s): `ensure_runner` gives the PowerShell route 5 s to take the lock, and on this host it does not, so the direct
     start follows (which route started the runner is not recorded). The strip counts the wait. Investigate the
     PowerShell route on this host, or shorten its wait (an `rcfd-runner` change, ADR 0123 amendment 2)?
+    Decided 2026-10-28: the PowerShell route is removed and the runner is started directly
+    ([ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md)).
 
 ## Files
 
