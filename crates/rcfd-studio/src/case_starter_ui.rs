@@ -25,9 +25,12 @@ fn request_id() -> egui::Id {
     egui::Id::new("rcfd-studio-case-starter-open")
 }
 
-/// Ask for the dialog; it opens in the next call of [`dialog`] (the Case menu entry and the Project panel button).
+/// Ask for the dialog; it opens in the next call of [`dialog`] (the Case menu entry and the Project panel button). The
+/// Project panel is drawn after the dialogs, so a request from there is seen in the next frame: a repaint is requested
+/// so that this frame comes without further input.
 pub fn request_open(ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(request_id(), true));
+    ctx.request_repaint();
 }
 
 /// The Project panel's entry, drawn above the lists while a project is open: a hint when it has no cases, and the button.

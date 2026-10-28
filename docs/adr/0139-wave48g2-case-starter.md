@@ -201,9 +201,10 @@ that far, except the timings (CS13 7.386 ms, its control 212.327 ms).
 No known miss.
 
 **Deviations and notes.**
-1. The task text asks for `cases/<name>.json` and says the user copies "a case.json". The shipped `case.json` files are benchmark
-   descriptors that the editor refuses (CS6). The starter offers the 9 runnable TOML files and writes `cases/<name>.toml`, byte-equal
-   to the source (D1, D3).
+1. The maintainer's report has the user copy "a case.json", and the task asks for `cases/<name>.json` "or the project's contract
+   layout". The 6 shipped `case.json` files are benchmark descriptors, not cases: the editor refuses them (CS6) and `rcfd run`
+   refuses them. The starter offers the 9 runnable TOML files and writes `cases/<name>.toml`, byte-equal to the source (D1, D3).
+   That is the contract's "case files in the existing case format".
 2. No "New empty case" (D7, CS10): the all-defaults case does not validate. CS10's control shows what a minimal valid text needs:
    the two boundary tables. That text is a 20 x 20 box with all walls fixed and no flow (question 4).
 3. Amendment 1: CS1's validate-stage control moved from the k-epsilon inlet channel (refused at open) to the laminar rotating
@@ -219,12 +220,27 @@ No known miss.
 8. Set-up detail not written in the table: the Studio models of CS2, CS4, CS8, CS9 and CS12 run without the run worker
    (`run_poll = None`), because these tests start no runs. CS4 and CS8 run with the watcher off, as registered. CS9 and CS12 also
    run with it off; the table does not say so, and neither check depends on the watcher. CS2 runs with the watcher on.
-9. `scripts/limit_audit.py` hits in the new test file, each read:
-   * five class (iii) hits, on the controls of CS2, CS5, CS9, CS10 and CS11. Each control asserts the failure it shows as a positive
-     fact: 9 differing files, exactly 1 problem, the editor switched, `validate()` true where CS10 requires false, 2 problems and 1
-     problem. The heuristic does not recognise this form, as with ADR 0131's controls;
-   * two class (iv) hits: the debug-build skips of CS13 and its control, each with a `SKIP` line. The limit is for release, and the
-     gate is release.
+9. CS13's control is a lower bound on wall time: it passed at 244 ms here (run 1: 212 ms). On a much faster machine the 9
+   validations could take under 100 ms, and the control would then not fail.
+10. **Fixed after the registered runs (found in review, not by a test).** `StudioApp::ui` draws the dialogs before the dock area.
+    A click on the Project panel's button therefore set the request after this frame's `case_starter_ui::dialog` had run. The
+    dialog would show only in the next frame, and egui draws that frame only on further input or a repaint request, so the
+    window could stay closed until the mouse moved. The Case menu path did not have this problem, because the menu bar is drawn
+    before the dialogs. Fix: `request_open` also calls `ctx.request_repaint()`. The unregistered test
+    `panel_button_request_repaints_and_opens_the_dialog_next_frame` covers it:
+    * after 14 frames the layout settles, and an idle frame asks for no repaint (delay `Duration::MAX`);
+    * a frame whose request comes after the dialogs, as the button's does, asks for one at once (delay 0);
+    * the next frame shows the dialog with 9 rows;
+    * in a throwaway run without the fix, it failed on the delay (`Duration::MAX` against 0); the fix was then restored.
+
+    Re-run after the fix: `case_starter_g2` 25 of 25 (CS13 9.857 ms, its control 251.582 ms), `frames_b4` 3 of 3, `frame_cost_b7`
+    2 of 2 (B7 median 0.496 ms, 14 rows built per frame); clippy (debug) and `fmt --check` clean.
+11. `scripts/limit_audit.py` hits in the new test file, each read:
+    * five class (iii) hits, on the controls of CS2, CS5, CS9, CS10 and CS11. Each control asserts the failure it shows as a
+      positive fact: 9 differing files, exactly 1 problem, the editor switched, `validate()` true where CS10 requires false, 2
+      problems and 1 problem. The heuristic does not recognise this form, as with ADR 0131's controls;
+    * two class (iv) hits: the debug-build skips of CS13 and its control, each with a `SKIP` line. The limit is for release, and the
+      gate is release.
 
 **Not run.** The "Not in CI" items (a person looking at the window). Also not run: a debug build of the new tests (CS13 and its
 control print `SKIP` there by design, as B7 does); Linux; the workspace gate; workspace-wide clippy (only `-p rcfd-studio`, as

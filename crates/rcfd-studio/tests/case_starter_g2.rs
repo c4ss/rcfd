@@ -727,6 +727,41 @@ fn cs12_the_dialog_draws_every_example_in_headless_frames() {
     assert_eq!(d.name, EXAMPLES[0].stem());
 }
 
+/// Not registered (found in review after the registered runs, ADR 0139 addendum): a request made after the dialogs were
+/// drawn, as the Project panel's button makes it, asks for the next frame at once, and that frame shows the dialog.
+#[test]
+fn panel_button_request_repaints_and_opens_the_dialog_next_frame() {
+    let (_root, st) = studio_on_new_project("cs12b", false, |_| {});
+    let mut app = StudioApp::new(st, None);
+    let ctx = egui::Context::default();
+    let input = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
+        ..Default::default()
+    };
+    // egui asks for more frames while it settles the layout; draw until a frame asks for none (at most 20)
+    let mut quiet = frame(&mut app, &ctx);
+    let mut settled = 1;
+    while quiet.viewport_output[&egui::ViewportId::ROOT].repaint_delay.is_zero() && settled < 20 {
+        quiet = frame(&mut app, &ctx);
+        settled += 1;
+    }
+    eprintln!("panel request: {settled} frames until a frame asked for no repaint");
+    let out = ctx.run_ui(input(), |ui| {
+        app.ui(ui);
+        case_starter_ui::request_open(ui.ctx()); // after dialogs(), as from the Project panel
+    });
+    let delay = |o: &egui::FullOutput| o.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
+    eprintln!(
+        "panel request: repaint delay {:?} (a frame without a request: {:?})",
+        delay(&out),
+        delay(&quiet)
+    );
+    assert!(app.ui_state.starter.is_none());
+    assert_eq!(delay(&out), Duration::ZERO);
+    let _ = frame(&mut app, &ctx);
+    assert_eq!(app.ui_state.starter.as_ref().map(|d| d.rows_drawn), Some(9));
+}
+
 // ---------------------------------------------------------------- CS13
 
 #[test]
