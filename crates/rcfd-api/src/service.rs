@@ -2117,24 +2117,34 @@ mod tests {
             .unwrap();
         assert_eq!(st["state"], "stopped");
         // read every page of events (the worker emits one `iteration` event per step, so the number of events before
-        // the `limit` event depends on how many steps ran) and look for the cap event and its reason
+        // the `limit` event depends on how many steps ran) and look for the cap event and its reason. `run.wait` returns
+        // as soon as the state is Stopped, and the worker emits `limit` and then `stopped` just after setting it, so on a
+        // fast machine the first poll can run in between: keep polling until the `stopped` event is seen (10 s at most)
+        let deadline = Instant::now() + Duration::from_secs(10);
         let mut after = 0u64;
         let mut reasons = Vec::new();
+        let mut stopped = false;
         loop {
             let ev = svc
                 .call("events.poll", &json!({"after": after, "session": id, "limit": 5000}))
                 .unwrap();
             let list = ev["events"].as_array().unwrap();
             if list.is_empty() {
-                break;
+                if stopped || Instant::now() > deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
             }
             reasons.extend(
                 list.iter()
                     .filter(|e| e["kind"] == "limit")
                     .map(|e| e["data"]["reason"].as_str().unwrap_or("").to_string()),
             );
+            stopped |= list.iter().any(|e| e["kind"] == "stopped");
             after = ev["next"].as_u64().unwrap();
         }
+        assert!(stopped, "no `stopped` event within 10 s of the run stopping");
         assert_eq!(reasons, vec!["max_run_seconds exceeded".to_string()]);
         std::fs::remove_dir_all(&root).unwrap();
     }
