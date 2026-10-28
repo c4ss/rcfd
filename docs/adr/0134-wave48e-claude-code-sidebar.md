@@ -417,7 +417,9 @@ and df9aa00 (a collapsed "turn details" section: `system/init`, the argument lis
 (Amendment 4); **run 2 at ca03916 is the registered run**: `cargo test --release -p rcfd-studio --no-fail-fast --
 --test-threads 1`, every test binary of the crate, all pass (the ignored known misses of 48B/48C and R6's of 48D,
 unchanged). After 18550ae, `chat_e`, `frames_b4`, `parity` and `prefs_b8` were run again, and after df9aa00 `chat_e`,
-`frames_b4`, `frame_cost_b7` and `parity`: all pass; the values after df9aa00 are in brackets below.
+`frames_b4`, `frame_cost_b7` and `parity`: all pass; the values after df9aa00 are in brackets below. Run 5, the whole
+crate again at 9fb5284 (the code of df9aa00), `--no-fail-fast`: every test binary passes (E6 0.624 s, E7 0.499 s and
+0.047 s, E10 0.193 ms, its control 43.122 ms, B7 0.329 ms).
 
 | Check | Limit | Result (run 2; run 1; [after df9aa00]) |
 |---|---|---|
@@ -466,8 +468,10 @@ Build once: `cargo build --release -p rcfd-studio -p rcfd-mcp -p rcfd-runner -p 
 `target\release\rcfd-studio.exe <project folder>`. The Chat tab sits behind "Case editor" in the right column.
 * V1: the Chat tab lists the folder's Claude Code sessions within about 2 s, with their state, and shows the Claude Code
   version once a turn ran (with a warning when it is not 2.1.310). Report the version.
-* V2: in a folder with `.mcp.json`, `.claude/` or a `CLAUDE.md` (the rcfd repository itself, for example), a banner says the
-  files are not confirmed; "Send" opens the dialog with the files, sizes, hashes, "new or changed" and previews; "Confirm
+* V2: make a project with Project > New project, close the Studio, put a `.mcp.json` and a `.claude/settings.json` into
+  it by hand and open it again (the scan covers the whole project folder at every check and message, so the project should
+  not sit on top of a large tree such as a repository with `target/` and worktrees). A banner says the files are not
+  confirmed; "Send" opens the dialog with the files, sizes, hashes, "new or changed" and previews; "Confirm
   these files" closes it; `%APPDATA%\rcfd\studio\claude-trust.json` now names the folder and nothing new is in the project.
   Edit one of those files: the next message is refused and the dialog lists only that file as changed.
 * V3: "New chat", type "say pong", Send: the text streams in, the cost of the turn and the session total appear; "turn
@@ -480,8 +484,11 @@ Build once: `cargo build --release -p rcfd-studio -p rcfd-mcp -p rcfd-runner -p 
   click it: `.rcfd/claude-allow.json` appears with that rule and no confirmation is asked; send the same message again: the
   file is created.
 * H3: turn details show `--strict-mcp-config --mcp-config %APPDATA%\rcfd\studio\claude-mcp\<hex>.json`. The panel does not
-  show `system/init`'s `mcp_servers`; to see them, run that argument list by hand in a terminal in the project folder with
-  `--model haiku "hi"` appended (no `--resume`/`--session-id`) and read the first line: only `rcfd_project` is expected.
+  show `system/init`'s `mcp_servers`; to see them, run that argument list by hand in a terminal in the project folder
+  without `--resume`/`--session-id`, and either drop `--input-format stream-json` and `--include-partial-messages` and
+  append `--model haiku "hi"`, or keep them and pipe one line `{"type":"user","message":{"role":"user","content":"hi"}}`
+  on stdin (which form this CLI accepts is not verified here); read the first output line: only `rcfd_project` is
+  expected.
 * H4: ask for a long answer (for example a 2000-word essay) and click Cancel while it streams: Task Manager shows no
   `claude.exe` (other than your own terminals) and no tool shell left. Repeat and close the Studio window instead of
   cancelling: the same.
@@ -503,4 +510,14 @@ Record per item: pass or fail, the Claude Code version, and anything the panel s
    the record). Keep, or keep the streamed view?
 6. A `claude.cmd` (npm install) is reported as not found. Support it (it would need `cmd /c`, with its own quoting rules),
    or require the native `claude.exe`?
+7. Discovery runs the real `claude agents --json` with the project folder as its working directory every 2 s from the moment
+   the project opens, also while the folder is not confirmed. The driver orders `resume` the other way (the folder check
+   before `claude agents --json`; E8's library limit was "no `claude agents --json` either"), and E11 therefore counts only
+   `-p` calls. Whether `claude agents` reads a project's hooks or `.mcp.json` is not verified. Not changed after
+   registration; two ways out: (a) list sessions only once the folder is confirmed (until then, transcripts shown as
+   "state unknown" with no process), or (b) run the listing from a neutral working folder (the listing is global: the
+   fixture's `agents.json` has a session of `C:\proj\other`, and `classify` filters by `cwd`).
+
+Known limit: a missing `rcfd-mcp` next to the Studio is not reported in the panel; the chat then runs without the project
+tools (its MCP server fails to start inside Claude Code). The checklist builds `rcfd-mcp` for this reason.
 
