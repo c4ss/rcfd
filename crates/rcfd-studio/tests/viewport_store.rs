@@ -46,7 +46,9 @@ fn v4_field_from_the_store_and_picks() {
     owners.sort();
     assert_eq!(owners, (0..64).collect::<Vec<_>>(), "distinct owner cells 0..63");
     let mut r = Reader::open(&dir).unwrap();
-    let expected: Vec<Vec<f64>> = (0..3).map(|k| mapped(&surface, &r.read_field(k, "p").unwrap())).collect();
+    let expected: Vec<Vec<f64>> = (0..3)
+        .map(|k| mapped(&surface, &r.read_field(k, "p").unwrap()))
+        .collect();
     let mut controls = 0;
     for k in 0..3 {
         vp::slide(&mut st, V4_SNAPS[k].1);
@@ -54,7 +56,12 @@ fn v4_field_from_the_store_and_picks() {
         assert_eq!((f.index, f.field.as_str()), (k, "p"));
         assert_eq!(bits(&f.faces), bits(&expected[k]), "snapshot {k}: shown values");
         if k + 1 < 3 {
-            assert_ne!(bits(&f.faces), bits(&expected[k + 1]), "control: snapshot {k} vs {}", k + 1);
+            assert_ne!(
+                bits(&f.faces),
+                bits(&expected[k + 1]),
+                "control: snapshot {k} vs {}",
+                k + 1
+            );
             controls += 1;
         }
     }
@@ -76,7 +83,12 @@ fn v4_field_from_the_store_and_picks() {
                     .unwrap_or_else(|| panic!("{}: no face at the centroid of face {f}", vp::adapter_name(a)));
                 let stored = expected[k][f];
                 assert_eq!(h.face, f, "{}: snapshot {k}", vp::adapter_name(a));
-                assert_eq!(h.picked.to_bits(), (stored as f32).to_bits(), "{}: face {f}", vp::adapter_name(a));
+                assert_eq!(
+                    h.picked.to_bits(),
+                    (stored as f32).to_bits(),
+                    "{}: face {f}",
+                    vp::adapter_name(a)
+                );
                 assert_eq!(h.value.to_bits(), stored.to_bits());
                 assert_eq!(h.cell, surface.cell[f]);
                 picks += 1;
@@ -136,11 +148,19 @@ fn v5_time_lookup_in_both_modes() {
         let f = sv.sample("p", t, false).unwrap();
         assert_eq!(f.index, idx, "{class} t = {t}");
         assert!(!f.interpolated);
-        assert_eq!(bits(&f.faces), bits(&mapped(&surface, &r.read_field(idx, "p").unwrap())), "{class} t = {t}");
+        assert_eq!(
+            bits(&f.faces),
+            bits(&mapped(&surface, &r.read_field(idx, "p").unwrap())),
+            "{class} t = {t}"
+        );
         n_near += 1;
         let want = r.field_at_time("p", t, Mode::Linear).unwrap();
         let f = sv.sample("p", t, true).unwrap();
-        assert_eq!(bits(&f.faces), bits(&mapped(&surface, &want.values)), "linear {class} t = {t}");
+        assert_eq!(
+            bits(&f.faces),
+            bits(&mapped(&surface, &want.values)),
+            "linear {class} t = {t}"
+        );
         assert_eq!(f.interpolated, want.interpolated, "linear {class} t = {t}");
         if class == "snapshot" {
             assert!(!f.interpolated, "exactly at a snapshot time: stored values");
@@ -153,11 +173,18 @@ fn v5_time_lookup_in_both_modes() {
         .map(|w| 0.5 * (w[0] + w[1]))
         .filter(|&t| round_half_up(&times, t) != r.by_time(t, Pick::Nearest).unwrap())
         .count();
-    assert!(differ >= 1, "control: the round-half-up lookup agrees at every midpoint");
+    assert!(
+        differ >= 1,
+        "control: the round-half-up lookup agrees at every midpoint"
+    );
     // through the drawn app, once per position class and mode
     let mut app = StudioApp::new(vp::studio_showing(&root, &id), None);
     let ctx = egui::Context::default();
-    let picks = [("snapshot", 0.35), ("midpoint", 0.225), ("random", pos[pos.len() - 1].1)];
+    let picks = [
+        ("snapshot", 0.35),
+        ("midpoint", 0.225),
+        ("random", pos[pos.len() - 1].1),
+    ];
     for (class, t) in picks {
         for linear in [false, true] {
             app.st.viewport.set_linear(linear);
@@ -175,7 +202,10 @@ fn v5_time_lookup_in_both_modes() {
             assert_eq!(bits(&f.faces), bits(&want), "app {class} linear {linear}");
             let drawn = vp::texts(&vp::frame(&mut app, &ctx).shapes);
             let shown = drawn.iter().any(|s| s.contains("interpolated"));
-            assert_eq!(shown, f.interpolated, "app {class} linear {linear}: the flag is drawn iff set");
+            assert_eq!(
+                shown, f.interpolated,
+                "app {class} linear {linear}: the flag is drawn iff set"
+            );
         }
     }
     eprintln!(
@@ -197,13 +227,20 @@ fn v8_legend_and_range() {
     let per: Vec<(f64, f64)> = (0..3)
         .map(|k| {
             let v = mapped(&surface, &r.read_field(k, "p").unwrap());
-            v.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, &x| (a.0.min(x), a.1.max(x)))
+            v.iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |a, &x| (a.0.min(x), a.1.max(x)))
         })
         .collect();
-    let run = per.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, &(x, y)| (a.0.min(x), a.1.max(y)));
+    let run = per.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, &(x, y)| {
+        (a.0.min(x), a.1.max(y))
+    });
     let check = |app: &mut StudioApp, ctx: &egui::Context, lo: f64, hi: f64, what: &str| {
         let l = app.st.viewport.legend().unwrap();
-        assert_eq!((l.lo.to_bits(), l.hi.to_bits()), (lo.to_bits(), hi.to_bits()), "{what}: range");
+        assert_eq!(
+            (l.lo.to_bits(), l.hi.to_bits()),
+            (lo.to_bits(), hi.to_bits()),
+            "{what}: range"
+        );
         assert_eq!(l.labels[0], format!("{lo:.4e}"), "{what}");
         assert_eq!(l.labels[l.labels.len() - 1], format!("{hi:.4e}"), "{what}");
         let drawn = vp::texts(&vp::frame(app, ctx).shapes);
@@ -214,7 +251,13 @@ fn v8_legend_and_range() {
     };
     for k in 0..3 {
         vp::show(&mut app.st, k);
-        check(&mut app, &ctx, per[k].0, per[k].1, &format!("snapshot {k}, per snapshot"));
+        check(
+            &mut app,
+            &ctx,
+            per[k].0,
+            per[k].1,
+            &format!("snapshot {k}, per snapshot"),
+        );
     }
     app.st.viewport.set_range_mode(RangeMode::Run).unwrap();
     assert!(app.st.drain_until(vp::WAIT, |s| s.viewport.run_range.is_some()));
@@ -239,7 +282,9 @@ fn v10_slider_uses_the_scalar_only_update() {
         let ctx = egui::Context::default();
         app.st.viewport.set_gpu(ViewGpu::from_adapter(a));
         let surface = app.st.viewport.surface.clone().unwrap();
-        let expected: Vec<Vec<f64>> = (0..3).map(|k| mapped(&surface, &r.read_field(k, "p").unwrap())).collect();
+        let expected: Vec<Vec<f64>> = (0..3)
+            .map(|k| mapped(&surface, &r.read_field(k, "p").unwrap()))
+            .collect();
         let _ = vp::frame(&mut app, &ctx);
         let g = app.st.viewport.gpu().unwrap();
         assert_eq!((g.uploads, g.scalar_updates), (1, 0), "first image: one upload");
@@ -268,9 +313,17 @@ fn v10_slider_uses_the_scalar_only_update() {
             }
             let after = vp::read_back(rd.device(), rd.queue(), g.texture().unwrap());
             let diff = after.chunks(4).zip(want.rgba.chunks(4)).filter(|(x, y)| x != y).count();
-            assert_eq!(diff, 0, "{}: snapshot {k}: {diff} pixels differ from a fresh upload", vp::adapter_name(a));
+            assert_eq!(
+                diff,
+                0,
+                "{}: snapshot {k}: {diff} pixels differ from a fresh upload",
+                vp::adapter_name(a)
+            );
         }
-        assert_eq!(controls, 3, "control: the texture before each step differs from the next image");
+        assert_eq!(
+            controls, 3,
+            "control: the texture before each step differs from the next image"
+        );
         let g = app.st.viewport.gpu().unwrap();
         eprintln!(
             "V10 on {}: 3 steps byte-identical to a fresh upload ({}x{}); uploads {}, scalar updates {}, renders {}; \
@@ -294,13 +347,26 @@ fn v11_plot_marker_follows_the_time_slider() {
     for k in 0..3 {
         vp::show(&mut app.st, k);
         assert_eq!(app.st.plot_marker, Some(V4_SNAPS[k].0 as f64), "snapshot {k}");
-        assert_ne!(app.st.plot_marker, Some(k as f64), "control: the marker is not the snapshot index");
+        assert_ne!(
+            app.st.plot_marker,
+            Some(k as f64),
+            "control: the marker is not the snapshot index"
+        );
     }
     app.st.viewport.set_linear(true);
     vp::slide(&mut app.st, 0.125);
-    let w = Reader::open(&dir).unwrap().field_at_time("p", 0.125, Mode::Linear).unwrap().weight;
+    let w = Reader::open(&dir)
+        .unwrap()
+        .field_at_time("p", 0.125, Mode::Linear)
+        .unwrap()
+        .weight;
     let want = 10.0 + w * (20.0 - 10.0);
-    assert_eq!(app.st.plot_marker.map(f64::to_bits), Some(want.to_bits()), "linear: {:?}", app.st.plot_marker);
+    assert_eq!(
+        app.st.plot_marker.map(f64::to_bits),
+        Some(want.to_bits()),
+        "linear: {:?}",
+        app.st.plot_marker
+    );
     app.st.plots.push("res_u", 10.0, 1e-3);
     app.st.plots.push("res_u", 20.0, 1e-4);
     layout::float(&mut app.st.dock, Panel::Plots);

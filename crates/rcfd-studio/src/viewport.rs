@@ -343,7 +343,9 @@ impl StoreView {
             let s = self.reader.field_at_time(name, pos, Mode::Linear).map_err(err)?;
             (s.values, s.lower, s.upper, s.weight, s.interpolated)
         } else {
-            let i = self.index_at(pos).ok_or_else(|| "the store has no snapshots".to_string())?;
+            let i = self
+                .index_at(pos)
+                .ok_or_else(|| "the store has no snapshots".to_string())?;
             (self.reader.read_field(i, name).map_err(err)?, i, i, 0.0, false)
         };
         let faces = self.faces(&cells)?;
@@ -365,7 +367,10 @@ impl StoreView {
     pub fn run_range(&mut self, name: &str) -> Result<Option<(f64, f64)>, String> {
         let mut r: Option<(f64, f64)> = None;
         for i in 0..self.reader.snapshots().len() {
-            let cells = self.reader.read_field(i, name).map_err(|e| format!("field '{name}': {e}"))?;
+            let cells = self
+                .reader
+                .read_field(i, name)
+                .map_err(|e| format!("field '{name}': {e}"))?;
             if let Some((a, b)) = min_max(&self.faces(&cells)?) {
                 r = Some(r.map_or((a, b), |(x, y)| (x.min(a), y.max(b))));
             }
@@ -379,9 +384,19 @@ impl StoreView {
 /// Requests to the viewport worker.
 #[derive(Debug, Clone)]
 enum Command {
-    Open { run: String, dir: PathBuf },
-    Sample { gen: u64, field: String, pos: f64, linear: bool },
-    RunRange { field: String },
+    Open {
+        run: String,
+        dir: PathBuf,
+    },
+    Sample {
+        gen: u64,
+        field: String,
+        pos: f64,
+        linear: bool,
+    },
+    RunRange {
+        field: String,
+    },
 }
 
 /// Results of the viewport worker.
@@ -494,7 +509,9 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
                     pos,
                     linear,
                 } => {
-                    let (Some((id, _)), Some(v)) = (&run, view.as_mut()) else { continue };
+                    let (Some((id, _)), Some(v)) = (&run, view.as_mut()) else {
+                        continue;
+                    };
                     match v.sample(&field, pos, linear) {
                         Ok(frame) => send(Event::Frame {
                             run: id.clone(),
@@ -508,7 +525,9 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
                     }
                 }
                 Command::RunRange { field } => {
-                    let (Some((id, _)), Some(v)) = (&run, view.as_mut()) else { continue };
+                    let (Some((id, _)), Some(v)) = (&run, view.as_mut()) else {
+                        continue;
+                    };
                     match v.run_range(&field) {
                         Ok(range) => send(Event::RunRange {
                             run: id.clone(),
@@ -547,13 +566,7 @@ fn worker(rx: Receiver<Command>, tx: Sender<Event>, period: Duration, wake: Wake
     }
 }
 
-fn try_open(
-    id: &str,
-    dir: &Path,
-    view: &mut Option<StoreView>,
-    missing: &mut Option<String>,
-    send: &impl Fn(Event),
-) {
+fn try_open(id: &str, dir: &Path, view: &mut Option<StoreView>, missing: &mut Option<String>, send: &impl Fn(Event)) {
     if !dir.join(rcfd_tsstore::STORE_FILE).is_file() {
         let message = format!(
             "no stored fields: {} not found (start the run with \"Store fields\" on)",
@@ -679,7 +692,11 @@ impl ViewGpu {
     }
 
     fn ensure_target(&mut self, w: u32, h: u32) {
-        if self.target.as_ref().is_some_and(|t| t.texture.width() == w && t.texture.height() == h) {
+        if self
+            .target
+            .as_ref()
+            .is_some_and(|t| t.texture.width() == w && t.texture.height() == h)
+        {
             return;
         }
         let texture = self.renderer.device().create_texture(&wgpu::TextureDescriptor {
@@ -976,10 +993,14 @@ impl Viewport {
             return;
         }
         self.reset_run();
-        let (Some(root), Some(id)) = (root, selected) else { return };
+        let (Some(root), Some(id)) = (root, selected) else {
+            return;
+        };
         self.run = Some(id.to_string());
         self.status = Status::Loading;
-        let w = self.worker.get_or_insert_with(|| ViewWorker::start(period, wake.clone()));
+        let w = self
+            .worker
+            .get_or_insert_with(|| ViewWorker::start(period, wake.clone()));
         w.send(Command::Open {
             run: id.to_string(),
             dir: root.join("runs").join(id).join("fields"),
@@ -1015,22 +1036,20 @@ impl Viewport {
                 self.surface = Some(surface);
                 self.two_d = two_d;
                 self.snaps = snaps;
-                self.field = fields
-                    .iter()
-                    .find(|f| f.as_str() == "p")
-                    .or(fields.first())
-                    .cloned();
+                self.field = fields.iter().find(|f| f.as_str() == "p").or(fields.first()).cloned();
                 self.fields = fields;
                 self.status = Status::Ready;
-                self.pos = self.position_of(self.snaps.len().saturating_sub(1));
-                self.request();
+                if !self.snaps.is_empty() {
+                    self.pos = self.position_of(self.snaps.len() - 1);
+                    self.request();
+                }
             }
             Event::NoStore { run, message } if self.mine(&run) => {
                 self.status = Status::NoStore(message);
             }
             Event::Snaps { run, snaps, fields } if self.mine(&run) => {
-                // a live run grew; follow the newest snapshot when the last one was shown
-                let at_end = self.frame.as_ref().is_some_and(|f| f.index + 1 == self.snaps.len());
+                // a live run grew; follow the newest snapshot when the last one (or none yet) was shown
+                let at_end = self.frame.as_ref().is_none_or(|f| f.index + 1 == self.snaps.len());
                 self.snaps = snaps;
                 if self.field.is_none() {
                     self.field = fields.iter().find(|f| f.as_str() == "p").or(fields.first()).cloned();
@@ -1040,7 +1059,7 @@ impl Viewport {
                     self.run_range = None;
                     self.ask_run_range();
                 }
-                if at_end && !self.linear {
+                if at_end && !self.linear && !self.snaps.is_empty() {
                     self.pos = self.position_of(self.snaps.len() - 1);
                     self.request();
                 }
@@ -1088,12 +1107,17 @@ impl Viewport {
 
     /// Slider bounds.
     pub fn bounds(&self) -> (f64, f64) {
-        (self.position_of(0), self.position_of(self.snaps.len().saturating_sub(1)))
+        (
+            self.position_of(0),
+            self.position_of(self.snaps.len().saturating_sub(1)),
+        )
     }
 
     /// Ask the worker for the field at the slider position (latest wins).
     pub fn request(&mut self) {
-        let (Some(w), Some(field)) = (&self.worker, &self.field) else { return };
+        let (Some(w), Some(field)) = (&self.worker, &self.field) else {
+            return;
+        };
         self.gen += 1;
         self.pending = true;
         w.send(Command::Sample {
@@ -1102,9 +1126,7 @@ impl Viewport {
             pos: self.pos,
             linear: self.linear && self.axis() == Axis::Time,
         });
-        if self.range_mode == RangeMode::Run
-            && self.run_range.as_ref().is_none_or(|(f, _)| f != field)
-        {
+        if self.range_mode == RangeMode::Run && self.run_range.as_ref().is_none_or(|(f, _)| f != field) {
             self.ask_run_range();
         }
     }
@@ -1138,8 +1160,11 @@ impl Viewport {
 
     /// Step one stored snapshot back (`-1`) or forward (`1`) from the shown one.
     pub fn step(&mut self, by: i64) {
+        if self.snaps.is_empty() {
+            return;
+        }
         let cur = self.frame.as_ref().map_or(0, |f| f.index) as i64;
-        let i = (cur + by).clamp(0, self.snaps.len() as i64 - 1).max(0);
+        let i = (cur + by).clamp(0, self.snaps.len() as i64 - 1);
         self.show_snapshot(i as usize);
     }
 
@@ -1310,6 +1335,14 @@ impl Viewport {
                 None
             }
         }
+    }
+
+    /// The shown image read back through [`Renderer::render`] (the texture's pixels, ADR 0132 V1), for "Save PNG".
+    pub fn snapshot_image(&self) -> Result<rcfd_render::Image, String> {
+        let v = self.view().ok_or("viewport: nothing shown")?;
+        let g = self.gpu().ok_or("viewport: no GPU")?;
+        let m = g.mesh().ok_or("viewport: nothing drawn yet")?;
+        g.renderer().render(m, &v).map_err(|e| format!("viewport: {e}"))
     }
 
     /// Texture pixel of a world point under the current view (`None` behind the eye).

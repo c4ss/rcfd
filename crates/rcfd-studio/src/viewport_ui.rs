@@ -109,6 +109,43 @@ fn controls(ui: &mut egui::Ui, vp: &mut Viewport) {
                 vp.error = Some(e);
             }
         }
+        ui.separator();
+        if ui
+            .button("Save PNG...")
+            .on_hover_text("the shown image, pixel for pixel (for comparing with a screenshot)")
+            .clicked()
+        {
+            save_png(vp);
+        }
+    });
+}
+
+/// Read the image back, ask where to save it, and write it on a background thread.
+fn save_png(vp: &mut Viewport) {
+    let img = match vp.snapshot_image() {
+        Ok(i) => i,
+        Err(e) => {
+            vp.error = Some(e);
+            return;
+        }
+    };
+    let step = vp.frame.as_ref().map_or(0.0, |f| f.step);
+    let name = format!("{}-step{step}.png", vp.run.as_deref().unwrap_or("viewport"));
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter("PNG", &["png"])
+        .set_file_name(name)
+        .save_file()
+    else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let r = img
+            .to_png()
+            .map_err(|e| e.to_string())
+            .and_then(|b| std::fs::write(&path, b).map_err(|e| e.to_string()));
+        if let Err(e) = r {
+            eprintln!("rcfd-studio: could not save {}: {e}", path.display());
+        }
     });
 }
 
@@ -121,10 +158,7 @@ fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
         if ui.button("<").on_hover_text("previous snapshot").clicked() {
             vp.step(-1);
         }
-        if ui
-            .button(if vp.playing { "pause" } else { "play" })
-            .clicked()
-        {
+        if ui.button(if vp.playing { "pause" } else { "play" }).clicked() {
             vp.toggle_play();
         }
         if ui.button(">").on_hover_text("next snapshot").clicked() {
@@ -244,7 +278,10 @@ fn legend(ui: &mut egui::Ui, vp: &Viewport, height: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(LEGEND_W - 8.0, height), Sense::hover());
     let Some(l) = vp.legend() else { return };
     let painter = ui.painter_at(rect);
-    let bar = Rect::from_min_size(rect.min + egui::vec2(4.0, 8.0), egui::vec2(16.0, (height - 16.0).max(8.0)));
+    let bar = Rect::from_min_size(
+        rect.min + egui::vec2(4.0, 8.0),
+        egui::vec2(16.0, (height - 16.0).max(8.0)),
+    );
     let map = ColorMap::viridis();
     let n = 64;
     for k in 0..n {

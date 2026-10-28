@@ -24,7 +24,13 @@ fn cube_viewport(device: &wgpu::Device, queue: &wgpu::Queue, info: wgpu::Adapter
     let mut vp = Viewport::default();
     vp.set_gpu(ViewGpu::from_device(device.clone(), queue.clone(), info));
     vp.camera = Some(CameraState {
-        cam: Camera::fit(lo, hi, 35f64.to_radians(), 25f64.to_radians(), Projection::Perspective { fovy: 0.8 }),
+        cam: Camera::fit(
+            lo,
+            hi,
+            35f64.to_radians(),
+            25f64.to_radians(),
+            Projection::Perspective { fovy: 0.8 },
+        ),
         lo,
         hi,
     });
@@ -186,7 +192,14 @@ fn composite(
 }
 
 /// Largest channel difference inside the image, and the count of pixels in `cols` differing by more than 1.
-fn compare(tex: &[u8], size: (u32, u32), out: &[u8], out_w: u32, origin: (u32, u32), cols: (u32, u32)) -> (u8, usize, usize) {
+fn compare(
+    tex: &[u8],
+    size: (u32, u32),
+    out: &[u8],
+    out_w: u32,
+    origin: (u32, u32),
+    cols: (u32, u32),
+) -> (u8, usize, usize) {
     let mut worst = 0u8;
     let (mut over, mut n) = (0usize, 0usize);
     for y in 0..size.1 {
@@ -224,8 +237,14 @@ fn v2_egui_composite_of_the_viewport_texture() {
                 let mut line = format!("V2 on {} {format:?} ppp {ppp}:", vp::adapter_name(a));
                 for (label, tex, bytes) in [("cube", cube_tex, &cube_bytes), ("ramp", &ramp_tex, &ramp_bytes)] {
                     let size = (tex.width(), tex.height());
-                    let (out, (w, _), o) =
-                        composite(&device, &queue, &tex.create_view(&Default::default()), size, format, ppp);
+                    let (out, (w, _), o) = composite(
+                        &device,
+                        &queue,
+                        &tex.create_view(&Default::default()),
+                        size,
+                        format,
+                        ppp,
+                    );
                     let (worst, _, _) = compare(bytes, size, &out, w, o, (0, 0));
                     assert!(worst <= 1, "{line} {label}: max channel difference {worst}");
                     line.push_str(&format!(" {label} max diff {worst};"));
@@ -237,7 +256,9 @@ fn v2_egui_composite_of_the_viewport_texture() {
                     2 * over >= n,
                     "{line} control: only {over} of {n} mid-grey pixels differ by more than 1"
                 );
-                line.push_str(&format!(" control: {over} of {n} mid-grey pixels differ by > 1 (max {worst})"));
+                line.push_str(&format!(
+                    " control: {over} of {n} mid-grey pixels differ by > 1 (max {worst})"
+                ));
                 eprintln!("{line}");
             }
         }

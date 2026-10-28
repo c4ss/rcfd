@@ -143,7 +143,11 @@ fn v3_mouse_mapping_equals_closed_forms() {
             let start = Camera::fit(LO, HI, yaw, pitch, proj);
             // the registered rule reproduces fit's own planes for a fitted camera
             let fp = cf_planes(start);
-            assert!(diff(&fp, &start) <= 1e-12, "planes of a fitted camera: {}", diff(&fp, &start));
+            assert!(
+                diff(&fp, &start) <= 1e-12,
+                "planes of a fitted camera: {}",
+                diff(&fp, &start)
+            );
             let mut st = CameraState {
                 cam: start,
                 lo: LO,
@@ -192,7 +196,9 @@ fn v3_mouse_mapping_equals_closed_forms() {
 /// V9: with no adapter the viewport reports a located error and headless frames still draw it.
 #[test]
 fn v9_no_adapter_is_a_located_error_and_frames_draw() {
-    let e = ViewGpu::headless(wgpu::Backends::empty()).err().expect("no adapter for no back ends");
+    let e = ViewGpu::headless(wgpu::Backends::empty())
+        .err()
+        .expect("no adapter for no back ends");
     assert!(e.starts_with("viewport: ") && e.contains("no adapter"), "{e}");
     let mut st = Studio::in_memory();
     st.poll = None;
@@ -211,15 +217,9 @@ fn v9_no_adapter_is_a_located_error_and_frames_draw() {
 /// Unregistered: a steady run stores time 0 at every snapshot; the slider runs over steps and linear is off.
 #[test]
 fn steady_runs_slide_over_steps() {
-    let same = [
-        Snap { step: 5, time: 0.0 },
-        Snap { step: 10, time: 0.0 },
-    ];
+    let same = [Snap { step: 5, time: 0.0 }, Snap { step: 10, time: 0.0 }];
     assert_eq!(axis_of(&same), Axis::Step);
-    let inc = [
-        Snap { step: 5, time: 0.1 },
-        Snap { step: 10, time: 0.2 },
-    ];
+    let inc = [Snap { step: 5, time: 0.1 }, Snap { step: 10, time: 0.2 }];
     assert_eq!(axis_of(&inc), Axis::Time);
     let dir = vp::temp("steady").join("fields");
     vp::write_store(&dir, &vp::cavity8(), &[(5, 0.0), (10, 0.0), (15, 0.0)], vp::p_v4);

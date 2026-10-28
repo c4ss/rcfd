@@ -57,19 +57,28 @@ pub fn p_v4(c: usize, k: usize) -> f64 {
 /// A project with one finished run whose store is at `runs/<id>/fields` (the ADR 0130 D3 contract). Returns the
 /// canonical root, the run id and the store folder.
 pub fn store_project(name: &str, snaps: &[(u64, f64)], p: impl Fn(usize, usize) -> f64) -> (PathBuf, String, PathBuf) {
+    let last = snaps.last().copied().unwrap_or((0, 0.0));
+    let (root, id, dir) = run_project(name, RunState::Finished, last);
+    write_store(&dir, &cavity8(), snaps, p);
+    (root, id, dir)
+}
+
+/// A project with one run of the given state and no store yet; the canonical root, the id and the store folder.
+pub fn run_project(name: &str, state: RunState, (step, time): (u64, f64)) -> (PathBuf, String, PathBuf) {
     let root = temp(name).join("proj");
     let proj = Project::create(&root, name, "rcfd test").unwrap();
     std::fs::write(root.join("cases/cavity.toml"), include_str!("../fixtures/cavity.toml")).unwrap();
-    let rec = proj.create_run("cases/cavity.toml", None, "rcfd test", serde_json::json!({})).unwrap();
+    let rec = proj
+        .create_run("cases/cavity.toml", None, "rcfd test", serde_json::json!({}))
+        .unwrap();
     let st = RunStatus {
-        step: snaps.last().map_or(0, |s| s.0),
-        time: snaps.last().map_or(0.0, |s| s.1),
-        ..RunStatus::new(RunState::Finished)
+        step,
+        time,
+        ..RunStatus::new(state)
     };
     proj.write_status(&rec.id, &st).unwrap();
     let root = rcfd_project::paths::canonicalize(&root).unwrap();
     let dir = root.join("runs").join(&rec.id).join("fields");
-    write_store(&dir, &cavity8(), snaps, p);
     (root, rec.id, dir)
 }
 
@@ -79,7 +88,10 @@ pub fn studio_showing(root: &Path, id: &str) -> Studio {
     st.poll = None;
     st.run_poll = None;
     st.open_project(root);
-    assert!(st.drain_until(WAIT, |s| s.browser().is_some()), "the project did not open");
+    assert!(
+        st.drain_until(WAIT, |s| s.browser().is_some()),
+        "the project did not open"
+    );
     st.select_run(id);
     assert!(
         st.drain_until(WAIT, |s| s.viewport.frame.is_some() && !s.viewport.pending()),
