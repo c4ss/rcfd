@@ -15,6 +15,11 @@ workspace = true
 rcfd-api.workspace = true
 rcfd-core.workspace = true
 rcfd-project.workspace = true
+# The viewport (ADR 0132): the render core on eframe's device, the run's field store, the mesh's patch kinds (layers 5, 4,
+# 1; planned by ADR 0131 Placement).
+rcfd-render = { path = "../rcfd-render" }
+rcfd-tsstore.workspace = true
+rcfd-mesh.workspace = true
 # Run control through the project's runner (ADR 0133 D1): client, records, budgets. Layer 2, no third-party crate.
 rcfd-runner = { path = "../rcfd-runner" }
 serde.workspace = true
@@ -36,10 +41,6 @@ rfd = "=0.15.4"
 version = "=30.0.1"
 default-features = false
 features = ["std", "wgsl", "dx12", "vulkan"]
-
-[dev-dependencies]
-# ADR 0133 R8: reads the store of a Studio-started run (layer 4, already planned for the Studio by ADR 0131).
-rcfd-tsstore.workspace = true
 
 [[bin]]
 name = "rcfd-studio"

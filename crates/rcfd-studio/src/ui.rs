@@ -347,9 +347,7 @@ impl TabViewer for Viewer<'_> {
             Panel::Browser => browser_panel(ui, self.st),
             Panel::CaseEditor => editor_panel(ui, self.st, self.us),
             Panel::Runs => runs_panel(ui, self.st, self.us),
-            Panel::Viewport => {
-                ui.weak("The 3D view of a run arrives with the viewport integration (48C, ADR 0132).");
-            }
+            Panel::Viewport => crate::viewport_ui::panel(ui, self.st),
             Panel::Plots => plots_panel(ui, self.st),
             Panel::Log => log_panel(ui, self.st),
             Panel::Chat => {

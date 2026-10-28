@@ -2,6 +2,8 @@
 //! later sub-wave are ignored `*_known_miss` tests that name it; they are not limits that were missed.
 
 mod common;
+#[macro_use]
+mod vp;
 
 use common::{b1_project, frame, frames_until, temp};
 use rcfd_api::case::Case;
@@ -130,10 +132,54 @@ fn parity_run_with_live_residual_and_report_monitors() {
     assert_eq!(plotted.to_bits(), recorded.to_bits());
 }
 
+/// Plan section 6, "2D field view with colour map, legend and hover" (48C, ADR 0132 integration amendment 1): through the
+/// drawn app on the first adapter, a run's stored field of the 2D cavity is rendered, the legend's end labels are drawn,
+/// and a pointer on face 0 draws the hover readout with that face's stored value.
 #[test]
-#[ignore = "48C (ADR 0132): the field view with colour map, legend and hover is the viewport integration; not in 48B"]
-fn parity_2d_field_view_with_colour_map_legend_and_hover_known_miss() {
-    panic!("the viewport arrives with 48C");
+fn parity_2d_field_view_with_colour_map_legend_and_hover() {
+    let a = &adapters_or_skip!()[0];
+    let snaps = [(10, 0.1), (20, 0.2), (30, 0.3)];
+    let (root, id, dir) = vp::store_project("parity-field", &snaps, vp::p_v4);
+    let mut st = vp::studio_showing(&root, &id);
+    st.viewport.set_gpu(rcfd_studio::viewport::ViewGpu::from_adapter(a));
+    let mut app = StudioApp::new(st, None);
+    let ctx = egui::Context::default();
+    assert!(frames_until(&mut app, &ctx, WAIT, |a| a
+        .st
+        .viewport
+        .gpu()
+        .is_some_and(|g| g.renders >= 1)));
+    let drawn = vp::texts(&vp::frame(&mut app, &ctx).shapes);
+    let legend = app.st.viewport.legend().unwrap();
+    for l in [&legend.labels[0], &legend.labels[legend.labels.len() - 1]] {
+        assert!(drawn.contains(l), "legend label {l} not drawn");
+    }
+    // the pointer on the centroid of face 0
+    let vpm = &app.st.viewport;
+    let s = vpm.surface.clone().unwrap();
+    let l = s.face(0);
+    let c = l.iter().fold([0.0; 3], |a, &p| {
+        [0, 1, 2].map(|d| a[d] + s.points[p][d] / l.len() as f64)
+    });
+    let (x, y) = vpm.pixel_of(c).unwrap();
+    let rect = vpm.image_rect.unwrap();
+    let ppp = ctx.pixels_per_point();
+    let pos = egui::pos2(rect.min.x + x as f32 / ppp, rect.min.y + y as f32 / ppp);
+    let _ = vp::frame_with(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)]);
+    let drawn = vp::texts(&vp::frame_with(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)]).shapes);
+    let stored = rcfd_tsstore::Reader::open(&dir).unwrap().read_field(2, "p").unwrap()[s.cell[0].unwrap()];
+    let want = format!("value {stored}");
+    assert!(
+        drawn.iter().any(|t| t.starts_with(&want)),
+        "no hover readout '{want}' among the drawn text (hover {:?})",
+        app.st.viewport.hover
+    );
+    eprintln!(
+        "parity 2D field view on {}: legend {:?}, hover '{}'",
+        vp::adapter_name(a),
+        legend.labels,
+        app.st.viewport.hover.as_ref().unwrap().text()
+    );
 }
 
 #[test]

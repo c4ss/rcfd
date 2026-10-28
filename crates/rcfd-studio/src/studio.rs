@@ -66,6 +66,8 @@ pub struct Studio {
     pub runs: RunsView,
     /// The viewport's current step, marked in the plots (set by the viewport, ADR 0132).
     pub plot_marker: Option<f64>,
+    /// The viewport of the selected run (ADR 0132; its GPU is attached by the app, none in `new`).
+    pub viewport: crate::viewport::Viewport,
     /// Status and error messages, latest last.
     pub messages: Vec<String>,
     /// Watcher period for projects opened from now on (`None`: watcher off).
@@ -108,6 +110,7 @@ impl Studio {
             monitors: MonitorStore::default(),
             runs: RunsView::default(),
             plot_marker: None,
+            viewport: Default::default(),
             messages: Vec::new(),
             poll: Some(POLL),
             run_poll: Some(poll::PERIOD),
@@ -185,6 +188,8 @@ impl Studio {
         self.plots.clear();
         self.monitors.clear();
         self.shown_run = None;
+        self.viewport.close();
+        self.plot_marker = None;
     }
 
     /// Ask the worker for a case file; it opens in the editor when it arrives.
@@ -252,6 +257,13 @@ impl Studio {
         if rows_changed || n > 0 {
             self.update_extra();
         }
+        // the viewport follows the selected run (ADR 0132) and the plots mark its step
+        let root = self.browser().map(|b| b.root.clone());
+        let selected = self.selected_run.clone();
+        self.viewport
+            .sync(root.as_deref(), selected.as_deref(), poll::PERIOD, &self.wake);
+        n += self.viewport.drain();
+        self.plot_marker = self.viewport.marker();
         n
     }
 
