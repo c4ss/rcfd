@@ -1021,6 +1021,63 @@ fn o9_a_field_typed_and_left_comes_back() {
     assert_eq!(cells, Some(320), "the preview");
 }
 
+/// O9b (amendment 1, a guard without a control): b kept (`mesh.ny` 12 committed and left); in the cavity "20" typed
+/// into `mesh.nx` with the field focused; a drawn click on b's label (b's editor comes back in the frame of the click);
+/// settled. Limits: b's `mesh.nx` is 10 (its own) and b has no field being typed; the cavity is kept with its 20, typed
+/// or committed (which one is reported).
+#[test]
+fn o9b_a_typed_text_stays_with_its_case() {
+    let root = project("o9b");
+    let (mut app, ctx) = app_on(&root, false, false);
+    app.ui_state.filter = "mesh.nx".into();
+    click_case(&mut app, &ctx, "cases/b.toml");
+    settle_drawn(&mut app, &ctx);
+    commit(&mut app.st, "mesh.ny", json!(12));
+    click_case(&mut app, &ctx, "cases/cavity.toml");
+    settle_drawn(&mut app, &ctx);
+    assert_eq!(
+        app.st.parked.keys().cloned().collect::<Vec<_>>(),
+        vec!["cases/b.toml"],
+        "set-up: b kept"
+    );
+    type_into_nx(&mut app, &ctx, &["BS", "BS", "2", "0"]);
+    assert_eq!(
+        app.st.editor.as_ref().unwrap().draft,
+        Some(("mesh.nx".to_string(), "20".to_string())),
+        "set-up: the keystrokes did not reach the field"
+    );
+    click_case(&mut app, &ctx, "cases/b.toml");
+    settle_drawn(&mut app, &ctx);
+    let b = app.st.editor.as_ref().unwrap();
+    let cav = app.st.parked.get("cases/cavity.toml");
+    let cav_state = cav.map(|c| (value_at(&c.settings, "mesh.nx").cloned(), c.draft.clone(), c.is_dirty()));
+    eprintln!(
+        "O9b: b ({}) mesh.nx {:?}, typed {:?}; the cavity kept {cav_state:?} (the 20 {})",
+        b.rel,
+        value_at(&b.settings, "mesh.nx"),
+        b.draft,
+        match &cav_state {
+            Some((_, Some(_), _)) => "as the field being typed",
+            Some((Some(v), None, true)) if *v == json!(20) => "committed",
+            _ => "lost",
+        }
+    );
+    assert_eq!(b.rel, "cases/b.toml");
+    assert_eq!(
+        value_at(&b.settings, "mesh.nx").cloned(),
+        Some(json!(10)),
+        "b's mesh.nx"
+    );
+    assert_eq!(b.draft, None, "b has a field being typed");
+    let typed = cav_state
+        .as_ref()
+        .is_some_and(|(_, d, _)| *d == Some(("mesh.nx".to_string(), "20".to_string())));
+    let committed = cav_state
+        .as_ref()
+        .is_some_and(|(v, d, dirty)| *v == Some(json!(20)) && d.is_none() && *dirty);
+    assert!(typed || committed, "the cavity's 20: {cav_state:?}");
+}
+
 /// O9 control: ADR 0148's route: back on the cavity, 16 from its file, clean, nothing typed.
 #[test]
 fn o9_control_the_typed_text_was_lost() {

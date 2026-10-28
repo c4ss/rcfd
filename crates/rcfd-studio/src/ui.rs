@@ -59,6 +59,9 @@ pub struct UiState {
     pub run_rects: BTreeMap<String, egui::Rect>,
     /// Where the case editor drew its Discard edits button last (ADR 0149; tests).
     pub discard_rect: Option<egui::Rect>,
+    /// Test switch (ADR 0149 amendment 1's control): the route before, the case editor's text fields with ids from their
+    /// place and one text buffer per settings path for every case.
+    pub shared_field_ids: bool,
 }
 
 /// The mark drawn after a case of the Project panel whose editor holds unsaved state (ADR 0149).
@@ -1243,10 +1246,14 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     let values = ed.settings.clone();
     let filter = us.filter.clone();
     let mut edits = Vec::new();
+    let shared = us.shared_field_ids;
     let field = Field {
+        rel: &ed.rel,
         errors: &ed.field_errors,
         draft: ed.draft.as_ref(),
+        shared,
     };
+    let rel = ed.rel.clone();
     egui::ScrollArea::vertical()
         .id_salt("settings")
         .auto_shrink([false; 2])
@@ -1260,7 +1267,7 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
             Edit::Text(p, t) => {
                 let r = ed.edit_text(&schema, &p, &t);
                 if r.is_err() {
-                    us.buffers.insert(p, t);
+                    us.buffers.insert(buffer_key(&rel, &p, shared), t);
                 }
                 r
             }
@@ -1312,11 +1319,24 @@ fn editor_panel(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     }
 }
 
-/// What the case editor's fields need of the editor besides the values: the refusals by path, and the field being typed
-/// (ADR 0149: a field typed in a case left and taken back shows its typed text until it is finished).
+/// What the case editor's fields need of the editor besides the values: its case, the refusals by path, and the field
+/// being typed (ADR 0149: a field typed in a case left and taken back shows its typed text until it is finished).
 struct Field<'a> {
+    rel: &'a str,
     errors: &'a BTreeMap<String, String>,
     draft: Option<&'a (String, String)>,
+    /// [`UiState::shared_field_ids`].
+    shared: bool,
+}
+
+/// The text buffer of field `path` of case `rel` (ADR 0149 amendment 1: one per case and path, so that a case's text
+/// never shows in, or is committed to, another case's field); with `shared`, the route before (one per path).
+fn buffer_key(rel: &str, path: &str, shared: bool) -> String {
+    if shared {
+        path.to_string()
+    } else {
+        format!("{rel}\u{1f}{path}")
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1433,11 +1453,16 @@ fn leaf_ui(
                     });
             }
             _ => {
-                let buf = us
-                    .buffers
-                    .entry(path.to_string())
-                    .or_insert_with(|| format_value(&current));
-                let r = ui.add(egui::TextEdit::singleline(buf).desired_width(130.0));
+                // ADR 0149 amendment 1: the field and its text belong to its case: a case taken back at the click is
+                // drawn in the frame of the click, and with one widget id and one buffer per path it would take over
+                // the focus and the text being typed in the case left, and commit them as its own
+                let key = buffer_key(field.rel, path, field.shared);
+                let buf = us.buffers.entry(key.clone()).or_insert_with(|| format_value(&current));
+                let mut edit = egui::TextEdit::singleline(buf).desired_width(130.0);
+                if !field.shared {
+                    edit = edit.id_salt(("rcfd-studio-field", field.rel, path));
+                }
+                let r = ui.add(edit);
                 us.field_rects.insert(path.to_string(), r.rect);
                 if r.changed() {
                     // ADR 0144: the case preview follows the text as it is typed
@@ -1445,7 +1470,7 @@ fn leaf_ui(
                 }
                 if r.lost_focus() {
                     let text = buf.clone();
-                    us.buffers.remove(path);
+                    us.buffers.remove(&key);
                     if text != format_value(&current) {
                         edits.push(Edit::Text(path.to_string(), text));
                     } else {

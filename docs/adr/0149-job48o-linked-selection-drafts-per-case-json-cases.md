@@ -1,7 +1,8 @@
 # ADR 0149: Job 48O, the case and its runs are one selection, unsaved edits are kept per case, Run reads a JSON case as `rcfd run` does, and the case starter says "simulated time"
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
-first; what had run before is listed under "What I already knew"); not yet accepted by the maintainer. Job 48O, on local
+first; what had run before is listed under "What I already knew"); amendment 1 (the case editor's fields per case, O9b)
+before any registered run; not yet accepted by the maintainer. Job 48O, on local
 main 9e857d8 (waves 48A-48N merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
 are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
 defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
@@ -259,6 +260,33 @@ Each follows from a decision of the maintainer above; limits not named are uncha
   rcfd-studio --release --all-targets -- -D warnings` is clean after one `manual_contains` and six `type_complexity`
   findings in the new tests were fixed, `cargo fmt -p rcfd-studio` applied. No registered check of this ADR, and none of
   the changed earlier tests, has run.
+
+## Amendment 1 (2026-10-28, found in review after the registration c057aee; before any registered run)
+
+A review of the registration found a hazard decision 2 opens: a case editor taken back at the click is drawn in the
+frame of the click, and the case editor's text fields had ids from their place in the panel and one text buffer per
+settings path for every case (`UiState::buffers`). A field of the case left that still had the focus in that frame would
+then be the same widget as the field of the same path of the case taken back: the case taken back could show the text
+typed in the other case and, when that field lost the focus, commit it as its own. Before decision 2 the editor showed
+`Loading <case>...` in that frame (no field), so the focus simply went.
+
+Change (decision 2 gains it): each text field of the case editor has an id salted with its case and path, and its text
+buffer is kept per case and path (`ui.rs` `buffer_key`, `Field`); test switch `UiState::shared_field_ids` (the route
+before). Behaviour is otherwise unchanged.
+
+What I knew when writing this: a throwaway probe (`crates/rcfd-studio/tests/zz_diag_o.rs`, run once in release on the
+changed code with and without the switch, deleted, never committed): b kept with `mesh.ny` 12 committed, "20" typed into
+the cavity's `mesh.nx` with the field focused, then a drawn click on b's label. In both routes the press on the label
+took the focus from the field first, so the 20 was committed to the cavity (kept with `mesh.nx` 20, dirty, no field
+typed) and b kept `mesh.nx` 10 and no field typed: with the default layout and a pointer the hazard does not show, so no
+control of the route before can fail. The probe also shows how O9 will most likely report (committed); O9's limit takes
+either outcome, as registered.
+
+**O9b** (`o9b_a_typed_text_stays_with_its_case`, `drafts_o.rs`, registered here before its run; a guard, no control): b
+kept (`mesh.ny` 12 committed and left); in the cavity "20" typed into `mesh.nx` with the field focused; a drawn click on
+b's label; settled. Limits: b's `mesh.nx` 10 and b has no field being typed; the cavity is kept holding its 20, either as
+the field being typed or committed and dirty (which one is reported). Every registered file (`linked_o`, `drafts_o`,
+`json_o`, `case_starter_g2`) and the whole suite run on the commit of this amendment.
 
 ## Not in CI (by hand)
 
