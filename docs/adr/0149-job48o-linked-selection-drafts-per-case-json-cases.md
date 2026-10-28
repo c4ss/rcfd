@@ -3,7 +3,9 @@
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (the case editor's fields per case, O9b)
 before any registered run; amendment 2 (the set-ups of O1 and O8's control) and amendment 3 (O1's control) before their
-corrected runs; not yet accepted by the maintainer. Job 48O, on local
+corrected runs; results in the addendum: every check met its limit and every control failed as required (O1, its control
+and O8's control after amendments 2 and 3), no known miss; one finding outside this job's decisions (deviation 4,
+question 9); not yet accepted by the maintainer. Job 48O, on local
 main 9e857d8 (waves 48A-48N merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
 are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
 defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
@@ -321,6 +323,88 @@ goes on (O1's limits read the side after each toggle, so a refused toggle in O1 
 when writing this: the output of that run (O1's values are in the addendum); the corrected control had not run. The four
 registered files and the whole suite run again on the commit of this amendment.
 
+## Addendum: results against the registered limits (2026-10-28)
+
+Branch `worktree-agent-a0ebc694d469da352`. Commits: registration c057aee (on main 9e857d8); amendment 1 894b659;
+amendment 2 3198a8e; amendment 3 39df6a5 (the final code); then this addendum. Every run: release, `--test-threads 1
+--nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; 16.8 to 27.7 GB free during the runs); the
+target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built at the baseline from the same sources (no file
+of theirs changed). Registered runs: the four files on 894b659 (first), on 3198a8e (after amendment 2) and on 39df6a5
+(after amendment 3), then the whole suite on 39df6a5 (O13); an earlier whole-suite run on 3198a8e is reported under O13.
+The table gives the final runs' values (39df6a5); where an earlier run differed, it says so.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| O1 | (a)-(l) as registered, every step agreeing | (a) (none, none, Mesh), `NO_RUN`; (b) (hex, none, Mesh, hex), `cases/hex.toml has no run yet: press Run (F5) to start one, or select a run in the Runs panel.`; (c) (cavity, r2, Mesh, cavity), no run shown; the toggle: (cavity, r2, Run, cavity); (d) (cavity, r1, Run, cavity), nothing read at the click, the editor the cavity; (e) (cavity, r1, Mesh, cavity); (f) (b, r3, Run, b), the editor b; (g) (b, r3, Mesh, b); (h) (cavity, r2, Mesh, cavity); (i) (cavity, r4, Run, cavity), the status bar exactly as registered, the readout `case cases/gone.toml (not in the project any more: ...)`; (j) (cavity, r5, Run, cavity); (k) (new.toml, none, Mesh, new.toml), `no_run_of("cases/new.toml")`; (l) (none, none, Mesh), `NO_RUN`; no disagreement at any step. First run (894b659): stopped at (a) on the helper's settle (amendment 2) | pass (after amendment 2) |
+| O1 control | (c) no run; (f) the cavity with r3 shown, disagreeing | (c) no run (the toggle to Run refused, `NO_RUN`); (f) the cavity selected, r3 shown, `the run's case Some("cases/b.toml")`; also (i), (j) the readout `case cases/gone.toml` without the note. Runs on 894b659 and 3198a8e stopped before (f) (amendments 2 and 3) | fails as required (after amendment 3) |
+| O2 | (a)-(d) as registered | (a) highlight and label the cavity, Mesh, the toggle's Run enabled; (b) the cavity, Run, `stored fields of run <r2>` drawn; (c) b, Run, `stored fields of run <r3>` and `case cases/b.toml` drawn; (d) hex, Mesh, the toggle's Run disabled, its refusal for hex drawn on hover | pass |
+| O2 control | (c) the cavity while r3 is shown | (c) highlight and label the cavity, Run, r3's caption drawn | fails as required |
+| O3 | (a)-(g) as registered | (a) (a, A1, Run); (b) (a, A2, Run); (c) (a, A2, Mesh); (d) (a, A1, Run); (e) (c, none, Mesh), the Mesh side c, `queued run <A3> of cases/a.toml (rcfd run --set ...)`; (f) A3 finished (30 iterations), (c, none, Mesh); (g) (a, A3, Mesh); no disagreement | pass |
+| O3 control | (e) A3 selected with c | (e) (c, A3, Mesh), disagreeing on A3's case | fails as required |
+| O4 | (b)-(h) as registered | (b) kept the cavity; no editor before b's read; the cavity's "save it first" exactly; Run of b free; (d) b, cavity, hex unsaved; (e) at the click and settled (cavity, Dirty, no typed field, 20); Run "save it first"; 320 cells from the editor; b's `cases/b.toml: finish editing the field mesh.ny (press Enter or click elsewhere); ...`, hex's exactly as registered; (f) (b, Clean, `("mesh.ny", "12")`, 10), Run's "finish editing", 120 cells from the editor; (g) hex in conflict with the disk's bytes, `physics.nu` 0.02; (h) in conflict at the click | pass |
+| O4 control | (b) nothing kept; (e) 16, clean | (b) nothing kept; (e) `mesh.nx` 16, Clean | fails as required |
+| O5 | as registered | the cavity: conflict with the 24 x 16 bytes offered, `mesh.nx` 20, `cases/cavity.toml: changed on disk while its edits were kept; resolve the conflict`; b: conflict with the 10 x 14 bytes, the typed field `("mesh.ny", "12")`, `mesh.ny` 10; c: conflict without a file, `mesh.nx` 14 (the status bar: the read's `... c.toml: The system cannot find the file specified. (os error 2)`) | pass |
+| O5 control | the cavity clean with 24 | Clean, `mesh.nx` 24 (b clean with 14, c not opened) | fails as required |
+| O5 report | (ADR 0131's rule drops the typed field) | `external_change` of b with a typed field: `Reloaded`, the typed field gone | as reported |
+| O6 | (b)-(e) as registered | (b) marked exactly the cavity, the hover drawn; (c) the dialog's Start greyed with exactly `cases/cavity.toml has unsaved edits: save it first (Case > Save); a run uses the file on disk`, Run of b free; (d) marked exactly the cavity, the editor's source line drawn; (e) no mark, Clean with 16, the file's source line drawn, 256 cells | pass |
+| O6 control | (b) no mark; (c) Start enabled | (b) none; (c) enabled | fails as required |
+| O7 | (a)-(h) as registered | (a) not closed, asked with b, cavity; (b) open, both unsaved; (c) the other project open, nothing kept, the cavity's file 16; (d) closed, the files `mesh.nx` 20, `mesh.ny` 12, `physics.nu` 0.02; (e) exactly `cases/c.toml: mesh.nx: '1e' is not a whole number: correct the field, or close with Discard`, open, c unchanged; (f) exactly the conflict refusal, open; (g) exactly `cases/cavity.toml: not saved, the file changed on disk; resolve the conflict`, open, the cavity in conflict, b's file 11; (h) `CancelClose` on the request, the question's texts drawn, `Close` after the drawn click on `Discard and close`, no `CancelClose` on the next request | pass |
+| O7 control | closes at once; no `CancelClose` | closed at once; the window's request gave no command, the question not drawn | fails as required |
+| O8 | as registered | the refusal exactly as registered; S c; kept b, cavity; then b, c; then b, c; `MAX_PARKED` 32. Reported: the largest kept settings tree 15,337 bytes as JSON (a 12 x 12 cavity) | pass |
+| O8 control | nothing kept, hex opened | nothing kept, hex selected, no refusal. First run (894b659): stopped at the procedure's save (amendment 2) | fails as required (after amendment 2) |
+| O9 | 20 kept, shown, Run refused, 320 cells | `mesh.nx` 20 committed and dirty (reported: the press on b's label took the focus first, so the field committed before the switch), the field draws `20`, Run `cases/cavity.toml has unsaved edits: save it first ...`, 320 cells from the editor | pass |
+| O9 control | 16, clean, the field 16 | 16, Clean, nothing typed, the field draws `16` | fails as required |
+| O9b | b's 10, nothing typed in b; the cavity's 20 | b `mesh.nx` 10, nothing typed; the cavity kept with 20 committed and dirty | pass (a guard, no control: amendment 1) |
+| O10 | (a)-(e) as registered | (a) the same settings; (b) `simplec 30 iterations, Some(144) cells; sets its store true; --set []` (deviation 4); (c) queued; (d) the snapshot byte-equal to `cases/j.json`, finished; the TOML case's run too; 30 residual lines, equal bit for bit; (e) `Ok("cases/j.json")` | pass |
+| O10 control | not TOML | (c) `cases/j.json was not started: cases/j.json: not TOML: invalid key-value pair, expected key`; (e) `cases/j.json: not TOML: invalid key-value pair, expected key` | fails as required |
+| O11 | 6 descriptors, (a)-(e) as registered | 6 of 6 (`backward_step`, `cavity`, `channel`, `flat_plate`, `heated_cavity`, `naca0012`): (a) the line; (b) `<case> was not started: <line>`; (c) `blocked` the line, Run `Run: <line>`; (d) the line; no run folder; (e) the line drawn on hover | pass |
+| O11 control | Run free after the read; not TOML | 6 of 6: `blocked` none, `<case> was not started: <case>: not TOML: invalid key-value pair, expected key`, the plan's `<case>: not TOML: ...` | fails as required |
+| O12 | as amended | 10 of 10 as before; the run lengths exactly as computed, e.g. `compressible, to simulated time 0.2 s` (Sod) and `compressible, to simulated time 3 s` (the ramp), the steady ones `simplec, at most N iterations`; no ` t = `; 2 transient examples | pass |
+| O12 control | ` t = ` | `compressible, to t = 0.2`, `compressible, to t = 3` | fails as required |
+| O13 | the whole suite and the rest | `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1 --nocapture` on 39df6a5: 55 test binaries, **239 passed, 0 failed, 4 ignored** (the four known misses: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b), 435 s in the test binaries (20.5 GB free at its start); against the baseline's 212 on 9e857d8, the 27 new tests of this ADR (O1-O11 and their controls, O9b, O5's report, CS7's new control). The changed earlier tests (N1, N3, N4, N11, J1, the J1 controls, J11, SF1, CS7) pass with their changed limits; the N1-N4 controls still fail as required. Timing checks in that run: B7 median 0.530 ms (control 13.837 ms); J10 median 1.565 ms, max 6.9 ms (control max 2,990.4 ms); J3c the build asked 0.503 s after the keystroke, one frame; J2 0.063 / 0.065 s; ADR 0138 G3 median 0.696 ms, max 2.5 ms; G8 2.098 ms; G10 31.1-42.8 ms on the five adapters; E10 median 0.409 ms. The earlier whole-suite run on 3198a8e: 238 passed, 1 failed (O1's control, amendment 3), 4 ignored. `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean on 39df6a5; `scripts/third_party_licenses.py --check`: up to date | pass |
+
+**Leftover processes** after all runs: none running from this job's target folder.
+
+**Deviations and notes.**
+
+1. Amendment 1 (found in review, before any run): the case editor's fields have ids and text buffers per case. A throwaway
+   probe found no leak in the default layout either way (the press on another case takes the focus first), so O9b is a
+   guard without a control; O9 then reported "committed", as the probe had shown.
+2. Amendments 2 and 3: three defects of the new tests' procedures (O1's settle with nothing selected, O8's control's
+   save, O1's control's toggle), none of a limit; each corrected before its rerun, every registered file then run again on
+   the final commit.
+3. ADR 0148 decision 1 (d) changes (decision 1: a run Run queued after another case was selected is not selected), with
+   N4's first limit (registered). The maintainer asked that R4 stay: its fix (the Viewport stays on the selected case's
+   mesh) stays; the selection of the run does not, so that the selection is one case (question 1).
+4. **Found, not changed: a case saved by the Studio stores no fields when Run starts it.** The case editor's save writes
+   every setting (canonical TOML, ADR 0131), `output.store_interval = 0`, `output.store_time_interval = 0.0` and
+   `output.store_precision = "f64"` among them (read in O7 (d)'s saved `cases/b.toml`), and so does `rcfd-api`'s writer
+   (O10's JSON case). ADR 0140 reads a store key in the text, 0 included, as the case's own choice, so the plan proposes
+   no store (`sets its store true; --set []` in O10 (b)) and the run stores no fields: after Run's own "save it first",
+   Run of the saved case has nothing to show on the Run side (O10's JSON run stored none; its TOML twin, with the
+   proposal, did). Not part of this job's decisions; question 9.
+5. "Reuse the same function": `rcfd run`'s reader (`load_case_in`) is private to the `rcfd` program; the Studio's
+   `preview::parse_case` applies the same rule with the same two `rcfd-api` functions and is now the Studio's only reader
+   (the plan, the cell count, the preview). The rule itself is in three places (question 6).
+6. "Select nothing new" for a run of a gone case is read as "keep the selected case" (question 3).
+7. The window's close asks too (the maintainer named closing the project; the window's close closes it as well).
+8. The memory bound is a count (32), with the largest kept settings tree measured at 15,337 bytes as JSON; an editor keeps
+   it about three times (its settings, its saved copy, the service's session), so 32 kept cases hold a few MB at most for
+   cases of this size.
+9. Earlier tests with values changed and limits held (from the reading under "What I already knew"): see "Changes to
+   earlier tests"; all passed in O13.
+10. `scripts/limit_audit.py` hits in this job's new test code, read: `drafts_o.rs` `assert_eq!(MAX_PARKED, 32)` (class i),
+    the registered bound compared on purpose (a changed constant fails); `linked_o.rs` `o3_control_the_queued_run_was_selected`
+    (class iii), a control asserting the behaviour before as a positive fact (the form the heuristic does not recognise).
+    The other hits in the touched files are earlier ADRs' and were read there.
+11. Nothing outside `crates/rcfd-studio` and `docs/adr` changed: `rcfd-api`, `rcfd-cli`, `rcfd-mcp`, `rcfd-project` and
+    `rcfd-runner` were read, not edited; `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` and `docs/architecture.md` are
+    unchanged.
+
+**Not run.** A person at the real window (the checklist below); Linux; debug builds of the new tests; the workspace gate and
+workspace-wide clippy (only `rcfd-studio` changed); the other crates' own tests (not changed); `cargo deny` (no dependency
+changed).
+
 ## Not in CI (by hand)
 
 A person at the real window: a case clicked and a run clicked in turn (the highlight, the name next to Run, the toggle
@@ -375,6 +459,13 @@ descriptor.
    `rcfd-mcp`). Recommendation: (b), as its own small job.
 7. **The bound** of 32 kept cases, refusing the next switch with a message. Accept, or another number?
 8. **The mark** `*` after a case label (the status bar already writes `<case> *` for the open case). Accept, or a dot?
+9. **A saved case stores no fields** (found by O10, addendum deviation 4): the case editor's save, and `rcfd-api`'s writer,
+   spell out `output.store_interval = 0` and `output.store_time_interval = 0.0`, which ADR 0140 takes as the case turning
+   its store off, so Run of a case saved in the Studio shows no fields. Options: (a) keep (the Start dialog's fix "store
+   for this case" turns it on per run); (b) the plan takes a zero store key that equals the schema's default as not set
+   (an explicit non-zero interval stays the case's own); (c) the save leaves out settings equal to their defaults (ADR
+   0131's canonical form changes, files shrink). Recommendation: (b) soon, as a small job of its own with its own check;
+   (c) later, together with ADR 0135's question on edits that rewrite a case in its canonical form.
 
 ## Files
 
