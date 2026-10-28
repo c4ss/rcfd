@@ -53,8 +53,15 @@ pub struct Studio {
     pub theme: Theme,
     /// The open project.
     pub project: Option<OpenProject>,
-    /// The case file open in the editor.
+    /// The selected case (project-relative): set by a click in the Project panel ([`Studio::open_case`]) or by a case
+    /// the case starter made and opened. Run, F5, the toolbar label, the Project panel's highlight, the Mesh side and
+    /// the case editor follow it (ADR 0148); a run uses its file on disk.
+    pub selected_case: Option<String>,
+    /// The case file open in the editor: the selected case once loaded, else none (ADR 0148).
     pub editor: Option<CaseEditor>,
+    /// The selected case when the case editor could not open it, and why (ADR 0148): the editor shows this for that
+    /// case, while the Mesh side and Run use its file on disk.
+    pub editor_error: Option<(String, String)>,
     /// A case file asked for and not loaded yet.
     pub pending_case: Option<String>,
     /// Selected run id.
@@ -112,7 +119,9 @@ impl Studio {
             prefs_dir,
             dock,
             project: None,
+            selected_case: None,
             editor: None,
+            editor_error: None,
             pending_case: None,
             selected_run: None,
             plots: MonitorStore::default(),
@@ -193,7 +202,9 @@ impl Studio {
 
     /// Close the project (and the case open in the editor; unsaved edits are dropped).
     pub fn close_project(&mut self) {
+        self.selected_case = None;
         self.editor = None;
+        self.editor_error = None;
         self.pending_case = None;
         self.selected_run = None;
         self.project = None;
@@ -209,12 +220,19 @@ impl Studio {
         self.view.close();
     }
 
-    /// Ask the worker for a case file; it opens in the editor when it arrives. The preview builds it and the Viewport
-    /// switches to its mesh (ADR 0144).
+    /// Select a case (a click in the Project panel): it is the selected case from now on (ADR 0148), the case editor
+    /// lets go of the case it held (its unsaved edits are dropped, as a load of the new case always did) and opens this
+    /// one when the worker has read it, the preview builds it and the Viewport switches to its mesh (ADR 0144).
     pub fn open_case(&mut self, rel: &str) {
         let Some(p) = &self.project else { return };
         if let Some(old) = &self.editor {
             p.worker.send(Command::Untrack(old.rel.clone()));
+        }
+        self.selected_case = Some(rel.to_string());
+        self.editor_error = None;
+        if !self.quick.switches.selection_from_editor {
+            // ADR 0148: the editor follows the selection at once ("Loading..." until the file arrives)
+            self.editor = None;
         }
         self.pending_case = Some(rel.to_string());
         p.worker.send(Command::Load(rel.to_string()));
@@ -581,7 +599,10 @@ impl Studio {
                     None => CaseEditor::from_bytes(self.svc.clone(), &rel, &bytes),
                 };
                 match ed {
-                    Ok(ed) => self.editor = Some(ed),
+                    Ok(ed) => {
+                        self.editor = Some(ed);
+                        self.editor_error = None;
+                    }
                     Err(m) => {
                         // ADR 0147 (the maintainer's answer to ADR 0144 question 4): a benchmark descriptor gets the
                         // preview's one-line "not a case file" message, not the list of its unknown keys
@@ -589,12 +610,24 @@ impl Studio {
                             .ok()
                             .and_then(|t| crate::preview::descriptor_message(&rel, t))
                             .filter(|_| !self.preview.switches.editor_lists_descriptor_keys);
-                        self.say(short.unwrap_or(m));
+                        let m = short.unwrap_or(m);
+                        self.editor_cannot_open(&rel, &m);
+                        self.say(m);
                     }
                 }
             }
+            Event::LoadFailed { rel, message } => {
+                // ADR 0148: only the failure of the file asked for last ends the wait (the route before: any failure)
+                if self.quick.switches.selection_from_editor || self.pending_case.as_deref() == Some(rel.as_str()) {
+                    self.pending_case = None;
+                    self.editor_cannot_open(&rel, &message);
+                }
+                self.say(message);
+            }
             Event::Failed(m) => {
-                self.pending_case = None;
+                if self.quick.switches.selection_from_editor {
+                    self.pending_case = None; // the route before ADR 0148: a failure of any kind ended the wait
+                }
                 if let Some(ed) = &mut self.editor {
                     ed.saving = false;
                 }
@@ -620,6 +653,24 @@ impl Studio {
                 companions,
             } => crate::case_starter::on_created(self, &rel, opened, &companions),
         }
+    }
+
+    /// The case editor could not open the selected case `rel` (ADR 0148): it holds nothing and shows `why` for that
+    /// case (the route before: it kept the case it held).
+    fn editor_cannot_open(&mut self, rel: &str, why: &str) {
+        if self.quick.switches.selection_from_editor {
+            return;
+        }
+        self.editor = None;
+        self.editor_error = Some((rel.to_string(), why.to_string()));
+    }
+
+    /// A run was queued by Run after another case was selected (ADR 0148): the run is selected (the plots, the log and
+    /// the strip follow it) and the Viewport stays on the selected case's mesh.
+    pub(crate) fn select_run_keep_view(&mut self, id: &str) {
+        self.selected_run = Some(id.to_string());
+        self.sync_shown();
+        self.keep_view_side();
     }
 
     /// Editor state for the status bar.

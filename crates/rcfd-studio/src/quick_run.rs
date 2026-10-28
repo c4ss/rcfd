@@ -59,6 +59,14 @@ pub struct Switches {
     /// The route before ADR 0147: the last lines of `runner.log` are appended to every error of `ensure_runner`, also to
     /// an early-exit report that already carries the runner's output (ADR 0146), so those lines show twice.
     pub tail_always: bool,
+    /// The route before ADR 0148: the selected case is the one in the case editor, else the one being loaded into it
+    /// (Run, F5, the toolbar label and the Project panel's highlight); the editor keeps its case until another loads
+    /// and when another cannot be opened; a failure of any file operation ends the wait for a load; a run that Run
+    /// queued always switches the Viewport to it.
+    pub selection_from_editor: bool,
+    /// The route before ADR 0148 (the maintainer's answer to ADR 0147 question 4): the Start run dialog's Start is
+    /// enabled whatever the case editor holds of its case.
+    pub start_ignores_editor: bool,
 }
 
 /// A start in flight.
@@ -193,17 +201,54 @@ fn spawn(name: &str, f: impl FnOnce() + Send + 'static) {
     let _ = std::thread::Builder::new().name(name.into()).spawn(f);
 }
 
-/// The case the Run button runs: the one open in the case editor, else the one being loaded into it (a click in the
-/// Project panel opens a case in the editor).
+/// The case the Run button runs: the selected case ([`Studio::selected_case`], set by the click in the Project panel;
+/// ADR 0148). The toolbar's label and the Project panel's highlight show the same case. With
+/// [`Switches::selection_from_editor`], the route before: the case in the case editor, else the one being loaded.
 pub fn selected_case(st: &Studio) -> Option<String> {
-    st.editor
-        .as_ref()
-        .map(|e| e.rel.clone())
-        .or_else(|| st.pending_case.clone())
+    if st.quick.switches.selection_from_editor {
+        return st
+            .editor
+            .as_ref()
+            .map(|e| e.rel.clone())
+            .or_else(|| st.pending_case.clone());
+    }
+    st.selected_case.clone()
 }
 
 /// The words of Run's refusal while a field of the case editor is being typed (ADR 0147); the field's path follows.
 pub const FINISH_EDITING: &str = "finish editing the field";
+
+/// Why a run of `case` must wait for the case editor (`None`: it need not): the editor holds `case` in conflict, with a
+/// field being typed (ADR 0147) or with unsaved edits (ADR 0141); a run uses the file on disk. Run's refusal, and the
+/// Start run dialog's for its case (ADR 0148, the maintainer's answer to ADR 0147 question 4).
+pub fn editor_blocks(st: &Studio, case: &str) -> Option<String> {
+    let ed = st.editor.as_ref().filter(|e| e.rel == case)?;
+    if ed.in_conflict() {
+        return Some(format!("{case}: resolve the conflict in the case editor first"));
+    }
+    // ADR 0147: the preview shows a field's text while it is typed; a run would not use it
+    if let Some((path, _)) = ed.draft.as_ref().filter(|_| !st.quick.switches.run_while_typing) {
+        return Some(format!(
+            "{case}: {FINISH_EDITING} {path} (press Enter or click elsewhere); the mesh shows the typed text, but a run \
+             uses the file on disk"
+        ));
+    }
+    if ed.is_dirty() {
+        return Some(format!(
+            "{case} has unsaved edits: save it first (Case > Save); a run uses the file on disk"
+        ));
+    }
+    None
+}
+
+/// Why the Start run dialog's Start cannot start a run of `case` now (`None`: it can): [`editor_blocks`] (ADR 0148);
+/// with [`Switches::start_ignores_editor`], never (the route before).
+pub fn start_blocked(st: &Studio, case: &str) -> Option<String> {
+    if st.quick.switches.start_ignores_editor || case.is_empty() {
+        return None;
+    }
+    editor_blocks(st, case)
+}
 
 /// Why Run cannot start now (`None`: it can). The Run button is greyed out with this as its hover text.
 pub fn blocked(st: &Studio) -> Option<String> {
@@ -217,22 +262,8 @@ pub fn blocked(st: &Studio) -> Option<String> {
     let Some(case) = selected_case(st) else {
         return Some("select a case in the Project panel first".into());
     };
-    if let Some(ed) = st.editor.as_ref().filter(|e| e.rel == case) {
-        if ed.in_conflict() {
-            return Some(format!("{case}: resolve the conflict in the case editor first"));
-        }
-        // ADR 0147: the preview shows a field's text while it is typed; a run would not use it
-        if let Some((path, _)) = ed.draft.as_ref().filter(|_| !st.quick.switches.run_while_typing) {
-            return Some(format!(
-                "{case}: {FINISH_EDITING} {path} (press Enter or click elsewhere); the mesh shows the typed text, but \
-                 a run uses the file on disk"
-            ));
-        }
-        if ed.is_dirty() {
-            return Some(format!(
-                "{case} has unsaved edits: save it first (Case > Save); a run uses the file on disk"
-            ));
-        }
+    if let Some(why) = editor_blocks(st, &case) {
+        return Some(why);
     }
     if let Some(s) = &st.quick.starting {
         return Some(format!("a start of {} is in progress ({})", s.case, s.stage));
@@ -449,6 +480,15 @@ fn apply(st: &mut Studio, m: Msg) {
                 s.stage = format!("queued run {id}; starting the runner");
             }
             st.quick.run = Some((id.clone(), *plan));
+            // ADR 0148: another case selected after the click keeps the Viewport on its mesh; the run is still selected
+            let moved_on =
+                !st.quick.switches.selection_from_editor && st.selected_case.as_deref() != Some(case.as_str());
+            if moved_on {
+                if !st.quick.switches.no_select {
+                    st.select_run_keep_view(&id);
+                }
+                return;
+            }
             if !st.quick.switches.no_select {
                 st.select_run(&id);
             }
@@ -743,15 +783,24 @@ fn res(r: &RunRow, k: &str) -> String {
     r.last_residuals.get(k).map_or("-".into(), |v| format!("{v:.2e}"))
 }
 
-/// The run line: id, case, state, step, time, last residuals and the viewport's snapshot.
+/// The run line: id, case, state, step and time in words (ADR 0148: `time step N  simulated time T s` of a transient
+/// run, `iteration N` of a steady one), last residuals and the viewport's snapshot.
 pub fn run_line(st: &Studio, r: &RunRow) -> String {
+    let when = if st.viewport.switches.bare_time {
+        format!("step {}  t {:.4e}", r.step, r.time)
+    } else {
+        crate::viewport::step_time_text(
+            crate::viewport::run_kind_of_time(r.time),
+            &r.step.to_string(),
+            r.time,
+            false,
+        )
+    };
     let mut s = format!(
-        "run {}  {}  {}  step {}  t {:.4e}  res u {}  p {}  continuity {}",
+        "run {}  {}  {}  {when}  res u {}  p {}  continuity {}",
         r.id,
         r.case,
         r.state_label(),
-        r.step,
-        r.time,
         res(r, "res_u"),
         res(r, "res_p"),
         res(r, "continuity")

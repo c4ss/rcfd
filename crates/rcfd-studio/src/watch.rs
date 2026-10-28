@@ -91,6 +91,14 @@ pub enum Event {
         /// Content.
         bytes: Vec<u8>,
     },
+    /// A file asked for by [`Command::Load`] could not be read (ADR 0148: the failure names its file, so that it does
+    /// not end the wait for another file asked for later).
+    LoadFailed {
+        /// Project-relative path.
+        rel: String,
+        /// Located message.
+        message: String,
+    },
     /// A file operation failed (located message).
     Failed(String),
     /// A save was written; the new base hash.
@@ -225,7 +233,7 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                             tracked.insert(rel.clone());
                             Event::Loaded { rel, bytes }
                         }
-                        Err(m) => Event::Failed(m),
+                        Err(message) => Event::LoadFailed { rel, message },
                     },
                     Command::Untrack(rel) => {
                         tracked.remove(&rel);

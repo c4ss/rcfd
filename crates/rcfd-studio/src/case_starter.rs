@@ -452,6 +452,13 @@ pub(crate) fn on_created(st: &mut Studio, rel: &str, opened: bool, companions: &
         }
     }
     if opened {
+        // ADR 0148: the new case is the selected case; the editor follows it (the `Loaded` that follows opens it)
+        st.selected_case = Some(rel.to_string());
+        st.editor_error = None;
+        st.pending_case = Some(rel.to_string());
+        if !st.quick.switches.selection_from_editor {
+            st.editor = None;
+        }
         if !st.view.switches.starter_skips_preview {
             st.show_case_mesh(rel);
         }
@@ -507,7 +514,8 @@ impl Studio {
             open: !busy,
             untrack,
         });
-        if !busy {
+        if !busy && self.quick.switches.selection_from_editor {
+            // the route before ADR 0148 waited for the load from here; now `Event::Created` asks for it
             self.pending_case = Some(rel.clone());
         }
         Ok(rel)

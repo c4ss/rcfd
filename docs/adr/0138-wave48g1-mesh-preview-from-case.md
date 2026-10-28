@@ -251,7 +251,8 @@ an external replacement of the file rebuilt it again (384 cells), 3 requests in 
    front in light grey with dark cell edges and coloured boundary outlines; the legend lists the patches. Hover an
    outline: `patch <name> (<kind>), boundary`; hover inside: the cell. Wheel zooms, right drag pans, double click fits;
    "cell edges" switches the edges off.
-4. Click a 3D case (`axial_fan_sector`, `axial_fan_cgrid`): patch colours with flat shading, orbit with the left drag,
+4. Click a 3D case (`axial_fan_sector`, `axial_fan_cgrid`): patch colours with flat shading, orbit with the left drag
+   (since [ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md) also with the middle drag),
    hide a patch with its legend checkbox, try "single colour"; hover names the patch. Note how long the first picture
    takes.
 5. Edit `mesh.nx` in the case editor: the panel says unsaved edits are not shown; save: the preview rebuilds. "Rebuild"

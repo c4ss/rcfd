@@ -3,7 +3,10 @@
 
 use crate::studio::Studio;
 use crate::view_toggle::Side;
-use crate::viewport::{Axis, Input, RangeMode, Status, Viewport, LEGEND_TICKS, PLAY_PERIOD};
+use crate::viewport::{
+    drag_input, slider_words, step_time_text, time_hover, Axis, DragButton, Input, RangeMode, Status, Viewport,
+    LEGEND_TICKS, MOUSE_HINT, PLAY_PERIOD,
+};
 use egui::{Color32, PointerButton, Pos2, Rect, Sense};
 use rcfd_render::ColorMap;
 use std::time::Instant;
@@ -62,11 +65,12 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio) {
     let img = egui::vec2((avail.x - LEGEND_W).max(16.0), (avail.y - 22.0).max(16.0));
     ui.horizontal(|ui| {
         image(ui, vp, img, dark);
+        scale_bar_over(ui, vp);
         legend(ui, vp, img.y);
     });
     match &vp.hover {
         Some(h) => ui.monospace(h.text()),
-        None => ui.weak("hover over the surface for its value"),
+        None => ui.weak(format!("hover over the surface for its value; {MOUSE_HINT}")),
     };
     if vp.playing {
         if vp.tick_play(Instant::now()) {
@@ -98,6 +102,10 @@ fn toggle(ui: &mut egui::Ui, st: &mut Studio) {
         if let Some(c) = st.view_caption() {
             ui.separator();
             ui.weak(c);
+            // ADR 0148: the run's case, the size of its domain and its cells, from the run's own stored mesh
+            if let Some(r) = st.run_readout() {
+                ui.weak(r);
+            }
         }
     });
     if let Some(side) = pick {
@@ -193,6 +201,8 @@ fn save_png(vp: &mut Viewport) {
 
 fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
     let axis = vp.axis();
+    // ADR 0148: every time says what it is (simulated time in seconds; a steady run's iterations)
+    let (kind, bare) = (vp.kind(), vp.switches.bare_time);
     ui.horizontal(|ui| {
         if ui.button("|<").on_hover_text("first snapshot").clicked() {
             vp.show_snapshot(0);
@@ -211,14 +221,14 @@ fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
         }
         let (a, b) = vp.bounds();
         let mut pos = vp.pos;
-        let mut s = egui::Slider::new(&mut pos, a..=b.max(a)).text(match axis {
-            Axis::Time => "time",
-            Axis::Step => "step",
-        });
+        let mut s = egui::Slider::new(&mut pos, a..=b.max(a)).text(slider_words(axis, kind, bare));
         if axis == Axis::Step {
             s = s.step_by(1.0);
         }
-        let r = ui.add(s);
+        let mut r = ui.add(s);
+        if !bare {
+            r = r.on_hover_text(time_hover(kind));
+        }
         if r.changed() {
             vp.set_pos(pos);
         } else if !r.dragged() && !vp.linear {
@@ -246,19 +256,22 @@ fn time_row(ui: &mut egui::Ui, vp: &mut Viewport) {
         }
     });
     if let Some(f) = &vp.frame {
-        ui.monospace(format!(
-            "snapshot {}/{}  step {}  t = {}{}{}",
+        let step = if f.interpolated {
+            format!("{:.3}", f.step)
+        } else {
+            format!("{}", f.step)
+        };
+        let r = ui.monospace(format!(
+            "snapshot {}/{}  {}{}{}",
             f.index + 1,
             vp.snaps.len(),
-            if f.interpolated {
-                format!("{:.3}", f.step)
-            } else {
-                format!("{}", f.step)
-            },
-            f.time,
+            step_time_text(kind, &step, f.time, bare),
             if f.interpolated { "  interpolated" } else { "" },
             if vp.pending() { "  (reading...)" } else { "" }
         ));
+        if !bare {
+            r.on_hover_text(time_hover(kind));
+        }
     }
 }
 
@@ -271,11 +284,16 @@ pub(crate) fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark
     vp.set_size(px(rect.width()), px(rect.height()), dark);
     let p = ppp as f64;
     let d = resp.drag_delta();
-    if resp.dragged_by(PointerButton::Primary) && d != egui::Vec2::ZERO {
-        vp.input(Input::Orbit(d.x as f64 * p, d.y as f64 * p));
-    }
-    if (resp.dragged_by(PointerButton::Secondary) || resp.dragged_by(PointerButton::Middle)) && d != egui::Vec2::ZERO {
-        vp.input(Input::Pan(d.x as f64 * p, d.y as f64 * p));
+    // ADR 0148: the primary and the middle drag orbit, the secondary drag pans ([`drag_input`])
+    let middle_pans = vp.switches.middle_pans;
+    for (pb, b) in [
+        (PointerButton::Primary, DragButton::Primary),
+        (PointerButton::Secondary, DragButton::Secondary),
+        (PointerButton::Middle, DragButton::Middle),
+    ] {
+        if resp.dragged_by(pb) && d != egui::Vec2::ZERO {
+            vp.input(drag_input(b, d.x as f64 * p, d.y as f64 * p, middle_pans));
+        }
     }
     if resp.hovered() {
         let y = ui.input(|i| i.smooth_scroll_delta.y);
@@ -323,6 +341,48 @@ pub(crate) fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark
             }
         }
         _ => vp.hover = None,
+    }
+}
+
+/// The scale bar of a 2D view (ADR 0148) over the image last drawn ([`Viewport::image_rect`]), drawn after anything
+/// else over the image (the preview's outlines) so that it stays readable. Nothing for a 3D view.
+pub(crate) fn scale_bar_over(ui: &egui::Ui, vp: &Viewport) {
+    let Some(rect) = vp.image_rect else { return };
+    if let Some(bar) = vp.scale_bar(rect.width(), rect.height()) {
+        scale_bar(ui, rect, &bar);
+    }
+}
+
+/// A scale bar in the image's bottom-left corner: a bar of `bar.points` with end ticks and its length above it, on a
+/// translucent plate so it reads on either background.
+fn scale_bar(ui: &egui::Ui, image: Rect, bar: &crate::viewport::ScaleBar) {
+    let p = ui.painter_at(image);
+    let ink = ui.visuals().strong_text_color();
+    let x0 = image.min.x + 14.0;
+    let y = image.max.y - 12.0;
+    let x1 = x0 + bar.points;
+    let font = egui::FontId::proportional(12.0);
+    let plate = p.add(egui::Shape::Noop);
+    let r = p.text(
+        Pos2::new(0.5 * (x0 + x1), y - 5.0),
+        egui::Align2::CENTER_BOTTOM,
+        &bar.label,
+        font,
+        ink,
+    );
+    let area = r.union(Rect::from_min_max(Pos2::new(x0, y - 5.0), Pos2::new(x1, y + 5.0)));
+    p.set(
+        plate,
+        egui::Shape::rect_filled(
+            area.expand(4.0),
+            3.0,
+            ui.visuals().extreme_bg_color.gamma_multiply(0.75),
+        ),
+    );
+    let stroke = egui::Stroke::new(2.0, ink);
+    p.line_segment([Pos2::new(x0, y), Pos2::new(x1, y)], stroke);
+    for x in [x0, x1] {
+        p.line_segment([Pos2::new(x, y - 5.0), Pos2::new(x, y + 5.0)], stroke);
     }
 }
 

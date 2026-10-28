@@ -5,8 +5,9 @@
 //! * opening a case (a click in the Project panel, [`Studio::open_case`], or a case the case starter makes and opens)
 //!   switches to Mesh;
 //! * selecting a run (a click in the Runs panel, [`Studio::select_run`], also of the run already selected; the run a
-//!   Run click starts, ADR 0141, which is selected the same way; a selection written to [`Studio::selected_run`]
-//!   directly, seen at the next [`Studio::drain`]) switches to Run;
+//!   Run click starts, ADR 0141, which is selected the same way, unless another case was selected after the click,
+//!   ADR 0148; a selection written to [`Studio::selected_run`] directly, seen at the next [`Studio::drain`]) switches
+//!   to Run;
 //! * a click on the toggle switches to that side, unless it has nothing to show (no case opened, no run selected): then
 //!   it is disabled and says why.
 //!
@@ -64,6 +65,9 @@ pub struct Switches {
     pub starter_skips_preview: bool,
     /// The case starter's route before ADR 0147: a case is written alone, without the data files of its example.
     pub starter_no_companions: bool,
+    /// The route before ADR 0148 (the maintainer's answer to ADR 0147 question 3): every file under `cases/` is listed
+    /// and offered as a case (no "Data files" list).
+    pub data_files_as_cases: bool,
 }
 
 /// The toggle's state, a field of [`Studio`].
@@ -131,11 +135,43 @@ impl Studio {
         }
     }
 
+    /// The Run side's readout beside its caption (ADR 0148): the run's case, the size of its domain and its cells, from
+    /// the run's own stored mesh (not from the selected case); `None` on the Mesh side.
+    pub fn run_readout(&self) -> Option<String> {
+        if self.viewport.switches.no_scale {
+            return None;
+        }
+        let id = self.viewport.run.as_deref()?;
+        let case = self.runs.row(id).map(|r| r.case.clone()).or_else(|| {
+            self.browser()
+                .and_then(|b| b.runs.iter().find(|r| r.id == id))
+                .map(|r| r.case.clone())
+        });
+        let mut parts = Vec::new();
+        if let Some(c) = case {
+            parts.push(format!("case {c}"));
+        }
+        if let Some(d) = self.viewport.domain() {
+            parts.push(d);
+        }
+        if let Some(n) = self.viewport.cells {
+            parts.push(format!("{} cells", crate::preview::with_commas(n as u64)));
+        }
+        (!parts.is_empty()).then(|| parts.join(", "))
+    }
+
     /// A case was asked for (a Project panel click, or a case the starter made and opened): the preview builds it and
     /// the Viewport switches to its mesh. A selection made before does not switch the view back later.
     pub(crate) fn show_case_mesh(&mut self, rel: &str) {
         self.preview.select(rel);
         self.view.side = Side::Mesh;
+        self.view.seen_run = self.selected_run.clone();
+        self.sync_viewport();
+    }
+
+    /// A run was selected without a switch of the side shown (ADR 0148: a run that Run queued after another case was
+    /// selected): the selection is taken as seen, the side stays.
+    pub(crate) fn keep_view_side(&mut self) {
         self.view.seen_run = self.selected_run.clone();
         self.sync_viewport();
     }

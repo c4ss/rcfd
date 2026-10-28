@@ -543,9 +543,10 @@ fn g9_2d_boundary_hover_names_the_patch() {
 }
 
 /// Unregistered: an unsaved edit is shown from the case editor's text after the debounce (ADR 0144, the maintainer's
-/// decision on ADR 0138 question 2; this test asserted the opposite before); a save from the case editor rebuilds it
-/// from the file (the editor's base hash changed) with the same mesh, kept without a new upload; an external
-/// replacement of the file seen by the watcher rebuilds it too.
+/// decision on ADR 0138 question 2; this test asserted the opposite before); after a save from the case editor the
+/// mesh shown is the file's (since ADR 0148 a save of the shown text is compared with it on the build thread and not
+/// built again; before, it was rebuilt from the file) with the same mesh, kept without a new upload; an external
+/// replacement of the file seen by the watcher rebuilds it.
 #[test]
 fn rebuilds_after_a_save_and_an_external_change() {
     let root = pv::project("rebuild", &[]);
@@ -580,7 +581,7 @@ fn rebuilds_after_a_save_and_an_external_change() {
             .built
             .as_ref()
             .is_some_and(|b| b.cells == 320 && !b.from_editor)),
-        "no rebuild after the save: {:?}",
+        "the mesh shown is not the file's after the save: {:?}",
         st.preview.status
     );
     assert_eq!(
