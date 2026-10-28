@@ -246,6 +246,26 @@ accepted.
 15. **Not in CI, not run here:** `claude plugin validate`, the real `--plugin-dir` session and the marketplace install (they need the
     Claude Code CLI and a person; the maintainer runs them).
 
+## Amendment 2 (2026-10-28, 48F server part, before any registered run): F3 shape rule for passed-through and data-keyed parts
+
+Written after the tools and `docs/mcp-tools.md` were written and before the F3 golden and any registered run. Reading the runner
+while writing the golden showed that several result parts are documents of ADR 0130's contract passed through unchanged, whose
+fields are the runner's (for example `metrics.json` holds the runner's run summary with the solver's `finish` event, not report
+values), and that some objects are keyed by data (run ids, metric and series names). Amendment 1 item 3 is refined; the limit is
+unchanged:
+
+1. Passed-through documents are shaped as the leaf `object`: `run_status` `/settings`, `/last_residual` and each `/events/*`;
+   `read_metrics` `/metrics/*`. Their shapes are checked by ADR 0130's tests, not here.
+2. Data-keyed objects are shaped as `{"*": <shape of their first value>}`: `project_info` `/runs_by_state`; `list_runs`
+   `/runs/*/metrics`; `read_metrics` `/metrics`; `read_residuals` `/series`; `compare_runs` `/metrics`, `/metrics/*`,
+   `/differences`, `/differences/*`; `edit_case` `/values`.
+3. The shape of `render_field` is that of the whole tool result (`content` with the image block, `structuredContent`), of the
+   other tools that of `structuredContent`.
+4. F3's fixture: two finished runs of the 12 x 12 cavity with the `lid_drag` report and `output.store_interval = 10` (30 steps and,
+   for `compare_runs`, 20 steps through `start_run`'s `set`), and a third long run for the control tools (paused, resumed,
+   cancelled; F11's 5.0 s limit). `run_status` is called with `events: 1`, `read_residuals` with `max_points: 10`, `render_field`
+   with `width: 128` (an inline image), `field_summary` and `render_field` with `field: "p"`.
+
 ## Files
 
 `crates/rcfd-mcp/src/{lib,main}.rs`, new `src/project.rs` and tests, `crates/rcfd-mcp/Cargo.toml`, `crates/rcfd-project/src/atomic.rs`,
