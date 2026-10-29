@@ -280,6 +280,16 @@ end times, wall caps) and every limit is unchanged. The A7 runs keep one thread 
 been made when this was written (the development runs before it were compilation and the library tests of
 `crates/rcfd-fv/tests/w48v_corrector_control.rs`, which are not registered checks, and `w33b_default_bits`, N2, which passed).
 
+## Amendment 2 (2026-10-29, after A9's first run and before its corrected run): A9's simplec arm
+
+A9 as registered stopped at its first arm: the example case with `algorithm = "simplec"` is refused by the case parser before
+any simulation is built, because the example sets `output.store_time_interval`, a key of transient runs ("a steady run
+(solver.algorithm = "simplec") has no simulated time; use output.store_interval"). That is a defect of the set-up (the arm
+never reached the key under test); the other four arms did not run. Seen before this amendment: only that message. The
+registered test is kept as `w48v_a9_..._known_miss` (ignored, limit unchanged, the defect named). Corrected test
+`w48v_a9b_...`: the same five arms and limit (each refused at `solver.corrector_control`), the simplec arm's text with
+`store_time_interval = 1.0` replaced by `store_interval = 50`.
+
 ## Not changed by this job
 
 `crates/rcfd-studio`, `crates/rcfd-runner`, the default of every key, the ADR 0077 one-corrector check, `baseline_hashes.rs`, the
