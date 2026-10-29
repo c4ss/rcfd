@@ -2,7 +2,10 @@
 
 Status: **registered 2026-10-29**, part 1 (design, set-up, every acceptance limit and every reading rule), before any
 solver run of this job; the iteration cap of the steady arms and the time step and end time of the transient arm may be
-changed by amendment 1 after the disclosed smoke runs (S0 below) and before the counted runs; nothing else. Job 48Y,
+changed by amendment 1 after the disclosed smoke runs (S0 below) and before the counted runs; nothing else.
+**Amendment 1:** the registered mesh was defective (it diverged at the trailing edge); corrected before any counted run.
+**Amendment 2:** the report-only SST arm was reduced for cost. **Results in the addendum:** every registered limit is
+met (L3 only with the registered extension to 24 degrees); no known miss. Not yet accepted by the maintainer. Job 48Y,
 on local main 4e795b1 (waves 48A-48W merged; ADR 0158 is job 48X on another branch). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
@@ -250,10 +253,139 @@ hours. **Changed (report-only arm, no limit depends on it):** SST runs at **0, 4
 degrees on M1w held cl 0.64405 and cd 0.00611 to every printed digit from iteration 500 to 2972); D4's window (the last
 1000 iterations) and rule are unchanged. The SA, DD and SA2 arms are unchanged.
 
-## Questions for the maintainer (open at registration; the addendum may add to them)
+## Addendum: results (2026-10-29)
 
-1. Storage (D6): accept "driver plus results, runs on demand" for sweeps of this size, rather than a new example project
-   with a cap of its own?
-2. A 2D aerofoil C-grid generator (wake cut, blunt or sharp trailing edge) as a mesh job of its own, for this sweep's
-   follow-up?
-3. URANS (transient SST/SA without DES) is missing (ADR 0136); is it wanted for stall work?
+Commits: 17cfe6d (registration and the driver), d9ba558 (amendment 1), a79aa5c (amendment 2), then the results, the
+limit tests and this addendum. All counted runs used `E:\projects\cfd\w48y-work\rcfd-4e795b1.exe`: the registration's
+release build of 4e795b1's code, copied out of the target folder. Work folder `E:\projects\cfd\w48y-work\w` (meshes,
+cases, runs); results in [`docs/investigations/job48y-aoa-sweep/`](../investigations/job48y-aoa-sweep/README.md). The host
+was shared for the whole job: total CPU was at 100 %, free memory 5 to 34 GB, and up to 9 of my single-thread runs went at
+a time. Wall times (results.json) are therefore rough.
+
+### Limits
+
+| Id | Limit | Measured | Outcome |
+|---|---|---|---|
+| L1 | every counted run complete | 28 of 28: 16 SA (0-24 degrees; exit 5 at the cap except 0 and 17, which met the targets at iteration 8000, exit 0), 8 SST (exit 5), 2 SA2 (exit 5), 2 DD (t = 40 reached, exit 0, no `corrector_cap` warning). No guard stop and no wall cap | met |
+| L2 | 0.90 <= slope / 2 pi <= 1.05 | 0.1009 per degree = 5.779 per rad = **0.920** x 2 pi (intercept 0.0083) | met (0.02 above the lower edge) |
+| L3 | some cl after the peak <= 0.90 cl_max | base sweep: peak at 20 degrees (1.5278), nothing after it, so no stall, and D8's extension ran. With 22 and 24 degrees: 1.3951 (0.913) and **1.2039 (0.788)**. Stall detected, first below 0.9 at 24 degrees | met (with the extension) |
+| L4 | abs(cl(0)) <= 0.005 | -2.3e-11 | met |
+| B1 | folder <= 400 000 bytes, each PNG <= 120 000 | about 300 000 bytes with this README (the test prints the exact value); PNGs 37 520, 35 009, 80 749 | met |
+| P1 | selftest | passed (registration, amendments, final) | met |
+| G0 | fmt, clippy, baseline_hashes untouched | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release --locked -p rcfd-api --tests -- -D warnings` clean; `git diff 4e795b1 -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
+
+D10's tests: `crates/rcfd-api/tests/aoa_sweep_w48y.rs`, 5 passed (L1, L2, L3, L4, B1; no known miss). They recompute the
+slope and the stall rule from the committed curve and agree with the driver.
+
+### The sweep curve and the report-only results
+
+The table with Ladson is in the folder's README; the figures are `cl_alpha.png` and `polar.png` there.
+
+* **D5's plan.** SA was steady by D4 at all 16 angles (the largest cl range over the last 1000 iterations was 8.3e-4, at
+  22 degrees), so the curve is SA throughout. DD ran at 18 and 20 degrees only, as D5's no-unsteady-angle case says.
+* **SA-DDES** (report only).
+  * 18 degrees: cl 1.343 (1.333 to 1.380), cd 0.0666. That is 0.156 below steady SA (1.499), and nothing sheds.
+  * 20 degrees: cl 0.864 (0.144 to 1.673), cd 0.390, chord Strouhal 0.239 over 4 periods; half-window drift -0.21 in cl.
+    The flow separated where steady SA (1.528) stays attached, and the mean over [20, 40] is not settled.
+  * Correctors: means 2.75 and 2.25, at most 3, never cap-bound; 2736 to 2883 s per run.
+* **SST** (report only).
+  * Slope 0.970 x 2 pi over 0, 4 and 8 degrees.
+  * Steady to 14 degrees (cl 1.3973, the peak). Not steady by D4 at 16, 18 and 20 degrees: iteration means 0.886,
+    0.968, 0.946, with the cl range over the window up to 2.3. Its own L3: stall detected, first below 0.9 at 16.
+  * Drag 0.0036 / 0.0047 / 0.0083 / 0.0162 / 0.0232 at 0 / 4 / 8 / 12 / 14 degrees, against Ladson's 0.0081 / 0.0082 /
+    0.0103 / 0.0132 / 0.0160.
+* **Grid check G1** (SA, M2w against M1w).
+  * 6 degrees: cl 0.6232 against 0.6185 (+0.8 %), cd 0.0176 against 0.0182 (-3.5 %).
+  * 14 degrees: cl 1.2913 against 1.2872 (+0.3 %), cd 0.0707 against 0.0734 (-3.6 %). M2w at 14 is not steady by D4:
+    the cd range is 8.8e-4, above 5e-4.
+* **Against Ladson** (80 grit; cl_max 1.612 at 17.1 degrees, 1.00 at 18.0; slope 0.985 x 2 pi).
+
+  | | cl_max | at | slope / 2 pi |
+  |---|---|---|---|
+  | SA | 1.528 (-5 %) | 20 degrees (+3) | 0.920 |
+  | SST | 1.397 (-13 %) | 14 degrees (-3) | 0.970 |
+
+  The two RANS models bracket the measured stall angle by about 3 degrees on either side. SA's lift falls gradually
+  after its peak; the experiment's drops by 38 % within a degree. SA's drag is 0.0037 at 0 degrees, half the measured
+  0.0081 (too low), and 1.4 to 4.6 times the measured value from 4 degrees up, growing with alpha. SST's drag is the
+  closer of the two up to 14 degrees.
+
+### Deviations
+
+1. **Amendment 1.** The registered sweep mesh M1 diverged at its trailing-edge cells in every smoke run. The counted runs
+   use M1w, with a wall y+ of about 40 instead of about 2. Steady runs got `min_iterations` = the cap. Both changes were
+   made before any counted run.
+2. **Amendment 2.** The report-only SST arm ran at 8 angles with 4000 iterations, not at every angle with 8000. This
+   was done for cost, before any SST run.
+3. **Runs started before the rule that asks for them had its last input.**
+   * SA at 22 and 24 degrees started while SA at 20 was still running. As amendment 2 says, the base sweep could not
+     show a stall with its peak at 20; the finished runs confirm it (L3 on the base: not detected).
+   * DD at 18 and 20 started while SA at 0 to 6 was still running. The finished runs confirm D5's plan [18, 20].
+4. **Diagnostics.** The diagnostic runs of amendment 1 came from a scratch script (`diag.py`, not committed). I stopped
+   3 of them myself, after 2746 to 2972 of their 12000 iterations, to free the CPU.
+5. **Sample count.** `histories.csv` keeps at most 101 samples per run (D6 allowed at most 201), to stay well inside B1.
+6. **Case titles.** The `title` line was reworded after S0 (it names the mesh). The S0 snapshots keep the original text.
+   No setting changed.
+7. **Python packages.** The plots use matplotlib from the user's site packages (Python 3.9.13), without `python -I`. The
+   driver reads only its own files and `validation-data/reference/`.
+8. **Run status.** The registration's "finished" means the `rcfd run` process ended normally. The finish event's
+   `state` is `converged` (exit 0) or `not_converged` (exit 5) for the steady runs and `finished` for the DD runs.
+
+### Not run
+
+* SST at 2, 6, 10, 13, 15, 17 degrees (amendment 2). SST at 22 and 24 degrees, which its rule did not ask for since its
+  curve drops by 16 degrees.
+* DD at every angle but 18 and 20 (D5); the dt ladder (never needed).
+* Linux, where the meshes' last bits depend on libm.
+* The workspace test suite and the gate: only the new test file, rcfd-api's clippy of its tests and fmt ran. No crate
+  source changed, so `baseline_hashes` was not re-run.
+* A field-level look at the solutions (separation point, nuTilda in the wake). The drag finding below is from the
+  monitors only.
+
+## Questions for the maintainer (1-3 at registration, 4-8 from the results; none is decided here)
+
+1. **Storage (D6).** Options:
+   - (a) driver plus results, runs on demand (this job, about 0.3 MB);
+   - (b) a new example project with its own cap (about 1 MB per stored run, two trees).
+
+   **Recommendation (a).** No existing cap moves, and the runs rebuild with one command.
+2. **A 2D aerofoil C-grid generator** (wake cut, sharp or blunt trailing edge) as a mesh job of its own. Options:
+   - (a) yes;
+   - (b) keep the O-grid warp.
+
+   **Recommendation (a).** The O-grid's trailing-edge slivers are what stopped wall-resolved spacing (amendment 1, and
+   question 5).
+3. **URANS (transient SST or SA without DES)** is missing (ADR 0136). Options:
+   - (a) add transient SST for stall work;
+   - (b) keep SA-DDES as the only transient closure.
+
+   **Recommendation (a).** SST is the closer model here up to its stall, and it is the model that fails to be steady
+   past 14 degrees (D4), which is where a URANS run is the usual next step.
+4. **SA's drag.** The steady SA arm gives cd half the measured value at 0 degrees and 1.4 to 4.6 times it from 4
+   degrees up. In the amendment-1 diagnostics, cd also kept rising for thousands of iterations; SST did not do either.
+   This may be SA's wall law at y+ about 40, the nuTilda far-field or initial values, or the first-order scheme of the
+   turbulence variable. Not investigated here. Options:
+   - (a) a registered investigation against the NASA TMR NACA 0012 SA results (alpha 0 and 10, their grids), the
+     wall-law path first;
+   - (b) accept SA as is for aerofoils.
+
+   **Recommendation (a).**
+5. **Trailing-edge divergence at fine wall spacing.** Steady SIMPLEC and adaptive PISO both diverged within 30
+   iterations at the two sliver cells of the sharp trailing edge (wall cell 1.6e-5 or 4.3e-5 chord; amendment 1). This
+   is the "stable when the resolution changes" concern of ADR 0156's request, on another mesh family. Options:
+   - (a) a solver-robustness job with M1 as its test case (the driver builds it: `mesh ... M1`);
+   - (b) leave it to the C-grid of question 2.
+
+   **Recommendation (a), then (b).**
+6. **Which curve is "the" result.** By the registration it is steady SA, which stalls at about 20 to 24 degrees; SST
+   stalls at 14 to 16. Options:
+   - (a) present both, as here;
+   - (b) designate SST after seeing the data.
+
+   **Recommendation (a).** Re-designating after the comparison would be choosing the model that matches.
+7. **SA-DDES at 20 degrees.** The run is not settled (half-window drift -0.21 in cl). Options:
+   - (a) run it to t = 100 and add 19 and 21 degrees;
+   - (b) leave it reported as is.
+
+   **Recommendation (a)**, if the transient picture of stall matters before URANS exists.
+8. **`CHANGELOG.md`.** Not edited, as in the other 48x jobs (ADR 0155 question 6).

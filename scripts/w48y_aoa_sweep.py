@@ -730,7 +730,7 @@ def write_outputs(runs, res, outdir, plots):
         w.writerow(["id", "index", "time", "cl", "cd"])
         for i, r in sorted(runs.items()):
             h = r["history"]
-            stride = max(1, math.ceil(len(h) / 200))
+            stride = max(1, math.ceil(len(h) / 100))  # at most 101 samples (D6: at most 201)
             sel = h[::stride]
             if h and sel[-1] is not h[-1]:
                 sel.append(h[-1])
@@ -753,8 +753,19 @@ def make_plots(runs, res, outdir):
             label="Ladson 1988, Re 6e6, 80 grit (experiment)")
     if res.get("sst_curve"):
         sc = res["sst_curve"]
-        ax.plot([p["alpha"] for p in sc], [p["cl"] for p in sc], "--", color="#b07aa1", lw=1.2,
-                label="steady SST, iteration mean (report only)")
+        ax.errorbar([p["alpha"] for p in sc], [p["cl"] for p in sc],
+                    yerr=[[p["cl"] - p["cl_min"] for p in sc], [p["cl_max"] - p["cl"] for p in sc]], fmt="--",
+                    color="#b07aa1", lw=1.0, capsize=2, alpha=0.8, label="SST, window mean, min/max (report only)")
+        unst = [p for p in sc if not p["steady"]]
+        if unst:
+            ax.plot([p["alpha"] for p in unst], [p["cl"] for p in unst], "v", mfc="none", color="#b07aa1", ms=6,
+                    label="SST not steady (D4)")
+    dds = [(int(a), d) for a, d in res.get("ddes", {}).items() if d.get("complete") and d.get("cl")]
+    if dds:
+        ax.errorbar([a for a, _ in dds], [d["cl"]["mean"] for _, d in dds],
+                    yerr=[[d["cl"]["mean"] - d["cl"]["min"] for _, d in dds],
+                          [d["cl"]["max"] - d["cl"]["mean"] for _, d in dds]],
+                    fmt="D", color="#e15759", ms=5, capsize=3, label="SA-DDES time mean, min/max")
     xs = [p["alpha"] for p in curve]
     ys = [p["cl"] for p in curve]
     err = [[p["cl"] - p["cl_min"] for p in curve], [p["cl_max"] - p["cl"] for p in curve]]
@@ -763,15 +774,16 @@ def make_plots(runs, res, outdir):
                          ("SA iteration mean", "x", "#f28e2b")):
         pts = [p for p in curve if p["source"] == src]
         if pts:
-            ax.plot([p["alpha"] for p in pts], [p["cl"] for p in pts], mk, color=col, ms=6, label=src)
+            ax.plot([p["alpha"] for p in pts], [p["cl"] for p in pts], mk, color=col, ms=5,
+                    label="sweep curve: " + src)
     a = [0, 20]
     ax.plot(a, [2 * math.pi * math.radians(v) for v in a], ":", color="0.6", lw=1, label="2 pi alpha")
     ax.set_xlabel("angle of attack alpha [deg]")
     ax.set_ylabel("lift coefficient cl")
     ax.set_title("NACA 0012, Re 6e6: cl(alpha) (ADR 0159)")
-    ax.set_ylim(-0.1, 2.3)
+    ax.set_ylim(-0.1, 2.6)
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=7, loc="upper left")
+    ax.legend(fontsize=6, loc="upper left")
     fig.tight_layout()
     fig.savefig(os.path.join(outdir, "cl_alpha.png"))
     plt.close(fig)
@@ -779,7 +791,11 @@ def make_plots(runs, res, outdir):
     fig, ax = plt.subplots(figsize=(6.4, 4.4), dpi=90)
     ax.plot([cd for _, _, cd in lad], [c for _, c, _ in lad], "s", mfc="none", color="0.35", ms=5,
             label="Ladson 1988, 80 grit")
-    ax.plot([p["cd"] for p in curve], [p["cl"] for p in curve], "o-", color="#4e79a7", label="sweep curve")
+    ax.plot([p["cd"] for p in curve], [p["cl"] for p in curve], "o-", color="#4e79a7", label="sweep curve (SA)")
+    if res.get("sst_curve"):
+        sc = res["sst_curve"]
+        ax.plot([p["cd"] for p in sc], [p["cl"] for p in sc], "v--", mfc="none", color="#b07aa1", lw=1.0,
+                label="SST window mean (report only)")
     for p in curve:
         ax.annotate(str(p["alpha"]), (p["cd"], p["cl"]), fontsize=6, xytext=(3, -3), textcoords="offset points")
     ax.set_xscale("log")
@@ -794,19 +810,34 @@ def make_plots(runs, res, outdir):
 
     hist = [r for r in runs.values() if not r.get("smoke") and (r["arm"] == "DD" or (
         r["arm"] == "SA" and not r["summary"].get("steady", True)))]
-    if hist:
-        fig, ax = plt.subplots(figsize=(6.4, 4.0), dpi=90)
+    sst_unsteady = [r for r in runs.values() if not r.get("smoke") and r["arm"] == "SST"
+                    and not r["summary"].get("steady", True)]
+    if hist or sst_unsteady:
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(6.4, 5.6), dpi=90)
         for r in sorted(hist, key=lambda r: (r["arm"], r["alpha"])):
             h = r["history"]
-            stride = max(1, len(h) // 1500)
+            stride = max(1, len(h) // 800)
             if r["arm"] == "DD":
                 ax.plot([t for _, t, _, _ in h[::stride]], [c for _, _, c, _ in h[::stride]], lw=0.8,
-                        label=f"DD {r['alpha']} deg (time)")
-        ax.set_xlabel("time t U / c")
+                        label=f"SA-DDES {r['alpha']} deg")
+        ax.axvspan(DDES_END / 2, DDES_END, color="0.9", zorder=0, label="averaging window")
+        ax.set_ylim(-0.2, 2.2)
+        ax.set_xlabel("time t U / c (the start-up spike is cut off)")
         ax.set_ylabel("cl")
-        ax.set_title("SA-DDES lift histories (ADR 0159)")
+        ax.set_title("SA-DDES lift histories and SST iteration histories (ADR 0159)", fontsize=10)
         ax.grid(alpha=0.3)
-        ax.legend(fontsize=6, ncol=2)
+        ax.legend(fontsize=6, ncol=3)
+        for r in sorted(sst_unsteady, key=lambda r: r["alpha"]):
+            h = r["history"]
+            stride = max(1, len(h) // 1500)
+            hw = [e for e in h if e[0] > SST_ITERATIONS - STEADY_WINDOW]
+            ax2.plot([i for i, _, _, _ in hw], [c for _, _, c, _ in hw], lw=0.7,
+                     label=f"SST {r['alpha']} deg (not steady)")
+        ax2.set_ylim(-0.5, 2.5)
+        ax2.set_xlabel("iteration (the window of D4, the last 1000)")
+        ax2.set_ylabel("cl")
+        ax2.grid(alpha=0.3)
+        ax2.legend(fontsize=6, ncol=4)
         fig.tight_layout()
         fig.savefig(os.path.join(outdir, "histories.png"))
         plt.close(fig)
