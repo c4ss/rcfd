@@ -294,3 +294,28 @@ registered test is kept as `w48v_a9_..._known_miss` (ignored, limit unchanged, t
 
 `crates/rcfd-studio`, `crates/rcfd-runner`, the default of every key, the ADR 0077 one-corrector check, `baseline_hashes.rs`, the
 example projects and the user's files.
+
+## Addendum (interim, 2026-10-29; the long runs and the census still running): results so far against the registered limits
+
+Binary and tests at 56473b8 (code), runs through `scripts/w48v_run_matrix.py` with `E:\projects\cfd\w48v-work\rcfd-bbc34b4.exe`
+(56473b8's code), work folder `E:\projects\cfd\w48v-work`. The machine was shared with another agent's WSL/Docker workload
+(total CPU 92 to 94 % before the first run), so wall times are rough and comparable only within the A7 group.
+
+| Check | Limit | Measured | Outcome |
+|---|---|---|---|
+| N2 | five fingerprints unchanged | `w33b_default_bits` passed (e9dca234..., 72d935a8..., e46fbe51..., c21a6553..., 2c711442...) | met |
+| N3 | 0 differences between aad08fe and the branch | 36 entries (`cases/`, `example-projects*/*/cases/`) equal byte for byte: 30 case files with their hash, 6 `cases/*/case.json` registry descriptors (not case files) refused identically; the example case hashes 6ac54a8827aedab0 with the key absent, written `"fixed"` or set to `"fixed"`, 5dad1499c3c6a5cb with `"adaptive"` | met |
+| N5 | no corrector key in a fixed run's events | none in any of the committed case's events (3 steps through `runctl::drive`) | met |
+| A1 | count 2 at every step; bit-identical at t = 10 | 160 steps, count 2 (estimate 0.3628 at step 1), ux, uy, p and face flux bit-identical | met |
+| A2 | K1 + adaptive: t = 3, not stopped, M_hf <= 0.0114 | 192 steps, not stopped, M_hf 5.707e-3; count 8 (estimate 0.4707 after counting 2 to 8) | met: K1 is a passing test |
+| A3 | K2 + adaptive: as A2 | 192 steps, not stopped, M_hf 5.707e-3; count 8 (estimate 0.4705) | met: K2 is a passing test |
+| A4 | A2 equals fixed at its count | count constant (8); equal to `n_correctors = 8` bit for bit at t = 3 | met |
+| A5 | chosen count's 20-iteration estimate <= 0.5; 60-iteration cold estimate < 1 | 64 x 48: 2 (0.3628; 0.3578); 128 x 96: 3 (0.2863; 0.2851); 256 x 256: 5 (0.3612; 0.3576); 64 x 256: 8 (0.4707; 0.4714) | met (margin 2.1 to 3.5 below 1) |
+| A6 | reported | mean correctors per step over (0, 10]: V64 2.000 (extra 0), V128 3.000 (+1), V64x256 8.000 (+6); V256 5 so far | see the final addendum |
+| A7 | reported; TR256 spoky | per step (steps 2 to 192, one thread each, started together): TV256 1.057 s (67.6 s per simulated second), TW5 0.780 s (49.9 s), TW3 0.459 s (29.4 s), TR256 0.667 s (42.7 s); TV256's first step with its search 52.4 s (about 50 steps); 48T's W3 29 s and W5 49 s reproduced. M_hf at t = 1 / 3: TV256 2.68e-7 / 9.06e-8, TW5 2.72e-7 / 9.20e-8, TW3 1.92e-7 / 7.88e-8, TR256 42.6 / 48.3 | TR256 spoky (the control fails without the opt-in) |
+| A9 | each arm refused at `solver.corrector_control` | registered test: set-up defect (amendment 2); corrected A9b: simplec, fractional_step, dynamic mesh, error_tolerance, low-Mach pimple all refused there with located messages; the piston and low-Mach texts without the key build | registered A9: known miss (set-up defect); A9b met |
+| A10 | correctors in every iteration event; finish summary | V64x256: 640 of 640 iteration events with `correctors` 8 and `corrector_cap` 0; `finish` `correctors` {estimates 1, cap_bound 0, mean 8, ...}; no cap-bound estimate, so no `corrector_cap` warning | met |
+| B3 | SV301 in `rcfd check --json`, exit 0 | SV301 (warning, solver, `solver.corrector_control`, fix `adaptive`), rho 4.36, exit 0; the human output names it; none on the committed case | met |
+| B4 | warning event SV301 after start, before the first iteration | events `start`, `warning:SV301`, `iteration`, `iteration`, `checkpoint`, `finish`; stderr names `solver.corrector_control` | met |
+| B5 | iteration events equal; stores byte-identical | 20 = 20 events equal; `store.rts` 892 365 bytes both, byte-identical | met |
+| C-preview | (not a registered check) | V64: St 0.1517, mean cd 1.3237 over [50, 100] (= U1's postdiction), 2 correctors; V128: clean (M_hf 8.1e-6 / 4.4e-5 / 1.3e-5 at t = 1, 3, 10), St 0.1614, mean cd 1.3488, 3 correctors, 5.7 s per simulated second | final addendum |
