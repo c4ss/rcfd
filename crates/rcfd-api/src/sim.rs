@@ -2723,6 +2723,17 @@ impl Simulation {
         }
     }
 
+    /// The face viscosity the momentum equation of the steady, coupled or transient incompressible solver used last
+    /// (`None`: the constant `physics.nu`; read only). Used by the `*_effective` force components (ADR 0164).
+    pub fn momentum_face_viscosity(&self) -> Option<Vec<f64>> {
+        match &self.engine {
+            Engine::Steady(s) => s.nu_face.clone(),
+            Engine::Coupled(s) => s.nu_face.clone(),
+            Engine::Transient(s) => s.nu_face.clone(),
+            _ => None,
+        }
+    }
+
     /// Registry key and label of the active turbulence model (`None` for laminar runs).
     pub fn turbulence_model(&self) -> Option<(String, String)> {
         self.turb
@@ -4071,7 +4082,22 @@ impl Simulation {
                 _ => {}
             }
         }
+        // ADR 0164: the `*_effective` components take the viscous stress with the momentum equation's face viscosity
+        let effective = matches!(r.component.as_str(), "total_effective" | "viscous_effective");
         let wall = |origin: Vec3| {
+            if effective {
+                if let Some(nu_face) = self.momentum_face_viscosity() {
+                    return ig::wall_force_and_moment_face_viscosity(
+                        g,
+                        &r.patch,
+                        self.velocity(),
+                        &self.pressure_face_values(),
+                        &nu_face,
+                        self.rho,
+                        origin,
+                    );
+                }
+            }
             ig::wall_force_and_moment(
                 g,
                 &r.patch,
@@ -4084,7 +4110,7 @@ impl Simulation {
         };
         let pick = |f: ig::PatchForce| match r.component.as_str() {
             "pressure" => f.pressure,
-            "viscous" => f.viscous,
+            "viscous" | "viscous_effective" => f.viscous,
             _ => f.total(),
         };
         Ok(match r.kind {

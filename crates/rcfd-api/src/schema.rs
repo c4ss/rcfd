@@ -627,8 +627,8 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "turbulence",
-            Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient"]).doc(
-                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient",
+            Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient", "freestream"]).doc(
+                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient (so a velocity = \"freestream\" far field is zero_gradient). freestream (opt-in, ADR 0164; needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves",
             ),
         )
         .field(
@@ -1234,7 +1234,11 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "component",
-            Schema::enumeration("total", &["total", "pressure", "viscous"]).doc("Force part to report"),
+            Schema::enumeration(
+                "total",
+                &["total", "pressure", "viscous", "total_effective", "viscous_effective"],
+            )
+            .doc("Force part to report (force, force_coefficient). total, viscous: the viscous stress with the molecular physics.nu (default; with a wall function this misses most of the wall shear the model applies); total_effective, viscous_effective: with the face viscosity of the momentum equation (molecular plus eddy viscosity, on wall faces the wall-function value), i.e. the wall shear the solver applies (ADR 0164; equal to total/viscous for laminar constant-viscosity runs)"),
         )
         .field(
             "direction",
