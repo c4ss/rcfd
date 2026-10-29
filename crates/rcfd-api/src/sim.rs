@@ -2773,7 +2773,23 @@ impl Simulation {
         if !errs.is_empty() {
             return Err(errs);
         }
-        let mut st = TurbState::new(new_case, &self.geom, &old.inlet_speeds)?;
+        // ADR 0166 amendment 1: the free-stream far-field default depends on the model, so the old model's inlet list is
+        // filtered by the new roles and completed by the patches the new model makes free-stream inlets
+        let mut speeds: Vec<(String, Vec<f64>)> = old
+            .inlet_speeds
+            .iter()
+            .filter(|(n, _)| turb::role(new_case, n) == turb::Role::Inlet)
+            .cloned()
+            .collect();
+        for n in new_case.tree.names("boundaries").unwrap_or_default() {
+            if turb::freestream_role(new_case, &n) && !speeds.iter().any(|(m, _)| *m == n) {
+                if let Some(patch) = self.geom.mesh.patch(&n) {
+                    let u = vec3::norm(get_v(new_case, &format!("boundaries.{n}.velocity_value"), [0.0; 3]));
+                    speeds.push((n, vec![u; patch.faces().count()]));
+                }
+            }
+        }
+        let mut st = TurbState::new(new_case, &self.geom, &speeds)?;
         st.model.initialize_from_nut(old.model.nut());
         self.turb = Some(st);
         self.case = new_case.clone();

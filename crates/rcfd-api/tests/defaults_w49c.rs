@@ -238,3 +238,64 @@ fn t6_sst_and_k_epsilon_far_field_default_is_unchanged() {
         assert_eq!(bits(&auto, &fields, 30), bits(&old, &fields, 30), "{model}");
     }
 }
+
+/// Far-field faces of `name`: (inflow faces, outflow faces) as (face value, owner cell value) pairs.
+type FacePairs = Vec<(f64, f64)>;
+fn far_field_faces(s: &Simulation, name: &str) -> (FacePairs, FacePairs) {
+    let g = &s.geom;
+    let nb = s.boundary_field(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+    let cells = s.field(name).unwrap();
+    let own = g.mesh.owner();
+    let pairs = |p: &str| -> FacePairs {
+        g.mesh
+            .patch(p)
+            .unwrap()
+            .faces()
+            .map(|f| (nb[f - g.n_internal], cells[own[f]]))
+            .collect()
+    };
+    (pairs("xmin"), pairs("xmax"))
+}
+
+/// T8 (ADR 0166 amendment 1): the live model switch takes the far-field role of the new model. (a) SA to SST: k and
+/// omega are zero-gradient (finite, the owner value) on every far-field face, as in a fresh SST build; (b) SST to SA:
+/// the inflow faces hold nuTilda = 3 nu; (c) SA to SA (a coefficient change): the free-stream condition stays (inflow
+/// faces 3 nu, outflow faces the owner value).
+#[test]
+fn t8_live_switch_takes_the_new_models_far_field_role() {
+    let sa = freestream_plate("spalart_allmaras", "");
+    let sst = freestream_plate("k_omega_sst", "");
+    // (a)
+    let mut s = run(&sa, 20);
+    s.reconfigure_turbulence(&sst).unwrap_or_else(|e| panic!("{e:?}"));
+    for _ in 0..10 {
+        s.step();
+    }
+    for name in ["k", "omega"] {
+        let (inflow, outflow) = far_field_faces(&s, name);
+        for (face, cell) in inflow.iter().chain(outflow.iter()) {
+            assert!(face.is_finite(), "{name}: {face}");
+            assert_eq!(face.to_bits(), cell.to_bits(), "{name}: face {face} owner {cell}");
+        }
+    }
+    // (b)
+    let mut s = run(&sst, 20);
+    s.reconfigure_turbulence(&sa).unwrap_or_else(|e| panic!("{e:?}"));
+    for _ in 0..10 {
+        s.step();
+    }
+    let (inflow, _) = far_field_faces(&s, "nuTilda");
+    assert!(inflow.iter().all(|(f, _)| *f == 3.0 * 2e-7), "{inflow:?}");
+    // (c)
+    let mut sa2 = sa.clone();
+    sa2.set("turbulence.coefficients.sa.cb1", serde_json::json!(0.1356))
+        .unwrap();
+    let mut s = run(&sa, 20);
+    s.reconfigure_turbulence(&sa2).unwrap_or_else(|e| panic!("{e:?}"));
+    for _ in 0..10 {
+        s.step();
+    }
+    let (inflow, outflow) = far_field_faces(&s, "nuTilda");
+    assert!(inflow.iter().all(|(f, _)| *f == 3.0 * 2e-7), "{inflow:?}");
+    assert!(outflow.iter().all(|(f, c)| f.to_bits() == c.to_bits()), "{outflow:?}");
+}
