@@ -168,6 +168,8 @@ pub struct Studio {
     pub runner_exe: PathBuf,
     /// The one-click path: Run button, status strip, binaries search (ADR 0141).
     pub quick: crate::quick_run::QuickRun,
+    /// Stop in Run's place (ADR 0161).
+    pub stop: crate::stop::StopState,
     /// The Viewport's Mesh / Run toggle (ADR 0144).
     pub view: crate::view_toggle::Toggle,
     shown_run: Option<String>,
@@ -218,6 +220,7 @@ impl Studio {
             run_switches: Switches::default(),
             runner_exe: default_runner_exe(),
             quick: Default::default(),
+            stop: Default::default(),
             view: Default::default(),
             shown_run: None,
             wake: Arc::new(|| {}),
@@ -303,6 +306,7 @@ impl Studio {
         self.preview.close();
         self.plot_marker = None;
         self.quick.close();
+        self.stop.close();
         self.view.close();
     }
 
@@ -755,7 +759,7 @@ impl Studio {
         for m in msgs {
             self.say(m);
         }
-        n + k + crate::quick_run::drain(self)
+        n + k + crate::quick_run::drain(self) + crate::stop::drain(self)
     }
 
     fn run_worker(&self) -> Option<&RunWorker> {

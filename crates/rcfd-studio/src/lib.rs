@@ -32,6 +32,8 @@ pub mod quick_run_ui;
 pub mod run_fields;
 pub mod runs;
 pub mod schema_model;
+pub mod stop;
+pub mod stop_ui;
 pub mod store_plan;
 pub mod studio;
 pub mod theme;

@@ -39,13 +39,19 @@ pub struct RunRow {
     pub queue_pos: Option<usize>,
     /// Residuals of the last line of `residuals.jsonl` (`res_u`, `res_p`, `continuity`), NaN for `null`.
     pub last_residuals: BTreeMap<String, f64>,
+    /// The process exit code from `status.json` once the run has ended (ADR 0161).
+    pub exit_code: Option<i32>,
 }
 
 impl RunRow {
-    /// The state as `status.json` spells it, or "held" for a queued run with a pause request.
+    /// The state as `status.json` spells it, "held" for a queued run with a pause request, or "stopped" for a run that
+    /// stopped cleanly on request (`cancelled` in `status.json`, ADR 0161).
     pub fn state_label(&self) -> String {
         if self.state == RunState::Queued && self.held {
             return "held".into();
+        }
+        if crate::stop::stopped_cleanly(self) {
+            return crate::stop::STOPPED.into();
         }
         state_name(self.state)
     }
