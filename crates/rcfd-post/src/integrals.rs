@@ -113,6 +113,43 @@ pub fn wall_force_and_moment(
     rho: f64,
     origin: Vec3,
 ) -> Result<(PatchForce, Vec3)> {
+    force_and_moment(geom, patch, u, p_face, |_| nu, nu != 0.0, rho, origin)
+}
+
+/// [`wall_force_and_moment`] with the viscous stress of every face taken with its own kinematic viscosity `nu_face[f]`
+/// (indexed by global face) instead of one molecular value: with the face viscosity of the momentum equation of a RANS
+/// model (molecular plus eddy viscosity, and on wall faces the wall-function value) the viscous part is the wall shear the
+/// momentum equation applies (ADR 0164).
+pub fn wall_force_and_moment_face_viscosity(
+    geom: &FvGeometry,
+    patch: &str,
+    u: &VectorField,
+    p_face: &[f64],
+    nu_face: &[f64],
+    rho: f64,
+    origin: Vec3,
+) -> Result<(PatchForce, Vec3)> {
+    if nu_face.len() != geom.mesh.n_faces() {
+        return Err(Error::Other(format!(
+            "face viscosity has {} values for {} faces",
+            nu_face.len(),
+            geom.mesh.n_faces()
+        )));
+    }
+    force_and_moment(geom, patch, u, p_face, |f| nu_face[f], true, rho, origin)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn force_and_moment(
+    geom: &FvGeometry,
+    patch: &str,
+    u: &VectorField,
+    p_face: &[f64],
+    nu_of: impl Fn(usize) -> f64,
+    viscous: bool,
+    rho: f64,
+    origin: Vec3,
+) -> Result<(PatchForce, Vec3)> {
     let mesh = &geom.mesh;
     let (sf, cf, own) = (mesh.face_area_vectors(), mesh.face_centres(), mesh.owner());
     let coeffs: Vec<Vec<_>> = (0..3).map(|k| u.boundary_coeffs(geom, k)).collect();
@@ -120,7 +157,7 @@ pub fn wall_force_and_moment(
     let mut vf = vec3::ZERO;
     let mut moment = vec3::ZERO;
     // Cell gradients of the components (their tangential parts give the transpose term of the stress).
-    let grads: Vec<Vec<Vec3>> = if nu == 0.0 {
+    let grads: Vec<Vec<Vec3>> = if !viscous {
         vec![]
     } else {
         (0..3)
@@ -153,6 +190,7 @@ pub fn wall_force_and_moment(
                 }
             }
         }
+        let nu = nu_of(f);
         let fv = tr.map(|t| -rho * nu * t * area);
         pf = vec3::add(pf, fp);
         vf = vec3::add(vf, fv);
@@ -326,6 +364,23 @@ mod tests {
         assert!(f.viscous[1].abs() < 1e-12);
         let cd = force_coefficient(f.viscous, [1.0, 0.0, 0.0], rho, uw, a);
         assert!((cd - f.viscous[0] / (0.5 * rho * uw * uw * a)).abs() < 1e-14);
+
+        // ADR 0164: a uniform face viscosity equal to nu gives the same bits; a doubled wall-face value doubles the
+        // viscous part and leaves the pressure part alone
+        let mut nuf = vec![nu; g.mesh.n_faces()];
+        let (fe, me) = wall_force_and_moment_face_viscosity(&g, "walls", &u, &pf, &nuf, rho, vec3::ZERO).unwrap();
+        let (f0, m0) = wall_force_and_moment(&g, "walls", &u, &pf, nu, rho, vec3::ZERO).unwrap();
+        for k in 0..3 {
+            assert_eq!(fe.viscous[k].to_bits(), f0.viscous[k].to_bits());
+            assert_eq!(fe.pressure[k].to_bits(), f0.pressure[k].to_bits());
+            assert_eq!(me[k].to_bits(), m0[k].to_bits());
+        }
+        for fc in g.mesh.patch("walls").unwrap().faces() {
+            nuf[fc] = 2.0 * nu;
+        }
+        let (f2, _) = wall_force_and_moment_face_viscosity(&g, "walls", &u, &pf, &nuf, rho, vec3::ZERO).unwrap();
+        assert!((f2.viscous[0] / f0.viscous[0] - 2.0).abs() < 1e-12);
+        assert!(wall_force_and_moment_face_viscosity(&g, "walls", &u, &pf, &nuf[1..], rho, vec3::ZERO).is_err());
     }
 
     /// Field `f(x)` on the box with exact fixed face values on every patch.

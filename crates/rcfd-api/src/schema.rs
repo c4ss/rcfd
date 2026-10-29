@@ -1234,7 +1234,11 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "component",
-            Schema::enumeration("total", &["total", "pressure", "viscous"]).doc("Force part to report"),
+            Schema::enumeration(
+                "total",
+                &["total", "pressure", "viscous", "total_effective", "viscous_effective"],
+            )
+            .doc("Force part to report (force, force_coefficient). total, viscous: the viscous stress with the molecular physics.nu (default; with a wall function this misses most of the wall shear the model applies); total_effective, viscous_effective: with the face viscosity of the momentum equation (molecular plus eddy viscosity, on wall faces the wall-function value), i.e. the wall shear the solver applies (ADR 0164; equal to total/viscous for laminar constant-viscosity runs)"),
         )
         .field(
             "direction",

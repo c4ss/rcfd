@@ -1,0 +1,6 @@
+# NASA Turbulence Modeling Resource, 2D NACA 0012 validation case, SA results: https://tmbwg.github.io/turbmodels/NACA0012_validation/n0012clcd_cfl3d_sa.dat (fetched 2026-10-29, ADR 0164)
+# CFL3D, 897x257 grid (farfield about 500 c), SA, nuTilda freestream = 3 nu, Re 6e6 per chord, M 0.15; lifting results with the point-vortex farfield correction
+alpha_deg,cl,cd
+0.,-0.68553224298E-05,0.81924676041E-02
+10.,0.10909146672E+01,0.12310544747E-01
+15.,0.15460981214E+01,0.21236647158E-01

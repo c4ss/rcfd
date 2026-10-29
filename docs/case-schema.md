@@ -128,6 +128,12 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 | `sa.des_delta` | `max_extent` | Grid scale `Delta`: `max_extent` (largest distance between two face centres of the cell, empty directions excluded: `max(dx, dy, dz)` on boxes) or `cbrt_volume` (`V^(1/3)`) |
 | `sa.c_des` | 0.65 | `C_DES`, range 0.1 to 2 (value from secondary literature, see `docs/reference-data.md`) |
 
+Far fields (ADR 0164): a patch with `velocity = "freestream"` has the turbulence role `zero_gradient` unless
+`boundaries.<patch>.turbulence` says otherwise, so `nuTilda` is fixed on none of its faces. Around a lifting body the
+far-field `nuTilda` can then grow far above `nutilde_ratio * nu` (ADR 0159's NACA 0012 at 10 degrees: about 6e4 nu).
+`boundaries.<patch>.turbulence = "inlet"` fixes it at `nutilde_ratio * nu` (or `nutilde_value`) on every face of the
+patch, outflow faces included.
+
 `convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
 `wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are
 rejected for this model with a located diagnostic. Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the
@@ -250,6 +256,15 @@ weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` o
 cells, the quantity the wall functions use.
 
 For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
+
+Force parts of `force` and `force_coefficient` reports with a turbulence model (ADR 0164): `component` = `total`
+(default), `pressure` or `viscous` take the viscous stress with the molecular `physics.nu` and the wall-normal derivative
+`u_P / dn` of the wall cell. On a wall-function mesh (wall-cell y+ well above 1) this is not the wall shear the solver
+applies: the momentum equation uses `nu + nu_t,w` on the wall face, so that the shear is `u_tau^2`, and the molecular
+value is only about `u+/y+` of it (about 0.35 at y+ = 40). The opt-in values `total_effective` and `viscous_effective` take
+the viscous stress with the face viscosity the momentum equation used last (molecular plus eddy viscosity, on wall faces
+the wall-function value): the wall shear the solver applies. For laminar constant-viscosity runs they equal `total` and
+`viscous` bit for bit. `pressure` is the same in both. The defaults are unchanged (bit-identical monitors).
 
 Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
 unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field
