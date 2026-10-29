@@ -120,7 +120,10 @@ fn p3_run_headless_emits_sv301_after_start_once_per_run() {
         (Some(s), Some(w), Some(i)) if s < w && w < i => {}
         other => problems.push(format!("K1 first call: start, SV301 warning, iteration at {other:?}")),
     }
-    let info_warns = start.map(|s| sv301(&first[s]["info"]["warnings"]).len()).unwrap_or(0);
+    // `info.warnings` holds `rules::warnings_json` objects, whose rule id is under `rule` (amendment 1)
+    let info_warns = start
+        .and_then(|s| first[s]["info"]["warnings"].as_array())
+        .map_or(0, |a| a.iter().filter(|w| w["rule"] == "SV301").count());
     if info_warns != 1 {
         problems.push(format!(
             "K1 first call: {info_warns} SV301 entries in start.info.warnings"

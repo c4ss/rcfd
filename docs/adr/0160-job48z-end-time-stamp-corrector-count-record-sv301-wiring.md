@@ -244,6 +244,13 @@ templates.
 
 Results go into an addendum; a miss or a defective set-up is handled by the house rules above.
 
+## Amendment 1 (2026-10-29, after the registration commit 5e282d6 and before any run of this job)
+
+P3's test counted the SV301 entries of `start.info.warnings` by the key `id`, but those entries are `rules::warnings_json`
+objects, whose rule id is under `rule` (read in `rules.rs` while writing the code plan; nothing had been built or run): the set-up
+would have reported 0 entries whatever the code does. Corrected in the test before its first run: the entries with
+`rule = "SV301"` are counted. P3's limit is unchanged.
+
 ## Not changed by this job
 
 The solver's time arithmetic and every engine's `time`, the adaptive controller and its error control (ADR 0050), the compressible
