@@ -4099,14 +4099,12 @@ impl Simulation {
             }
         }
         // ADR 0164: the `*_effective` components take the viscous stress with the momentum equation's face viscosity.
-        // ADR 0166 D1, D3: so do the default `total` and `viscous` of force and force-coefficient reports when a
-        // turbulence model is active; `*_molecular` (and every moment report not asking for `*_effective`) keep
-        // `physics.nu`, the computation these had before
+        // ADR 0166 D1 and ADR 0170 D1: so do the default `total` and `viscous` of force, force-coefficient and moment
+        // reports when a turbulence model is active; `*_molecular` and `pressure` keep `physics.nu`, the computation
+        // these had before (a moment report gives the whole moment whatever its component, ADR 0170 D2)
         let effective = match r.component.as_str() {
             "total_effective" | "viscous_effective" => true,
-            "total" | "viscous" => {
-                self.turb.is_some() && matches!(r.kind, ReportKind::Force | ReportKind::ForceCoefficient)
-            }
+            "total" | "viscous" => self.turb.is_some(),
             _ => false,
         };
         let wall = |origin: Vec3| {
