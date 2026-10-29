@@ -4626,11 +4626,11 @@ mod tests {
     /// ADR 0160 S7: the snap rule of the reported end time.
     #[test]
     fn s7_end_snap_rule() {
-        let end = 0.3;
+        let end = 0.3_f64;
         let up = f64::from_bits(end.to_bits() + 1);
         assert_eq!(end_snap(end - 1e-13, end), Some(end));
         assert_eq!(end_snap(up, end), Some(end));
-        let big = 1e5;
+        let big = 1e5_f64;
         assert_eq!(end_snap(f64::from_bits(big.to_bits() + 1), big), Some(big));
         assert_eq!(end_snap(end - 2e-12, end), None);
         assert_eq!(end_snap(end, end), None);
