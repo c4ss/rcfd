@@ -3,7 +3,8 @@
 Status: **registered** 2026-10-29, after the code and the tests below were written and compiled and before any registered
 run (what had run before is listed under "What I already knew"); amendment 1 (X2's check, a set-up defect) before its
 corrected run; **results in the addendum**: every registered limit met but the registered X2 (set-up defect, corrected by
-X2b, met), every control failed as required; not yet accepted by the maintainer. House rules of
+X2b, met), every control failed as required; amendment 2 (X6, the dialog line) after those runs and before its own, met;
+not yet accepted by the maintainer. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
 corrected run; defaults of existing code stay bit-identical outside the Studio's run plan; `rcfd run`, the runner and the
@@ -231,6 +232,7 @@ over 3 s, no extra cost; but see "a finding" below.
 | X5 (a) control | the four entries, no corrector keys; reported | 891 steps, 310 s; no corrector keys; M_hf 1.05e-7 / 1.17e-7 (the same values as X5 (a): the count stayed 2); no SV301 | as registered (predicted, not discriminating) |
 | X5 (b) | `solver.end_time=3` and the entry, finished at 3, count above 2, clean, no SV301, file and snapshot | 192 steps, 137 s; one estimate (step 1: 5 correctors, rho 0.361), 5 at every step; M_hf 2.68e-7 / 9.06e-8 (ADR 0156 TV256: the same); no SV301; file and snapshot unchanged | met |
 | X5 (b) control | must fail (b): `set` exactly `solver.end_time=3`, SV301 in `check.json` and the events, spoky | 192 steps, 93 s; `check.json`'s `rules` hold SV301 (`amplified by 2.42 per step ... cell 129 at (-0.50093, -0.01845, 0.05), typically a thin wall cell`, fix `adaptive`) and `events.jsonl` its warning event; M_hf 42.63 / 48.33 (ADR 0154 R256 / ADR 0156 TR256: the same) | fails as required |
+| X6 (amendment 2) | the dialog line exactly, last wins; none for the steady and fractional cases | every text as registered; none for the two (ad082e5); clippy (`-D warnings`) and fmt clean again on ad082e5 | met |
 | W | 0 failures; ignored = main's plus this job's; lints; `workspace_graph` | the whole `rcfd-studio` suite on b52505d (`--test-threads 1`): 62 test binaries, **279 passed, 0 failed, 18 ignored**: main's 13 and this job's 5 (the four X5 and amendment 1's X2 known miss); the changed ADR 0153 tests ((a) control, (d), (g1), (g2), (h)) and the unchanged (b), (c), f3, (f2) and ADR 0152's DV6 among the passed; clippy and fmt clean (below); `workspace_graph` 3 passed | met |
 | N | only the Studio and this ADR | `git diff --stat 4e795b1`: `crates/rcfd-studio/src/{quick_run,quick_run_ui,runs,time_step,ui}.rs`, `tests/{correctors_x,run_time_s}.rs`, this ADR | met |
 
