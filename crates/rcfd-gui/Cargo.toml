@@ -21,7 +21,7 @@ png.workspace = true
 # ADR 0165 (Dependabot 7, 8, 10): the Studio's egui set (ADR 0131 W48-2 (a), eframe 0.36.2), so the workspace has one.
 # Back end glow (OpenGL), as before; the packages are already locked for eframe 0.36.2. A build together with the Studio
 # also turns on eframe's wgpu, so main.rs asks for glow explicitly (ADR 0165 S2).
-eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
 egui = "0.36.2"
 egui_dock = { version = "0.21.1", features = ["serde"] }
 egui_plot = "0.37.0"
