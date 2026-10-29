@@ -3,7 +3,9 @@
 Status: **registered 2026-10-29**, before any solver run of this job (set-ups, limits, reading rules and the not-run list
 are fixed here). **Amendment 1** (after the first runs, before any corrected run): arm B's far field is defective and is
 replaced by arm F with a new opt-in turbulence role; runs end at the residual targets before the cap, so the window is
-amended. Results will be added in an addendum. Job 49A, on local main 8d2ea58 (the worktree branch was reset to
+amended. **Results in the addendum:** both causes found and confirmed (the force report's molecular wall shear; the
+unanchored far-field nuTilda); limits met except LA4 (cd at 10 degrees +25.95 %, band 25 %), LA6 (a reading-rule
+artefact) and LP1 at y+ 5 (+19.9 %), which are known misses. Not yet accepted by the maintainer. Job 49A, on local main 8d2ea58 (the worktree branch was reset to
 it before any work). Number: ADR 0163 is the highest in this worktree and in the main checkout. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -329,3 +331,177 @@ Options: (a) correct that sentence by a note in ADR 0159; (b) leave it to this r
 Question 5: **`min_iterations`** does not gate the residual targets. Options: (a) document it in `docs/case-schema.md`;
 (b) an opt-in key that holds steady runs to a minimum iteration count; (c) change the gate (changes when default runs
 stop). Recommendation: (a) now, (b) if steady studies need fixed iteration counts.
+
+## Addendum: results (2026-10-29)
+
+Commits: 590fe32 (registration, D1 code, driver, TMR files), 47a3751 (amendment 1, the `freestream` role), then the
+results, the limit tests and this addendum.
+- Binaries: A10, A00, B00, B10, P40 and P01 used `rcfd-w49a.exe` (the registration's build). F10, F00, C10, P05 and S00
+  used `rcfd-w49a-am1.exe` (amendment 1's build).
+- Host: shared with other agents, CPU 80-100 %, free memory 16-17 GB, at most 3 of my solver processes at a time. Wall
+  times in `results.json` are therefore rough.
+- Results: [`docs/investigations/job49a-sa-drag/`](../investigations/job49a-sa-drag/README.md).
+
+### The finding
+
+ADR 0159's SA drag was wrong for two independent reasons. Neither is the SA model, its coefficients or its wall law.
+
+1. **H1 confirmed: the force report.** The default force components take the molecular viscosity. On a wall-function
+   mesh the reported friction is a fraction of the shear the solver applies:
+   - 0.319 of it on the aerofoil at y+ about 42;
+   - 0.352 on the y+ 40 plate;
+   - 1.005 at y+ 1.
+
+   That is why cd at 0 degrees was about half the measured value, for SA and for SST alike. With the opt-in
+   `total_effective`, A00 (ADR 0159's case unchanged) gives:
+
+   | | This job | TMR |
+   |---|---|---|
+   | cd | 0.008484 (+3.6 %) | 0.008192 |
+   | friction | 0.007060 (+3.3 %) | 0.006831 |
+   | pressure | 0.001424 (+4.6 %) | 0.001361 |
+2. **H2 confirmed: the far-field nuTilda.** Nothing fixes nuTilda on a `freestream` far field. The median outer
+   nuTilda/nu of ADR 0159's runs:
+   - 23.8 at 0 degrees;
+   - **6.02e4** at 10 degrees, that is 0.01 U c of eddy viscosity in the whole outer flow.
+
+   With the corrected far field (amendment 1's opt-in `turbulence = "freestream"`) it is 3.000 at both angles. At
+   10 degrees that changes the solution:
+
+   | | A10 (ADR 0159's far field) | F10 (corrected) | TMR |
+   |---|---|---|---|
+   | cl | 0.982 | **1.055** (-3.3 %) | 1.0909 |
+   | cd (`total_effective`) | 0.0445 | **0.0155** (+26 %) | 0.01231 |
+   | pressure part of cd | 0.0374 | 0.0095 | |
+
+   On 500 chords (C10) the corrected set-up gives cl 1.065 (-2.4 %) and cd 0.0135 (+10 %). So most of F10's remaining
+   cd excess is the 50-chord far field without a point-vortex correction. TMR's far-field page names drag at high lift as
+   the sensitive quantity.
+3. **H3 confirmed: the drift.**
+   - A10's cd rose 18.7 % between the windows 1001-2000 and 7001-8000. Its nut volume average went from 0.0021 at
+     iteration 635 to 0.0099 at 5000 and held there: the outer nuTilda filling the domain.
+   - With the far field corrected, F10 met the residual targets (1e-6) at iteration 577, with cd constant to 5 digits
+     over its last 80 iterations and the outer nuTilda at 3 nu.
+   - The steady iteration itself is not the cause.
+
+### Limits
+
+| Id | Limit | Measured | Outcome |
+|---|---|---|---|
+| L1 | exit 0 or 5 (amendment 1) | A00 0, A10 5, F00 0, F10 0, P01 5, P05 0, P40 0 (B00, B10, C10: 0) | met |
+| LR | A00, A10 bit-identical to ADR 0159 | 10 314 and 16 000 cl/cd values, 0 different; both stop where ADR 0159's did (5157, 8000) | met |
+| C1 | laminar effective = default, bits | equal | met |
+| C2 | SA y+ 40 plate: effective / molecular > 1.5 | passes (`force_effective_w49a.rs`) | met |
+| C3 | pressure part unchanged | within 1e-12 | met |
+| C4, C5 | (amendment 1) inflow faces 3 nu, outflow faces owner value; located error | pass | met |
+| LP1 | wall-law Cf(0.97) vs TMR 2.70565e-3: P01 5 %, P05 and P40 10 % | P01 +3.11 %, P40 +4.31 %, **P05 +19.9 %** | P01, P40 met; **P05 missed** (`..._y_plus_5_known_miss`) |
+| LP2 | P01 molecular / wall law 1 +- 0.03 | 1.0045 | met |
+| LP3 | P40 molecular / wall law <= 0.6 | 0.352 | met |
+| LP4 | report C_F vs wall-law integral, 2 % | P01 +0.25 %, P40 -0.02 % | met |
+| LA1 | A00 cd_v / cd_veff <= 0.6 | 0.319 | met |
+| LA2 | friction within 10 % of 0.006831 | A00 +3.3 %, F00 +2.5 % | met |
+| LA3 | cd within 12 % of 0.008192 | A00 +3.6 %, F00 +2.6 % (0.008402) | met |
+| LA4 | F10: cd within 25 % of 0.01231 and cl within 5 % of 1.0909 | cd 0.015506 (window mean) **+25.95 %**; cl 1.05465 -3.3 % | **missed** (cd), `..._known_miss` |
+| LA5 | outer nuTilda/nu: A10 >= 1000, F00 and F10 <= 5 | 6.02e4; 3.000; 3.001 | met |
+| LA6 | F10 abs(drift) <= 2 % | -97 % (see below) | **missed**, `..._known_miss` |
+| B1 | folder <= 300 000 bytes, PNG <= 120 000, reference files <= 30 000 | see the commit; reference files 11 549 bytes | met (test `w49a_b1_storage`) |
+| P1 | selftest | passed | met |
+| G0 | fmt, clippy, baseline_hashes, w33b_default_bits, workspace_graph | all clean / passing; `baseline_hashes.rs` unchanged and its test passes (3 passed, 1 ignored as before) | met |
+
+**About the three misses.**
+- **LA4.** Missed by 0.95 points on cd. The final iteration's cd is 0.015484 (+25.8 %); the window mean includes the
+  last 288 iterations of a run that converged at 577. C10 shows the 50-chord far field as the main cause.
+- **LA6.** The miss is in amendment 1's reading rule, not in the flow. F10 ended at 577 iterations, so the early window
+  (iterations 73-144) lies in the start-up transient, where cd falls from 0.08 to 0.016. Over the last 288 iterations cd
+  ranges from 0.015484 to 0.015600 and settles to 0.0154838. The rule was fixed before F10 ran and is not changed after
+  it.
+- **LP1 at y+ 5.** A real wall-treatment observation (question 8). In the buffer layer SA's wall mode `auto` over-predicts
+  the plate friction by 20 %. The molecular and wall-law values agree there (0.974), so it is not the report.
+
+### Reported, no limit
+
+- **SST at 0 degrees (S00)**, 4000-iteration cap, exit 5:
+  - cd (default) 0.003637, ADR 0159's 0.0036;
+  - `total_effective` **0.008317**, +1.5 % against TMR's SA value;
+  - friction 0.006901 (+1.0 %), pressure 0.001416.
+
+  SST's half-size drag in ADR 0159 was the same report effect. Its outer turbulence was not checked: SST was not the
+  subject, and its cd did not drift.
+- **Plate mean C_F** against Kármán-Schoenherr (0.002934 at Re_L 1e7): P01 +0.7 %, P05 +17.7 %, P40 +2.1 %.
+- **Plate y+ at 0.97**: 0.99, 5.31 and 39.6 (targets 1, 5, 40).
+- **B00 and B10** (the defective far field): B10 reached F10's solution (cd_eff 0.015484, cl 1.0550) by iteration 500 and
+  held it to about 1500. Then nut hit the cap (1e5 nu) in the whole domain and nuTilda grew without bound: medians 5e71
+  and 1e63 nu at the end. Final cd_eff 0.084 and 0.182.
+- **Wall times**:
+  - A runs: 1024 and 2282 s.
+  - F runs: 48 and 126 s.
+  - C10: 106 s.
+  - Plates: 10 to 781 s.
+
+### Deviations
+
+1. **Amendment 1.** Arm B's far field was defective (`inlet` traps nuTilda). It was replaced by arm F with a new opt-in
+   role, and limits LA2-LA6 moved from B to F. The window rule was amended because `min_iterations` does not hold runs to
+   the cap. Both were done before any corrected run.
+2. **Driver stopped.** I stopped my own scheduler process (not a solver) so that it would not start C10 with the defective
+   set-up. A10, A00 and P01 ran on. Their `wall.json` was written by `adopt` from the finish event (`"adopted": true`); the
+   wall time there is the solver's elapsed time.
+3. **Binaries.** Two builds were used (see the head of the addendum). The amended build differs only by the new role and
+   its check. P05 and S00 do not use the role.
+4. **Reporting additions to the driver after registration.** Report-only items: the "reported" block, the
+   Kármán-Schoenherr mean C_F, and C10/S00 in it. No limit's computation changed except by amendment 1.
+5. **`nuTilda` is not a report field.** `nut_avg` (volume average of `nut`) was used instead, as registered in D3. The
+   outer nuTilda limit (LA5) reads the stored `solution.vtu`.
+6. **TMR files.** Fetched with `curl` from the TMR site (tmbwg.github.io) on 2026-10-29. Only the clcd file and the
+   0-degree upper-surface cf zone are committed.
+
+### Not run
+
+- The full workspace test suite and the gate. Ran instead:
+  - rcfd-post's integrals tests;
+  - `force_effective_w49a` (C1-C5) and `sa_drag_w49a`;
+  - `baseline_hashes`, `w33b_default_bits`, `workspace_graph`, `case_hashes_w48u`, `w48v_case_hashes`, `physics_schema`,
+    `sst_schema`, `turb_models`, after the amendment's code;
+  - clippy of rcfd-post and rcfd-api (lib and tests) and fmt.
+- Other angles of ADR 0159's sweep with the fixes (question 3). The point-vortex far field. A C-grid. Linux.
+- Q5 of ADR 0159 (the trailing-edge divergence at fine wall spacing): not touched. Nothing here bears on it directly. Its
+  divergence came within 15-30 iterations, far faster than the far-field growth found here, and these runs stayed on M1w.
+  Whether the unanchored far field contributes is not tested.
+- k-epsilon with wall functions. It uses the same report, so H1 applies to it by the same code path, but it was not run.
+
+### Questions for the maintainer (1-3 registered, 4-5 from amendment 1, 6-8 from the results; none is decided here)
+
+1. **Default force report with wall functions.**
+   - (a) Keep `total`/`viscous` molecular and point users of wall functions at `total_effective`.
+   - (b) Make the effective viscosity the default, keeping `molecular` values for the old numbers. This changes the
+     default monitors of every RANS run with wall cells above y+ about 1.
+
+   **Recommendation (b)**, in a job of its own with its own record. The default is wrong by a factor of about 3 on
+   wall-function meshes, for every RANS model. Until then (a) holds.
+2. **Far-field turbulence of `velocity = "freestream"` patches.**
+   - (a) Keep the opt-in `turbulence = "freestream"` (done here).
+   - (b) Make it the default for such patches. This changes default results of every far-field RANS case.
+   - (c) Document only.
+
+   **Recommendation (b)**, in its own job. The default lets nuTilda grow to 6e4 nu at 10 degrees and triples the drag;
+   `inlet`, the obvious workaround, is worse (amendment 1). (a) is in place now.
+3. **ADR 0159's sweep.** Re-run its SA arm (and the DDES overlap) with `total_effective` and the `freestream` role.
+   **Recommendation: yes.** cl at 10 degrees moves from 0.98 to 1.05 and the stall picture may move with it.
+4. **ADR 0159's record** (from amendment 1). Recommendation: a one-line note in ADR 0159 that SA-a00 stopped at 5157.
+5. **`min_iterations`** (from amendment 1). Recommendation: document now, an opt-in hold later if needed.
+6. **LA4 (cd at 10 degrees, +26 % on 50 chords).**
+   - (a) A point-vortex far-field correction (Thomas and Salas 1986) as an opt-in.
+   - (b) Use 500-chord far fields for aerofoil validation (C10: +10 %).
+
+   **Recommendation (b) now, (a) as a later job.**
+7. **LA6's reading rule.**
+   - (a) Accept the known miss as recorded.
+   - (b) Register a drift metric relative to the run length for future jobs.
+
+   **Recommendation (a) here, and (b) for future jobs.**
+8. **SA wall mode `auto` in the buffer layer** (P05: +20 % at y+ 5.3).
+   - (a) A wall-treatment job: the plate at y+ 3 to 15, and the switch at `fix_y_plus` = 5.
+   - (b) Leave it.
+
+   **Recommendation (a).** M1w's wall cells span y+ 5.5 to 61 (ADR 0159's SA-a00, median 42), so some lie in the buffer
+   layer. Where they are was not mapped.
