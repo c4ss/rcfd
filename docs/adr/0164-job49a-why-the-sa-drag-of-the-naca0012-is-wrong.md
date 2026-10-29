@@ -5,7 +5,10 @@ are fixed here). **Amendment 1** (after the first runs, before any corrected run
 replaced by arm F with a new opt-in turbulence role; runs end at the residual targets before the cap, so the window is
 amended. **Results in the addendum:** both causes found and confirmed (the force report's molecular wall shear; the
 unanchored far-field nuTilda); limits met except LA4 (cd at 10 degrees +25.95 %, band 25 %), LA6 (a reading-rule
-artefact) and LP1 at y+ 5 (+19.9 %), which are known misses. Not yet accepted by the maintainer. Job 49A, on local main 8d2ea58 (the worktree branch was reset to
+artefact) and LP1 at y+ 5 (+19.9 %), which are known misses. Not yet accepted by the maintainer. **2026-10-29:** the
+maintainer answered questions 1, 2, 4 and 5 with the recommendations; the defaults are changed by
+[ADR 0166](0166-job49c-effective-wall-shear-and-sa-far-field-defaults.md) (the molecular values are now
+`total_molecular` / `viscous_molecular`). Job 49A, on local main 8d2ea58 (the worktree branch was reset to
 it before any work). Number: ADR 0163 is the highest in this worktree and in the main checkout. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit

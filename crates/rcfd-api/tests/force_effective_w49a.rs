@@ -1,7 +1,9 @@
 //! ADR 0164 (job 49A): the opt-in force components `total_effective` / `viscous_effective` take the viscous stress with
-//! the momentum equation's face viscosity (molecular + eddy viscosity, on wall faces the wall-function value). The
-//! default components are unchanged. Limits of ADR 0164 C1-C3 (registered before this file was run); C4-C5 test the
-//! opt-in far-field role `turbulence = "freestream"` of amendment 1 (registered before they were run).
+//! the momentum equation's face viscosity (molecular + eddy viscosity, on wall faces the wall-function value). Limits of
+//! ADR 0164 C1-C3 (registered before this file was run); C4-C5 test the far-field role `turbulence = "freestream"` of
+//! amendment 1 (registered before they were run). ADR 0166 D4: with a turbulence model the default `total` / `viscous`
+//! are now the effective values, so C2/C3 compare against the molecular values by their new names `total_molecular` /
+//! `viscous_molecular` (the pre-ADR 0166 defaults); the limits are unchanged.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::{ReportDef, Simulation};
@@ -61,6 +63,18 @@ patch = "ymin"
 direction = [1.0, 0.0, 0.0]
 a_ref = 0.02
 component = "viscous_effective"
+[reports.d_total_mol]
+type = "force_coefficient"
+patch = "ymin"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.02
+component = "total_molecular"
+[reports.d_visc_mol]
+type = "force_coefficient"
+patch = "ymin"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.02
+component = "viscous_molecular"
 "#;
 
 fn values(c: &Case, n: usize) -> Vec<(String, f64)> {
@@ -89,20 +103,21 @@ fn c1_laminar_effective_equals_default() {
 }
 
 /// C2 / C3: Spalart-Allmaras with its wall function at y+ about 40: the effective viscous part is well above the
-/// molecular one (the molecular one is about u+/y+ of the wall shear), and the pressure part is the same in both.
+/// molecular one (the molecular one is about u+/y+ of the wall shear), and the pressure part is the same in both. The
+/// molecular values are the `*_molecular` components (ADR 0166 D4; before ADR 0166 the default ones).
 #[test]
 fn c2_c3_sa_wall_function_effective_shear() {
     let mut c = Case::parse_toml(PLATE).unwrap();
     c.set("turbulence.model", serde_json::json!("spalart_allmaras"))
         .unwrap();
     let v = values(&c, 400);
-    let (mol, eff) = (get(&v, "d_visc"), get(&v, "d_visc_eff"));
+    let (mol, eff) = (get(&v, "d_visc_mol"), get(&v, "d_visc_eff"));
     assert!(mol > 0.0 && eff.is_finite(), "{v:?}");
     assert!(eff / mol > 1.5, "effective {eff} molecular {mol}");
-    let p_default = get(&v, "d_total") - mol;
+    let p_mol = get(&v, "d_total_mol") - mol;
     let p_eff = get(&v, "d_total_eff") - eff;
     assert!(
-        (p_default - p_eff).abs() <= 1e-12 * (get(&v, "d_total").abs() + 1e-30),
+        (p_mol - p_eff).abs() <= 1e-12 * (get(&v, "d_total_mol").abs() + 1e-30),
         "{v:?}"
     );
 }

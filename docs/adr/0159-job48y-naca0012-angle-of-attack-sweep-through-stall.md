@@ -274,6 +274,8 @@ a time. Wall times (results.json) are therefore rough.
 | P1 | selftest | passed (registration, amendments, final) | met |
 | G0 | fmt, clippy, baseline_hashes untouched | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release --locked -p rcfd-api --tests -- -D warnings` clean; `git diff 4e795b1 -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
 
+**Correction (2026-10-29, ADR 0164 amendment 1, ADR 0166):** in L1, SA-a00 met the residual targets at iteration 5157 (exit 0, `monitors.csv` 5157 rows), not 8000; only SA-a17 met them at 8000.
+
 D10's tests: `crates/rcfd-api/tests/aoa_sweep_w48y.rs`, 5 passed (L1, L2, L3, L4, B1; no known miss). They recompute the
 slope and the stall rule from the committed curve and agree with the driver.
 
