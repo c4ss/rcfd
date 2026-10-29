@@ -344,7 +344,29 @@ fn tmp(tag: &str) -> PathBuf {
 
 /// (name, value) recorded on the unchanged tree (registration commit) by run R1 on Windows x86_64 and written here before any
 /// code of this job (R2). Other platforms print (bit-identity is per platform, ADR 0137).
-const PRE_FIX: &[(&str, u64)] = &[];
+const PRE_FIX: &[(&str, u64)] = &[
+    ("s1-piso-state", 0xf183afd4fb113aeb),
+    ("s1-piso-monitor-y", 0x0297250c32dad91c),
+    ("s1-piso-monitor-x", 0xdc045cf946f98d75),
+    ("s1-piso_courant-state", 0xf183afd4fb113aeb),
+    ("s1-piso_courant-monitor-y", 0x0297250c32dad91c),
+    ("s1-piso_courant-monitor-x", 0xdc045cf946f98d75),
+    ("s1-frozen-state", 0xc28e21755765afb2),
+    ("s1-frozen-monitor-y", 0x421c68002d506f14),
+    ("s1-frozen-monitor-x", 0xf420ef5661ea56a5),
+    ("s1-variable_density-state", 0xf3b7338710ebdffe),
+    ("s1-variable_density-monitor-y", 0x9f8ac199d6dd3b6f),
+    ("s1-variable_density-monitor-x", 0x615ba4d967d9c49d),
+    ("s1-vof-state", 0x75ea9b9e2ea73dd7),
+    ("s1-vof-monitor-y", 0x77ec901b88fc01ec),
+    ("s1-vof-monitor-x", 0x9d3f7f9bec6b0de5),
+    ("s2-state", 0xcd611e803856ea20),
+    ("s3-statistics", 0x19ad55464579264d),
+    ("s3-state", 0xf183afd4fb113aeb),
+    ("s4-particles", 0xf02b919af84469b1),
+    ("s5-chained-state", 0xc1bdb6e9a6d012ec),
+    ("s6-store-ux", 0xeba9acd4fa177a4f),
+];
 
 /// Compare recorded values: on the registered platform each must equal `PRE_FIX`; elsewhere they are printed only.
 fn against_pre_fix(got: &[(String, u64)], problems: &mut Vec<String>) {
