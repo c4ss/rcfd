@@ -188,6 +188,55 @@ An aerofoil C-grid generator; transient SST or SA (URANS) without DES; compressi
 Linux runs (the curve is computed on this host; the meshes' last bits depend on the platform's libm, ADR 0137); tuning
 of any model coefficient or mesh parameter to the data.
 
+## Amendment 1 (2026-10-29, after S0 and disclosed diagnostic runs, before any counted run): the sweep mesh M1 is defective; no stop before the cap
+
+What had run when this was written (binary `rcfd-4e795b1.exe`, the registration's build; work folders
+`E:\projects\cfd\w48y-work\w` and `...\diag`, outside the repository):
+
+1. **S0 as registered, on M1: all three diverged at the trailing edge.** `smoke-SA-a06` stopped by the steady divergence
+   guard at iteration 15 (velocity runaway, cell 0 at (0.9958, -0.0784), a trailing-edge wall cell of the rotated mesh),
+   `smoke-SA-a16` at iteration 11 (cell 0), `smoke-DD-a16` at step 8 (the adaptive control took 5 correctors at step 1,
+   rho 0.39; at step 6 the search ended at the cap of 10 with rho 1.049 at cell 255, the other trailing-edge wall cell,
+   then the PIMPLE guard stopped the run on a Courant number of 4e6; cl swung from 0.64 to -2.8 to -38 in steps 4-6).
+2. **Diagnostics (not registered, not counted; a scratch script `diag.py` that writes the driver's case text with another
+   mesh path and runs it).** SA and SST at 6 degrees on the example's mesh: 300 iterations, no divergence. On M1: SST at 6
+   degrees diverged at iteration 16 (cell 0); M1 without the trailing-edge fan, SA at 6: iteration 24 (cell 255); the M1
+   grid with a wall cell of 4.3e-5 chord (grading 1e5): iteration 26 (cell 254). With wall cells of 1.3e-4 (grading 3e4)
+   and **3.5e-4** chord (grading **1e4**): 300 iterations each, no divergence. On the grading-1e4 grid (bit-equal points to
+   M1w below): SA-DDES at 16 degrees, dt 0.01, 100 steps (t = 1): no divergence, 2 correctors at every step (one estimate),
+   0.3 s per step; SA at 6 and 14 degrees (stopped by me after 2751 and 2746 of 12000 iterations to free the CPU) and
+   SST at 6 (2972): SA's cl falls and cd rises slowly (6 degrees: cl 0.6383 / 0.6248 / 0.6219 and cd 0.0101 / 0.0157 /
+   0.0168 at 500 / 2000 / 2751; 14 degrees: cl 1.356 / 1.303 / 1.295, cd 0.042 / 0.065 / 0.069), the increments shrinking by
+   about 0.7 per 500 iterations; SST at 6: cl 0.64405, cd 0.00611 from iteration 500 on. SA's momentum residual was
+   1.1e-6 at 2751 iterations, next to the 1e-6 target, while cd still rose by about 3e-4 per 250 iterations. Cost on the
+   loaded host (total CPU 70 to 100 % with other agents): 0.17 to 0.5 s per iteration on 32 768 cells.
+
+**Defect 1 (the mesh, D2).** M1's wall cell of 1.6e-5 chord makes the two trailing-edge wall cells slivers (face angles
+8.4 and 171.7 degrees, aspect ratio in the thousands), and both solvers diverge there within 30 iterations or steps; the
+mesh is not usable with this solver. Wall-resolved spacing (y+ about 1-2) is therefore not reachable on this O-grid route;
+the finest wall cell that ran is 1.3e-4 chord (centre y+ about 15, the buffer layer, where a wall law is least accurate).
+**Corrected:** **M1w**, the M1 grid with grading **1e4**: first cell 3.494e-4 chord at mid-chord, flat-plate centre
+y+ 41 (the log layer, SA's `wall_mode = "auto"` uses the Spalding law there), `rcfd check-mesh` maximum non-orthogonality
+73.5 degrees, skewness 0.70, aspect ratio 657, volume ratio 4.9, no error; sha256
+`bd8ef3c6da2dd3681d38c18914c8fbdcddab77bb1381c0688e1e2dce5f0c0299`. Grid check **M2w**: 384 x 192, grading 6412.8 (M1w's
+first step), 73 728 cells, 78.4 degrees, sha256 `54eb17c6c3ef90f658d1947374684945b257e997779891904f5982a7a47d6a90`. Every
+other mesh parameter (far field 50, `blend` 0.1, `te_fan` 0.05) as registered. M1 and M2 stay in the driver for the S0
+record; the counted arms use M1w and M2w.
+
+**Defect 2 (the stop, D3).** D3 meant every steady run to reach its cap so that the window is the last 1000 of 8000
+iterations; with the default residual targets a run can stop much earlier (SA at 6 degrees was at 1.1e-6 by 2751) while its
+forces still drift, and the window would then be read on a run that ended by chance. **Corrected:** steady cases set
+`solver.min_iterations` = the cap (the targets are then only checked at the cap), so every counted steady run ends at
+iteration 8000 with exit code 0 or 5.
+
+**Unchanged** (with reasons): the cap 8000 (the diagnostic increments of SA's cd shrink by about 0.7 per 500 iterations, so
+D4's cd range is met by about 4200 iterations at 6 degrees and 5400 at 14; 8000 leaves margin); DD's dt 0.01 and end time 40
+(2 correctors at dt 0.01 on M1w, 0.3 s per step, about 20 min per run unloaded); the windows, D4-D8, every limit. No other
+set-up value was changed after seeing these numbers; in particular nothing in the model, the far field or the schemes.
+
+**Order of the counted runs (cost, not a rule):** the SA arm (14 angles) first, then the DD runs that D5's plan asks for,
+then SA2, then SST; at most 4 at a time. A run of a later arm that cannot be made in this job is reported as not run.
+
 ## Questions for the maintainer (open at registration; the addendum may add to them)
 
 1. Storage (D6): accept "driver plus results, runs on demand" for sweeps of this size, rather than a new example project

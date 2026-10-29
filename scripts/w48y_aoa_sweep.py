@@ -45,10 +45,15 @@ LADSON = os.path.join(REPO, "validation-data", "reference", "w31c_naca0012_ladso
 # ---------------------------------------------------------------------------------------------------- registry (ADR 0159)
 
 # mesh name -> parameters (D2). M2 (1.5 x M1 in each direction) has the first radial step of M1 (grid check G1).
+# M1 and M2 are the registered meshes; M1 diverged at its trailing-edge cells in every smoke run (amendment 1), so the
+# counted runs use M1w and M2w: the same grids with a wall cell for SA's wall law (grading 1e4, wall y+ about 40).
 MESHES = {
     "M1": {"nx": 256, "ny": 128, "grading": 3.0e5, "far": 50.0, "blend": 0.1, "te_fan": 0.05},
     "M2": {"nx": 384, "ny": 192, "grading": "match:M1", "far": 50.0, "blend": 0.1, "te_fan": 0.05},
+    "M1w": {"nx": 256, "ny": 128, "grading": 1.0e4, "far": 50.0, "blend": 0.1, "te_fan": 0.05},
+    "M2w": {"nx": 384, "ny": 192, "grading": "match:M1w", "far": 50.0, "blend": 0.1, "te_fan": 0.05},
 }
+SWEEP_MESH, GRID_MESH = "M1w", "M2w"  # amendment 1
 
 ALPHAS = [0, 2, 4, 6, 8, 10, 12, 13, 14, 15, 16, 17, 18, 20]  # D1
 EXTENSION = [22, 24]  # D8: only when the base sweep shows no stall
@@ -68,10 +73,10 @@ SLOPE_BAND = (0.90, 1.05)  # L2: slope / (2 pi per rad)
 CL0_LIMIT = 0.005  # L4
 
 ARMS = {
-    "SA": "steady Spalart-Allmaras (simplec), mesh M1 (primary steady arm)",
-    "SST": "steady k-omega SST (simplec), mesh M1 (report only; the example projects' model)",
-    "DD": "transient SA-DDES (piso, adaptive correctors), mesh M1",
-    "SA2": "steady Spalart-Allmaras (simplec), mesh M2 (grid check, report only)",
+    "SA": "steady Spalart-Allmaras (simplec) (primary steady arm)",
+    "SST": "steady k-omega SST (simplec) (report only; the example projects' model)",
+    "DD": "transient SA-DDES (piso, adaptive correctors)",
+    "SA2": "steady Spalart-Allmaras (simplec) on the finer mesh (grid check, report only)",
 }
 
 WALL_CAP = {"SA": 4 * 3600, "SST": 4 * 3600, "SA2": 8 * 3600, "DD": 12 * 3600}
@@ -88,12 +93,12 @@ def registry():
     """Every run id the ADR names: id -> spec. DD ids exist for every angle; which of them run is the plan's (D5)."""
     out = {}
     for a in ALPHAS + EXTENSION:
-        out[rid("SA", a)] = {"arm": "SA", "alpha": a, "mesh": "M1"}
-        out[rid("SST", a)] = {"arm": "SST", "alpha": a, "mesh": "M1"}
+        out[rid("SA", a)] = {"arm": "SA", "alpha": a, "mesh": SWEEP_MESH}
+        out[rid("SST", a)] = {"arm": "SST", "alpha": a, "mesh": SWEEP_MESH}
         for lvl in (0, 1, 2):
-            out[rid("DD", a, lvl)] = {"arm": "DD", "alpha": a, "mesh": "M1", "dt": DDES_DT / 2 ** lvl}
+            out[rid("DD", a, lvl)] = {"arm": "DD", "alpha": a, "mesh": SWEEP_MESH, "dt": DDES_DT / 2 ** lvl}
     for a in (6, 14):
-        out[rid("SA2", a)] = {"arm": "SA2", "alpha": a, "mesh": "M2"}
+        out[rid("SA2", a)] = {"arm": "SA2", "alpha": a, "mesh": GRID_MESH}
     # disclosed smoke runs (not counted): cost, corrector counts, the transient time-step
     out[rid("SA", 6, smoke=True)] = {"arm": "SA", "alpha": 6, "mesh": "M1", "iterations": 3000, "smoke": True}
     out[rid("SA", 16, smoke=True)] = {"arm": "SA", "alpha": 16, "mesh": "M1", "iterations": 3000, "smoke": True}
@@ -312,6 +317,7 @@ model = "{model}"
 algorithm = "simplec"
 convection = "linear_upwind"
 max_iterations = {n}
+min_iterations = {nmin}   # amendment 1: no stop at the residual targets before the cap (the forces still drift there)
 
 [output]
 store_interval = {n}   # the last snapshot only
@@ -342,14 +348,21 @@ store_fields = ["ux", "uy", "p", "nut"]
 
 def case_text(spec):
     a = spec["alpha"]
-    head = f'title = "NACA 0012, alpha {a} deg, {ARMS[spec["arm"]]} (ADR 0159, job 48Y)"\n\n'
+    head = f'title = "NACA 0012, alpha {a} deg, {ARMS[spec["arm"]]}, mesh {spec["mesh"]} (ADR 0159, job 48Y)"\n\n'
     rot = "0.0" if a == 0 else fmt(-float(a))
     body = COMMON.format(mesh=spec["mesh"], rot=rot, alpha=a)
     if spec["arm"] == "DD":
         tail = DDES.format(dt=fmt(spec["dt"]), end=fmt(spec.get("end", DDES_END)))
     else:
         model = "k_omega_sst" if spec["arm"] == "SST" else "spalart_allmaras"
-        tail = STEADY.format(model=model, n=spec.get("iterations", STEADY_ITERATIONS))
+        n = spec.get("iterations", STEADY_ITERATIONS)
+        if spec.get("smoke"):
+            # the registered smoke cases (S0) had no min_iterations line
+            tail = STEADY.format(model=model, n=n, nmin=0).replace(
+                "min_iterations = 0   # amendment 1: no stop at the residual targets before the cap (the forces still "
+                "drift there)\n", "")
+        else:
+            tail = STEADY.format(model=model, n=n, nmin=n)
     return head + body + tail
 
 
@@ -850,7 +863,7 @@ def main():
             print(i, json.dumps(s))
     elif cmd == "mesh":
         rcfd, work = a[1], a[2]
-        for name in a[3:] or ["M1", "M2"]:
+        for name in a[3:] or [SWEEP_MESH, GRID_MESH]:
             info = build_mesh(rcfd, work, name)
             print(json.dumps({k: v for k, v in info.items() if k != "quality"}, indent=1))
             q = info["quality"]
