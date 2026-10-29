@@ -239,7 +239,7 @@ fn m7_plot_series_grows_and_frames_draw_while_running() {
             ..Default::default()
         };
         let t = Instant::now();
-        let out = ctx.run(input, |ctx| app.ui(ctx));
+        let out = ctx.run_ui(input, |ui| app.ui(ui));
         let dt = t.elapsed();
         let ctrl = &app.st.ctrl;
         if !ctrl.status.is_running() {
@@ -299,6 +299,6 @@ fn m6_large_series_are_decimated_and_the_frame_draws() {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
             ..Default::default()
         };
-        let _ = ctx.run(input, |ctx| app.ui(ctx));
+        let _ = ctx.run_ui(input, |ui| app.ui(ui));
     }
 }

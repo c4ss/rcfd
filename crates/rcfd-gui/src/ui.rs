@@ -61,20 +61,28 @@ impl RcfdApp {
         }
     }
 
-    /// Draw one frame. `eframe::App::update` calls this; tests call it directly with a bare context.
-    pub fn ui(&mut self, ctx: &egui::Context) {
+    /// Draw one frame into the root `ui`. `eframe::App::ui` calls this; tests call it directly through
+    /// `egui::Context::run_ui` with a bare context.
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        let ctx = ui.ctx().clone();
         if self.theme_applied != Some(self.st.theme) {
-            self.st.theme.apply(ctx);
+            self.st.theme.apply(&ctx);
             self.theme_applied = Some(self.st.theme);
         }
         let active = self.st.tick();
-        self.menu_bar(ctx);
-        self.status_bar(ctx);
-        self.file_prompt(ctx);
-        let style = egui_dock::Style::from_egui(ctx.style().as_ref());
-        DockArea::new(&mut self.dock)
-            .style(style)
-            .show(ctx, &mut Viewer { st: &mut self.st });
+        self.menu_bar(ui);
+        self.status_bar(ui);
+        self.file_prompt(&ctx);
+        let style = egui_dock::Style::from_egui(ui.style());
+        // The central panel egui_dock 0.12's `DockArea::show` drew itself (ADR 0165 S3).
+        let frame = egui::Frame::central_panel(ui.style())
+            .inner_margin(0.0)
+            .fill(Color32::TRANSPARENT);
+        egui::CentralPanel::default().frame(frame).show(ui, |ui| {
+            DockArea::new(&mut self.dock)
+                .style(style)
+                .show_inside(ui, &mut Viewer { st: &mut self.st });
+        });
         self.save_prefs_if_changed();
         ctx.request_repaint_after(if active {
             std::time::Duration::from_millis(100)
@@ -83,18 +91,21 @@ impl RcfdApp {
         });
     }
 
-    fn menu_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+    fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        // egui 0.27 menus closed only on a click outside or `close`; 0.36 menus close on any click by default.
+        let config =
+            egui::containers::menu::MenuConfig::new().close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        egui::Panel::top("menu").show(ui, |ui| {
+            egui::MenuBar::new().config(config).ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("New lid-driven cavity").clicked() {
                         if let Err(e) = self.st.ctrl.new_from_template() {
                             self.st.ctrl.message = Some(e);
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Open...").clicked() {
-                        ui.close_menu();
+                        ui.close();
                         let st = &mut self.st;
                         match files::open_with_dialog(&mut st.ctrl, st.chooser.as_ref(), st.dialog_dir.as_deref()) {
                             files::Outcome::Failed(e) => st.ctrl.message = Some(e),
@@ -103,7 +114,7 @@ impl RcfdApp {
                     }
                     if ui.button("Open from typed path...").clicked() {
                         self.st.prompt = Some(Prompt::Open);
-                        ui.close_menu();
+                        ui.close();
                     }
                     let can_save = self.st.ctrl.session.is_some();
                     if ui
@@ -115,10 +126,10 @@ impl RcfdApp {
                                 self.st.ctrl.message = Some(e);
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.add_enabled(can_save, egui::Button::new("Save as...")).clicked() {
-                        ui.close_menu();
+                        ui.close();
                         let st = &mut self.st;
                         match files::save_as_with_dialog(&mut st.ctrl, st.chooser.as_ref(), st.dialog_dir.as_deref()) {
                             files::Outcome::Failed(e) => st.ctrl.message = Some(e),
@@ -137,12 +148,12 @@ impl RcfdApp {
                             .as_ref()
                             .map(|p| p.display().to_string())
                             .unwrap_or_else(|| "case.toml".into());
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("Quit").clicked() {
                         self.st.quit = true;
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
                 ui.menu_button("Run", |ui| {
@@ -153,22 +164,22 @@ impl RcfdApp {
                         .clicked()
                     {
                         self.st.ctrl.run_start();
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.add_enabled(s == "running", egui::Button::new("Pause")).clicked() {
                         self.st.ctrl.run_pause();
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.add_enabled(s == "paused", egui::Button::new("Resume")).clicked() {
                         self.st.ctrl.run_resume();
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .add_enabled(s == "running" || s == "paused", egui::Button::new("Stop"))
                         .clicked()
                     {
                         self.st.ctrl.run_stop();
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
                 ui.menu_button("View", |ui| {
@@ -183,13 +194,13 @@ impl RcfdApp {
                         for p in Panel::ALL {
                             if ui.button(p.title()).clicked() {
                                 layout::float(&mut self.dock, p);
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                     });
                     if ui.button("Reset layout").clicked() {
                         self.dock = layout::default_layout();
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     let label = if self.st.theme == Theme::Dark {
@@ -199,15 +210,15 @@ impl RcfdApp {
                     };
                     if ui.button(label).clicked() {
                         self.st.theme = self.st.theme.toggled();
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             });
         });
     }
 
-    fn status_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal(|ui| {
                 let c = &self.st.ctrl;
                 let dirty = if c.dirty { " *" } else { "" };
@@ -260,8 +271,18 @@ impl RcfdApp {
 }
 
 impl eframe::App for RcfdApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.ui(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        RcfdApp::ui(self, ui);
+    }
+}
+
+/// The window options: 1280 x 800, rendered with OpenGL (glow). The renderer is named because a build together with the
+/// Studio also enables eframe's wgpu back end, and eframe's default renderer is then wgpu (ADR 0165 S2).
+pub fn native_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
     }
 }
 
@@ -271,6 +292,11 @@ struct Viewer<'a> {
 
 impl TabViewer for Viewer<'_> {
     type Tab = Panel;
+
+    /// egui_dock 0.12's default id, the title text (0.21 has no default; ADR 0165 S3).
+    fn id(&mut self, tab: &mut Panel) -> egui::Id {
+        egui::Id::new(self.title(tab).text())
+    }
 
     fn title(&mut self, tab: &mut Panel) -> egui::WidgetText {
         tab.title().into()
@@ -375,7 +401,7 @@ fn node_ui(
     match &node.kind {
         Kind::Group => {
             let open = !filter.is_empty();
-            let mut h = egui::CollapsingHeader::new(&node.name).id_source(path);
+            let mut h = egui::CollapsingHeader::new(&node.name).id_salt(path);
             if open {
                 h = h.open(Some(true));
             }
@@ -393,7 +419,7 @@ fn node_ui(
                 .and_then(Value::as_object)
                 .map(|m| m.keys().cloned().collect())
                 .unwrap_or_default();
-            let mut h = egui::CollapsingHeader::new(format!("{} ({})", node.name, entries.len())).id_source(path);
+            let mut h = egui::CollapsingHeader::new(format!("{} ({})", node.name, entries.len())).id_salt(path);
             if !filter.is_empty() {
                 h = h.open(Some(true));
             }
@@ -405,7 +431,7 @@ fn node_ui(
                 for name in &entries {
                     let epath = format!("{path}.{name}");
                     ui.horizontal(|ui| {
-                        egui::CollapsingHeader::new(name).id_source(&epath).show(ui, |ui| {
+                        egui::CollapsingHeader::new(name).id_salt(&epath).show(ui, |ui| {
                             for c in &item.children {
                                 node_ui(ui, st, c, &format!("{epath}.{}", c.name), values, "", edits);
                             }
@@ -458,7 +484,7 @@ fn leaf_ui(ui: &mut egui::Ui, st: &mut AppState, node: &Node, path: &str, values
             }
             Kind::Enum(options) => {
                 let cur = current.as_str().unwrap_or_default().to_string();
-                egui::ComboBox::from_id_source(("enum", path))
+                egui::ComboBox::from_id_salt(("enum", path))
                     .selected_text(cur.clone())
                     .show_ui(ui, |ui| {
                         for o in options {
@@ -514,7 +540,7 @@ fn leaf_ui(ui: &mut egui::Ui, st: &mut AppState, node: &Node, path: &str, values
 fn viewport_panel(ui: &mut egui::Ui, st: &mut AppState) {
     ui.horizontal(|ui| {
         let cur = st.ctrl.view.field.clone();
-        egui::ComboBox::from_id_source("vp-field")
+        egui::ComboBox::from_id_salt("vp-field")
             .selected_text(cur.clone())
             .show_ui(ui, |ui| {
                 for f in FIELD_NAMES {
@@ -721,7 +747,7 @@ fn monitors_panel(ui: &mut egui::Ui, st: &mut AppState) {
         .show(ui, |plot| {
             for n in &names {
                 let pts = st.ctrl.monitors.plot_points_decimated(n, log, MAX_PLOT_POINTS);
-                plot.line(egui_plot::Line::new(egui_plot::PlotPoints::new(pts)).name(n));
+                plot.line(egui_plot::Line::new(n, egui_plot::PlotPoints::new(pts)));
             }
         });
     if !reports.is_empty() {
@@ -730,7 +756,7 @@ fn monitors_panel(ui: &mut egui::Ui, st: &mut AppState) {
             .show(ui, |plot| {
                 for n in &reports {
                     let pts = st.ctrl.monitors.plot_points_decimated(n, false, MAX_PLOT_POINTS);
-                    plot.line(egui_plot::Line::new(egui_plot::PlotPoints::new(pts)).name(n));
+                    plot.line(egui_plot::Line::new(n, egui_plot::PlotPoints::new(pts)));
                 }
             });
     }
@@ -774,7 +800,7 @@ fn assistant_panel(ui: &mut egui::Ui, st: &mut AppState) {
             .active
             .clone()
             .unwrap_or_else(|| "choose provider".into());
-        egui::ComboBox::from_id_source("provider")
+        egui::ComboBox::from_id_salt("provider")
             .selected_text(cur)
             .show_ui(ui, |ui| {
                 for n in &names {
@@ -803,7 +829,7 @@ fn assistant_panel(ui: &mut egui::Ui, st: &mut AppState) {
         }
     });
     egui::CollapsingHeader::new("Provider settings")
-        .id_source("prov-settings")
+        .id_salt("prov-settings")
         .show(ui, |ui| {
             let kind = st.setup.active().map(|c| c.kind);
             if let Some(c) = st.setup.active_mut() {
@@ -972,7 +998,7 @@ fn assistant_panel(ui: &mut egui::Ui, st: &mut AppState) {
                             }
                             if let Some(r) = result {
                                 egui::CollapsingHeader::new("result")
-                                    .id_source(("res", e as *const Entry as usize))
+                                    .id_salt(("res", e as *const Entry as usize))
                                     .show(ui, |ui| {
                                         ui.label(RichText::new(r).monospace().small());
                                     });
@@ -1009,4 +1035,20 @@ fn assistant_panel(ui: &mut egui::Ui, st: &mut AppState) {
             }
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    /// ADR 0165 L9: the app asks for glow whatever eframe back ends the build enabled (a build with the Studio enables wgpu
+    /// too, and eframe's default renderer is then wgpu); the window size is unchanged.
+    #[test]
+    fn native_options_ask_for_glow_at_1280_by_800() {
+        let o = super::native_options();
+        assert_eq!(o.renderer, eframe::Renderer::Glow);
+        assert_eq!(o.viewport.inner_size, Some(egui::vec2(1280.0, 800.0)));
+        assert_eq!(
+            o.viewport.title, None,
+            "run_native names the window after the app, \"rcfd\""
+        );
+    }
 }

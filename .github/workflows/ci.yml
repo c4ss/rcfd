@@ -20,7 +20,7 @@ env:
   CARGO_TERM_COLOR: always
   # The toolchain the project's gate uses. Change it together with gate.yml and docs/releasing.md.
   RUST_GATE_TOOLCHAIN: "1.99.0"
-  # The oldest toolchain README.md promises for the solver and libraries (the Studio, rcfd-studio, needs 1.95).
+  # The oldest toolchain README.md promises for the solver and libraries (the desktop apps rcfd-studio and rcfd-gui need 1.95).
   RUST_MIN_TOOLCHAIN: "1.90.0"
 
 jobs:
@@ -85,8 +85,9 @@ jobs:
           toolchain: ${{ env.RUST_MIN_TOOLCHAIN }}
       - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
       # No -D warnings: lint names newer than 1.90 would warn here without anything being wrong.
-      # rcfd-studio needs Rust 1.95 (eframe 0.36) and states it as its rust-version (ADR 0131 W48-1 (b)).
-      - run: cargo check --workspace --all-targets --locked --exclude rcfd-studio
+      # rcfd-studio and rcfd-gui need Rust 1.95 (eframe 0.36) and state it as their rust-version (ADR 0131 W48-1 (b),
+      # ADR 0165). The job keeps its name so a required check of that name still matches.
+      - run: cargo check --workspace --all-targets --locked --exclude rcfd-studio --exclude rcfd-gui
 
   deny:
     name: dependency licences and sources (cargo deny)

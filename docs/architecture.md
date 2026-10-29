@@ -26,7 +26,7 @@ rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
 rcfd-mcp    -> api, project, runner, tsstore, post   (project tools behind --project: folder, run service, stored fields, CPU render; ADR 0135)
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
-rcfd-gui    -> api, mcp, assistant   (eframe/egui desktop app)
+rcfd-gui    -> api, mcp, assistant   (legacy eframe/egui desktop app on glow (OpenGL), frozen (docs/ui-restart-plan.md); egui 0.36 as the Studio, ADR 0165; needs Rust 1.95)
 rcfd-runner -> project   (Studio L2 run service: runs the `rcfd` binary as child processes, ADR 0123; on rcfd-project's records, ADR 0130)
 rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 0125)
 rcfd-claude -> project   (Studio L6: Claude Code bridge, ADR 0126; atomic allow-list file, ADR 0134)

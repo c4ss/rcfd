@@ -32,8 +32,18 @@ impl Theme {
         }
     }
 
-    /// Apply to a context.
+    /// egui's theme value.
+    pub fn egui(self) -> egui::Theme {
+        match self {
+            Theme::Light => egui::Theme::Light,
+            Theme::Dark => egui::Theme::Dark,
+        }
+    }
+
+    /// Apply to a context. egui 0.36 keeps a light and a dark style and by default follows the system theme; the theme
+    /// is fixed first so that the system theme cannot switch it, then the visuals are set as before (ADR 0165 S3).
     pub fn apply(self, ctx: &egui::Context) {
+        ctx.set_theme(self.egui());
         ctx.set_visuals(self.visuals());
     }
 }

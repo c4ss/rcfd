@@ -26,9 +26,9 @@ allow = [
 ]
 confidence-threshold = 0.9
 exceptions = [
-    # Fonts bundled in epaint (desktop app only); their licence texts must ship with binaries (THIRD_PARTY_LICENSES.md).
-    { crate = "epaint", allow = ["OFL-1.1", "LicenseRef-UFL-1.0"] },
-    # The same fonts, moved out of epaint in egui 0.36 (Studio, ADR 0131 amendment 1); SPDX id of the Ubuntu Font Licence.
+    # egui's default fonts, in epaint_default_fonts since egui 0.36 (both desktop apps: ADR 0131 amendment 1, ADR 0165);
+    # SPDX id of the Ubuntu Font Licence. Their licence texts must ship with binaries (THIRD_PARTY_LICENSES.md). The epaint
+    # exception for egui 0.27 (fonts inside epaint) went with egui 0.27 (ADR 0165).
     { crate = "epaint_default_fonts", allow = ["OFL-1.1", "Ubuntu-font-1.0"] },
 ]
 
