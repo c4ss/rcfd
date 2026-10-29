@@ -100,6 +100,126 @@ pub enum SaWallMode {
     /// Spalding law of the wall for the wall shear and strain; for a wall cell with y+ > 5 the cell `nuT` is fixed to the
     /// value whose `nut` equals the Spalding eddy viscosity `nu (dy+/du+ - 1)`. Works from y+ about 1 into the log layer.
     Auto,
+    /// Opt-in (ADR 0168): the model's own inner-layer solution instead of Spalding's law. Wall shear, y+ and wall-face
+    /// `nu_t` from [`SaInnerLaw`]; for a wall cell with y+ > `fix_y_plus` the cell `nuT` is fixed to `kappa u_tau y` and
+    /// the face between the wall cell and its wall-normal neighbour gets the law's series-resistance viscosity
+    /// `nu (y2+ - y1+)/(u+(y2+) - u+(y1+))`; every other internal face gets `nut` of the interpolated `nuT`.
+    SaLaw,
+}
+
+/// Inner-layer law of the wall of the SA model itself (ADR 0168): in the constant-stress layer `nuT = kappa u_tau y`
+/// (Spalart and Allmaras 1994, through the TMR page), so `du+/dy+ = 1/(1 + nut+)`, `nut+ = kappa y+ fv1(kappa y+)`.
+/// `u+(y+)` is tabulated once by Simpson quadrature in `ln y+` and read by cubic Hermite interpolation with the exact
+/// derivative; below the table `u+ = y+`, above it the log asymptote `u+ = u+_end + ln((1 + kappa y+)/(1 + kappa y+_end))/kappa`.
+#[derive(Debug, Clone)]
+pub struct SaInnerLaw {
+    kappa: f64,
+    cv1: f64,
+    s0: f64,
+    ds: f64,
+    u: Vec<f64>,
+}
+
+impl SaInnerLaw {
+    const Y_MIN: f64 = 1e-3;
+    const Y_MAX: f64 = 1e8;
+    const PER_DECADE: usize = 64;
+    const SUB: usize = 8;
+
+    /// Table for the model constants `kappa` and `cv1`.
+    pub fn new(kappa: f64, cv1: f64) -> Self {
+        let s0 = Self::Y_MIN.ln();
+        let n = 11 * Self::PER_DECADE;
+        let ds = (Self::Y_MAX.ln() - s0) / n as f64;
+        let mut law = SaInnerLaw {
+            kappa,
+            cv1,
+            s0,
+            ds,
+            u: Vec::with_capacity(n + 1),
+        };
+        let mut u = Self::Y_MIN;
+        law.u.push(u);
+        let h = ds / Self::SUB as f64;
+        for i in 0..n {
+            let a = s0 + i as f64 * ds;
+            let mut sum = 0.0;
+            for k in 0..=Self::SUB {
+                let w = if k == 0 || k == Self::SUB {
+                    1.0
+                } else if k % 2 == 1 {
+                    4.0
+                } else {
+                    2.0
+                };
+                sum += w * law.du_ds((a + k as f64 * h).exp());
+            }
+            u += sum * h / 3.0;
+            law.u.push(u);
+        }
+        law
+    }
+
+    /// `nut/nu` of the inner layer at `y+`.
+    pub fn nut_plus(&self, y_plus: f64) -> f64 {
+        let chi = self.kappa * y_plus;
+        if chi <= 0.0 {
+            0.0
+        } else {
+            chi * fv1(chi, self.cv1)
+        }
+    }
+
+    fn du_ds(&self, y_plus: f64) -> f64 {
+        y_plus / (1.0 + self.nut_plus(y_plus))
+    }
+
+    /// `u+(y+)`.
+    pub fn u_plus(&self, y_plus: f64) -> f64 {
+        if y_plus <= Self::Y_MIN {
+            return y_plus.max(0.0);
+        }
+        let n = self.u.len() - 1;
+        if y_plus >= Self::Y_MAX {
+            let k = self.kappa;
+            return self.u[n] + ((1.0 + k * y_plus) / (1.0 + k * Self::Y_MAX)).ln() / k;
+        }
+        let s = y_plus.ln();
+        let i = (((s - self.s0) / self.ds) as usize).min(n - 1);
+        let sa = self.s0 + i as f64 * self.ds;
+        let t = ((s - sa) / self.ds).clamp(0.0, 1.0);
+        let (ua, ub) = (self.u[i], self.u[i + 1]);
+        let (da, db) = (
+            self.du_ds(sa.exp()) * self.ds,
+            self.du_ds((sa + self.ds).exp()) * self.ds,
+        );
+        let (t2, t3) = (t * t, t * t * t);
+        (2.0 * t3 - 3.0 * t2 + 1.0) * ua + (t3 - 2.0 * t2 + t) * da + (-2.0 * t3 + 3.0 * t2) * ub + (t3 - t2) * db
+    }
+
+    /// Friction velocity from the tangential speed `u` at distance `y` (bisection; `u_tau u+(y u_tau/nu)` increases
+    /// with `u_tau`). Zero speed gives zero.
+    pub fn u_tau(&self, nu: f64, u: f64, y: f64) -> f64 {
+        let u = u.abs();
+        if u == 0.0 {
+            return 0.0;
+        }
+        let g = |ut: f64| ut * self.u_plus(y * ut / nu) - u;
+        let mut hi = 2.0 * u.max((nu * u / y).sqrt());
+        let mut lo = hi * 1e-8;
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if g(mid) > 0.0 {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+            if hi - lo < 1e-14 * hi {
+                break;
+            }
+        }
+        0.5 * (lo + hi)
+    }
 }
 
 /// `fv1`.
@@ -301,6 +421,11 @@ pub struct SpalartAllmaras {
     step_dt: Option<f64>,
     nutilde_old: Vec<f64>,
     pub(crate) delta_cache: Option<Vec<f64>>,
+    // wall mode SaLaw only (ADR 0168): the inner law, the wall-normal first faces (wall face, internal face, neighbour,
+    // wall-normal distance between the cell centres) and the relaxed internal-face eddy viscosity
+    inner: Option<SaInnerLaw>,
+    law_faces: Option<Vec<(usize, usize, f64)>>,
+    face_nut: Vec<f64>,
 }
 
 impl SpalartAllmaras {
@@ -358,7 +483,52 @@ impl SpalartAllmaras {
             step_dt: None,
             nutilde_old: Vec::new(),
             delta_cache: None,
+            inner: None,
+            law_faces: None,
+            face_nut: Vec::new(),
         })
+    }
+
+    /// Wall mode SaLaw (ADR 0168): for every wall cell, the internal face whose cell-centre step is closest to the wall
+    /// normal (cosine above 0.5) and leads to a cell without a wall face, with the wall-normal distance of that step.
+    fn build_law_faces(&self) -> Vec<(usize, usize, f64)> {
+        let g = &self.geom;
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        let cc = g.mesh.cell_centres();
+        let mut out = Vec::new();
+        for c1 in 0..g.n_cells() {
+            let fw = self.cell_wall_face[c1];
+            if fw == usize::MAX {
+                continue;
+            }
+            let nw = g.normal(fw);
+            let mut best: Option<(usize, usize, f64)> = None;
+            let mut best_cos = 0.5;
+            for &f in g.mesh.cell_faces(c1) {
+                if f >= g.n_internal {
+                    continue;
+                }
+                let c2 = if own[f] == c1 { nei[f] } else { own[f] };
+                let d = vec3::sub(cc[c2], cc[c1]);
+                let len = vec3::norm(d);
+                let dy = -vec3::dot(d, nw);
+                if len > 0.0 && dy / len > best_cos {
+                    best_cos = dy / len;
+                    best = Some((f, c2, dy));
+                }
+            }
+            if let Some((f, c2, dy)) = best {
+                if self.cell_wall_face[c2] == usize::MAX {
+                    out.push((fw, f, dy));
+                }
+            }
+        }
+        out
+    }
+
+    /// Wall mode SaLaw: number of wall cells with a wall-normal first face (zero before the first sweep).
+    pub fn law_face_count(&self) -> usize {
+        self.law_faces.as_ref().map_or(0, Vec::len)
     }
 
     /// Wall distance of every cell centre.
@@ -378,7 +548,13 @@ impl SpalartAllmaras {
 
     /// Effective face viscosity `nu + nu_t` for the momentum equation.
     pub fn nu_face(&self) -> Vec<f64> {
-        effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut)
+        let mut out = effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut);
+        if self.wall_mode == SaWallMode::SaLaw {
+            for (o, &v) in out.iter_mut().zip(&self.face_nut) {
+                *o = self.nu + v;
+            }
+        }
+        out
     }
 
     /// Start from an eddy-viscosity field (e.g. the one of another model): `nuT` by inverting `nut = nuT fv1`.
@@ -485,6 +661,25 @@ impl SpalartAllmaras {
                 }
             }
         }
+        if self.wall_mode == SaWallMode::SaLaw {
+            if self.inner.is_none() {
+                self.inner = Some(SaInnerLaw::new(cf.kappa, cf.cv1));
+            }
+            if self.law_faces.is_none() {
+                self.law_faces = Some(self.build_law_faces());
+            }
+            let il = self.inner.as_ref().unwrap();
+            for &c in &wall_cells {
+                let f = self.cell_wall_face[c];
+                let y = g.dn[f - g.n_internal];
+                let ut = il.u_tau(nu, self.tangential_speed(u, f), y);
+                if ut > 0.0 && ut * y / nu > self.fix_y_plus {
+                    // the inner-layer solution nuT = kappa u_tau y and its strain u_tau^2/(nu + nut)
+                    vort[c] = ut * ut / nu / (1.0 + il.nut_plus(ut * y / nu));
+                    fixed[c] = Some(cf.kappa * ut * y);
+                }
+            }
+        }
 
         // ---- gradient of nuT, diffusivity
         let nb = self.nutilde.boundary_values(&g);
@@ -577,6 +772,7 @@ impl SpalartAllmaras {
         let old = std::mem::take(&mut self.wall_nut);
         let law = self.law;
         let mode = self.wall_mode;
+        let inner = self.inner.as_ref().filter(|_| mode == SaWallMode::SaLaw);
         let mut yp = vec![0.0; self.wall_faces.len()];
         self.wall_nut = self
             .wall_faces
@@ -585,12 +781,19 @@ impl SpalartAllmaras {
             .map(|(i, &f)| {
                 let y = g.dn[f - g.n_internal];
                 let uu = self.tangential_speed(u, f);
-                let ut = if uu > 0.0 { law.u_tau(nu, uu, y) } else { 0.0 };
+                let ut = if uu > 0.0 {
+                    match inner {
+                        Some(il) => il.u_tau(nu, uu, y),
+                        None => law.u_tau(nu, uu, y),
+                    }
+                } else {
+                    0.0
+                };
                 yp[i] = ut * y / nu;
                 let new = match mode {
                     SaWallMode::Resolved => 0.0,
-                    SaWallMode::Auto if uu > 0.0 => (ut * ut * y / uu - nu).max(0.0),
-                    SaWallMode::Auto => 0.0,
+                    SaWallMode::Auto | SaWallMode::SaLaw if uu > 0.0 => (ut * ut * y / uu - nu).max(0.0),
+                    SaWallMode::Auto | SaWallMode::SaLaw => 0.0,
                 };
                 let v = match old.get(i) {
                     Some(&(_, o)) => alpha * new + (1.0 - alpha) * o,
@@ -599,6 +802,36 @@ impl SpalartAllmaras {
                 (f, v)
             })
             .collect();
+        if let (Some(il), Some(lf)) = (inner, self.law_faces.as_ref()) {
+            // internal faces: nut of the interpolated nuT (linear near the wall); wall-normal first faces of wall cells
+            // above fix_y_plus: the series resistance of the inner law between the two cell centres
+            let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+            let ntv = &self.nutilde.values;
+            let mut target: Vec<f64> = (0..g.n_internal)
+                .map(|f| {
+                    let w = g.weights[f];
+                    nut_from_nutilde(w * ntv[own[f]] + (1.0 - w) * ntv[nei[f]], nu, cf.cv1).min(cap)
+                })
+                .collect();
+            for &(fw, fi, dy) in lf {
+                let y1 = g.dn[fw - g.n_internal];
+                let ut = il.u_tau(nu, self.tangential_speed(u, fw), y1);
+                let (y1p, y2p) = (ut * y1 / nu, ut * (y1 + dy) / nu);
+                if ut > 0.0 && y1p > self.fix_y_plus {
+                    let du = il.u_plus(y2p) - il.u_plus(y1p);
+                    if du > 0.0 {
+                        target[fi] = (nu * (y2p - y1p) / du - nu).clamp(0.0, cap);
+                    }
+                }
+            }
+            if self.face_nut.len() == target.len() {
+                for (o, t) in self.face_nut.iter_mut().zip(target) {
+                    *o = alpha * t + (1.0 - alpha) * *o;
+                }
+            } else {
+                self.face_nut = target;
+            }
+        }
         self.y_plus = yp;
         self.step_dt = None;
         change
@@ -634,6 +867,48 @@ mod tests {
         }
         assert!((at(-1e12 * om) / om - 0.1).abs() < 1e-6);
         assert!(s_tilde(om, -100.0, SLimiter::Min03, c2, c3) >= 0.3 * om - 1e-15);
+    }
+
+    /// ADR 0168 T1: the inner law against an independent quadrature, its limits and its inversion.
+    #[test]
+    fn w49e_inner_law_quadrature_limits_and_inversion() {
+        let c = SaCoefficients::default();
+        let il = SaInnerLaw::new(c.kappa, c.cv1);
+        // independent check: composite Simpson in y+ (not ln y+) with many points
+        let direct = |yp: f64| {
+            let n = 200_000;
+            let h = yp / n as f64;
+            let f = |y: f64| 1.0 / (1.0 + il.nut_plus(y));
+            let mut s = f(0.0) + f(yp);
+            for k in 1..n {
+                s += if k % 2 == 1 { 4.0 } else { 2.0 } * f(k as f64 * h);
+            }
+            s * h / 3.0
+        };
+        for yp in [0.5, 1.0, 3.0, 5.0, 8.0, 12.0, 15.0, 30.0, 60.0, 200.0] {
+            let (a, b) = (il.u_plus(yp), direct(yp));
+            assert!((a - b).abs() < 1e-7 * b.max(1.0), "y+ {yp}: {a} vs {b}");
+        }
+        // viscous limit, continuity at both table ends, log-layer intercept of the SA model (about 5.0)
+        assert!((il.u_plus(1e-4) - 1e-4).abs() < 1e-18);
+        assert!((il.u_plus(1e-3 * (1.0 + 1e-12)) - 1e-3).abs() < 1e-12);
+        assert!((il.u_plus(1e8 * (1.0 - 1e-12)) - il.u_plus(1e8 * (1.0 + 1e-12))).abs() < 1e-9);
+        let b = il.u_plus(1e4) - (1e4f64).ln() / c.kappa;
+        assert!((4.9..5.2).contains(&b), "B = {b}");
+        // monotone, and u_tau inverts u = u_tau u+(y u_tau / nu)
+        let mut prev = 0.0;
+        for k in 0..2000 {
+            let v = il.u_plus(1e-4 * 1.02f64.powi(k));
+            assert!(v > prev);
+            prev = v;
+        }
+        let nu = 2e-7;
+        for &(ut, y) in &[(0.04, 1e-6), (0.04, 2e-5), (0.04, 1e-4), (0.04, 3e-4), (1.0, 1e-2)] {
+            let u = ut * il.u_plus(ut * y / nu);
+            let got = il.u_tau(nu, u, y);
+            assert!((got / ut - 1.0).abs() < 1e-10, "{got} vs {ut}");
+        }
+        assert_eq!(il.u_tau(nu, 0.0, 1e-4), 0.0);
     }
 
     #[test]
