@@ -377,6 +377,12 @@ ADR 0159's SA drag was wrong for two independent reasons. Neither is the SA mode
    On 500 chords (C10) the corrected set-up gives cl 1.065 (-2.4 %) and cd 0.0135 (+10 %). So most of F10's remaining
    cd excess is the 50-chord far field without a point-vortex correction. TMR's far-field page names drag at high lift as
    the sensitive quantity.
+
+   **The remaining +10 % at 10 degrees on 500 chords is not attributed.** Untested candidates:
+   - the wall law at y+ about 40;
+   - wall cells in the buffer layer (y+ from 5.5; P05 shows +20 % there);
+   - first-order convection of nuTilda;
+   - the O-grid's resolution.
 3. **H3 confirmed: the drift.**
    - A10's cd rose 18.7 % between the windows 1001-2000 and 7001-8000. Its nut volume average went from 0.0021 at
      iteration 635 to 0.0099 at 5000 and held there: the outer nuTilda filling the domain.
@@ -389,7 +395,7 @@ ADR 0159's SA drag was wrong for two independent reasons. Neither is the SA mode
 | Id | Limit | Measured | Outcome |
 |---|---|---|---|
 | L1 | exit 0 or 5 (amendment 1) | A00 0, A10 5, F00 0, F10 0, P01 5, P05 0, P40 0 (B00, B10, C10: 0) | met |
-| LR | A00, A10 bit-identical to ADR 0159 | 10 314 and 16 000 cl/cd values, 0 different; both stop where ADR 0159's did (5157, 8000) | met |
+| LR | A00, A10 bit-identical to ADR 0159 | 10 314 and 16 000 cl/cd values, 0 different; both stop where ADR 0159's did (5157, 8000). Reported, from the amended build: S00 (a default SST case) against ADR 0159's SST-a00, 8000 values, 0 different | met |
 | C1 | laminar effective = default, bits | equal | met |
 | C2 | SA y+ 40 plate: effective / molecular > 1.5 | passes (`force_effective_w49a.rs`) | met |
 | C3 | pressure part unchanged | within 1e-12 | met |

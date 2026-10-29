@@ -133,7 +133,7 @@ Far fields (ADR 0164): a patch with `velocity = "freestream"` has the turbulence
 far-field `nuTilda` can then grow far above `nutilde_ratio * nu` (ADR 0159's NACA 0012 at 10 degrees: about 6e4 nu).
 `boundaries.<patch>.turbulence = "freestream"` (opt-in; the patch needs `velocity = "freestream"`) fixes it at
 `nutilde_ratio * nu` (or `nutilde_value`) on the faces where `velocity_value` enters the domain and leaves it
-zero-gradient where the flow leaves; the same holds for k, epsilon and omega of the other models. Do not use
+zero-gradient where the flow leaves. k, epsilon and omega of the other models take the same path, but that is untested. Do not use
 `turbulence = "inlet"` on such a far field: it fixes the value on the outflow faces too, the convection operator then
 carries the fixed value out instead of the cell value, the quantity cannot leave the domain and accumulates (ADR 0164
 amendment 1: nuTilda grew to the eddy-viscosity cap of `1e5 nu` in the whole domain within about 1500 iterations).
@@ -236,9 +236,12 @@ from or to `laminar` needs a rebuild (other settings still reset the simulation 
 
 Per-boundary keys (`boundaries.<patch>.`):
 
-* `turbulence` = `auto` (default) | `wall` | `inlet` | `zero_gradient`. `auto` treats a fixed
-  zero-velocity patch as a wall, any other fixed-velocity patch as an inlet, the rest as zero
-  gradient.
+* `turbulence` = `auto` (default) | `wall` | `inlet` | `zero_gradient` | `freestream`. `auto` treats a fixed
+  zero-velocity patch as a wall, any other fixed-velocity patch as an inlet, the rest (including a
+  `velocity = "freestream"` far field) as zero gradient. `freestream` (opt-in, ADR 0164; the patch needs
+  `velocity = "freestream"`): the inlet values on the faces where `velocity_value` enters the domain, zero gradient
+  where the flow leaves (see the far-field note under `spalart_allmaras`). The code path is shared by all RANS models.
+  It was tested for Spalart-Allmaras only (ADR 0164 C4).
 * Inlet specification `turbulence_spec`:
   * `intensity_length` (default): `k = 3/2 (I U)^2`, `epsilon = Cmu^(3/4) k^(3/2) / l`, with
     `turbulence_intensity` (0.05) and `turbulence_length` (required, m). `U` is the local inlet

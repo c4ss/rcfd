@@ -34,6 +34,8 @@ ADR 0159's SA drag had two independent causes. Neither is the SA model, its cons
        +26 %).
    - On a 500-chord far field (C10) the same set-up gives cl **1.065** (-2.4 %) and cd **0.0135** (+10 %). Most of the
      remaining excess at 50 chords is the far-field extent; there is no point-vortex correction.
+   - The remaining +10 % on 500 chords is not attributed. Untested candidates: the wall law at y+ 40, wall cells in the
+     buffer layer, first-order nuTilda convection and the O-grid's resolution.
 
 ## Results (window means; `cd` = default report, `cd_eff` = `total_effective`)
 
