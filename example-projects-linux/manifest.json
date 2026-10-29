@@ -23,11 +23,11 @@
         },
         {
           "case": "cases/naca0012-aoa4.toml",
-          "run": "r-20261028T220207-6504"
+          "run": "r-20261029T231217-99f7"
         },
         {
           "case": "cases/naca0012-aoa2.toml",
-          "run": "r-20261028T220207-763f"
+          "run": "r-20261029T231217-5606"
         },
         {
           "case": "cases/step-re800.toml",
@@ -39,14 +39,14 @@
         },
         {
           "case": "cases/naca0012-aoa4-rotated.toml",
-          "run": "r-20261029T000812-6c75"
+          "run": "r-20261029T231217-fede"
         },
         {
           "case": "cases/naca0012-aoa2-rotated.toml",
-          "run": "r-20261029T000812-00f3"
+          "run": "r-20261029T231217-4d9c"
         }
       ],
-      "bytes": 34823333
+      "bytes": 28093048
     },
     "quick-start": {
       "runs": [

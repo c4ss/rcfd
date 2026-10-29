@@ -1,0 +1,38 @@
+{
+  "exit_code": 0,
+  "last_residuals": {
+    "monitors": {
+      "cd": 0.028203441036857065,
+      "cl": 0.3469251453476993
+    },
+    "residuals": {
+      "continuity": 9.980699996135807e-14,
+      "p": 2.513460437422463e-8,
+      "u": 4.432550798375756e-8
+    },
+    "step": 409,
+    "time": 0.0
+  },
+  "reason": "converged: residual targets met: res_u 4.433e-8 < 1.000e-6, res_p 2.513e-8 < 1.000e-6",
+  "reports": {
+    "cd": 0.028203441036857065,
+    "cl": 0.3469251453476993
+  },
+  "solver_finish": {
+    "elapsed_s": 28.68717531,
+    "event": "finish",
+    "exit_code": 0,
+    "format": "rcfd-status",
+    "iterations": 409,
+    "ok": true,
+    "reason": "residual targets met: res_u 4.433e-8 < 1.000e-6, res_p 2.513e-8 < 1.000e-6",
+    "seq": 412,
+    "state": "converged",
+    "time": 0.0,
+    "version": 1,
+    "wall_s": 28.68717531
+  },
+  "state": "finished",
+  "steps": 409,
+  "time": 0.0
+}

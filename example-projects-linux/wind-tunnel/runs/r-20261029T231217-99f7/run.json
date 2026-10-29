@@ -1,0 +1,15 @@
+{
+  "id": "r-20261029T231217-99f7",
+  "case": "cases/naca0012-aoa4.toml",
+  "case_snapshot_hash": "fnv64:0afd0461ce0ab0d9",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-29T23:12:17.416353645Z",
+  "case_source": "/src/example-projects-linux/wind-tunnel/cases/naca0012-aoa4.toml",
+  "case_dir": "/src/example-projects-linux/wind-tunnel/cases"
+}
