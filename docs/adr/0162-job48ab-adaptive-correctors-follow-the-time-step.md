@@ -278,6 +278,9 @@ failing test (`case_hashes_w48u`) fails identically at 444255c.
 6. N3 as registered ("passes") is not met, but the failure is the same at 444255c, before this job, and concerns written case
    texts, which this job does not touch. It was **not** turned into a `*_known_miss` test: the test belongs to ADR 0155 and the
    miss is not this job's; question 6 asks for its owner's decision.
+7. While this job ran, local main advanced to 1a9c566 (jobs 48Y, 48Z, 48AA). The branch stays on 444255c; a trial merge with
+   1a9c566 (aborted afterwards) has no conflict and `cargo check -p rcfd-fv -p rcfd-api --all-targets` of it is clean; no run or
+   test of this job was repeated on the merged tree.
 
 ### Not run
 
