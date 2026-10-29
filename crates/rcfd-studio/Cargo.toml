@@ -31,7 +31,7 @@ toml.workspace = true
 # ADR 0131 W48-2 (a): eframe 0.36.2 (0.37.0 fails the two-week rule until 2026-10-29) on its wgpu back end.
 # `wgpu_no_default_features`: eframe's `wgpu` feature would turn on wgpu's default back ends (Metal, GLES, WebGL), which
 # feature unification would also give rcfd-render; the back ends are chosen by the wgpu entry below instead.
-eframe = { version = "0.36.2", default-features = false, features = ["wgpu_no_default_features", "default_fonts", "x11", "wayland"] }
+eframe = { version = "0.37.0", default-features = false, features = ["wgpu_no_default_features", "default_fonts", "x11", "wayland"] }
 egui = "0.36.2"
 egui_dock = { version = "0.21.1", features = ["serde"] }
 egui_plot = "0.37.0"
