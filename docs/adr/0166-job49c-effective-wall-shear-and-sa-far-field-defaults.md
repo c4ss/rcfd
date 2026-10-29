@@ -1,7 +1,9 @@
 # ADR 0166: Job 49C, the effective wall shear and the SA far-field turbulence become defaults (ADR 0164 questions 1, 2, 4, 5)
 
 Status: **registered 2026-10-29**, before any code and before any solver run of this job. The enumeration of what changes,
-the design, the limits, the reading rules and the not-run list are fixed here. Job 49C, on local main f9a520a (the
+the design, the limits, the reading rules and the not-run list are fixed here. **Results in the addendum:** every
+registered limit met, no amendment, no known miss; no stored example run and no `baseline_hashes.rs` case changes. Not yet
+accepted by the maintainer. Job 49C, on local main f9a520a (the
 worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest in this worktree and in the main
 checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
 
@@ -305,3 +307,71 @@ new default; it is the same set-up.
    - (b) Keep (`total_effective` is the opt-in).
 
    Recommendation: (a), in its own job.
+
+## Addendum: results (2026-10-29)
+
+Commits on the branch:
+- dc4160b: this registration;
+- 6f6c701: the code, the tests and the docs;
+- 43891d6: the driver;
+- then this addendum.
+
+Binary of the runs: `E:\projects\cfd\w49c-work\rcfd-w49c.exe`, the release build of 6f6c701 (43891d6 adds only the
+Python driver), sha256 `17E3D0CA0C14CA8D30B5C5328627BE37F2B72EED4392D0F040AF7934F3C7F9F1`.
+
+Host: shared with jobs 49D and 49E (their two solver processes ran throughout), about 21-24 GB free. At most 2 of my
+solver processes at a time: R1 and R2 together, then R3 alone.
+
+### Limits
+
+| Id | Measured | Outcome |
+|---|---|---|
+| T1 | laminar plate: all spellings equal bit for bit (forces and moments) | met |
+| T2 | power-law plate: `total` = `total_molecular`, `viscous` = `viscous_molecular`, moment unchanged, bit for bit; `viscous_effective` differs (control) | met |
+| T3 | SA plate y+ 40: `total` = `total_effective`, `viscous` = `viscous_effective` bit for bit; ratio > 1.5; pressure part within 1e-12 | met |
+| T4 | default moment = `total_molecular` moment bit for bit; `total_effective` moment differs (control) | met |
+| T5 | SA far field under `auto` = explicit `freestream` bit for bit (ux, uy, p, nuTilda, flux after 30 iterations); inflow faces 3 nu; explicit `zero_gradient` differs (control) | met |
+| T6 | SST and k-epsilon: no validation error, `auto` = explicit `zero_gradient` bit for bit; `turb` unit test `freestream_far_field_default_is_sa_only` passes | met |
+| T7 | `force_effective_w49a` C1-C5: 4 passed (C2/C3 respelled) | met |
+| R1 | SA-a00, legacy spellings: 1099 iterations to the wall cap (exit 8); 1099 compared, 2198 cd/cl values, **0 different** from ADR 0159 | met |
+| R2 | SA-a10, legacy spellings: 876 iterations (exit 8); 876 compared, **0 different** | met |
+| R3 | F10 without its `turbulence` line: 577 iterations, exit 0, the same stop reason; 577 x 12 values, **0 different**. So `cd` = F10's `cd_eff` (0.0154838 at the end), `cl` = F10's `cl_eff` (1.05521), `cd_v` = F10's `cd_veff` (0.0060170) | met |
+| G1 | `baseline_hashes.rs` unchanged; its test 3 passed, 1 ignored as before. `case_hashes_w48u` passes. `w48v_case_hashes` holds only an ignored print tool (ADR 0156 N3), so nothing to pass there; the case hashes are checked by `case_hashes_w48u`. `w33b_default_bits` passes. `workspace_graph` 3 passed | met |
+| G2 | no file changed under `example-projects`, `example-projects-linux`, `cases` since f9a520a; `example_projects_w48h` 21 passed, 1 ignored (as before); `example_rotated_w48u` 2 passed | met |
+| G3 | rcfd-api lib 106 passed, 2 ignored; `physics_schema` 11, `sst_schema` 3, `turb_models` 8, `registry_setups_w39a` 2, `rules_w19c` 5 (fenced TOML of both docs), `w48v_adaptive_correctors` 5, `sa_drag_w49a` 8 passed; ignored counts as before | met |
+| G4 | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release -p rcfd-api --lib --test defaults_w49c --test force_effective_w49a -- -D warnings` clean | met |
+
+What this shows:
+- **The old numbers stay reproducible by name.** ADR 0159's SA cases reproduce bit for bit with
+  `component = "total_molecular"` and `turbulence = "zero_gradient"`, at 0 and 10 degrees, as far as the runs went.
+- **The new default equals ADR 0164's corrected set-up.** An unchanged ADR 0159 case text now gives what ADR 0164's opt-in
+  F10 gave, bit for bit: cl 1.055 and cd 0.01548 at 10 degrees, against 0.982 and 0.0396 before.
+- Wall time of R3: 201 s on the shared host, against F10's 124 s.
+
+### Deviations
+
+- `w48v_case_hashes` was registered in G1 as "passes". Its only test is an ignored print tool. The registered intent (the
+  case hashes are unchanged) is met by `case_hashes_w48u`, which compares every shipped case against the 6867e40 fixture.
+- The R1-R3 comparison output (`E:\projects\cfd\w49c-work\runs\compare.json`) is recorded in the table above and is not
+  committed. D7 named no results folder.
+
+### Not run
+
+- The full workspace test suite and the gate. The Studio tests (`example_projects_h`, `scale_n`, `saved_store_r`) were not
+  run. They read the stored runs and plans, which this job does not change, and start plans do not read the changed
+  code.
+- Linux.
+- ADR 0159's runs to their full length (R1/R2 are prefixes of 1099 and 876 iterations).
+- The SST and DD arms with the legacy spelling.
+- The ignored heavy FAN-01 runs (moments unchanged by D3).
+- Re-runs of the 8 stored NACA 0012 example runs (question 3).
+
+### Questions for the maintainer
+
+Questions 1-4 above stand unchanged; no result bears on them. In short:
+1. **SST and k-epsilon far fields.** Recommendation: (b), a `freestream` default with values from `initial_intensity` and
+   `initial_viscosity_ratio`, in its own job.
+2. **Moments.** Recommendation: (a), follow the force default, re-reading FAN-01's torque known misses.
+3. **The 8 stored NACA example runs.** A re-run now gives other cl and cd; the fields are the same. Recommendation: (b),
+   regenerate in one registered job together with question 1 (b), so that the examples change once.
+4. **Laminar variable viscosity.** Recommendation: (a), in its own job.
