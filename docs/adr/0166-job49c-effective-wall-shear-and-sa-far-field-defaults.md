@@ -2,7 +2,8 @@
 
 Status: **registered 2026-10-29**, before any code and before any solver run of this job. The enumeration of what changes,
 the design, the limits, the reading rules and the not-run list are fixed here. **Results in the addendum:** every
-registered limit met, no amendment, no known miss; no stored example run and no `baseline_hashes.rs` case changes. Not yet
+registered limit met, no known miss; amendment 1 (the live model switch) corrected a defect found by review after the
+results; no stored example run and no `baseline_hashes.rs` case changes. Not yet
 accepted by the maintainer. Job 49C, on local main f9a520a (the
 worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest in this worktree and in the main
 checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
@@ -341,7 +342,9 @@ Commits on the branch:
 - dc4160b: this registration;
 - 6f6c701: the code, the tests and the docs;
 - 43891d6: the driver;
-- then this addendum.
+- aa9c963: this addendum;
+- 3550c10: amendment 1 (registration);
+- 5b70279: amendment 1's correction and T8.
 
 Binary of the runs: `E:\projects\cfd\w49c-work\rcfd-w49c.exe`, the release build of 6f6c701 (43891d6 adds only the
 Python driver), sha256 `17E3D0CA0C14CA8D30B5C5328627BE37F2B72EED4392D0F040AF7934F3C7F9F1`.
@@ -360,6 +363,7 @@ solver processes at a time: R1 and R2 together, then R3 alone.
 | T5 | SA far field under `auto` = explicit `freestream` bit for bit (ux, uy, p, nuTilda, flux after 30 iterations); inflow faces 3 nu; explicit `zero_gradient` differs (control) | met |
 | T6 | SST and k-epsilon: no validation error, `auto` = explicit `zero_gradient` bit for bit; `turb` unit test `freestream_far_field_default_is_sa_only` passes | met |
 | T7 | `force_effective_w49a` C1-C5: 4 passed (C2/C3 respelled) | met |
+| T8 (amendment 1) | (a) SA to SST: k and omega on every far-field face finite and equal to the owner cell; (b) SST to SA: inflow faces 3 nu; (c) SA to SA: inflow faces 3 nu, outflow faces the owner value. Control: with the uncorrected list (`old.inlet_speeds`, put back temporarily) T8 fails at (a) | met |
 | R1 | SA-a00, legacy spellings: 1099 iterations to the wall cap (exit 8); 1099 compared, 2198 cd/cl values, **0 different** from ADR 0159 | met |
 | R2 | SA-a10, legacy spellings: 876 iterations (exit 8); 876 compared, **0 different** | met |
 | R3 | F10 without its `turbulence` line: 577 iterations, exit 0, the same stop reason; 577 x 12 values, **0 different**. So `cd` = F10's `cd_eff` (0.0154838 at the end), `cl` = F10's `cl_eff` (1.05521), `cd_v` = F10's `cd_veff` (0.0060170) | met |
@@ -375,7 +379,17 @@ What this shows:
   F10 gave, bit for bit: cl 1.055 and cd 0.01548 at 10 degrees, against 0.982 and 0.0396 before.
 - Wall time of R3: 201 s on the shared host, against F10's 124 s.
 
+After amendment 1's correction (5b70279), these were re-run: `defaults_w49c` (6 passed), `force_effective_w49a`,
+`turb_models` (8 passed; holds the F-044 live-switch tests), `baseline_hashes` (3 passed, 1 ignored), the `turb` lib
+tests, clippy and fmt. All passed or were clean. The other G tests and R1-R3 were not re-run. The correction touches only
+`reconfigure_turbulence`, which no fresh build and none of those tests call except `turb_models`.
+
 ### Deviations
+
+- **Amendment 1.** The live model switch kept the old model's inlet list. That was a defect introduced by D2 and found
+  by review after the registered results. It was registered as amendment 1 before its fix and its test T8.
+- T8 (c) is checked by what can be seen from outside the crate (the far-field faces after the switch), not by comparing
+  the inlet list itself, which is private.
 
 - `w48v_case_hashes` was registered in G1 as "passes". Its only test is an ignored print tool. The registered intent (the
   case hashes are unchanged) is met by `case_hashes_w48u`, which compares every shipped case against the 6867e40 fixture.
