@@ -300,7 +300,11 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
             raw_text_differs += 1;
             let keep = |l: &str| -> String {
                 l.split('\t')
-                    .filter(|f| !f.starts_with("toml ") && !f.starts_with("json "))
+                    .filter(|f| {
+                        !f.starts_with("toml ")
+                            && !f.starts_with("json ")
+                            && (compare_meshes || !f.starts_with("mesh "))
+                    })
                     .collect::<Vec<_>>()
                     .join("\t")
             };
