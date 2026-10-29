@@ -4,8 +4,14 @@ Status: **registered 2026-10-28**, before any registered run (the code and the t
 first; what had run before is listed under "What I already knew"); the registration was corrected in review before any
 run (724d735 to the next commit: check (f2) added for "Refine x2" and the Start run dialog, the (a) control shortened to
 1.25 s so that its results are surely written, the gravity scale and the ramped-lid case of D5 and (g), D3's wording, the
-order of runs, CRLF-proof test helpers). Job 48S, on local main a64864e (waves 48A-48P and 48R
-merged; this branch was started at 6867e40 and merged main before this registration). House rules of
+order of runs, CRLF-proof test helpers); amendments 1 ((f)'s first frame), 2 ((f)'s fix button outside the window; f3) and
+3 (ADR 0152 DV6's `Debug` text; D2) before the corrected runs; results in the addendum: (a) (the maintainer's 256 x 256
+cylinder through Run, 40 s) and every other check met its limits and every control failed as required, but for two known
+misses: (f) (the registration's layout of the warning row; f3 meets (f)'s limits on the corrected layout) and D2 (F ended
+1.7e-14 s short of 3 s); the registered decision rule, read literally, then names neither step, and this job keeps A, the
+solver's adaptive Courant controller, as the automatic step (question 7); not yet accepted by the maintainer. Job 48S, on
+local main a64864e (waves 48A-48P and 48R merged; this branch was started at 6867e40 and merged main before this
+registration). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
 corrected run; defaults of existing code stay bit-identical outside the Studio's run path; `rcfd run` of a case file and the
@@ -337,12 +343,13 @@ which no new text holds).
 
 Branch `worktree-agent-a36702f9566b8d038`. Commits: 56c0161 (the code and tests), c4d3346 (main a64864e merged: 48P,
 48R), 724d735 (registration), bfc2600 (registration corrected in review, before any run), 3ae759b (amendment 1), 31ba296
-(amendment 2, the final code), then this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files,
-this host (Windows 11, 16 threads, 93.6 GB, 34-37 GB free during the runs, shared with other agents' builds and runs).
-Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first run, (a)); 3ae759b and 31ba296 in `target-48s-a1/` (the
-corrected (f), f3, the (f) control again, the known-miss test, W), because (a) and D2 ran from `target/`'s binaries; the code
-of the amendments is display-only (the time fields' number format, the warning row's layout, a doc comment), outside the
-run path (a), D2 and the other runs exercise.
+(amendment 2), 5895991 (amendment 3, the final code), then this addendum (e60c3d6, 440ea7c and (a)'s row). Every run:
+release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB, 14-37 GB free
+during the runs, shared with other agents' builds and runs). Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first
+run, (a)); 3ae759b, 31ba296 and 5895991 in `target-48s-a1/` (the corrected (f), f3, the (f) control again, the known-miss
+test, W twice), because (a) and D2 ran from `target/`'s binaries; the code of the amendments is display-only (the time
+fields' number format, the warning row's layout, the plan's `Debug` text, a doc comment), outside the run path (a), D2 and
+the other runs exercise.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -371,7 +378,7 @@ run path (a), D2 and the other runs exercise.
 | (g2) | as registered | `set` exactly as registered; 113 steps, finished at 2 s bit for bit, every monitor finite; Courant at most 0.461 after step 10 | pass |
 | (h) | as registered | `run.json` `set` = the TOML twin's `solver.end_time=2.3`, `solver.dt=0.00602`, `solver.max_courant=0.5`, `solver.max_dt=0.023`; finished at 2.3 bit for bit; `case.snapshot` the JSON file | pass |
 | (h) control | no `solver.*` entry | `set` empty | fails as required |
-| (a) | as registered | running at the time of writing (started 23:13; t = 20 s at 23:52) | pending |
+| (a) | as registered | finished at 40 bit for bit (`status.json` reason `finished: end time 40 reached`, exit 0), 10,742 steps in 4,721 s (1.31 h; the limit 3 h), 23:13-00:31; every monitor finite; `set` the four entries `solver.end_time=40`, `solver.dt=0.00116`, `solver.max_courant=0.5`, `solver.max_dt=0.4`; Courant 0.147 at step 1, at most 0.4501 after step 10 (0.4499-0.4501 from t = 1 on); dt 0.00116 at step 1, 0.0033 from step 67, 0.00371-0.00389 from t = 5 on (the largest 3.35 times dt0), the last step 52 % of the one before; over [10, 40] 5 upward crossings (14.54, 20.55, 26.57, 32.58, 38.59 s), St 0.16632, amplitude 0.3349; 40 snapshots, the last at (10,742, 40) exactly | pass |
 | W | the whole suite and the lints | first run on 31ba296 (23:29-23:41): 59 binaries, 268 passed, 1 failed (ADR 0152's DV6 (a), amendment 3), 11 ignored; corrected run on 5895991 (23:42-23:54): **269 passed, 0 failed, 11 ignored**: the known misses of ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and ADR 0144 J3b, ADR 0152's DV6 recorder, and this ADR's (a), D1, D3, D4 (heavy), `d2_cylinder_256x256_known_miss` and `f_the_toolbar_time_row_drawn_known_miss`; against main's 246 (ADR 0152), the 23 new tests that are not ignored; DV6's 22 cases equal to the record. `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 5895991; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed (after W); `scripts/third_party_licenses.py --check`: up to date | pass |
 
 **Decision.** A, the solver's adaptive Courant controller from the conservative first step, met every limit of its own on
@@ -382,7 +389,9 @@ throughout, so it runs at the estimate's caution): the cylinder 64 x 48 took 4,6
 (2.85 times fewer), 85.9 s against 193.9 s, at a realized Courant number of 0.45 against 0.20; the 256 x 256 cylinder 891
 against 2,567 steps (409 s against 1,151 s) to 3 s; the step 1,909 against 3,591; the cavity, whose uniform grid makes the
 estimate tight, 633 against 640. The results agree within 0.83 % (St), 0.20 % (`cd`), 0.03 % (`p_inlet`) and 5e-6 relative
-(`lid_drag`); A ends on N bit for bit on all four, F on three.
+(`lid_drag`); A ends on N bit for bit on all four, F on three. With A, (a) then ran the maintainer's 256 x 256 cylinder
+through Run for 40 s within every limit: 10,742 steps (the registration's estimate about 11,000; F's step would take about
+34,200) in 1.31 h, Courant at most 0.4501, St 0.1663.
 
 **Deviations and notes.**
 
@@ -423,12 +432,19 @@ estimate tight, 633 against 640. The results agree within 0.83 % (St), 0.20 % (`
   0.5 by construction): the shipped cylinder 0.4994 against 0.218 (2.3 times high), 256 x 256 0.496 against 0.147 (3.4), the
   cavity 0.499 against 0.103 (4.8: an impulsive start, the lid's cells only moving), the step 0.500 against 0.389 (1.3), the
   heated cavity (gravity scale) 0.499 against 0.00058 (a flow at rest at its first step); the ramped lid none against
-  0.00047. The controller's largest step was 2.96 (D1) and 3.05 (D2) times the estimate's first step.
+  0.00047. The controller's largest step was 2.96 (D1), 3.05 (D2) and 3.35 ((a)) times the estimate's first step.
 * The hover's step and wall-time estimates (the first step's count, "or fewer") against the runs: (b) about 13,290 steps
   and 3.2 min against 4,663 steps and 78 s; (c) 1,213 against 458; (g1) 13,514 and 1.7 min against 3,810 steps; D2's
   adaptive run 2,587 against 891.
-* The last step of the adaptive runs as a fraction of the step before it: D1 58 %, D2 32 %, D3 92 %, D4 74 %, (c) 6.3 %.
-* (a): see its row.
+* The last step of the adaptive runs as a fraction of the step before it: D1 58 %, D2 32 %, D3 92 %, D4 74 %, (c) 6.3 %,
+  (a) 52 %.
+* (a): the hover's `About 34,483 steps or fewer (the step grows to the Courant target), estimated wall time about 3 h or
+  less (65,536 cells, at 4.7 microseconds per cell and step)` against 10,742 steps (3.2 times fewer) and 1.31 h, at 6.7
+  microseconds per cell and step on the shared host; the registration's "about 11,000 steps (P10's dt)" against 10,742;
+  `res_p` medians 3.2e-4 (t 5-10), 6.7e-4 (10-20), 7.5e-4 (20-30) and 7.4e-4 (30-40), steady; `cd` over [30, 40] s 1.3563
+  (1.3460 to 1.3667); St 0.1663 against the 64 x 48 cylinder's 0.1573 ((b)); the last step (half the step before) has
+  `res_p` 3.0e-3 against 7.4e-4 before it, its `cd` 1.36205 and `cl` 0.33379 in line with the step before (1.36200,
+  0.33372).
 
 **Not run.** A person at the real window (the checklist); Linux and macOS; debug builds of the new tests; the workspace
 gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited); `cargo deny` (no
@@ -459,11 +475,12 @@ dependency change); the heavy tests outside this job (`--ignored` of earlier ADR
     reacts after each step, so a quickly accelerating flow can pass C for a few steps" (f3 and W run again). Recommendation:
     (b), with the next Studio change.
 
-Recommendations for questions 1-5 of the registration: 1 keep 0.5 (it held the 256 x 256 cylinder through (a)'s 40 s and
-costs 2.85 times fewer steps than the fixed alternative on the shipped cylinder); 2 a solver job after job 48T's findings,
-not a run-time corrector count from the Studio; 3 yes, as a small follow-up with SF4 (b) and SF9 (g) registered again; 4
-keep the read-only line until it is missed; 5 calibrate from the project's finished runs (steps, cells and wall time are in
-their records) when the estimate is found wrong in use.
+Recommendations for questions 1-5 of the registration: 1 keep 0.5: with it the maintainer's 256 x 256 cylinder ran (a)'s
+40 s at Courant 0.45 with steady residuals and St 0.166, while P4 puts the onset of that mesh's instability at about 0.56,
+so a higher target has no margin there; and it costs 2.85 times fewer steps than the fixed alternative on the shipped
+cylinder; 2 a solver job after job 48T's findings, not a run-time corrector count from the Studio; 3 yes, as a small
+follow-up with SF4 (b) and SF9 (g) registered again; 4 keep the read-only line until it is missed; 5 calibrate from the
+project's finished runs (steps, cells and wall time are in their records) when the estimate is found wrong in use.
 
 ## Not in CI (by hand)
 
