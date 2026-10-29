@@ -270,6 +270,16 @@ B1 in-process. Free RAM is checked before the long runs (other agents share the 
 * `scripts/w48v_run_matrix.py`, `scripts/w48v_shedding.py` (St, mean cd, cl amplitude, the correctors per step from a status
   stream).
 
+## Amendment 1 (2026-10-29, after the code commit 56473b8 and before any registered run): threads of the long runs
+
+Before the first registered run the machine was saturated by another agent's WSL/Docker workload (total CPU 92 to 94 %,
+`vmmemWSL` 39.7 GB, 14.5 GB free), and job 48S measured that threads buy about 1.1x on this solver (ADR 0153 P3). Results do
+not depend on the thread count (`docs/run-control.md`, measured; ADR 0154 ran with 1 or 2). Changed, for wall time only: V256
+and V512 run with **2** threads (registered 4), V128 with **1** (registered 2); every other entry of the run matrix (overrides,
+end times, wall caps) and every limit is unchanged. The A7 runs keep one thread each, started together. No run of this job had
+been made when this was written (the development runs before it were compilation and the library tests of
+`crates/rcfd-fv/tests/w48v_corrector_control.rs`, which are not registered checks, and `w33b_default_bits`, N2, which passed).
+
 ## Not changed by this job
 
 `crates/rcfd-studio`, `crates/rcfd-runner`, the default of every key, the ADR 0077 one-corrector check, `baseline_hashes.rs`, the

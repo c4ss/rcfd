@@ -34,9 +34,10 @@ def mesh(nx, ny, dt):
 # id -> (overrides of the committed case, end time, threads, wall cap in s)
 MATRIX = {
     "V64": (arm(AD), 100.0, 1, 2 * H),
-    "V128": (arm(mesh(128, 96, DT32), AD), 100.0, 2, 6 * H),
-    "V256": (arm(mesh(256, 256, DT64), AD), 100.0, 4, 10 * H),
-    "V512": (arm(mesh(512, 512, DT128), AD), 10.0, 4, 10 * H),
+    # threads 1, 2, 2 by ADR 0156 amendment 1 (registered 2, 4, 4; wall time only)
+    "V128": (arm(mesh(128, 96, DT32), AD), 100.0, 1, 6 * H),
+    "V256": (arm(mesh(256, 256, DT64), AD), 100.0, 2, 10 * H),
+    "V512": (arm(mesh(512, 512, DT128), AD), 10.0, 2, 10 * H),
     "V64x256": (arm(mesh(64, 256, DT64), AD), 10.0, 1, 2 * H),
     "TV256": (arm(mesh(256, 256, DT64), AD), 3.0, 1, 2 * H),
     "TW5": (arm(mesh(256, 256, DT64), {"solver.n_correctors": 3}), 3.0, 1, 2 * H),
