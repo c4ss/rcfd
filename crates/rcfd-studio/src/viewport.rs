@@ -110,7 +110,7 @@ pub fn fit(c: &Camera, lo: Vec3, hi: Vec3) -> Camera {
 /// One mouse action on the view.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Input {
-    /// Primary (left) or middle drag, pixels: rotate the camera about its target (ADR 0148: the middle drag orbits).
+    /// Middle drag, pixels: rotate the camera about its target (ADR 0148: the middle drag orbits; the left drag does not).
     Orbit(f64, f64),
     /// Secondary (right) drag, pixels: the surface follows the pointer.
     Pan(f64, f64),
@@ -131,19 +131,20 @@ pub enum DragButton {
     Middle,
 }
 
-/// What the view does with a drag of `button` by `dx`, `dy` pixels (ADR 0148, the maintainer's request): the primary and
-/// the middle button orbit, the secondary button pans; in a 2D view too (the primary drag orbited there before, and
-/// still does). With `middle_pans`, ADR 0132's mapping (the middle drag panned).
-pub fn drag_input(button: DragButton, dx: f64, dy: f64, middle_pans: bool) -> Input {
+/// What the view does with a drag of `button` by `dx`, `dy` pixels (ADR 0148, the maintainer's request, then the
+/// maintainer's later one): the middle button orbits, the secondary button pans, the primary (left) button does nothing
+/// (it rotated the view before; a left drag is left free for picking). With `middle_pans`, ADR 0132's mapping (the middle
+/// drag panned).
+pub fn drag_input(button: DragButton, dx: f64, dy: f64, middle_pans: bool) -> Option<Input> {
     match button {
-        DragButton::Primary => Input::Orbit(dx, dy),
-        DragButton::Middle if !middle_pans => Input::Orbit(dx, dy),
-        DragButton::Middle | DragButton::Secondary => Input::Pan(dx, dy),
+        DragButton::Primary => None,
+        DragButton::Middle if !middle_pans => Some(Input::Orbit(dx, dy)),
+        DragButton::Middle | DragButton::Secondary => Some(Input::Pan(dx, dy)),
     }
 }
 
 /// The mouse controls of the view, in words (the hint under the image).
-pub const MOUSE_HINT: &str = "left or middle drag: rotate; right drag: pan; wheel: zoom; double click: fit";
+pub const MOUSE_HINT: &str = "middle drag: rotate; right drag: pan; wheel: zoom; double click: fit";
 
 /// Negative-control switches of the viewport (tests only; all off in the app).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

@@ -428,3 +428,5 @@ selected is no longer selected), and the limits of N1 (c), N3 (c), N4 and the se
 This ADR; hunks in `crates/rcfd-studio/src/{studio,watch,quick_run,case_starter,view_toggle,project_view,ui,preview,
 preview_ui,viewport,viewport_ui}.rs`; new tests `crates/rcfd-studio/tests/{selection_n,followups_n,scale_n}.rs`; changed
 tests `crates/rcfd-studio/tests/{oneclick_e2e_g4,preview_g1}.rs`; dated notes in ADRs 0132, 0138 and 0147.
+
+> Note 2026-10-29 (maintainer request): the left (primary) drag no longer rotates or pans the view; `drag_input` returns `None` for it. The middle drag still orbits, the right drag pans, `MOUSE_HINT` reads "middle drag: rotate". Test N5 was updated to expect no camera change for the primary drag.

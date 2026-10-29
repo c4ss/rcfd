@@ -123,24 +123,30 @@ fn n5(tag: &str, middle_pans: bool) -> Vec<(String, bool, bool)> {
 fn n5_the_middle_drag_orbits() {
     assert_eq!(
         drag_input(DragButton::Primary, 3.0, -4.0, false),
-        Input::Orbit(3.0, -4.0)
+        None,
+        "the left drag does nothing"
     );
     assert_eq!(
         drag_input(DragButton::Middle, 3.0, -4.0, false),
-        Input::Orbit(3.0, -4.0)
+        Some(Input::Orbit(3.0, -4.0))
     );
     assert_eq!(
         drag_input(DragButton::Secondary, 3.0, -4.0, false),
-        Input::Pan(3.0, -4.0)
+        Some(Input::Pan(3.0, -4.0))
     );
     assert_eq!(
         drag_input(DragButton::Middle, 3.0, -4.0, true),
-        Input::Pan(3.0, -4.0),
+        Some(Input::Pan(3.0, -4.0)),
         "ADR 0132's mapping"
     );
     for (name, orbited, panned) in n5("n5", false) {
-        let want_orbit = !name.ends_with("secondary");
-        assert_eq!((orbited, panned), (want_orbit, !want_orbit), "{name}");
+        let want = if name.ends_with("primary") {
+            (false, false)
+        } else {
+            let o = !name.ends_with("secondary");
+            (o, !o)
+        };
+        assert_eq!((orbited, panned), want, "{name}");
     }
 }
 

@@ -285,7 +285,7 @@ pub(crate) fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark
     vp.set_size(px(rect.width()), px(rect.height()), dark);
     let p = ppp as f64;
     let d = resp.drag_delta();
-    // ADR 0148: the primary and the middle drag orbit, the secondary drag pans ([`drag_input`])
+    // ADR 0148: the middle drag orbits, the secondary drag pans, the primary (left) drag does nothing ([`drag_input`])
     let middle_pans = vp.switches.middle_pans;
     for (pb, b) in [
         (PointerButton::Primary, DragButton::Primary),
@@ -293,7 +293,9 @@ pub(crate) fn image(ui: &mut egui::Ui, vp: &mut Viewport, size: egui::Vec2, dark
         (PointerButton::Middle, DragButton::Middle),
     ] {
         if resp.dragged_by(pb) && d != egui::Vec2::ZERO {
-            vp.input(drag_input(b, d.x as f64 * p, d.y as f64 * p, middle_pans));
+            if let Some(i) = drag_input(b, d.x as f64 * p, d.y as f64 * p, middle_pans) {
+                vp.input(i);
+            }
         }
     }
     if resp.hovered() {
