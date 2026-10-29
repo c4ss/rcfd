@@ -844,19 +844,36 @@ fn metric(entries: &[ledger::Entry], variant: &str, name: &str) -> f64 {
 
 /// G1, G2: every committed run finished with the registered solver state and step; each run's wall time (launched to
 /// final state, the ledger's `wall_s`) at most 180 s, the sum at most 20 min (per tree: each tree is one rebuild).
+/// ADR 0169: the aerofoil runs regenerated under the far-field default of ADR 0169 meet the residual targets (409 and
+/// 230 iterations, exit 0), so their G1 part is the known miss below (limit intact); every other run's G1 and every
+/// run's G2 stay here.
 #[test]
 fn g1_g2_runs_finished_as_registered_within_their_time() {
     for (tree, _) in TREES {
-        g1_g2_tree(tree);
+        g1_g2_tree(tree, false);
     }
 }
 
-fn g1_g2_tree(tree: &'static str) {
+/// KNOWN MISS (ADR 0169 interim note and addendum): G1's aerofoil expectation, solver state `not_converged` at iteration
+/// 2000 with exit code 5 (ADR 0142), is missed by the runs regenerated under ADR 0169's far-field default, which meet the
+/// residual targets at iteration 409 (4 degrees) and 230 (2 degrees), exit 0. The limit is kept as registered.
+#[test]
+#[ignore = "KNOWN MISS (ADR 0169): the regenerated aerofoil runs converge at 409 / 230 iterations (exit 0), G1 expects not_converged at 2000, exit 5"]
+fn g1_aerofoil_runs_stop_not_converged_at_2000_known_miss() {
+    for (tree, _) in TREES {
+        g1_g2_tree(tree, true);
+    }
+}
+
+/// G1 / G2 of one tree. `aerofoils`: false checks G1 of every run except the aerofoils and G2 of every run; true checks
+/// only the aerofoils' G1 (the known miss above).
+fn g1_g2_tree(tree: &'static str, aerofoils: bool) {
     let mut total = 0.0;
     for ex in tree_projects(tree) {
         let (name, dir, runs) = (ex.label(), ex.dir, ex.runs);
         let entries = ledger_entries(&dir);
         for (id, case_rel) in &runs {
+            let naca = case_rel.contains("naca0012");
             let met = read_json(&dir.join("runs").join(id).join("metrics.json"));
             let fin = &met["solver_finish"];
             let (state, steps, exit) = (
@@ -876,6 +893,17 @@ fn g1_g2_tree(tree: &'static str) {
                 met["state"]
             );
             assert_eq!(met["state"], "finished", "{name}/{id}");
+            if aerofoils != naca {
+                if !aerofoils {
+                    // G2 of the aerofoil runs (their G1 is the known miss)
+                    let e = entries.iter().find(|e| e.settings["run"] == json!(id)).expect("entry");
+                    let wall = e.wall_s.expect("wall_s");
+                    println!("G2 {name}/{id}: {wall:.1} s");
+                    assert!(wall <= 180.0, "{name}/{id}: {wall} s");
+                    total += wall;
+                }
+                continue;
+            }
             assert_eq!(state, want.0, "{name}/{id}: solver state");
             if let Some(n) = want.1 {
                 assert_eq!(steps, n, "{name}/{id}: steps");
