@@ -190,6 +190,17 @@ test is kept as the ignored `x2_entries_in_order_and_the_plan_text_known_miss` (
 and `, correctors: `, the derived form's separator before a field name). What I knew when writing this: the output of that run
 (the values of X1, X3 and X4 are in the addendum); X2b had not run.
 
+## Amendment 2 (2026-10-29, after the runs of the addendum below, before X6's run)
+
+D6's dialog line has an exact text but no registered check covered it. Added **X6** (`x6_dialog_corrector_line`, model):
+for the shipped cylinder, `dialog_corrector_line` with no override gives exactly `Pressure correctors: this dialog's run
+takes solver.corrector_control = "fixed", 2 per step (the case's, unless an override sets them); Run on the toolbar makes them
+adaptive (Advanced).`; with `solver.corrector_control=adaptive` exactly `Pressure correctors: this dialog's run takes
+solver.corrector_control = "adaptive" (at least 2, at most 10).`; with `=adaptive` then `=fixed` the fixed line (last wins);
+with `solver.n_correctors=3` the fixed line with 3; none for the quick start's steady cavity and for the fractional-step
+cylinder. Its control is in-test (the two cases without a line). What I knew when writing this: the results below and that
+`store_plan::parse_entry` reads a bare `adaptive` as a JSON string (read in the code); X6 had not run.
+
 ## Addendum (2026-10-29): results against the registered limits
 
 Code at 405e219 (registration; X1, X3, X4 ran on it) and b52505d (amendment 1: the test file only; X2b, X5, W and the lints
@@ -230,11 +241,16 @@ over 3 s, no extra cost; but see "a finding" below.
 
 At ADR 0153's automatic step the first estimate is made at dt0 = 0.00116 s, where two correctors give 0.406 on the 256 x 256
 cylinder; the controller then grows the step about threefold within 70 steps (to 0.0033 to 0.0039 s, ADR 0153 (a)), where
-DG1 measured 1.166 for two correctors at 1/256 = 0.0039 s (ADR 0154): above ADR 0156's target 0.5, below 1. The adaptive
-control re-estimates only every 1000 steps or when its growth monitor fires; a 3 s run has 891 steps, so it kept 2 throughout.
-The run was clean (M_hf 1.2e-7 at 3 s) because the amplification stays below 1 at that step, not because of the margin the
-opt-in is meant to give. ADR 0156 D8 item 5 named this; it is a solver matter (`crates/rcfd-fv`), outside this job:
-question 2.
+DG1 measured 1.166 for two correctors at 1/256 = 0.0039 s (ADR 0154): at or above 1 (lag-neutral or slowly growing), far
+above ADR 0156's target 0.5; ADR 0153's P4 saw slow growth at a fixed 0.0042 s on this mesh. The adaptive control
+re-estimates only every 1000 steps or when its growth monitor fires (three steps in a row growing by 1.5, which an
+amplification near 1 does not do); a 3 s run has 891 steps, so it kept 2 throughout. So under the Studio's default automatic
+step the opt-in did nothing on 256 x 256 for the first 1000 steps, and the coupling ran at a step whose two-corrector
+estimate is about 1.0 to 1.17. The 3 s run was clean (M_hf 1.2e-7 at 3 s), but why it stayed clean was not measured, and
+longer runs at the grown step (ADR 0153's (a) ran 40 s with two fixed correctors and shed normally; its M_hf was not
+measured) are not covered by this job. ADR 0156 D8 item 5 named the gap; closing it is a solver change (`crates/rcfd-fv`),
+outside this job: question 2. Until then, resolution robustness under the Studio's defaults rests on the solver's 1000-step
+re-estimate and growth monitor, not on the first estimate's margin.
 
 ### Deviations
 
@@ -272,8 +288,10 @@ question 2.
    the Studio? Recommendation: yes, a small runner job with its own check (no change for fixed runs), then a Studio line
    `correctors <n>` in the strip.
 2. **A re-estimate when the step has grown** (the finding above; ADR 0156 D8 item 5): with ADR 0153's automatic step the
-   count is chosen at the first step's dt (0.00116 s) and kept while the step grows threefold, so on 256 x 256 the coupling
-   runs near an amplification of 1 instead of the target 0.5 for the first 1000 steps. Options: (a) keep (the 3 s run was
+   count is chosen at the first step's dt (0.00116 s) and kept while the step grows threefold, so on 256 x 256 the opt-in
+   does nothing for the first 1000 steps and the coupling runs where two correctors' estimate is about 1.0 to 1.17 (at or
+   above lag-neutral) instead of the target 0.5. This is the most important open item for "stable whatever the resolution"
+   under the Studio's defaults. Options: (a) keep (the 3 s run was
    clean); (b) a solver change in `PimpleSolver`: re-estimate when dt has changed by a factor 1.5 since the last estimate;
    (c) a Studio change: start the automatic step at the controller's later step size. Recommendation: (b), registered with
    ADR 0156's harness (V256 under the controller to 10 s, cost reported), since it is what makes "stable whatever the

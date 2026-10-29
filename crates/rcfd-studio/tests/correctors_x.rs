@@ -380,6 +380,42 @@ fn x2_procedure(plain: impl Fn(&str) -> bool) {
     assert_eq!(run_off.set(), want[..4], "the switch off");
 }
 
+// ---------------------------------------------------------------- X6: the Start run dialog's line (amendment 2)
+
+/// X6 (ADR 0158 amendment 2, model): the Start run dialog's corrector line (D6) of the shipped cylinder with the dialog's
+/// overrides read last-wins, exactly; none for the steady cavity and for the fractional-step cylinder.
+#[test]
+fn x6_dialog_corrector_line() {
+    let (dir, cyl) = (ts::wind_tunnel_cases(), ts::cylinder(64, 48));
+    let f = time_step::facts(&cyl, &dir).unwrap();
+    let line =
+        |set: &[&str]| time_step::dialog_corrector_line(&f, &set.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    let fixed = |n: u64| {
+        format!(
+            "Pressure correctors: this dialog's run takes solver.corrector_control = \"fixed\", {n} per step (the case's, \
+             unless an override sets them); Run on the toolbar makes them adaptive (Advanced)."
+        )
+    };
+    assert_eq!(line(&[]), Some(fixed(2)));
+    assert_eq!(
+        line(&["solver.corrector_control=adaptive"]),
+        Some(
+            "Pressure correctors: this dialog's run takes solver.corrector_control = \"adaptive\" (at least 2, at most 10)."
+                .to_string()
+        )
+    );
+    assert_eq!(
+        line(&["solver.corrector_control=adaptive", "solver.corrector_control=fixed"]),
+        Some(fixed(2))
+    );
+    assert_eq!(line(&["solver.n_correctors=3"]), Some(fixed(3)));
+    let cav = std::fs::read_to_string(ts::quick_start_cases().join("cavity-re100.toml")).unwrap();
+    let steady = time_step::facts(&cav, &ts::quick_start_cases()).unwrap();
+    assert_eq!(time_step::dialog_corrector_line(&steady, &[]), None);
+    let frac = time_step::facts(&with_solver(&cyl, "time_advance = \"fractional_step\""), &dir).unwrap();
+    assert_eq!(time_step::dialog_corrector_line(&frac, &[]), None);
+}
+
 // ---------------------------------------------------------------- the served project (as run_time_s.rs)
 
 fn project(tag: &str, cases: &[(&str, String)]) -> RunnerProject {
