@@ -126,7 +126,9 @@ What changed in the app's code (all API-forced, behaviour kept):
 * Menu bar and status bar: `egui::Panel::top/bottom(..).show(ui, ..)` (were `TopBottomPanel::..show(ctx, ..)`);
   `egui::MenuBar::new().config(..).ui` (was `egui::menu::bar`); `ui.close()` (was `ui.close_menu()`). The menu config sets
   `PopupCloseBehavior::CloseOnClickOutside`: egui 0.36's default closes a menu on any click inside it, while 0.27 kept it open
-  until a click outside or `close_menu` (so the View menu's panel checkboxes still leave the menu open).
+  until a click outside or `close_menu` (so the View menu's panel checkboxes still leave the menu open). Read in egui 0.27.2
+  `src/menu.rs` `stationary_interaction`: a 0.27 menu closed on a press outside its area (`area_contains`), Escape, a second
+  click on its button, or `close_menu`.
 * Dock: `DockArea::show_inside` inside `egui::CentralPanel` with the frame egui_dock 0.12's `show(ctx)` used
   (`Frame::central_panel(..)`, inner margin 0, transparent fill). `TabViewer::id` is now required; it returns 0.12's default
   (`Id::new(title text)`).
@@ -170,7 +172,11 @@ behaviour, the theme and the dock frame were found by reading the egui/egui_dock
 
 As registered: a real window (look, OpenGL context creation, native file dialog, real input); reading a 0.27-era
 `gui-prefs.json`; `cargo deny check` (not installed; L6 instead, the CI deny job runs it); the Rust 1.90 type-check (no 1.90
-toolchain; L8 instead); the Studio's integration tests; the full gate; Linux/macOS builds.
+toolchain; L8 instead); the Studio's integration tests; the full gate; Linux/macOS builds. For the Studio's integration tests in
+a workspace test build (the gate): `cargo tree -e features -i <pkg>` gives the same feature set for egui, epaint, egui_dock and
+egui_plot with `-p rcfd-studio` alone and with `--workspace`, so only eframe gains `glow` there; the Studio's tests use
+`eframe::egui_wgpu` and rcfd-render's `Renderer` only (grep of `crates/rcfd-studio/tests`), which the glow feature does not
+change. Not run.
 
 ### Questions
 
