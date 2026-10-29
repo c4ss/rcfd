@@ -200,3 +200,64 @@ this job's code; J2's own set-up assumed Run there. **Corrected set-up of J2 (AD
 its control wait until `blocked` is empty *and* the toolbar's place holds Run (`stop::view` is `View::Run`), i.e. the
 case's earlier run has ended, before the click. Recorded before J2 runs again. Every other failure of that suite run is
 listed in the addendum with its handling.
+
+## Addendum: results (2026-10-29, branch `worktree-agent-a0f10be20ce1b479a`, release builds on the gate host)
+
+Commits: 8f35938 (registration, code and tests), 995dd42 (amendment 1), b38949f (amendment 2), this addendum. All runs
+release, `--test-threads 1`, `rcfd` and `rcfd-runner` of the same build, own target folder; other agents' builds and
+runs shared the host. First run of `stop_aa` at 8f35938 (AA1, AA2, AA3 failed: amendment 1); the counted run of every
+AA check below is the second, at 995dd42, unless said.
+
+| Id | Limit | Measured | Result |
+|---|---|---|---|
+| AA1 (registered) | (a)-(h), (e) with exactly one `cancel_requested` | first run: 0 `cancel_requested`; every item checked before it within its limit (amendment 1) | **miss**: `aa1_..._known_miss`, ignored, limit intact |
+| AA1b | AA1 with (e)'s events "at most one, no `killed`" | (a) Stop drawn, Run not; hover drawn, names the three phrases; (b) F5: 1 run folder, the refusal message; (c) "stopped" and Run 0.779 s after the click; (d) 35 frames, all "Stopping...", F5 refused; (e) exit code 7, "cancelled on request; the solver stopped cleanly after step 158", no pid, 1 `cancel_requested`, 0 `killed`, `solver_finish` interrupted; (f) footer, 3 snapshots (2 before the stop), the last at step 158 with the status time's bits, `residuals.jsonl` at 158; (g) viewport 3 of 3 snapshots and a frame after 1.4 ms, Runs panel `... stopped 158 2.3189e0 ...`; (h) one "stop requested" message, no error | pass |
+| AA1 C1 (kill) | (c) not met and (f) fails | no "stopped" in 5.0 s (803 frames; `failed`, "ended without a finish event (exit code 1)"); store without footer, last snapshot step 138 against status step 164 | fails as required |
+| AA1 C2 (route before) | (a) fails; a second run queued while the first runs | Stop not drawn, Run drawn; second run folder within 10 s, first `running` | fails as required |
+| AA1 C3 (Run while stopping) | (d) fails | 54 of 54 frames between drew Run | fails as required |
+| AA2 (registered) | as AA1's (e) | first run: 0 `cancel_requested` | **miss**: `aa2_..._known_miss`, ignored, limit intact |
+| AA2b | Escape and "." stop nothing; Ctrl+.: (c), (e) as AA1b, (f) | after Escape and ".", 2 s: running, no cancel file; Ctrl+.: "stopped" after 1.240 s (63 frames), step 152, exit 7, 1 `cancel_requested`, 0 `killed`, footer, 3 snapshots, last at 152 with the status time's bits | pass |
+| AA3 | in flight nothing asked; ended within 20.0 s, `cancelled`, no error, Run drawn | 148 frames in flight, `stop` never asked; Stop clicked with the run queued and no runner holding the lock; ended 0.458 s later, "cancelled before launch", label "cancelled", 0 launched; no start error, no "Stop: " or "cancel run" message; Run drawn | pass (after amendment 1 item 2) |
+| AA4 | no-op after the end | view Run; `stop` false; messages, `status.json` unchanged; no cancel file; Run drawn, Stop not | pass (both runs) |
+| AA5 | the label table; no project: Run, false, silent | as registered | pass (both runs) |
+| AA6 | the `rcfd-studio` suite; clippy; fmt; `workspace_graph` | suite at 995dd42: 62 test binaries, 280 passed, 1 failed (J2, amendment 2), 15 ignored (the 13 ignored before and this job's 2 known misses); J2 after amendment 2 (b38949f), run alone: pass (run 1 selected 0.134 s, run 2 0.103 s after the click; its control as before); `cargo clippy -p rcfd-studio --all-targets -- -D warnings` clean; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed | pass (J2 after amendment 2) |
+
+Reported without a limit: AA1b's run had stored 2 snapshots when Stop was clicked and stopped at step 158 (about 2.3 s
+simulated); AA1's first (missed) run stopped 0.213 s after the click at step 240 with 4 snapshots; `cancel_requested`
+was present in the second runs of AA1b and AA2b and absent in the first runs of AA1 and AA2, as amendment 1's
+diagnosis predicts (it depends on whether a runner tick falls between the request and the solver's exit).
+
+Deviations and notes:
+* AA1 and AA2 missed a limit that misread the runner (amendment 1); AA1b and AA2b were registered after the miss. The
+  limit that mattered (no kill, the final snapshot) was met in all four runs.
+* AA3's first run had a test-code defect (amendment 1 item 2); its in-flight check is weaker than registered (Ctrl+. is
+  not pressed in flight, only the model call `stop::stop` is tried there; the drawn Stop's greyed-out state is not
+  checked by a click).
+* J2 (ADR 0144) needed a set-up change because D4 changes what its click hits (amendment 2). The whole suite was not
+  run again after that change; J2 was.
+* `quick_run_ui.rs`: the Run button's 12 lines are re-indented inside the new `if` (the merge with job 48X may conflict
+  there; the intent is "draw Run unless `stop_ui::button` drew Stop").
+* The race "the run ends between the click and the request" (D1's second status read) is read from code, not tested.
+
+Not run: the Studio tests in a debug build; Linux (the new process tests have never run there); the "Not in CI" items
+(a real window, Cmd+. on macOS, keyboard layouts); a stop whose solver step exceeds the 10 s grace (the hover's kill
+sentence); the workspace gate and workspace-wide clippy; other crates' tests (no other crate changed).
+
+## Questions for the maintainer
+
+1. **A `stopped` state in `status.json`?** Today "stopped" is the Studio's label for `cancelled` with exit code 7.
+   Options: (a) keep it a Studio label; (b) add `RunState::Stopped` in `rcfd-project`, written by the runner for a clean
+   stop (touches the record contract, the runner, `rcfd-mcp`, the CLI's `wait`, and ADR 0133 R3 / ADR 0141 G6, which
+   expect `cancelled`). Recommendation: (a) now; (b) only if another client (MCP, CLI) needs to tell the two apart.
+2. **Continue a stopped run?** The runner passes no `--checkpoint`, so a stopped run cannot be continued. Options: (a)
+   leave it; (b) the runner passes `--checkpoint runs/<id>/restart.rcfd` so a clean stop writes a restart file (only for
+   the cases `save_restart` supports) and the Studio offers "Continue". Recommendation: (b) as its own job.
+3. **Rename the strip's and the Runs panel's "Cancel" to "Stop"?** They send the same request and end the same way.
+   Recommendation: yes, labels only, in a small job (G6 of ADR 0141 clicks "Cancel" and needs the same set-up change).
+4. **F5 while the selected case's run is going** now refuses with a message (before: a second run of the case was
+   queued). Options... still starts any run. Recommendation: accept.
+5. **The runner's `cancel_requested` event** is missing when the solver stops before the runner's next tick (amendment
+   1). Should `finalize` write it when it finds the cancel request? Recommendation: yes, a one-line runner change in its
+   own job, so the event log always records who ended the run.
+6. **`QuickRun::rects` keeps a stale "Run" entry** while Stop is drawn (tests use it as the toolbar's place).
+   Recommendation: accept; clear it only if a test should fail loudly when it clicks Run under Stop.
