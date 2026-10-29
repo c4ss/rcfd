@@ -518,6 +518,7 @@ impl RunPoller {
                     held: k.held,
                     queue_pos: None,
                     last_residuals: k.last_res.clone(),
+                    exit_code: st.and_then(|s| s.exit_code),
                 }
             })
             .collect();
@@ -710,6 +711,7 @@ fn same_rows(a: &[RunRow], b: &[RunRow]) -> bool {
                 y.held,
                 y.queue_pos,
             ) && key(x) == key(y)
+                && x.exit_code == y.exit_code
         })
 }
 

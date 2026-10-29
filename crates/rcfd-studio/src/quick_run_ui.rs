@@ -48,18 +48,21 @@ pub fn toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
     };
     let mut go = false;
     ui.horizontal(|ui| {
-        let label = RichText::new("  Run  ").strong().color(Color32::WHITE);
-        let r = ui
-            .add_enabled(blocked.is_none(), egui::Button::new(label).fill(GO))
-            .on_hover_ui(|ui| {
-                ui.label(RUN_HOVER);
-                if let Some(h) = &plan_hover {
-                    ui.label(h.as_str());
-                }
-            })
-            .on_disabled_hover_text(blocked.clone().unwrap_or_default());
-        st.quick.rects.insert("Run".into(), r.rect);
-        go |= r.clicked();
+        // ADR 0161: Stop in Run's place while the selected case's toolbar run is live
+        if !crate::stop_ui::button(ui, st) {
+            let label = RichText::new("  Run  ").strong().color(Color32::WHITE);
+            let r = ui
+                .add_enabled(blocked.is_none(), egui::Button::new(label).fill(GO))
+                .on_hover_ui(|ui| {
+                    ui.label(RUN_HOVER);
+                    if let Some(h) = &plan_hover {
+                        ui.label(h.as_str());
+                    }
+                })
+                .on_disabled_hover_text(blocked.clone().unwrap_or_default());
+            st.quick.rects.insert("Run".into(), r.rect);
+            go |= r.clicked();
+        }
         match &case {
             Some(c) => ui.label(RichText::new(c).monospace()),
             None => ui.weak("no case selected"),
@@ -108,7 +111,8 @@ pub fn toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
         ui.colored_label(ERR, e.as_str());
     }
     if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F5)) {
-        go = true;
+        // ADR 0161: not while the toolbar shows Stop for the selected case
+        go = crate::stop_ui::allow_run(st);
     }
     if go {
         if let Err(m) = quick_run::run_selected_case(st) {
