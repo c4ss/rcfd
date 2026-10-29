@@ -1,7 +1,9 @@
 # ADR 0162: Job 48AB, the adaptive pressure-corrector count is re-estimated when the time step has changed by a factor 1.5 (the dt trigger)
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any run of this job (set-ups, limits,
-reading rules and the cost bound are fixed here); not yet accepted by the maintainer. House rules of
+reading rules and the cost bound are fixed here); **results in the addendum** (2026-10-29: every registered limit met except N3 and
+N6 as worded, both only because of a failure of `case_hashes_w48u` that is identical at 444255c; the control B in class
+B-iii, the caveat not reproduced as an instability); no amendment; not yet accepted by the maintainer. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
 becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected
 run; defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no unsafe code, no new crate,
@@ -220,8 +222,10 @@ trigger (the control) the count stays 2 for 1000 steps and the 60-iteration esti
 (largest M_hf 5.7e-7), and its own 1000-step estimate at step 1001 (t = 3.44) chooses 3 (0.392), the count the trigger chose at
 step 4. **So the caveat of ADR 0158 is not reproduced as an instability at t <= 10 (class B-iii)**: on this mesh at the Studio's
 Courant 0.5 the two-corrector coupling sits just under lag-neutral, and what the trigger buys here is the registered margin (from
-about 1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect. Fixed-dt adaptive runs and default runs
-are bit-identical to 444255c.
+about 1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect. The resolution sweep under the Studio's
+plan to t = 100 (64 x 48, 128 x 96, 256 x 256) is clean at every stored time and converges (St 0.1573, 0.1649, 0.1665; mean cd
+1.3264, 1.3532, 1.3578), with counts 2, 2, 3. Fixed-dt adaptive runs and default runs are bit-identical to 444255c; the only
+failing test (`case_hashes_w48u`) fails identically at 444255c.
 
 ### Results
 
@@ -231,7 +235,7 @@ are bit-identical to 444255c.
 | N2 | `baseline_hashes` as at 444255c, file not edited | 3 passed (shipped cases, cavity, heated cavity), 1 ignored (its existing `rotating_channel` known difference); its `kepsilon_channel` check did not fail on this run; no diff of the file | met |
 | N3 | `case_hashes_w48u` passes | **fails**: H1 "30 differ": every difference is in the written `toml`/`json` text hashes, the settings and mesh hashes are equal; the identical test on the `git archive` copy of 444255c fails with the same 46 lines (compared line by line: 0 differences). Its record was made on 6867e40, before ADR 0156 added `solver.corrector_control` to the schema (the written texts list every key with its default), which is the likely cause (not investigated further: no code of this job writes case texts) | **not met as worded; pre-existing at 444255c, unchanged by this job** (deviation 6) |
 | N5 | ADR 0156's tests pass unchanged | rcfd-fv `w48v_corrector_control` 5 of 5; rcfd-api `w48v_adaptive_correctors` (not ignored: key/hash, A9b, N5/A10, B3, A11) ok; `w48t_cylinder_spokes` A1, A2 (K1 adaptive), A3 (K2 adaptive) ok; A4 (ignored, run on purpose): count 8, equal to `n_correctors = 8` bit for bit, 150 s | met |
-| N6 | 0 failures but N2's known one | rcfd-fv: 101 test binaries, all `ok`; rcfd-api (`--no-fail-fast`): 147 binaries, 740 passed, 1 failed (N3's H1, pre-existing), 273 ignored (6 of them this job's new ignored tests; no existing test file is edited, so no `#[ignore]` was added or removed elsewhere) | met but for N3's pre-existing failure |
+| N6 | 0 failures but N2's known one | rcfd-fv: 101 test binaries, all `ok`; rcfd-api (`--no-fail-fast`): 147 binaries, 740 passed, 1 failed (N3's H1, pre-existing), 273 ignored (6 of them this job's new ignored tests; no existing test file is edited, so no `#[ignore]` was added or removed elsewhere) | not met as worded: the one failure is N3's, pre-existing at 444255c |
 | N4 | five fingerprints equal; F2 = ADR 0156's record | 444255c / branch: F1 afd495792c2b99fe / same (160 steps, count 2, 0.3628); F2 cc671f5cf533a58f / same (192 steps, count 8, 0.47074: ADR 0156's 8 and 0.4707); F3 825d0690211cbd20 / same (17 steps, the last 0.03 s after 16 of 0.0625: the landing rule keeps it bit-identical); F4 e14dcf87ed39866d / same; F5 93857919dcc30131 / same (201 steps, fixed correctors, automatic dt). Not registered, printed for contrast: F6 (adaptive under the Studio's time entries, 64 x 48) differs, 6f08f81a1f3d5b4c / 6f92929a044c68ee: the branch's log has the two dt-fired estimates (steps 4, 135; count 2 kept), the hash includes the log | met |
 | L1-L6 | as registered | `crates/rcfd-fv/tests/w48ab_dt_trigger.rs`: 5 tests (L2 and L3 in one) passed: constant dt no dt-fired estimate and bit-equal to factor 0; x1.4 none; x2 one at step 6 with dt 0.1, `triggered` 0; x0.5 one at step 6 (count 10 at target 0); the short last step of `run_fixed` (0.02 after 0.05) none and bit-equal; factor 0 none | met |
 | A1 | not stopped, t = 10 | 2767 steps, t = 10 exactly | met |
@@ -244,9 +248,9 @@ are bit-identical to 444255c.
 | E2 | <= 4 % over (0, 10] | 29.7 s of 2745.2 s: 1.1 % | met |
 | E3 | all estimates over (0, 10], reported | 87.3 s of 2745.2 s: 3.2 % (step 1: 6.6 s; steps 1014, 2014: 24.4 s and 26.6 s); deterministic proxy: 400 lag-map corrector applications (160 dt-fired) against 8298 corrector solves of the steps | reported |
 | B | reported by its reading rule | AB256-off: 2767 steps to t = 10, largest M_hf 5.73e-7 (no spokes); 2 correctors to step 1000; 60-iteration estimate with 2 correctors 0.9379 (t = 1, the wall cell at (0.499, 0.043)) and 0.9970 (t = 3); its own 1000-step estimate at step 1001 (t = 3.44) chose 3 (0.3923), step 2001 3 (0.4260); at t = 10, 3 correctors 0.4460 | **class B-iii: not reproduced** |
-| C1 | C64, C128, C256 not stopped, M_hf <= 0.0114 at every stored time | C64: 5824 steps, largest 8.03e-3 (the 64-around physical part, as V64's 7.4e-3); C128: 11822 steps, largest 4.42e-5; C256: PENDING | C64, C128 met |
-| C2 | St in [0.145, 0.175], mean cd in [1.25, 1.45]; C256 against C128 | C64 St 0.1573, cd 1.3264; C128 St 0.1649, cd 1.3532; C256 PENDING | PENDING |
-| C3 | counts, reported | C64: 2 throughout (estimates 0.040 to 0.085; dt-fired at steps 4 and 135); C128: 2 throughout (0.111 at step 1, 0.137 and 0.227 at the dt-fired steps 4 and 333, then 0.247 to 0.255); C256: PENDING | reported |
+| C1 | C64, C128, C256 not stopped, M_hf <= 0.0114 at every stored time | C64: 5824 steps, largest 8.03e-3 (the 64-around physical part, as V64's 7.4e-3); C128: 11822 steps, largest 4.42e-5; C256: 26747 steps (18 115 s, 2 threads), largest 1.66e-7 (the 100 stored values 4.4e-8 to 1.66e-7) | met |
+| C2 | St in [0.145, 0.175], mean cd in [1.25, 1.45]; C256 against C128 | C64 St 0.1573, cd 1.3264; C128 St 0.1649, cd 1.3532; C256 St 0.1665, cd 1.3578 (cl peak to peak 0.673); \|St(C256) - St(C128)\| 0.0016, \|cd(C256) - cd(C128)\| 0.0046 | met |
+| C3 | counts, reported | C64: 2 throughout (estimates 0.040 to 0.085; dt-fired at steps 4 and 135); C128: 2 throughout (0.111 at step 1, 0.137 and 0.227 at the dt-fired steps 4 and 333, then 0.247 to 0.255); C256: as AB256 to t = 10 (the same five estimates with the same values: `max_dt` 1 against 0.1 never binds), then 3 at every 1000-step estimate to step 26014 (0.425 to 0.440, dt 0.00371 to 0.00381); dt-fired only at steps 4 and 14; mean 3.000 | reported |
 
 ### Against the predictions
 
