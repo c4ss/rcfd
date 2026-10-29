@@ -44,6 +44,13 @@ pub const CELL_STEP_SECONDS: f64 = 4.7e-6;
 /// The automatic step of a run unless the user picks another one ([`StepMode::Adaptive`], ADR 0153 D2).
 pub const DEFAULT_MODE: StepMode = StepMode::Adaptive;
 
+/// Run makes the pressure correctors adaptive unless the user switches it off in Advanced (ADR 0158, job 48X: the
+/// maintainer's "yes turn on adaptive correctors", ADR 0156 question 1).
+pub const DEFAULT_ADAPTIVE_CORRECTORS: bool = true;
+
+/// The run-time entry of adaptive pressure correctors (ADR 0156 D1, D8).
+pub const ADAPTIVE_ENTRY: &str = "solver.corrector_control=adaptive";
+
 /// Keys that give a case its own step control (`rcfd-api` `timectl::requested`, and the earlier `solver.max_courant`
 /// controller): the automatic step leaves such a case's control alone.
 pub const OWN_CONTROL: [&str; 13] = [
@@ -111,6 +118,20 @@ pub struct Facts {
     pub u0: f64,
     /// Where [`Facts::u0`] is: `the initial velocity field`, `boundary <patch>` or [`GRAVITY_SCALE`].
     pub u0_from: Option<String>,
+    /// The pressure correctors of the case (ADR 0158, job 48X).
+    pub correctors: Correctors,
+}
+
+/// What the pressure correctors of a case's runs depend on (ADR 0158, job 48X; ADR 0156 D5, D8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Correctors {
+    /// `solver.n_correctors` as resolved.
+    pub n: u64,
+    /// `solver.corrector_control` as resolved (`fixed`, the schema default, or `adaptive`).
+    pub control: String,
+    /// Why the solver would refuse `solver.corrector_control = "adaptive"` for this case (ADR 0156 D5), `None` when it
+    /// accepts it.
+    pub not_adaptive: Option<String>,
 }
 
 impl Facts {
@@ -150,6 +171,9 @@ pub struct RunTime {
     pub max_dt: Option<f64>,
     /// How the step is chosen.
     pub mode: StepMode,
+    /// Run makes the pressure correctors adaptive (`solver.corrector_control=adaptive`) where the solver accepts it and the
+    /// case does not choose the key itself (ADR 0158; the Advanced popover's switch).
+    pub adaptive_correctors: bool,
 }
 
 impl Default for RunTime {
@@ -159,6 +183,7 @@ impl Default for RunTime {
             courant: COURANT_TARGET,
             max_dt: None,
             mode: DEFAULT_MODE,
+            adaptive_correctors: DEFAULT_ADAPTIVE_CORRECTORS,
         }
     }
 }
@@ -273,6 +298,30 @@ fn kind_of(case: &rcfd_api::case::Case) -> Kind {
         return Kind::Other("a chain runs each stage with its own settings".into());
     }
     Kind::Transient
+}
+
+/// Why the solver refuses `solver.corrector_control = "adaptive"` for a parsed case of kind `kind` (ADR 0156 D5:
+/// `rcfd-api` `Simulation::new` accepts it for the incompressible transient solver, piso or pimple, with the iterative
+/// time advance, no dynamic mesh and no `solver.error_tolerance`), `None` when it accepts it. [`Kind::Transient`] is that
+/// solver (constant density, not VOF, not compressible; also not a prescribed flow or a chain, which the Studio leaves to
+/// their own settings).
+fn not_adaptive(case: &rcfd_api::case::Case, kind: &Kind) -> Option<String> {
+    let get = |p: &str| case.get(p).unwrap_or(Value::Null);
+    match kind {
+        Kind::Steady { .. } => return Some("a steady run has no time steps".into()),
+        Kind::Other(why) => return Some(why.clone()),
+        Kind::Transient => {}
+    }
+    if get("solver.time_advance").as_str() == Some("fractional_step") {
+        return Some("solver.time_advance = \"fractional_step\" (a non-iterative step has no correctors)".into());
+    }
+    if get("dynamic_mesh.enabled").as_bool() == Some(true) {
+        return Some("dynamic_mesh (the pressure-lag estimate is not defined on a moving mesh)".into());
+    }
+    if get("solver.error_tolerance").as_f64().is_some_and(|e| e > 0.0) {
+        return Some("solver.error_tolerance (step doubling restores the state of trial steps)".into());
+    }
+    None
 }
 
 /// The thinnest cell of `sim`'s mesh ([`Facts::h_min`]).
@@ -391,7 +440,13 @@ pub fn facts(text: &str, dir: &Path) -> Result<Facts, String> {
         h_min: 0.0,
         u0: 0.0,
         u0_from: None,
+        correctors: Correctors {
+            n: get("solver.n_correctors").as_u64().unwrap_or(0),
+            control: get("solver.corrector_control").as_str().unwrap_or_default().to_string(),
+            not_adaptive: None,
+        },
     };
+    f.correctors.not_adaptive = not_adaptive(&case, &f.kind);
     if f.kind == Kind::Transient {
         let sim = Simulation::new(&case).map_err(|d| diags(&d))?;
         f.cells = sim.geom.mesh.n_cells() as u64;
@@ -815,6 +870,158 @@ pub fn dialog_lines(case: &str, f: &Facts, set: &[String]) -> Vec<(bool, String)
     v
 }
 
+// ---------------------------------------------------------------- pressure correctors (ADR 0158, job 48X)
+
+/// Why a run keeps fixed pressure correctors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FixedWhy {
+    /// The user switched adaptive correctors off (Advanced).
+    Off,
+    /// The solver does not accept adaptive correctors for this case (the reason, [`Correctors::not_adaptive`]).
+    Scope(String),
+}
+
+/// The pressure correctors of a Studio run (ADR 0158; ADR 0156 D8).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CorrectorPlan {
+    /// Run adds [`ADAPTIVE_ENTRY`]: the solver uses at least the case's `solver.n_correctors`, at most 10, as many as keep
+    /// the estimated pressure-lag amplification at most 0.5 (ADR 0156 D2-D4).
+    Adaptive {
+        /// The case's `solver.n_correctors` (the least count).
+        n: u64,
+    },
+    /// The case sets `solver.corrector_control = "adaptive"` itself: Run keeps it and adds no entry.
+    CaseAdaptive {
+        /// The case's `solver.n_correctors`.
+        n: u64,
+    },
+    /// The case's own fixed count, and why.
+    Fixed {
+        /// The case's `solver.n_correctors`.
+        n: u64,
+        /// Why.
+        why: FixedWhy,
+    },
+}
+
+impl CorrectorPlan {
+    /// The `--set` entry of this plan ([`ADAPTIVE_ENTRY`] or none).
+    pub fn entry(&self) -> Option<String> {
+        matches!(self, CorrectorPlan::Adaptive { .. }).then(|| ADAPTIVE_ENTRY.to_string())
+    }
+}
+
+/// The pressure correctors of a run of a case with facts `f` and run-time settings `rt`: adaptive when the solver accepts
+/// it ([`Correctors::not_adaptive`]), the case does not choose `solver.corrector_control` itself and `rt` keeps adaptive
+/// correctors on. ADR 0152's rule: a key at its schema default (`"fixed"`, also when the text spells it out, as the
+/// Studio editor's full save does) is not the case's own; `"adaptive"` is.
+pub fn corrector_plan(f: &Facts, rt: &RunTime) -> CorrectorPlan {
+    let c = &f.correctors;
+    if let Some(why) = &c.not_adaptive {
+        return CorrectorPlan::Fixed {
+            n: c.n,
+            why: FixedWhy::Scope(why.clone()),
+        };
+    }
+    if c.control == "adaptive" {
+        return CorrectorPlan::CaseAdaptive { n: c.n };
+    }
+    if !rt.adaptive_correctors {
+        return CorrectorPlan::Fixed {
+            n: c.n,
+            why: FixedWhy::Off,
+        };
+    }
+    CorrectorPlan::Adaptive { n: c.n }
+}
+
+/// The toolbar's line of the pressure correctors of a run (under the time row).
+pub fn corrector_label(cp: &CorrectorPlan) -> String {
+    match cp {
+        CorrectorPlan::Adaptive { n } => format!(
+            "pressure correctors: adaptive for this run (at least {n}, at most 10; the solver adds them where the mesh \
+             needs them)"
+        ),
+        CorrectorPlan::CaseAdaptive { .. } => {
+            "pressure correctors: adaptive (the case's own solver.corrector_control)".to_string()
+        }
+        CorrectorPlan::Fixed { n, why: FixedWhy::Off } => {
+            format!("pressure correctors: fixed, {n} per step (adaptive switched off in Advanced)")
+        }
+        CorrectorPlan::Fixed {
+            n,
+            why: FixedWhy::Scope(_),
+        } => format!("pressure correctors: the case's own ({n} per step; adaptive is not available for this case)"),
+    }
+}
+
+/// The measured cost of adaptive correctors, for the hovers (ADR 0156 A1, A6, A7).
+pub const CORRECTOR_COST: &str = "Measured (ADR 0156): the shipped 64 x 48 cylinder keeps 2 correctors (its results \
+     are those of fixed correctors, bit for bit); 128 x 96 takes 3; 256 x 256 at dt 1/64 takes 5, about 1.6 times the time \
+     per step of 2 fixed correctors, plus a search at the first step of about 50 steps' time.";
+
+/// The hover text of [`corrector_label`] (also a line of Run's hover).
+pub fn corrector_hover(f: &Facts, cp: &CorrectorPlan) -> String {
+    match cp {
+        CorrectorPlan::Adaptive { n } => format!(
+            "Pressure correctors adaptive for this run (solver.corrector_control=adaptive, ADR 0156): at the first step, \
+             every 1000 steps and when the last corrector's pressure change keeps growing, the solver estimates how much \
+             a lagged pressure error grows per step and uses as many correctors as keep that at most 0.5 (at least the \
+             case's solver.n_correctors = {n}, at most 10), so a refined mesh with thin wall cells keeps its \
+             pressure-velocity coupling (no grid-scale pressure spokes) without hand-tuning. {CORRECTOR_COST} The count \
+             is in the run's events. A run-time setting: the case file keeps its own; switch it off in Advanced."
+        ),
+        CorrectorPlan::CaseAdaptive { .. } => {
+            "The case sets solver.corrector_control = \"adaptive\" itself; Run keeps it (ADR 0156).".to_string()
+        }
+        CorrectorPlan::Fixed { n, why: FixedWhy::Off } => format!(
+            "Pressure correctors fixed for this run: {n} per outer iteration (the case's solver.n_correctors; adaptive \
+             correctors switched off in Advanced). On a refined mesh with thin wall cells a fixed count can lose the \
+             pressure-velocity coupling (grid-scale pressure spokes, or divergence); the solver's check before the run \
+             then warns (SV301, in the run's events) with the fix solver.corrector_control = \"adaptive\", which the \
+             Advanced switch turns on."
+        ),
+        CorrectorPlan::Fixed {
+            n,
+            why: FixedWhy::Scope(why),
+        } => format!(
+            "Run keeps the case's pressure correctors ({n} per outer iteration, solver.corrector_control = \"{}\"): \
+             the solver has no adaptive correctors for this case: {why}.",
+            f.correctors.control
+        ),
+    }
+}
+
+/// The Start run dialog's line of the pressure correctors of a transient case whose solver accepts adaptive correctors
+/// (`None` otherwise): the dialog's run takes the case's own `solver.corrector_control` and `solver.n_correctors`
+/// (with the dialog's overrides `set`, last wins); Run on the toolbar makes them adaptive.
+pub fn dialog_corrector_line(f: &Facts, set: &[String]) -> Option<String> {
+    if f.kind != Kind::Transient || f.correctors.not_adaptive.is_some() {
+        return None;
+    }
+    let (mut control, mut n) = (f.correctors.control.clone(), f.correctors.n);
+    for e in set {
+        if let Some((p, v)) = crate::store_plan::parse_entry(e) {
+            match p.as_str() {
+                "solver.corrector_control" => control = v.as_str().map_or(control, str::to_string),
+                "solver.n_correctors" => n = v.as_u64().unwrap_or(n),
+                _ => {}
+            }
+        }
+    }
+    Some(if control == "adaptive" {
+        format!(
+            "Pressure correctors: this dialog's run takes solver.corrector_control = \"adaptive\" (at least {n}, at \
+             most 10)."
+        )
+    } else {
+        format!(
+            "Pressure correctors: this dialog's run takes solver.corrector_control = \"{control}\", {n} per step (the \
+             case's, unless an override sets them); Run on the toolbar makes them adaptive (Advanced)."
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -834,7 +1041,43 @@ mod tests {
             h_min: h,
             u0,
             u0_from: Some("the initial velocity field".into()),
+            correctors: Correctors {
+                n: 2,
+                control: "fixed".into(),
+                not_adaptive: None,
+            },
         }
+    }
+
+    #[test]
+    fn corrector_plan_follows_scope_case_and_switch() {
+        let mut f = facts_of(1.0, 0.01);
+        let rt = RunTime::default();
+        assert_eq!(corrector_plan(&f, &rt), CorrectorPlan::Adaptive { n: 2 });
+        assert_eq!(corrector_plan(&f, &rt).entry().as_deref(), Some(ADAPTIVE_ENTRY));
+        let off = RunTime {
+            adaptive_correctors: false,
+            ..RunTime::default()
+        };
+        assert_eq!(
+            corrector_plan(&f, &off),
+            CorrectorPlan::Fixed {
+                n: 2,
+                why: FixedWhy::Off
+            }
+        );
+        assert_eq!(corrector_plan(&f, &off).entry(), None);
+        f.correctors.control = "adaptive".into();
+        assert_eq!(corrector_plan(&f, &rt), CorrectorPlan::CaseAdaptive { n: 2 });
+        assert_eq!(corrector_plan(&f, &rt).entry(), None);
+        f.correctors.not_adaptive = Some("why".into());
+        assert!(matches!(
+            corrector_plan(&f, &rt),
+            CorrectorPlan::Fixed {
+                why: FixedWhy::Scope(_),
+                ..
+            }
+        ));
     }
 
     #[test]
