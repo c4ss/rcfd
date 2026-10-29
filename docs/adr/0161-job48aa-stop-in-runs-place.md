@@ -1,7 +1,9 @@
 # ADR 0161: Job 48AA, Stop in Run's place on the Studio toolbar: the runner's graceful stop, the final state stored as the last snapshot, Ctrl+., the run shown "stopped"
 
 Status: **registered 2026-10-29**, before any registered run (the code and the tests below were written and compiled
-first; nothing of them had run). Job 48AA, on local main 4e795b1 (wave 48V merged). House rules of
+first; nothing of them had run); amendments 1 (AA1, AA2 known misses of the `cancel_requested` count, AA1b and AA2b;
+AA3's set-up) and 2 (J2's set-up) before the corrected runs; results in the addendum: every check met its limits and
+every control failed as required, but for the two known misses; not yet accepted by the maintainer. Job 48AA, on local main 4e795b1 (wave 48V merged). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
 corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
@@ -158,7 +160,8 @@ Runs panel have Cancel).
 ## Files
 
 `crates/rcfd-studio/src/{stop,stop_ui}.rs`, `crates/rcfd-studio/tests/stop_aa.rs` (new); hunks in
-`crates/rcfd-studio/src/{lib,studio,quick_run_ui,runs,poll}.rs`; this ADR.
+`crates/rcfd-studio/src/{lib,studio,quick_run_ui,runs,poll}.rs`; this ADR. Amendment 2 adds
+`crates/rcfd-studio/tests/live_preview_run_j.rs` (J2's set-up).
 
 ## Amendment 1 (2026-10-29, after the first registered run, before any corrected run)
 
