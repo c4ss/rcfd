@@ -1,0 +1,43 @@
+# ADR 0155 R0: written by case_hashes_w48u.rs on the base code (RCFD_W48U_RECORD=1), 41 lines
+# control [mesh.transform]: mesh.transform: unknown setting 'transform' (known: fan, source, generator, nx, ny, nx_right, ny_right, nz, nz_right, lz, r_interface, sector_angle, isotropic_interface, lx, ly, depth, r_in, r_out, grading, periodic_x, periodic_y, periodic_z, core_fraction, ramp_start, throat_height, exit_height, ramp_angle, wall_layers, first_layer_height, target_y_plus, layer_growth, layer_walls, layer_reference_velocity, layer_reference_length, layer_u_tau, file, scale)
+cases/axial_fan_cgrid/axial_fan_cgrid.toml	valid	settings 127babbde665c974	toml 7b9d4779520455de	json 03e8f262e6603768	mesh 961115a048c56c94 cells 11536
+cases/axial_fan_sector/axial_fan_sector.toml	valid	settings 718b37f2008dc997	toml 32af5fd5bbdd8b1f	json 49b680695777f5df	mesh 61ca579595e43d14 cells 13332
+cases/backward_step/case.json	invalid at description,id,mesh.generator,mesh.note,mesh.params,physics.regime,physics.reynolds_step_height,reference,roadmap
+cases/cavity/case.json	invalid at boundary_conditions,description,id,mesh.params,physics.regime,physics.reynolds,reference,roadmap
+cases/channel/case.json	invalid at description,id,mesh.generator,mesh.params,physics.re_tau,physics.regime,reference,roadmap
+cases/channel/kepsilon_channel.toml	valid	settings 941b0a1627735a60	toml 4f20d190292e7797	json 01618852cb845578	mesh 9cb071c39eb32a92 cells 56
+cases/channel/kepsilon_inlet.toml	valid	settings f78b0d60d4f81a81	toml 6023453cb378f867	json 7135723088aa1611	mesh 132ad07ea6511b06 cells 288
+cases/channel/profile_inlet.toml	valid	settings 07932b3a2a05c100	toml 52f7fc76cda3a6be	json d0c2528ea3df03fc	mesh 82aeeeaf26901ab4 cells 480
+cases/channel/sst_channel.toml	valid	settings 3b96c45d46319a0b	toml bb19debc43a3d025	json a8416717eca7dba7	mesh 8c029012a82e844a cells 240
+cases/flat_plate/case.json	invalid at description,id,mesh.generator,mesh.note,mesh.params,physics.regime,physics.reynolds_length,reference,roadmap
+cases/heated_cavity/case.json	invalid at description,id,mesh.note,mesh.params,physics.prandtl,physics.rayleigh,physics.regime,reference,roadmap
+cases/naca0012/case.json	invalid at description,id,mesh.generator,mesh.note,physics.regime,reference,roadmap
+cases/packed_bed/packed_bed.toml	valid	settings 313cef29377a5eb5	toml bc046844b6141e9a	json b4d9d00f40837f05	mesh 461ccb3da94f0f6c cells 320
+cases/rotating_channel/rotating_channel.toml	valid	settings 0b5712e10be35832	toml 9a2142c3a8ebc239	json 7a8df31ecc2ffafc	mesh ea0c9d7984df250d cells 160
+cases/sod/sod.toml	valid	settings ae551820b05f075c	toml 3dbadd9ae1172b53	json 951155686113a336	mesh a98d7fe0bca09cbb cells 100
+cases/wedge/wedge.toml	valid	settings 71ce01f103e205f8	toml 5c22ad5c09399603	json fb84846aefddda22	mesh 3533926a50503374 cells 1200
+crates/rcfd-claude/tests/fixtures/v2.1.310/agents.json	invalid at 
+crates/rcfd-project/tests/fixtures/legacy_runner_1248a76/cavity.toml	valid	settings 087ad5cd0d97b699	toml 7bc98fd0d3b50c33	json 9dc8a5edc878526b	mesh fe656bafbb6a59c7 cells 144
+crates/rcfd-project/tests/fixtures/legacy_runner_1248a76/r-20261028T010219-cc06/check.json	invalid at cells,diagnostics,event,exit_code,format,mesh.errors,mesh.max_aspect_ratio,mesh.max_non_orthogonality,mesh.max_skewness,mesh.max_volume,mesh.max_volume_ratio,mesh.mean_non_orthogonality,mesh.measures,mesh.min_volume,mesh.n_cells,mesh.n_faces,mesh.n_internal_faces,mesh.n_patches,mesh.poor_counts,mesh.poor_list,mesh.poor_warnings,mesh.total_volume,mesh.warnings,ok,rules,seq,version,wall_s
+crates/rcfd-project/tests/fixtures/legacy_runner_1248a76/r-20261028T010219-cc06/metrics.json	invalid at exit_code,last_residuals,reason,solver_finish,state,steps,time
+crates/rcfd-project/tests/fixtures/legacy_runner_1248a76/r-20261028T010219-cc06/run.json	invalid at case_dir,case_snapshot_hash,case_source,created,id,mesh_hash,settings,solver_version
+crates/rcfd-project/tests/fixtures/legacy_runner_1248a76/r-20261028T010219-cc06/status.json	invalid at exit_code,pid,reason,state,step,time,updated
+crates/rcfd-studio/tests/fixtures/cavity.toml	valid	settings fed79ba60e1f6d5a	toml 912066b086dcbd16	json 4b5879c7fef94a34	mesh 7008c46b788655b3 cells 256
+docs/case-schema.md block 0e411290ee5d0178	valid	settings 27f6fa258824a88e	toml deeca1345de1ddb8	json 636e48679e29d82c	mesh f706d550c5b4ea25 cells 400
+docs/case-schema.md block 5e0e9f3117df3e10	valid	settings 3e1c7602e31b7042	toml b60712df24374236	json 7e731d6f8cc13926	mesh 19e047dda9c372ed cells 8840
+docs/studies.md block 4adcce6e3e41c0a1	valid	settings 0f415b2fc3f4d403	toml dfb1fc50eb8b9cea	json a36844bf0024169b	mesh f706d550c5b4ea25 cells 400
+docs/tutorials/cavity.md block 2109ff2444edef85	valid	settings fe159e2d08f52e9d	toml 5998961492d2ef85	json ce996b2d18e39b53	mesh 7ec423cee5aed4e0 cells 1024
+docs/tutorials/desktop-assistant.md block 07f9fcb769790cb9	valid	settings 7e1ff22fae62a8bf	toml 8ecf806792c03015	json 79d85dd63a83cdff	mesh 7ec423cee5aed4e0 cells 1024
+docs/tutorials/mcp-design-loop.md block d2186c758f5d2275	valid	settings 96f204636e5224fb	toml 350d7cbd1fb6044c	json 2a0e8f8e8e569961	mesh dc25758fde89ee34 cells 480
+docs/tutorials/quick-start-cli.md block 472fed7bd1166201	valid	settings a537b843e6126acb	toml 7c6dc5ec93a8f449	json 7bb753a51b341389	mesh 7008c46b788655b3 cells 256
+example-projects/quick-start/cases/cavity-re100.toml	valid	settings e9ec007378563f82	toml a3433dfb57c17ed8	json 6c5905afc0483314	mesh 7ec423cee5aed4e0 cells 1024
+example-projects/quick-start/cases/cavity-re400.toml	valid	settings baf1fcb72e94abe0	toml a476a809f6ba015e	json a03619aab98c3316	mesh 7ec423cee5aed4e0 cells 1024
+example-projects/quick-start/cases/heated-cavity-ra1e3.toml	valid	settings 581e6a668c34d762	toml 40bad1bd5ff7cd89	json 2479757d9a1b5a8a	mesh d8b3b3ab6b336ac8 cells 1600
+example-projects/quick-start/cases/heated-cavity-ra1e4.toml	valid	settings 90cdefcabcc71068	toml de631084b5e087b5	json ac22ef3a19888808	mesh d8b3b3ab6b336ac8 cells 1600
+example-projects/wind-tunnel/cases/cylinder-re100.toml	valid	settings 6ac54a8827aedab0	toml 2cd9c463d668db7f	json 1cd487632e231c40	mesh 1df795dbf2882e2d cells 3072
+example-projects/wind-tunnel/cases/cylinder-re200.toml	valid	settings b3ac773c804255b1	toml 4f6ff7e25bc35302	json 0efc7664d3d43979	mesh 1df795dbf2882e2d cells 3072
+example-projects/wind-tunnel/cases/naca0012-aoa2.toml	valid	settings 8d792070e0f7a81e	toml 3a403e0e3a1e9d14	json b9949ecc8b55fca0	mesh 8516e4b6ee41c1d9 cells 6144
+example-projects/wind-tunnel/cases/naca0012-aoa4.toml	valid	settings 7b68d5e7cd533215	toml 7b797b50ddad415f	json e61db30f90de199b	mesh 8516e4b6ee41c1d9 cells 6144
+example-projects/wind-tunnel/cases/step-re400.toml	valid	settings ff761e4321482e6f	toml 08a402bed03deeef	json 2c272e394a8cce69	mesh e80ac2eb246fd019 cells 8000
+example-projects/wind-tunnel/cases/step-re800.toml	valid	settings 9e693983ec7936f3	toml 0a2c00b38649d871	json a57dd31748b1dce5	mesh e80ac2eb246fd019 cells 8000
+example-projects/wind-tunnel/meshes/naca0012-ogrid.recipe.toml	valid	settings ef754b25f79d4c01	toml f6d923b51e78ea1d	json b97f0ea9e04cac07	mesh cc7f577d14228e71 cells 6144

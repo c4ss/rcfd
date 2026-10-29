@@ -48,7 +48,8 @@ fn toml_files(dir: &Path) -> Vec<Entry> {
 }
 
 /// The 22 unedited cases of DV6: the ten files under `cases/` (the case starter's ten examples are these files), the ten
-/// cases of `example-projects/*/cases/`, `common::RUN_CASE` and `common::CAVITY`.
+/// cases of `example-projects/*/cases/`, `common::RUN_CASE` and `common::CAVITY` (on 6867e40; cases added since are listed
+/// too, and DV6 keeps the ones its record names, ADR 0157).
 pub fn unedited() -> Vec<Entry> {
     let root = repo();
     let mut v = toml_files(&root.join("cases"));

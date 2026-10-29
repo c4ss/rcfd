@@ -1,0 +1,9 @@
+{
+  "state": "finished",
+  "step": 2000,
+  "time": 0.0,
+  "pid": null,
+  "updated": "2026-10-29T00:11:53.863904995Z",
+  "reason": "not_converged: iteration limit 2000 reached without meeting the residual targets",
+  "exit_code": 5
+}

@@ -366,3 +366,10 @@ there).
 `crates/rcfd-studio/src/{runs,monitors,poll}.rs` and tests, this ADR. Amendment 1 adds: `crates/rcfd-studio/src/{studio,ui,watch,
 project_view}.rs`, `crates/rcfd-studio/Cargo.toml`, `crates/rcfd-api/src/{schema,fieldstore}.rs`, `crates/rcfd-api/tests/` (R11),
 `docs/case-schema.md`, `docs/run-control.md`, `docs/architecture.md`, `Cargo.lock`.
+
+## Note (2026-10-28, ADR 0155)
+
+Question 5 for new tables: job 48U adds `[mesh.transform]` as an *optional* settings table (`rcfd-core` `Schema::optional`,
+ADR 0155 D2), which stays out of the settings data until a case writes it, so the settings hash, `to_toml`, `to_json` and
+the mesh of every existing case are unchanged (ADR 0155 H1, against a record made on 6867e40). Keys added to an existing
+table still change every hash; the question stays open for those.

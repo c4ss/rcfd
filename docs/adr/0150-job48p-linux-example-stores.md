@@ -324,3 +324,10 @@ Added by the addendum:
 This ADR; `scripts/make_example_projects.py`, `scripts/test_make_example_projects.py`,
 `scripts/docker/ubuntu-24.04-rust.Dockerfile`; `crates/rcfd-mcp/tests/example_projects_w48h.rs`,
 `crates/rcfd-studio/tests/example_projects_h.rs`; `example-projects-linux/**`; `README.md`.
+
+## Note (2026-10-29, [ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md))
+
+With job 48U merged (ADR 0155), both trees hold two more aerofoil cases (`naca0012-aoa4-rotated.toml`,
+`naca0012-aoa2-rotated.toml`): the per-tree counts become 12 case files (S3), `MESH_FILE_CASES` 4, H1 8 wind-tunnel runs.
+The Linux tree's two new runs are made by `python scripts/make_example_projects.py --docker --add-missing` (D4's
+container; the ten Linux runs of this ADR kept byte for byte; results in ADR 0157). No limit of this ADR changed.

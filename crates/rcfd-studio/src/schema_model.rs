@@ -4,8 +4,8 @@
 //! range-checks user input locally, and resolves settings paths (including
 //! named entries such as `boundaries.<patch>.velocity`) to their schema node.
 //!
-//! Copied from `crates/rcfd-gui/src/schema_model.rs` at main 15b00ef (last changed in f71f6e2) by ADR 0131 W48-9 (a); unchanged
-//! apart from this note. The copy goes away with `rcfd-gui`.
+//! Copied from `crates/rcfd-gui/src/schema_model.rs` at main 15b00ef (last changed in f71f6e2) by ADR 0131 W48-9 (a); changed
+//! since only by ADR 0155 ([`Node::unit`], the schema's display unit `x-rcfd-unit`). The copy goes away with `rcfd-gui`.
 
 use serde_json::Value;
 
@@ -55,6 +55,9 @@ pub struct Node {
     pub default: Value,
     /// Fields of a `Group`, or the single item template of a `Named` map.
     pub children: Vec<Node>,
+    /// Display unit the schema states for a value without an SI dimension or a list (`x-rcfd-unit`, ADR 0155: `deg`,
+    /// `m`); shown next to the field.
+    pub unit: Option<String>,
 }
 
 impl Node {
@@ -89,6 +92,7 @@ impl Node {
             kind,
             default: schema.get("default").cloned().unwrap_or(Value::Null),
             children: vec![],
+            unit: schema.get("x-rcfd-unit").and_then(Value::as_str).map(String::from),
         }
     }
 

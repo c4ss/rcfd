@@ -31,5 +31,6 @@ pub mod surface;
 pub mod surface_remesh;
 pub mod sweep;
 pub mod tetmesh;
+pub mod transform;
 
 pub use mesh::{BoundarySpec, Mesh, Patch, PatchKind, PeriodicRotation, Zone};

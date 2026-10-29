@@ -386,3 +386,12 @@ check. The results are in ADR 0144's addendum (J17, J18).
 This ADR; `example-projects/**`; `scripts/make_example_projects.py`, `scripts/test_make_example_projects.py`;
 `.github/workflows/ci.yml` (one line); `crates/rcfd-mcp/tests/example_projects_w48h.rs`;
 `crates/rcfd-studio/tests/example_projects_h.rs`.
+
+## Note (2026-10-28, ADR 0155)
+
+Job 48U adds two aerofoil cases to `wind-tunnel` that set the angle of attack by rotating the mesh
+(`cases/naca0012-aoa4-rotated.toml`, `cases/naca0012-aoa2-rotated.toml`) and their runs, made by
+`scripts/make_example_projects.py --add-missing` (a new option: only the cases without a run are run; the six runs of this
+ADR are kept byte for byte). The staleness tests' counts follow (12 case files, 8 wind-tunnel cases and runs,
+`MESH_FILE_CASES` 4, S4 reads a rotated case's angle from its transform); no limit of this ADR changed. With the two runs
+the wind-tunnel folder is 34 826 293 bytes (cap 35 000 000) and all of `example-projects/` 39 080 436 (cap 40 000 000).

@@ -46,7 +46,8 @@ fn committed(project: &str) -> Vec<(String, String)> {
 
 #[test]
 fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
-    for (name, n_cases) in [("wind-tunnel", 6), ("quick-start", 4)] {
+    // wind-tunnel: the six cases of ADR 0142 and the two rotated aerofoil cases of ADR 0155
+    for (name, n_cases) in [("wind-tunnel", 8), ("quick-start", 4)] {
         let root = rcfd_project::paths::canonicalize(&examples().join(name)).unwrap();
         let runs = committed(name);
         let mut st = Studio::in_memory();
