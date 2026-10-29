@@ -459,10 +459,12 @@ conflict, but the suite has not run on the merged tree.
 
 6. **The facts' cost.** The Studio builds the case's simulation (`Simulation::new`) on a control thread for the shown text of
    a transient case, and again at Run when the file changed since: 0.95 s and its memory for 256 x 256 (P11). Accept, or
-   compute the thinnest cell and the speeds in a child process (`rcfd`) for large meshes?
+   compute the thinnest cell and the speeds in a child process (`rcfd`) for large meshes? Recommendation: accept (the
+   window does not wait for it), and move it to a child process when cases of a million cells are run from the Studio.
 7. **The decision** (amendment 3). The registered rule, read literally, made neither A nor F the default, because F missed
    its own end-time limit on D2; this job kept A, which met every limit of its own and ends on N exactly. Confirm A as the
-   Studio's automatic step, or choose otherwise?
+   Studio's automatic step, or choose otherwise? Recommendation: confirm A (on D1-D4 the results of F within 0.83 % at
+   1.01 to 2.88 times fewer steps and the end on N bit for bit; (a) within every limit).
 8. **Snapshot times of the adaptive step** are those of the first step after each store interval ((c): 1.0027 ... 7.0089 s,
    the last on N exactly). Options: (a) keep; (b) land the steps on the store times too (ADR 0050's
    `output.write_time_interval` lands on them but also writes a VTU snapshot each time; a solver option without the VTU
