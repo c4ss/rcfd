@@ -195,3 +195,14 @@ The merge also brings 48U's record-based `rcfd-api` tests, which nothing above r
 | H1m | `cargo test --release --locked -p rcfd-api --test case_hashes_w48u --test mesh_transform_w48u --test w48t_cylinder_spokes --test end_time_landing_w48k -- --test-threads 1 --nocapture` on 1f110bf, on Windows and in the container of L4 (an archive of that commit) | every test passes, their own ignored tests ignored. If `case_hashes_w48u` fails only on case files added after 6867e40 (labels), the fix mirrors DV6 (D4) with a note here and in ADR 0155; if it fails on a hash of a recorded case, nothing is changed: stop and report |
 | Q2 | `cargo clippy --release --locked -p rcfd-core -p rcfd-mesh -p rcfd-api --all-targets -- -D warnings` and `cargo fmt -p rcfd-core -p rcfd-mesh -p rcfd-api -- --check`, on Windows and in the same container | clean |
 | S1r | The whole `rcfd-studio` suite again on Windows (question 2 option (c)), set-up of amendment 2, not overlapped with a container | 0 failed; reported next to S1, whose counted miss stays as recorded |
+
+### Results of amendment 3 (2026-10-29)
+
+| Id | Result | Verdict |
+|---|---|---|
+| H1m | Windows (c08e6d8, the same code as 1f110bf): `case_hashes_w48u` 1 passed (the cases added after 6867e40 are printed as "not in the record (new)": the two rotated cases and one block of `docs/case-schema.md`; it compares only recorded labels, so no DV6-style fix was needed), `mesh_transform_w48u` 13 passed, `end_time_landing_w48k` 8 passed, `w48t_cylinder_spokes` 0 passed and 7 ignored (its tools and runs ignored by design). Container (an archive of c08e6d8): the same, 1, 13, 8 passed, 7 ignored | pass |
+| Q2 | `cargo clippy --release --locked -p rcfd-core -p rcfd-mesh -p rcfd-api --all-targets -- -D warnings` and `cargo fmt ... --check` clean on Windows and in the container | pass |
+| S1r | the whole `rcfd-studio` suite again on Windows (10 min 49 s, about 9.4 GB free at its start): 250 passed, 0 failed, 7 ignored (the same seven as S1); `r1_model_states_follow_status_json` ok | pass; S1's counted miss stays recorded |
+
+Not run after amendment 3: the remaining suites of `rcfd-api`, `rcfd-core`, `rcfd-mesh`, `rcfd-mcp`, `rcfd-cli`, `rcfd-io`,
+`rcfd-post`, `rcfd-gui` on the merge (48U's ADR 0155 H2 ran them on its own branch), and the `rcfd-studio` suite on Linux.
