@@ -176,3 +176,14 @@ transient case in scope. Treatment, each decided before any run:
 2. X5 (a), (b) and their controls (`-- --ignored x5`), two at a time, after checking the free memory (the machine is shared:
    at registration about 5 GB of 94 GB free, most held by another agent's WSL workload).
 3. W, then `workspace_graph` when no Studio run holds `rcfd.exe`.
+
+## Amendment 1 (2026-10-29, after the first registered run of X1-X4 on 405e219, before X2's corrected run)
+
+The run of step 1 (`correctors_x`, 405e219): X1, X3, X3's control and X4 passed; **X2 failed at its first assertion**: the
+`Debug` text of `StartPlan::new`'s plan must hold neither `time:` nor `correctors`, and it holds `end_time: 80.0` (the plan's
+`CaseFacts`), which contains `time:`. The plan has no `time` field there (the text printed by the test ends `extra_set: [] }`),
+so this is a defect of the check, not of the code; the other assertions of X2 did not run. By the house rule the registered
+test is kept as the ignored `x2_entries_in_order_and_the_plan_text_known_miss` (its limit intact). Corrected check **X2b**
+(`x2b_entries_in_order_and_the_plan_text`): X2's procedure and every limit, the `Debug` text read for the fields (`, time: `
+and `, correctors: `, the derived form's separator before a field name). What I knew when writing this: the output of that run
+(the values of X1, X3 and X4 are in the addendum); X2b had not run.

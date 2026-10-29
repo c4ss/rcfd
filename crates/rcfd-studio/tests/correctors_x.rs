@@ -330,15 +330,29 @@ fn x1_scope_of_the_examples_and_variants() {
 
 /// X2 (model): Run's plan of the shipped cylinder: the time entries, then the corrector entry, then the user's overrides
 /// (the last entry of a key applies); with the switch off no corrector entry; a plan without Run's settings prints as before
-/// (no `time`, no `correctors` in its `Debug` text: ADR 0152 DV6).
+/// (no `time`, no `correctors` in its `Debug` text: ADR 0152 DV6). Its first assertion, as registered, also matches
+/// `end_time:` of the plan's facts: a set-up defect (ADR 0158 amendment 1), so it is kept as the ignored known miss and
+/// X2b checks the field names.
 #[test]
-fn x2_entries_in_order_and_the_plan_text() {
+#[ignore = "known miss, set-up defect (ADR 0158 amendment 1): `time:` also matches the facts' `end_time:`"]
+fn x2_entries_in_order_and_the_plan_text_known_miss() {
+    x2_procedure(|dbg| !dbg.contains("correctors") && !dbg.contains("time:"));
+}
+
+/// X2b (ADR 0158 amendment 1): X2's procedure and limits, the plan's `Debug` text read for the fields `time` and
+/// `correctors` (`, time: ` and `, correctors: `) instead of the bare words.
+#[test]
+fn x2b_entries_in_order_and_the_plan_text() {
+    x2_procedure(|dbg| !dbg.contains(", correctors: ") && !dbg.contains(", time: "));
+}
+
+fn x2_procedure(plain: impl Fn(&str) -> bool) {
     let (dir, text) = (ts::wind_tunnel_cases(), ts::cylinder(64, 48));
     let f = time_step::facts(&text, &dir).unwrap();
     let rt = RunTime::default();
     let base = StartPlan::new("cases/cyl.toml", &text, &dir).unwrap();
     let dbg = format!("{base:?}");
-    assert!(!dbg.contains("correctors") && !dbg.contains("time:"), "{dbg}");
+    assert!(plain(&dbg), "{dbg}");
     let mut run = base
         .clone()
         .with_time(time_step::plan(&f, &rt).unwrap())
