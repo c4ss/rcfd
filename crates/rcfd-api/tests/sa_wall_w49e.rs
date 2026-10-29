@@ -72,7 +72,7 @@ fn t2_auto_sa_law_is_wired() {
         "[turbulence]\nmodel = \"spalart_allmaras\"",
         "[turbulence]\nmodel = \"spalart_allmaras\"\n[turbulence.sa]\nwall_mode = \"sa_law\"",
     );
-    let err = Case::parse_toml(&bad).err().expect("unknown wall mode accepted");
+    let err = Case::parse_toml(&bad).expect_err("unknown wall mode accepted");
     assert!(
         err.iter().any(|d| format!("{d:?}").contains("turbulence.sa.wall_mode")),
         "{err:?}"
