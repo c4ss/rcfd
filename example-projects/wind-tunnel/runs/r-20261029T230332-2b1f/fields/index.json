@@ -1,0 +1,1 @@
+{"format":"rcfd-tsstore-index","mesh_hash":"c5d96657ac8f4b3d","n_cells":6144,"n_points":12544,"snapshots":[{"step":200,"time":0.0},{"step":400,"time":0.0},{"step":409,"time":0.0}],"store":"store.rts","version":1}

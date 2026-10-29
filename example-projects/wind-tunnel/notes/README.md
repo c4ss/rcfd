@@ -52,12 +52,12 @@ on the machine that made them (see `designs/variants.ledger.jsonl` for every val
 |---|---|---|---|---|---|---|
 | `cases/cylinder-re100.toml` | `runs/r-20261028T152128-d5cb` | finished (finished) | 1280 | 18.4 s | 80 | cd 1.327, cl -0.3034, strouhal 0.1517, cd_mean 1.323, cl_amplitude 0.3091, periods 5 |
 | `cases/cylinder-re200.toml` | `runs/r-20261028T152128-db3f` | finished (finished) | 1280 | 16.4 s | 80 | cd 1.286, cl 0.244, strouhal 0.1751, cd_mean 1.291, cl_amplitude 0.6303, periods 6 |
-| `cases/naca0012-aoa4.toml` | `runs/r-20261028T152128-cb3a` | finished (not_converged) | 2000 | 58.6 s | 10 | cd 0.02536, cl 0.3482 |
-| `cases/naca0012-aoa2.toml` | `runs/r-20261028T152128-78e0` | finished (not_converged) | 2000 | 55.7 s | 10 | cd 0.01888, cl 0.1988 |
+| `cases/naca0012-aoa4.toml` | `runs/r-20261029T230332-0566` | finished (converged) | 409 | 16.0 s | 3 | cd 0.0282, cl 0.3469 |
+| `cases/naca0012-aoa2.toml` | `runs/r-20261029T230332-3d8a` | finished (converged) | 230 | 9.9 s | 2 | cd 0.02196, cl 0.1982 |
 | `cases/step-re800.toml` | `runs/r-20261028T152128-806b` | finished (converged) | 740 | 23.4 s | 19 | p_inlet -0.2276, x_reattach 5.888, x_top_separation 4.652, x_top_reattach 10.42 |
 | `cases/step-re400.toml` | `runs/r-20261028T152128-37c8` | finished (converged) | 429 | 13.4 s | 11 | p_inlet -0.1471, x_reattach 4.248, x_top_separation 3.856, x_top_reattach 5.271 |
-| `cases/naca0012-aoa4-rotated.toml` | `runs/r-20261028T224153-d9c7` | finished (not_converged) | 2000 | 53.1 s | 10 | cd 0.02536, cl 0.3482 |
-| `cases/naca0012-aoa2-rotated.toml` | `runs/r-20261028T224153-afb6` | finished (not_converged) | 2000 | 50.2 s | 10 | cd 0.01888, cl 0.1988 |
+| `cases/naca0012-aoa4-rotated.toml` | `runs/r-20261029T230332-2b1f` | finished (converged) | 409 | 16.5 s | 3 | cd 0.0282, cl 0.3469 |
+| `cases/naca0012-aoa2-rotated.toml` | `runs/r-20261029T230332-c6be` | finished (converged) | 230 | 8.1 s | 2 | cd 0.02196, cl 0.1982 |
 
 <!-- end of generated runs -->
 
@@ -66,8 +66,9 @@ on the machine that made them (see `designs/variants.ledger.jsonl` for every val
 * Every mesh is coarse on purpose, so that a run takes about a minute and the folder stays small. No result here is a
   validation: there is no mesh study, no time-step study and no uncertainty estimate. Each problem's note says how its
   numbers relate to the published benchmark.
-* The aerofoil runs stop at their 2000-iteration cap without reaching the residual targets (state "finished", solver
-  state "not_converged"); see `notes/naca0012.md`.
+* The aerofoil runs meet the residual targets well before their 2000-iteration cap since the far-field default of
+  ADR 0169 (2026-10-29); the runs stored before stopped at the cap with solver state "not_converged". See
+  `notes/naca0012.md`.
 * The fields are stored in single precision (f32, ADR 0133): each stored value is within |x| 2^-24 of the solver's
   value. The solver itself runs in double precision.
 * The Case editor of the Studio resolves relative paths against the Studio's working folder, not against the case's
