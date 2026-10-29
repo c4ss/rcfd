@@ -1,7 +1,9 @@
 # ADR 0156: Job 48V, adaptive PISO/PIMPLE pressure correctors chosen by the pressure-lag estimate (`solver.corrector_control`), a pre-run coupling warning (SV301) and resolution robustness of the refined cylinder
 
 Status: **registered** 2026-10-28, before any code of this job was compiled and before any run of this job (set-ups,
-criteria, limits and reading rules are fixed here; results in the addendum). House rules of
+criteria, limits and reading rules are fixed here); two amendments before the runs they govern; **results in the addendum**
+(2026-10-29: every registered limit met except the registered A9, a set-up defect corrected by A9b); not yet accepted by the
+maintainer. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
 becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected
 run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no unsafe
@@ -295,35 +297,208 @@ registered test is kept as `w48v_a9_..._known_miss` (ignored, limit unchanged, t
 `crates/rcfd-studio`, `crates/rcfd-runner`, the default of every key, the ADR 0077 one-corrector check, `baseline_hashes.rs`, the
 example projects and the user's files.
 
-## Addendum (interim, 2026-10-29; the long runs and the census still running): results so far against the registered limits
+## Addendum (2026-10-29): results against the registered limits
 
-Binary and tests at 56473b8 (code), runs through `scripts/w48v_run_matrix.py` with `E:\projects\cfd\w48v-work\rcfd-bbc34b4.exe`
-(56473b8's code), work folder `E:\projects\cfd\w48v-work`. The machine was shared with another agent's WSL/Docker workload
-(total CPU 92 to 94 % before the first run), so wall times are rough and comparable only within the A7 group.
+Everything below was measured after the registration and its two amendments; no limit or rule was changed after a result was
+seen. Code at 56473b8 (the A9 test changed in d2ee3d2, amendment 2); the runs through `scripts/w48v_run_matrix.py` with
+`E:\projects\cfd\w48v-work\rcfd-bbc34b4.exe` (56473b8's code); work folder `E:\projects\cfd\w48v-work` (runs, store dumps,
+`metrics-*.json`, `shedding-final.json`, the census log). The machine was shared with another agent's WSL/Docker workload (total
+CPU 92 to 100 %, 8 to 15 GB free) for the whole job, so wall times are rough and comparable only within the A7 group.
 
-| Check | Limit | Measured | Outcome |
+### The answer
+
+`solver.corrector_control = "adaptive"` makes the solver choose its own corrector count from the mesh and the step. It took 2 on
+the committed 64 x 48 (and is then bit-identical to today's default), 3 on 128 x 96, 5 on the user's 256 x 256, 6 and then 5 on
+512 x 512, and 8 on the stretched 64 x 256 wall layer (in-plane wall aspect 18.8) where no hand-picked count of 3 worked; 4 per
+outer iteration for PIMPLE with 2 outer iterations on that mesh (W1's coupling, which diverged in 48T). At the chosen counts the
+estimated per-step amplification of a lagged pressure error is 0.29 to 0.48, against 2.42 to 4.36 with the default two
+correctors. Every refined run is clean at every stored time, K1 and K2 are passing tests, the cap was never needed, and the
+resolution sweep converges (St 0.1517, 0.1614, 0.1646 and mean cd 1.324, 1.349, 1.355 for 64 x 48, 128 x 96, 256 x 256). The
+pre-run warning SV301 fires exactly on the refined set-ups of the user's family, on no user-facing case, and reproduces 48T's
+DG1 values; the census of the test suite found it on two families of existing test set-ups (B2b, B2c below).
+
+### Results
+
+| Check | Limit (registered) | Measured | Outcome |
 |---|---|---|---|
-| N2 | five fingerprints unchanged | `w33b_default_bits` passed (e9dca234..., 72d935a8..., e46fbe51..., c21a6553..., 2c711442...) | met |
-| N3 | 0 differences between aad08fe and the branch | 36 entries (`cases/`, `example-projects*/*/cases/`) equal byte for byte: 30 case files with their hash, 6 `cases/*/case.json` registry descriptors (not case files) refused identically; the example case hashes 6ac54a8827aedab0 with the key absent, written `"fixed"` or set to `"fixed"`, 5dad1499c3c6a5cb with `"adaptive"` | met |
-| N5 | no corrector key in a fixed run's events | none in any of the committed case's events (3 steps through `runctl::drive`) | met |
-| A1 | count 2 at every step; bit-identical at t = 10 | 160 steps, count 2 (estimate 0.3628 at step 1), ux, uy, p and face flux bit-identical | met |
-| A2 | K1 + adaptive: t = 3, not stopped, M_hf <= 0.0114 | 192 steps, not stopped, M_hf 5.707e-3; count 8 (estimate 0.4707 after counting 2 to 8) | met: K1 is a passing test |
-| A3 | K2 + adaptive: as A2 | 192 steps, not stopped, M_hf 5.707e-3; count 8 (estimate 0.4705) | met: K2 is a passing test |
-| A4 | A2 equals fixed at its count | count constant (8); equal to `n_correctors = 8` bit for bit at t = 3 | met |
-| A5 | chosen count's 20-iteration estimate <= 0.5; 60-iteration cold estimate < 1 | 64 x 48: 2 (0.3628; 0.3578); 128 x 96: 3 (0.2863; 0.2851); 256 x 256: 5 (0.3612; 0.3576); 64 x 256: 8 (0.4707; 0.4714) | met (margin 2.1 to 3.5 below 1) |
-| A6 | reported | mean correctors per step over (0, 10]: V64 2.000 (extra 0), V128 3.000 (+1), V64x256 8.000 (+6); V256 5 so far | see the final addendum |
-| A7 | reported; TR256 spoky | per step (steps 2 to 192, one thread each, started together): TV256 1.057 s (67.6 s per simulated second), TW5 0.780 s (49.9 s), TW3 0.459 s (29.4 s), TR256 0.667 s (42.7 s); TV256's first step with its search 52.4 s (about 50 steps); 48T's W3 29 s and W5 49 s reproduced. M_hf at t = 1 / 3: TV256 2.68e-7 / 9.06e-8, TW5 2.72e-7 / 9.20e-8, TW3 1.92e-7 / 7.88e-8, TR256 42.6 / 48.3 | TR256 spoky (the control fails without the opt-in) |
-| A9 | each arm refused at `solver.corrector_control` | registered test: set-up defect (amendment 2); corrected A9b: simplec, fractional_step, dynamic mesh, error_tolerance, low-Mach pimple all refused there with located messages; the piston and low-Mach texts without the key build | registered A9: known miss (set-up defect); A9b met |
-| A10 | correctors in every iteration event; finish summary | V64x256: 640 of 640 iteration events with `correctors` 8 and `corrector_cap` 0; `finish` `correctors` {estimates 1, cap_bound 0, mean 8, ...}; no cap-bound estimate, so no `corrector_cap` warning | met |
-| B3 | SV301 in `rcfd check --json`, exit 0 | SV301 (warning, solver, `solver.corrector_control`, fix `adaptive`), rho 4.36, exit 0; the human output names it; none on the committed case | met |
-| B4 | warning event SV301 after start, before the first iteration | events `start`, `warning:SV301`, `iteration`, `iteration`, `checkpoint`, `finish`; stderr names `solver.corrector_control` | met |
-| B5 | iteration events equal; stores byte-identical | 20 = 20 events equal; `store.rts` 892 365 bytes both, byte-identical | met |
-| A8 | PIMPLE n_outer 2, alpha 0.9 + adaptive on K1's mesh: as A2 | 192 steps, not stopped, M_hf 7.540e-3; count 4 per outer iteration (estimate 0.4714) | met (W1's coupling, which diverged in 48T, is clean with the opt-in) |
-| B0 | within 1e-3 of DG1 | G64 0.357819, G128 0.745564, G256 2.418431, G64x256 4.358667, G256s 1.165589, G256g 0.219239; largest difference 4.4e-4 (DG1's values are quoted to 3 decimals) | met |
-| B1 | SV301 exactly on the three refined set-ups | fires on 256 x 256 at 1/64 (2.42) and at 0.0156 (2.42) and on 64 x 256 (4.36); not on 64 x 48, 128 x 96, 256 x 256 at 1/256, grading 10.88, adaptive, fractional_step, `pressure_lag_check = "off"` | met (10 of 10) |
-| B2a | 0 warnings | 302 distinct texts: 14 with the preflight (the two example cylinders 0.358 and 0.271; 12 test literals, the largest 0.989 on 12 800 cells); 288 skipped: 120 not a case, 104 simplec, 48 templates, 5 compressible, 5 simple, 3 dynamic mesh, 2 adaptive, 1 coupled; every user-facing case (`cases/`, `example-projects*/`, docs blocks) is steady or compressible except the two cylinders | met |
-| K | K1, K2 fail as registered (opt-in off) | K1 stopped by the guard at step 30 (t = 0.453), M_hf 1.4e10; K2 t = 3, M_hf 282.35 | controls fail without the opt-in, as registered |
-| user-mesh twin | 256 x 256 adaptive in-process to t = 3 (ignored heavy test) | M_hf 8.853e-8, count 5 (0.3612) | pass |
-| C1 | V256 clean at t = 1, 3, 10 (0.01, 0.0114, 0.01) | M_hf 2.68e-7, 9.06e-8, 5.31e-8 (store snapshots read while the run went on; the largest of the 31 snapshots to t = 31 is 2.68e-7 at t = 1) | met |
-| C2 | cd(3) in [1.444, 1.488], cd(10) in [1.2716, 1.3154] | 1.4657, 1.2956 (48T's W5: 1.466, 1.296) | met |
-| C-preview | (not a registered check) | V64: St 0.1517, mean cd 1.3237 over [50, 100] (= U1's postdiction), 2 correctors; V128: clean (M_hf 8.1e-6 / 4.4e-5 / 1.3e-5 at t = 1, 3, 10), St 0.1614, mean cd 1.3488, 3 correctors, 5.7 s per simulated second | final addendum |
+| N1 | `baseline_hashes` passes, file not edited | `baseline_hashes`: 3 passed (shipped cases, cavity, heated cavity), 1 ignored (its existing `rotating_channel` known difference); the file has no diff against aad08fe | met |
+| N2 | five fingerprints unchanged | `w33b_default_bits` passed (e9dca234e513bec8, 72d935a8d4993955, e46fbe511183e9fc, c21a6553acb2a7a6, 2c71144215f1d245), also in the N4 run | met |
+| N3 | 0 differences between aad08fe and the branch | 36 entries (`cases/**`, `example-projects*/*/cases/*`) equal: 30 case files with their hash, 6 `cases/*/case.json` registry descriptors (not case files) refused identically; the example case: 6ac54a8827aedab0 with the key absent, written `"fixed"` or set `"fixed"`; 5dad1499c3c6a5cb with `"adaptive"` | met |
+| N4 | 0 failures | rcfd-core, rcfd-fv, rcfd-cli, rcfd-runner: 690 passed, 0 failed, 242 ignored (140 test binaries); rcfd-api: 726 passed, 0 failed, 267 ignored (143); rcfd-studio's seven listed files: 63 passed, 0 failed; the only `#[ignore]` lines added are this job's 11 new tests, none removed | met |
+| N5 | no corrector key in a fixed run's events | none (the committed case, 3 steps through `runctl::drive`) | met |
+| A1 | count 2 at every step; bit-identical at t = 10 | 160 steps, count 2 (0.3628 at step 1); ux, uy, p and face flux bit-identical | met |
+| A2 | K1 + adaptive: t = 3, not stopped, M_hf <= 0.0114 | 192 steps, M_hf 5.707e-3, count 8 (0.4707) | **met: K1 is a passing test** |
+| A3 | K2 + adaptive: as A2 | 192 steps, M_hf 5.707e-3, count 8 (0.4705) | **met: K2 is a passing test** |
+| A4 | A2 equals fixed at its count | count constant (8); equal to `n_correctors = 8` bit for bit | met |
+| A5 | chosen count's 20-iteration estimate <= 0.5; 60-iteration cold estimate < 1 | 64 x 48: 2 (0.3628; 0.3578); 128 x 96: 3 (0.2863; 0.2851); 256 x 256: 5 (0.3612; 0.3576); 64 x 256: 8 (0.4707; 0.4714) | met (margin 2.1 to 3.5) |
+| A6 | reported | mean correctors per step over (0, 10]: V64 2.000 (extra 0), V128 3.000 (+1.0), V256 5.000 (+3.0), V64x256 8.000 (+6.0), V512 5.781 (+3.8) | reported |
+| A7 | reported; TR256 spoky | below | reported; TR256 spoky (the control fails without the opt-in) |
+| A8 | PIMPLE n_outer 2, alpha 0.9 + adaptive on K1's mesh | 192 steps, M_hf 7.540e-3, 4 correctors per outer iteration (0.4714) | met |
+| A9 | each arm refused at `solver.corrector_control` | registered test stopped at its simplec arm (set-up defect, amendment 2); A9b: simplec, fractional_step, dynamic mesh, error_tolerance, low-Mach pimple refused there, the piston and low-Mach texts without the key build | A9: known miss (set-up defect, ignored); A9b met |
+| A10 | correctors in every iteration event, finish summary | V64x256: 640 of 640 events (`correctors` 8, `corrector_cap` 0), `finish` summary (1 estimate); also V256 (6400 events, 7 estimates) and V512 (1280 events, counts 6 and 5); no cap-bound estimate anywhere, so no `corrector_cap` warning | met |
+| B0 | within 1e-3 of DG1 | 0.357819, 0.745564, 2.418431, 4.358667, 1.165589, 0.219239 (G64, G128, G256, G64x256, G256s, G256g); largest difference 4.4e-4 (DG1 quoted to 3 decimals) | met |
+| B1 | SV301 exactly on the three refined set-ups | fires on 256 x 256 at 1/64 and 0.0156 (2.42) and 64 x 256 (4.36); not on 64 x 48, 128 x 96, 256 x 256 at 1/256, grading 10.88, adaptive, fractional_step, `pressure_lag_check = "off"` | met (10 of 10) |
+| B2a | 0 warnings | 302 distinct texts; 14 with the preflight (the example cylinders 0.358 and 0.271; 12 test literals, the largest 0.989); 288 skipped (120 not a case, 104 simplec, 48 templates, 5 compressible, 5 simple, 3 dynamic mesh, 2 adaptive, 1 coupled) | met |
+| B2b | reported | 248 applicable simulations (101 tests, 173 distinct set-ups); 10 distinct set-ups with rho >= 1.3 (eight u3 boxes 1.47 to 8.16, t5's Hartmann step 31.3, this job's B3 cylinder 4.36); none between 1 and 1.3 (below) | reported |
+| B2c | zero false positives | 5 true positives (t5 and two u3 boxes stopped by the guard once perturbed, one u3 box growing at g 1.17, the B3 cylinder), 5 undetermined (u3 boxes, g 0.965 to 1.022), 0 false positives | met |
+| B3 | SV301 in `rcfd check --json`, exit 0 | SV301 (warning, solver, path, fix `adaptive`), 4.36, exit 0; human line printed; none on the committed case | met |
+| B4 | warning SV301 after `start`, before the first `iteration` | `start`, `warning:SV301`, `iteration`, `iteration`, `checkpoint`, `finish`; stderr names the key | met |
+| B5 | events equal, stores byte-identical | 20 = 20 iteration events equal; `store.rts` 892 365 bytes, byte-identical | met |
+| C1 | V256 clean at t = 1, 3, 10 | M_hf 2.68e-7, 9.06e-8, 5.31e-8 | met |
+| C2 | cd(3) in [1.444, 1.488], cd(10) in [1.2716, 1.3154] | 1.4657, 1.2956 | met |
+| C3 | V256 to t = 100: M_hf <= 0.0114 at every stored time; cl peak to peak >= 0.3 over [50, 100]; St and cd as C5 | largest M_hf of 100 snapshots 2.68e-7 (t = 1), 8.6e-8 over t >= 50; cl peak to peak 0.679; St 0.1646, mean cd 1.3550; finished in 5609 s (cap 10 h) | met |
+| C4 | V512 clean at t = 1, 3, 10 | 3.23e-8, 1.94e-8, 1.59e-8; cd(3) 1.4650, cd(10) 1.2997; 5266 s | met |
+| C5 | each St in [0.145, 0.175], mean cd in [1.25, 1.45]; \|dSt\| <= 0.008, \|dcd\| <= 0.04 between V256 and V128 | St 0.1517 / 0.1614 / 0.1646; mean cd 1.3237 / 1.3488 / 1.3550; \|dSt\| 0.0032, \|dcd\| 0.0062 | met |
+| K | K1, K2 fail as registered with the opt-in off | K1 stopped at step 30 (t = 0.453); K2 t = 3 with M_hf 282.35 | the controls fail, as registered |
+
+### The resolution sweep (C5, A6; all `adaptive`, grading 100, Courant-matched step)
+
+| Run | Mesh, dt | Correctors (estimates) | M_hf largest stored | cd(3), cd(10) | St, mean cd over [50, 100] | Wall per simulated second |
+|---|---|---|---|---|---|---|
+| V64 | 64 x 48, 1/16 | 2 (0.363 at step 1, 0.262 at 1001) | 7.4e-3 (t = 2; the physical part at 64 cells around: the run is the fixed one, A1) | 1.474, 1.272 | 0.1517, 1.3237 | 0.49 s (1 thread) |
+| V128 | 128 x 96, 1/32 | 3 (0.286) | 4.4e-5 | 1.467, 1.285 | 0.1614, 1.3488 | 5.7 s (1 thread) |
+| V256 | 256 x 256, 1/64 | 5 (0.361, then 0.325 to 0.333 at the six later estimates) | 2.7e-7 | 1.466, 1.296 | 0.1646, 1.3550 | 56 s (2 threads) |
+| V512 | 512 x 512, 1/128 | 6, from step 1001 5 (0.354; 0.480) | 3.2e-8 (to t = 10) | 1.465, 1.300 | (to t = 10 only) | 526 s (2 threads) |
+| V64x256 | 64 x 256, 1/64 | 8 (0.471) | 8.5e-3 (t = 2; the 64-around physical part) | 1.470, 1.296 | (to t = 10 only) | 54 s (1 thread) |
+
+The Strouhal number and the mean drag converge with refinement (the differences fall from 0.0097 to 0.0032 and from 0.025 to
+0.006). 48T's values for comparison: R128 cd(10) 1.286, the 256 x 256 workarounds 1.466 / 1.291 to 1.303.
+
+### Cost (A6, A7)
+
+Paired runs on 256 x 256 at dt 1/64, one thread each, started together, steps 2 to 192:
+
+| Run | Coupling | s per step | s per simulated second | M_hf t = 1 / 3 |
+|---|---|---|---|---|
+| TV256 | adaptive (5 correctors) | 1.057 | 67.6 | 2.68e-7 / 9.06e-8 |
+| TW5 | `n_correctors = 3` | 0.780 | 49.9 (48T: 49) | 2.72e-7 / 9.20e-8 |
+| TW3 | `time_advance = "fractional_step"` | 0.459 | 29.4 (48T: 29) | 1.92e-7 / 7.88e-8 |
+| TR256 | default PISO-2 (control) | 0.667 | 42.7 | 42.6 / 48.3 (spoky) |
+
+TV256's first step, with the search over 2, 3, 4, 5 correctors, took 52.4 s (about 50 of its steps; 0.8 % of a 100-unit run).
+The five correctors cost 1.36 x the three-corrector workaround and 2.3 x the fractional step per step; the factor-2 margin is what
+makes it five rather than four (DG1: four correctors 0.563). A fixed count can make 64 x 256 stable: 8 (A4), which the control
+finds by itself; 3 cannot (K2).
+
+### The census and its classification (B2b, B2c)
+
+**B2b.** The instrumented copy (`E:\projects\cfd\w48v-work\b2b`, bbc34b4 plus the logging in `Simulation::new`) ran
+`cargo test --release -p rcfd-api` once: 725 passed, 266 ignored, 1 failed (the registered A9, whose set-up defect amendment 2
+records; the copy predates A9b). It built 248 simulations to which the preflight applies (101 tests, 173 distinct set-ups). Ten
+distinct set-ups have rho >= 1.3: the eight closed boxes at rest of `user_scalars` u3 (1.466, 1.894, 2.624, 3.222, 4.143, 4.819
+on 256 cells; 6.438, 8.156 on 512), the Hartmann set-up of `transient_sources` t5 at dt 0.02 (31.31, 320 cells; its own file calls
+that step "beyond the stability bound"), and the 64 x 256 cylinder of this job's B3 test (4.359, the intended positive). None
+lies between 1 and 1.3, and the largest below 1 is 0.989 (a 12 800-cell registry set-up). Against the prediction: u3, t5 and the
+64 x 256 cylinder found; ADR 0077 C4's rheology channel not (0.011 here, see the limitation below); ADR 0154's K tests are ignored,
+so only B3's instance was in the suite.
+
+**B2c.** Five true positives: t5 (the perturbed run stopped by the guard at step 24 while the unperturbed one runs 60 steps), u3
+at 8.156 and 6.438 (stopped at steps 14 and 16), u3 at 1.466 (g 1.171, |dp| 3.6e-5 to 4.1e-3 over steps 30 to 60) and the B3
+cylinder (both runs stopped at step 30, as K1). Five undetermined: u3 at 4.819, 4.143, 3.222, 2.624, 1.894 (g 1.000, 1.006, 1.022,
+1.000, 0.965). No false positive: the limit is met. Reading: where the warning fires on the cylinder family it is confirmed (B0,
+B1, DG1, K1); on five of the eight diffusion-only boxes (cells of in-plane aspect 6.4 and 12.8, nu dt / dx^2 from 4 to 33) a
+perturbation neither grows nor decays within 60 steps, so there the estimate is an upper indication, not borne out. None of the
+ten is a user-facing case, and the tests themselves drive `Simulation` directly and see no warning; SV301 would show for them only
+through `rcfd check` or `rcfd run`.
+
+### A limitation found by the census (not a registered check)
+
+The pre-run estimate runs the solver as built. Where the Simulation sets the solver's face viscosity before every step from a law
+(rheology, eddy viscosity of a turbulence model, a user-function or temperature-dependent viscosity), the trial step of the
+preflight uses the solver's viscosity before that law is applied (the constant `physics.nu` at step 0). Example: the power-law
+channel of `rheology.rs` `transient_runs_use_the_law_too` gives 0.011 in the preflight, where ADR 0077's in-step estimate (with
+the law's viscosity, up to its cap 10) gave 4.17. So SV301 can miss such cases (a false negative). The adaptive control itself is
+not affected: its estimates run inside the real step, on the matrices built with the viscosity the Simulation has just set.
+Recommendation (question 7): give the preflight the Simulation's own first-step viscosity (a read-only version of the per-step
+preparation in `Simulation::step`), or make the estimate in-step at step 1 for those cases.
+
+### D8. Studio hand-off (prepared, not wired; `crates/rcfd-studio` and `crates/rcfd-runner` unchanged)
+
+For the follow-up job that turns the opt-in on by default in the Studio's run plan, so that a Studio user who refines a mesh gets
+the adaptive count without touching a setting:
+
+1. **The override.** One run-time `--set` entry, `solver.corrector_control=adaptive`, added by the Studio's run plan
+   (`StartPlan::set()`, whose entries the runner records in `run.json` `settings.set`; ADR 0149, 0152, 0153). It is never written
+   into the case file or the case editor (ADR 0153's rule for run-time settings).
+2. **When.** For a case whose plan facts are a transient incompressible `piso` or `pimple` run with the iterative time advance
+   (not `time_advance = "fractional_step"`), constant density, not VOF, not `compressible`, no `dynamic_mesh`, no
+   `solver.error_tolerance`: exactly the cases `adaptive` accepts (D5; any other case would be refused with a located error at
+   `solver.corrector_control`). Only when the case does not choose the key itself; by ADR 0152's rule a key written at its schema
+   default (`"fixed"`, which the Studio editor's full save writes out) is not the case's own, so a saved case still gets the
+   proposal, and a user who wants fixed correctors sets `solver.corrector_control=fixed` in the Start run dialog, whose overrides
+   come later in `set()` and win (the last `--set` of a key applies). Question 4 asks whether to keep that rule here.
+3. **Order in `set()`.** After the store proposal (ADR 0140) and after 48S's time-step entries (`solver.dt`, `solver.max_courant`,
+   `solver.max_dt`, `solver.end_time`), before the Start run dialog's overrides.
+4. **What the user sees.** The Run hover and ADR 0153's "overrides the case's ..." indicator name it ("pressure correctors adaptive
+   for this run"). Without the override, the pre-launch `check.json` (the runner's `rcfd run --check-only`) and `events.jsonl` (the
+   runner forwards every `warning` event) already carry SV301 with its fix, and `corrector_cap` when it happens; the run log can
+   show each `iteration` event's `correctors`. `residuals.jsonl` does not carry the count: `crates/rcfd-runner` `drain` copies only
+   `u`, `p`, `continuity` and `monitors`; the follow-up adds `correctors` and `corrector_cap` there (for example `"coupling":
+   {"correctors": n, "cap": c}`), so the residual plot can show them.
+5. **With 48S's automatic step.** 48S's plan runs the Courant controller (`max_courant` 0.5, the step growing to `max_dt`). The
+   count is chosen at the first step's dt and re-estimated every 1000 steps and when the growth monitor fires; a growing step
+   raises the wall diffusion number and so the needed count: the monitor covers a count that becomes too small, the 1000-step
+   estimates a count that becomes too large. A re-estimate when the step has changed by a factor (for example 1.5) since the last
+   one would be a small addition (not registered here).
+6. **Tests for the follow-up (to register there).** (i) the plan of the shipped cylinder case holds the entry; the quick start's
+   cavity (steady) and a `fractional_step` variant do not; a case that sets `adaptive` itself gets no second entry; (ii) `run.json`
+   `settings.set` records it and `case.snapshot` stays the file's bytes; (iii) a Run of the 256 x 256 refine through the Studio ends
+   `finished`, clean at t = 1 and 3 (`M_hf`), with `finish.correctors.mode = "adaptive"`; (iv) ADR 0152's DV6 record
+   (`plans_6867e40.txt`, never re-recorded) changes for its transient entries: register the expected difference, as ADR 0152 did.
+
+### Deviations
+
+1. The worktree started at 1248a76, the merge base with local main; it was fast-forwarded to local main aad08fe (48A to 48T, 48P,
+   48Q, 48R merged) before any work.
+2. Amendment 1: V128, V256 and V512 ran with 1, 2, 2 threads instead of 2, 4, 4 (wall time only).
+3. Amendment 2: A9's simplec arm kept the example's transient store key (set-up defect); the registered A9 stays an ignored known
+   miss, A9b is the corrected test.
+4. Tool placement: A1, A4, A5, A8, B0, B1 and the user-mesh twin are in `w48t_cylinder_spokes.rs` (registered:
+   `w48v_adaptive_correctors.rs`), next to ADR 0154's harness and `m_hf`; the N3 printer is its own file
+   (`w48v_case_hashes.rs`) so that it builds on aad08fe unchanged.
+5. `Simulation::perturb_pressure`, a public hook not named in the registration, was written for B2c (the schema has no initial
+   pressure field and the restart route excludes the census's cases).
+6. The census tree was cut at bbc34b4, before d2ee3d2: its run includes the registered A9 (the set-up defect, failing as expected)
+   and not A9b.
+7. The registration predicted no count for 512 x 512; it took 6 and from step 1001 5.
+8. The analysis scripts ran with the user's site packages (numpy) without `python -I`; they read only this job's own files.
+
+### Not run
+
+* The whole gate (workspace fmt, clippy, tests); run: rustfmt on the touched crates, `cargo clippy -p rcfd-core -p rcfd-fv
+  -p rcfd-api -p rcfd-cli --all-targets -- -D warnings` (clean), N4's suites.
+* Linux.
+* The Studio itself (not edited; only N4's listed tests); SV301 in the run service, the MCP tools, the chain driver and
+  `rcfd validate` (stated as not wired in D7).
+* V512 and V64x256 into the shedding phase (registered to t = 10).
+* The census covered rcfd-api's suite only (as registered); the simulations built by other crates' tests (rcfd-studio,
+  rcfd-runner, rcfd-cli through the binary) were not instrumented.
+* The developed shedding of the user's own dt 0.0156 with the opt-in (V256 used the Courant-matched 1/64, which differs from
+  0.0156 by 0.16 %; B1 shows the same estimate, 2.42, for both).
+
+### Questions for the maintainer (with recommendations)
+
+1. **Turn the opt-in on by default in the Studio's run plan (D8)?** Recommendation: yes, as the follow-up of D8; it is what makes a
+   refinement in the Studio stable without a setting, and on the committed case it changes nothing (A1: bit-identical). Keep the
+   library default `fixed` until a registered benchmark of a default flip.
+2. **The target 0.5 (safety factor 2) gives five correctors on the user's mesh (1.36 x three correctors per step).** Keep it, or
+   lower the margin (0.75 would take four there, DG1's 0.563)? Recommendation: keep 0.5: 48T's clean and failing step-1 estimates are
+   separated only by the band 1.17 to 2.42, the estimate's spread is small (20 against 60 iterations within 1.5 %), and the margin
+   also covers later flow states; `fractional_step` stays the cheaper choice for a user who wants speed on a fixed mesh.
+3. **SV301 costs one step plus 60 lag-map applications per `rcfd check`, `--check-only` and `rcfd run` of a transient two-corrector
+   case (20 to 30 s on 65 536 cells on this loaded machine, B0 and B1; twice when the runner makes its pre-launch check).** Accept, or use
+   20 iterations (A5: within 1.5 %)? Recommendation: keep 60 for now (the level is registered on 60-iteration data); drop the copy in
+   `rcfd run` once the Studio reads SV301 from `check.json`.
+4. **An explicit `corrector_control = "fixed"` in a case text:** should the Studio's plan honour it (no proposal), or treat it as a
+   key at its default (ADR 0152's rule, so the editor's full save does not lock users out of the fix)? Recommendation: ADR 0152's
+   rule; fixed correctors through the Start run dialog's override.
+5. **Wire SV301 into the run service, the MCP tools and the chain driver?** Recommendation: yes, in a follow-up with its own checks;
+   `Simulation::pressure_lag_preflight` and `rules::lag_preflight_rule` are ready for it.
+6. **`residuals.jsonl` without the corrector count:** add `correctors` and `corrector_cap` in `crates/rcfd-runner` `drain` with the
+   Studio follow-up? Recommendation: yes (no change for fixed runs).
+7. **The preflight's viscosity (the limitation above):** give it the Simulation's first-step viscosity? Recommendation: yes, as a
+   registered follow-up with the rheology and RANS set-ups of the census as its checks.
+8. **SV301 on existing test set-ups:** it would fire on nine of them (u3's eight closed boxes at rest, t5's Hartmann step at
+   dt 0.02) if they were run through `rcfd check` or `rcfd run`; four are shown unstable when perturbed, five undetermined. Raise
+   the level, or accept? Recommendation: accept: none is a user-facing case, the warning says "likely", and its remedy is harmless
+   (on such a box `adaptive` just adds correctors); revisit the level only with a registered study of non-cylinder families.
