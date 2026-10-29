@@ -1,7 +1,8 @@
 # ADR 0165: Job 49B, the legacy desktop app `rcfd-gui` moves to eframe/egui 0.36.2, egui_dock 0.21.1 and egui_plot 0.37.0 (Dependabot 7, 8, 10), one egui version set in the workspace
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any build or run of this job (set-up,
-limits and the not-run list are fixed here); results in the addendum. House rules of
+limits and the not-run list are fixed here); **results in the addendum** (2026-10-29: L1 to L9 met; one registration text
+error, D-1; three questions, Q1 to Q3). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; a missed limit is reported, not
 hidden, and becomes an ignored `*_known_miss` test where it is a test; defaults stay bit-identical (only the GUI crate, its
 manifest, CI configuration, the lock file and documentation are touched; no solver or library code);
