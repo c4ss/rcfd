@@ -1,0 +1,15 @@
+{
+  "id": "r-20261029T230332-c6be",
+  "case": "cases/naca0012-aoa2-rotated.toml",
+  "case_snapshot_hash": "fnv64:772341130c85228f",
+  "solver_version": "rcfd 0.1.0",
+  "settings": {
+    "mem_mb": null,
+    "priority": 0,
+    "set": [],
+    "threads": 1
+  },
+  "created": "2026-10-29T23:03:32.479499800Z",
+  "case_source": "E:\\projects\\cfd\\rcfd\\.claude\\worktrees\\agent-af38a22bebd395ee8\\example-projects\\wind-tunnel\\cases\\naca0012-aoa2-rotated.toml",
+  "case_dir": "E:\\projects\\cfd\\rcfd\\.claude\\worktrees\\agent-af38a22bebd395ee8\\example-projects\\wind-tunnel\\cases"
+}

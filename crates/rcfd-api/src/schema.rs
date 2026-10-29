@@ -628,7 +628,7 @@ pub fn case_schema() -> Schema {
         .field(
             "turbulence",
             Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient", "freestream"]).doc(
-                "Turbulence role of the patch (k-epsilon, k-omega SST, Spalart-Allmaras): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega, nuTilda) from the turbulence_* settings, zero_gradient = outlet / symmetry. freestream (needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves (ADR 0164). auto: a fixed zero velocity is a wall, any other fixed velocity an inlet; a velocity = \"freestream\" far field with a non-zero velocity_value is freestream with Spalart-Allmaras (ADR 0166) and zero_gradient with the other models; everything else zero_gradient. zero_gradient on an SA far field gives the pre-ADR 0166 behaviour",
+                "Turbulence role of the patch (k-epsilon, k-omega SST, Spalart-Allmaras): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega, nuTilda) from the turbulence_* settings, zero_gradient = outlet / symmetry. freestream (needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves (ADR 0164). auto: a fixed zero velocity is a wall, any other fixed velocity an inlet; a velocity = \"freestream\" far field with a non-zero velocity_value is freestream with Spalart-Allmaras (ADR 0166), k-omega SST and k-epsilon (ADR 0169; without an inlet specification, i.e. turbulence_spec = intensity_length and no turbulence_length, their far-field k and epsilon / omega come from turbulence.initial_intensity and initial_viscosity_ratio) and zero_gradient with the other models (the Reynolds stress model has no inlet condition); everything else zero_gradient. zero_gradient on such a far field gives the behaviour before ADR 0166 (SA) / ADR 0169 (SST, k-epsilon)",
             ),
         )
         .field(
@@ -650,7 +650,7 @@ pub fn case_schema() -> Schema {
             Schema::float(0.0)
                 .at_least(0.0)
                 .dim(Dimension::LENGTH)
-                .doc("Turbulence length scale l of an inlet (intensity_length); 0 = unset. For internal flow about 0.07 times the hydraulic diameter"),
+                .doc("Turbulence length scale l of an inlet (intensity_length); 0 = unset. For internal flow about 0.07 times the hydraulic diameter. Unset on a k-omega SST / k-epsilon freestream far field: k and epsilon / omega come from turbulence.initial_intensity and initial_viscosity_ratio (ADR 0169)"),
         )
         .field(
             "turbulence_viscosity_ratio",
@@ -1585,13 +1585,13 @@ pub fn case_schema() -> Schema {
             "initial_intensity",
             Schema::float(0.05)
                 .range(1e-6, 1.0)
-                .doc("Turbulence intensity used to derive the initial k"),
+                .doc("Turbulence intensity used to derive the initial k, and the far-field k of a k-omega SST / k-epsilon freestream patch without an inlet specification (ADR 0169)"),
         )
         .field(
             "initial_viscosity_ratio",
             Schema::float(10.0)
                 .range(1e-3, 1e6)
-                .doc("Viscosity ratio nut/nu used to derive the initial epsilon"),
+                .doc("Viscosity ratio nut/nu used to derive the initial epsilon (omega), and the far-field epsilon (omega) of a k-omega SST / k-epsilon freestream patch without an inlet specification (ADR 0169)"),
         )
         .field(
             "plugin",

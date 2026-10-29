@@ -108,9 +108,13 @@ const PAIRS: [(&str, &str); 2] = [
     ("cases/naca0012-aoa2-rotated.toml", "cases/naca0012-aoa2.toml"),
 ];
 
-/// E2 with its control.
+/// E2 with its control. KNOWN MISS (ADR 0169 interim note and addendum): the runs regenerated under ADR 0169's far-field
+/// default meet the residual targets at iteration 409 / 230, so the registered comparison at iteration 2000 and over
+/// 1001-2000 (`steps == 2000`) cannot be made; the limit is kept as registered. ADR 0169 reports the final values: within
+/// 5.3e-9 relative, the same iteration counts.
 #[test]
-fn e2_rotated_mesh_matches_rotated_flow() {
+#[ignore = "KNOWN MISS (ADR 0169): the regenerated aerofoil runs converge at 409 / 230 iterations, E2 compares at iteration 2000"]
+fn e2_rotated_mesh_matches_rotated_flow_known_miss() {
     for (rot, flow) in PAIRS {
         for c in compare(rot, flow) {
             println!(

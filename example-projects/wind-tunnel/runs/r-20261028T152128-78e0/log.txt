@@ -1,6 +1,0 @@
-E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-78e0\case.snapshot: ok, 6144 cells
-E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-78e0\case.snapshot: SV101 [warning/mesh] mesh: the maximum non-orthogonality exceeds 70 degrees: expect slower convergence and reduced accuracy
-6144 cells, algorithm simplec
-warning: the maximum non-orthogonality exceeds 70 degrees: expect slower convergence and reduced accuracy
-results written to E:\projects\cfd\rcfd\.claude\worktrees\agent-a62d8ecd6bf092d6d\example-projects\wind-tunnel\runs\r-20261028T152128-78e0\output
-warning: stopped after 2000 iterations without meeting the tolerances

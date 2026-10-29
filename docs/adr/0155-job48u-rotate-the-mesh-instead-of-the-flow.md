@@ -408,3 +408,5 @@ dependency).
 
 Merged into main with job 48P's Linux tree and job 48R's DV5/DV6 by job 48W: the two rotated cases and their Linux-built
 runs are in `example-projects-linux/` too (`--docker --add-missing`), DV6 takes the cases its record names. Results there.
+
+2026-10-29 (ADR 0169, job 49F): the regenerated aerofoil runs converge at 409 / 230 iterations, so E2 (iteration 2000, 1001-2000) is the ignored known miss `e2_rotated_mesh_matches_rotated_flow_known_miss`, limit intact; at the final iteration the two forms agree within 5.3e-9 (ADR 0169).

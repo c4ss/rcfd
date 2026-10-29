@@ -430,3 +430,5 @@ preview_ui,viewport,viewport_ui}.rs`; new tests `crates/rcfd-studio/tests/{selec
 tests `crates/rcfd-studio/tests/{oneclick_e2e_g4,preview_g1}.rs`; dated notes in ADRs 0132, 0138 and 0147.
 
 > Note 2026-10-29 (maintainer request): the left (primary) drag no longer rotates or pans the view; `drag_input` returns `None` for it. The middle drag still orbits, the right drag pans, `MOUSE_HINT` reads "middle drag: rotate". Test N5 was updated to expect no camera change for the primary drag.
+
+2026-10-29 (ADR 0169, job 49F): N9's steady snapshot line and strip (`snapshot 10/10  iteration 2000`) name the aerofoil run before its regeneration under ADR 0169 (now 3 snapshots, 409 iterations); those two checks are the ignored known miss `n9_steady_words_name_snapshot_10_and_iteration_2000_known_miss`, limits intact.

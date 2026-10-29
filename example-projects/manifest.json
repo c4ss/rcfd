@@ -3,6 +3,11 @@
   "adr": "0142",
   "solver_version": "rcfd 0.1.0",
   "script": "scripts/make_example_projects.py",
+  "platform": {
+    "os": "windows",
+    "arch": "x86_64",
+    "python": "3.9.13"
+  },
   "projects": {
     "wind-tunnel": {
       "runs": [
@@ -16,11 +21,11 @@
         },
         {
           "case": "cases/naca0012-aoa4.toml",
-          "run": "r-20261028T152128-cb3a"
+          "run": "r-20261029T230332-0566"
         },
         {
           "case": "cases/naca0012-aoa2.toml",
-          "run": "r-20261028T152128-78e0"
+          "run": "r-20261029T230332-3d8a"
         },
         {
           "case": "cases/step-re800.toml",
@@ -32,14 +37,14 @@
         },
         {
           "case": "cases/naca0012-aoa4-rotated.toml",
-          "run": "r-20261028T224153-d9c7"
+          "run": "r-20261029T230332-2b1f"
         },
         {
           "case": "cases/naca0012-aoa2-rotated.toml",
-          "run": "r-20261028T224153-afb6"
+          "run": "r-20261029T230332-c6be"
         }
       ],
-      "bytes": 34826293
+      "bytes": 28095017
     },
     "quick-start": {
       "runs": [
