@@ -497,14 +497,14 @@ A binary distribution of rcfd must carry the licence texts and notices of the pa
 | wasm-bindgen-macro | 0.2.129 | `MIT OR Apache-2.0` |
 | wasm-bindgen-macro-support | 0.2.129 | `MIT OR Apache-2.0` |
 | wasm-bindgen-shared | 0.2.129 | `MIT OR Apache-2.0` |
-| wasm-encoder | 0.261.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wasm-encoder | 0.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wasmi | 0.31.2 | `MIT/Apache-2.0` |
 | wasmi_arena | 0.4.1 | `MIT/Apache-2.0` |
 | wasmi_core | 0.13.0 | `MIT/Apache-2.0` |
-| wasmparser | 0.261.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wasmparser | 0.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wasmparser-nostd | 0.100.2 | `Apache-2.0 WITH LLVM-exception` |
-| wast | 261.0.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
-| wat | 1.261.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wast | 262.0.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wat | 1.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wayland-backend | 0.3.17 | `MIT` |
 | wayland-client | 0.31.15 | `MIT` |
 | wayland-csd-frame | 0.3.0 | `MIT` |

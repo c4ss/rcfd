@@ -18,4 +18,4 @@ serde.workspace = true
 serde_json.workspace = true
 # Deflate for the optional lossless codec. Already compiled in this workspace through png 0.18 (rcfd-post),
 # so it adds no crate to the build graph. MIT OR Zlib OR Apache-2.0. (ADR 0124 D3)
-miniz_oxide = "=0.8.9"
+miniz_oxide = "=0.9.1"
