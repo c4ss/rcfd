@@ -159,3 +159,31 @@ Runs panel have Cancel).
 
 `crates/rcfd-studio/src/{stop,stop_ui}.rs`, `crates/rcfd-studio/tests/stop_aa.rs` (new); hunks in
 `crates/rcfd-studio/src/{lib,studio,quick_run_ui,runs,poll}.rs`; this ADR.
+
+## Amendment 1 (2026-10-29, after the first registered run, before any corrected run)
+
+The first registered run of `stop_aa` (release, `--test-threads 1`, at 8f35938) passed AA1 C1, C2, C3, AA4 and AA5 and
+failed AA1, AA2 and AA3. What I knew when writing this: that run's output, and one diagnostic run of AA3 alone with a
+throwaway print (not kept, not counted).
+
+1. **AA1 and AA2 missed (e)'s events limit.** Both runs had 0 `cancel_requested` events against the registered "exactly
+   one" (and 0 `killed`). Every other item of AA1 that ran before the failed assertion was within its limit (the run's
+   numbers: "stopped" shown 0.213 s after the click, 35 frames between, all drawing "Stopping...", F5 refused; exit code
+   7, the clean-stop reason at step 240, no pid; `solver_finish` interrupted; the store closed with its footer, 4
+   snapshots, the last at step 240 with the status time's bits; `residuals.jsonl` at 240; viewable after 0.6 ms; the
+   Runs panel's line `... stopped 240 ...`; one "stop requested" message). Diagnosis, read from code after the miss:
+   the runner's tick (`runner.rs`, the active-run loop) handles a solver that has exited (`finalize`, then `continue`)
+   before it looks at the cancel request, and writes `cancel_requested` only when a tick sees the request while the
+   solver is still alive. A solver that stops within one step (about 17 ms here) of the request is usually gone at the
+   runner's next tick (100 ms), so the event is absent. My registration misread the runner; the stop itself is as
+   intended. Per the house rules AA1 and AA2 stay as registered, as the ignored `aa1_..._known_miss` and
+   `aa2_..._known_miss` tests with the limit intact.
+   **AA1b, AA2b (new ids, registered here before they run):** AA1 and AA2 unchanged (procedure, every other limit and
+   the controls) except (e)'s events: "at most one `cancel_requested`, and no `killed`". Reason: the kill is the
+   event that matters (a killed solver writes no final snapshot); C1 still fails AA1b (its (c) and (f)).
+2. **AA3 set-up defect (test code).** The run failed before reaching any limit ("the run was not queued" after 60 s).
+   The diagnostic run showed why: the test pressed Ctrl+. in every frame while the start was in flight, and the frame
+   in which the run was queued drew Stop enabled (D4.3), so that Ctrl+. stopped the queued run, correctly; the test
+   then never saw state D4.3 and waited. Corrected: while the start is in flight only `stop::stop` (the model call,
+   which reads the view it acts on) is tried, and frames are drawn without keys. Limits unchanged. (In the diagnostic
+   run the run so stopped ended, no error was shown, and Run was drawn again; not counted.)

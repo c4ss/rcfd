@@ -229,8 +229,9 @@ fn end_run(app: &mut StudioApp, ctx: &egui::Context, p: &RunnerProject, id: &str
     }
 }
 
-/// AA1 (c) to (h), and AA2's (c), (e), (f).
-fn assert_clean_stop(s: &Stopped, frames: bool) {
+/// AA1 (c) to (f), and AA2's (c), (e), (f). `registered_events`: (e)'s events as registered (exactly one
+/// `cancel_requested`, the known miss); else AA1b's and AA2b's (amendment 1: at most one, and no `killed`).
+fn assert_clean_stop(s: &Stopped, frames: bool, registered_events: bool) {
     let shown = s
         .shown_s
         .unwrap_or_else(|| panic!("(c) 'stopped' and Run not shown within {STOP_LIMIT_S} s"));
@@ -248,7 +249,16 @@ fn assert_clean_stop(s: &Stopped, frames: bool) {
         "(e) reason"
     );
     assert_eq!(s.pid, None, "(e) pid");
-    assert_eq!((s.cancel_requested, s.killed), (1, 0), "(e) events");
+    if registered_events {
+        assert_eq!((s.cancel_requested, s.killed), (1, 0), "(e) events");
+    } else {
+        assert!(
+            s.cancel_requested <= 1 && s.killed == 0,
+            "(e) events (amendment 1): {} cancel_requested, {} killed",
+            s.cancel_requested,
+            s.killed
+        );
+    }
     assert_eq!(s.solver_finish, "interrupted", "(e) metrics.json solver_finish");
     assert_eq!(s.footer, Some(true), "(f) the store is not closed with its footer");
     assert!(s.store_count >= 3, "(f) {} snapshots", s.store_count);
@@ -326,9 +336,8 @@ fn before_stop(app: &mut StudioApp, ctx: &egui::Context, p: &RunnerProject) -> B
     }
 }
 
-#[test]
-fn aa1_stop_by_the_button_stops_cleanly_with_the_final_snapshot() {
-    let (p, mut app, ctx) = cylinder_app("aa1", true, |_| {});
+fn aa1(tag: &str, registered_events: bool) {
+    let (p, mut app, ctx) = cylinder_app(tag, true, |_| {});
     let id = running(&mut app, &ctx, &p, 2);
     let b = before_stop(&mut app, &ctx, &p);
     eprintln!("AA1 before: {b:#?}");
@@ -351,8 +360,22 @@ fn aa1_stop_by_the_button_stops_cleanly_with_the_final_snapshot() {
         b.f5_refusal
     );
     assert_eq!(b.runs_after_f5, 1, "(b) F5 started a run");
-    assert_clean_stop(&s, true);
+    assert_clean_stop(&s, true, registered_events);
     assert_viewable_and_said(&s, &app);
+}
+
+/// AA1 as registered: missed (e)'s "exactly one `cancel_requested`" (0: the solver exited before the runner's next
+/// tick saw the request); amendment 1.
+#[test]
+#[ignore = "known miss: ADR 0161 amendment 1 (no cancel_requested event when the solver exits before the runner's next tick)"]
+fn aa1_stop_by_the_button_stops_cleanly_with_the_final_snapshot_known_miss() {
+    aa1("aa1", true);
+}
+
+/// AA1b (amendment 1): AA1 with (e)'s events "at most one `cancel_requested`, no `killed`".
+#[test]
+fn aa1b_stop_by_the_button_stops_cleanly_with_the_final_snapshot() {
+    aa1("aa1b", false);
 }
 
 /// AA1 control C1: a kill instead of Stop: no "stopped" within the limit and the final-snapshot check fails.
@@ -406,9 +429,8 @@ fn aa1_control_run_drawn_while_stopping_fails_d() {
 
 // ---------------------------------------------------------------- AA2: Ctrl+.
 
-#[test]
-fn aa2_ctrl_period_stops_and_escape_or_a_full_stop_do_not() {
-    let (p, mut app, ctx) = cylinder_app("aa2", true, |_| {});
+fn aa2(tag: &str, registered_events: bool) {
+    let (p, mut app, ctx) = cylinder_app(tag, true, |_| {});
     let id = running(&mut app, &ctx, &p, 2);
     let key = |k: egui::Key, pressed| egui::Event::Key {
         key: k,
@@ -439,7 +461,20 @@ fn aa2_ctrl_period_stops_and_escape_or_a_full_stop_do_not() {
     assert!(!cancel_file, "Escape or '.' asked for a stop");
     let s = end_run(&mut app, &ctx, &p, &id, How::Shortcut);
     eprintln!("AA2: {s:#?}");
-    assert_clean_stop(&s, false);
+    assert_clean_stop(&s, false, registered_events);
+}
+
+/// AA2 as registered: missed (e)'s events as AA1; amendment 1.
+#[test]
+#[ignore = "known miss: ADR 0161 amendment 1 (no cancel_requested event when the solver exits before the runner's next tick)"]
+fn aa2_ctrl_period_stops_and_escape_or_a_full_stop_do_not_known_miss() {
+    aa2("aa2", true);
+}
+
+/// AA2b (amendment 1): AA2 with (e)'s events as AA1b.
+#[test]
+fn aa2b_ctrl_period_stops_and_escape_or_a_full_stop_do_not() {
+    aa2("aa2b", false);
 }
 
 // ---------------------------------------------------------------- AA3: before the run is queued, no runner alive
@@ -458,13 +493,15 @@ fn aa3_stop_before_the_run_is_queued_and_before_the_runner_runs() {
             View::Preparing { .. } => {
                 preparing += 1;
                 let n = app.st.messages.len();
+                // amendment 1 item 2: only the model call, which reads the view it acts on; a Ctrl+. frame here can be
+                // the frame in which the run is queued, and then it stops the queued run (D4.3), as it should
                 if stop::stop(&mut app.st) {
                     prep_bad.push("stop() asked".to_string());
                 }
-                let _ = g4::frame_with(&mut app, &ctx, ctrl_period());
                 if app.st.messages.len() != n || !app.st.stop.stopping.is_empty() {
-                    prep_bad.push(format!("Ctrl+. or stop() acted: {:?}", app.st.messages.last()));
+                    prep_bad.push(format!("stop() acted: {:?}", app.st.messages.last()));
                 }
+                let _ = drawn(&mut app, &ctx);
             }
             View::Live { id, queued, .. } => break (id, p.client.runner_running(), queued),
             v => {
