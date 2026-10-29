@@ -546,6 +546,35 @@ pub fn check_case(case: &Case, mesh: Option<&Value>) -> Vec<RuleDiagnostic> {
     RuleSet::builtin().evaluate(&case.tree.to_json(), mesh)
 }
 
+/// Level of the computed setup rule SV301 (ADR 0156 D7): a pre-run pressure-lag estimate at or above it warns. It lies between
+/// the largest step-1 estimate of a clean run (1.166) and the smallest of a spoky or diverged one (2.418) in ADR 0154's DG1.
+pub const SV301_LEVEL: f64 = 1.3;
+
+/// The computed setup rule SV301 (ADR 0156 D7) for the pre-run pressure-lag estimate of a transient case
+/// ([`crate::sim::Simulation::pressure_lag_preflight`]): a warning at `solver.corrector_control` with the fix `adaptive` when the
+/// estimate is at least [`SV301_LEVEL`]. Not in `setup_rules.json` because it needs a built simulation.
+pub fn lag_preflight_rule(p: &crate::sim::LagPreflight) -> Option<RuleDiagnostic> {
+    if p.rho.is_nan() || p.rho < SV301_LEVEL {
+        return None;
+    }
+    let x = p.position;
+    Some(RuleDiagnostic {
+        id: "SV301".into(),
+        severity: Severity::Warning,
+        category: "solver".into(),
+        path: "solver.corrector_control".into(),
+        message: format!(
+            "with solver.n_correctors = {} the pressure-velocity coupling is likely unstable on this mesh at this solver.dt: \
+             a lagged pressure error is amplified by {:.2} per step (pressure-lag estimate, ADR 0073; warning level {}), its \
+             largest entry in cell {} at ({:.4e}, {:.4e}, {:.4e}), typically a thin wall cell; the run would develop grid-scale \
+             pressure oscillations (spokes) there or diverge. Remedy: set solver.corrector_control = \"adaptive\" (the solver \
+             then adds pressure correctors until the estimate is at most 0.5)",
+            p.n_correctors, p.rho, SV301_LEVEL, p.cell, x[0], x[1], x[2]
+        ),
+        fix: Some(json!({"path": "solver.corrector_control", "value": "adaptive"})),
+    })
+}
+
 /// The mesh context of the rules: the serialised quality report.
 pub fn mesh_context(q: &rcfd_mesh::quality::QualityReport) -> Value {
     serde_json::to_value(q).unwrap_or(Value::Null)

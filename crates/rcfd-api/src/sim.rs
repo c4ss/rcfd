@@ -827,6 +827,26 @@ pub struct StepSummary {
     pub converged: bool,
 }
 
+/// Power iterations of the pre-run pressure-lag estimate (ADR 0156 D7): those of ADR 0154's DG1, on which the level of the
+/// setup rule SV301 is registered.
+pub const LAG_PREFLIGHT_ITERATIONS: usize = 60;
+
+/// The pre-run pressure-lag estimate of a transient case (ADR 0156 D7): the per-step amplification of a lagged pressure error
+/// with the configured correctors, the step it was made at and the cell (with its centre) of the mode's largest entry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LagPreflight {
+    /// Estimated amplification per step.
+    pub rho: f64,
+    /// Step the estimate was made at (the trial copy's step).
+    pub step: usize,
+    /// Cell of the largest entry of the estimated mode.
+    pub cell: usize,
+    /// Centre of that cell.
+    pub position: [f64; 3],
+    /// The configured `solver.n_correctors`.
+    pub n_correctors: usize,
+}
+
 /// A fixed-step transient run whose summed steps stop short of `solver.end_time` by more than the end tolerance (1e-12)
 /// adds a remainder step: 2000 steps of 0.05 reach 99.99999999999646, and the step of 3.5e-12 s that followed spoiled the
 /// pressure (ADR 0142 question 6). A step that would leave a remainder below this fraction of itself is stretched to end
@@ -963,6 +983,8 @@ pub struct Simulation {
     steady_diverged: Option<rcfd_fv::simple::SteadyDivergence>,
     /// Pressure-lag warnings of the transient solver already handed out (ADR 0077 part C).
     lag_reported: usize,
+    /// Estimates of the adaptive corrector count already looked at for cap warnings (ADR 0156 D4).
+    corrector_reported: usize,
     /// `short_last_step` warnings not handed out yet (ADR 0145 D4).
     landing_warnings: Vec<serde_json::Value>,
     /// Solution limits (`limits.*`, ADR 0016): `(enabled, min, max)` for temperature and transported scalars.
@@ -1687,10 +1709,19 @@ impl Simulation {
             }
             linear_controls!(s);
             s.time_scheme = solver_time_scheme(case);
+            // ADR 0156: the adaptive corrector count (validated with the other engines below)
+            let adaptive = get_s(case, "solver.corrector_control") == "adaptive";
+            if adaptive {
+                let mut c = rcfd_fv::pimple::CorrectorControl::registered();
+                if matches!(s.time_scheme, TimeScheme::Bdf2 | TimeScheme::Bdf2Bounded) {
+                    c.start = 2;
+                }
+                s.corrector_control = Some(c);
+            }
             // ADR 0077 part C: one pressure-lag estimate per run (warn by default; read-only); amendment 3: one corrector only,
-            // the regime of the ADR 0073 model
+            // the regime of the ADR 0073 model; not with the adaptive count, which supersedes it (ADR 0156 D5)
             let lag = get_s(case, "solver.pressure_lag_check");
-            if lag != "off" && s.n_correctors == 1 {
+            if lag != "off" && s.n_correctors == 1 && !adaptive {
                 use rcfd_fv::pimple::{LagAction, LagCheck};
                 let mut c = LagCheck::new(
                     0,
@@ -1940,6 +1971,23 @@ impl Simulation {
                 return Err(diag("solver.time_advance", format!("fractional_step {w}")));
             }
         }
+        if get_s(case, "solver.corrector_control") == "adaptive" {
+            // ADR 0156 D5: a property of the incompressible PISO/PIMPLE corrector loop
+            let why = if !matches!(&engine, Engine::Transient(_)) || !matches!(alg.as_str(), "piso" | "pimple") {
+                Some("needs the incompressible transient solver: solver.algorithm = \"piso\" or \"pimple\" with constant density, not VOF")
+            } else if get_s(case, "solver.time_advance") == "fractional_step" {
+                Some("is not available with solver.time_advance = \"fractional_step\" (a non-iterative step has no correctors)")
+            } else if dynmesh.is_some() {
+                Some("is not available with dynamic_mesh (the pressure-lag estimate is not defined on a moving mesh)")
+            } else if get_f(case, "solver.error_tolerance") > 0.0 {
+                Some("is not available with solver.error_tolerance (step doubling restores the state of trial steps)")
+            } else {
+                None
+            };
+            if let Some(w) = why {
+                return Err(diag("solver.corrector_control", format!("adaptive {w}")));
+            }
+        }
         let timectl = {
             let transient = matches!(engine, Engine::Transient(_)) && !compressible;
             let plain = energy.is_none()
@@ -2028,6 +2076,7 @@ impl Simulation {
             steady_guard,
             steady_diverged: None,
             lag_reported: 0,
+            corrector_reported: 0,
             landing_warnings: Vec::new(),
             limit_t,
             limit_s,
@@ -2448,7 +2497,107 @@ impl Simulation {
                 })
             }));
         self.lag_reported = s.lag_warnings.len();
+        // ADR 0156 D4: an estimate of the adaptive corrector count that ended at the cap
+        if let Some(c) = s.settings.corrector_control {
+            let est = &s.correctors.estimates;
+            for e in est[self.corrector_reported.min(est.len())..]
+                .iter()
+                .filter(|e| e.cap_bound)
+            {
+                let x = cc.get(e.cell).copied().unwrap_or([f64::NAN; 3]);
+                out.push(serde_json::json!({
+                    "message": format!(
+                        "solver.corrector_control = \"adaptive\": with the cap of {} pressure correctors the estimated pressure-lag \
+                         amplification is still {:.3} per step (above {}) at step {}, cell {} at ({:.4e}, {:.4e}, {:.4e}); the run \
+                         goes on with {} correctors and may develop grid-scale pressure oscillations there: lower solver.dt",
+                        e.correctors, e.rho, c.target, e.step, e.cell, x[0], x[1], x[2], e.correctors
+                    ),
+                    "kind": "corrector_cap", "step": e.step, "rho": e.rho, "correctors": e.correctors, "cell": e.cell,
+                    "position": x,
+                }));
+            }
+            self.corrector_reported = est.len();
+        }
         out
+    }
+
+    /// The corrector count of the last step and the number of cap-bound estimates so far, when the adaptive corrector count is
+    /// on (ADR 0156 D4); `None` otherwise (every `fixed` run).
+    pub fn corrector_status(&self) -> Option<(usize, usize)> {
+        match &self.engine {
+            Engine::Transient(s) if s.settings.corrector_control.is_some() => {
+                Some((s.correctors.last, s.correctors.cap_bound))
+            }
+            _ => None,
+        }
+    }
+
+    /// Run summary of the adaptive corrector count (ADR 0156 D4): `mode`, `steps`, `mean`, `max`, `last`, `estimates`,
+    /// `cap_bound`, `triggered` and the `log` of every estimate (`[step, correctors, rho, cap_bound, triggered]`); `None` for a
+    /// `fixed` run.
+    pub fn corrector_summary(&self) -> Option<serde_json::Value> {
+        let Engine::Transient(s) = &self.engine else {
+            return None;
+        };
+        s.settings.corrector_control?;
+        let r = &s.correctors;
+        let num = |x: f64| serde_json::Number::from_f64(x).map_or(serde_json::Value::Null, serde_json::Value::Number);
+        let log: Vec<serde_json::Value> = r
+            .estimates
+            .iter()
+            .map(|e| serde_json::json!([e.step, e.correctors, num(e.rho), e.cap_bound, e.triggered]))
+            .collect();
+        Some(serde_json::json!({
+            "mode": "adaptive", "steps": r.steps, "mean": num(r.mean()), "max": r.max, "last": r.last,
+            "estimates": r.estimates.len(), "cap_bound": r.cap_bound, "triggered": r.triggered, "log": log,
+        }))
+    }
+
+    /// Add `dp` (one value per cell) to the kinematic pressure of the incompressible transient solver: a perturbation for
+    /// stability checks (ADR 0156 B2c). Returns `false` (and changes nothing) for another engine or a wrong length.
+    pub fn perturb_pressure(&mut self, dp: &[f64]) -> bool {
+        match &mut self.engine {
+            Engine::Transient(s) if dp.len() == s.p.values.len() => {
+                for (p, d) in s.p.values.iter_mut().zip(dp) {
+                    *p += d;
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Pre-run estimate of the pressure-lag amplification with the configured correctors (ADR 0156 D7, the setup rule SV301):
+    /// made for the incompressible transient solver with `time_advance = "iterative"`, no dynamic mesh, `n_correctors >= 2`,
+    /// `corrector_control = "fixed"` and `pressure_lag_check != "off"`, on a copy of the solver (the simulation is not changed)
+    /// with [`LAG_PREFLIGHT_ITERATIONS`] power iterations at the next step (the second from the start under bdf2).
+    pub fn pressure_lag_preflight(&self) -> Option<LagPreflight> {
+        let Engine::Transient(s) = &self.engine else {
+            return None;
+        };
+        if s.settings.fractional.is_some()
+            || self.dynmesh.is_some()
+            || s.settings.n_correctors < 2
+            || s.settings.corrector_control.is_some()
+            || get_s(&self.case, "solver.pressure_lag_check") == "off"
+        {
+            return None;
+        }
+        let w = s.lag_preflight(self.dt, LAG_PREFLIGHT_ITERATIONS)?;
+        let x = self
+            .geom
+            .mesh
+            .cell_centres()
+            .get(w.cell)
+            .copied()
+            .unwrap_or([f64::NAN; 3]);
+        Some(LagPreflight {
+            rho: w.rho,
+            step: w.step,
+            cell: w.cell,
+            position: x,
+            n_correctors: s.settings.n_correctors,
+        })
     }
 
     /// Registry key and label of the active turbulence model (`None` for laminar runs).

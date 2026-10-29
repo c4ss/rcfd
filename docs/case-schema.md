@@ -549,6 +549,20 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   `base_body`, `dynamic_mesh`, `solver.viscous_stress = "full"` and `time_scheme = "bdf2_bounded"`; `physics.body_force` is refused
   for `piso` as before. A fractional-step run is not restartable (`supports_restart()` is false; the lagged pressure increment is
   not in the checkpoint). The default `iterative` leaves every existing run bit-identical (ADR 0037 F13).
+* `solver.corrector_control` = `fixed` (default: exactly `solver.n_correctors` pressure correctors per outer iteration) |
+  `adaptive` (ADR 0156): the transient `piso`/`pimple` solver chooses its own corrector count, at least `n_correctors` and at
+  most 10. At the first step (step 2 under `bdf2`/`bdf2_bounded`), every 1000 steps and after the largest pressure change of
+  the last corrector grew by more than 1.5 per step on 3 steps in a row, it estimates how much a lagged pressure error is
+  amplified per step with N correctors (the ADR 0073 estimate on the step's own matrices, 20 power iterations, on copies) and
+  takes the smallest N at which that is at most 0.5 (a safety factor 2 below instability). This is what keeps a refined mesh
+  stable without hand-tuning: refining a graded wall layer at a fixed Courant number raises the wall diffusion number
+  `nu dt / dr1^2` like `1/h`, and two correctors then lose the coupling in the thin wall cells (grid-scale pressure spokes or
+  divergence, ADR 0154). With a count that stays at `n_correctors` the run is bit-identical to `fixed`. Reported: `correctors`
+  and `corrector_cap` in every `iteration` status event, a `correctors` summary in `finish`, a `warning` (`kind`
+  `corrector_cap`) when 10 correctors are not enough (lower `solver.dt` then). Located errors at `solver.corrector_control`
+  with steady or coupled algorithms, `time_advance = "fractional_step"`, variable density, VOF, `compressible`, `dynamic_mesh`
+  and `solver.error_tolerance`. The key at its default does not enter the case hash (`SettingsTree::content_hash`, ADR 0156 D6),
+  so every earlier case keeps its `case_hash`.
 * `convergence.<name>.monitor = "res_T"` (energy residual), `res_nut`, `res_rho` are valid monitors.
 * New fields in `report.field` and the GUI field list: `y_plus`, `rho`, `mach`.
 
@@ -1441,6 +1455,15 @@ base case alone. See `docs/run-control.md` for the events.
 before anything is solved. Each diagnostic has `id`, `severity` (`error`, `warning`, `info`), `category`, a located `path`, `message`
 and sometimes a suggested `fix` (never applied). Errors stop the run with exit 3; warnings go to stderr and to `warning` status events
 with the rule id. The 21 rules (SV001-SV013 errors, SV101-SV105 warnings, SV201-SV203 infos) and the grammar are in ADR 0031.
+
+One computed rule needs a built simulation and is not in the rule file: **SV301** (warning, `solver`, path
+`solver.corrector_control`, fix `adaptive`; ADR 0156). For a transient `piso`/`pimple` case with `time_advance = "iterative"`,
+no dynamic mesh, `n_correctors >= 2`, `corrector_control = "fixed"` and `pressure_lag_check != "off"`, `rcfd check`,
+`--check-only` and `rcfd run` let a copy of the solver take its next step with the ADR 0073 pressure-lag estimate (60 power
+iterations, the case's correctors) and warn when a lagged pressure error is amplified by 1.3 or more per step: the coupling is
+then likely unstable (in ADR 0154's cylinder runs every clean set-up was at most 1.166, every spoky or diverged one at least
+2.418). The message names the cell of the estimate's largest entry and the remedy `solver.corrector_control = "adaptive"`. The
+estimate changes no result (the solver itself is not touched) and costs about 61 steps' worth of linear algebra once.
 
 ## Wave 20C: `study` (F-095, ADR 0034)
 

@@ -131,9 +131,13 @@ fn diag(message: String) -> Diagnostic {
 pub fn check_only(case: &Case) -> (u8, Value) {
     let mut seq = 0;
     let mut diags: Vec<Diagnostic> = case.semantic_errors();
+    // ADR 0156 D7: the pre-run pressure-lag estimate (on a copy of the solver) for the computed rule SV301; the simulation
+    // is dropped before the mesh is built, as before
+    let mut preflight = None;
     if diags.is_empty() {
-        if let Err(d) = Simulation::new(case) {
-            diags = d;
+        match Simulation::new(case) {
+            Ok(s) => preflight = s.pressure_lag_preflight(),
+            Err(d) => diags = d,
         }
     }
     let mesh = if diags.is_empty() {
@@ -157,7 +161,10 @@ pub fn check_only(case: &Case) -> (u8, Value) {
         return (exit::INVALID, v);
     };
     let q = check_mesh(&mesh);
-    let rules = crate::rules::check_case(case, Some(&crate::rules::mesh_context(&q)));
+    let mut rules = crate::rules::check_case(case, Some(&crate::rules::mesh_context(&q)));
+    if let Some(d) = preflight.as_ref().and_then(crate::rules::lag_preflight_rule) {
+        rules.push(d);
+    }
     let code = if !q.is_ok() {
         exit::BAD_MESH
     } else if crate::rules::has_errors(&rules) {
@@ -414,6 +421,11 @@ pub fn drive(
             "index": step.index, "time": step.time, "res_u": step.res_u, "res_p": step.res_p,
             "continuity": step.continuity, "done": step.done,
         });
+        if let Some((n, capped)) = lock_sim(sim).corrector_status() {
+            // ADR 0156 D4: only with solver.corrector_control = "adaptive"
+            body["correctors"] = json!(n);
+            body["corrector_cap"] = json!(capped);
+        }
         if opts.status_monitors {
             // opt-in (ADR 0130 D5): the report values this step appended to the monitor store
             let m: serde_json::Map<String, Value> = lock_sim(sim)
@@ -469,6 +481,10 @@ pub fn drive(
     }
     let mut body = outcome.to_json();
     body["ok"] = json!(outcome.exit_code == exit::OK);
+    if let Some(c) = lock_sim(sim).corrector_summary() {
+        // ADR 0156 D4: only with solver.corrector_control = "adaptive"
+        body["correctors"] = c;
+    }
     if outcome.state == "diverged" {
         // machine-readable record of the guard trip (ADR 0077)
         if let Some(d) = lock_sim(sim).divergence_json() {

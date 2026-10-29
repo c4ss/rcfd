@@ -932,7 +932,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "pressure_lag_check",
-            Schema::enumeration("warn", &["warn", "raise", "off"]).doc("PISO/PIMPLE pressure-lag check (ADR 0073 B4, ADR 0077), made only with n_correctors = 1: one estimate of the per-step amplification of the lagged pressure error (step 1; step 2 with bdf2/bdf2_bounded); warn emits a located warning event when it reaches 1 (the solution is unchanged), raise stops the run (state diverged, exit 6), off skips the estimate. Not used by the fractional step or dynamic meshes"),
+            Schema::enumeration("warn", &["warn", "raise", "off"]).doc("PISO/PIMPLE pressure-lag check (ADR 0073 B4, ADR 0077), made only with n_correctors = 1: one estimate of the per-step amplification of the lagged pressure error (step 1; step 2 with bdf2/bdf2_bounded); warn emits a located warning event when it reaches 1 (the solution is unchanged), raise stops the run (state diverged, exit 6), off skips the estimate. With n_correctors >= 2 and corrector_control = fixed, rcfd check, --check-only and rcfd run make the same estimate once before the run on a copy of the solver and warn (rule SV301, ADR 0156) when it reaches 1.3; off skips that too. Not used by the fractional step or dynamic meshes"),
         )
         .field(
             "time_scheme",
@@ -971,6 +971,12 @@ pub fn case_schema() -> Schema {
             Schema::int(2)
                 .range(1.0, 10.0)
                 .doc("Pressure correctors per outer iteration"),
+        )
+        .field(
+            "corrector_control",
+            Schema::enumeration("fixed", &["fixed", "adaptive"])
+                .doc("Pressure correctors of the transient piso/pimple solver (ADR 0156): fixed = exactly n_correctors per outer iteration (default); adaptive = at least n_correctors, and as many more (at most 10) as the step's pressure-velocity coupling needs to stay stable: at the first step, every 1000 steps and when the last corrector's pressure change grows on 3 steps in a row, the solver estimates how much a lagged pressure error is amplified per step (the ADR 0073 estimate on the step's own matrices) and adds correctors until that is at most 0.5. Use it when refining a mesh makes the wall cells thin (grid-scale pressure spokes or divergence with fixed correctors; the warning SV301 says so before the run). The count is reported in every iteration event (correctors) and the run summary; a warning event when 10 correctors are not enough. Not with time_advance = fractional_step, steady algorithms, variable density, VOF, compressible, dynamic_mesh or error_tolerance (located errors)")
+                .hash_omit_default(),
         )
         .field(
             "pseudo_mode",

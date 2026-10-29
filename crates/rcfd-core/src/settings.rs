@@ -84,6 +84,9 @@ pub struct Schema {
     pub kind: Kind,
     /// Human readable documentation.
     pub doc: String,
+    /// As a field of an object: left out of [`SettingsTree::content_hash`] while its value equals its default, so that adding
+    /// the field to a schema leaves the hash of all earlier data unchanged (ADR 0156 D6). Default `false`.
+    pub hash_omit_default: bool,
 }
 
 impl Schema {
@@ -91,6 +94,7 @@ impl Schema {
         Schema {
             kind,
             doc: String::new(),
+            hash_omit_default: false,
         }
     }
     /// Boolean setting.
@@ -161,6 +165,12 @@ impl Schema {
     /// Attach documentation.
     pub fn doc(mut self, d: &str) -> Self {
         self.doc = d.into();
+        self
+    }
+    /// Leave this field out of [`SettingsTree::content_hash`] while it holds its default value (ADR 0156 D6): for a key added
+    /// to an existing schema, so that every earlier case keeps its hash.
+    pub fn hash_omit_default(mut self) -> Self {
+        self.hash_omit_default = true;
         self
     }
     /// Set bounds (in SI for floats) on an int or float.
@@ -504,9 +514,15 @@ impl SettingsTree {
         serde_json::to_string_pretty(&self.data).expect("settings data is always serializable")
     }
 
-    /// Stable content hash of the data (FNV-1a over canonical, key-sorted JSON).
+    /// Stable content hash of the data (FNV-1a over canonical, key-sorted JSON). Object fields whose schema has
+    /// [`Schema::hash_omit_default`] are left out while they hold their default (ADR 0156 D6); with no such field in the schema
+    /// the hashed text is the serialised data itself.
     pub fn content_hash(&self) -> u64 {
-        fnv64(serde_json::to_string(&self.data).expect("serializable").as_bytes())
+        if !has_hash_omitted(&self.schema) {
+            return fnv64(serde_json::to_string(&self.data).expect("serializable").as_bytes());
+        }
+        let pruned = hash_view(&self.schema, &self.data);
+        fnv64(serde_json::to_string(&pruned).expect("serializable").as_bytes())
     }
 
     /// Schema node at `path` (named-object segments match any name).
@@ -651,10 +667,7 @@ impl SettingsTree {
             Kind::Command(a) => a.clone(),
             _ => return Err(invalid(path, "not a command")),
         };
-        let arg_schema = Schema {
-            kind: Kind::Object(arg_fields),
-            doc: String::new(),
-        };
+        let arg_schema = Schema::of(Kind::Object(arg_fields));
         let empty = json!({});
         let args = coerce(&arg_schema, if args.is_null() { &empty } else { args }, path)?;
         let key = pattern.join(".");
@@ -665,6 +678,45 @@ impl SettingsTree {
             .ok_or_else(|| invalid(path, format!("no handler registered for command '{key}'")))?;
         let _ = cmd;
         h(self, &parent.join("."), &args)
+    }
+}
+
+/// True when a field anywhere below `s` has [`Schema::hash_omit_default`] (ADR 0156 D6).
+fn has_hash_omitted(s: &Schema) -> bool {
+    match &s.kind {
+        Kind::Object(fields) => fields
+            .iter()
+            .any(|f| f.schema.hash_omit_default || has_hash_omitted(&f.schema)),
+        Kind::Named(item) | Kind::List(item) => has_hash_omitted(item),
+        _ => false,
+    }
+}
+
+/// The data as [`SettingsTree::content_hash`] hashes it: every object field with [`Schema::hash_omit_default`] that holds its
+/// default is left out; everything else is kept, in the data's own order (so the text equals the text of the data without
+/// those fields).
+fn hash_view(s: &Schema, v: &Value) -> Value {
+    match (&s.kind, v) {
+        (Kind::Object(fields), Value::Object(m)) => {
+            let mut out = Map::new();
+            for (k, x) in m {
+                match fields.iter().find(|f| &f.name == k) {
+                    Some(f) if f.schema.hash_omit_default && *x == f.schema.default_value() => {}
+                    Some(f) => {
+                        out.insert(k.clone(), hash_view(&f.schema, x));
+                    }
+                    None => {
+                        out.insert(k.clone(), x.clone());
+                    }
+                }
+            }
+            Value::Object(out)
+        }
+        (Kind::Named(item), Value::Object(m)) => {
+            Value::Object(m.iter().map(|(k, x)| (k.clone(), hash_view(item, x))).collect())
+        }
+        (Kind::List(item), Value::Array(a)) => Value::Array(a.iter().map(|x| hash_view(item, x)).collect()),
+        _ => v.clone(),
     }
 }
 
@@ -882,6 +934,62 @@ mod tests {
         bad = parsed;
         bad["extra"] = json!(1);
         assert!(SettingsTree::from_json(sample_schema(), &bad).is_err());
+    }
+
+    /// ADR 0156 D6: a field added with `hash_omit_default` leaves the hash of data without it unchanged while it holds its
+    /// default (also inside named objects), changes it at any other value, and is still a normal key everywhere else.
+    #[test]
+    fn hash_omitted_default_leaves_earlier_hashes_unchanged() {
+        let with_key = |s: Schema| {
+            let Kind::Object(mut fields) = s.kind else {
+                unreachable!()
+            };
+            for f in fields.iter_mut() {
+                if f.name == "solver" {
+                    f.schema = f.schema.clone().field(
+                        "mode",
+                        Schema::enumeration("fixed", &["fixed", "adaptive"]).hash_omit_default(),
+                    );
+                }
+                if f.name == "boundaries" {
+                    let Kind::Named(item) = &f.schema.kind else {
+                        unreachable!()
+                    };
+                    f.schema = Schema::named(
+                        item.as_ref()
+                            .clone()
+                            .field("extra", Schema::float(2.5).hash_omit_default()),
+                    );
+                }
+            }
+            Schema::of(Kind::Object(fields))
+        };
+        let mut old = SettingsTree::new(sample_schema());
+        old.add_named("boundaries", "inlet").unwrap();
+        old.set("solver.relax_p", json!(0.7)).unwrap();
+        let mut new = SettingsTree::new(with_key(sample_schema()));
+        new.add_named("boundaries", "inlet").unwrap();
+        new.set("solver.relax_p", json!(0.7)).unwrap();
+        assert!(new.to_json()["solver"].get("mode").is_some(), "the key is in the data");
+        assert_eq!(new.content_hash(), old.content_hash());
+        // written out at its default: the same data, the same hash
+        let mut explicit = new.clone();
+        explicit.set("solver.mode", json!("fixed")).unwrap();
+        explicit.set("boundaries.inlet.extra", json!(2.5)).unwrap();
+        assert_eq!(explicit.content_hash(), old.content_hash());
+        // another value: another hash
+        let mut adaptive = new.clone();
+        adaptive.set("solver.mode", json!("adaptive")).unwrap();
+        assert_ne!(adaptive.content_hash(), old.content_hash());
+        let mut extra = new.clone();
+        extra.set("boundaries.inlet.extra", json!(3.0)).unwrap();
+        assert_ne!(extra.content_hash(), old.content_hash());
+        assert_ne!(extra.content_hash(), adaptive.content_hash());
+        // the old schema's own hashing is the serialised data, unchanged
+        assert_eq!(
+            old.content_hash(),
+            crate::hash::fnv64(serde_json::to_string(&old.to_json()).unwrap().as_bytes())
+        );
     }
 
     #[test]
