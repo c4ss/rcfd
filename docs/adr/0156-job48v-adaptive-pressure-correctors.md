@@ -329,6 +329,23 @@ resolution sweep converges (St 0.1517, 0.1614, 0.1646 and mean cd 1.324, 1.349, 
 pre-run warning SV301 fires exactly on the refined set-ups of the user's family, on no user-facing case, and reproduces 48T's
 DG1 values; the census of the test suite found it on two families of existing test set-ups (B2b, B2c below).
 
+### Where the delivery differs from the brief's wording
+
+1. **"Verify no warning fires on any existing example/test case."** No user-facing case and no case literal warns (B2a). But the
+   census (B2b) shows SV301 would fire on nine existing test set-ups if they were run through `rcfd check` or `rcfd run`: the eight
+   closed boxes at rest of `user_scalars` u3 and the Hartmann step of `transient_sources` t5; four of them are unstable when
+   perturbed, five undetermined (their perturbations neither grow nor decay although the estimates of 1.9 to 4.8 predict growth).
+2. **"Adaptive per step."** The count is chosen by the lag estimate (D2): at the first step, every 1000 steps and when the
+   per-step growth monitor fires; there is no per-step residual tolerance (a design choice argued in D2). The growth monitor never
+   fired in any run of this job (`triggered` 0 everywhere); its counting is checked only by the library test.
+3. **"Counted in the status/residual output."** In the status stream (every `iteration` event, the `finish` summary, the
+   `corrector_cap` warning, A10 and A11), not in the run service's `residuals.jsonl` (`crates/rcfd-runner` unchanged; D8 item 4,
+   question 6).
+4. **SV301 can miss cases** whose viscosity comes from a law the Simulation applies before each step (rheology, eddy viscosity,
+   property laws): the limitation below, question 7. The adaptive control itself is not affected.
+5. **Cost.** On the user's mesh the opt-in costs 1.36 x the three-corrector workaround and 2.3 x the fractional step per step
+   (A7); robustness across meshes is what it buys.
+
 ### Results
 
 | Check | Limit (registered) | Measured | Outcome |
@@ -478,8 +495,11 @@ the adaptive count without touching a setting:
 
 ### Not run
 
-* The whole gate (workspace fmt, clippy, tests); run: rustfmt on the touched crates, `cargo clippy -p rcfd-core -p rcfd-fv
-  -p rcfd-api -p rcfd-cli --all-targets -- -D warnings` (clean), N4's suites.
+* The gate's test step for the whole workspace (run: N4's suites, which cover rcfd-core, rcfd-fv, rcfd-api, rcfd-cli,
+  rcfd-runner and seven rcfd-studio files). The gate's other two steps were run: `cargo fmt -p <crate> -- --check` for all 22
+  crates (clean; `cargo fmt --all` itself stops on Windows' command-line length, os error 206) and `cargo clippy --workspace
+  --all-targets -- -D warnings` (clean: exit 0, no warning, 185 crates checked). The tests of rcfd-turb, rcfd-gui, rcfd-mcp, rcfd-assistant and the other crates
+  that build `PimpleSettings` or a `Schema` were compiled by that clippy run but not run.
 * Linux.
 * The Studio itself (not edited; only N4's listed tests); SV301 in the run service, the MCP tools, the chain driver and
   `rcfd validate` (stated as not wired in D7).
