@@ -148,14 +148,11 @@ pressure_max_iter = 20000
 corrector_control = "adaptive"
 "#;
 
-#[test]
-fn w48v_a9_adaptive_is_refused_where_the_kernel_has_no_piso_correctors() {
+/// The five A9 arms; `simplec` is the arm's text (amendment 2 corrects it).
+fn a9_arms(simplec: String) -> [(&'static str, String); 5] {
     let ad = "corrector_control = \"adaptive\"";
-    let texts = [
-        (
-            "simplec",
-            example_with(&format!("{ad}\n")).replace("algorithm = \"piso\"", "algorithm = \"simplec\""),
-        ),
+    [
+        ("simplec", simplec),
         (
             "fractional_step",
             example_with(&format!("{ad}\ntime_advance = \"fractional_step\"")),
@@ -166,7 +163,30 @@ fn w48v_a9_adaptive_is_refused_where_the_kernel_has_no_piso_correctors() {
             example_with(&format!("{ad}\nerror_tolerance = 1e-3")),
         ),
         ("variable density (low Mach pimple)", LOW_MACH.to_string()),
-    ];
+    ]
+}
+
+/// A9 as registered. KNOWN MISS by a set-up defect (ADR 0156 amendment 2): its simplec arm is refused by the case parser before
+/// a simulation is built (the example's `output.store_time_interval` is a key of transient runs), so the test stops there; the
+/// corrected test is `w48v_a9b_...`.
+#[test]
+#[ignore = "known miss (ADR 0156 amendment 2): set-up defect, the simplec arm keeps the example's transient store key and is refused by the parser; corrected in w48v_a9b_"]
+fn w48v_a9_adaptive_is_refused_where_the_kernel_has_no_piso_correctors_known_miss() {
+    let simplec =
+        example_with("corrector_control = \"adaptive\"\n").replace("algorithm = \"piso\"", "algorithm = \"simplec\"");
+    a9_check(a9_arms(simplec));
+}
+
+/// A9 corrected (ADR 0156 amendment 2): the simplec arm with `store_interval = 50` in place of the transient store key.
+#[test]
+fn w48v_a9b_adaptive_is_refused_where_the_kernel_has_no_piso_correctors() {
+    let simplec = example_with("corrector_control = \"adaptive\"\n")
+        .replace("algorithm = \"piso\"", "algorithm = \"simplec\"")
+        .replace("store_time_interval = 1.0", "store_interval = 50");
+    a9_check(a9_arms(simplec));
+}
+
+fn a9_check(texts: [(&'static str, String); 5]) {
     for (name, text) in texts {
         let r = Simulation::new(&parse(&text));
         let msg = match &r {
