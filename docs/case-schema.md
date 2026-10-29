@@ -762,6 +762,10 @@ pressure is meaningless. A larger remainder is still taken as a separate, shorte
 of the step, the run reports the warning `short_last_step` (`rcfd run` on stderr, the run's events), because the
 pressure of a much shorter step can be inaccurate: choose `solver.end_time` as a whole number of steps of `solver.dt`.
 The adaptive controller below lands on the end time and on write times by its own rule.
+A run whose summed steps end within the end tolerance (1e-12) of `solver.end_time` without a separate step (job 48S: 2,567
+steps of 3/2567 reach 2.999999999999983) reports `solver.end_time` exactly as its final time: the last `iteration` event, the
+`finish` event, the last stored snapshot, the monitors' last abscissa (ADR 0160). Only the time stamp changes: the solver's own
+time, every field, the restart file and so a continued run are as before.
 
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
@@ -1514,7 +1518,10 @@ no dynamic mesh, `n_correctors >= 2`, `corrector_control = "fixed"` and `pressur
 iterations, the case's correctors) and warn when a lagged pressure error is amplified by 1.3 or more per step: the coupling is
 then likely unstable (in ADR 0154's cylinder runs every clean set-up was at most 1.166, every spoky or diverged one at least
 2.418). The message names the cell of the estimate's largest entry and the remedy `solver.corrector_control = "adaptive"`. The
-estimate changes no result (the solver itself is not touched) and costs about 61 steps' worth of linear algebra once.
+estimate changes no result (the solver itself is not touched) and costs about 61 steps' worth of linear algebra once. The trial
+step uses the viscosity the first step would use (ADR 0160): a rheology law's on the current velocity, else a turbulence
+model's present eddy viscosity. The run service's `run.check` and `run.headless` (MCP `check_case_headless`, `run_headless`)
+give it too; `run.headless` only at a run's start (no step taken yet).
 
 ## Wave 20C: `study` (F-095, ADR 0034)
 

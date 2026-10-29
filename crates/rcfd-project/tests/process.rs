@@ -121,6 +121,8 @@ fn residual(step: u64) -> ResidualLine {
             .map(|k| (format!("eq{k}"), 1.0 / (1.0 + (step + k) as f64)))
             .collect(),
         monitors: Default::default(),
+        correctors: None,
+        corrector_cap: None,
     }
 }
 

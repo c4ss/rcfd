@@ -878,6 +878,13 @@ fn fixed_step(t: f64, dt: f64, end: f64) -> (f64, bool) {
     }
 }
 
+/// The reported final time of a fixed-step run whose end test stopped it at the solver time `t` (ADR 0160 D1): `end` when `t`
+/// lies within the end tolerance of it (1e-12 below, as the end test; `1e-12 max(1, |end|)` above, where `t + (end - t)` can
+/// round over), `None` when `t` is `end` already or lies outside.
+fn end_snap(t: f64, end: f64) -> Option<f64> {
+    (t != end && t >= end - 1e-12 && t <= end + 1e-12 * end.abs().max(1.0)).then_some(end)
+}
+
 /// The run-time warning `short_last_step` (ADR 0145 D4) of the step `d` taken at step `step`, ending at `time`, instead of
 /// the proposed step `dt` towards the end time `end`; `None` unless `d` is shorter than [`SHORT_LAST_STEP`] of `dt`. A
 /// stretched step (D1) is longer than its proposal and never warns.
@@ -994,6 +1001,10 @@ pub struct Simulation {
     corrector_reported: usize,
     /// `short_last_step` warnings not handed out yet (ADR 0145 D4).
     landing_warnings: Vec<serde_json::Value>,
+    /// The reported end of a fixed-step run that stopped within the end tolerance of `solver.end_time` (ADR 0160 D2): the bits
+    /// of the solver's own time at that end and `solver.end_time`; [`Simulation::time`] reports the second while the solver's
+    /// time still has those bits.
+    time_snap: Option<(u64, f64)>,
     /// Solution limits (`limits.*`, ADR 0016): `(enabled, min, max)` for temperature and transported scalars.
     limit_t: (bool, f64, f64),
     limit_s: (bool, f64, f64),
@@ -2085,6 +2096,7 @@ impl Simulation {
             lag_reported: 0,
             corrector_reported: 0,
             landing_warnings: Vec::new(),
+            time_snap: None,
             limit_t,
             limit_s,
             clipped: 0,
@@ -2368,8 +2380,19 @@ impl Simulation {
         self.last.map_or(0, |l| l.index)
     }
 
-    /// Current simulation time (0 for steady runs).
+    /// Current simulation time (0 for steady runs). A fixed-step run that stopped within the end tolerance of
+    /// `solver.end_time` reports `solver.end_time` (ADR 0160 D1, D2); [`solver_time`](Self::solver_time) is the solver's own.
     pub fn time(&self) -> f64 {
+        let t = self.solver_time();
+        match self.time_snap {
+            Some((bits, end)) if bits == t.to_bits() => end,
+            _ => t,
+        }
+    }
+
+    /// The solver's own time (0 for steady runs): the sum of the steps it took, never snapped onto the end time (ADR 0160 D2);
+    /// the time to take differences of between steps.
+    pub fn solver_time(&self) -> f64 {
         match &self.engine {
             Engine::Steady(_) | Engine::Coupled(_) => 0.0,
             Engine::VarDensity(v) => v.solver.time,
@@ -2590,7 +2613,9 @@ impl Simulation {
         {
             return None;
         }
-        let w = s.lag_preflight(self.dt, LAG_PREFLIGHT_ITERATIONS)?;
+        // ADR 0160 D6: the trial step gets the face viscosity the next step would set (a law's error: no estimate)
+        let nu = self.next_step_viscosity_of(s).ok()?;
+        let w = s.lag_preflight_with(self.dt, LAG_PREFLIGHT_ITERATIONS, nu.as_deref())?;
         let x = self
             .geom
             .mesh
@@ -2605,6 +2630,33 @@ impl Simulation {
             position: x,
             n_correctors: s.settings.n_correctors,
         })
+    }
+
+    /// The face viscosity that [`step`](Self::step) would hand the incompressible transient solver before its next step,
+    /// computed without changing the simulation (ADR 0160 D6): with a rheology law, the law on a copy of its state (the
+    /// transient call: no temperature, relaxed against the copy's history) on the current velocity, which is what the step
+    /// sets; else with a turbulence model, the model's present face viscosity (laminar zones masked), not the state after the
+    /// step's own sweep; else `None` (the constant `physics.nu`). `None` also for other engines and when the law fails.
+    pub fn next_step_viscosity(&self) -> Option<Vec<f64>> {
+        match &self.engine {
+            Engine::Transient(s) => self.next_step_viscosity_of(s).ok().flatten(),
+            _ => None,
+        }
+    }
+
+    fn next_step_viscosity_of(&self, s: &PimpleSolver) -> std::result::Result<Option<Vec<f64>>, String> {
+        if let Some(r) = &self.rheology {
+            return r.clone().nu_faces(&self.geom, &s.u, None, self.t_init).map(Some);
+        }
+        Ok(self.turb.as_ref().map(|t| t.nu_face()))
+    }
+
+    /// The face viscosity the incompressible transient solver holds now (`None`: the constant `physics.nu`; read only).
+    pub fn solver_face_viscosity(&self) -> Option<Vec<f64>> {
+        match &self.engine {
+            Engine::Transient(s) => s.nu_face.clone(),
+            _ => None,
+        }
     }
 
     /// Registry key and label of the active turbulence model (`None` for laminar runs).
@@ -2743,6 +2795,9 @@ impl Simulation {
 
     /// Advance one iteration (steady) or time step (transient) and record monitors.
     pub fn step(&mut self) -> StepSummary {
+        self.time_snap = None;
+        // ADR 0160 D1: the step is one of `fixed_step`'s (fixed solver.dt or the legacy Courant controller)
+        let mut fixed_end = false;
         self.update_marangoni();
         let mut reason_override: Option<String> = None;
         let mut udf_error: Option<String> = None;
@@ -2784,6 +2839,7 @@ impl Simulation {
             Engine::Transient(s) if frozen => {
                 // ADR 0145 D1: a rounding remainder is absorbed into the last whole step (no warning: no pressure here)
                 let (dt, last) = fixed_step(s.time, self.dt, self.end_time);
+                fixed_end = true;
                 if let Some(en) = &mut self.energy {
                     let joule = joule_source(&mut self.electric, &self.geom, &en.solver.t.values, &mut udf_error);
                     if let Some(zs) = &self.zone_sources {
@@ -3165,6 +3221,7 @@ impl Simulation {
                 // transient variable density (ADR 0009): one time step of SIMPLE-inner iterations; a rounding remainder is
                 // absorbed into the last whole step (ADR 0145 D1)
                 let (dt, last) = fixed_step(v.solver.time, self.dt, self.end_time);
+                fixed_end = true;
                 match v.solver.advance(dt) {
                     Ok(si) => {
                         v.steps += 1;
@@ -3236,6 +3293,7 @@ impl Simulation {
                 // two-phase free-surface step (ADR 0049): alpha sub-cycled, then PISO / PIMPLE on the mixture; a rounding
                 // remainder is absorbed into the last whole step (ADR 0145 D1)
                 let (dt, last) = fixed_step(v.solver.time, self.dt, self.end_time);
+                fixed_end = true;
                 match v.solver.step(dt) {
                     Ok(si) => {
                         v.steps += 1;
@@ -3295,6 +3353,7 @@ impl Simulation {
                 let mut last = false;
                 if fixed {
                     (dt, last) = fixed_step(s.time, dt, self.end_time);
+                    fixed_end = true;
                 } else if planned.is_none() {
                     dt = dt.min((self.end_time - s.time).max(1e-12));
                 }
@@ -3561,6 +3620,7 @@ impl Simulation {
         if udf_error.is_none() && summary.done {
             udf_error = self.udf_monitor_step(x, true);
         }
+        let mut ended_by_time = false;
         if let Some(e) = udf_error {
             summary.done = true;
             summary.converged = false;
@@ -3574,6 +3634,7 @@ impl Simulation {
                 summary.res_u, self.tol_u, summary.res_p, self.tol_p
             ));
         } else if summary.done {
+            ended_by_time = !self.is_steady();
             self.stop_reason = Some(if self.is_steady() {
                 format!(
                     "iteration limit {} reached without meeting the residual targets",
@@ -3601,6 +3662,16 @@ impl Simulation {
                 summary.converged = false;
                 self.stop_reason = Some(e.clone());
                 self.failure = Some(e);
+            }
+        }
+        // ADR 0160 D1, D2: a fixed-step run that the end test stopped within its tolerance of solver.end_time reports
+        // solver.end_time: the step's summary, `time()` and the step's monitor abscissae. Applied after every reader above;
+        // the solver's own time, and everything computed from it, is unchanged.
+        if fixed_end && ended_by_time && self.failure.is_none() {
+            if let Some(t) = end_snap(summary.time, self.end_time) {
+                self.monitors.retime_last(summary.time, t);
+                self.time_snap = Some((self.solver_time().to_bits(), t));
+                summary.time = t;
             }
         }
         self.done = summary.done;
@@ -4551,6 +4622,20 @@ mod tests {
     use super::*;
 
     use super::tests_support::CAVITY_TOML as CAVITY;
+
+    /// ADR 0160 S7: the snap rule of the reported end time.
+    #[test]
+    fn s7_end_snap_rule() {
+        let end = 0.3;
+        let up = f64::from_bits(end.to_bits() + 1);
+        assert_eq!(end_snap(end - 1e-13, end), Some(end));
+        assert_eq!(end_snap(up, end), Some(end));
+        let big = 1e5;
+        assert_eq!(end_snap(f64::from_bits(big.to_bits() + 1), big), Some(big));
+        assert_eq!(end_snap(end - 2e-12, end), None);
+        assert_eq!(end_snap(end, end), None);
+        assert_eq!(end_snap(f64::NAN, end), None);
+    }
 
     #[test]
     fn cavity_case_runs_converges_and_records_monitors() {

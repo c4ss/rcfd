@@ -50,6 +50,19 @@ impl MonitorStore {
         s.y.push(y);
     }
 
+    /// Replace the last abscissa of every series whose last `x` has the bit pattern of `from` by `to` (a fixed-step run's final
+    /// time reported on its end time, ADR 0160 D2); returns the number of series changed. The ordinates are not touched.
+    pub fn retime_last(&mut self, from: f64, to: f64) -> usize {
+        let mut n = 0;
+        for s in self.series.values_mut() {
+            if let Some(x) = s.x.last_mut().filter(|x| x.to_bits() == from.to_bits()) {
+                *x = to;
+                n += 1;
+            }
+        }
+        n
+    }
+
     /// Series by name.
     pub fn get(&self, name: &str) -> Option<&Series> {
         self.series.get(name)
@@ -330,6 +343,20 @@ mod tests {
             }
         }
         s
+    }
+
+    #[test]
+    fn retime_last_moves_only_matching_last_abscissae() {
+        let mut m = MonitorStore::new("time");
+        for (x, y) in [(0.1, 1.0), (0.2, 2.0), (0.30000000000000004, 3.0)] {
+            m.push("a", "", x, y);
+            m.push("b", "", x, -y);
+        }
+        m.push("c", "", 0.2, 5.0);
+        assert_eq!(m.retime_last(0.30000000000000004, 0.3), 2);
+        assert_eq!(m.get("a").unwrap().x, vec![0.1, 0.2, 0.3]);
+        assert_eq!(m.get("b").unwrap().y, vec![-1.0, -2.0, -3.0]);
+        assert_eq!(m.get("c").unwrap().x, vec![0.2]);
     }
 
     #[test]

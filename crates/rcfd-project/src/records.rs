@@ -340,6 +340,13 @@ pub struct ResidualLine {
     /// Monitor values by name (`null` reads as NaN).
     #[serde(default, deserialize_with = "nan::map")]
     pub monitors: BTreeMap<String, f64>,
+    /// Pressure correctors of the step's final outer iteration, only in runs with `solver.corrector_control = "adaptive"`
+    /// (ADR 0160 D4; absent otherwise, and not written when `None`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correctors: Option<u64>,
+    /// Estimates so far whose corrector search ended at the cap (same runs only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corrector_cap: Option<u64>,
 }
 
 /// `runs/<id>/metrics.json`: final report values by name.

@@ -229,6 +229,22 @@ fn read_last_line(p: &Path) -> Option<String> {
     text.lines().rev().find(|l| !l.trim().is_empty()).map(String::from)
 }
 
+/// The `residuals.jsonl` line of the solver `iteration` event `v` for step `idx`: step, time, the residuals and the report
+/// values (`rcfd run --status-monitors`, ADR 0130 D5; empty from a stream without them), and, only when the event carries
+/// them (`solver.corrector_control = "adaptive"`, ADR 0156 D4), the step's `correctors` and `corrector_cap` (ADR 0160 D4):
+/// the line of any other run is unchanged.
+pub fn residual_line(v: &Value, idx: u64) -> Value {
+    let mut line = json!({"step": idx, "time": v["time"],
+        "residuals": {"u": v["res_u"], "p": v["res_p"], "continuity": v["continuity"]},
+        "monitors": v.get("monitors").filter(|m| m.is_object()).cloned().unwrap_or_else(|| json!({}))});
+    for k in ["correctors", "corrector_cap"] {
+        if let Some(x) = v.get(k) {
+            line[k] = x.clone();
+        }
+    }
+    line
+}
+
 /// Final report values for `metrics.json` (ADR 0135 amendment 3): the report names are the `monitors` keys of the last
 /// residual line (`rcfd run --status-monitors`); each value is the last `y` of that series in the solver's
 /// `monitors.json`, else the residual line's value. Non-finite values are `null` (as serde_json writes them).
@@ -753,10 +769,7 @@ impl<S: RunStore> Runner<S> {
             if v["event"] == "iteration" {
                 let idx = v["index"].as_u64().unwrap_or(0);
                 if idx > a.step {
-                    residuals.push(json!({"step": idx, "time": v["time"],
-                        "residuals": {"u": v["res_u"], "p": v["res_p"], "continuity": v["continuity"]},
-                        // `rcfd run --status-monitors` (ADR 0130 D5); empty from a stream without them
-                        "monitors": v.get("monitors").filter(|m| m.is_object()).cloned().unwrap_or_else(|| json!({}))}));
+                    residuals.push(residual_line(&v, idx));
                     a.step = idx;
                     a.time = v["time"].as_f64().unwrap_or(a.time);
                     moved = true;
@@ -969,6 +982,38 @@ mod tests {
     const CASE: &str = "title = \"runner unit\"\n[mesh]\ngenerator = \"cavity_2d\"\nnx = 12\nny = 12\n[physics]\nnu = 0.01\n\
         [boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n\
         [solver]\nalgorithm = \"simplec\"\nconvection = \"upwind\"\nmax_iterations = 400\ntolerance_u = 1e-14\ntolerance_p = 1e-14\n";
+
+    /// ADR 0160 R1: a fixed run's line is byte-identical to the construction before ADR 0160 (copied here); an adaptive
+    /// event adds exactly `correctors` and `corrector_cap`.
+    #[test]
+    fn r1_residual_line_adds_the_corrector_count_only_when_the_event_has_it() {
+        let before = |v: &Value, idx: u64| -> Value {
+            json!({"step": idx, "time": v["time"],
+                "residuals": {"u": v["res_u"], "p": v["res_p"], "continuity": v["continuity"]},
+                "monitors": v.get("monitors").filter(|m| m.is_object()).cloned().unwrap_or_else(|| json!({}))})
+        };
+        let events = [
+            json!({"event": "iteration", "index": 3, "time": 0.03, "res_u": 1e-3, "res_p": 2e-4, "continuity": 1e-12,
+                   "done": false, "monitors": {"lid_drag": 0.31}}),
+            json!({"event": "iteration", "index": 4, "time": 0.04, "res_u": 1e-3, "res_p": 2e-4, "continuity": 1e-12,
+                   "done": true}),
+            json!({"event": "iteration", "index": 5, "time": 0.05, "res_u": null, "res_p": null, "continuity": null,
+                   "done": true}),
+        ];
+        for e in &events {
+            let idx = e["index"].as_u64().unwrap();
+            assert_eq!(residual_line(e, idx).to_string(), before(e, idx).to_string());
+        }
+        let mut a = events[0].clone();
+        a["correctors"] = json!(5);
+        a["corrector_cap"] = json!(0);
+        let line = residual_line(&a, 3);
+        let mut want = before(&events[0], 3);
+        want["correctors"] = json!(5);
+        want["corrector_cap"] = json!(0);
+        assert_eq!(line.to_string(), want.to_string());
+        assert_eq!(line.as_object().unwrap().len(), 6);
+    }
 
     /// `rcfd` of the same target directory (`target/<profile>/deps/<test>` -> `target/<profile>/rcfd`).
     fn rcfd() -> PathBuf {
