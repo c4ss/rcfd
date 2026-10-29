@@ -63,6 +63,8 @@ NU = 1.6666666666666667e-7  # Re = 6e6 (U = 1, c = 1), the example's value
 # steady arms (D3): iteration cap and the window of the statistics
 STEADY_ITERATIONS = 8000  # amendment 1 may change it after the disclosed smoke, before the counted runs
 STEADY_WINDOW = 1000
+SST_ITERATIONS = 4000  # amendment 2
+SST_ALPHAS = [0, 4, 8, 12, 14, 16, 18, 20]  # amendment 2
 STEADY_CL_RANGE = 0.005  # D4: steady iff max - min over the window <= these
 STEADY_CD_RANGE = 0.0005
 # transient arm (D5)
@@ -94,7 +96,8 @@ def registry():
     out = {}
     for a in ALPHAS + EXTENSION:
         out[rid("SA", a)] = {"arm": "SA", "alpha": a, "mesh": SWEEP_MESH}
-        out[rid("SST", a)] = {"arm": "SST", "alpha": a, "mesh": SWEEP_MESH}
+        # amendment 2: the report-only SST arm runs 4000 iterations, at SST_ALPHAS (and 22, 24 by its own curve)
+        out[rid("SST", a)] = {"arm": "SST", "alpha": a, "mesh": SWEEP_MESH, "iterations": SST_ITERATIONS}
         for lvl in (0, 1, 2):
             out[rid("DD", a, lvl)] = {"arm": "DD", "alpha": a, "mesh": SWEEP_MESH, "dt": DDES_DT / 2 ** lvl}
     for a in (6, 14):
@@ -675,9 +678,10 @@ def analyse(runs):
     if sst_curve:
         res["sst_stall"] = stall([(p["alpha"], p["cl"]) for p in sst_curve])
         spts = [(p["alpha"], p["cl"]) for p in sst_curve if p["alpha"] in SLOPE_ALPHAS]
-        if len(spts) == len(SLOPE_ALPHAS):
+        if len(spts) >= 3:  # amendment 2: 0, 4 and 8 degrees
             b, _ = slope_fit(spts)
             res["sst_slope_factor"] = b / (2 * math.pi)
+            res["sst_slope_alphas"] = [a for a, _ in spts]
     res["ddes"] = {str(a): {"id": r["id"], "dt": r["dt"], "complete": r["complete"], **{
         k: r["summary"].get(k) for k in ("cl", "cd", "cl_half_drift", "cd_half_drift", "St_chord", "periods",
                                          "correctors", "corrector_cap", "steps", "reached")}}

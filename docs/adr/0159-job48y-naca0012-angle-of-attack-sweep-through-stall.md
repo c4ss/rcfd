@@ -237,6 +237,19 @@ set-up value was changed after seeing these numbers; in particular nothing in th
 **Order of the counted runs (cost, not a rule):** the SA arm (14 angles) first, then the DD runs that D5's plan asks for,
 then SA2, then SST; at most 4 at a time. A run of a later arm that cannot be made in this job is reported as not run.
 
+## Amendment 2 (2026-10-29, before any SST run): the report-only SST arm on fewer angles and a shorter cap
+
+What had run when this was written: the counted SA runs at 15, 16, 17, 18 and 20 degrees (finished, each steady by D4),
+SA at 8 to 14 and the extension 22 and 24 (started before SA at 20 had finished, because with SA's cl rising through
+1.4988 at 18 to 1.5277 at 20 no base angle could give D8's drop after a peak at 20; D8's rule is re-evaluated on the
+finished runs in the addendum) and SA2 at 6 and 14 were running; no SST and no DD run. On the loaded host the steady runs
+take 0.5 to 1.1 s per iteration (9 of my processes next to other agents' builds and containers, total CPU 100 %), so a
+steady run of 8000 iterations takes 1.2 to 2.4 hours. The SST arm at all 14 (16) angles would take another 6 or more
+hours. **Changed (report-only arm, no limit depends on it):** SST runs at **0, 4, 8, 12, 14, 16, 18, 20** degrees (and 22,
+24 when its own curve shows no 10 % drop by 20), with a cap and `min_iterations` of **4000** (the diagnostic SST run at 6
+degrees on M1w held cl 0.64405 and cd 0.00611 to every printed digit from iteration 500 to 2972); D4's window (the last
+1000 iterations) and rule are unchanged. The SA, DD and SA2 arms are unchanged.
+
 ## Questions for the maintainer (open at registration; the addendum may add to them)
 
 1. Storage (D6): accept "driver plus results, runs on demand" for sweeps of this size, rather than a new example project
