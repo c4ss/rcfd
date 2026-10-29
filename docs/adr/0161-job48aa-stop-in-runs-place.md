@@ -223,7 +223,7 @@ AA check below is the second, at 995dd42, unless said.
 | AA3 | in flight nothing asked; ended within 20.0 s, `cancelled`, no error, Run drawn | 148 frames in flight, `stop` never asked; Stop clicked with the run queued and no runner holding the lock; ended 0.458 s later, "cancelled before launch", label "cancelled", 0 launched; no start error, no "Stop: " or "cancel run" message; Run drawn | pass (after amendment 1 item 2) |
 | AA4 | no-op after the end | view Run; `stop` false; messages, `status.json` unchanged; no cancel file; Run drawn, Stop not | pass (both runs) |
 | AA5 | the label table; no project: Run, false, silent | as registered | pass (both runs) |
-| AA6 | the `rcfd-studio` suite; clippy; fmt; `workspace_graph` | suite at 995dd42: 62 test binaries, 280 passed, 1 failed (J2, amendment 2), 15 ignored (the 13 ignored before and this job's 2 known misses); J2 after amendment 2 (b38949f), run alone: pass (run 1 selected 0.134 s, run 2 0.103 s after the click; its control as before); `cargo clippy -p rcfd-studio --all-targets -- -D warnings` clean; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed | pass (J2 after amendment 2) |
+| AA6 | the `rcfd-studio` suite; clippy; fmt; `workspace_graph` | suite at 995dd42: 62 test binaries, 280 passed, 1 failed (J2, amendment 2), 15 ignored (the 13 ignored before and this job's 2 known misses); J2 after amendment 2 (b38949f), run alone: pass (run 1 selected 0.134 s, run 2 0.103 s after the click; its control as before); `cargo clippy -p rcfd-studio --all-targets -- -D warnings` clean; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed. Suite again at df8098a (after amendment 2): 62 binaries, 280 passed, 1 failed, 15 ignored; J2 passed in it; the failure was ADR 0138's GPU timing G10 (`preview_gpu_g1`, upload frame 133.2 ms, then 113.5 ms run alone, limit 100 ms) on the RTX 5080 that other agents' jobs were using (20 % busy when read); G10 passed in the run at 995dd42, whose `src/` is the same as df8098a's (only tests and documents changed since), and this job changes no preview or render code. Clippy repeated at df8098a: clean | pass (J2 after amendment 2); G10 a timing miss on the shared GPU, not caused by this job (not re-registered) |
 
 Reported without a limit: AA1b's run had stored 2 snapshots when Stop was clicked and stopped at step 158 (about 2.3 s
 simulated); AA1's first (missed) run stopped 0.213 s after the click at step 240 with 4 snapshots; `cancel_requested`
@@ -241,10 +241,24 @@ Deviations and notes:
 * `quick_run_ui.rs`: the Run button's 12 lines are re-indented inside the new `if` (the merge with job 48X may conflict
   there; the intent is "draw Run unless `stop_ui::button` drew Stop").
 * The race "the run ends between the click and the request" (D1's second status read) is read from code, not tested.
+* Known limit (read from code, not run): a queued run whose runner never starts (`ensure_runner` failed) and that Stop
+  was pressed for keeps its cancel request until a runner starts (Runs > Start runner), and the toolbar shows
+  "Stopping..." for its case until then; that hover speaks of "the step it is on", which is wrong for a run that never
+  launched.
+
+Where the delivery differs from the brief:
+* D3: Stop replaces Run only for the selected case's live toolbar run; with another case selected Run is shown for that
+  case and the running run is stopped from the strip or the Runs panel (question 7).
+* D2: "stopped" is the Studio's label for `cancelled` with exit code 7; `status.json` says `cancelled` (question 1).
+* D4.2: before the run is queued Stop is drawn greyed out and does nothing (no pending stop is kept); once queued it
+  takes the run out of the queue.
+* D8: the strip's and the Runs panel's "Cancel" keep their label (question 3).
+* D4: F5 now refuses a second run of a case whose toolbar run is going (question 4).
 
 Not run: the Studio tests in a debug build; Linux (the new process tests have never run there); the "Not in CI" items
 (a real window, Cmd+. on macOS, keyboard layouts); a stop whose solver step exceeds the 10 s grace (the hover's kill
-sentence); the workspace gate and workspace-wide clippy; other crates' tests (no other crate changed).
+sentence); Stop of a run paused from the strip (the solver leaves its pause loop when the stop file appears, read from
+`rcfd-cli`; not checked); the workspace gate and workspace-wide clippy; other crates' tests (no other crate changed).
 
 ## Questions for the maintainer
 
@@ -264,3 +278,7 @@ sentence); the workspace gate and workspace-wide clippy; other crates' tests (no
    own job, so the event log always records who ended the run.
 6. **`QuickRun::rects` keeps a stale "Run" entry** while Stop is drawn (tests use it as the toolbar's place).
    Recommendation: accept; clear it only if a test should fail loudly when it clicks Run under Stop.
+7. **Which run Stop stands for (D3).** Options: (a) the selected case's live toolbar run only, as built (another case
+   selected shows Run for it; several cases can run at once from the toolbar); (b) any live toolbar run whatever case is
+   selected (Run is unavailable on the toolbar while any of them runs). Recommendation: (a): it keeps the case-linked
+   toolbar of ADR 0148/0149 and starting runs of several cases, and the strip and Runs panel stop the others.

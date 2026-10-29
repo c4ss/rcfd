@@ -492,3 +492,10 @@ live_preview_gpu_j,live_preview_run_j}.rs`, `tests/lj/mod.rs` and `crates/rcfd-a
 changed tests `crates/rcfd-studio/tests/{preview_g1,preview_cost_g1,oneclick_g4,oneclick_e2e_g4,example_projects_h}.rs`
 and `crates/rcfd-mcp/tests/example_projects_w48h.rs`; ADR 0138 amendment 3, ADR 0141 amendments 2 and 3, a note in ADR
 0142.
+
+## Note (2026-10-29, ADR 0161 amendment 2)
+
+J2 (d) and its control now wait, before their click on Run, until the toolbar's place holds Run (`stop::view` is
+`View::Run`): since [ADR 0161](0161-job48aa-stop-in-runs-place.md) the place holds Stop while the case's run that Run
+started is live, so the earlier set-up (wait until `quick_run::blocked` is empty) could click Stop. J2's limits are
+unchanged; it passed on the corrected set-up (ADR 0161 addendum).
