@@ -4,7 +4,9 @@ Status: **registered 2026-10-29**, before any code and before any solver run of 
 the design, the limits, the reading rules and the not-run list are fixed here. **Results in the addendum:** every
 registered limit met, no known miss; amendment 1 (the live model switch) corrected a defect found by review after the
 results; no stored example run and no `baseline_hashes.rs` case changes. Not yet
-accepted by the maintainer. Job 49C, on local main f9a520a (the
+accepted by the maintainer. 2026-10-29: questions 1 (b) and 3 (b) are taken in
+[ADR 0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) (job 49F), which supersedes D2's
+SA-only scope and with it T6 and T8 (a). Job 49C, on local main f9a520a (the
 worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest in this worktree and in the main
 checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
 

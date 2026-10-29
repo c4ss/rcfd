@@ -1,7 +1,8 @@
 //! ADR 0166 (job 49C): the effective wall shear is the default of force reports with a turbulence model (D1), moment
 //! reports keep their default (D3), the old values stay spellable as `total_molecular` / `viscous_molecular` (D4), and a
 //! Spalart-Allmaras free-stream far field takes the `freestream` turbulence role by default (D2). Limits T1-T6 of ADR 0166,
-//! registered before this file was written.
+//! registered before this file was written. T6 and T8 (a) are superseded by ADR 0169 (SST and k-epsilon far fields are
+//! `freestream` by default too) and replaced in `far_field_w49f.rs`.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::{ReportDef, Simulation};
@@ -227,17 +228,8 @@ fn t5_sa_far_field_default_is_freestream() {
     }
 }
 
-/// T6: SST and k-epsilon keep the old far-field role under `auto`: no validation error (checked in
-/// `freestream_plate`), and the run is the explicit `zero_gradient` one, bit for bit.
-#[test]
-fn t6_sst_and_k_epsilon_far_field_default_is_unchanged() {
-    let fields = ["ux", "uy", "p", "k"];
-    for model in ["k_omega_sst", "k_epsilon"] {
-        let auto = freestream_plate(model, "");
-        let old = freestream_plate(model, "turbulence = \"zero_gradient\"");
-        assert_eq!(bits(&auto, &fields, 30), bits(&old, &fields, 30), "{model}");
-    }
-}
+// T6 (SST and k-epsilon kept the `zero_gradient` far field under `auto`) is superseded by ADR 0169 D1, which makes
+// `freestream` their default too: its replacement is `far_field_w49f.rs` F1 (ADR 0169 D9).
 
 /// Far-field faces of `name`: (inflow faces, outflow faces) as (face value, owner cell value) pairs.
 type FacePairs = Vec<(f64, f64)>;
@@ -257,27 +249,14 @@ fn far_field_faces(s: &Simulation, name: &str) -> (FacePairs, FacePairs) {
     (pairs("xmin"), pairs("xmax"))
 }
 
-/// T8 (ADR 0166 amendment 1): the live model switch takes the far-field role of the new model. (a) SA to SST: k and
-/// omega are zero-gradient (finite, the owner value) on every far-field face, as in a fresh SST build; (b) SST to SA:
+/// T8 (ADR 0166 amendment 1): the live model switch takes the far-field role of the new model. (a) SA to SST: superseded
+/// by ADR 0169 D1 (SST's far field is `freestream` too), replaced by `far_field_w49f.rs` F6 (ADR 0169 D9); (b) SST to SA:
 /// the inflow faces hold nuTilda = 3 nu; (c) SA to SA (a coefficient change): the free-stream condition stays (inflow
 /// faces 3 nu, outflow faces the owner value).
 #[test]
 fn t8_live_switch_takes_the_new_models_far_field_role() {
     let sa = freestream_plate("spalart_allmaras", "");
     let sst = freestream_plate("k_omega_sst", "");
-    // (a)
-    let mut s = run(&sa, 20);
-    s.reconfigure_turbulence(&sst).unwrap_or_else(|e| panic!("{e:?}"));
-    for _ in 0..10 {
-        s.step();
-    }
-    for name in ["k", "omega"] {
-        let (inflow, outflow) = far_field_faces(&s, name);
-        for (face, cell) in inflow.iter().chain(outflow.iter()) {
-            assert!(face.is_finite(), "{name}: {face}");
-            assert_eq!(face.to_bits(), cell.to_bits(), "{name}: face {face} owner {cell}");
-        }
-    }
     // (b)
     let mut s = run(&sst, 20);
     s.reconfigure_turbulence(&sa).unwrap_or_else(|e| panic!("{e:?}"));

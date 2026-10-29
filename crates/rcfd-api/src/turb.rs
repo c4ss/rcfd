@@ -146,17 +146,24 @@ fn velocity_is_zero(case: &Case, b: &str) -> bool {
     !has_expr && vec3::norm(v) == 0.0
 }
 
+/// Is k-epsilon (any variant) selected?
+fn is_k_epsilon(case: &Case) -> bool {
+    get_s(case, "turbulence.model") == "k_epsilon"
+}
+
 /// Does the patch take the free-stream turbulence condition (inlet values on the inflow faces, zero gradient on the
-/// outflow faces)? Explicitly by `turbulence = "freestream"` (ADR 0164 amendment 1), or by default (ADR 0166 D2): under
-/// `turbulence = "auto"`, a `velocity = "freestream"` patch with a non-zero `velocity_value` with Spalart-Allmaras (whose
-/// free-stream value `nutilde_ratio * nu` needs no further key). Catalogue and wall-motion kinds resolve first, as in
-/// [`role`]. Every other `auto` patch, and every other model, resolves as before.
+/// outflow faces)? Explicitly by `turbulence = "freestream"` (ADR 0164 amendment 1), or by default: under
+/// `turbulence = "auto"`, a `velocity = "freestream"` patch with a non-zero `velocity_value` with Spalart-Allmaras
+/// (ADR 0166 D2; its free-stream value `nutilde_ratio * nu` needs no further key), k-omega SST or k-epsilon (ADR 0169 D1;
+/// without an inlet specification their values come from [`freestream_fallback`]). Catalogue and wall-motion kinds
+/// resolve first, as in [`role`]. Every other `auto` patch, and every other model (the Reynolds stress model has no inlet
+/// condition, plugin and algebraic models keep theirs), resolves as before.
 pub fn freestream_role(case: &Case, patch: &str) -> bool {
     let b = format!("boundaries.{patch}");
     match get_s(case, &format!("{b}.turbulence")).as_str() {
         "freestream" => true,
         "auto" => {
-            is_sa(case)
+            (is_sa(case) || is_sst(case) || is_k_epsilon(case))
                 && get_s(case, &format!("{b}.velocity")) == "freestream"
                 && crate::bc_cat::role(case, patch).is_none()
                 && !crate::wall_motion::is_wall_motion(case, patch)
@@ -164,6 +171,37 @@ pub fn freestream_role(case: &Case, patch: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// Does a k-omega SST or k-epsilon free-stream patch ([`freestream_role`]) take its values from the initial-field keys
+/// (ADR 0169 D2)? True when the patch gives no inlet specification, which is exactly the input the inlet check refuses
+/// otherwise: `turbulence_spec = "intensity_length"` (the default) with `turbulence_length` unset (0). The values are then
+/// those of `turbulence_spec = "intensity_viscosity_ratio"` with `turbulence.initial_intensity` and
+/// `turbulence.initial_viscosity_ratio` ([`freestream_values`], [`freestream_values_sst`]). Every explicit specification
+/// is used as given.
+pub fn freestream_fallback(case: &Case, patch: &str) -> bool {
+    let b = format!("boundaries.{patch}");
+    (is_sst(case) || is_k_epsilon(case))
+        && freestream_role(case, patch)
+        && get_s(case, &format!("{b}.turbulence_spec")) == "intensity_length"
+        && get_f(case, &format!("{b}.turbulence_length")) <= 0.0
+}
+
+/// `(k, epsilon)` of a free-stream face with speed `u` without an inlet specification (ADR 0169 D2):
+/// `k = 1.5 (I U)^2` with `I = turbulence.initial_intensity`, `epsilon = Cmu k^2 / (nu R)` with
+/// `R = turbulence.initial_viscosity_ratio`, the clamps of [`inlet_values`].
+pub fn freestream_values(case: &Case, cmu: f64, nu: f64, u: f64) -> (f64, f64) {
+    let k = k_from_intensity(get_f(case, "turbulence.initial_intensity"), u).max(1e-10);
+    let e = epsilon_from_viscosity_ratio(cmu, k, nu, get_f(case, "turbulence.initial_viscosity_ratio"));
+    (k, e.max(1e-10))
+}
+
+/// `(k, omega)` of a k-omega SST free-stream face without an inlet specification: [`freestream_values`] with
+/// `Cmu = beta*`, `omega = epsilon / (beta* k)`.
+pub fn freestream_values_sst(case: &Case, nu: f64, u: f64) -> (f64, f64) {
+    let beta_star = rcfd_turb::sst::BETA_STAR;
+    let (k, e) = freestream_values(case, beta_star, nu, u);
+    (k, (e / (beta_star * k)).max(1e-10))
 }
 
 /// Turbulence role of a boundary entry (`turbulence = auto` is resolved from the velocity condition).
@@ -188,7 +226,7 @@ pub fn role(case: &Case, patch: &str) -> Role {
                     Role::Inlet
                 }
             } else if freestream_role(case, patch) {
-                // ADR 0166 D2: a Spalart-Allmaras free-stream far field takes the `freestream` role by default
+                // ADR 0166 D2, ADR 0169 D1: an SA, SST or k-epsilon free-stream far field takes the `freestream` role
                 Role::Inlet
             } else {
                 Role::ZeroGradient
@@ -521,7 +559,11 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                                 "the inlet velocity is zero, so k = 1.5 (I U)^2 vanishes: prescribe the velocity or use turbulence_spec = \"values\"",
                             ));
                         }
-                        if other == "intensity_length" && get_f(case, &format!("{b}.turbulence_length")) <= 0.0 {
+                        // ADR 0169 D2: a free-stream far field without a length takes the initial-field keys instead
+                        if other == "intensity_length"
+                            && get_f(case, &format!("{b}.turbulence_length")) <= 0.0
+                            && !freestream_fallback(case, n)
+                        {
                             out.push(diag(
                                 &format!("{b}.turbulence_length"),
                                 "turbulence_spec = \"intensity_length\" needs a positive turbulence_length [m] (about 0.07 times the hydraulic diameter for internal flow)",
@@ -906,6 +948,8 @@ impl TurbState {
             .map_or(cmu, |c| c.value);
         for (patch, speeds) in inlet_speeds {
             let b = format!("boundaries.{patch}");
+            // ADR 0169 D2: an SST / k-epsilon free-stream patch without an inlet specification
+            let fallback = freestream_fallback(case, patch);
             let per_scalar: Vec<(&str, Vec<f64>)> = if sa {
                 let v = get_f(case, &format!("{b}.nutilde_value"));
                 let v = if v > 0.0 { v } else { ctx.nutilde0 };
@@ -913,7 +957,11 @@ impl TurbState {
             } else if sst {
                 let (mut kf, mut wf) = (Vec::new(), Vec::new());
                 for &u in speeds {
-                    let (k, w) = inlet_values_sst(case, &b, nu, u);
+                    let (k, w) = if fallback {
+                        freestream_values_sst(case, nu, u)
+                    } else {
+                        inlet_values_sst(case, &b, nu, u)
+                    };
                     kf.push(k);
                     wf.push(w);
                 }
@@ -921,7 +969,11 @@ impl TurbState {
             } else if get_s(case, "turbulence.model") == "k_epsilon" {
                 let (mut kf, mut ef) = (Vec::new(), Vec::new());
                 for &u in speeds {
-                    let (k, e) = inlet_values(case, &b, cmu_now, nu, u);
+                    let (k, e) = if fallback {
+                        freestream_values(case, cmu_now, nu, u)
+                    } else {
+                        inlet_values(case, &b, cmu_now, nu, u)
+                    };
                     kf.push(k);
                     ef.push(e);
                 }
@@ -931,7 +983,7 @@ impl TurbState {
             };
             // ADR 0164 amendment 1: a `freestream` turbulence role fixes the values on the inflow faces only (zero gradient
             // on outflow faces, so that what the flow carries can leave); its velocity is a uniform free stream (checked).
-            // ADR 0166 D2: also the default of a Spalart-Allmaras free-stream far field (`freestream_role`)
+            // ADR 0166 D2, ADR 0169 D1: also the default of an SA, SST or k-epsilon free-stream far field (`freestream_role`)
             let freestream = freestream_role(case, patch);
             let u_ref = get_v(case, &format!("{b}.velocity_value"), [0.0; 3]);
             for (name, vals) in per_scalar {
@@ -1084,10 +1136,11 @@ mod tests {
         assert_eq!(role(&c, "i"), Role::Wall);
     }
 
-    /// ADR 0166 T6 (D2): under `auto`, a free-stream far field is `freestream` (an inlet role) with Spalart-Allmaras only,
-    /// and only with a non-zero free stream; every other model, and the explicit spellings, resolve as before.
+    /// ADR 0169 F7 (D1; replaces ADR 0166 T6's SA-only test): under `auto`, a free-stream far field is `freestream` (an
+    /// inlet role) with Spalart-Allmaras, k-omega SST and k-epsilon, and only with a non-zero free stream; the Reynolds
+    /// stress model, the algebraic models and laminar cases, and the explicit spellings, resolve as before.
     #[test]
-    fn freestream_far_field_default_is_sa_only() {
+    fn freestream_far_field_default_is_sa_sst_and_k_epsilon() {
         let mut c = Case::new();
         c.set("boundaries.f.velocity", "freestream".into()).unwrap();
         c.set("boundaries.f.velocity_value", serde_json::json!([1.0, 0.0, 0.0]))
@@ -1098,8 +1151,8 @@ mod tests {
         assert!(!freestream_role(&c, "f"));
         for (model, inlet) in [
             ("spalart_allmaras", true),
-            ("k_omega_sst", false),
-            ("k_epsilon", false),
+            ("k_omega_sst", true),
+            ("k_epsilon", true),
             ("rsm", false),
             ("smagorinsky", false),
             ("mixing_length", false),
@@ -1111,7 +1164,21 @@ mod tests {
             // a zero free stream has no inflow faces: the old role
             assert_eq!(role(&c, "z"), Role::ZeroGradient, "{model} zero free stream");
             assert!(!freestream_role(&c, "z"), "{model} zero free stream");
+            // ADR 0169 D2: SST and k-epsilon without an inlet specification take the initial-field keys
+            let two_eq = matches!(model, "k_omega_sst" | "k_epsilon");
+            assert_eq!(freestream_fallback(&c, "f"), two_eq, "{model}");
+            assert!(!freestream_fallback(&c, "z"), "{model} zero free stream");
         }
+        // an explicit specification is used as given
+        c.set("turbulence.model", "k_omega_sst".into()).unwrap();
+        c.set("boundaries.f.turbulence_length", serde_json::json!(0.1)).unwrap();
+        assert!(freestream_role(&c, "f") && !freestream_fallback(&c, "f"));
+        c.set("boundaries.f.turbulence_length", serde_json::json!(0.0)).unwrap();
+        c.set("boundaries.f.turbulence_spec", "values".into()).unwrap();
+        assert!(!freestream_fallback(&c, "f"));
+        c.set("boundaries.f.turbulence_spec", "intensity_length".into())
+            .unwrap();
+        assert!(freestream_fallback(&c, "f"));
         c.set("turbulence.model", "spalart_allmaras".into()).unwrap();
         // the old behaviour stays spellable; the explicit opt-in is unchanged
         c.set("boundaries.f.turbulence", "zero_gradient".into()).unwrap();

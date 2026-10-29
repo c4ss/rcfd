@@ -258,3 +258,16 @@ both trees before and after.
    differs from its initial field. (a) Keep D2. (b) Use `k_initial` and `omega_initial` / `epsilon_initial` for the far
    field when they are set. Recommendation: (b) in a later job if a case needs it; no committed case sets them together
    with a free-stream far field.
+
+## Amendment 1 (2026-10-29, after the code and its tests, before any registered run): the base commit
+
+**Defect 1.** The registration names the base commit as 1248a76 (status, G1, W1, R1). That was the worktree branch's
+commit before the fast-forward; the fast-forward moved it to local main **1a04d46** ("Merge job 49C ..."), on which this
+job is built (fd5bc8e, the registration, has parent 1a04d46). 1248a76 is an old ancestor that does not even hold the
+example trees. Found when G1's `git diff 1248a76 -- baseline_hashes.rs` showed main's own earlier change (d59b202,
+ADR 0137), not a change of this job.
+
+**Correction 1.** Read 1a04d46 for 1248a76 everywhere in this ADR: G1 is `git diff 1a04d46 --
+crates/rcfd-api/tests/baseline_hashes.rs` empty; W1 / L1's `git diff --stat` is against 1a04d46; R1 compares with
+`r-20261028T152128-cb3a` as committed at 1a04d46 (`scripts/w49f_legacy_check.py --base`, default 1a04d46). No limit
+changes. No registered run had been made.

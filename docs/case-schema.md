@@ -137,8 +137,12 @@ Before ADR 0166 the default was `zero_gradient`: `nuTilda` was fixed on none of 
 body, grew far above `nutilde_ratio * nu` (ADR 0159's NACA 0012 at 10 degrees: about 6e4 nu, which tripled the drag).
 `turbulence = "zero_gradient"` still gives that behaviour, for example to reproduce ADR 0159.
 
-With k-epsilon and k-omega SST the default stays `zero_gradient`. The explicit `turbulence = "freestream"` takes the same
-path there but needs an inlet specification (`turbulence_spec`, e.g. a `turbulence_length`); it is untested for them.
+With k-epsilon and k-omega SST the far field is `freestream` by default too (ADR 0169): k and epsilon / omega are fixed on
+the inflow faces, from the patch's inlet specification if it has one, else from `turbulence.initial_intensity` and
+`initial_viscosity_ratio` (see `turbulence_spec` below). Before ADR 0169 their default was `zero_gradient`; the explicit
+`turbulence = "zero_gradient"` still gives it (the NACA 0012 example runs before ADR 0169 also need
+`component = "total_molecular"` on `cl` and `cd`, ADR 0166). The Reynolds stress model keeps `zero_gradient`: it has no
+inlet condition.
 
 Do not use `turbulence = "inlet"` on such a far field. It fixes the value on the outflow faces too, and the convection
 operator then carries the fixed value out instead of the cell value, so the quantity cannot leave the domain and
@@ -246,19 +250,27 @@ Per-boundary keys (`boundaries.<patch>.`):
 * `turbulence` = `auto` (default) | `wall` | `inlet` | `zero_gradient` | `freestream`.
   * `freestream` (ADR 0164; the patch needs `velocity = "freestream"`): the inlet values on the faces where
     `velocity_value` enters the domain, zero gradient where the flow leaves (see the far-field note under
-    `spalart_allmaras`). The code path is shared by all RANS models; it was tested for Spalart-Allmaras only (ADR 0164
-    C4, ADR 0166 T5).
+    `spalart_allmaras`). Tested for Spalart-Allmaras (ADR 0164 C4, ADR 0166 T5) and for k-omega SST and k-epsilon
+    (ADR 0169 F1-F3). The Reynolds stress model has no inlet condition, so `freestream` is an error with it.
   * `auto`:
     * a fixed zero-velocity patch is a wall;
     * any other fixed-velocity patch is an inlet;
     * a `velocity = "freestream"` far field with a non-zero `velocity_value` is `freestream` with Spalart-Allmaras
-      (ADR 0166), and zero gradient with the other models;
+      (ADR 0166), k-omega SST and k-epsilon (ADR 0169), and zero gradient with the other models;
     * the rest is zero gradient.
-  * `zero_gradient` on a Spalart-Allmaras far field gives the behaviour before ADR 0166.
+  * `zero_gradient` on such a far field gives the behaviour before ADR 0166 (Spalart-Allmaras) or ADR 0169 (k-omega
+    SST, k-epsilon).
 * Inlet specification `turbulence_spec`:
   * `intensity_length` (default): `k = 3/2 (I U)^2`, `epsilon = Cmu^(3/4) k^(3/2) / l`, with
     `turbulence_intensity` (0.05) and `turbulence_length` (required, m). `U` is the local inlet
     speed per face, so expression profiles work.
+  * A k-omega SST or k-epsilon `freestream` far field (explicit or by default) with this default spec and no
+    `turbulence_length` takes the free-stream values from the initial-field keys instead (ADR 0169):
+    `k = 3/2 (I U)^2` with `I = turbulence.initial_intensity` and `U = |velocity_value|`,
+    `epsilon = Cmu k^2 / (ratio nu)` with `ratio = turbulence.initial_viscosity_ratio` (SST: `omega = epsilon / (beta* k)`).
+    With `|velocity_value| = |initial.velocity|` these are the initial values (the far field holds the initial state, the
+    TMR practice). `k_initial` / `omega_initial` / `epsilon_initial` are not read for the far field. Any explicit spec on
+    the patch is used as given. An `inlet` role (or a fixed-velocity inlet) still needs `turbulence_length`.
   * `intensity_viscosity_ratio`: same `k`, `epsilon = Cmu k^2 / (ratio nu)` with
     `turbulence_viscosity_ratio` (10).
   * `values`: `k_value`, `epsilon_value`.
