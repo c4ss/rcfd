@@ -1,7 +1,9 @@
 # ADR 0160: Job 48Z, three follow-ups: a fixed step's final time reported on `solver.end_time`, the corrector count in `residuals.jsonl`, SV301 in the run service and the MCP tools with the first-step viscosity
 
 Status: **registered** 2026-10-29, before any code of this job was written or compiled and before any run of this job (set-ups,
-criteria, limits, reading rules and the order of runs are fixed here); results in the addendum. House rules of
+criteria, limits, reading rules and the order of runs are fixed here); one amendment before any run; **results in the
+addendum** (every registered limit met; two pre-existing test failures of main reported); not yet accepted by the maintainer.
+House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
 becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
 corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no
@@ -250,6 +252,119 @@ P3's test counted the SV301 entries of `start.info.warnings` by the key `id`, bu
 objects, whose rule id is under `rule` (read in `rules.rs` while writing the code plan; nothing had been built or run): the set-up
 would have reported 0 entries whatever the code does. Corrected in the test before its first run: the entries with
 `rule = "SV301"` are counted. P3's limit is unchanged.
+
+## Addendum (2026-10-29): results against the registered limits
+
+Everything below was measured after the registration and amendment 1; no limit or rule was changed after a result was seen.
+Commits: 5e282d6 (registration), 0e66b47 (amendment 1), 8047c58 (a print line of S1 that did not compile; before any run),
+78b4019 (R2: the recorded values, no other change), 9545aae (the code), fc744db (a compile fix of the S7 unit test's literals,
+found by the first N5 build; nothing had run on 9545aae's lib tests). Release builds in `E:\projects\cfd\target-48z`; logs,
+census and probe files in `E:\projects\cfd\w48z-work` (outside the repository). The machine was shared with another agent's
+WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test threads 2 to 6.
+
+### The answer
+
+1. **End time.** A fixed-step run that the end test stops within 1e-12 of `solver.end_time` now reports `solver.end_time`
+   exactly (its last `iteration` event, `finish`, `RunOutcome`, `time()`, the last stored snapshot, the monitors' last
+   abscissa); 48S's case (2,567 steps of 3/2567) reports 3.0 where it reported 2.999999999999983. Every field, flux, monitor
+   value, statistic, particle and continued run is bit-identical to the unchanged tree (S1-S6 against the recorded hashes,
+   C7, ADR 0145's tests, the baselines, the example projects' rerun). No opt-in was needed.
+2. **`residuals.jsonl`** carries `correctors` and `corrector_cap` on the lines of `adaptive` runs only; every other line is
+   byte-identical (R1-R4; the example projects' 12 `residuals.jsonl` byte-equal after a rebuild).
+3. **SV301** was already given by the service's `run.check` and MCP `check_case_headless` (both go through
+   `runctl::check_only`; ADR 0156 D7's "not wired" was inaccurate there) and now also by `run.headless` / MCP `run_headless`
+   at a run's start. The preflight sees the first step's viscosity: the power-law channel's estimate goes from 0.0112 to 4.30
+   (ADR 0077's in-step 4.17) and warns; no law-free estimate changed by a bit (231 census simulations), no B2a text warns.
+
+### Results
+
+| Check | Limit (registered) | Measured | Outcome |
+|---|---|---|---|
+| R1 run (unchanged tree) | predictions | S1-S6: 3 steps (S2 2567) ending at `t_3` / 2.999999999999983, values printed and recorded; P1, P2, P5, V4 pass; P3, P4 no SV301 event; V1 rho 0.011223; R2 adaptive lines without the count; N1 passed (3 passed, 1 ignored: `kepsilon_channel` did not fail here) | as predicted |
+| N1 | `baseline_hashes` passes, not edited | 3 passed, 1 ignored (`rotating_channel`, its known difference); file unchanged | met |
+| N2 | `w33b_default_bits` | passed | met |
+| N3 | `end_time_landing_w48k` unchanged | 8 passed | met |
+| N4 | `chain_w19c` (C7), `restart_w19c`, `timectl_tree` | 6, 7 (+1 ignored), 4 passed; C7's first stage ends at 0.49999999999999994 and is now snapped (S9), its chained run still equals the single run bit for bit, time included | met |
+| N5 | 0 failures but N1's | rcfd-post, -fv, -api, -project, -runner, -mcp, -cli: 1654 passed, 2 failed, 530 ignored; rcfd-studio `json_o`, `saved_store_r`: 10 passed. Failures: `case_hashes_w48u` H1 (fails identically on main 444255c, built separately: the same 30 entries differ, toml/json text hashes of the 48U record against the merged schema) and rcfd-mcp `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` (asserts that `%TEMP%\x` does not exist; that folder exists on this machine since 2026-10-15, not made by this job); ignored = before + 0 (this job added no ignored test) | met with 2 pre-existing failures (deviation 3) |
+| N6 | clippy, fmt, graph | `cargo fmt -p` of the six changed crates `--check` clean; `workspace_graph` 3 passed; clippy: see below | see below |
+| S1 | 5 paths: times, `end`, unchanged hashes, last x | 3 steps each; step 3 reports `end` (e.g. piso 0.0300000000001 for `t_3` 0.03), `time()` `end`; 15 hashes equal the recorded ones (the variable-density and VOF states also equal ADR 0145's E hashes 0xf3b7338710ebdffe, 0x75ea9b9e2ea73dd7); every series' last x `end` | met |
+| S2 | 2567 steps, 3.0, hash | 2567 steps, 3.0 bit for bit, 0xcd611e803856ea20 as recorded | met |
+| S3 | statistics hash | 10 statistics fields, hash 0x19ad55464579264d and state hash as recorded | met |
+| S4 | particles hash | 3 flow steps, 1 parcel, tracker time 0.03 (the flow's own time, not the reported 0.0300000000001), hash 0xf02b919af84469b1 as recorded | met |
+| S5 | chained = single, hash | equal in ux, uy, p, flux, time (6 steps to 0.06000000000000005); hash as recorded | met |
+| S6 | events, outcome, store | iteration, finish, outcome time 0.0300000000001 = `end`; store 3 snapshots, the last (3, `end`); stored ux hash as recorded | met |
+| S7 | unit test of the rule | passed | met |
+| S8 | `solver_time()` = `t_3` | 0.03 (`t_3`) while `time()` reports `end` | met |
+| S9 | probe: reported | 28 firings; 11 in this job's files, 17 in existing tests: `chain_w19c` C7 (0.5), `sim::tests::time_dependent_inlet_expression_is_updated_every_step` (0.5), `divergence_guard_w32c` (0.5), `chemistry` k9 (4.0, twice), `dynamic_mesh` t3 (3.0), `particles_two_way` pl6/pl7 PISO and PIMPLE (4.0), `phase_change_case` t1_t2 (1.0), `timectl_tree` s11 (1.0, twice), `transient_energy` (1.5), `user_scalars` u3 (1.0, twice), `zone_sources` e4 (1.0, twice), one `rcfd` process (0.2, a CLI test); largest `|end - t|` 6.3e-14, all short (no overshoot); every one of these tests passes in N5 and in the probe run | reported |
+| R1 | bytes as before; +2 keys | passed | met |
+| R2 | adaptive lines with the count; fixed lines' keys | adaptive: 5 lines, `correctors` 2, `corrector_cap` 0; fixed: 5 lines, keys `monitors residuals step time` | met |
+| R3 | round trips; old line byte-equal | passed | met |
+| R4 | `--rerun-check` passes | 0 problems: 60 files byte-equal (12 runs: `residuals.jsonl`, `case.snapshot`, `fields/store.rts`, `fields/index.json`, `output/monitors.json`) | met |
+| P1 | `run.check`: SV301 on K1 only | K1: exit 0, one SV301 (warning, solver, `solver.corrector_control`, fix `adaptive`, 4.36); committed: no rule | met (also on the unchanged tree) |
+| P2 | MCP `check_case_headless` | as P1 | met (also on the unchanged tree) |
+| P3 | `run.headless` emits SV301 once per run | K1: `start`, `warning:SV301`, `iteration`, `iteration`, `finish`, and `start.info.warnings` holds it; second call: `start`, `iteration`, `finish`; committed: no warning, no `warnings` key | met |
+| P4 | MCP `run_headless` | `start`, `warning:SV301`, `iteration`, `finish` | met |
+| P5 | events equal with and without the preflight | 7 = 7 iteration events equal (status every 10 of 20 steps) | met |
+| V1 | `thin` warns | rho 4.300847 at step 1 (cell 0, the wall cell at the inlet), `check_only` gives SV301; ADR 0077: 4.17 | met |
+| V2 | rheology viscosity bit-identical | `thin` (668 faces, 0.0287 to 10) and `limit` (0.1) bit-identical to the solver's after step 1 | met |
+| V3 | reported | Smagorinsky: pre-run 0.05 everywhere (the model's eddy viscosity is 0 before its first update), after step 1 0.0503 to 0.0584 (largest relative difference 0.14); Spalart-Allmaras: pre-run 1.2104e-3, after step 1 1.0e-3 to 1.2121e-3 (0.21) | reported: D6's approximation misses the first sweep, by 14 to 21 % on these set-ups |
+| V4 | preflight changes no run | `thin` (rho 4.30) and SGS: 5 steps bit-identical | met |
+| V5 | ADR 0156 B2a: 0 warnings, the 14 | the same 14 texts with the same four-decimal values (0.3578, 0.2713, 0.0013, ..., 0.9892, 0.6952), 0 warnings; 309 skipped (288 at ADR 0156; the new texts are later jobs' and this job's templates) | met |
+| V6 | B0 within 1e-3 and equal to ADR 0156's six decimals; B1 10 of 10 | 0.357819, 0.745564, 2.418431, 4.358667, 1.165589, 0.219239 (identical); B1 10 of 10 | met |
+| V7 | (a) law-free new = old; (b) reported | 274 simulations (115 tests, 181 set-ups). (a) 231 law-free simulations, 0 differ; 152 law-free set-ups also appear in ADR 0156's census, all bit-equal there too (9 are new tests). (b) one set-up changes its warning status: the power-law channel, 0.0112 to 4.3008. Carreau `limit` 0.2006 to 0.0112 (now the plain channel's value, its law gives 0.1); Spalart-Allmaras 0.001312 to 0.001331; RSM / plugin 2.6e-12..3.5e-10 to 2.1e-8..2.9e-6; Smagorinsky / WALE unchanged (0.000112755). New rho >= 1.3: ADR 0156's ten (t5 31.31, the eight u3 boxes 1.466 to 8.156, the K1 cylinder 4.359; all bit-equal to their old values) and the power-law channel | (a) met; (b) reported |
+| V8 | B2c of the newly warning set-up: no false positive | power-law channel: g 1.048, `|dp|` 3.7e-3 to 1.5e-2 over steps 30 to 60 (growing, 4.1 x in 30 steps, just below the 1.05 of "true positive"): undetermined | met (no false positive) |
+
+**Clippy (N6).** `cargo clippy --workspace --all-targets -- -D warnings`: exit 0, no warning, 207 crates checked. N6 met.
+
+### Deviations
+
+1. Amendment 1 (P3's count by `rule`, before any run). The print line of S1 did not compile (`f64` in a `BTreeSet`); fixed in
+   8047c58 before any run (bit patterns in the set). The S7 unit test's float literals were untyped (`to_bits` on `{float}`);
+   fixed in fc744db after the first N5 build stopped at it, before any test of 9545aae had run.
+2. The census (V7) and the probe (S9) ran in one scratch copy of 9545aae plus fc744db's two-line fix
+   (`E:\projects\cfd\w48z-work\probe\src`, instrumented by `w48z_probe_patch.py`: 40 added lines, logging only), with its own
+   target folder; rcfd-api with both logs, then rcfd-cli, rcfd-runner, rcfd-mcp with the snap log only. Its results: rcfd-api 755
+   passed, 1 failed (H1, as N5); the others 193 passed, 1 failed (the `%TEMP%\x` test, as N5).
+3. N5 has two failures, both pre-existing and not of this job: `case_hashes_w48u` H1 fails identically on main 444255c (run in a
+   separate copy and target, the same 30 differing entries); `design_tests::t2_...` fails because `%TEMP%\x` (a folder dated
+   2026-10-15, not made by this job and not removed by it) exists on this machine.
+4. N1: the brief expected `kepsilon_channel` to fail locally; `shipped_cases_match_registered_hashes` passed on both trees here.
+5. S9 was registered for rcfd-api, rcfd-cli, rcfd-runner and rcfd-mcp; rcfd-studio, rcfd-gui and rcfd-assistant (which also link
+   rcfd-api or start `rcfd`) were not probed.
+
+### Not run
+
+* The workspace test gate beyond N5's crates (rcfd-studio only `json_o` and `saved_store_r`; rcfd-gui, rcfd-assistant,
+  rcfd-turb and the others not run; they do not use the changed APIs except through `Simulation`).
+* Linux (S1-S6's recorded values are Windows x86_64 only; elsewhere the test prints, ADR 0137).
+* The Studio (not edited).
+* An exact first-step turbulence viscosity (D6, question 2).
+
+### Questions for the maintainer (with recommendations)
+
+1. **The 48S case (ADR 0153 deviation 2, `d2_cylinder_256x256_known_miss`).** Its F arm missed R1 by 1.7e-14; with this job it
+   would report 3.0 exactly. Re-run the known miss as a corrected test in a Studio job, or leave it ignored as the record of
+   the miss? Recommendation: a separate short job re-registers D2's F check (only its limit R1 is affected); this job did not
+   run it (256 x 256 to t = 3, and it lives in `crates/rcfd-studio`).
+2. **Exact turbulence viscosity in the preflight.** The preflight uses the turbulence model's present eddy viscosity, which
+   misses the first update by 14 to 21 % on the two set-ups measured (and is the laminar viscosity for Smagorinsky / WALE
+   before their first update). Exact needs a copy of the model (a `boxed_clone` on `TurbulenceModel`, implemented for the
+   built-in models; a plugin model without it would keep today's behaviour). Recommendation: yes, as its own small job with
+   V2's bit-identity check for each built-in model; none of today's turbulent census set-ups is near the 1.3 level (largest
+   0.0013), so there is no hurry.
+3. **The chain driver and the static rules in the service.** `run.headless` now emits SV301, but neither the chain driver nor
+   the service's runs emit the static setup rules' warnings that `rcfd run` emits. Recommendation: wire the static warnings
+   into `run.headless` the same way (a change of the `start` event for cases with static warnings, so with its own check),
+   and SV301 into the chain driver's stage starts, in one follow-up.
+4. **The power-law channel now warns (V7, V8).** It is a test set-up, not a shipped case; the perturbation grows by 4.1 x over
+   30 steps but just misses the 1.05 rate of "true positive". Recommendation: accept (the warning is right to fire on an
+   estimate of 4.3; the test drives `Simulation` directly and does not see it).
+5. **`correctors` in MCP `read_residuals` / the Studio's residual plot.** The keys are in `residuals.jsonl` and in
+   `ResidualLine`; neither the MCP series nor the Studio plot shows them yet. Recommendation: add a `coupling.correctors` series
+   to `read_residuals` and a Studio plot line in the next Studio job (D8 item 4).
+6. **The two pre-existing N5 failures** (H1 against the 48U record after the 48V schema key; the `%TEMP%\x` folder that makes
+   rcfd-mcp `t2` fail on this machine). Recommendation: H1 needs its record re-made in a registered job (the record, not the
+   cases, changed); the `%TEMP%\x` folder can be removed by the maintainer (this job did not remove it, it is not its own).
 
 ## Not changed by this job
 
