@@ -1,8 +1,11 @@
 # ADR 0169: Job 49F, `freestream` becomes the far-field default of k-omega SST and k-epsilon; the 8 stored NACA 0012 example runs are regenerated
 
 Status: **registered 2026-10-29**, before any code and before any solver run of this job. The enumeration, the design,
-the limits, the reading rules and the not-run list are fixed here. Results: addendum (not yet written). Not yet accepted
-by the maintainer. Job 49F, on local main 1248a76 (the worktree branch was fast-forwarded to it before any work; it holds
+the limits, the reading rules and the not-run list are fixed here. **Results in the addendum:** the code limits F1-F7, R1
+and the records (G1: no `baseline_hashes.rs` case changes) met; the 8 regenerated NACA runs **converge** (409 / 230
+iterations, exit 0) and so miss the aerofoil parts of ADR 0142 G1, ADR 0155 E2 and ADR 0148 N9, now ignored known misses
+with their limits intact; sizes and wall times within their limits. Amendment 1 (base commit) and amendment 2 (R2, a
+reported drag-attribution run) before their runs. Not yet accepted by the maintainer. Job 49F, on local main 1248a76 (the worktree branch was fast-forwarded to it before any work; it holds
 job 49C, ADR 0166). Number: 0168 is the highest in `git log --all` and in every worktree when this was written (0167 job
 49D, 0168 job 49E); job 49G runs at the same time and may also be writing an ADR.
 
@@ -292,3 +295,121 @@ against the stored 0.02536; two changes act together (ADR 0166's effective wall 
 same binary, work folder `E:\projects\cfd\w49f-work\r2`. Reported: iterations, solver state, final `cl` and `cd`.
 Reading: R2's `cd` minus the stored 0.02536 is the far field's part (molecular shear); the regenerated 0.02820 minus R2's
 `cd` is the wall-shear part. No limit; it changes no committed file except this ADR.
+
+## Addendum: results (2026-10-29)
+
+Commits on the branch (base 1a04d46):
+- fd5bc8e: this registration;
+- 1d29410: the code (`turb.rs`, `schema.rs` doc strings), the tests (F1-F6 in `far_field_w49f.rs`, F7, D9's respelling of
+  `defaults_w49c.rs`), the docs, R1's driver, amendment 1;
+- fde3f85: the interim note (after W1);
+- 93980e1: W1, the 4 Windows runs, the ledger, the run table, the manifest and the hand-updated `notes/naca0012.md` and
+  `notes/README.md` (D8);
+- 63d957d: L1, the same for the Linux tree (the container copied the notes);
+- e40ddc0: the known misses (below);
+- 5723e8b: amendment 2;
+- this addendum, with R2's `--variant` option of the driver.
+
+Binaries (Windows, release, `--locked`, `CARGO_TARGET_DIR=E:\projects\cfd\w49f-work\target`, the code of 1d29410):
+`rcfd.exe` sha256 `d6e9c6501a3bde5242028ed0ffc29377e2879dd83e46f024ddde8601cfde3574`, `rcfd-runner.exe`
+`3a97b27fe990af5317948715cc5f833f464b7bffbde7066bd3f0ba3dc540ad38`. Linux: built in the container from the working
+tree of 93980e1 with the 4 Linux runs deleted (1611 source files; the code is 1d29410's).
+
+Host: shared with jobs 49D and 49E (four solver processes throughout) and FAN-01 test runs of another job; 37-39 GB free.
+One solver process of mine at a time (W1 and L1 run their cases one after the other; L1 after W1).
+
+### Limits
+
+| Id | Measured | Outcome |
+|---|---|---|
+| F1 | SST and k-epsilon: no validation error; `auto` = explicit `freestream` bit for bit (ux, uy, p, k, omega / epsilon, flux after 30 iterations); explicit `zero_gradient` differs | met |
+| F2 | inflow faces: k = 3.75e-3, SST omega 1875.0000000000002, k-epsilon epsilon 0.6328125000000002 (nu 2e-7), bit for bit the formula; outflow faces = owner cells | met |
+| F3 | `turbulence_length = 0.1`: inflow omega 1.1180 = `inlet_values_sst` (length path), not the fallback 1875; k the same | met |
+| F4 | the `turbulence_length` error stays for a fixed-velocity inlet and for an explicit `inlet` role; explicit `freestream` without a spec validates; RSM with explicit `freestream` keeps its error; RSM under `auto`: `ZeroGradient`, no error on the far field | met |
+| F5 | the 8 example cases validate; far field `Inlet` with the fallback | met |
+| F6 | SA 20 iterations, switch to SST, 10 iterations: inflow faces k, omega = F2's values bit for bit; outflow = owner | met |
+| F7 | `freestream_far_field_default_is_sa_sst_and_k_epsilon` (rcfd-api lib: 106 passed, 2 ignored, as before) | met |
+| T | `defaults_w49c` T1-T5, T8 (b), (c): 5 passed | met |
+| R1 | old spellings on the 4-degree case, new binary: `finished`, `not_converged`, 2000 iterations; `residuals.jsonl` 2000 of 2000 lines byte-equal; 40 of 40 stored fields (10 snapshots x ux, uy, p, nut) bit-equal with `r-20261028T152128-cb3a` at 1a04d46 | met |
+| W1 | 4 runs added, exactly the NACA cases; **each `converged`, exit 0, at iteration 409 (4 degrees, both forms) and 230 (2 degrees, both forms)**; walls 16.0, 9.9, 16.5, 8.1 s, tree sum 127.5 s; closing check 0 problems; the other 4 wind-tunnel runs, `quick-start`, `meshes/` and `cases/` unchanged against 1a04d46; `wind-tunnel` 28 095 017 bytes (cap 35 000 000; was 34 826 293), tree 32 349 247 (cap 40 000 000) | **missed** (G1's aerofoil state, steps and exit code); the rest met |
+| L1 | container exit 0; 14 inputs copied; 4 runs added, the same states and iteration counts as W1; walls 28.9, 15.3, 27.8, 15.2 s, tree sum 235.5 s; `--check` of both trees 0 problems; the other Linux runs, `quick-start`, `meshes/` unchanged; `wind-tunnel` 28 093 048 bytes (was 34 823 333), tree 32 346 672 | **missed** (as W1); the rest met |
+| E1 | `example_projects_w48h`: 21 passed, 2 ignored (ADR 0142's crossing known miss and the new G1 known miss). G2 (every run, both trees), G3 (`0 < cl(2) < cl(4)`), S1-S9, T1-T3 pass | met except G1's aerofoil part (known miss) |
+| E2 | `example_rotated_w48u`: E3 passes; E2 fails at its `steps == 2000` assertion (409) | **missed** (known miss) |
+| E3 | `example_projects_h` 1 passed; `mesh_transform_u` 4; `saved_store_r` 6; `correctors_x` 6 passed, 5 ignored (its own); `scale_n` N9 fails at "snapshot 10/10  iteration 2000" (shows `snapshot 3/3  iteration 409`), otherwise 7 passed | met except N9's steady snapshot line and strip (known miss) |
+| E4 | `python -m unittest scripts/test_make_example_projects.py` 15 OK; `--check` 0 problems | met |
+| G1 | `git diff 1a04d46 -- crates/rcfd-api/tests/baseline_hashes.rs` empty; 3 passed, 1 ignored; `case_hashes_w48u` 1 passed; `w33b_default_bits` 1; `workspace_graph` 3 | met |
+| G2 | `registry_setups_w39a` 2 passed, 1 ignored (V1 naca0012: exit 0, 0 errors, SV101 warning as before); `force_effective_w49a` 4; `turb_models` 8 (1 ignored); `physics_schema` 11; `sst_schema` 3; `rules_w19c` 5 (1 ignored); `w48v_adaptive_correctors` 5 (4 ignored); `sa_drag_w49a` 8 (3 ignored); `bc_catalogue` 22 (9 ignored); `mesh_transform_w48u` 13 | met |
+| G3 | `cargo fmt -- --check` clean for rcfd-api, rcfd-mcp, rcfd-studio; clippy `-D warnings` clean on the rcfd-api lib, `far_field_w49f`, `defaults_w49c`, `example_projects_w48h`, `example_rotated_w48u`, `scale_n` | met |
+
+Known misses (reading rule; each limit kept exactly as registered, the passing part stays a normal test):
+- `example_projects_w48h::g1_aerofoil_runs_stop_not_converged_at_2000_known_miss` (ignored): ADR 0142 G1's aerofoil
+  tuple (`not_converged`, 2000, exit 5). `g1_g2_runs_finished_as_registered_within_their_time` keeps G1 of every other
+  run and G2 of every run.
+- `example_rotated_w48u::e2_rotated_mesh_matches_rotated_flow_known_miss` (ignored), unchanged body.
+- `scale_n::n9_steady_words_name_snapshot_10_and_iteration_2000_known_miss` (ignored): ADR 0148 N9's two steady
+  assertions that name the stored run's 10 snapshots and 2000 iterations; `n9_every_time_says_what_it_is` keeps the
+  rest (the steady slider word `iteration`, no `time` in the steady strip, the x axis, the Runs panel column).
+
+### Reported (no limit)
+
+| Case | stored before (Windows) | regenerated, Windows | regenerated, Linux |
+|---|---|---|---|
+| aoa4 | 2000 it, not_converged, cl 0.348195, cd 0.025360 | 409 it, converged, cl 0.346925148, cd 0.028203441 | 409, cl 0.346925145, cd 0.028203441 |
+| aoa2 | 2000 it, not_converged, cl 0.198833, cd 0.018876 | 230 it, converged, cl 0.198177659, cd 0.021964573 | 230, cl 0.198177656, cd 0.021964573 |
+| aoa4-rotated | as aoa4 | 409, cl 0.346925147, cd 0.028203441 | 409, cl 0.346925146, cd 0.028203441 |
+| aoa2-rotated | as aoa2 | 230, cl 0.198177657, cd 0.021964573 | 230, cl 0.198177657, cd 0.021964573 |
+
+- Momentum residual at the end: 4.4e-8 (4 degrees), 7.6e-8 (2 degrees); stored runs: 1.4e-6 at 2000.
+- Rotated against flow-rotated (what E2 measured, at the final iteration instead of 2000): `cl` 2.6e-9 / 5.2e-9 relative
+  (Windows, 4 / 2 degrees), `cd` 1.4e-9 / 7.7e-10; Linux `cl` 6.0e-10 / 3.5e-9, `cd` 2.3e-10 / 5.2e-10; equal iteration
+  counts and report iterations. Largest difference in the first 30 iterations (6e-4 in `cl`).
+- Far field of the examples (D2): k = 3.75e-3, omega = 2250 (nu = 1/6e6), the initial values.
+- Snapshots: 3 (200, 400, 409) and 2 (200, 230) instead of 10; each NACA run folder about 2.1 / 1.9 MB instead of
+  about 3.6 MB.
+- **R2 (amendment 2)**, the new far field with molecular `cl` / `cd`: 409 iterations, converged, `cl` 0.347151, `cd`
+  0.025420. So at 4 degrees the far field moves `cd` by +0.00006 (+0.2 %) and `cl` by -0.0010; ADR 0166's effective wall
+  shear moves `cd` by +0.00278 (+11 %) and `cl` by -0.0002. The drag change of the regenerated examples is almost all
+  ADR 0166's; the far field changes the convergence (targets met at 409 instead of not at 2000).
+- Lift slope of this mesh: (0.346925 - 0.198178) / 2 = 0.0744 per degree (stored runs 0.0747).
+
+### Deviations
+
+- Amendment 1: the base commit was misnamed (1248a76 for 1a04d46) in the registration, corrected before any run.
+- The interim note and the three known misses follow the registered reading rule. The regenerated runs are kept as
+  made; `max_iterations`, the case files and their comments are untouched (D6).
+- D8 named only the run numbers in `notes/naca0012.md`; four sentences that described the old runs' stopping at 2000
+  iterations (the solver bullet, "What to click" step 2, the limits bullet, `notes/README.md`'s limits bullet) were
+  rewritten too, because they had become false; the earlier numbers are kept there as attributed history. A sentence
+  on the far field and on how to reproduce the old runs (D5) was added.
+- The Windows `manifest.json` gained a `platform` block (os windows, x86_64, Python 3.9.13): `write_manifest` writes it
+  on every run of the script since ADR 0150; the committed Windows manifest predates that.
+- An attempt to commit the interim note picked up the staged deletion of the 4 Windows runs; it was undone locally
+  (`git reset --soft`, not pushed) and recommitted as fde3f85 (note only) and 93980e1 (runs).
+
+### Not run
+
+- The full workspace test suite, the gate, the whole `rcfd-studio` suite (only the tests that read the example runs,
+  E3, and `correctors_x`), Linux tests (only L1's runs and its `--check` in the container).
+- `--rerun-check` of either tree (the 4 new runs are byte-reproducible by ADR 0142 D10's procedure; not checked here).
+- The ignored heavy FAN-01 runs (no free-stream patch, D1 cannot reach them) and ADR 0159's / 0164's sweeps.
+- A k-epsilon or SST far-field validation against reference data (the plate tests are set-up checks).
+
+### Questions for the maintainer
+
+1. (Registered above.) Far-field values when `k_initial` / `omega_initial` are set. Recommendation: (a) keep D2 now;
+   (b) later if a case needs it.
+2. **The aerofoil examples now converge.** ADR 0142 G1 (aerofoils `not_converged` at 2000, exit 5), ADR 0155 E2
+   (comparison at iteration 2000) and ADR 0148 N9 (steady words "snapshot 10/10  iteration 2000") describe the old runs
+   and are now known misses. (a) Re-register them in a small job for the new runs: aerofoils `converged`, exit 0, at
+   most 2000 iterations; E2 at the final iteration (measured: within 5.3e-9) with equal iteration counts; N9 on the
+   run's own last snapshot. (b) Keep the known misses. Recommendation: (a).
+3. **The case comment** `max_iterations = 2000   # the run stops here: the residual targets are not reached on this mesh
+   (ADR 0142)` in the 4 aerofoil cases is now false. Editing it changes the toml hashes recorded in
+   `case_hashes_6867e40.txt` and the Studio plans fixture, and makes the stored runs stale (`check_run` compares the case
+   with its snapshot), so the 8 runs would have to be regenerated once more. (a) Fix the comment together with question
+   2 (a), with the fixtures' aerofoil lines handled under a registered note, and regenerate the 8 runs again; (b) leave
+   it. Recommendation: (a), in the same job as question 2.
+4. **Job 49D's SST arm** runs on a binary without this change; its SST numbers are a record of the pre-49F far field.
+   To reproduce them after this merge, add `turbulence = "zero_gradient"` to the far field (and `component =
+   "total_molecular"` for ADR 0159's spelling). Nothing to decide unless 49D's results are to be re-run with the new
+   default.

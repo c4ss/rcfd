@@ -9,6 +9,9 @@ and `cd`), and runs that one case through the run service exactly as scripts/mak
 thread). `compare` checks the run against the stored run r-20261028T152128-cb3a as committed at <base> (default 1a04d46,
 the base of job 49F, before it regenerated the run): residuals.jsonl byte for byte, and the 10 stored snapshots of ux, uy, p, nut bit for bit.
 Writes <work>/compare.json and exits 0 when everything matches.
+
+`run --variant molecular` (ADR 0169 amendment 2, R2) applies only the two `component = "total_molecular"` lines and
+keeps the far field at its default; it is not compared.
 """
 
 import argparse
@@ -53,7 +56,7 @@ def do_run(a):
     os.makedirs(os.path.join(pdir, "runs"))
     case = os.path.join(pdir, CASE.replace("/", os.sep))
     text = mep.read(case).decode("utf-8")
-    for old, new in EDITS:
+    for old, new in EDITS if a.variant == "legacy" else EDITS[1:]:
         if text.count(old) != 1:
             sys.exit("%s: the text to edit is not found once: %r" % (CASE, old))
         text = text.replace(old, new)
@@ -128,6 +131,7 @@ def main():
     ap.add_argument("--bin-dir", default=os.path.join(mep.REPO, "target", "release"))
     ap.add_argument("--work", required=True)
     ap.add_argument("--base", default="1a04d46")
+    ap.add_argument("--variant", choices=["legacy", "molecular"], default="legacy")
     a = ap.parse_args()
     a.work = os.path.abspath(a.work)
     os.makedirs(a.work, exist_ok=True)
