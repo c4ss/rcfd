@@ -339,6 +339,7 @@ The table with Ladson is in the folder's README; the figures are `cl_alpha.png` 
 * Linux, where the meshes' last bits depend on libm.
 * The workspace test suite and the gate: only the new test file, rcfd-api's clippy of its tests and fmt ran. No crate
   source changed, so `baseline_hashes` was not re-run.
+* No ADR index lists ADR 0157 or earlier ones, and no test or script self-test reads `docs/adr/` or `docs/investigations/` (`git grep`), so none needed an update or a run.
 * A field-level look at the solutions (separation point, nuTilda in the wake). The drag finding below is from the
   monitors only.
 
