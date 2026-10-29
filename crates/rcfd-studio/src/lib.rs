@@ -9,7 +9,9 @@
 //! worker ([`watch`]) and the run worker ([`poll`], ADR 0133), which talks to the project's `rcfd-runner`. Tests drive
 //! the model and draw headless frames; the look of the window is checked by hand (ADR 0131 "Not in CI"). The Claude Code
 //! sidebar ([`chat`], ADR 0134) has its own worker and turn threads. Studio-started runs store fields by default, and
-//! a run without fields to show says why ([`store_plan`], [`run_fields`], [`fields_ui`], ADR 0140).
+//! a run without fields to show says why ([`store_plan`], [`run_fields`], [`fields_ui`], ADR 0140). Run sets the time
+//! step of a transient run when it starts, from the mesh and the case's speeds, and simulates the time asked for on the
+//! toolbar ([`time_step`], ADR 0153).
 
 pub mod bins;
 pub mod case_edit;
@@ -33,6 +35,7 @@ pub mod schema_model;
 pub mod store_plan;
 pub mod studio;
 pub mod theme;
+pub mod time_step;
 pub mod ui;
 pub mod view_toggle;
 pub mod viewport;

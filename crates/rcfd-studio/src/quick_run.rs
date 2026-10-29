@@ -25,6 +25,7 @@ use crate::bins::{self, Found, Search};
 use crate::layout::{self, Panel};
 use crate::runs::{PlanRoute, RunRow, StartPlan, StoreEvery};
 use crate::studio::Studio;
+use crate::time_step::{self, Facts, Kind, RunTime, StepMode, TimePlan};
 use crate::viewport::Status;
 use crate::watch::Wake;
 use egui_dock::{DockState, NodePath};
@@ -32,7 +33,7 @@ use rcfd_project::records::EventKind;
 use rcfd_project::RunState;
 use rcfd_runner::client::Client;
 use rcfd_runner::runner::Config;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;
@@ -81,6 +82,12 @@ pub struct Switches {
     /// case text as the case's own whatever its value, so a case saved by the Studio (`store_interval = 0` spelled out)
     /// is run without stored fields ([`crate::runs::PlanRoute::default_store_keys_set`]).
     pub default_store_keys_set: bool,
+    /// The route before ADR 0153: Run takes the case's own `solver.dt` and `solver.end_time` (no time settings are
+    /// added to its plan), the toolbar has no time row and the Mesh side no time-step line.
+    pub case_time: bool,
+    /// The layout of ADR 0153's registration (its known-miss test, amendment 2): the Courant warning's text first and its
+    /// fix button after it, which a long warning pushes out of a 1280-point window.
+    pub warning_fix_last: bool,
 }
 
 /// A start in flight.
@@ -120,7 +127,15 @@ enum Msg {
         id: String,
         snapshots: Result<usize, String>,
     },
+    Facts {
+        gen: u64,
+        key: (String, String),
+        result: Box<Result<Facts, String>>,
+    },
 }
+
+/// Facts of case texts kept (ADR 0153), the oldest dropped first.
+pub const FACTS_KEPT: usize = 16;
 
 /// The one-click model, a field of [`Studio`].
 pub struct QuickRun {
@@ -142,12 +157,22 @@ pub struct QuickRun {
     pub switches: Switches,
     /// Where the toolbar and the strip drew their buttons last (by label), so tests can click them.
     pub rects: BTreeMap<String, egui::Rect>,
+    /// The run-time settings of each case's runs ("Simulate for" and Advanced, ADR 0153), by case. Not saved in the
+    /// case; forgotten when the project closes.
+    pub run_time: BTreeMap<String, RunTime>,
+    /// The time-step facts of the case texts the Mesh side showed, by (case, text hash) (ADR 0153), at most
+    /// [`FACTS_KEPT`].
+    pub facts: BTreeMap<(String, String), Result<Facts, String>>,
+    /// The toolbar's Advanced popover is open.
+    pub advanced_open: bool,
     gen: u64,
     locating: bool,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     probed: BTreeSet<String>,
     failed_seen: BTreeSet<String>,
+    facts_order: VecDeque<(String, String)>,
+    facts_asked: BTreeSet<(String, String)>,
 }
 
 impl Default for QuickRun {
@@ -163,12 +188,17 @@ impl Default for QuickRun {
             notice: None,
             switches: Switches::default(),
             rects: BTreeMap::new(),
+            run_time: BTreeMap::new(),
+            facts: BTreeMap::new(),
+            advanced_open: false,
             gen: 0,
             locating: false,
             tx,
             rx,
             probed: BTreeSet::new(),
             failed_seen: BTreeSet::new(),
+            facts_order: VecDeque::new(),
+            facts_asked: BTreeSet::new(),
         }
     }
 }
@@ -184,6 +214,11 @@ impl QuickRun {
         self.notice = None;
         self.probed.clear();
         self.failed_seen.clear();
+        self.run_time.clear();
+        self.facts.clear();
+        self.facts_order.clear();
+        self.facts_asked.clear();
+        self.advanced_open = false;
     }
 
     /// True while a search started by [`QuickRun::locate`] has not reported.
@@ -303,6 +338,15 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
     let (Some(case), Some(root)) = (selected_case(st), st.browser().map(|b| b.root.clone())) else {
         return Err("Run: no case or project".into());
     };
+    // ADR 0153: the run-time settings at the click, and the facts of the file on disk when the Mesh side shows them
+    let rt = run_time(st, &case);
+    let cached = st
+        .preview
+        .displayed()
+        .filter(|b| b.rel == case && !b.from_editor)
+        .and_then(|b| st.quick.facts.get(&(b.rel.clone(), b.case_hash.clone())))
+        .and_then(|r| r.as_ref().ok())
+        .cloned();
     let q = &mut st.quick;
     q.error = None;
     q.runner_error = None;
@@ -321,6 +365,9 @@ pub fn run_selected_case(st: &mut Studio) -> Result<(), String> {
             toml_only: q.switches.cases_as_toml,
             default_store_keys_set: q.switches.default_store_keys_set,
         },
+        case_time: q.switches.case_time,
+        rt,
+        cached,
     };
     let (tx, wake) = (q.tx.clone(), st.wake.clone());
     spawn("rcfd-studio-quick-start", move || start_job(job, tx, wake));
@@ -335,6 +382,12 @@ struct Job {
     tail_always: bool,
     /// [`Switches::cases_as_toml`] and [`Switches::default_store_keys_set`].
     route: PlanRoute,
+    /// [`Switches::case_time`].
+    case_time: bool,
+    /// The case's run-time settings at the click (ADR 0153).
+    rt: RunTime,
+    /// The facts the toolbar showed for the file on disk (used when the file still hashes to them).
+    cached: Option<Facts>,
 }
 
 /// The last lines of `.rcfd/runner.log` (the runner has no console; since ADR 0146 its standard output and error go
@@ -396,18 +449,35 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
         }
     }
     stage("reading the case");
-    let plan = job
+    let read = job
         .root
         .join(&job.case)
         .canonicalize()
         .map_err(|e| format!("{}: {e}", job.case))
         .and_then(|path| {
             let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            StartPlan::new_route(&job.case, &text, path.parent().unwrap_or(&job.root), job.route)
+            let dir = path.parent().unwrap_or(&job.root).to_path_buf();
+            let plan = StartPlan::new_route(&job.case, &text, &dir, job.route)?;
+            Ok((plan, text, dir))
         });
-    let plan = match plan {
+    let (plan, text, dir) = match read {
         Ok(p) => p,
         Err(e) => return fail(format!("{} was not started: {e}", job.case)),
+    };
+    // ADR 0153: the time step is set now, from the file this run uses
+    let plan = if job.case_time {
+        plan
+    } else {
+        stage("setting the time step");
+        match time_facts(&text, &dir, job.cached) {
+            Ok(f) if f.kind == Kind::Transient => match time_step::plan(&f, &job.rt) {
+                Ok(t) => plan.with_time(t),
+                Err(e) => return fail(format!("{} was not started: {e}", job.case)),
+            },
+            // a steady case or one outside the scope runs as before; a case whose simulation does not build fails in
+            // the solver with its located message, as before
+            _ => plan,
+        }
     };
     stage("queueing the run");
     let id = match client.submit(&job.root.join(&plan.case), &plan.settings()) {
@@ -423,6 +493,159 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
         .ensure_runner()
         .map_err(|e| runner_error(&e, &job.root, job.tail_always));
     send(Msg::Runner { gen, result });
+}
+
+// ---------------------------------------------------------------- the time step (ADR 0153)
+
+/// The facts of the case `text`: `cached` when it is of this text, else computed ([`time_step::facts`]).
+fn time_facts(text: &str, dir: &Path, cached: Option<Facts>) -> Result<Facts, String> {
+    let hash = rcfd_project::records::hash_bytes(text.as_bytes());
+    match cached.filter(|f| f.hash == hash) {
+        Some(f) => Ok(f),
+        None => time_step::facts(text, dir),
+    }
+}
+
+/// The run-time settings of `case`'s runs (the defaults until changed).
+pub fn run_time(st: &Studio, case: &str) -> RunTime {
+    st.quick.run_time.get(case).cloned().unwrap_or_default()
+}
+
+/// The run-time settings of `case`'s runs, to change ("Simulate for", Advanced).
+pub fn run_time_mut<'a>(st: &'a mut Studio, case: &str) -> &'a mut RunTime {
+    st.quick.run_time.entry(case.to_string()).or_default()
+}
+
+/// The time-step facts of what the Mesh side shows of `case` (the text it built), once computed.
+pub fn facts_of<'a>(st: &'a Studio, case: &str) -> Option<&'a Result<Facts, String>> {
+    let b = st.preview.displayed().filter(|b| b.rel == case)?;
+    st.quick.facts.get(&(b.rel.clone(), b.case_hash.clone()))
+}
+
+/// The facts of `case` for the Start run dialog's estimate (ADR 0153 D12): those of the text the Mesh side shows when it
+/// shows `case`, else the latest computed for any text of it.
+pub fn latest_facts<'a>(st: &'a Studio, case: &str) -> Option<&'a Facts> {
+    if let Some(r) = facts_of(st, case) {
+        return r.as_ref().ok();
+    }
+    st.quick
+        .facts_order
+        .iter()
+        .rev()
+        .filter(|k| k.0 == case)
+        .find_map(|k| st.quick.facts.get(k).and_then(|r| r.as_ref().ok()))
+}
+
+/// Compute the facts of the text the Mesh side shows when they are not known, on a control thread (the solver's
+/// simulation is built there, never on the UI thread).
+fn ask_facts(st: &mut Studio) {
+    if st.quick.switches.case_time {
+        return;
+    }
+    let Some(b) = st.preview.displayed().cloned() else {
+        return;
+    };
+    let key = (b.rel.clone(), b.case_hash.clone());
+    if st.quick.facts.contains_key(&key) || st.quick.facts_asked.contains(&key) {
+        return;
+    }
+    st.quick.facts_asked.insert(key.clone());
+    let dir = b.file.parent().map(Path::to_path_buf).unwrap_or_default();
+    let (tx, wake, gen) = (st.quick.tx.clone(), st.wake.clone(), st.quick.gen);
+    spawn("rcfd-studio-time-facts", move || {
+        let result = Box::new(time_step::facts(&b.text, &dir));
+        if tx.send(Msg::Facts { gen, key, result }).is_ok() {
+            wake();
+        }
+    });
+}
+
+fn keep_facts(q: &mut QuickRun, key: (String, String), result: Result<Facts, String>) {
+    q.facts_asked.remove(&key);
+    if q.facts.insert(key.clone(), result).is_none() {
+        q.facts_order.push_back(key);
+    }
+    while q.facts_order.len() > FACTS_KEPT {
+        if let Some(old) = q.facts_order.pop_front() {
+            q.facts.remove(&old);
+        }
+    }
+}
+
+/// The toolbar's time row of a selected case (ADR 0153).
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeView {
+    /// No row: no case selected, or the route before ADR 0153.
+    None,
+    /// The facts are not known yet, or the case's simulation does not build here (the reason on hover).
+    Unknown {
+        /// The row's text.
+        text: String,
+        /// Why, when the case does not build.
+        hover: Option<String>,
+    },
+    /// A steady case, or a transient one outside the scope: a line and its hover.
+    Plain {
+        /// The line.
+        text: String,
+        /// Its hover text.
+        hover: String,
+    },
+    /// A transient case: what the row offers and the plan of its next run (or why there is none).
+    Transient {
+        /// The case's facts.
+        facts: Box<Facts>,
+        /// Its run-time settings.
+        rt: RunTime,
+        /// The plan of its next run.
+        plan: Result<TimePlan, String>,
+    },
+}
+
+/// The row's text while the facts are not known.
+pub const TIME_UNKNOWN: &str = "time step: known once the mesh of the case is built; Run sets it when it starts";
+
+/// What the toolbar's time row shows for the selected case.
+pub fn time_view(st: &Studio) -> TimeView {
+    if st.quick.switches.case_time {
+        return TimeView::None;
+    }
+    let Some(case) = selected_case(st) else {
+        return TimeView::None;
+    };
+    match facts_of(st, &case) {
+        None => TimeView::Unknown {
+            text: TIME_UNKNOWN.into(),
+            hover: None,
+        },
+        Some(Err(e)) => TimeView::Unknown {
+            text: "time step: set when Run starts (the case's simulation does not build here)".into(),
+            hover: Some(e.clone()),
+        },
+        Some(Ok(f)) if f.kind != Kind::Transient => TimeView::Plain {
+            text: time_step::other_label(f).unwrap_or_default(),
+            hover: time_step::other_hover(f).unwrap_or_default(),
+        },
+        Some(Ok(f)) => {
+            let rt = run_time(st, &case);
+            TimeView::Transient {
+                plan: time_step::plan(f, &rt),
+                facts: Box::new(f.clone()),
+                rt,
+            }
+        }
+    }
+}
+
+/// The fix of the toolbar's Courant warning ([`time_step::warning`]): the automatic step instead of the case's own, or
+/// the default Courant target instead of one above [`time_step::COURANT_WARN`].
+pub fn fix_warning(st: &mut Studio, case: &str) {
+    let rt = run_time_mut(st, case);
+    if rt.mode == StepMode::Case {
+        rt.mode = time_step::DEFAULT_MODE;
+    } else if rt.courant > time_step::COURANT_WARN {
+        rt.courant = time_step::COURANT_TARGET;
+    }
 }
 
 /// Make `p` the shown tab of its place and give that place the focus (shown first when it was hidden).
@@ -481,6 +704,7 @@ pub fn drain(st: &mut Studio) -> usize {
         apply(st, m);
     }
     follow_selected(st);
+    ask_facts(st);
     n
 }
 
@@ -553,6 +777,7 @@ fn apply(st: &mut Studio, m: Msg) {
             }
         }
         Msg::Probe { gen, id, snapshots } if gen == current => explain_end(st, &id, snapshots),
+        Msg::Facts { gen, key, result } if gen == current => keep_facts(&mut st.quick, key, *result),
         _ => {}
     }
 }

@@ -413,7 +413,9 @@ selected is no longer selected), and the limits of N1 (c), N3 (c), N4 and the se
 4. **Refine x2's time estimate.** The hover says "each iteration does about that much more work" and gives the runner's
    memory estimate; a transient run on a finer mesh may also need a smaller `solver.dt` (CFL), which is not said in
    numbers. Options: (a) keep; (b) add the CFL estimate of the refined mesh from the case's velocity scale. Recommendation:
-   (a).
+   (a). Note (2026-10-28): superseded by [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (job 48S, the
+   maintainer's request after a refined cylinder ran at Courant about 10): Run sets the time step from the mesh and the
+   case's speeds when a run starts, the Mesh side shows a Courant estimate, and "Refine x2"'s hover says the step follows.
 5. **Refine for `axial_fan_sector`** (counts under `mesh.fan`). Options: (a) not offered (now); (b) double its `n_*`
    counts too. Recommendation: (a): its mesh is fragile against count changes (`docs/case-schema.md`).
 6. **A JSON case and Run** (found by N1 (c), deviation 4 of the addendum). Run and the Start run dialog read a case as

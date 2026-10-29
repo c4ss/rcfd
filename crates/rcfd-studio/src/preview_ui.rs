@@ -108,6 +108,7 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
     if !st.viewport.switches.no_scale {
         resolution(ui, st, &b);
     }
+    time_line(ui, st, &b);
     ui.monospace(counts(&b));
     controls(ui, st, &b);
     let avail = ui.available_size();
@@ -164,6 +165,9 @@ pub const REFINE: &str = "Refine x2";
 /// editor does not hold the case as shown ([`preview::refine_blocked`]).
 fn resolution(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
     let mut go = false;
+    // ADR 0153: Refine x2 does not touch the time step, which Run sets from the finer cells
+    let note =
+        shown_facts(st, b).and_then(|f| crate::time_step::refine_note(f, &crate::quick_run::run_time(st, &b.rel)));
     ui.horizontal(|ui| {
         ui.monospace(preview::resolution_text(b));
         match preview::refine_offer(b, &st.preview.limits) {
@@ -176,7 +180,12 @@ fn resolution(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
                 };
                 let resp = ui
                     .add_enabled(why.is_none(), egui::Button::new(label))
-                    .on_hover_text(preview::refine_hover(&r))
+                    .on_hover_ui(|ui| {
+                        ui.label(preview::refine_hover(&r));
+                        if let Some(n) = &note {
+                            ui.label(n.as_str());
+                        }
+                    })
                     .on_disabled_hover_text(why.clone().unwrap_or_default());
                 st.preview.rects.insert(REFINE, resp.rect);
                 go = resp.clicked();
@@ -195,6 +204,27 @@ fn resolution(ui: &mut egui::Ui, st: &mut Studio, b: &Built) {
         if let Err(m) = preview::refine(st) {
             st.say(m);
         }
+    }
+}
+
+/// The time-step facts of the shown mesh's text, once computed (ADR 0153; none with `QuickRun::switches.case_time`).
+fn shown_facts<'a>(st: &'a Studio, b: &Built) -> Option<&'a crate::time_step::Facts> {
+    if st.quick.switches.case_time {
+        return None;
+    }
+    st.quick
+        .facts
+        .get(&(b.rel.clone(), b.case_hash.clone()))
+        .and_then(|r| r.as_ref().ok())
+}
+
+/// The time-step line of the Mesh side of a transient case (ADR 0153, superseding ADR 0148 question 4): the estimated
+/// Courant number of the case's own step on this mesh and what Run sets ([`crate::time_step::mesh_line`]). Shown once
+/// the facts of the shown text are computed (off the UI thread); none for a steady case.
+fn time_line(ui: &mut egui::Ui, st: &Studio, b: &Built) {
+    let Some(f) = shown_facts(st, b) else { return };
+    if let Some(line) = crate::time_step::mesh_line(f, &crate::quick_run::run_time(st, &b.rel)) {
+        ui.monospace(line).on_hover_text(crate::time_step::MESH_HOVER);
     }
 }
 

@@ -127,6 +127,8 @@ pub struct Built {
     pub file: PathBuf,
     /// `hash_bytes` of the text built: the case file as read, or the editor's text.
     pub case_hash: String,
+    /// The text built (ADR 0153: the time step's facts are computed from it, off the UI thread, when it is shown).
+    pub text: Arc<str>,
     /// True when built from the case editor's unsaved text (ADR 0144), false from the file on disk.
     pub from_editor: bool,
     /// `Mesh::content_hash` of the built mesh.
@@ -776,6 +778,7 @@ fn build_text(
             rel: rel.to_string(),
             file,
             case_hash,
+            text: Arc::from(src),
             from_editor,
             mesh_hash: mesh.content_hash(),
             cells: mesh.n_cells(),
