@@ -5,7 +5,7 @@ and the not-run list are fixed here); results in the addendum below. House rules
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; defaults stay bit-identical (no
 library code is touched); `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or re-recorded; the record
 `crates/rcfd-api/tests/fixtures/case_hashes_6867e40.txt` (R0) is not edited or re-recorded; no unsafe code, no new crate.
-Parents: [ADR 0155](0155-job48u-mesh-transform-rotated-cases.md) (H1 and its record R0, base 6867e40),
+Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (H1 and its record R0, base 6867e40),
 [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (the key `solver.corrector_control`, default `"fixed"`,
 `Schema::hash_omit_default`, D6), [ADR 0160](0160-job48z-end-time-stamp-corrector-count-record-sv301-wiring.md) deviation 3 /
 question 6 and [ADR 0162](0162-job48ab-adaptive-correctors-follow-the-time-step.md) question 6 (both report the H1 failure and
