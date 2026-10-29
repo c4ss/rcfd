@@ -251,6 +251,8 @@ question 2.
 5. The Studio shows no SV301 text of its own (D5): with the switch on the solver makes no SV301 estimate at all; with it off,
    SV301 reaches the run's `check.json` and events (X5 (b) control), which the Log panel lists, and the corrector line's hover
    says so.
+6. After N was measured, a dated note (docs only) was added to ADR 0156 D8 pointing here; so the branch's final diff against
+   4e795b1 also names `docs/adr/0156-...`, which N's registered wording does not list. No code outside `crates/rcfd-studio`.
 
 ### Not run
 
