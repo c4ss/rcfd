@@ -249,6 +249,45 @@ fn w48v_n5_a10_correctors_in_the_status_stream_only_when_adaptive() {
     assert_eq!(c["log"][0][0], 1, "first estimate at step 1: {c}");
 }
 
+/// A11 (ADR 0156 amendment 3): the cap's reports end to end. K1's mesh (64 x 256) with `adaptive` at dt 1/16, 1/4 and 1, three
+/// steps each through `runctl::drive`; on the first arm whose first estimate is cap-bound: a `corrector_cap` warning event
+/// (`correctors` 10, `rho` > 0.5), `corrector_cap >= 1` in every later `iteration` event, `finish.correctors.cap_bound >= 1`.
+#[test]
+fn w48v_a11_the_cap_is_reported_end_to_end() {
+    for dt in [1.0 / 16.0, 0.25, 1.0] {
+        let case = with_sets(
+            parse(&example_with("corrector_control = \"adaptive\"")),
+            &[
+                ("mesh.nx", json!(64)),
+                ("mesh.ny", json!(256)),
+                ("solver.dt", json!(dt)),
+            ],
+        );
+        let ev = drive(case, 3);
+        let fin = ev.iter().find(|e| e["event"] == "finish").expect("finish event");
+        let c = &fin["correctors"];
+        println!("A11 dt {dt}: state {}, correctors {c}", fin["state"]);
+        if c["log"][0][3] != true {
+            continue;
+        }
+        let w = ev
+            .iter()
+            .position(|e| e["event"] == "warning" && e["kind"] == "corrector_cap")
+            .expect("A11: a corrector_cap warning event");
+        println!("A11 warning: {}", ev[w]["message"]);
+        assert_eq!(ev[w]["correctors"], 10, "{}", ev[w]);
+        assert!(ev[w]["rho"].as_f64().unwrap() > 0.5, "{}", ev[w]);
+        let later: Vec<&Value> = ev[w..].iter().filter(|e| e["event"] == "iteration").collect();
+        assert!(!later.is_empty(), "A11: no iteration event after the warning");
+        for e in later {
+            assert!(e["corrector_cap"].as_u64().unwrap() >= 1, "{e}");
+        }
+        assert!(c["cap_bound"].as_u64().unwrap() >= 1, "{c}");
+        return;
+    }
+    panic!("A11: no arm bound the cap (reported as not exercised)");
+}
+
 // ------------------------------------------------------------------------------------------------ B3 (library): check_only
 
 fn sv301(ev: &Value) -> Vec<Value> {
