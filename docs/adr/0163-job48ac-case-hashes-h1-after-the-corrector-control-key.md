@@ -1,7 +1,9 @@
 # ADR 0163: Job 48AC, ADR 0155's H1 (`case_hashes_w48u`) compared after a documented normalisation of the one new default-valued key `solver.corrector_control`; rcfd-mcp `t2` gets its own temp parent
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any run of this job (set-ups, limits
-and the not-run list are fixed here); results in the addendum below. House rules of
+and the not-run list are fixed here); **results in the addendum** (2026-10-29: L1, L2, L3 met; L4, L6, L7 not run and L5
+incomplete because the suite run was stopped by the session's low-memory reaper; two failures in the partial L5 run, both
+outside this job's files, see Q1; one set-up deviation, D-1). House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; defaults stay bit-identical (no
 library code is touched); `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or re-recorded; the record
 `crates/rcfd-api/tests/fixtures/case_hashes_6867e40.txt` (R0) is not edited or re-recorded; no unsafe code, no new crate.
@@ -73,3 +75,62 @@ A missed limit is reported in the addendum, not hidden; no limit is changed afte
 * `baseline_hashes.rs` beyond its normal run inside L5 (not edited).
 * Test suites of crates other than rcfd-api and rcfd-mcp (no other crate is touched).
 * Linux/macOS (H1 compares mesh hashes only on Windows, ADR 0137; unchanged).
+
+## Addendum (results, 2026-10-29)
+
+Branch `worktree-agent-a3060ad185b4fedf6`, base local main 6366587. Commits: 5d6aeb6 + 1a9d436 (this registration, before any
+code or run), 47c253e (the test changes). Files changed: `crates/rcfd-api/tests/case_hashes_w48u.rs`,
+`crates/rcfd-mcp/src/design_tests.rs`, this ADR. Not changed: the record R0, `baseline_hashes.rs`, any library code.
+`CARGO_TARGET_DIR=E:\projects\cfd\rcfd\target-48ac`.
+
+| id | limit | result | verdict |
+| --- | --- | --- | --- |
+| L1 | H1 passes after normalisation; C1, C2, C4 hold | `h1_case_files_are_unchanged_against_the_base_record ... ok`: "41 recorded sources (30 valid, 30 meshes built), 44 now, 0 differ"; C1 asserted for every valid current source; C2 asserted for the 30 recorded valid sources; C4: `cases/axial_fan_cgrid/axial_fan_cgrid.toml` with `corrector_control = "adaptive"` gives toml 5f70e423bab8ce24, json cdfaf1b0e42d6037, neither equal to its R0 columns | met |
+| L2 | raw text columns differ for the valid sources only, settings and mesh columns for none | "30 of 30 recorded valid sources differ raw (text columns only), 0 after normalisation"; the C3 assertion (settings and mesh columns equal raw for every recorded source) holds; the 11 invalid R0 lines are not normalised and all equal R0 | met |
+| L3 | D1: unmodified t2 with `TEMP`/`TMP` = fresh empty dir passes | `design_tests::t2_paths_are_sandboxed_and_names_are_restricted ... ok` (TEMP=TMP=a fresh scratch dir `tmp48ac_d1`); control with the normal TEMP on the same unmodified code: fails at `design_tests.rs:227` `assertion failed: !root.parent().unwrap().join("x").exists()` | met |
+| L4 | fixed t2 with normal TEMP passes | not run (D-2) | not run |
+| L5 | `cargo test -p rcfd-api --no-fail-fast`: 0 failures | stopped after 88 test binaries had finished (about 3 h of the debug suite, the machine shared with other jobs); in those: 521 passed, 2 failed, 178 ignored; `case_hashes_w48u` passed inside it | incomplete; 2 failures (Q1) |
+| L6 | `cargo test -p rcfd-mcp`: 0 failures | not run (D-2) | not run |
+| L7 | clippy `-D warnings` and fmt `--check`, rcfd-api and rcfd-mcp | not run as registered (D-2); `cargo fmt -p rcfd-api -p rcfd-mcp` was applied before the test run and commit 47c253e, and both test builds compiled without warnings | not run |
+
+What the record shows (the brief's "show it"): for all 30 valid R0 sources the settings content hash and the mesh content hash
+(compared, Windows) of the current code equal R0 unchanged; the raw toml and json hashes of all 30 differ; after removing the
+single entry `solver.corrector_control = "fixed"` from the settings value, both text hashes of all 30 equal R0, and C1 shows
+that the serialisation used is byte-identical to `Case::to_toml` / `Case::to_json_string`. So the written text of every
+recorded case differs from 6867e40 by exactly that one default-valued key. Three sources not in R0 (the `docs/case-schema.md`
+block 46e761937bab06b8, `example-projects/wind-tunnel/cases/naca0012-aoa{2,4}-rotated.toml`) are printed, not compared, as H1
+already did.
+
+The stray `%TEMP%\x` (dated 2026-10-15) still exists after the job (`Test-Path` true); nothing outside the tests' own
+directories was deleted.
+
+### Deviations
+
+D-1. S1 registered `serde_json::Map::shift_remove`; it does not compile here (the method needs serde_json's `preserve_order`
+feature, so this build's `Map` is the key-sorted BTreeMap). The test uses `Map::remove`, which on a BTreeMap cannot reorder
+the remaining keys; with `preserve_order` it could only swap keys, which would make the line differ from R0 (a false failure,
+never a false pass). Changed after the compile error and before the first H1 run; no amendment was written beforehand.
+
+D-2. The background chain (rcfd-api suite, then rcfd-mcp suite, clippy, fmt check) was stopped by the Claude Code session's
+low-memory reaper during the rcfd-api suite; as instructed by that notice it was not restarted. Hence L4, L6, L7 not run and
+L5 incomplete.
+
+### Not run
+
+L4, L6, L7, the rest of L5 (the rcfd-api binaries after the 88th), and the registered not-run items (record mode, other
+crates, Linux/macOS).
+
+### Questions
+
+Q1. Two failures in the partial L5 run, both in files and code this job did not touch (it changed test files only):
+* `baseline_hashes::shipped_cases_match_registered_hashes`: `kepsilon_channel: got (60, da0ee795fd177d8e), registered (60,
+  6ddc55969af2a835)`. ADRs 0158, 0160 and 0162 record this case as known to fail on this machine at earlier commits
+  (intermittently: it passed in the 0160 and 0162 runs).
+* `fan01_stall_w43c::w45a_p5_defaults_are_bit_identical_to_main`: absent and `none` 0xb1aed685ee7279c0 (guard
+  `velocity_runaway`), `barth_jespersen` 0x3cd6036eafc92b11, against the recorded 0xec721116c0963182 / 0x26e5a0c524957698.
+  ADR 0162 reports H1 as rcfd-api's only failure at its base, so this is either new on main 6366587 (the merge of 48Y, 48Z,
+  48AA, 48AB) or load-dependent like `kepsilon_channel`. Not investigated (out of scope; not rerun because of D-2).
+  Recommendation: rerun the two tests alone on an idle machine at 6366587 and at 444255c; if 6366587 fails and 444255c passes,
+  bisect the four merges.
+
+Q2. Rerun L4, L6, L7 and the full L5 when memory allows (the commands are those registered).
