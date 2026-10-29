@@ -210,6 +210,9 @@ pub struct StartPlan {
     /// store keys and before the user's overrides. `None` for every plan but Run's of a transient case. Boxed so that
     /// the run worker's updates stay small.
     pub time: Option<Box<crate::time_step::TimePlan>>,
+    /// The pressure correctors Run sets (ADR 0158, job 48X: `solver.corrector_control=adaptive`), applied after the time
+    /// settings and before the user's overrides. `None` for every plan but Run's of a transient case.
+    pub correctors: Option<crate::time_step::CorrectorPlan>,
 }
 
 impl std::fmt::Debug for StartPlan {
@@ -227,6 +230,10 @@ impl std::fmt::Debug for StartPlan {
             .field("extra_set", &self.extra_set);
         if let Some(t) = &self.time {
             d.field("time", t);
+        }
+        // ADR 0158: like `time`, only when set
+        if let Some(c) = &self.correctors {
+            d.field("correctors", c);
         }
         d.finish()
     }
@@ -394,11 +401,13 @@ impl StartPlan {
             mem_mb: None,
             extra_set: Vec::new(),
             time: None,
+            correctors: None,
         })
     }
 
     /// The `rcfd run --set` entries: the store keys (when the proposal is on), then the run-time time settings of Run
-    /// (ADR 0153, when set), then the user's overrides. f64 is the store's default, so it adds no key.
+    /// (ADR 0153, when set), then Run's pressure correctors (ADR 0158, when set and adaptive), then the user's overrides
+    /// (the last entry of a key applies). f64 is the store's default, so it adds no key.
     pub fn set(&self) -> Vec<String> {
         let mut v = Vec::new();
         if let Some(s) = self.store.as_ref().filter(|s| s.on) {
@@ -413,6 +422,9 @@ impl StartPlan {
         if let Some(t) = &self.time {
             v.extend(t.entries.iter().cloned());
         }
+        if let Some(e) = self.correctors.as_ref().and_then(|c| c.entry()) {
+            v.push(e);
+        }
         v.extend(self.extra_set.iter().filter(|s| !s.trim().is_empty()).cloned());
         v
     }
@@ -426,6 +438,12 @@ impl StartPlan {
             (self.store, self.note) = propose_store(&f);
         }
         self.time = Some(Box::new(t));
+        self
+    }
+
+    /// Add Run's pressure correctors (ADR 0158) to the plan.
+    pub fn with_correctors(mut self, c: crate::time_step::CorrectorPlan) -> StartPlan {
+        self.correctors = Some(c);
         self
     }
 

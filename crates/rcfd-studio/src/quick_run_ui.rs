@@ -4,7 +4,7 @@
 
 use crate::quick_run::{self, Control, TimeView, Tone};
 use crate::studio::Studio;
-use crate::time_step::{self, Facts, RunTime, StepMode, TimePlan};
+use crate::time_step::{self, CorrectorPlan, Facts, RunTime, StepMode, TimePlan};
 use crate::ui::{StartDialog, UiState};
 use egui::{Color32, RichText};
 
@@ -18,12 +18,16 @@ pub const RUN_HOVER: &str = "start the selected case with the default plan and f
 pub const SIMULATE_FOR: &str = "Simulate for";
 /// The button of the time step's popover (ADR 0153).
 pub const ADVANCED: &str = "Advanced";
+/// Where the toolbar's pressure-corrector line was drawn (a key of `QuickRun::rects`, ADR 0158).
+pub const CORRECTORS_LINE: &str = "pressure correctors";
 /// The fix button of the Courant warning (ADR 0153).
 pub const FIX: &str = "Use the automatic time step";
 /// The fix button of the Courant warning when the target is too high (ADR 0153).
 pub const FIX_TARGET: &str = "Use the default Courant target";
 /// The checkbox of the Advanced popover (ADR 0153).
 pub const AUTO_BOX: &str = "automatic time step (Courant controller)";
+/// The pressure correctors' checkbox of the Advanced popover (ADR 0158).
+pub const CORRECTORS_BOX: &str = "adaptive pressure correctors (the solver picks the count)";
 
 /// Draw the toolbar (top) and the strip (bottom); call after the menu bar and the status bar so they sit inside them.
 pub fn show(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
@@ -46,6 +50,16 @@ pub fn toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
         TimeView::Transient { plan: Err(e), .. } => Some(format!("This run is not started: {e}")),
         _ => None,
     };
+    // ADR 0158: the run's pressure correctors, a line of its own after the plan's
+    let corrector_hover = match &time {
+        TimeView::Transient {
+            facts,
+            plan: Ok(_),
+            correctors,
+            ..
+        } => Some(time_step::corrector_hover(facts, correctors)),
+        _ => None,
+    };
     let mut go = false;
     ui.horizontal(|ui| {
         let label = RichText::new("  Run  ").strong().color(Color32::WHITE);
@@ -54,6 +68,9 @@ pub fn toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
             .on_hover_ui(|ui| {
                 ui.label(RUN_HOVER);
                 if let Some(h) = &plan_hover {
+                    ui.label(h.as_str());
+                }
+                if let Some(h) = &corrector_hover {
                     ui.label(h.as_str());
                 }
             })
@@ -122,7 +139,7 @@ pub fn toolbar(ui: &mut egui::Ui, st: &mut Studio, us: &mut UiState) {
 /// `solver.dt` or `solver.end_time`, and the Courant warning with its fix. A steady case, or a transient one outside the
 /// scope, gets one line saying what Run does instead. The settings are the case's run-time settings, never the case's.
 fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
-    let (facts, rt, plan) = match view {
+    let (facts, rt, plan, correctors) = match view {
         TimeView::None => return,
         TimeView::Unknown { text, hover } => {
             let r = ui.weak(text);
@@ -135,7 +152,12 @@ fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
             ui.weak(text).on_hover_text(hover);
             return;
         }
-        TimeView::Transient { facts, rt, plan } => (facts, rt, plan),
+        TimeView::Transient {
+            facts,
+            rt,
+            plan,
+            correctors,
+        } => (facts, rt, plan, correctors),
     };
     let mut next = rt.clone();
     ui.horizontal(|ui| {
@@ -173,7 +195,7 @@ fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
         egui::Popup::from_response(&adv)
             .open_bool(open)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| advanced(ui, &facts, &mut next, rects));
+            .show(|ui| advanced(ui, &facts, &correctors, &mut next, rects));
         match &plan {
             Ok(tp) => {
                 let hover = time_step::hover(&facts, tp);
@@ -187,6 +209,26 @@ fn time_row(ui: &mut egui::Ui, st: &mut Studio, case: &str, view: TimeView) {
             }
         }
     });
+    // ADR 0158: the run's pressure correctors on a line of their own (wrapped), so that the row above keeps its width
+    if plan.is_ok() {
+        let text = time_step::corrector_label(&correctors);
+        let hover = time_step::corrector_hover(&facts, &correctors);
+        let off = matches!(
+            correctors,
+            CorrectorPlan::Fixed {
+                why: time_step::FixedWhy::Off,
+                ..
+            }
+        );
+        let text = if off {
+            RichText::new(text).color(WARN)
+        } else {
+            RichText::new(text).weak()
+        };
+        let r = ui.add(egui::Label::new(text).wrap());
+        st.quick.rects.insert(CORRECTORS_LINE.into(), r.rect);
+        r.on_hover_text(hover);
+    }
     if let Some((w, fix)) = plan.as_ref().ok().and_then(|tp| warning_of(case, &facts, tp)) {
         // ADR 0153 amendment 2: the fix first, the warning wrapping after it, so that the button stays in the window
         let last = st.quick.switches.warning_fix_last;
@@ -227,10 +269,12 @@ fn warning_of(case: &str, f: &Facts, tp: &TimePlan) -> Option<(String, &'static 
 }
 
 /// The Advanced popover: the automatic step on or off (the case's own `solver.dt`), its Courant target and its largest
-/// step. A case with its own step control keeps it.
+/// step, and adaptive pressure correctors on or off (ADR 0158). A case with its own step control keeps it; a case that
+/// sets adaptive correctors itself, or one whose solver has none, keeps its own.
 fn advanced(
     ui: &mut egui::Ui,
     f: &Facts,
+    cp: &CorrectorPlan,
     rt: &mut RunTime,
     rects: &mut std::collections::BTreeMap<String, egui::Rect>,
 ) {
@@ -283,6 +327,32 @@ fn advanced(
             }
         });
     });
+    ui.separator();
+    ui.strong("Pressure correctors of this case's runs");
+    let kept = match cp {
+        CorrectorPlan::CaseAdaptive { .. } => {
+            Some("the case sets solver.corrector_control = \"adaptive\" itself, which Run keeps".to_string())
+        }
+        CorrectorPlan::Fixed {
+            why: time_step::FixedWhy::Scope(why),
+            ..
+        } => Some(format!("the solver has no adaptive correctors for this case: {why}")),
+        _ => None,
+    };
+    let mut on = !matches!(cp, CorrectorPlan::Fixed { .. });
+    let r = ui
+        .add_enabled(kept.is_none(), egui::Checkbox::new(&mut on, CORRECTORS_BOX))
+        .on_hover_text(format!(
+            "on: Run adds solver.corrector_control=adaptive (the solver uses at least the case's solver.n_correctors = \
+             {}, at most 10, as many as the mesh and the step need); off: Run takes the case's fixed count. {}",
+            f.correctors.n,
+            time_step::CORRECTOR_COST
+        ))
+        .on_disabled_hover_text(kept.unwrap_or_default());
+    rects.insert(CORRECTORS_BOX.into(), r.rect);
+    if r.changed() {
+        rt.adaptive_correctors = on;
+    }
 }
 
 /// The status strip of the selected run.

@@ -858,6 +858,10 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
                                 ui.weak(line);
                             }
                         }
+                        // ADR 0158: and its pressure correctors (the case's; Run on the toolbar makes them adaptive)
+                        if let Some(line) = crate::time_step::dialog_corrector_line(f, &plan.set()) {
+                            ui.weak(line);
+                        }
                     }
                     ui.weak(format!("rcfd run --set: {}", plan.set().join(" ")));
                     let why = start_why.clone();

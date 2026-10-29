@@ -470,8 +470,11 @@ fn start_job(job: Job, tx: Sender<Msg>, wake: Wake) {
     } else {
         stage("setting the time step");
         match time_facts(&text, &dir, job.cached) {
+            // ADR 0158: and the pressure correctors (adaptive unless switched off, out of scope or the case's own)
             Ok(f) if f.kind == Kind::Transient => match time_step::plan(&f, &job.rt) {
-                Ok(t) => plan.with_time(t),
+                Ok(t) => plan
+                    .with_time(t)
+                    .with_correctors(time_step::corrector_plan(&f, &job.rt)),
                 Err(e) => return fail(format!("{} was not started: {e}", job.case)),
             },
             // a steady case or one outside the scope runs as before; a case whose simulation does not build fails in
@@ -599,6 +602,8 @@ pub enum TimeView {
         rt: RunTime,
         /// The plan of its next run.
         plan: Result<TimePlan, String>,
+        /// The pressure correctors of its next run (ADR 0158).
+        correctors: crate::time_step::CorrectorPlan,
     },
 }
 
@@ -630,6 +635,7 @@ pub fn time_view(st: &Studio) -> TimeView {
             let rt = run_time(st, &case);
             TimeView::Transient {
                 plan: time_step::plan(f, &rt),
+                correctors: time_step::corrector_plan(f, &rt),
                 facts: Box::new(f.clone()),
                 rt,
             }

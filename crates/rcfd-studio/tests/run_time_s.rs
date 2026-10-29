@@ -123,8 +123,9 @@ struct A {
 }
 
 /// (a)'s procedure: `cases/cyl256.toml` (the wind tunnel's cylinder at 256 x 256, as the maintainer refined it) selected,
-/// "Simulate for" `n` s, the step `mode`, Run, until it ended (`limit`); the lift's shedding over `[from, n]`.
-fn a_run(tag: &str, n: f64, from: f64, mode: StepMode, limit: Duration) -> A {
+/// "Simulate for" `n` s, the step `mode`, Run, until it ended (`limit`); the lift's shedding over `[from, n]`. ADR 0158:
+/// `correctors` is Run's adaptive pressure-corrector switch (on in the app; the control runs with it off, as registered).
+fn a_run(tag: &str, n: f64, from: f64, mode: StepMode, correctors: bool, limit: Duration) -> A {
     let p = project(tag, &[("cases/cyl256.toml", ts::cylinder(256, 256))]);
     let mut st = studio(&p, false);
     select(&mut st, "cases/cyl256.toml");
@@ -132,6 +133,7 @@ fn a_run(tag: &str, n: f64, from: f64, mode: StepMode, limit: Duration) -> A {
         let rt = quick_run::run_time_mut(&mut st, "cases/cyl256.toml");
         rt.simulate = Some(n);
         rt.mode = mode;
+        rt.adaptive_correctors = correctors;
     }
     let t0 = Instant::now();
     let id = run_now(&mut st).unwrap();
@@ -163,7 +165,7 @@ fn a_run(tag: &str, n: f64, from: f64, mode: StepMode, limit: Duration) -> A {
 #[test]
 #[ignore = "heavy: ADR 0153 (a) (60 to 90 minutes)"]
 fn a_cylinder_256_automatic_step_is_stable_and_sheds() {
-    let a = a_run("a", 40.0, 10.0, StepMode::Adaptive, Duration::from_secs(3 * 3600));
+    let a = a_run("a", 40.0, 10.0, StepMode::Adaptive, true, Duration::from_secs(3 * 3600));
     let c = time_step::COURANT_TARGET;
     assert_eq!(a.state, RunState::Finished, "state");
     assert_eq!(a.end_bits, 40f64.to_bits(), "end {}", a.end);
@@ -183,10 +185,11 @@ fn a_cylinder_256_automatic_step_is_stable_and_sheds() {
 
 /// (a) control: the same case with its own `solver.dt = 0.0625` (Advanced: the automatic step off), 1.25 s (20 steps, as
 /// probe P2): the first Courant number is above the target (predicted 6.3), and (predicted) the Courant number passes 10
-/// within the 1.25 s.
+/// within the 1.25 s. ADR 0158: with Run's adaptive pressure correctors switched off, so that the set-up stays the
+/// registered one (`set` exactly `solver.end_time=1.25`).
 #[test]
 fn a_control_the_case_step_on_256_is_far_above_the_target() {
-    let a = a_run("actl", 1.25, 0.625, StepMode::Case, Duration::from_secs(1800));
+    let a = a_run("actl", 1.25, 0.625, StepMode::Case, false, Duration::from_secs(1800));
     assert_eq!(a.set, vec!["solver.end_time=1.25".to_string()], "the case's own step");
     assert!(
         a.co_first > time_step::COURANT_TARGET,
@@ -404,6 +407,8 @@ fn cd_ends_at_the_time_asked_for_and_leaves_the_case_alone() {
         "solver.dt=0.00602".to_string(),
         "solver.max_courant=0.5".to_string(),
         "solver.max_dt=0.073".to_string(),
+        // ADR 0158: Run's adaptive pressure correctors (the registered difference)
+        time_step::ADAPTIVE_ENTRY.to_string(),
     ];
     assert_eq!(r.plan_set, want, "(d) the plan");
     assert_eq!(r.set, want, "(d) run.json");
@@ -475,7 +480,9 @@ fn g1_a_flow_at_rest_under_gravity_gets_the_gravity_scale() {
             "solver.end_time=2",
             "solver.dt=0.000148",
             "solver.max_courant=0.5",
-            "solver.max_dt=0.02"
+            "solver.max_dt=0.02",
+            // ADR 0158: Run's adaptive pressure correctors (the registered difference)
+            time_step::ADAPTIVE_ENTRY
         ]
     );
     assert_eq!((state, end), (RunState::Finished, 2f64.to_bits()));
@@ -497,7 +504,9 @@ fn g2_a_case_without_a_speed_scale_runs_under_the_controller() {
             "solver.end_time=2",
             "solver.dt=0.01",
             "solver.max_courant=0.5",
-            "solver.max_dt=0.02"
+            "solver.max_dt=0.02",
+            // ADR 0158: Run's adaptive pressure correctors (the registered difference)
+            time_step::ADAPTIVE_ENTRY
         ]
     );
     assert_eq!((state, end), (RunState::Finished, 2f64.to_bits()));
@@ -517,14 +526,13 @@ fn h_run(tag: &str, before: bool) -> (Vec<String>, Vec<String>, Option<RunState>
     let id = run_now(&mut st).unwrap();
     let s = wait_end(&p, &mut st, &id, Duration::from_secs(600));
     let f = time_step::facts(&toml, &p.dir.join("cases")).unwrap();
-    let toml_plan = time_step::plan(
-        &f,
-        &time_step::RunTime {
-            simulate: Some(2.3),
-            ..Default::default()
-        },
-    )
-    .unwrap();
+    let rt = time_step::RunTime {
+        simulate: Some(2.3),
+        ..Default::default()
+    };
+    let mut toml_plan = time_step::plan(&f, &rt).unwrap();
+    // ADR 0158: and the corrector entry of the TOML twin's plan (the registered difference)
+    toml_plan.entries.extend(time_step::corrector_plan(&f, &rt).entry());
     let same = std::fs::read(p.run_dir(&id).join("case.snapshot")).unwrap() == json.as_bytes();
     let r = (
         run_set(&p, &id),
