@@ -11,6 +11,10 @@
     python scripts/make_example_projects.py --rerun-check    rebuild this platform's tree in a temporary copy and compare
                                                              the files that are byte-reproducible with the committed ones
     python scripts/make_example_projects.py --docker --rerun-check   the same for the Linux tree, in Docker
+    python scripts/make_example_projects.py --add-missing    run only the cases of this platform's tree that have no run
+                                                             yet (the existing runs are kept byte for byte; ADR 0155)
+    python scripts/make_example_projects.py --docker --add-missing   the same for the Linux tree, in Docker, after its
+                                                             inputs are copied from the Windows tree (ADR 0157)
 
 The trees (ADR 0150): `example-projects/` holds runs built on Windows (ADR 0142), `example-projects-linux/` the same
 projects with runs built on x86_64 Linux. Mesh generators call the C library's libm, whose last bits differ per platform
@@ -107,6 +111,9 @@ PROJECTS = {
             _naca(2, "cases/naca0012-aoa2.toml"),
             _step(800, "cases/step-re800.toml"),
             _step(400, "cases/step-re400.toml"),
+            # ADR 0155: the same angles set by rotating the mesh, the flow along +x (made with --add-missing)
+            _naca(4, "cases/naca0012-aoa4-rotated.toml"),
+            _naca(2, "cases/naca0012-aoa2-rotated.toml"),
         ],
     },
     "quick-start": {
@@ -690,6 +697,36 @@ def build_project(pname, bins, threads, root=EXAMPLES):
     return {"project": pname, "runs": ids, "meshes": meshes, "pruned": pruned}
 
 
+def build_missing(pname, bins, threads, root=EXAMPLES):
+    """Run only the spec's cases that have no run yet, through the run service exactly as a rebuild does, keep every
+    existing run (and the mesh files) byte for byte, then write the ledger and the run table of all runs (ADR 0155
+    D10)."""
+    spec = PROJECTS[pname]
+    pdir = os.path.join(root, pname)
+    ensure_project(pdir, spec["name"], bins)
+    missing = [r for r in spec["runs"] if run_of_case(pdir, r["case"]) is None]
+    runs_dir = os.path.join(pdir, "runs")
+    os.makedirs(runs_dir, exist_ok=True)
+    ids = []
+    if missing:
+        clean_dot(pdir)
+        runner = Runner(pdir, bins, threads)
+        runner.start()
+        try:
+            for r in missing:
+                ids.append(runner.submit(os.path.join(pdir, r["case"].replace("/", os.sep))))
+            for r, rid in zip(missing, ids):
+                runner.wait(rid, 3600)
+                st = read_json(os.path.join(runs_dir, rid, "status.json"))
+                print("  %s %s: %s, step %d, %s" % (rid, r["case"], st["state"], st["step"], st.get("reason", "")))
+        finally:
+            runner.stop()
+        clean_dot(pdir)
+    pruned = {rid: prune_run(os.path.join(runs_dir, rid)) for rid in ids}
+    summarise_existing(pname, root)
+    return {"project": pname, "runs": ids, "meshes": [], "pruned": pruned}
+
+
 def summarise_existing(pname, root=EXAMPLES):
     """Write the ledger and the run table of a project from its existing runs (no solver run; ADR 0142 amendment 1)."""
     spec = PROJECTS[pname]
@@ -1064,6 +1101,20 @@ def docker_command(io_dir, image, inner, copy_out, cpus, memory):
     return cmd + [image, "bash", "-c", "; ".join(steps)]
 
 
+def docker_inner(a):
+    """The command line of this script inside the container: the Linux tree, the container's binaries, and the options
+    of `a` that apply there (`--project`, `--rerun-check`, `--add-missing`)."""
+    inner = ["python3", "scripts/make_example_projects.py", "--tree", "linux", "--bin-dir", "/target/release",
+             "--threads", str(a.threads)]
+    for p in a.project or []:
+        inner += ["--project", p]
+    if a.rerun_check:
+        inner.append("--rerun-check")
+    if a.add_missing:
+        inner.append("--add-missing")
+    return inner
+
+
 def docker_linux(a):
     """--docker: build the Linux tree (or, with --rerun-check, rebuild it in a temporary copy and compare) in a container
     of DOCKERFILE's image, from this checkout's files; the built tree replaces example-projects-linux/ (ADR 0150)."""
@@ -1073,12 +1124,7 @@ def docker_linux(a):
         r = subprocess.run(["docker", "build", "-t", image, "-f", DOCKERFILE, os.path.dirname(DOCKERFILE)])
         if r.returncode != 0:
             return r.returncode
-    inner = ["python3", "scripts/make_example_projects.py", "--tree", "linux", "--bin-dir", "/target/release",
-             "--threads", str(a.threads)]
-    for p in a.project or []:
-        inner += ["--project", p]
-    if a.rerun_check:
-        inner.append("--rerun-check")
+    inner = docker_inner(a)
     with tempfile.TemporaryDirectory(prefix="rcfd_w48p_docker_") as io_dir:
         n = source_tar(os.path.join(io_dir, "src.tar"))
         cmd = docker_command(io_dir, image, inner, not a.rerun_check, a.docker_cpus, a.docker_memory)
@@ -1124,6 +1170,10 @@ def main(argv=None):
     ap.add_argument("--root", default=None, help="folder holding the projects (default: the tree's folder)")
     ap.add_argument("--summarise-only", action="store_true",
                     help="write the ledger and run tables of the existing runs (no solver run), then the manifest")
+    ap.add_argument("--add-missing", action="store_true",
+                    help="run only the cases without a run (the existing runs are kept), then the ledger, the run "
+                         "tables and the manifest, in this platform's tree (ADR 0155); with --docker in the Linux "
+                         "tree (ADR 0157)")
     ap.add_argument("--docker", action="store_true",
                     help="build the Linux tree in Docker and put it in place (with --rerun-check: compare only)")
     ap.add_argument("--docker-image", default=DOCKER_IMAGE, help="image (built from %s when missing)" %
@@ -1131,6 +1181,8 @@ def main(argv=None):
     ap.add_argument("--docker-cpus", default="0-3", help="--cpuset-cpus of the container")
     ap.add_argument("--docker-memory", default="16g", help="--memory of the container")
     a = ap.parse_args(argv)
+    if a.add_missing and (a.rerun_check or a.summarise_only):
+        sys.exit("--add-missing runs the missing cases; --rerun-check and --summarise-only do not apply")
     if a.check:
         problems = check(os.path.abspath(a.root)) if a.root else check_trees()
         for p in problems:
@@ -1156,6 +1208,12 @@ def main(argv=None):
         if tree is not None and tree != INPUT_TREE:
             n = sync_inputs(TREES[INPUT_TREE], root, pname)
             print("inputs of %s: %d files copied from %s" % (pname, n, rel(REPO, TREES[INPUT_TREE])))
+        if a.add_missing:
+            # after the inputs are copied, so that a Linux tree sees the Windows tree's new cases (ADR 0157)
+            print("adding the missing runs of %s" % pname)
+            res = build_missing(pname, bins, a.threads, root)
+            print("  added %s; pruned %s" % (res["runs"], {k: [f for f, _ in v] for k, v in res["pruned"].items()}))
+            continue
         print("building %s" % pname)
         t0 = time.time()
         res = build_project(pname, bins, a.threads, root)

@@ -321,3 +321,12 @@ same with a `.json` case.
 This ADR; `crates/rcfd-studio/src/{runs,store_plan,quick_run,poll}.rs`; `docs/run-control.md`; new tests
 `crates/rcfd-studio/tests/{saved_store_r,plans_record_r}.rs`, `tests/dv/mod.rs`, `tests/fixtures/plans_6867e40.txt`; changed
 tests `crates/rcfd-studio/tests/{start_plan_r10,store_plan_sf,case_output_sf9}.rs`; dated notes in ADRs 0133, 0140, 0149.
+
+## Note (2026-10-29, [ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md))
+
+With job 48U merged (ADR 0155), `example-projects/wind-tunnel/cases/` holds two more cases (`naca0012-aoa4-rotated.toml`,
+`naca0012-aoa2-rotated.toml`), which have no plan in the record made on 6867e40. DV6 now takes the cases its record names
+(still 22, compared byte for byte as registered) and asserts that the cases it leaves out are exactly those two, by name;
+a recorded case that is gone still fails its label comparison. DV5 compares two routes of today's code (no record), so it
+takes the two new cases too: 19 texts instead of 17. The record (`tests/fixtures/plans_6867e40.txt`) and its recorder are
+unchanged.

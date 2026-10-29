@@ -29,8 +29,14 @@ use std::path::{Path, PathBuf};
 const CAP_TOTAL: u64 = 40_000_000;
 const CAP_PROJECTS: [(&str, u64); 2] = [("wind-tunnel", 35_000_000), ("quick-start", 6_000_000)];
 const MAX_SNAPSHOTS: usize = 100;
-/// The aerofoil cases name a mesh file; every other case uses a generator (ADR 0142 D3, E1 known miss).
-const MESH_FILE_CASES: [&str; 2] = ["cases/naca0012-aoa4.toml", "cases/naca0012-aoa2.toml"];
+/// The aerofoil cases name a mesh file; every other case uses a generator (ADR 0142 D3, E1 known miss). The two rotated
+/// ones set the angle by `[mesh.transform]` (ADR 0155 D9).
+const MESH_FILE_CASES: [&str; 4] = [
+    "cases/naca0012-aoa4.toml",
+    "cases/naca0012-aoa2.toml",
+    "cases/naca0012-aoa4-rotated.toml",
+    "cases/naca0012-aoa2-rotated.toml",
+];
 /// The committed trees (ADR 0150): (folder, platform its runs were built on). The Windows tree holds the inputs.
 const TREES: [(&str, &str); 2] = [("example-projects", "windows"), ("example-projects-linux", "linux")];
 /// The generated run table of a project's `notes/README.md` (the only part of an input a rebuild writes).
@@ -392,7 +398,8 @@ fn s3_every_case_validates_through_rcfd_api() {
                 n += 1;
             }
         }
-        assert_eq!(n, 10, "{tree}: ten case files");
+        // ten of ADR 0142 and the two rotated aerofoil cases of ADR 0155, in each tree
+        assert_eq!(n, 12, "{tree}: twelve case files");
     }
 }
 
@@ -493,7 +500,9 @@ fn e2_mesh_file_cases_validate_when_resolved_against_their_folder() {
 }
 
 /// S4: the aerofoil cases agree with themselves: the angle of the initial velocity equals the far-field velocity's, the
-/// lift and drag directions are normal and parallel to it, and it equals the ledger's `alpha` (each tree's ledger).
+/// lift and drag directions are normal and parallel to it, and it equals the ledger's `alpha` (each tree's ledger). A
+/// case that rotates its mesh (ADR 0155) has the flow along +x (lift +y, drag +x) and its angle of attack is
+/// `-rotate_z_deg` about the quarter chord.
 #[test]
 fn s4_aerofoil_angle_of_attack_is_consistent() {
     for (tree, _) in TREES {
@@ -513,15 +522,31 @@ fn s4_tree(tree: &str) {
         let uf = v("boundaries.farfield.velocity_value");
         let lift = v("reports.cl.direction");
         let drag = v("reports.cd.direction");
-        let alpha = u0[1].atan2(u0[0]);
-        let (s, c) = alpha.sin_cos();
-        let close = |a: &[f64], b: [f64; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() <= 1e-15);
-        assert!(
-            close(&uf, [u0[0], u0[1], u0[2]]),
-            "{rel}: far field {uf:?} vs initial {u0:?}"
-        );
-        assert!(close(&lift, [-s, c, 0.0]), "{rel}: lift direction {lift:?}");
-        assert!(close(&drag, [c, s, 0.0]), "{rel}: drag direction {drag:?}");
+        let mesh_turn = case.get("mesh.transform.rotate_z_deg").unwrap().as_f64().unwrap();
+        let alpha = if mesh_turn != 0.0 {
+            // ADR 0155: the mesh turns by -alpha about the quarter chord; the flow and the forces stay on the world axes
+            assert_eq!(u0, [1.0, 0.0, 0.0], "{rel}: initial velocity");
+            assert_eq!(uf, [1.0, 0.0, 0.0], "{rel}: far field");
+            assert_eq!(lift, [0.0, 1.0, 0.0], "{rel}: lift direction");
+            assert_eq!(drag, [1.0, 0.0, 0.0], "{rel}: drag direction");
+            assert_eq!(
+                v("mesh.transform.rotate_origin"),
+                [0.25, 0.0, 0.0],
+                "{rel}: quarter chord"
+            );
+            (-mesh_turn).to_radians()
+        } else {
+            let alpha = u0[1].atan2(u0[0]);
+            let (s, c) = alpha.sin_cos();
+            let close = |a: &[f64], b: [f64; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() <= 1e-15);
+            assert!(
+                close(&uf, [u0[0], u0[1], u0[2]]),
+                "{rel}: far field {uf:?} vs initial {u0:?}"
+            );
+            assert!(close(&lift, [-s, c, 0.0]), "{rel}: lift direction {lift:?}");
+            assert!(close(&drag, [c, s, 0.0]), "{rel}: drag direction {drag:?}");
+            alpha
+        };
         let stem = Path::new(rel).file_stem().unwrap().to_string_lossy().into_owned();
         let e = entries.iter().find(|e| e.variant == stem).expect("ledger entry");
         let a = e.param("alpha").expect("alpha").value;

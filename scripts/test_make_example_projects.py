@@ -1,4 +1,4 @@
-"""Self-test of scripts/make_example_projects.py (ADR 0142 P1, ADR 0150): python -m unittest scripts/test_make_example_projects.py
+"""Self-test of scripts/make_example_projects.py (ADR 0142 P1, ADR 0150, ADR 0157): python -m unittest scripts/test_make_example_projects.py
 
 Pure helpers against known values, `--check` on both committed trees (no binary needed), and the same checks on
 tampered copies. The rebuild itself needs the solver and is not run here."""
@@ -61,6 +61,21 @@ class Helpers(unittest.TestCase):
         else:
             self.assertIsNone(p)
         self.assertEqual(mx.platform_block()["os"], p or sys.platform)
+
+    def test_docker_forwards_add_missing_and_refuses_it_with_a_rerun_check(self):
+        # ADR 0157: `--docker --add-missing` runs `--add-missing` in the container's Linux tree
+        class A:
+            threads, project, rerun_check, add_missing = 1, None, False, True
+        inner = mx.docker_inner(A())
+        self.assertEqual(inner[:4], ["python3", "scripts/make_example_projects.py", "--tree", "linux"])
+        self.assertIn("--add-missing", inner)
+        self.assertNotIn("--rerun-check", inner)
+        A.add_missing = False
+        self.assertNotIn("--add-missing", mx.docker_inner(A()))
+        for extra in (["--rerun-check"], ["--summarise-only"]):
+            with self.assertRaises(SystemExit) as e:
+                mx.main(["--add-missing"] + extra)
+            self.assertIn("--add-missing", str(e.exception))
 
     def test_readme_paths(self):
         text = "Open `cases/a.toml`, then `runs/<id>/fields` and `../../docs/x.md`; not `p` or `meshes/*`. `notes/b.md`."

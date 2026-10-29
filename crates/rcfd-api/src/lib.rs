@@ -17,6 +17,7 @@ pub mod inflate;
 pub mod init;
 pub mod linsolver;
 pub mod lumped;
+pub mod mesh_transform;
 pub mod mixing_run;
 pub mod particle_coupling;
 pub mod particle_run;

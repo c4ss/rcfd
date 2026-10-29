@@ -1490,6 +1490,10 @@ fn leaf_ui(
                         None => {}
                     }
                 }
+                // ADR 0155: the schema's display unit of a value without an SI dimension (degrees) or of a list
+                if let Some(u) = &node.unit {
+                    ui.weak(u);
+                }
                 match &node.kind {
                     Kind::Float { dim: Some(d), .. } => {
                         ui.weak(d);

@@ -169,6 +169,12 @@ impl Case {
 
     /// Set a setting by dotted path (named entries such as `boundaries.lid` are created on demand).
     pub fn set(&mut self, path: &str, value: Value) -> Result<()> {
+        if let Some(m) = crate::mesh_transform::string_angle(path, &value) {
+            return Err(Error::InvalidValue {
+                path: path.into(),
+                reason: m,
+            });
+        }
         let segs: Vec<&str> = path.split('.').collect();
         // create the named entry for `<collection>.<name>.<field>` when it does not exist yet
         if segs.len() >= 3 && self.tree.get(&segs[..2].join(".")).is_err() {
@@ -193,6 +199,8 @@ impl Case {
     pub fn check_json(value: &Value) -> Vec<Diagnostic> {
         let mut out = Vec::new();
         collect_errors(&case_schema(), value, "", &mut out);
+        // a degree given as a unit string would be stored in radians (ADR 0155 D7)
+        out.extend(crate::mesh_transform::check_raw(value));
         out
     }
 
@@ -567,6 +575,7 @@ impl Case {
         out.extend(crate::chain::check(self));
         out.extend(crate::study::check(self));
         out.extend(crate::dynmesh::check(self));
+        out.extend(crate::mesh_transform::check(self));
         out
     }
 }

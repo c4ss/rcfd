@@ -281,7 +281,8 @@ pub fn case_schema() -> Schema {
             Schema::float(1.0)
                 .at_least(1e-12)
                 .doc("Scale factor applied to mesh file coordinates"),
-        );
+        )
+        .field("transform", crate::mesh_transform::schema());
 
     let physics = Schema::object()
         .doc("Fluid properties")

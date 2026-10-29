@@ -543,7 +543,14 @@ fn compare_count(n: f64, op: &str, b: &Option<Value>) -> bool {
 /// Evaluate the built-in rules for `case`, with the mesh context when `mesh` is given (a serialised
 /// quality report).
 pub fn check_case(case: &Case, mesh: Option<&Value>) -> Vec<RuleDiagnostic> {
-    RuleSet::builtin().evaluate(&case.tree.to_json(), mesh)
+    let mut out = RuleSet::builtin().evaluate(&case.tree.to_json(), mesh);
+    // ADR 0155 D6: MT101, emitted by code (not a data rule), only while the case rotates its mesh
+    let mt = crate::mesh_transform::world_coordinate_warnings(case);
+    if !mt.is_empty() {
+        out.extend(mt);
+        out.sort_by(|a, b| (a.severity, &a.id, &a.path).cmp(&(b.severity, &b.id, &b.path)));
+    }
+    out
 }
 
 /// The mesh context of the rules: the serialised quality report.

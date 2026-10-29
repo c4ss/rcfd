@@ -84,6 +84,10 @@ pub struct Schema {
     pub kind: Kind,
     /// Human readable documentation.
     pub doc: String,
+    /// An optional object field (ADR 0155, [`Schema::optional`]): absent from the data until a value inside it is set.
+    pub optional: bool,
+    /// Display unit for clients (`x-rcfd-unit`, [`Schema::unit`]); never used to convert a value.
+    pub unit: Option<String>,
 }
 
 impl Schema {
@@ -91,6 +95,8 @@ impl Schema {
         Schema {
             kind,
             doc: String::new(),
+            optional: false,
+            unit: None,
         }
     }
     /// Boolean setting.
@@ -196,7 +202,28 @@ impl Schema {
         self
     }
 
-    /// Default value for this schema.
+    /// Make an object an optional field of its parent object (ADR 0155): a parent left without it in the input keeps
+    /// it out of its data (so a schema that gains an optional field serialises and hashes every existing input as
+    /// before); [`SettingsTree::get`] of a path into an absent optional object gives the schema defaults, and
+    /// [`SettingsTree::set`] of a path into it creates the object with its defaults first. Exported to the JSON Schema
+    /// as `"x-rcfd-optional": true`, left out of the parent's `required`.
+    pub fn optional(mut self) -> Self {
+        assert!(
+            matches!(self.kind, Kind::Object(_)),
+            "optional() on a non-object schema"
+        );
+        self.optional = true;
+        self
+    }
+
+    /// A display unit for clients (`"x-rcfd-unit"` in the JSON Schema), for a value without an SI dimension (degrees)
+    /// or a list; the value is never converted by it (ADR 0155).
+    pub fn unit(mut self, u: &str) -> Self {
+        self.unit = Some(u.into());
+        self
+    }
+
+    /// Default value for this schema (an object leaves its optional fields out).
     pub fn default_value(&self) -> Value {
         match &self.kind {
             Kind::Bool { default } => json!(default),
@@ -208,7 +235,7 @@ impl Schema {
             Kind::Object(fields) => {
                 let mut m = Map::new();
                 for f in fields {
-                    if !matches!(f.schema.kind, Kind::Command(_)) {
+                    if !matches!(f.schema.kind, Kind::Command(_)) && !f.schema.optional {
                         m.insert(f.name.clone(), f.schema.default_value());
                     }
                 }
@@ -243,6 +270,12 @@ impl Schema {
         let mut m = Map::new();
         if !self.doc.is_empty() {
             m.insert("description".into(), json!(self.doc));
+        }
+        if self.optional {
+            m.insert("x-rcfd-optional".into(), json!(true));
+        }
+        if let Some(u) = &self.unit {
+            m.insert("x-rcfd-unit".into(), json!(u));
         }
         match &self.kind {
             Kind::Bool { default } => {
@@ -308,7 +341,9 @@ impl Schema {
                         );
                     } else {
                         props.insert(f.name.clone(), f.schema.json_schema_node());
-                        required.push(f.name.clone());
+                        if !f.schema.optional {
+                            required.push(f.name.clone());
+                        }
                     }
                 }
                 m.insert("properties".into(), Value::Object(props));
@@ -428,8 +463,14 @@ pub fn coerce(schema: &Schema, value: &Value, path: &str) -> Result<Value> {
                 }
                 let child = join(path, &f.name);
                 match obj.get(&f.name) {
-                    Some(v) => out.insert(f.name.clone(), coerce(&f.schema, v, &child)?),
-                    None => out.insert(f.name.clone(), f.schema.default_value()),
+                    Some(v) => {
+                        out.insert(f.name.clone(), coerce(&f.schema, v, &child)?);
+                    }
+                    // an optional object the input leaves out stays out of the data (ADR 0155)
+                    None if f.schema.optional => {}
+                    None => {
+                        out.insert(f.name.clone(), f.schema.default_value());
+                    }
                 };
             }
             Ok(Value::Object(out))
@@ -518,21 +559,28 @@ impl SettingsTree {
         Ok(s)
     }
 
-    /// Get the value at a dotted path (e.g. `"boundaries.inlet.velocity"`).
+    /// Get the value at a dotted path (e.g. `"boundaries.inlet.velocity"`). A path into an optional object the data
+    /// does not hold reads the schema defaults (ADR 0155).
     pub fn get(&self, path: &str) -> Result<Value> {
+        let segs = segments(path);
         let mut v = &self.data;
         let mut s = &self.schema;
-        for seg in segments(path) {
+        for (i, seg) in segs.iter().enumerate() {
             s = child_schema(s, seg).ok_or_else(|| Error::PathNotFound(path.into()))?;
             if matches!(s.kind, Kind::Command(_)) {
                 return Err(Error::PathNotFound(format!("{path} (is a command)")));
             }
-            v = child_value(v, seg).ok_or_else(|| Error::PathNotFound(path.into()))?;
+            v = match child_value(v, seg) {
+                Some(c) => c,
+                None if s.optional => return defaults_at(s, &segs[i + 1..], path),
+                None => return Err(Error::PathNotFound(path.into())),
+            };
         }
         Ok(v.clone())
     }
 
-    /// Set the value at a dotted path after validation and unit conversion.
+    /// Set the value at a dotted path after validation and unit conversion. A path into an optional object the data
+    /// does not hold creates that object with its defaults first (ADR 0155).
     pub fn set(&mut self, path: &str, value: Value) -> Result<()> {
         let segs = segments(path);
         if segs.is_empty() {
@@ -542,8 +590,15 @@ impl SettingsTree {
         let schema = self.schema_at(path)?.clone();
         let new = coerce(&schema, &value, path)?;
         let mut cur = &mut self.data;
+        let mut s = &self.schema;
         for (i, seg) in segs.iter().enumerate() {
             let last = i + 1 == segs.len();
+            s = child_schema(s, seg).ok_or_else(|| Error::PathNotFound(path.into()))?;
+            if s.optional && child_value(cur, seg).is_none() {
+                if let Value::Object(m) = &mut *cur {
+                    m.insert((*seg).to_string(), s.default_value());
+                }
+            }
             let slot = child_value_mut(cur, seg).ok_or_else(|| Error::PathNotFound(path.into()))?;
             if last {
                 *slot = new;
@@ -651,10 +706,7 @@ impl SettingsTree {
             Kind::Command(a) => a.clone(),
             _ => return Err(invalid(path, "not a command")),
         };
-        let arg_schema = Schema {
-            kind: Kind::Object(arg_fields),
-            doc: String::new(),
-        };
+        let arg_schema = Schema::of(Kind::Object(arg_fields));
         let empty = json!({});
         let args = coerce(&arg_schema, if args.is_null() { &empty } else { args }, path)?;
         let key = pattern.join(".");
@@ -666,6 +718,25 @@ impl SettingsTree {
         let _ = cmd;
         h(self, &parent.join("."), &args)
     }
+}
+
+/// The value at `rest` below the absent optional object `s` (its defaults; an optional object nested in it reads its
+/// own defaults the same way). `path` is the full path, for the error.
+fn defaults_at(s: &Schema, rest: &[&str], path: &str) -> Result<Value> {
+    let mut v = s.default_value();
+    let mut sch = s;
+    for seg in rest {
+        sch = child_schema(sch, seg).ok_or_else(|| Error::PathNotFound(path.into()))?;
+        if matches!(sch.kind, Kind::Command(_)) {
+            return Err(Error::PathNotFound(format!("{path} (is a command)")));
+        }
+        v = match child_value(&v, seg) {
+            Some(c) => c.clone(),
+            None if sch.optional => sch.default_value(),
+            None => return Err(Error::PathNotFound(path.into())),
+        };
+    }
+    Ok(v)
 }
 
 fn child_schema<'a>(s: &'a Schema, seg: &str) -> Option<&'a Schema> {
@@ -906,6 +977,83 @@ mod tests {
         bad["junk"] = json!(1);
         let errs = validate_json_schema(&js, &bad).unwrap_err();
         assert_eq!(errs.len(), 3, "{errs:?}");
+    }
+
+    /// ADR 0155: an optional object stays out of the data until a value inside it is set, so a schema that gains one
+    /// keeps the data, text and hash of every input without it; `get` reads its defaults; `set` creates it; the JSON
+    /// Schema marks it and does not require it.
+    #[test]
+    fn optional_objects_stay_out_of_the_data_until_set() {
+        let with = || {
+            sample_schema().field(
+                "extra",
+                Schema::object()
+                    .optional()
+                    .field("angle", Schema::float(0.0).range(-360.0, 360.0).unit("deg"))
+                    .field("origin", Schema::list(Schema::float(0.0)).unit("m")),
+            )
+        };
+        let mut a = SettingsTree::new(sample_schema());
+        a.add_named("boundaries", "inlet").unwrap();
+        a.set("solver.relax_p", json!(0.7)).unwrap();
+        let data = a.to_json();
+        let b = SettingsTree::from_json(with(), &data).unwrap();
+        assert_eq!(b.to_json(), data);
+        assert_eq!(b.to_json_string(), a.to_json_string());
+        assert_eq!(b.content_hash(), a.content_hash());
+        assert_eq!(
+            SettingsTree::new(with()).to_json(),
+            SettingsTree::new(sample_schema()).to_json()
+        );
+        // an absent optional object reads its defaults
+        assert_eq!(b.get("extra.angle").unwrap(), json!(0.0));
+        assert_eq!(b.get("extra").unwrap(), json!({"angle": 0.0, "origin": []}));
+        assert!(b.get("extra.nope").is_err());
+        assert!(b.to_json().get("extra").is_none());
+        // set creates it with its defaults
+        let mut c = b.clone();
+        c.set("extra.angle", json!(-4.0)).unwrap();
+        assert_eq!(c.to_json()["extra"], json!({"angle": -4.0, "origin": []}));
+        assert_ne!(c.content_hash(), b.content_hash());
+        // a refused value creates nothing
+        let mut d = b.clone();
+        assert!(d.set("extra.angle", json!(400.0)).is_err());
+        assert!(d.to_json().get("extra").is_none());
+        // round trip with the object present; an empty object present is kept with its defaults
+        let e = SettingsTree::from_json(with(), &c.to_json()).unwrap();
+        assert_eq!(e.to_json(), c.to_json());
+        let mut data2 = data.clone();
+        data2["extra"] = json!({});
+        let f = SettingsTree::from_json(with(), &data2).unwrap();
+        assert_eq!(f.to_json()["extra"], json!({"angle": 0.0, "origin": []}));
+        // unknown keys inside it are refused
+        let mut bad = c.to_json();
+        bad["extra"]["oops"] = json!(1);
+        assert!(SettingsTree::from_json(with(), &bad).is_err());
+        // JSON Schema
+        let js = with().to_json_schema();
+        assert_eq!(js["properties"]["extra"]["x-rcfd-optional"], json!(true));
+        assert!(!js["required"].as_array().unwrap().contains(&json!("extra")));
+        assert!(js["required"].as_array().unwrap().contains(&json!("solver")));
+        assert_eq!(
+            js["properties"]["extra"]["properties"]["angle"]["x-rcfd-unit"],
+            json!("deg")
+        );
+        assert_eq!(
+            js["properties"]["extra"]["properties"]["origin"]["x-rcfd-unit"],
+            json!("m")
+        );
+        validate_json_schema(&js, &b.to_json()).unwrap();
+        validate_json_schema(&js, &c.to_json()).unwrap();
+        // the schema without the optional field exports no new attribute
+        let plain = sample_schema().to_json_schema().to_string();
+        assert!(!plain.contains("x-rcfd-optional") && !plain.contains("x-rcfd-unit"));
+    }
+
+    #[test]
+    #[should_panic(expected = "optional() on a non-object schema")]
+    fn only_objects_are_optional() {
+        let _ = Schema::float(0.0).optional();
     }
 
     #[test]

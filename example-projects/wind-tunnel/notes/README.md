@@ -7,11 +7,13 @@ see a picture at once, scrub a run through time, and compare a case with its var
 | Problem | Cases | Mesh | Notes |
 |---|---|---|---|
 | Flow past a cylinder, vortex shedding (transient) | `cases/cylinder-re100.toml`, variant `cases/cylinder-re200.toml` | O-grid generator in the case | `notes/cylinder.md` |
-| NACA 0012 aerofoil, k-omega SST (steady) | `cases/naca0012-aoa4.toml`, variant `cases/naca0012-aoa2.toml` | `meshes/naca0012-ogrid` from `meshes/naca0012-ogrid.recipe.toml` | `notes/naca0012.md` |
+| NACA 0012 aerofoil, k-omega SST (steady) | `cases/naca0012-aoa4.toml`, variant `cases/naca0012-aoa2.toml`; the same angles by a rotated mesh: `cases/naca0012-aoa4-rotated.toml`, `cases/naca0012-aoa2-rotated.toml` | `meshes/naca0012-ogrid` from `meshes/naca0012-ogrid.recipe.toml` | `notes/naca0012.md` |
 | Backward-facing step, laminar (steady) | `cases/step-re800.toml`, variant `cases/step-re400.toml` | box generator in the case | `notes/step.md` |
 
 The design ledger `designs/variants.ledger.jsonl` (format of ADR 0121, one line per run) holds the parameters and the
-results of the six runs, so a case and its variant can be compared as numbers.
+results of the eight runs, so a case and its variant can be compared as numbers. The two aerofoil cases ending in
+`-rotated` set the angle of attack by rotating the mesh (`[mesh.transform]`, ADR 0155) instead of the flow; their
+results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`).
 
 ## Open it
 
@@ -22,10 +24,10 @@ results of the six runs, so a case and its variant can be compared as numbers.
 
 ## What to click, in order
 
-1. **Project panel**: the six cases are listed under `cases/`, the mesh files under `meshes/`, the ledger under `designs/`.
+1. **Project panel**: the eight cases are listed under `cases/`, the mesh files under `meshes/`, the ledger under `designs/`.
 2. **Select a case** (for example `cases/cylinder-re100.toml`): the Case editor shows its settings. Case > Validate checks
    it. If your Studio has the mesh preview of wave 48G, the Viewport shows the case's mesh.
-3. **Runs panel**: the six finished runs, one per case, with their final state and step. Select the run of
+3. **Runs panel**: the eight finished runs, one per case, with their final state and step. Select the run of
    `cases/cylinder-re100.toml`.
 4. **Viewport**: the run's pressure field `p` appears on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
    "field" box; hover to read values.
@@ -54,6 +56,8 @@ on the machine that made them (see `designs/variants.ledger.jsonl` for every val
 | `cases/naca0012-aoa2.toml` | `runs/r-20261028T152128-78e0` | finished (not_converged) | 2000 | 55.7 s | 10 | cd 0.01888, cl 0.1988 |
 | `cases/step-re800.toml` | `runs/r-20261028T152128-806b` | finished (converged) | 740 | 23.4 s | 19 | p_inlet -0.2276, x_reattach 5.888, x_top_separation 4.652, x_top_reattach 10.42 |
 | `cases/step-re400.toml` | `runs/r-20261028T152128-37c8` | finished (converged) | 429 | 13.4 s | 11 | p_inlet -0.1471, x_reattach 4.248, x_top_separation 3.856, x_top_reattach 5.271 |
+| `cases/naca0012-aoa4-rotated.toml` | `runs/r-20261028T224153-d9c7` | finished (not_converged) | 2000 | 53.1 s | 10 | cd 0.02536, cl 0.3482 |
+| `cases/naca0012-aoa2-rotated.toml` | `runs/r-20261028T224153-afb6` | finished (not_converged) | 2000 | 50.2 s | 10 | cd 0.01888, cl 0.1988 |
 
 <!-- end of generated runs -->
 

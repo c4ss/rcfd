@@ -323,8 +323,15 @@ fn cylindrical_interface_mesh(
     Ok(m)
 }
 
-/// Build the mesh described by the case.
+/// Build the mesh described by the case: the mesh file (scaled by `mesh.scale`) or the generator's mesh, then the
+/// case's `[mesh.transform]` (ADR 0155; without one, or with an angle of 0, the mesh is exactly the one built).
 pub fn build_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
+    let mesh = build_untransformed_mesh(case)?;
+    crate::mesh_transform::apply(case, mesh)
+}
+
+/// The mesh of the case before its transform (the whole of `build_mesh` before ADR 0155).
+fn build_untransformed_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
     let me = |e: Error| diag("mesh", e.to_string());
     if get_s(case, "mesh.source") == "file" {
         let file = get_s(case, "mesh.file");

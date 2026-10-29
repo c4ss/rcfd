@@ -23,6 +23,7 @@ Rust 1.99.0, the gate's toolchain). From a checkout, on a machine with Docker:
 
     python scripts/make_example_projects.py --docker                 rebuild this tree and put it in place
     python scripts/make_example_projects.py --docker --rerun-check   rebuild it in a temporary copy and compare
+    python scripts/make_example_projects.py --docker --add-missing   copy the inputs, run only the cases with no run here
     python scripts/make_example_projects.py --check                  check both trees and their shared inputs
 
 Change an input in `../example-projects/`, rebuild that tree on Windows and this one with `--docker`; `--check` and the
