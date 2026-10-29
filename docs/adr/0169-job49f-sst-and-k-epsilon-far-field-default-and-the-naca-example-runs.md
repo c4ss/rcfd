@@ -282,7 +282,7 @@ with `r-20261028T152128-cb3a` at 1a04d46; `finished`, `not_converged`, 2000 iter
 added exactly the 4 NACA runs, but **each meets the residual targets**: solver state `converged`, exit 0, at iteration
 409 (4 degrees, both forms) and 230 (2 degrees, both forms). So W1 misses ADR 0142 G1's aerofoil expectation
 (`not_converged` at 2000, exit 5), and E2 (`example_rotated_w48u`, which asserts 2000 steps) misses as well. The rest of
-W1 holds: wall times 7.9-16.3 s, closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293). Per the
+W1 holds: wall times 7.9-16.3 s (the solver's `wall_s`; the ledger's `wall_s`, launch to final state, which G2 limits, is 8.1-16.5 s), closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293). Per the
 registered reading rule the runs are kept as made (nothing tuned, `max_iterations` untouched), the missed limits move to
 ignored `*_known_miss` tests with the limits intact, and L1 runs with the same limits (the same miss is expected there).
 
@@ -390,7 +390,7 @@ Known misses (reading rule; each limit kept exactly as registered, the passing p
 
 - The full workspace test suite, the gate, the whole `rcfd-studio` suite (only the tests that read the example runs,
   E3, and `correctors_x`), Linux tests (only L1's runs and its `--check` in the container).
-- `--rerun-check` of either tree (the 4 new runs are byte-reproducible by ADR 0142 D10's procedure; not checked here).
+- `--rerun-check` of either tree (the 4 new runs are expected to be byte-reproducible by ADR 0142 D10's procedure; not checked).
 - The ignored heavy FAN-01 runs (no free-stream patch, D1 cannot reach them) and ADR 0159's / 0164's sweeps.
 - A k-epsilon or SST far-field validation against reference data (the plate tests are set-up checks).
 
@@ -413,3 +413,12 @@ Known misses (reading rule; each limit kept exactly as registered, the passing p
    To reproduce them after this merge, add `turbulence = "zero_gradient"` to the far field (and `component =
    "total_molecular"` for ADR 0159's spelling). Nothing to decide unless 49D's results are to be re-run with the new
    default.
+5. **A far field that sets only `turbulence_intensity`** (default spec, no length) gets D2's fallback, which takes
+   `turbulence.initial_intensity`, not the patch's intensity. Such a case was a validation error before, so no valid case
+   moves, but the patch key is silently unused. (a) Keep, documented (`docs/case-schema.md` now says so, after the
+   addendum). (b) Use a patch `turbulence_intensity` / `turbulence_viscosity_ratio` that the case sets explicitly
+   before the initial-field keys (ADR 0152's key-at-default rule tells them apart). Recommendation: (a) now, (b) in a
+   later job.
+
+Pointers (dated one-liners, after the addendum): ADR 0142 (G1), ADR 0148 (N9) and ADR 0155 (E2) note that their aerofoil
+limits are known misses under this ADR.

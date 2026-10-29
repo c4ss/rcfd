@@ -269,8 +269,10 @@ Per-boundary keys (`boundaries.<patch>.`):
     `k = 3/2 (I U)^2` with `I = turbulence.initial_intensity` and `U = |velocity_value|`,
     `epsilon = Cmu k^2 / (ratio nu)` with `ratio = turbulence.initial_viscosity_ratio` (SST: `omega = epsilon / (beta* k)`).
     With `|velocity_value| = |initial.velocity|` these are the initial values (the far field holds the initial state, the
-    TMR practice). `k_initial` / `omega_initial` / `epsilon_initial` are not read for the far field. Any explicit spec on
-    the patch is used as given. An `inlet` role (or a fixed-velocity inlet) still needs `turbulence_length`.
+    TMR practice). `k_initial` / `omega_initial` / `epsilon_initial` are not read for the far field, and neither is the
+    patch's own `turbulence_intensity` under this default spec: to set the far-field intensity on the patch, give it
+    `turbulence_spec = "intensity_viscosity_ratio"` (or a `turbulence_length`). Any explicit spec on the patch is used
+    as given. An `inlet` role (or a fixed-velocity inlet) still needs `turbulence_length`.
   * `intensity_viscosity_ratio`: same `k`, `epsilon = Cmu k^2 / (ratio nu)` with
     `turbulence_viscosity_ratio` (10).
   * `values`: `k_value`, `epsilon_value`.

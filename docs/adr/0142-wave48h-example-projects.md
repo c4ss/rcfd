@@ -395,3 +395,5 @@ Job 48U adds two aerofoil cases to `wind-tunnel` that set the angle of attack by
 ADR are kept byte for byte). The staleness tests' counts follow (12 case files, 8 wind-tunnel cases and runs,
 `MESH_FILE_CASES` 4, S4 reads a rotated case's angle from its transform); no limit of this ADR changed. With the two runs
 the wind-tunnel folder is 34 826 293 bytes (cap 35 000 000) and all of `example-projects/` 39 080 436 (cap 40 000 000).
+
+2026-10-29 (ADR 0169, job 49F): the aerofoil runs regenerated under the far-field default of ADR 0169 meet the residual targets at 409 / 230 iterations (exit 0), so G1's aerofoil expectation (`not_converged` at 2000, exit 5) is the ignored known miss `g1_aerofoil_runs_stop_not_converged_at_2000_known_miss`, limit intact.
