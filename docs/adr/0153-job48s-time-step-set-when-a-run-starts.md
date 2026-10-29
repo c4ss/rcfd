@@ -343,7 +343,9 @@ which no new text holds).
 
 Branch `worktree-agent-a36702f9566b8d038`. Commits: 56c0161 (the code and tests), c4d3346 (main a64864e merged: 48P,
 48R), 724d735 (registration), bfc2600 (registration corrected in review, before any run), 3ae759b (amendment 1), 31ba296
-(amendment 2), 5895991 (amendment 3, the final code), then this addendum (e60c3d6, 440ea7c and (a)'s row). Every run:
+(amendment 2), 5895991 (amendment 3), then this addendum (e60c3d6, 440ea7c, 58dd7c8 and the last commit); e60c3d6 holds
+the final code: two doc comments of `time_step.rs` name the right decisions (D7, D12), no behaviour changed, so the tests did
+not run again on it, and `cargo fmt` and `cargo clippy` (W's) are clean on 58dd7c8. Every run:
 release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB, 14-37 GB free
 during the runs, shared with other agents' builds and runs). Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first
 run, (a)); 3ae759b, 31ba296 and 5895991 in `target-48s-a1/` (the corrected (f), f3, the (f) control again, the known-miss
@@ -378,8 +380,8 @@ the other runs exercise.
 | (g2) | as registered | `set` exactly as registered; 113 steps, finished at 2 s bit for bit, every monitor finite; Courant at most 0.461 after step 10 | pass |
 | (h) | as registered | `run.json` `set` = the TOML twin's `solver.end_time=2.3`, `solver.dt=0.00602`, `solver.max_courant=0.5`, `solver.max_dt=0.023`; finished at 2.3 bit for bit; `case.snapshot` the JSON file | pass |
 | (h) control | no `solver.*` entry | `set` empty | fails as required |
-| (a) | as registered | finished at 40 bit for bit (`status.json` reason `finished: end time 40 reached`, exit 0), 10,742 steps in 4,721 s (1.31 h; the limit 3 h), 23:13-00:31; every monitor finite; `set` the four entries `solver.end_time=40`, `solver.dt=0.00116`, `solver.max_courant=0.5`, `solver.max_dt=0.4`; Courant 0.147 at step 1, at most 0.4501 after step 10 (0.4499-0.4501 from t = 1 on); dt 0.00116 at step 1, 0.0033 from step 67, 0.00371-0.00389 from t = 5 on (the largest 3.35 times dt0), the last step 52 % of the one before; over [10, 40] 5 upward crossings (14.54, 20.55, 26.57, 32.58, 38.59 s), St 0.16632, amplitude 0.3349; 40 snapshots, the last at (10,742, 40) exactly | pass |
-| W | the whole suite and the lints | first run on 31ba296 (23:29-23:41): 59 binaries, 268 passed, 1 failed (ADR 0152's DV6 (a), amendment 3), 11 ignored; corrected run on 5895991 (23:42-23:54): **269 passed, 0 failed, 11 ignored**: the known misses of ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and ADR 0144 J3b, ADR 0152's DV6 recorder, and this ADR's (a), D1, D3, D4 (heavy), `d2_cylinder_256x256_known_miss` and `f_the_toolbar_time_row_drawn_known_miss`; against main's 246 (ADR 0152), the 23 new tests that are not ignored; DV6's 22 cases equal to the record. `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 5895991; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed (after W); `scripts/third_party_licenses.py --check`: up to date | pass |
+| (a) | as registered | finished at 40 bit for bit (`status.json` reason `finished: end time 40 reached`, exit 0), 10,742 steps in 4,721 s (1.31 h; the limit 3 h), 23:13-00:31; every monitor finite; `set` the four entries `solver.end_time=40`, `solver.dt=0.00116`, `solver.max_courant=0.5`, `solver.max_dt=0.4`; Courant 0.147 at step 1, at most 0.4501 after step 10 (0.4499-0.4501 from t = 1 on); dt 0.00116 at step 1, 0.0033 from step 68, 0.00371-0.00389 from t = 5 on (the largest 3.35 times dt0), the last step 52 % of the one before; over [10, 40] 5 upward crossings (14.54, 20.55, 26.57, 32.58, 38.59 s), St 0.16632, amplitude 0.3349; 40 snapshots, the last at (10,742, 40) exactly | pass |
+| W | the whole suite and the lints | first run on 31ba296 (23:29-23:41): 59 binaries, 268 passed, 1 failed (ADR 0152's DV6 (a), amendment 3), 11 ignored; corrected run on 5895991 (23:42-23:54): **269 passed, 0 failed, 11 ignored**: the known misses of ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and ADR 0144 J3b, ADR 0152's DV6 recorder, and this ADR's (a), D1, D3, D4 (heavy), `d2_cylinder_256x256_known_miss` and `f_the_toolbar_time_row_drawn_known_miss`; against main's 246 (ADR 0152), the 23 new tests that are not ignored; DV6's 22 cases equal to the record. `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 5895991 and on 58dd7c8; `cargo fmt -p rcfd-studio -- --check` clean on both; `workspace_graph` 3 passed (after W); `scripts/third_party_licenses.py --check`: up to date | pass |
 
 **Decision.** A, the solver's adaptive Courant controller from the conservative first step, met every limit of its own on
 D1-D4; F missed its own end-time limit on D2 (amendment 3), which the registered rule let gate A. As amendment 3 says, A
@@ -438,8 +440,9 @@ through Run for 40 s within every limit: 10,742 steps (the registration's estima
   adaptive run 2,587 against 891.
 * The last step of the adaptive runs as a fraction of the step before it: D1 58 %, D2 32 %, D3 92 %, D4 74 %, (c) 6.3 %,
   (a) 52 %.
-* (a): the hover's `About 34,483 steps or fewer (the step grows to the Courant target), estimated wall time about 3 h or
-  less (65,536 cells, at 4.7 microseconds per cell and step)` against 10,742 steps (3.2 times fewer) and 1.31 h, at 6.7
+* (a): the hover's text for this plan (computed with `time_step::hover`, not read from a drawn frame) `About 34,483 steps
+  or fewer (the step grows to the Courant target), estimated wall time about 3 h or less (65,536 cells, at 4.7
+  microseconds per cell and step)` against 10,742 steps (3.2 times fewer) and 1.31 h, at 6.7
   microseconds per cell and step on the shared host; the registration's "about 11,000 steps (P10's dt)" against 10,742;
   `res_p` medians 3.2e-4 (t 5-10), 6.7e-4 (10-20), 7.5e-4 (20-30) and 7.4e-4 (30-40), steady; `cd` over [30, 40] s 1.3563
   (1.3460 to 1.3667); St 0.1663 against the 64 x 48 cylinder's 0.1573 ((b)); the last step (half the step before) has
@@ -448,7 +451,9 @@ through Run for 40 s within every limit: 10,742 steps (the registration's estima
 
 **Not run.** A person at the real window (the checklist); Linux and macOS; debug builds of the new tests; the workspace
 gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited); `cargo deny` (no
-dependency change); the heavy tests outside this job (`--ignored` of earlier ADRs).
+dependency change); the heavy tests outside this job (`--ignored` of earlier ADRs); the merge with today's main (aad08fe:
+waves 48Q and 48T, among them 48T's `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`): `git merge-tree` finds no
+conflict, but the suite has not run on the merged tree.
 
 **Questions added by the addendum** (the registration's 1-5 stand; recommendations for them below).
 
@@ -481,6 +486,15 @@ so a higher target has no margin there; and it costs 2.85 times fewer steps than
 cylinder; 2 a solver job after job 48T's findings, not a run-time corrector count from the Studio; 3 yes, as a small
 follow-up with SF4 (b) and SF9 (g) registered again; 4 keep the read-only line until it is missed; 5 calibrate from the
 project's finished runs (steps, cells and wall time are in their records) when the estimate is found wrong in use.
+
+Read with ADR 0154 (job 48T, merged into main after this registration; not on this branch), which puts the onset of the
+default PISO coupling's failure in the thin wall cells at a wall diffusion number `nu dt / dr1^2` between 6.5 (clean) and
+11.4 (spoky): with `nu` 0.01 and `dr1` this ADR's thinnest cell (0.002614 m), (a) ran at 5.4 to 5.7 (dt 0.00371 to
+0.00389 s), P4's slow growth at dt 0.0042 s is at 6.1 (below ADR 0154's clean 6.5 on another mesh, so that number does
+not fix the onset alone either), its decay at 0.0035 s at 5.1, and P5's growth at 0.005 s at 7.3. So on this mesh the
+target 0.5 kept (a) below the onset ADR 0154 found; at a fixed Courant number that number grows as 1/h with refinement, so
+a finer graded mesh can pass the onset at Courant 0.5 (decision 3 claims no stability on every mesh). This supports the
+recommendation of question 2 (a solver change after ADR 0154's findings) over a lower Studio target.
 
 ## Not in CI (by hand)
 
