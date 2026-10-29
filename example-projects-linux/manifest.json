@@ -36,9 +36,17 @@
         {
           "case": "cases/step-re400.toml",
           "run": "r-20261028T220207-1173"
+        },
+        {
+          "case": "cases/naca0012-aoa4-rotated.toml",
+          "run": "r-20261029T000812-6c75"
+        },
+        {
+          "case": "cases/naca0012-aoa2-rotated.toml",
+          "run": "r-20261029T000812-00f3"
         }
       ],
-      "bytes": 27402312
+      "bytes": 34823333
     },
     "quick-start": {
       "runs": [
