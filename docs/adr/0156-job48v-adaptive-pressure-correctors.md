@@ -292,6 +292,18 @@ registered test is kept as `w48v_a9_..._known_miss` (ignored, limit unchanged, t
 `w48v_a9b_...`: the same five arms and limit (each refused at `solver.corrector_control`), the simplec arm's text with
 `store_time_interval = 1.0` replaced by `store_interval = 50`.
 
+## Amendment 3 (2026-10-29, after the addendum's runs and before any run of A11): the cap report end to end
+
+Every registered run ended with no cap-bound estimate, so the cap's reports (the `corrector_cap` warning event, the
+`corrector_cap` count of the `iteration` events, `finish.correctors.cap_bound`) were checked only at library level
+(`w48v_corrector_control.rs`, target 0); A10 passed them vacuously. Added: **A11**, `w48v_a11_...` in
+`crates/rcfd-api/tests/w48v_adaptive_correctors.rs`: K1's mesh (64 x 256) with `adaptive` at dt 1/16, 1/4 and 1, in this order;
+each arm is driven through `runctl::drive` for 3 steps (fewer if the guard stops it); the first arm whose first estimate is
+cap-bound is the checked arm. Limit on that arm: a `warning` event with `kind = "corrector_cap"`, `correctors` 10 and `rho` above
+0.5; `corrector_cap >= 1` in every `iteration` event after it; `finish.correctors.cap_bound >= 1`. If no arm binds the cap, A11 is
+reported as not exercised and no other arm is added. Seen before this amendment: only that the registered runs never bound the
+cap; 48T's B2 (64 x 256 at dt 1/16, two correctors) diverged at step 19.
+
 ## Not changed by this job
 
 `crates/rcfd-studio`, `crates/rcfd-runner`, the default of every key, the ADR 0077 one-corrector check, `baseline_hashes.rs`, the
