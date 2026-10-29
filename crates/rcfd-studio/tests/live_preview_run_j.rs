@@ -28,6 +28,12 @@ fn mesh_shown(app: &StudioApp) -> bool {
         })
 }
 
+/// The toolbar draws Run, not Stop, in Run's place (ADR 0161 amendment 2: while the case's toolbar run is live the place
+/// holds Stop).
+fn run_drawn(app: &StudioApp) -> bool {
+    rcfd_studio::stop::view(&app.st) == rcfd_studio::stop::View::Run
+}
+
 /// Click Run and wait until a new run (`n` in all) is queued, selected and shown on the Run side; the seconds from the
 /// click's release and the run's id. The new run is the id that was not there before the click (amendment 5: ids of the
 /// same second sort by their random suffix, so the last id in name order need not be the newest).
@@ -84,10 +90,11 @@ fn j2_a_run_start_switches_to_run_and_a_case_click_back_to_mesh() {
         Some(id1.as_str()),
         "(c) the run was deselected"
     );
-    // (d)
+    // (d) ADR 0161 amendment 2: Run is drawn again (not Stop) once the case's first run has ended
     assert!(
         common::frames_until(&mut app, &ctx, lj::WAIT, |a| rcfd_studio::quick_run::blocked(&a.st)
-            .is_none()),
+            .is_none()
+            && run_drawn(a)),
         "(d) Run stayed blocked: {:?}",
         rcfd_studio::quick_run::blocked(&app.st)
     );
@@ -127,7 +134,7 @@ fn j2_a_run_start_switches_to_run_and_a_case_click_back_to_mesh() {
     app.st.open_case("cases/live.toml");
     assert!(common::frames_until(&mut app, &ctx, lj::WAIT, mesh_shown));
     assert!(common::frames_until(&mut app, &ctx, lj::WAIT, |a| {
-        rcfd_studio::quick_run::blocked(&a.st).is_none()
+        rcfd_studio::quick_run::blocked(&a.st).is_none() && run_drawn(a)
     }));
     let _ = click(&mut app, &ctx, "Run");
     assert!(

@@ -187,3 +187,16 @@ throwaway print (not kept, not counted).
    then never saw state D4.3 and waited. Corrected: while the start is in flight only `stop::stop` (the model call,
    which reads the view it acts on) is tried, and frames are drawn without keys. Limits unchanged. (In the diagnostic
    run the run so stopped ended, no error was shown, and Run was drawn again; not counted.)
+
+## Amendment 2 (2026-10-29, during AA6's suite run, before the corrected run of J2)
+
+AA6's suite run (release, `--test-threads 1`, at 995dd42) failed ADR 0144's J2
+(`live_preview_run_j::j2_a_run_start_switches_to_run_and_a_case_click_back_to_mesh`): "the run was not selected within
+60 s" in its step (d). Read from J2's code: (d) waits only until `quick_run::blocked` is empty and clicks "Run" at the
+recorded rectangle; the first run of the same case (300 steps) was queued or running then (`blocked` is empty as soon
+as `ensure_runner` returned), so with D3/D4 the toolbar drew Stop in that place, the click was a Stop of run 1 and no
+second run was queued. This is D4's intended change (Run of a case whose toolbar run is live is Stop), not a defect of
+this job's code; J2's own set-up assumed Run there. **Corrected set-up of J2 (ADR 0144's limits unchanged):** (d) and
+its control wait until `blocked` is empty *and* the toolbar's place holds Run (`stop::view` is `View::Run`), i.e. the
+case's earlier run has ended, before the click. Recorded before J2 runs again. Every other failure of that suite run is
+listed in the addendum with its handling.
