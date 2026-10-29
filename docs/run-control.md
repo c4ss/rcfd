@@ -88,7 +88,8 @@ within one launch) and `wall_s`. Events:
 - `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`; with `--status-monitors` also `monitors` (report name to
   value, `null` when not finite); with `solver.corrector_control = "adaptive"` (ADR 0156) also `correctors` (the pressure
   correctors of the step's final outer iteration) and `corrector_cap` (how many estimates so far ended at the cap of 10); a
-  `fixed` run's events have neither key
+  `fixed` run's events have neither key. The run service copies both into the step's `residuals.jsonl` line (top-level, same
+  names; ADR 0160), only when the event has them, so the lines of every other run are unchanged
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
 - `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`

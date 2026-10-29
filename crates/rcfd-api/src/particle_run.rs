@@ -235,7 +235,8 @@ impl ParticleRun {
 
     /// The hook at the end of a transient flow step of `sim`.
     pub fn after_step(&mut self, sim: &Simulation) -> Result<(), String> {
-        let t = sim.time();
+        // the solver's own time (ADR 0160 D2; inside `step`, before any end-time snap, the two are equal)
+        let t = sim.solver_time();
         let dt = t - self.t_prev;
         self.t_prev = t;
         if self.two_way.is_some() {

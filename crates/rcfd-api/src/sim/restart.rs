@@ -211,6 +211,7 @@ impl Simulation {
         self.converged = false;
         self.last = None;
         self.stop_reason = None;
+        self.time_snap = None;
     }
 
     fn transient_state(c: &Container, meta: &Value) -> Result<PimpleState> {

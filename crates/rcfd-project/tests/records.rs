@@ -97,6 +97,17 @@ fn r1_every_record_round_trips() {
         time: 1.0 / 3.0,
         residuals: [("p".to_string(), 1.234e-7), ("Ux".to_string(), f64::MIN_POSITIVE)].into(),
         monitors: [("dp".to_string(), -12.5)].into(),
+        correctors: None,
+        corrector_cap: None,
+    });
+    // ADR 0160 R3: the corrector count of an adaptive run's line
+    round_trip(&ResidualLine {
+        step: 13,
+        time: 0.5,
+        residuals: [("p".to_string(), 1e-6)].into(),
+        monitors: Default::default(),
+        correctors: Some(5),
+        corrector_cap: Some(0),
     });
     round_trip(&Metrics::from([
         ("dp".to_string(), 101.325),
@@ -109,6 +120,14 @@ fn r1_every_record_round_trips() {
     literal::<RunEvent>(json!({"t": "t", "kind": "state", "from": "running", "to": "paused"}));
     literal::<RunEvent>(json!({"t": "t", "kind": "stop", "reason": "max steps"}));
     literal::<ResidualLine>(json!({"step": 1, "time": 0.0, "residuals": {"p": 0.5}, "monitors": {}}));
+    literal::<ResidualLine>(
+        json!({"step": 2, "time": 0.1, "residuals": {"p": 0.5}, "monitors": {}, "correctors": 8, "corrector_cap": 1}),
+    );
+    // ADR 0160 R3: a line without the count reads with None and writes back byte for byte
+    let old = r#"{"step":3,"time":0.25,"residuals":{"continuity":1e-12,"p":0.5,"u":0.25},"monitors":{"cd":1.25}}"#;
+    let l: ResidualLine = serde_json::from_str(old).unwrap();
+    assert_eq!((l.correctors, l.corrector_cap), (None, None));
+    assert_eq!(serde_json::to_string(&l).unwrap(), old);
     // Additive growth: an unknown field is accepted.
     let _: RunStatus = serde_json::from_value(
         json!({"state": "running", "step": 1, "time": 0.0, "pid": 7, "updated": "u", "eta_s": 30}),

@@ -817,11 +817,12 @@ pub fn track_transient(case: &Case, sim: &mut Simulation) -> std::result::Result
     let end = gf(case, "particles.end_time");
     let every = gi(case, "particles.output_every").max(0) as usize;
     let mut step = 0usize;
-    let mut t_prev = sim.time();
+    // the solver's own time: the flow's steps exactly, not the end time a fixed-step run reports (ADR 0160 D2)
+    let mut t_prev = sim.solver_time();
     while tr.time < end * (1.0 - 1e-12) && !sim.is_done() {
         sim.step();
-        let dt = sim.time() - t_prev;
-        t_prev = sim.time();
+        let dt = sim.solver_time() - t_prev;
+        t_prev = sim.solver_time();
         if dt <= 0.0 {
             break;
         }

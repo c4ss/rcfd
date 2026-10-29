@@ -666,10 +666,19 @@ impl PimpleSolver {
     /// step, `iterations` power iterations and the configured `n_correctors`, without the adaptive control. The solver itself is
     /// not changed. `None` for the fractional step, a moving mesh, a stopped run, or when the trial is stopped by the guard.
     pub fn lag_preflight(&self, dt: f64, iterations: usize) -> Option<LagWarning> {
+        self.lag_preflight_with(dt, iterations, None)
+    }
+
+    /// [`lag_preflight`](Self::lag_preflight) with the face viscosity `nu_face` for the trial step(s) (ADR 0160 D6: the one
+    /// the caller would set before the next step); `None` keeps the solver's own, exactly as `lag_preflight`.
+    pub fn lag_preflight_with(&self, dt: f64, iterations: usize, nu_face: Option<&[f64]>) -> Option<LagWarning> {
         if self.ale.is_some() || self.settings.fractional.is_some() || self.diverged.is_some() {
             return None;
         }
         let mut s = self.scratch();
+        if let Some(nu) = nu_face {
+            s.nu_face = Some(nu.to_vec());
+        }
         s.settings.corrector_control = None;
         let euler_first =
             matches!(s.settings.time_scheme, TimeScheme::Bdf2 | TimeScheme::Bdf2Bounded) && s.hist_u[0].older.is_none();

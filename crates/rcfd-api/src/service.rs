@@ -1118,6 +1118,20 @@ impl Service {
                 .interpolate_from(&src_case, &ck, mode)
                 .map_err(|e| RpcError::params(format!("interpolate: {e}")))?;
         }
+        // ADR 0160 D5: the computed setup rule SV301 at the start of a run (no step taken yet: fresh, continued or interpolated
+        // in this call), as `rcfd run` shows it: a `warning` event after `start`; `info` gains `warnings` only when it fires
+        let mut info = json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())});
+        {
+            let g = lock(&sim);
+            if g.iteration() == 0 {
+                if let Some(d) = g
+                    .pressure_lag_preflight()
+                    .and_then(|pf| crate::rules::lag_preflight_rule(&pf))
+                {
+                    info["warnings"] = crate::rules::warnings_json(std::slice::from_ref(&d));
+                }
+            }
+        }
         let cap = self.cfg.max_steps_per_call;
         let max_steps = u_param(p, "max_steps", cap as u64)?.min(cap as u64) as usize;
         let max_elapsed = p
@@ -1134,7 +1148,7 @@ impl Service {
             checkpoint,
             checkpoint_every: u_param(p, "checkpoint_every", 0)? as usize,
             out_dir: out_dir.clone(),
-            info: json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())}),
+            info,
             // `rcfd run` flags (ADR 0130); the service keeps its defaults
             store_dir: None,
             status_monitors: false,
