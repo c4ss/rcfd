@@ -184,3 +184,14 @@ its code path is the Linux one minus the copy). The "Not in CI" checklist (a per
    either tree does not fit. Options (as ADR 0155 question 5): (a) raise the per-project caps; (b) keep one platform's
    stores in git, the other built on demand (`--docker`); (c) move the stores out of git (release asset or LFS).
    **Recommendation (b)** before the examples grow, (c) later; nothing changed here.
+
+## Amendment 3 (2026-10-29, after the addendum, before these runs)
+
+The merge also brings 48U's record-based `rcfd-api` tests, which nothing above ran on the merged tree, and touches
+`rcfd-core`, `rcfd-mesh` and `rcfd-api`, which Q1 did not lint. Added checks, limits fixed here:
+
+| Id | Check | Limit |
+|---|---|---|
+| H1m | `cargo test --release --locked -p rcfd-api --test case_hashes_w48u --test mesh_transform_w48u --test w48t_cylinder_spokes --test end_time_landing_w48k -- --test-threads 1 --nocapture` on 1f110bf, on Windows and in the container of L4 (an archive of that commit) | every test passes, their own ignored tests ignored. If `case_hashes_w48u` fails only on case files added after 6867e40 (labels), the fix mirrors DV6 (D4) with a note here and in ADR 0155; if it fails on a hash of a recorded case, nothing is changed: stop and report |
+| Q2 | `cargo clippy --release --locked -p rcfd-core -p rcfd-mesh -p rcfd-api --all-targets -- -D warnings` and `cargo fmt -p rcfd-core -p rcfd-mesh -p rcfd-api -- --check`, on Windows and in the same container | clean |
+| S1r | The whole `rcfd-studio` suite again on Windows (question 2 option (c)), set-up of amendment 2, not overlapped with a container | 0 failed; reported next to S1, whose counted miss stays as recorded |
