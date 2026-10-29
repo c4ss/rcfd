@@ -86,6 +86,187 @@ pub struct PimpleSettings {
     /// periodic faces, as the steady `SimpleSolver::coupled_body_pair_mean` (ADR 0080). The default (owner value) leaves
     /// `(rAU_o - rAU_q) f.S` per seam pair, a seam mass source wherever `rAU` differs across the pair. Default `false` (bit-identical).
     pub coupled_body_pair_mean: bool,
+    /// Adaptive pressure-corrector count (ADR 0156): `None` (default) = exactly `n_correctors` correctors per outer iteration;
+    /// `Some` = at least `n_correctors`, raised until the estimated pressure-lag amplification of the step is at most the
+    /// control's target. Not used by the fractional step or moving meshes.
+    pub corrector_control: Option<CorrectorControl>,
+}
+
+/// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
+///
+/// At an estimate step the ADR 0073 pressure-lag map of the step (the final outer iteration's momentum matrices frozen, the
+/// estimate made on copies, so the step's solution is that of a fixed count) is estimated with `N = n_correctors,
+/// n_correctors + 1, ...` correctors until its amplification is at most `target` or `N = max_correctors`; that count is then used
+/// by every outer iteration until the next estimate. Estimates are made at the first step at or after `start`, every `every`
+/// steps, and after the growth monitor fired: the largest pressure change of the last corrector grew by more than `growth` per
+/// step on `growth_steps` consecutive steps (a lag mode that grows by its amplification once it dominates that change).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CorrectorControl {
+    /// Largest number of correctors per outer iteration (the cap).
+    pub max_correctors: usize,
+    /// Largest accepted estimate of the pressure-lag amplification per step.
+    pub target: f64,
+    /// Power iterations per estimate.
+    pub iterations: usize,
+    /// Steps between scheduled estimates after the first (0 = the first estimate only).
+    pub every: usize,
+    /// First step estimated (2 for BDF2, whose first step is implicit Euler).
+    pub start: usize,
+    /// Growth factor per step of the last corrector's largest pressure change counted by the monitor.
+    pub growth: f64,
+    /// Consecutive growing steps that fire the monitor (0 = no monitor).
+    pub growth_steps: usize,
+    /// Fewest steps between two estimates fired by the monitor.
+    pub trigger_gap: usize,
+}
+
+impl CorrectorControl {
+    /// The registered control of ADR 0156: cap 10, target 0.5 (safety factor 2), 20 power iterations, an estimate every 1000
+    /// steps, the monitor at growth 1.5 on 3 consecutive steps with 25 steps between fired estimates; first estimate at step 1.
+    pub fn registered() -> Self {
+        CorrectorControl {
+            max_correctors: 10,
+            target: 0.5,
+            iterations: 20,
+            every: 1000,
+            start: 1,
+            growth: 1.5,
+            growth_steps: 3,
+            trigger_gap: 25,
+        }
+    }
+}
+
+/// One estimate of the adaptive corrector count (ADR 0156).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CorrectorEstimate {
+    /// Step (1-based) at which the estimate was made.
+    pub step: usize,
+    /// Count chosen.
+    pub correctors: usize,
+    /// Estimated pressure-lag amplification per step with that count.
+    pub rho: f64,
+    /// Cell holding the largest entry of the estimated mode.
+    pub cell: usize,
+    /// The search ended at the cap with the estimate above the target.
+    pub cap_bound: bool,
+    /// Made because the growth monitor fired.
+    pub triggered: bool,
+    /// Lag-map estimates (counts tried) of this search.
+    pub evaluations: usize,
+}
+
+/// State and record of the adaptive corrector count (ADR 0156); stays empty while `corrector_control` is `None`.
+#[derive(Debug, Clone, Default)]
+pub struct CorrectorRecord {
+    /// Correctors per outer iteration in use (0 before the first step with the control).
+    pub current: usize,
+    /// Steps taken with the control.
+    pub steps: u64,
+    /// Sum over those steps of the correctors of the final outer iteration.
+    pub sum: u64,
+    /// Largest count used by a step.
+    pub max: usize,
+    /// Count used by the last step.
+    pub last: usize,
+    /// Every estimate, in order.
+    pub estimates: Vec<CorrectorEstimate>,
+    /// Estimates whose search ended at the cap with the estimate above the target.
+    pub cap_bound: usize,
+    /// Estimates made because the growth monitor fired.
+    pub triggered: usize,
+    mode: Option<Vec<f64>>,
+    last_estimate: Option<usize>,
+    last_trigger: Option<usize>,
+    growth_run: usize,
+    last_change: Option<f64>,
+    fired: bool,
+}
+
+impl CorrectorRecord {
+    /// Whether step `step` makes an estimate, and whether the monitor asked for it.
+    fn due(&self, step: usize, c: &CorrectorControl) -> (bool, bool) {
+        if step < c.start.max(1) {
+            return (false, false);
+        }
+        let Some(last) = self.last_estimate else {
+            return (true, false);
+        };
+        if c.every > 0 && step.saturating_sub(last) >= c.every {
+            return (true, false);
+        }
+        let gap_ok = match self.last_trigger {
+            Some(t) => step.saturating_sub(t) >= c.trigger_gap,
+            None => true,
+        };
+        if self.fired && gap_ok {
+            return (true, true);
+        }
+        (false, false)
+    }
+
+    /// The growth monitor (ADR 0156 D3.5): `change` = largest cell change of the pressure in the step's last corrector,
+    /// `range` = pressure range after the step.
+    pub fn observe(&mut self, change: f64, range: f64, c: &CorrectorControl) {
+        if c.growth_steps == 0 {
+            return;
+        }
+        let grew = self.last_change.is_some_and(|prev| change > c.growth * prev) && change > 1e-10 * range;
+        self.growth_run = if grew { self.growth_run + 1 } else { 0 };
+        self.last_change = Some(change);
+        if self.growth_run >= c.growth_steps {
+            self.fired = true;
+        }
+    }
+
+    /// Whether the growth monitor has fired and its estimate is still to be made.
+    pub fn monitor_fired(&self) -> bool {
+        self.fired
+    }
+
+    /// Take the count of a search made at `step`.
+    fn apply(&mut self, pick: CorrectorPick, step: usize, triggered: bool) {
+        self.current = pick.n;
+        self.estimates.push(CorrectorEstimate {
+            step,
+            correctors: pick.n,
+            rho: pick.rho,
+            cell: pick.cell,
+            cap_bound: pick.cap_bound,
+            triggered,
+            evaluations: pick.evaluations,
+        });
+        if pick.cap_bound {
+            self.cap_bound += 1;
+        }
+        if triggered {
+            self.triggered += 1;
+            self.last_trigger = Some(step);
+        }
+        self.last_estimate = Some(step);
+        self.mode = Some(pick.mode);
+        self.growth_run = 0;
+        self.last_change = None;
+        self.fired = false;
+    }
+
+    /// Forget the schedule (a restored or reinitialised state): the next step at or after `start` estimates afresh.
+    fn reset_schedule(&mut self) {
+        self.last_estimate = None;
+        self.last_trigger = None;
+        self.growth_run = 0;
+        self.last_change = None;
+        self.fired = false;
+    }
+
+    /// Mean correctors per step taken with the control (0 before any).
+    pub fn mean(&self) -> f64 {
+        if self.steps == 0 {
+            0.0
+        } else {
+            self.sum as f64 / self.steps as f64
+        }
+    }
 }
 
 /// What the pressure-lag check does when the estimated amplification reaches one (ADR 0073 B4).
@@ -244,6 +425,7 @@ impl PimpleSettings {
             divergence_courant_limit: DEFAULT_DIVERGENCE_COURANT_LIMIT,
             pressure_lag_check: None,
             coupled_body_pair_mean: false,
+            corrector_control: None,
         }
     }
 
@@ -405,6 +587,18 @@ pub struct PimpleSolver {
     pub lag_estimates: Vec<LagWarning>,
     /// Estimates of the pressure-lag check with `rho >= 1` made in `Warn` mode.
     pub lag_warnings: Vec<LagWarning>,
+    /// State and record of the adaptive corrector count (ADR 0156); empty while `settings.corrector_control` is `None`.
+    pub correctors: CorrectorRecord,
+}
+
+/// The count chosen by one search of the adaptive corrector control.
+struct CorrectorPick {
+    n: usize,
+    rho: f64,
+    cell: usize,
+    cap_bound: bool,
+    evaluations: usize,
+    mode: Vec<f64>,
 }
 
 impl PimpleSolver {
@@ -435,7 +629,61 @@ impl PimpleSolver {
             diverged: None,
             lag_estimates: Vec::new(),
             lag_warnings: Vec::new(),
+            correctors: CorrectorRecord::default(),
         }
+    }
+
+    /// A copy of the solver's state for a trial step (ADR 0156 D7): fields, histories, sources and settings; no records, no
+    /// moving-mesh step, not stopped.
+    fn scratch(&self) -> PimpleSolver {
+        PimpleSolver {
+            geom: self.geom.clone(),
+            settings: self.settings.clone(),
+            u: self.u.clone(),
+            p: self.p.clone(),
+            phi: self.phi.clone(),
+            time: self.time,
+            history: Vec::new(),
+            hist_u: self.hist_u.clone(),
+            phi_hist: self.phi_hist.clone(),
+            step_no: self.step_no,
+            nu_face: self.nu_face.clone(),
+            body_force: self.body_force.clone(),
+            source_force: self.source_force.clone(),
+            sink: self.sink.clone(),
+            face_jump: self.face_jump.clone(),
+            ale: None,
+            fs_q: self.fs_q.clone(),
+            diverged: None,
+            lag_estimates: Vec::new(),
+            lag_warnings: Vec::new(),
+            correctors: CorrectorRecord::default(),
+        }
+    }
+
+    /// Pre-run estimate of the pressure-lag amplification (ADR 0156 D7, the setup rule SV301): a copy of the solver takes the
+    /// next step (the second one from the start under BDF2, whose first step is implicit Euler) with the ADR 0073 check at that
+    /// step, `iterations` power iterations and the configured `n_correctors`, without the adaptive control. The solver itself is
+    /// not changed. `None` for the fractional step, a moving mesh, a stopped run, or when the trial is stopped by the guard.
+    pub fn lag_preflight(&self, dt: f64, iterations: usize) -> Option<LagWarning> {
+        if self.ale.is_some() || self.settings.fractional.is_some() || self.diverged.is_some() {
+            return None;
+        }
+        let mut s = self.scratch();
+        s.settings.corrector_control = None;
+        let euler_first =
+            matches!(s.settings.time_scheme, TimeScheme::Bdf2 | TimeScheme::Bdf2Bounded) && s.hist_u[0].older.is_none();
+        let at = s.step_no + if euler_first { 2 } else { 1 };
+        s.settings.pressure_lag_check = Some(LagCheck {
+            every: 0,
+            start: at,
+            iterations,
+            action: LagAction::Warn,
+        });
+        while s.step_no < at && s.diverged.is_none() {
+            s.step(dt);
+        }
+        s.lag_estimates.iter().find(|w| w.step == at).copied()
     }
 
     /// Record a trip of the divergence guard and build the record returned for the step.
@@ -561,6 +809,21 @@ impl PimpleSolver {
             && s.pressure_lag_check
                 .is_some_and(|c| self.step_no == c.start.max(1) || (c.every > 0 && self.step_no % c.every == 0));
         let mut lag_ctx: Option<LagCtx> = None;
+        // ADR 0156: the adaptive corrector count (not on a moving mesh, where the lag map is not defined)
+        let cc = if self.ale.is_none() { s.corrector_control } else { None };
+        let n_lo = s.n_correctors.max(1);
+        let (cc_due, cc_triggered) = match &cc {
+            Some(c) => {
+                if self.correctors.current == 0 {
+                    self.correctors.current = n_lo;
+                }
+                self.correctors.due(self.step_no, c)
+            }
+            None => (false, false),
+        };
+        // largest pressure change of the last corrector of the final outer iteration (the growth monitor; adaptive only)
+        let mut cc_change = 0.0f64;
+        let mut n_corr_final = s.n_correctors;
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
@@ -724,12 +987,31 @@ impl PimpleSolver {
                     pbc: pbc.clone(),
                 });
             }
+            if let (Some(c), true, true) = (&cc, cc_due, last) {
+                // ADR 0156 D3: choose the count on the frozen matrices of this (final) outer iteration, before its correctors
+                let ctx = LagCtx {
+                    mats: mats.clone(),
+                    links: links.clone(),
+                    pbc: pbc.clone(),
+                };
+                let n_hi = c.max_correctors.max(n_lo);
+                let pick = self.pick_correctors(&ctx, c, n_lo, n_hi);
+                self.correctors.apply(pick, self.step_no, cc_triggered);
+            }
+            let n_corr = if cc.is_some() {
+                self.correctors.current
+            } else {
+                s.n_correctors
+            };
+            if last {
+                n_corr_final = n_corr;
+            }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             let gamma_p = face_interpolate(&g, &r_au);
             let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
 
             // ---- pressure correctors ---------------------------------------
-            for corr in 0..s.n_correctors {
+            for corr in 0..n_corr {
                 let mut hby_a = vec![[0.0; 3]; n];
                 for k in 0..3 {
                     if let Some(m) = &mats[k] {
@@ -841,8 +1123,11 @@ impl PimpleSolver {
                         (res_u, res_p, p_iters),
                     );
                 }
-                let last_corr = corr + 1 == s.n_correctors;
+                let last_corr = corr + 1 == n_corr;
                 let a = if last_corr { alpha_p } else { 1.0 };
+                if cc.is_some() && last && last_corr {
+                    cc_change = (0..n).fold(0.0f64, |m, c| m.max((p_new[c] - p_old[c]).abs()));
+                }
                 for c in 0..n {
                     self.p.values[c] = p_old[c] + a * (p_new[c] - p_old[c]);
                 }
@@ -850,8 +1135,23 @@ impl PimpleSolver {
         }
 
         // ---- finish the step ------------------------------------------------
+        if let Some(c) = &cc {
+            // ADR 0156: the step's record and the growth monitor
+            let (lo, hi) = self
+                .p
+                .values
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| (a.min(x), b.max(x)));
+            let r = &mut self.correctors;
+            r.steps += 1;
+            r.sum += n_corr_final as u64;
+            r.max = r.max.max(n_corr_final);
+            r.last = n_corr_final;
+            r.observe(cc_change, hi - lo, c);
+        }
         if let (Some(ctx), Some(chk)) = (&lag_ctx, s.pressure_lag_check) {
-            let (rho, cell) = self.lag_amplification(ctx, chk.iterations.max(2));
+            // the count the step used (the configured one unless the adaptive control is on)
+            let (rho, cell, _) = self.lag_amplification_n(ctx, n_corr_final, chk.iterations.max(2), None);
             let w = LagWarning {
                 step: self.step_no,
                 rho,
@@ -902,8 +1202,9 @@ impl PimpleSolver {
     }
 
     /// One application of the linearised pressure-lag map of a step (ADR 0073 B4): the pressure error `e` drives the momentum predictors
-    /// and correctors of every outer iteration with the frozen matrices of `ctx`; returns the pressure error at the end of the step.
-    fn lag_map(&self, ctx: &LagCtx, e: &[f64], pbc_h: &crate::pressure::PressureBc) -> Vec<f64> {
+    /// and the `n_corr` correctors of every outer iteration with the frozen matrices of `ctx`; returns the pressure error at the end of
+    /// the step.
+    fn lag_map(&self, ctx: &LagCtx, n_corr: usize, e: &[f64], pbc_h: &crate::pressure::PressureBc) -> Vec<f64> {
         let g = &self.geom;
         let s = &self.settings;
         let n = g.n_cells();
@@ -955,7 +1256,7 @@ impl PimpleSolver {
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             let gamma = face_interpolate(g, &r_au);
-            for corr in 0..s.n_correctors {
+            for corr in 0..n_corr {
                 let mut hby_a = vec![[0.0; 3]; n];
                 for k in 0..3 {
                     if let Some(m) = &used[k] {
@@ -984,7 +1285,7 @@ impl PimpleSolver {
                         }
                     }
                 }
-                let a = if corr + 1 == s.n_correctors { alpha_p } else { 1.0 };
+                let a = if corr + 1 == n_corr { alpha_p } else { 1.0 };
                 for c in 0..n {
                     p[c] = p_old[c] + a * (p_new[c] - p_old[c]);
                 }
@@ -993,8 +1294,16 @@ impl PimpleSolver {
         p
     }
 
-    /// Power-iteration estimate of the spectral radius of the pressure-lag map (ADR 0073 B4) and the cell of the largest mode entry.
-    fn lag_amplification(&self, ctx: &LagCtx, iterations: usize) -> (f64, usize) {
+    /// Power-iteration estimate of the spectral radius of the pressure-lag map with `n_corr` correctors (ADR 0073 B4), the cell of
+    /// the largest mode entry and the normalised mode. `warm` (same length as the cells) replaces the ADR 0073 start vector (ADR 0156
+    /// D3: the search starts each count from the previous count's mode).
+    fn lag_amplification_n(
+        &self,
+        ctx: &LagCtx,
+        n_corr: usize,
+        iterations: usize,
+        warm: Option<&[f64]>,
+    ) -> (f64, usize, Vec<f64>) {
         let g = &self.geom;
         let n = g.n_cells();
         let vol = g.mesh.cell_volumes();
@@ -1024,30 +1333,33 @@ impl PimpleSolver {
             }
         }
         let mut seed: u64 = 0x2545F4914F6CDD1D;
-        let mut e: Vec<f64> = cc
-            .iter()
-            .map(|x| {
-                seed ^= seed << 13;
-                seed ^= seed >> 7;
-                seed ^= seed << 17;
-                let r = (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
-                let mut v = 1.0;
-                for k in 0..3 {
-                    if g.active[k] && hi[k] > lo[k] {
-                        v *= (std::f64::consts::PI * (x[k] - lo[k]) / (hi[k] - lo[k])).cos();
+        let mut e: Vec<f64> = match warm {
+            Some(w) if w.len() == n => w.to_vec(),
+            _ => cc
+                .iter()
+                .map(|x| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 7;
+                    seed ^= seed << 17;
+                    let r = (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+                    let mut v = 1.0;
+                    for k in 0..3 {
+                        if g.active[k] && hi[k] > lo[k] {
+                            v *= (std::f64::consts::PI * (x[k] - lo[k]) / (hi[k] - lo[k])).cos();
+                        }
                     }
-                }
-                v + 0.1 * r
-            })
-            .collect();
+                    v + 0.1 * r
+                })
+                .collect(),
+        };
         let n0 = norm(&mut e);
         if n0 <= 0.0 || !n0.is_finite() {
-            return (0.0, 0);
+            return (0.0, 0, e);
         }
         e.iter_mut().for_each(|x| *x /= n0);
         let mut logs = Vec::with_capacity(iterations);
         for _ in 0..iterations {
-            let mut next = self.lag_map(ctx, &e, &pbc_h);
+            let mut next = self.lag_map(ctx, n_corr, &e, &pbc_h);
             let nn = norm(&mut next);
             if !(nn.is_finite() && nn > 0.0) {
                 logs.push(if nn == 0.0 { f64::NEG_INFINITY } else { f64::INFINITY });
@@ -1060,7 +1372,50 @@ impl PimpleSolver {
         let tail = &logs[half..];
         let rho = (tail.iter().sum::<f64>() / tail.len().max(1) as f64).exp();
         let cell = (0..n).max_by(|&a, &b| e[a].abs().total_cmp(&e[b].abs())).unwrap_or(0);
-        (rho, cell)
+        (rho, cell, e)
+    }
+
+    /// The corrector count of an estimate of the adaptive control (ADR 0156 D3.3) on the frozen matrices `ctx`: the first search
+    /// counts up from `n_lo` until the estimate is at most the target or `n_hi` is reached; a later one checks the count in use,
+    /// counts up from it when above the target, and else takes one count fewer when that one is at or below the target.
+    fn pick_correctors(&self, ctx: &LagCtx, c: &CorrectorControl, n_lo: usize, n_hi: usize) -> CorrectorPick {
+        let first = self.correctors.last_estimate.is_none();
+        let mut warm: Option<Vec<f64>> = self.correctors.mode.clone();
+        let mut evaluations = 0;
+        let mut estimate = |k: usize, warm: &mut Option<Vec<f64>>| -> (f64, usize) {
+            let (rho, cell, mode) = self.lag_amplification_n(ctx, k, c.iterations.max(2), warm.as_deref());
+            *warm = Some(mode);
+            evaluations += 1;
+            (rho, cell)
+        };
+        let mut n = if first {
+            n_lo
+        } else {
+            self.correctors.current.clamp(n_lo, n_hi)
+        };
+        let above = |r: f64| r.is_nan() || r > c.target;
+        let (mut rho, mut cell) = estimate(n, &mut warm);
+        if above(rho) {
+            while above(rho) && n < n_hi {
+                n += 1;
+                (rho, cell) = estimate(n, &mut warm);
+            }
+        } else if !first && n > n_lo {
+            let (r1, c1) = estimate(n - 1, &mut warm);
+            if r1 <= c.target {
+                n -= 1;
+                rho = r1;
+                cell = c1;
+            }
+        }
+        CorrectorPick {
+            n,
+            rho,
+            cell,
+            cap_bound: above(rho),
+            evaluations,
+            mode: warm.unwrap_or_default(),
+        }
     }
 
     /// Advance to `t_end` with a fixed step `dt` (the last step is shortened to land on `t_end`).
@@ -1284,6 +1639,7 @@ impl PimpleSolver {
         self.history.clear();
         self.history.extend(st.last);
         self.diverged = None;
+        self.correctors.reset_schedule();
         Ok(())
     }
 
@@ -1318,6 +1674,7 @@ impl PimpleSolver {
         self.step_no = 0;
         self.history.clear();
         self.diverged = None;
+        self.correctors.reset_schedule();
         Ok(())
     }
 }

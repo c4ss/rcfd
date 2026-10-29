@@ -543,6 +543,21 @@ fn cmd_run(args: &[String]) -> u8 {
             return FAIL;
         }
     }
+    // ADR 0156 D7: the computed setup rule SV301 from the pre-run pressure-lag estimate (made on a copy of the solver, so the
+    // run itself is unchanged); like the static rules' warnings: stderr and a `warning` status event after `start`
+    let mut rule_warnings = rule_warnings;
+    if let Some(d) = sim
+        .pressure_lag_preflight()
+        .and_then(|p| rcfd_api::rules::lag_preflight_rule(&p))
+    {
+        eprintln!("{label}: {d}");
+        if let (Some(all), serde_json::Value::Array(w)) = (
+            rule_warnings.as_array_mut(),
+            rcfd_api::rules::warnings_json(std::slice::from_ref(&d)),
+        ) {
+            all.extend(w);
+        }
+    }
     let mut status_file = match opt(args, "--status-file") {
         Some(f) => match std::fs::File::create(f) {
             Ok(h) => Some(h),
@@ -607,12 +622,15 @@ fn cmd_run(args: &[String]) -> u8 {
         }
         match ev["event"].as_str() {
             Some("iteration") if !quiet && !status_json => println!(
-                "{:>6}  t={:<10.4e} res_u {:.3e}  res_p {:.3e}  continuity {:.2e}",
+                "{:>6}  t={:<10.4e} res_u {:.3e}  res_p {:.3e}  continuity {:.2e}{}",
                 ev["index"],
                 ev["time"].as_f64().unwrap_or(0.0),
                 ev["res_u"].as_f64().unwrap_or(f64::NAN),
                 ev["res_p"].as_f64().unwrap_or(f64::NAN),
-                ev["continuity"].as_f64().unwrap_or(f64::NAN)
+                ev["continuity"].as_f64().unwrap_or(f64::NAN),
+                // ADR 0156 D4: only with solver.corrector_control = "adaptive"
+                ev.get("correctors")
+                    .map_or(String::new(), |n| format!("  correctors {n}"))
             ),
             Some("checkpoint") => eprintln!("checkpoint written to {}", ev["path"].as_str().unwrap_or("")),
             Some("warning") => eprintln!("warning: {}", ev["message"].as_str().unwrap_or("")),

@@ -10,6 +10,10 @@
 //! * `w48t_mhf_control_cross_check` (amendment 2, prints): the Rust M_hf against `scripts/w48t_spoke_metrics.py` on the control.
 //! * `w48t_w3_...`, `w48t_w5_...` (heavy, ignored, pass): the accepted workarounds on the user's 256 x 256 mesh,
 //!   `time_advance = "fractional_step"` and `n_correctors = 3`, clean at t = 3.
+//! * ADR 0156 (job 48V), `solver.corrector_control = "adaptive"`: `w48v_k1_...` and `w48v_k2_...` are K1 and K2 with the opt-in
+//!   (A2, A3: real acceptance tests, not ignored); `w48v_a1_...` the committed case adaptive against fixed (A1); ignored: A4 (K1's
+//!   adaptive run against a fixed run at its count), A5 (the chosen counts' 60-iteration estimates), A8 (PIMPLE), B0 (the
+//!   pre-run estimate against DG1), B1 (where SV301 fires) and the user's 256 x 256 mesh with the opt-in.
 //!
 //! Every test prints what it measured before it asserts.
 
@@ -390,4 +394,297 @@ fn w48t_w5_three_correctors_on_the_user_mesh_is_clean() {
         "W5: stopped at t = {t} after {steps} steps"
     );
     assert!(m <= K_LIMIT, "W5: M_hf {m:.4e} > {K_LIMIT}");
+}
+
+// ------------------------------------------------------------------------------------------------ ADR 0156 (job 48V)
+
+/// Settings overrides of an arm.
+type Overrides = Vec<(&'static str, Value)>;
+
+/// The opt-in of ADR 0156.
+fn adaptive(mut v: Overrides) -> Overrides {
+    v.push(("solver.corrector_control", json!("adaptive")));
+    v
+}
+
+/// The case run through `Simulation` to `t_end`: the simulation and the steps taken.
+fn run_sim(overrides: &[(&str, Value)], t_end: f64) -> (Simulation, usize) {
+    let mut ov = overrides.to_vec();
+    ov.push(("solver.end_time", json!(t_end)));
+    let mut sim = Simulation::new(&case_with(&ov)).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut steps = 0;
+    while !sim.is_done() {
+        sim.step();
+        steps += 1;
+    }
+    (sim, steps)
+}
+
+/// (stopped by the guard, time reached, M_hf of p).
+fn outcome(sim: &Simulation) -> (bool, f64, f64) {
+    let cc = sim.geom.mesh.cell_centres().to_vec();
+    let p = sim.field("p").unwrap();
+    let m = if p.iter().all(|x| x.is_finite()) {
+        m_hf(&p, &cc)
+    } else {
+        f64::INFINITY
+    };
+    (sim.diverged(), sim.time(), m)
+}
+
+/// The clean check of A2, A3, A8 and the user-mesh test: not stopped, t = 3 reached, M_hf <= 0.0114 (K1 and K2's limit).
+fn assert_clean_at_3(label: &str, sim: &Simulation, steps: usize) {
+    let (diverged, t, m) = outcome(sim);
+    println!(
+        "{label}: {steps} steps, stopped by the guard {diverged}, t = {t}, M_hf {m:.4e} (limit {K_LIMIT}); correctors {}",
+        sim.corrector_summary()
+            .map_or("(fixed)".into(), |c| c.to_string())
+    );
+    assert!(
+        !diverged && (t - 3.0).abs() < 1e-9,
+        "{label}: stopped at t = {t} after {steps} steps"
+    );
+    assert!(m <= K_LIMIT, "{label}: M_hf {m:.4e} > {K_LIMIT}");
+}
+
+/// A2 (ADR 0156): K1's set-up (64 x 256, dt 1/64, two correctors) with `solver.corrector_control = "adaptive"` reaches t = 3 clean.
+#[test]
+fn w48v_k1_adaptive_correctors_fine_wall_layer_is_clean() {
+    let (sim, steps) = run_sim(&adaptive(k_overrides(2)), 3.0);
+    assert_clean_at_3("A2 (K1 adaptive)", &sim, steps);
+}
+
+/// A3 (ADR 0156): K2's set-up (three correctors) with `solver.corrector_control = "adaptive"` reaches t = 3 clean.
+#[test]
+fn w48v_k2_adaptive_correctors_fine_wall_layer_is_clean() {
+    let (sim, steps) = run_sim(&adaptive(k_overrides(3)), 3.0);
+    assert_clean_at_3("A3 (K2 adaptive)", &sim, steps);
+}
+
+fn bits_of(sim: &Simulation) -> Vec<u64> {
+    let mut v: Vec<u64> = Vec::new();
+    for f in ["ux", "uy", "p"] {
+        v.extend(sim.field(f).unwrap().iter().map(|x| x.to_bits()));
+    }
+    v.extend(sim.flux().iter().map(|x| x.to_bits()));
+    v
+}
+
+/// The count of every estimate of an adaptive run (from its summary log).
+fn counts(sim: &Simulation) -> Vec<u64> {
+    let s = sim.corrector_summary().expect("adaptive run");
+    s["log"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e[1].as_u64().unwrap())
+        .collect()
+}
+
+/// A1 (ADR 0156): the committed 64 x 48 case with `adaptive` keeps two correctors at every step and equals the fixed run at t = 10
+/// bit for bit (ux, uy, p, face flux).
+#[test]
+fn w48v_a1_committed_case_adaptive_equals_fixed() {
+    let (fixed, _) = run_sim(&[], 10.0);
+    let (adapt, steps) = run_sim(&adaptive(vec![]), 10.0);
+    let s = adapt.corrector_summary().unwrap();
+    println!("A1: {steps} steps, correctors {s}");
+    assert_eq!(s["max"], 2, "A1: {s}");
+    assert_eq!(s["mean"], 2.0, "A1: {s}");
+    assert!(counts(&adapt).iter().all(|&n| n == 2), "A1: {s}");
+    assert!(
+        bits_of(&fixed) == bits_of(&adapt),
+        "A1: fields or flux differ at t = 10"
+    );
+    assert!(fixed.corrector_summary().is_none());
+}
+
+/// A4 (ADR 0156): K1's adaptive run against a fixed run with `n_correctors` = the count it chose (when the count did not change).
+#[test]
+#[ignore = "ADR 0156 A4 (heavy, about two K1 runs in release)"]
+fn w48v_a4_k1_adaptive_equals_fixed_at_its_count() {
+    let (adapt, _) = run_sim(&adaptive(k_overrides(2)), 3.0);
+    let c = counts(&adapt);
+    println!("A4: counts of the estimates {c:?}");
+    assert!(
+        c.windows(2).all(|w| w[0] == w[1]),
+        "A4: the count changed over the run: {c:?}"
+    );
+    let n = c[0] as u32;
+    let (fixed, _) = run_sim(&k_overrides(n), 3.0);
+    println!(
+        "A4: fixed n_correctors = {n}: equal {}",
+        bits_of(&fixed) == bits_of(&adapt)
+    );
+    assert!(
+        bits_of(&fixed) == bits_of(&adapt),
+        "A4: differs from the fixed run with {n} correctors"
+    );
+}
+
+/// A5 (ADR 0156): the count chosen at the first estimate, and a 60-iteration cold estimate (DG1 harness) of the lag map with it.
+#[test]
+#[ignore = "ADR 0156 A5 (prints; heavy: 256 x 256 arms)"]
+fn w48v_a5_effective_amplification_of_the_chosen_count() {
+    let arms: Vec<(&str, Overrides)> = vec![
+        ("A1 64x48 1/16", vec![]),
+        ("V128 128x96 1/32", mesh_dt(128, 96, 1.0 / 32.0)),
+        ("V256 256x256 1/64", mesh_dt(256, 256, 1.0 / 64.0)),
+        ("A2 64x256 1/64", mesh_dt(64, 256, 1.0 / 64.0)),
+    ];
+    let only = std::env::var("W48V_A5").unwrap_or_default();
+    for (name, ov) in arms {
+        if !only.is_empty() && !only.split(',').any(|x| name.starts_with(x)) {
+            continue;
+        }
+        let t0 = std::time::Instant::now();
+        let mut sim = Simulation::new(&case_with(&adaptive(ov.clone()))).unwrap();
+        sim.step();
+        let s = sim.corrector_summary().unwrap();
+        let first = &s["log"][0];
+        let (n, rho20, cap) = (
+            first[1].as_u64().unwrap() as usize,
+            first[2].as_f64().unwrap(),
+            first[3].as_bool().unwrap(),
+        );
+        let lag = LagCheck {
+            every: 0,
+            start: 1,
+            iterations: 60,
+            action: LagAction::Warn,
+        };
+        let coupling = Coupling {
+            n_correctors: n,
+            pimple: None,
+        };
+        let (mut h, dt) = harness(&case_with(&ov), coupling, Some(lag));
+        h.step(dt);
+        let rho60 = h.lag_estimates[0].rho;
+        println!(
+            "A5 {name}: chosen {n} correctors (20-iteration estimate {rho20:.4}, cap bound {cap}, {} estimate(s)), \
+             60-iteration cold estimate {rho60:.4}; wall {:.1} s",
+            s["log"].as_array().unwrap().len(),
+            t0.elapsed().as_secs_f64()
+        );
+        assert!(cap || rho20 <= 0.5, "A5 {name}: {rho20}");
+        assert!(rho60 < 1.0, "A5 {name}: 60-iteration estimate {rho60} >= 1");
+    }
+}
+
+/// A8 (ADR 0156): PIMPLE (n_outer 2, alpha_u = alpha_p = 0.9, W1's coupling) on K1's mesh with the opt-in reaches t = 3 clean.
+#[test]
+#[ignore = "ADR 0156 A8 (heavy: PIMPLE n_outer 2 on 64 x 256 to t = 3)"]
+fn w48v_a8_pimple_adaptive_on_the_fine_wall_layer_is_clean() {
+    let mut ov = adaptive(k_overrides(2));
+    ov.extend([
+        ("solver.algorithm", json!("pimple")),
+        ("solver.n_outer", json!(2)),
+        ("solver.alpha_u", json!(0.9)),
+        ("solver.alpha_p", json!(0.9)),
+    ]);
+    let (sim, steps) = run_sim(&ov, 3.0);
+    assert_clean_at_3("A8 (PIMPLE adaptive)", &sim, steps);
+}
+
+/// The user's 256 x 256 mesh (grading 100, dt 1/64) with the opt-in: clean at t = 3 (in-process twin of V256).
+#[test]
+#[ignore = "heavy (ADR 0156, 65,536 cells to t = 3): the user's mesh with solver.corrector_control = adaptive"]
+fn w48v_user_mesh_adaptive_is_clean() {
+    let (sim, steps) = run_sim(&adaptive(user_mesh(&[])), 3.0);
+    assert_clean_at_3("user mesh adaptive", &sim, steps);
+}
+
+/// B0 (ADR 0156): the pre-run estimate equals DG1's step-1 values (the same step, the same estimate), within 1e-3.
+#[test]
+#[ignore = "ADR 0156 B0 (prints; heavy: 256 x 256 arms)"]
+fn w48v_b0_preflight_replicates_dg1() {
+    let arms: Vec<(&str, Overrides, f64)> = vec![
+        ("G64", mesh_dt(64, 48, 1.0 / 16.0), 0.358),
+        ("G128", mesh_dt(128, 96, 1.0 / 32.0), 0.746),
+        ("G256", mesh_dt(256, 256, 1.0 / 64.0), 2.418),
+        ("G64x256", mesh_dt(64, 256, 1.0 / 64.0), 4.359),
+        ("G256s", mesh_dt(256, 256, 1.0 / 256.0), 1.166),
+        (
+            "G256g",
+            [mesh_dt(256, 256, 1.0 / 64.0), vec![("mesh.grading", json!(10.88))]].concat(),
+            0.219,
+        ),
+    ];
+    let only = std::env::var("W48V_B0").unwrap_or_default();
+    let mut worst = 0.0f64;
+    for (name, ov, dg1) in arms {
+        if !only.is_empty() && !only.split(',').any(|x| x == name) {
+            continue;
+        }
+        let t0 = std::time::Instant::now();
+        let sim = Simulation::new(&case_with(&ov)).unwrap();
+        let p = sim.pressure_lag_preflight().expect("applicable");
+        let d = (p.rho - dg1).abs();
+        worst = worst.max(d);
+        println!(
+            "B0 {name}: preflight rho {:.6} at step {} (cell {} at r {:.4}), DG1 {dg1}, difference {d:.2e}; wall {:.1} s",
+            p.rho,
+            p.step,
+            p.cell,
+            p.position[0].hypot(p.position[1]),
+            t0.elapsed().as_secs_f64()
+        );
+    }
+    assert!(worst <= 1e-3, "B0: largest difference {worst:.3e}");
+}
+
+/// B1 (ADR 0156): where `rcfd check` (the library's `check_only`) gives SV301 and where it does not.
+#[test]
+#[ignore = "ADR 0156 B1 (prints; heavy: 256 x 256 arms)"]
+fn w48v_b1_sv301_fires_where_registered() {
+    let user = mesh_dt(256, 256, 1.0 / 64.0);
+    let arms: Vec<(&str, Overrides, bool)> = vec![
+        ("256x256 1/64", user.clone(), true),
+        ("256x256 0.0156", mesh_dt(256, 256, 0.0156), true),
+        ("64x256 1/64", mesh_dt(64, 256, 1.0 / 64.0), true),
+        ("64x48 committed", vec![], false),
+        ("128x96 1/32", mesh_dt(128, 96, 1.0 / 32.0), false),
+        ("256x256 1/256", mesh_dt(256, 256, 1.0 / 256.0), false),
+        (
+            "256x256 grading 10.88",
+            [user.clone(), vec![("mesh.grading", json!(10.88))]].concat(),
+            false,
+        ),
+        ("256x256 adaptive", adaptive(user.clone()), false),
+        (
+            "256x256 fractional_step",
+            [user.clone(), vec![("solver.time_advance", json!("fractional_step"))]].concat(),
+            false,
+        ),
+        (
+            "256x256 pressure_lag_check off",
+            [user.clone(), vec![("solver.pressure_lag_check", json!("off"))]].concat(),
+            false,
+        ),
+    ];
+    let only = std::env::var("W48V_B1").unwrap_or_default();
+    let mut wrong = Vec::new();
+    for (name, ov, want) in arms {
+        if !only.is_empty() && !name.starts_with(only.as_str()) {
+            continue;
+        }
+        let t0 = std::time::Instant::now();
+        let (code, ev) = rcfd_api::runctl::check_only(&case_with(&ov));
+        let sv: Vec<&Value> = ev["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["id"] == "SV301")
+            .collect();
+        println!(
+            "B1 {name}: exit {code}, SV301 {} (want {want}){}; wall {:.1} s",
+            !sv.is_empty(),
+            sv.first().map_or(String::new(), |r| format!(": {}", r["message"])),
+            t0.elapsed().as_secs_f64()
+        );
+        if sv.is_empty() == want {
+            wrong.push(name);
+        }
+    }
+    assert!(wrong.is_empty(), "B1: wrong outcome for {wrong:?}");
 }

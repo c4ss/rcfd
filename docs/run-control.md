@@ -86,17 +86,22 @@ within one launch) and `wall_s`. Events:
 
 - `start`: `cells`, `algorithm`, `steady`, `start_iteration`, `case_hash`, `info` (`driver`, `threads`, `precision`, `continue_from`)
 - `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`; with `--status-monitors` also `monitors` (report name to
-  value, `null` when not finite)
+  value, `null` when not finite); with `solver.corrector_control = "adaptive"` (ADR 0156) also `correctors` (the pressure
+  correctors of the step's final outer iteration) and `corrector_cap` (how many estimates so far ended at the cap of 10); a
+  `fixed` run's events have neither key
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
-- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`; a
-  pressure-lag warning of PISO/PIMPLE (ADR 0077, `solver.pressure_lag_check = "warn"`) also has `kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`
+- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`
+  (including the computed rule `SV301` of ADR 0156, the pre-run pressure-lag estimate, emitted right after `start`); a
+  pressure-lag warning of PISO/PIMPLE (ADR 0077, `solver.pressure_lag_check = "warn"`) also has `kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`;
+  an adaptive corrector estimate that ends at the cap (ADR 0156) has `kind = "corrector_cap"`, `step`, `rho`, `correctors`, `cell`, `position`
 - `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `rules` (setup-rule diagnostics, `id severity category path message [fix]`), `mesh` (quality report)
 - `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`; a run stopped by a divergence guard (state `diverged`) also has
   `divergence` (ADR 0077): `solver` (`steady` or `transient`), `kind` (steady: `non_finite`, `continuity_growth`, `velocity_runaway`, `pressure_runaway`;
   transient: `non_finite`, `courant`, `lag_amplification`), `quantity`, `iteration` (steady) or `step`, `outer`, `stage` (transient), `cell`, `position`,
   `value`, `limit`, `last_good` (steady: the iteration with the smallest continuity before the trip; transient: the previous step). `summarize_stream`
-  passes it on as `divergence`.
+  passes it on as `divergence`. With `solver.corrector_control = "adaptive"` it also has `correctors` (ADR 0156): `mode`, `steps`, `mean`,
+  `max`, `last`, `estimates`, `cap_bound`, `triggered` and `log` (one `[step, correctors, rho, cap_bound, triggered]` per estimate).
 
 The MCP tool `read_status_stream` (service method `status.read`) summarises such a file; the
 tool `run_headless` (service method `run.headless`) produces the same stream through the service.
