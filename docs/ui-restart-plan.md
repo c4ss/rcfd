@@ -91,7 +91,8 @@ Project folder contract (agents code against it; later changes are additive and 
     status.json            state (queued, running, paused, finished, failed, cancelled), step, time, pid, updated; replaced atomically
     events.jsonl           append-only events (state changes, warnings, stop reasons)
     log.txt                solver log
-    residuals.jsonl        one line per step: step, time, residuals, monitors
+    residuals.jsonl        one line per step: step, time, residuals, monitors; with solver.corrector_control =
+                           "adaptive" also correctors and corrector_cap (ADR 0160; absent on every other run)
     fields/                time-series store (index.json, mesh once, one snapshot per saved time)
     metrics.json           final report values
   designs/                 design ledger (ADR 0121)

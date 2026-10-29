@@ -2,7 +2,8 @@
 
 Status: **registered** 2026-10-29, before any code of this job was written or compiled and before any run of this job (set-ups,
 criteria, limits, reading rules and the order of runs are fixed here); one amendment before any run; **results in the
-addendum** (every registered limit met; two pre-existing test failures of main reported); not yet accepted by the maintainer.
+addendum** (every registered limit met except N5 as worded: two tests fail, both identically on main 444255c, neither from this
+job); not yet accepted by the maintainer.
 House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
 becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
@@ -285,7 +286,7 @@ WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test threads 2 
 | N2 | `w33b_default_bits` | passed | met |
 | N3 | `end_time_landing_w48k` unchanged | 8 passed | met |
 | N4 | `chain_w19c` (C7), `restart_w19c`, `timectl_tree` | 6, 7 (+1 ignored), 4 passed; C7's first stage ends at 0.49999999999999994 and is now snapped (S9), its chained run still equals the single run bit for bit, time included | met |
-| N5 | 0 failures but N1's | rcfd-post, -fv, -api, -project, -runner, -mcp, -cli: 1654 passed, 2 failed, 530 ignored; rcfd-studio `json_o`, `saved_store_r`: 10 passed. Failures: `case_hashes_w48u` H1 (fails identically on main 444255c, built separately: the same 30 entries differ, toml/json text hashes of the 48U record against the merged schema) and rcfd-mcp `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` (asserts that `%TEMP%\x` does not exist; that folder exists on this machine since 2026-10-15, not made by this job); ignored = before + 0 (this job added no ignored test) | met with 2 pre-existing failures (deviation 3) |
+| N5 | 0 failures but N1's | rcfd-post, -fv, -api, -project, -runner, -mcp, -cli: 1654 passed, 2 failed, 530 ignored; rcfd-studio `json_o`, `saved_store_r`: 10 passed; and, beyond the registration, the Studio files that read runs, residual lines or the corrector plan (`correctors_x`, `run_time_s`, `monitors_r8`, `ingest_r4_r7`, `tick_cost_r6`, `start_plan_r10`, `store_plan_sf`, `editor_b5`, `drafts_o`, `case_starter_g2`): 79 passed, 8 ignored, 0 failed. Failures: `case_hashes_w48u` H1 (fails identically on main 444255c, built separately: the same 30 entries differ, toml/json text hashes of the 48U record against the merged schema) and rcfd-mcp `design_tests::t2_paths_are_sandboxed_and_names_are_restricted` (fails identically on main 444255c, run alone there: it asserts that `%TEMP%\x` does not exist, and that folder exists on this machine since 2026-10-15, not made by this job); ignored = before + 0 (this job added no ignored test) | **missed as registered** (the limit allowed only N1's failure); both failures shown pre-existing on main 444255c, neither from this job (deviation 3) |
 | N6 | clippy, fmt, graph | `cargo fmt -p` of the six changed crates `--check` clean; `workspace_graph` 3 passed; clippy: see below | see below |
 | S1 | 5 paths: times, `end`, unchanged hashes, last x | 3 steps each; step 3 reports `end` (e.g. piso 0.0300000000001 for `t_3` 0.03), `time()` `end`; 15 hashes equal the recorded ones (the variable-density and VOF states also equal ADR 0145's E hashes 0xf3b7338710ebdffe, 0x75ea9b9e2ea73dd7); every series' last x `end` | met |
 | S2 | 2567 steps, 3.0, hash | 2567 steps, 3.0 bit for bit, 0xcd611e803856ea20 as recorded | met |
@@ -325,16 +326,19 @@ WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test threads 2 
    (`E:\projects\cfd\w48z-work\probe\src`, instrumented by `w48z_probe_patch.py`: 40 added lines, logging only), with its own
    target folder; rcfd-api with both logs, then rcfd-cli, rcfd-runner, rcfd-mcp with the snap log only. Its results: rcfd-api 755
    passed, 1 failed (H1, as N5); the others 193 passed, 1 failed (the `%TEMP%\x` test, as N5).
-3. N5 has two failures, both pre-existing and not of this job: `case_hashes_w48u` H1 fails identically on main 444255c (run in a
-   separate copy and target, the same 30 differing entries); `design_tests::t2_...` fails because `%TEMP%\x` (a folder dated
-   2026-10-15, not made by this job and not removed by it) exists on this machine.
+3. N5 as registered allowed no failure but N1's; it has two, both pre-existing and not of this job: `case_hashes_w48u` H1 and
+   rcfd-mcp `design_tests::t2_...` each fail identically on main 444255c (a separate copy and target folder,
+   `E:\projects\cfd\w48z-work\main`); `t2` fails because `%TEMP%\x` (a folder dated 2026-10-15, not made by this job and not
+   removed by it) exists on this machine. No `*_known_miss` was added: they are other jobs' tests, not this job's checks.
+   The schema doc of `residuals.jsonl` is also `docs/ui-restart-plan.md` (its folder contract, which `rcfd-project`'s
+   `records.rs` tests name); it gained the two keys with `docs/run-control.md`.
 4. N1: the brief expected `kepsilon_channel` to fail locally; `shipped_cases_match_registered_hashes` passed on both trees here.
 5. S9 was registered for rcfd-api, rcfd-cli, rcfd-runner and rcfd-mcp; rcfd-studio, rcfd-gui and rcfd-assistant (which also link
    rcfd-api or start `rcfd`) were not probed.
 
 ### Not run
 
-* The workspace test gate beyond N5's crates (rcfd-studio only `json_o` and `saved_store_r`; rcfd-gui, rcfd-assistant,
+* The workspace test gate beyond N5's crates (rcfd-studio only the twelve files named in N5; rcfd-gui, rcfd-assistant,
   rcfd-turb and the others not run; they do not use the changed APIs except through `Simulation`).
 * Linux (S1-S6's recorded values are Windows x86_64 only; elsewhere the test prints, ADR 0137).
 * The Studio (not edited).
