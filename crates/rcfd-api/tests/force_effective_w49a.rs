@@ -1,6 +1,7 @@
 //! ADR 0164 (job 49A): the opt-in force components `total_effective` / `viscous_effective` take the viscous stress with
 //! the momentum equation's face viscosity (molecular + eddy viscosity, on wall faces the wall-function value). The
-//! default components are unchanged. Limits of ADR 0164 C1-C3 (registered before this file was run).
+//! default components are unchanged. Limits of ADR 0164 C1-C3 (registered before this file was run); C4-C5 test the
+//! opt-in far-field role `turbulence = "freestream"` of amendment 1 (registered before they were run).
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::{ReportDef, Simulation};
@@ -104,4 +105,55 @@ fn c2_c3_sa_wall_function_effective_shear() {
         (p_default - p_eff).abs() <= 1e-12 * (get(&v, "d_total").abs() + 1e-30),
         "{v:?}"
     );
+}
+
+/// C4 (ADR 0164 amendment 1): `turbulence = "freestream"` on a `velocity = "freestream"` patch fixes nuTilda at
+/// `nutilde_ratio * nu` on the inflow faces and leaves it zero-gradient (the owner value) on the outflow faces.
+#[test]
+fn c4_freestream_turbulence_role_fixes_inflow_only() {
+    let text = PLATE
+        .replace(
+            "[boundaries.xmin]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]",
+            "[boundaries.xmin]\nvelocity = \"freestream\"\nvelocity_value = [1.0, 0.0, 0.0]\npressure = \"freestream\"\nturbulence = \"freestream\"",
+        )
+        .replace(
+            "[boundaries.xmax]\nvelocity = \"zero_gradient\"\npressure = \"fixed\"",
+            "[boundaries.xmax]\nvelocity = \"freestream\"\nvelocity_value = [1.0, 0.0, 0.0]\npressure = \"freestream\"\nturbulence = \"freestream\"",
+        )
+        + "[turbulence]\nmodel = \"spalart_allmaras\"\n";
+    assert_eq!(text.matches("turbulence = \"freestream\"").count(), 2);
+    let c = Case::parse_toml(&text).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut s = Simulation::new(&c).unwrap_or_else(|e| panic!("{e:?}"));
+    for _ in 0..30 {
+        s.step();
+    }
+    let g = &s.geom;
+    let nb = s.boundary_field("nuTilda").unwrap();
+    let cells = s.field("nuTilda").unwrap();
+    let own = g.mesh.owner();
+    let nu = 2e-7;
+    for f in g.mesh.patch("xmin").unwrap().faces() {
+        assert_eq!(nb[f - g.n_internal], 3.0 * nu, "inflow face {f}");
+    }
+    let mut differs = false;
+    for f in g.mesh.patch("xmax").unwrap().faces() {
+        assert_eq!(nb[f - g.n_internal], cells[own[f]], "outflow face {f}");
+        differs |= cells[own[f]] != 3.0 * nu;
+    }
+    assert!(
+        differs,
+        "the outflow faces should carry the cell values, not the fixed value"
+    );
+}
+
+/// C5: the role needs a free-stream velocity on the patch.
+#[test]
+fn c5_freestream_turbulence_role_needs_a_freestream_velocity() {
+    let mut c = Case::parse_toml(PLATE).unwrap();
+    c.set("turbulence.model", serde_json::json!("spalart_allmaras"))
+        .unwrap();
+    c.set("boundaries.xmin.turbulence", serde_json::json!("freestream"))
+        .unwrap();
+    let errs = c.semantic_errors();
+    assert!(errs.iter().any(|d| d.path == "boundaries.xmin.turbulence"), "{errs:?}");
 }

@@ -131,8 +131,12 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 Far fields (ADR 0164): a patch with `velocity = "freestream"` has the turbulence role `zero_gradient` unless
 `boundaries.<patch>.turbulence` says otherwise, so `nuTilda` is fixed on none of its faces. Around a lifting body the
 far-field `nuTilda` can then grow far above `nutilde_ratio * nu` (ADR 0159's NACA 0012 at 10 degrees: about 6e4 nu).
-`boundaries.<patch>.turbulence = "inlet"` fixes it at `nutilde_ratio * nu` (or `nutilde_value`) on every face of the
-patch, outflow faces included.
+`boundaries.<patch>.turbulence = "freestream"` (opt-in; the patch needs `velocity = "freestream"`) fixes it at
+`nutilde_ratio * nu` (or `nutilde_value`) on the faces where `velocity_value` enters the domain and leaves it
+zero-gradient where the flow leaves; the same holds for k, epsilon and omega of the other models. Do not use
+`turbulence = "inlet"` on such a far field: it fixes the value on the outflow faces too, the convection operator then
+carries the fixed value out instead of the cell value, the quantity cannot leave the domain and accumulates (ADR 0164
+amendment 1: nuTilda grew to the eddy-viscosity cap of `1e5 nu` in the whole domain within about 1500 iterations).
 
 `convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
 `wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are

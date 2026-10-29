@@ -627,8 +627,8 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "turbulence",
-            Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient"]).doc(
-                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient",
+            Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient", "freestream"]).doc(
+                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient (so a velocity = \"freestream\" far field is zero_gradient). freestream (opt-in, ADR 0164; needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves",
             ),
         )
         .field(

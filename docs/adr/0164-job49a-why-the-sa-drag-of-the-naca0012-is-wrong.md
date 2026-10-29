@@ -1,7 +1,9 @@
 # ADR 0164: Job 49A, why the steady Spalart-Allmaras drag of the NACA 0012 is wrong (ADR 0159 question 4)
 
 Status: **registered 2026-10-29**, before any solver run of this job (set-ups, limits, reading rules and the not-run list
-are fixed here). Results will be added in an addendum. Job 49A, on local main 8d2ea58 (the worktree branch was reset to
+are fixed here). **Amendment 1** (after the first runs, before any corrected run): arm B's far field is defective and is
+replaced by arm F with a new opt-in turbulence role; runs end at the residual targets before the cap, so the window is
+amended. Results will be added in an addendum. Job 49A, on local main 8d2ea58 (the worktree branch was reset to
 it before any work). Number: ADR 0163 is the highest in this worktree and in the main checkout. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -256,3 +258,74 @@ Why these bands:
 
    Recommendation in the addendum.
 3. **ADR 0159's sweep.** Whether to re-run its SA arm with the fixes (a new job).
+
+## Amendment 1 (2026-10-29, after the first runs and before any corrected run): arm B is defective; `min_iterations` does not hold a run to the cap
+
+**What had run** (binary `rcfd-w49a.exe` as registered; work folder `E:\projects\cfd\w49a-work\w`):
+- B10 and B00 had finished.
+- P40 had finished.
+- A10, A00 and P01 were running.
+
+**Defect 3 (D2, arm B): `turbulence = "inlet"` on a far field traps nuTilda.**
+- B10 settled within 500 iterations: cd (`total_effective`) 0.015484, cl 1.0550, the volume average of nut 2.4e-6.
+- Then the volume average of nut grew by about a factor of 2 every 100 to 250 iterations: 5.1e-6 at 750, 1.7e-5 at 1000,
+  7.5e-5 at 1250, 4.2e-3 at 1500.
+- By about 1700 it was at the solver's eddy-viscosity cap of 1e5 nu (0.016667) in the whole domain, with cd 0.18. B00
+  went the same way (cd 0.073 at the end).
+- The cause is in the set-up, not the model. `rcfd_fv::convection::convection` treats a non-coupled boundary face as
+  `diag += flux * a`, `rhs -= flux * b`. On a `FixedValue` face (a = 0, b = 3 nu) the flux leaving the domain carries the
+  fixed 3 nu instead of the cell value. So the nuTilda carried towards the 50-chord outflow faces cannot leave, and it
+  accumulates there. Its eddy diffusivity (nu + nuTilda)/sigma then spreads it through the domain.
+- D2's statement that fixing the outflow faces "affects only the boundary cells' diffusion" was wrong.
+
+**Correction 3 (code, opt-in, default unchanged).** A new value of `boundaries.<patch>.turbulence`: `freestream`.
+- It is allowed only on a patch with `velocity = "freestream"`; otherwise a located error at that key.
+- It gives the patch's turbulence scalars `rcfd_fv::bc::Freestream { u_ref: velocity_value, value: the inlet value,
+  fixed_on_inflow: true }`: the inlet value (for SA `nutilde_ratio * nu` or `nutilde_value`) on faces where
+  `velocity_value` enters, zero gradient where it leaves. This is the TMR far-field practice for the turbulence variable.
+- It reuses the inlet path: `turb::role` maps it to `Role::Inlet`, and `TurbState::new` builds the `Freestream` condition
+  instead of `FixedValue`. Every other value builds exactly what it built before.
+- Tests C4 (the inflow faces hold 3 nu, the outflow faces the owner value) and C5 (the located error) are in
+  `force_effective_w49a.rs`. Documented in `docs/case-schema.md`, with a warning not to use `inlet` on such a far field.
+- Binary for every run from here on: `E:\projects\cfd\w49a-work\rcfd-w49a-am1.exe`, sha256
+  `D09F0FBC38CFAF03DC7AB8BAF6618B093F91BB61C0223CE7ADAF170F8B561927`. Its default paths are those of the registered build;
+  the only code added is the new role and its check.
+- **New arms F00 and F10**: A00 and A10 with `boundaries.farfield.turbulence = "freestream"`.
+- **LA2-LA6**, registered on B00/B10, are evaluated on F00/F10 with unchanged limits. B00 and B10 are reported as the
+  record of the defective set-up.
+- **C10** (report only, not yet run) is redefined as F10 on F500w.
+
+**Defect 4 (D3, D4, L1): `solver.min_iterations` does not hold a steady run to the cap.**
+- `Simulation::step` (`sim.rs`) checks `summary.converged` (the residual targets) before the `min_iterations` gate. That
+  gate applies only to the monitor convergence conditions, as its schema text says ("Convergence conditions are only
+  evaluated from this iteration on"). So a run stops when `res_u` and `res_p` fall below 1e-6.
+- Seen here: P40 at iteration 203, B10 at 5842, B00 at 7448.
+- The same holds for ADR 0159. Its SA-a00 stopped at 5157 (`monitors.csv` has 5157 rows; finish reason "residual
+  targets met"), although its addendum says the runs at 0 and 17 degrees met the targets "at iteration 8000". That is a
+  record error of ADR 0159's addendum (question 4 below); its window was still the last 1000 iterations of a run that
+  had settled.
+
+**Correction 4 (reading, no code).**
+- L1: exit code 0 (targets met, at any iteration) or 5 (the cap).
+- D4's window is the last min(1000, floor(n/2)) iterations of a run of n iterations.
+- LA6's early window is iterations floor(n/8)+1 to floor(n/4). For n = 8000 that is the registered 1001-2000.
+- The plates' 15000-iteration cap stays; they stop at their targets.
+
+**Unchanged**: every limit value and band, the meshes, the cases of A, P, S, the tests C1-C3.
+
+**Seen before writing this, disclosed.** P40's reports: `cf_veff` / `cf_v` = 2.918, i.e. the molecular part is 0.343 of
+the effective one (LP3's prediction, before LP3 is evaluated on the wall data). A00 and A10 interim values from the
+running status files: A00 `cd_eff` 0.00848 at 700 iterations; A10 nut volume average about 0.0099 (6e4 nu) from about
+5000 iterations on.
+
+**Process.** I stopped my own driver process (the Python scheduler, not a solver) after this was found, so that it would
+not start C10 with the defective set-up. The three solver runs it had started (A10, A00, P01) ran on to their own end.
+Their `wall.json` is written by the driver's new `adopt` command from the status file's finish event (exit code and
+elapsed time), marked `"adopted": true`. The remaining runs (F10, F00, C10, P05, S00) are started by new driver calls with
+the amended binary, at most 3 solver processes at a time.
+
+New question 4: **ADR 0159's addendum** says SA-a00 and SA-a17 met the targets "at iteration 8000"; SA-a00 stopped at 5157.
+Options: (a) correct that sentence by a note in ADR 0159; (b) leave it to this record. Recommendation: (a), one line.
+Question 5: **`min_iterations`** does not gate the residual targets. Options: (a) document it in `docs/case-schema.md`;
+(b) an opt-in key that holds steady runs to a minimum iteration count; (c) change the gate (changes when default runs
+stop). Recommendation: (a) now, (b) if steady studies need fixed iteration counts.

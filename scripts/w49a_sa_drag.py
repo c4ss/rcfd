@@ -6,13 +6,18 @@
     python scripts/w49a_sa_drag.py collect <work> <outdir> [--ref48y <w48y-work>] [--plots]
                                                                             results.json, results.csv (and plots)
     python scripts/w49a_sa_drag.py tmr                                      friction part of the TMR SA cd at alpha 0
+    python scripts/w49a_sa_drag.py adopt <work> <id> ...                   wall.json from the status file's finish event
+                                                                            (runs whose driver was stopped, amendment 1)
     python scripts/w49a_sa_drag.py list | selftest
 
 Arms (ADR 0164):
   A00, A10   ADR 0159's steady SA case (M1w, alpha 0 / 10) unchanged, plus extra reports (pressure / viscous parts of cd,
              the opt-in *_effective components, the volume average of nut). Must reproduce ADR 0159's cl/cd bit for bit.
   B00, B10   A with the far-field nuTilda fixed: boundaries.farfield.turbulence = "inlet" (nuTilda = 3 nu there).
-  C10        B10 on F500w, the same O-grid with a far field of 500 chords (report only).
+             DEFECTIVE (amendment 1): "inlet" also fixes nuTilda on the outflow faces, it cannot leave and accumulates.
+  F00, F10   amendment 1: A with boundaries.farfield.turbulence = "freestream" (3 nu on inflow faces, zero gradient on
+             outflow faces), the opt-in role added by amendment 1.
+  C10        amendment 1: F10 on F500w, the same O-grid with a far field of 500 chords (report only).
   S00        ADR 0159's SST case at alpha 0 with the extra force reports (report only).
   P01, P05, P40   SA flat plate through `rcfd run` (Re 5e6 per m, plate 0..2), wall-cell y+ 1, 5 and 40 at x = 0.97.
 
@@ -62,9 +67,12 @@ def registry():
     out = {
         "A00": {"kind": "af", "arm": "SA", "alpha": 0, "mesh": "M1w", "fix_farfield": False},
         "A10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "M1w", "fix_farfield": False},
-        "B00": {"kind": "af", "arm": "SA", "alpha": 0, "mesh": "M1w", "fix_farfield": True},
-        "B10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "M1w", "fix_farfield": True},
-        "C10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "F500w", "fix_farfield": True},
+        "B00": {"kind": "af", "arm": "SA", "alpha": 0, "mesh": "M1w", "fix_farfield": "inlet"},
+        "B10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "M1w", "fix_farfield": "inlet"},
+        # amendment 1: the corrected far field, and C10 moved onto it
+        "F00": {"kind": "af", "arm": "SA", "alpha": 0, "mesh": "M1w", "fix_farfield": "freestream"},
+        "F10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "M1w", "fix_farfield": "freestream"},
+        "C10": {"kind": "af", "arm": "SA", "alpha": 10, "mesh": "F500w", "fix_farfield": "freestream"},
         "S00": {"kind": "af", "arm": "SST", "alpha": 0, "mesh": "M1w", "fix_farfield": False},
     }
     for k, (yp, layers, ny) in PLATES.items():
@@ -124,8 +132,12 @@ field = "nut"   # nuTilda is not a report field; the eddy viscosity of the far f
 """
 
 FARFIELD = 'pressure = "freestream"\n'
-FARFIELD_FIXED = ('pressure = "freestream"\nturbulence = "inlet"   # ADR 0164 arm B: nuTilda fixed to '
-                  'turbulence.nutilde_ratio * nu = 3 nu on the far field\n')
+FARFIELD_FIXED = {
+    "inlet": ('pressure = "freestream"\nturbulence = "inlet"   # ADR 0164 arm B: nuTilda fixed to '
+              'turbulence.nutilde_ratio * nu = 3 nu on the far field\n'),
+    "freestream": ('pressure = "freestream"\nturbulence = "freestream"   # ADR 0164 amendment 1: nuTilda = 3 nu on '
+                   'the inflow faces, zero gradient on the outflow faces\n'),
+}
 
 PLATE = """title = "SA flat plate, wall-cell y+ {yp} at x = 0.97 (ADR 0164, job 49A, arm {id})"
 
@@ -203,7 +215,7 @@ def case_text(i, spec):
     text = w48.case_text(base)
     if spec["fix_farfield"]:
         assert text.count(FARFIELD) == 1
-        text = text.replace(FARFIELD, FARFIELD_FIXED)
+        text = text.replace(FARFIELD, FARFIELD_FIXED[spec["fix_farfield"]])
     text += EXTRA_REPORTS
     if spec["arm"] == "SA":
         text += NT_REPORT
@@ -250,6 +262,21 @@ def command(rcfd, work, i):
     with open(os.path.join(run, "cmd.txt"), "w", encoding="utf-8") as f:
         f.write(json.dumps(cmd, indent=1) + "\n")
     return run, cmd
+
+
+def adopt(work, i):
+    """wall.json of a run whose driver was stopped (ADR 0164 amendment 1): exit code and time from the finish event."""
+    run = os.path.join(work, "runs", i)
+    wallf = os.path.join(run, "wall.json")
+    if os.path.exists(wallf):
+        raise SystemExit(f"{wallf} exists")
+    _, fin, _ = w48.read_stream(os.path.join(run, "solver-status.jsonl"))
+    if fin is None:
+        raise SystemExit(f"{i}: no finish event (still running?)")
+    with open(wallf, "w", encoding="utf-8") as f:
+        json.dump({"id": i, "exit": fin["exit_code"], "process_wall_s": fin["elapsed_s"], "started": None,
+                   "adopted": True}, f)
+    print(f"adopted {i}: exit {fin['exit_code']}, {fin['elapsed_s']:.1f} s")
 
 
 def run_many(rcfd, work, ids, parallel):
@@ -434,12 +461,17 @@ def analyse(work, ref48y):
              "state": (fin or {}).get("state"),
              "warnings": [w.get("kind") or w.get("rule") or w.get("message", "")[:60] for w in warnings]}
         keys = sorted({k for e in its[-1:] for k in e.get("monitors", {})})
-        r["window"] = {k: mean_range(its, k, last - WINDOW + 1, last) for k in keys}
+        # amendment 1: runs may end at the residual targets before the cap (min_iterations does not gate them), so the
+        # window is the last min(1000, n // 2) iterations
+        nwin = min(WINDOW, last // 2)
+        r["window_iterations"] = nwin
+        r["window"] = {k: mean_range(its, k, last - nwin + 1, last) for k in keys}
         vtu = os.path.join(rdir, i, "output", "solution.vtu")
         if spec["kind"] == "af":
             if "cd" in keys:
-                early = mean_range(its, "cd", 1001, 2000)
-                mid = mean_range(its, "cd", 3001, 4000)
+                # amendment 1: the early window is (n/8, n/4], iterations 1001-2000 for n = 8000 as registered
+                early = mean_range(its, "cd", last // 8 + 1, last // 4)
+                mid = mean_range(its, "cd", 3001, 4000) if last >= 5000 else None
                 late = r["window"]["cd"]
                 r["drift_cd_1k2k_to_last"] = (late["mean"] - early["mean"]) / late["mean"] if early else None
                 r["drift_cd_3k4k_to_last"] = (late["mean"] - mid["mean"]) / late["mean"] if mid else None
@@ -496,7 +528,7 @@ def evaluate(runs):
     if w("A00", "cd_v") is not None:
         ev["LA1"] = {"ratio_molecular_to_effective": w("A00", "cd_v") / w("A00", "cd_veff"),
                      "met": w("A00", "cd_v") / w("A00", "cd_veff") <= 0.6}
-    for i in ("A00", "B00"):
+    for i in ("A00", "F00"):
         if w(i, "cd_veff") is not None:
             ev[f"LA2_{i}"] = {"cd_friction_effective": w(i, "cd_veff"), "tmr": tmr["cd_friction_alpha0"],
                               "rel": w(i, "cd_veff") / tmr["cd_friction_alpha0"] - 1.0,
@@ -504,27 +536,54 @@ def evaluate(runs):
             ev[f"LA3_{i}"] = {"cd_effective": w(i, "cd_eff"), "tmr": tmr["cd_alpha0"],
                               "rel": w(i, "cd_eff") / tmr["cd_alpha0"] - 1.0,
                               "met": band(w(i, "cd_eff"), tmr["cd_alpha0"], 0.12)}
-    if w("B10", "cd_eff") is not None:
-        ev["LA4"] = {"cd_effective": w("B10", "cd_eff"), "cl": w("B10", "cl"),
-                     "cd_rel": w("B10", "cd_eff") / tmr["cd_alpha10"] - 1.0,
-                     "cl_rel": w("B10", "cl") / tmr["cl_alpha10"] - 1.0,
-                     "met": bool(band(w("B10", "cd_eff"), tmr["cd_alpha10"], 0.25)
-                                 and band(w("B10", "cl"), tmr["cl_alpha10"], 0.05))}
-    fs = {i: (runs.get(i, {}).get("freestream_nutilde") or {}).get("median") for i in ("A10", "B00", "B10")}
+    if w("F10", "cd_eff") is not None:
+        ev["LA4"] = {"cd_effective": w("F10", "cd_eff"), "cl": w("F10", "cl"),
+                     "cd_rel": w("F10", "cd_eff") / tmr["cd_alpha10"] - 1.0,
+                     "cl_rel": w("F10", "cl") / tmr["cl_alpha10"] - 1.0,
+                     "met": bool(band(w("F10", "cd_eff"), tmr["cd_alpha10"], 0.25)
+                                 and band(w("F10", "cl"), tmr["cl_alpha10"], 0.05))}
+    fs = {i: (runs.get(i, {}).get("freestream_nutilde") or {}).get("median") for i in ("A10", "F00", "F10")}
     if all(v is not None for v in fs.values()):
         ev["LA5"] = {"median_nutilde_over_nu": fs,
-                     "met": fs["A10"] >= 1000.0 and fs["B00"] <= 5.0 and fs["B10"] <= 5.0}
-    if "B10" in runs and runs["B10"].get("drift_cd_1k2k_to_last") is not None:
-        d = runs["B10"]["drift_cd_1k2k_to_last"]
-        ev["LA6"] = {"drift_B10": d, "drift_A10": runs.get("A10", {}).get("drift_cd_1k2k_to_last"),
+                     "met": fs["A10"] >= 1000.0 and fs["F00"] <= 5.0 and fs["F10"] <= 5.0}
+    if "F10" in runs and runs["F10"].get("drift_cd_1k2k_to_last") is not None:
+        d = runs["F10"]["drift_cd_1k2k_to_last"]
+        ev["LA6"] = {"drift_F10": d, "drift_A10": runs.get("A10", {}).get("drift_cd_1k2k_to_last"),
                      "met": abs(d) <= 0.02}
     for i in ("A00", "A10"):
         b = runs.get(i, {}).get("bits_vs_adr0159")
         if b:
             ev[f"LR_{i}"] = {**b, "met": b["different"] == 0 and b["compared"] > 0}
+    # reported, no limit
+    rep = {"tmr_pressure_alpha0": tmr["cd_pressure_alpha0"]}
+    for i in ("A00", "A10", "B00", "B10", "F00", "F10", "C10", "S00"):
+        if i in runs:
+            rep[i] = {k: w(i, k) for k in ("cl", "cd", "cd_p", "cd_v", "cd_eff", "cd_veff", "cl_eff", "nut_avg")}
+            rep[i]["drift_cd_1k2k_to_last"] = runs[i].get("drift_cd_1k2k_to_last")
+            rep[i]["freestream_nutilde"] = runs[i].get("freestream_nutilde")
+    ks = ks_mean_cf(1.0e7)
+    rep["karman_schoenherr_mean_CF_ReL_1e7"] = ks
+    for i in ("P01", "P05", "P40"):
+        wl = runs.get(i, {}).get("wall")
+        if wl:
+            rep[i] = {"y_plus_097": wl["y_plus_097"], "CF_law": wl["CF_law"], "CF_law_vs_KS": wl["CF_law"] / ks - 1.0,
+                      "CF_molecular": wl["CF_molecular"]}
+    ev["reported"] = rep
     ev["L1"] = {i: runs[i]["exit"] for i in runs}
     ev["L1"]["met"] = all(runs[i]["exit"] in (0, 5) for i in runs)
     return ev
+
+
+def ks_mean_cf(re_l):
+    """Karman-Schoenherr mean skin friction of a plate: 0.242 / sqrt(C_F) = log10(Re_L C_F) (bisection)."""
+    lo, hi = 1e-4, 1e-1
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if 0.242 / math.sqrt(mid) - math.log10(re_l * mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
 
 
 def plate_depth(run):
@@ -565,7 +624,7 @@ def make_plots(runs, outdir):
     import matplotlib.pyplot as plt
     fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
     for ax, key, title in ((axes[0], "cd", "cd (default report)"), (axes[1], "cd_eff", "cd (total_effective)")):
-        for i in ("A00", "A10", "B00", "B10", "C10"):
+        for i in ("A00", "A10", "B00", "B10", "F00", "F10", "C10"):
             if i in runs:
                 h = [(it, m[key]) for it, m in runs[i]["history"] if m.get(key) is not None]
                 if h:
@@ -591,10 +650,11 @@ def selftest():
                                   **({"iterations": SST_ITER} if spec["arm"] == "SST" else {})})
             body = t.split("\n", 1)[1]
             if spec["fix_farfield"]:
-                assert body.startswith(base.replace(FARFIELD, FARFIELD_FIXED)), i
+                assert body.startswith(base.replace(FARFIELD, FARFIELD_FIXED[spec["fix_farfield"]])), i
             else:
                 assert body.startswith(base), i  # arm A / S: ADR 0159's case text unchanged
-            assert ('turbulence = "inlet"' in t) == spec["fix_farfield"], i
+            assert ('turbulence = "inlet"' in t) == (spec["fix_farfield"] == "inlet"), i
+            assert ('turbulence = "freestream"' in t) == (spec["fix_farfield"] == "freestream"), i
     assert abs(interp([0.0, 1.0], [0.0, 2.0], 0.25) - 0.5) < 1e-15
     g = w48.MESHES["F500w"]["grading"]
     f1 = w48.geometric_first(1.0e4, 128) * 50.0
@@ -636,6 +696,9 @@ def main():
         ref = a[a.index("--ref48y") + 1] if "--ref48y" in a else None
         ev = collect(a[1], a[2], ref, "--plots" in a)
         print(json.dumps(ev, indent=1))
+    elif cmd == "adopt":
+        for i in a[2:]:
+            adopt(a[1], i)
     elif cmd == "tmr":
         print(json.dumps(tmr_friction(), indent=1))
     elif cmd == "list":

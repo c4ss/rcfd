@@ -151,7 +151,8 @@ pub fn role(case: &Case, patch: &str) -> Role {
     let b = format!("boundaries.{patch}");
     match get_s(case, &format!("{b}.turbulence")).as_str() {
         "wall" => Role::Wall,
-        "inlet" => Role::Inlet,
+        // `freestream` (ADR 0164 amendment 1): inlet values on the inflow faces only, built in `TurbState::new`
+        "inlet" | "freestream" => Role::Inlet,
         "zero_gradient" => Role::ZeroGradient,
         _ => {
             if let Some(r) = crate::bc_cat::role(case, patch) {
@@ -428,6 +429,14 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut walls = 0;
     for n in &names {
         let b = format!("boundaries.{n}");
+        if get_s(case, &format!("{b}.turbulence")) == "freestream"
+            && get_s(case, &format!("{b}.velocity")) != "freestream"
+        {
+            out.push(diag(
+                &format!("{b}.turbulence"),
+                "turbulence = \"freestream\" needs velocity = \"freestream\" on the patch (inflow and outflow faces are told apart by velocity_value)",
+            ));
+        }
         match role(case, n) {
             Role::Wall => {
                 walls += 1;
@@ -897,10 +906,23 @@ impl TurbState {
             } else {
                 Vec::new()
             };
+            // ADR 0164 amendment 1: a `freestream` turbulence role fixes the values on the inflow faces only (zero gradient
+            // on outflow faces, so that what the flow carries can leave); its velocity is a uniform free stream (checked)
+            let freestream = get_s(case, &format!("{b}.turbulence")) == "freestream";
+            let u_ref = get_v(case, &format!("{b}.velocity_value"), [0.0; 3]);
             for (name, vals) in per_scalar {
-                let pf: Vec<[f64; 3]> = vals.iter().map(|&v| [v, 0.0, 0.0]).collect();
+                let bc: Box<dyn rcfd_fv::bc::Bc> = if freestream {
+                    Box::new(rcfd_fv::bc::Freestream {
+                        u_ref,
+                        value: [vals.first().copied().unwrap_or(0.0), 0.0, 0.0],
+                        fixed_on_inflow: true,
+                    })
+                } else {
+                    let pf: Vec<[f64; 3]> = vals.iter().map(|&v| [v, 0.0, 0.0]).collect();
+                    Box::new(FixedValue(Profile::PerFace(pf)))
+                };
                 if let Some(f) = model.scalar_mut(name) {
-                    let _ = f.set_bc(geom, patch, Box::new(FixedValue(Profile::PerFace(pf))));
+                    let _ = f.set_bc(geom, patch, bc);
                 }
             }
         }
