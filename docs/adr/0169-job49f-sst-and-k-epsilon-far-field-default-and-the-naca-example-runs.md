@@ -271,3 +271,14 @@ ADR 0137), not a change of this job.
 crates/rcfd-api/tests/baseline_hashes.rs` empty; W1 / L1's `git diff --stat` is against 1a04d46; R1 compares with
 `r-20261028T152128-cb3a` as committed at 1a04d46 (`scripts/w49f_legacy_check.py --base`, default 1a04d46). No limit
 changes. No registered run had been made.
+
+## Interim note (2026-10-29, after W1, before any test edit and before L1): the regenerated aerofoil runs converge
+
+R1 (old spellings, new binary) met: `residuals.jsonl` byte-equal over 2000 lines and 40 of 40 stored fields bit-equal
+with `r-20261028T152128-cb3a` at 1a04d46; `finished`, `not_converged`, 2000 iterations. W1 (`--add-missing`, Windows)
+added exactly the 4 NACA runs, but **each meets the residual targets**: solver state `converged`, exit 0, at iteration
+409 (4 degrees, both forms) and 230 (2 degrees, both forms). So W1 misses ADR 0142 G1's aerofoil expectation
+(`not_converged` at 2000, exit 5), and E2 (`example_rotated_w48u`, which asserts 2000 steps) misses as well. The rest of
+W1 holds: wall times 7.9-16.3 s, closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293). Per the
+registered reading rule the runs are kept as made (nothing tuned, `max_iterations` untouched), the missed limits move to
+ignored `*_known_miss` tests with the limits intact, and L1 runs with the same limits (the same miss is expected there).
