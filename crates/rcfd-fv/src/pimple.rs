@@ -99,7 +99,9 @@ pub struct PimpleSettings {
 /// n_correctors + 1, ...` correctors until its amplification is at most `target` or `N = max_correctors`; that count is then used
 /// by every outer iteration until the next estimate. Estimates are made at the first step at or after `start`, every `every`
 /// steps, and after the growth monitor fired: the largest pressure change of the last corrector grew by more than `growth` per
-/// step on `growth_steps` consecutive steps (a lag mode that grows by its amplification once it dominates that change).
+/// step on `growth_steps` consecutive steps (a lag mode that grows by its amplification once it dominates that change); and
+/// (ADR 0162) when the step's dt differs from the dt of the last estimate by `dt_factor` or more, up or down (a step marked as
+/// a landing step, [`CorrectorRecord::mark_landing_step`], is not compared).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CorrectorControl {
     /// Largest number of correctors per outer iteration (the cap).
@@ -118,11 +120,14 @@ pub struct CorrectorControl {
     pub growth_steps: usize,
     /// Fewest steps between two estimates fired by the monitor.
     pub trigger_gap: usize,
+    /// Change of the step's dt against the dt of the last estimate (either way) that makes an estimate (ADR 0162); 0 = none.
+    pub dt_factor: f64,
 }
 
 impl CorrectorControl {
     /// The registered control of ADR 0156: cap 10, target 0.5 (safety factor 2), 20 power iterations, an estimate every 1000
-    /// steps, the monitor at growth 1.5 on 3 consecutive steps with 25 steps between fired estimates; first estimate at step 1.
+    /// steps, the monitor at growth 1.5 on 3 consecutive steps with 25 steps between fired estimates; first estimate at step 1;
+    /// and ADR 0162's dt trigger at a factor 1.5.
     pub fn registered() -> Self {
         CorrectorControl {
             max_correctors: 10,
@@ -133,8 +138,22 @@ impl CorrectorControl {
             growth: 1.5,
             growth_steps: 3,
             trigger_gap: 25,
+            dt_factor: 1.5,
         }
     }
+}
+
+/// Why an estimate of the adaptive corrector count is made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EstimateReason {
+    /// The first step, or the schedule of every `every` steps.
+    Scheduled,
+    /// The growth monitor fired.
+    Monitor,
+    /// The step's dt grew by `dt_factor` or more since the last estimate (ADR 0162).
+    DtUp,
+    /// The step's dt fell by `dt_factor` or more since the last estimate (ADR 0162).
+    DtDown,
 }
 
 /// One estimate of the adaptive corrector count (ADR 0156).
@@ -154,6 +173,12 @@ pub struct CorrectorEstimate {
     pub triggered: bool,
     /// Lag-map estimates (counts tried) of this search.
     pub evaluations: usize,
+    /// The step's dt.
+    pub dt: f64,
+    /// Made because the step's dt changed by the control's `dt_factor` since the last estimate (ADR 0162).
+    pub dt_triggered: bool,
+    /// Lag-map corrector applications of this search: the sum over its evaluations of count x power iterations.
+    pub work: usize,
 }
 
 /// State and record of the adaptive corrector count (ADR 0156); stays empty while `corrector_control` is `None`.
@@ -175,34 +200,56 @@ pub struct CorrectorRecord {
     pub cap_bound: usize,
     /// Estimates made because the growth monitor fired.
     pub triggered: usize,
+    /// Estimates made because the step's dt changed by the control's `dt_factor` (ADR 0162).
+    pub dt_triggered: usize,
     mode: Option<Vec<f64>>,
     last_estimate: Option<usize>,
     last_trigger: Option<usize>,
     growth_run: usize,
     last_change: Option<f64>,
     fired: bool,
+    /// dt of the step of the last estimate.
+    last_dt: Option<f64>,
+    /// The next step is a landing step (see [`mark_landing_step`](Self::mark_landing_step)).
+    landing: bool,
 }
 
 impl CorrectorRecord {
-    /// Whether step `step` makes an estimate, and whether the monitor asked for it.
-    fn due(&self, step: usize, c: &CorrectorControl) -> (bool, bool) {
+    /// Whether step `step` (of size `dt`; `landing`: a landing step) makes an estimate, and why.
+    fn due(&self, step: usize, dt: f64, landing: bool, c: &CorrectorControl) -> Option<EstimateReason> {
         if step < c.start.max(1) {
-            return (false, false);
+            return None;
         }
         let Some(last) = self.last_estimate else {
-            return (true, false);
+            return Some(EstimateReason::Scheduled);
         };
         if c.every > 0 && step.saturating_sub(last) >= c.every {
-            return (true, false);
+            return Some(EstimateReason::Scheduled);
         }
         let gap_ok = match self.last_trigger {
             Some(t) => step.saturating_sub(t) >= c.trigger_gap,
             None => true,
         };
         if self.fired && gap_ok {
-            return (true, true);
+            return Some(EstimateReason::Monitor);
         }
-        (false, false)
+        // ADR 0162 D1, D2: the dt trigger, not on a landing step
+        if let (true, false, Some(de)) = (c.dt_factor > 0.0, landing, self.last_dt) {
+            if dt >= c.dt_factor * de {
+                return Some(EstimateReason::DtUp);
+            }
+            if de >= c.dt_factor * dt {
+                return Some(EstimateReason::DtDown);
+            }
+        }
+        None
+    }
+
+    /// The next step is a landing step: its dt was shortened or stretched from the step size the time control proposed (to land
+    /// on a write time or the end time), so the dt trigger of ADR 0162 neither compares it nor takes it as the dt of an
+    /// estimate. Cleared by that step.
+    pub fn mark_landing_step(&mut self) {
+        self.landing = true;
     }
 
     /// The growth monitor (ADR 0156 D3.5): `change` = largest cell change of the pressure in the step's last corrector,
@@ -224,8 +271,10 @@ impl CorrectorRecord {
         self.fired
     }
 
-    /// Take the count of a search made at `step`.
-    fn apply(&mut self, pick: CorrectorPick, step: usize, triggered: bool) {
+    /// Take the count of a search made at `step` of size `dt` (`landing`: a landing step).
+    fn apply(&mut self, pick: CorrectorPick, step: usize, reason: EstimateReason, dt: f64, landing: bool) {
+        let triggered = reason == EstimateReason::Monitor;
+        let dt_triggered = matches!(reason, EstimateReason::DtUp | EstimateReason::DtDown);
         self.current = pick.n;
         self.estimates.push(CorrectorEstimate {
             step,
@@ -235,6 +284,9 @@ impl CorrectorRecord {
             cap_bound: pick.cap_bound,
             triggered,
             evaluations: pick.evaluations,
+            dt,
+            dt_triggered,
+            work: pick.work,
         });
         if pick.cap_bound {
             self.cap_bound += 1;
@@ -242,6 +294,13 @@ impl CorrectorRecord {
         if triggered {
             self.triggered += 1;
             self.last_trigger = Some(step);
+        }
+        if dt_triggered {
+            self.dt_triggered += 1;
+        }
+        // ADR 0162 D2: a landing step does not become the reference dt (the first estimate's is kept if it is one)
+        if !landing || self.last_dt.is_none() {
+            self.last_dt = Some(dt);
         }
         self.last_estimate = Some(step);
         self.mode = Some(pick.mode);
@@ -253,6 +312,7 @@ impl CorrectorRecord {
     /// Forget the schedule (a restored or reinitialised state): the next step at or after `start` estimates afresh.
     fn reset_schedule(&mut self) {
         self.last_estimate = None;
+        self.last_dt = None;
         self.last_trigger = None;
         self.growth_run = 0;
         self.last_change = None;
@@ -598,6 +658,7 @@ struct CorrectorPick {
     cell: usize,
     cap_bound: bool,
     evaluations: usize,
+    work: usize,
     mode: Vec<f64>,
 }
 
@@ -695,6 +756,14 @@ impl PimpleSolver {
         s.lag_estimates.iter().find(|w| w.step == at).copied()
     }
 
+    /// [`lag_preflight`](Self::lag_preflight) with `n_correctors` correctors instead of the configured count (ADR 0162 D5: the
+    /// effective amplification of the count in use between estimates). The solver itself is not changed.
+    pub fn lag_trial(&self, dt: f64, iterations: usize, n_correctors: usize) -> Option<LagWarning> {
+        let mut s = self.scratch();
+        s.settings.n_correctors = n_correctors.max(1);
+        s.lag_preflight(dt, iterations)
+    }
+
     /// Record a trip of the divergence guard and build the record returned for the step.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn trip(
@@ -764,6 +833,8 @@ impl PimpleSolver {
     /// velocity and flux and supplies the solution-dependent momentum sources of that iteration (ADR 0045). The hook is not
     /// used by the non-iterative fractional-step advance.
     pub fn step_with(&mut self, dt: f64, mut hook: Option<&mut OuterHook>) -> StepInfo {
+        // ADR 0162 D2: the landing mark holds for this step only
+        let landing = std::mem::take(&mut self.correctors.landing);
         if let Some(d) = &self.diverged {
             // the guard has stopped this run (ADR 0067): do no work
             return d.info;
@@ -821,14 +892,14 @@ impl PimpleSolver {
         // ADR 0156: the adaptive corrector count (not on a moving mesh, where the lag map is not defined)
         let cc = if self.ale.is_none() { s.corrector_control } else { None };
         let n_lo = s.n_correctors.max(1);
-        let (cc_due, cc_triggered) = match &cc {
+        let cc_reason = match &cc {
             Some(c) => {
                 if self.correctors.current == 0 {
                     self.correctors.current = n_lo;
                 }
-                self.correctors.due(self.step_no, c)
+                self.correctors.due(self.step_no, dt, landing, c)
             }
-            None => (false, false),
+            None => None,
         };
         // largest pressure change of the last corrector of the final outer iteration (the growth monitor; adaptive only)
         let mut cc_change = 0.0f64;
@@ -996,7 +1067,7 @@ impl PimpleSolver {
                     pbc: pbc.clone(),
                 });
             }
-            if let (Some(c), true, true) = (&cc, cc_due, last) {
+            if let (Some(c), Some(reason), true) = (&cc, cc_reason, last) {
                 // ADR 0156 D3: choose the count on the frozen matrices of this (final) outer iteration, before its correctors
                 let ctx = LagCtx {
                     mats: mats.clone(),
@@ -1004,8 +1075,9 @@ impl PimpleSolver {
                     pbc: pbc.clone(),
                 };
                 let n_hi = c.max_correctors.max(n_lo);
-                let pick = self.pick_correctors(&ctx, c, n_lo, n_hi);
-                self.correctors.apply(pick, self.step_no, cc_triggered);
+                // ADR 0162 D3: no step-down check when the step has grown
+                let pick = self.pick_correctors(&ctx, c, n_lo, n_hi, reason != EstimateReason::DtUp);
+                self.correctors.apply(pick, self.step_no, reason, dt, landing);
             }
             let n_corr = if cc.is_some() {
                 self.correctors.current
@@ -1386,15 +1458,26 @@ impl PimpleSolver {
 
     /// The corrector count of an estimate of the adaptive control (ADR 0156 D3.3) on the frozen matrices `ctx`: the first search
     /// counts up from `n_lo` until the estimate is at most the target or `n_hi` is reached; a later one checks the count in use,
-    /// counts up from it when above the target, and else takes one count fewer when that one is at or below the target.
-    fn pick_correctors(&self, ctx: &LagCtx, c: &CorrectorControl, n_lo: usize, n_hi: usize) -> CorrectorPick {
+    /// counts up from it when above the target, and else (when `allow_down`; ADR 0162 D3) takes one count fewer when that one
+    /// is at or below the target.
+    fn pick_correctors(
+        &self,
+        ctx: &LagCtx,
+        c: &CorrectorControl,
+        n_lo: usize,
+        n_hi: usize,
+        allow_down: bool,
+    ) -> CorrectorPick {
         let first = self.correctors.last_estimate.is_none();
         let mut warm: Option<Vec<f64>> = self.correctors.mode.clone();
         let mut evaluations = 0;
+        let mut work = 0;
+        let iterations = c.iterations.max(2);
         let mut estimate = |k: usize, warm: &mut Option<Vec<f64>>| -> (f64, usize) {
-            let (rho, cell, mode) = self.lag_amplification_n(ctx, k, c.iterations.max(2), warm.as_deref());
+            let (rho, cell, mode) = self.lag_amplification_n(ctx, k, iterations, warm.as_deref());
             *warm = Some(mode);
             evaluations += 1;
+            work += k * iterations;
             (rho, cell)
         };
         let mut n = if first {
@@ -1409,7 +1492,7 @@ impl PimpleSolver {
                 n += 1;
                 (rho, cell) = estimate(n, &mut warm);
             }
-        } else if !first && n > n_lo {
+        } else if !first && allow_down && n > n_lo {
             let (r1, c1) = estimate(n - 1, &mut warm);
             if r1 <= c.target {
                 n -= 1;
@@ -1423,15 +1506,20 @@ impl PimpleSolver {
             cell,
             cap_bound: above(rho),
             evaluations,
+            work,
             mode: warm.unwrap_or_default(),
         }
     }
 
-    /// Advance to `t_end` with a fixed step `dt` (the last step is shortened to land on `t_end`).
+    /// Advance to `t_end` with a fixed step `dt` (the last step is shortened to land on `t_end`; it is marked as a landing step
+    /// for the adaptive corrector count, ADR 0162 D2).
     pub fn run_fixed(&mut self, t_end: f64, dt: f64) -> Vec<StepInfo> {
         let mut out = Vec::new();
         while self.time < t_end - 1e-12 * dt.max(1e-300) {
             let d = dt.min(t_end - self.time);
+            if d != dt {
+                self.correctors.mark_landing_step();
+            }
             out.push(self.step(d));
         }
         out
