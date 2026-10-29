@@ -354,7 +354,11 @@ fn s4a_killed_runner_is_recovered_without_loss_or_duplicates() {
         "the solver died with the runner"
     );
     p.client.ensure_runner().unwrap();
-    assert_ne!(p.runner_pid(), old);
+    // ensure_runner returns once the new runner holds the lock; it writes runner.json just after (ADR 0143 note)
+    assert!(
+        wait_until(Duration::from_secs(10), || p.runner_pid() != old),
+        "runner.json still names the killed runner {old}"
+    );
     for id in &ids {
         let s = p.client.wait(id, Duration::from_secs(300)).unwrap();
         assert_eq!(s.state, RunState::Finished, "{id}: {s:?}");

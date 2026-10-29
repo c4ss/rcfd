@@ -326,3 +326,5 @@ once, with the exit code and the end of the runner's output. It also investigate
   handles (I6).
 
 The options that remain are in ADR 0146's question 1.
+
+> Note 2026-10-29 (gate run 40924955386, Windows): S4a failed once with `assertion left != right` (both 6636): `ensure_runner` returns as soon as the new runner holds the lock, and the runner writes `.rcfd/runner.json` just after, so the test read the killed runner's pid. A test race, not a product defect (20 of 20 passes on an idle machine). S4a now waits up to 10 s for `runner.json` to name another pid; its other limits are unchanged.
