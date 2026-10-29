@@ -308,6 +308,33 @@ new default; it is the same set-up.
 
    Recommendation: (a), in its own job.
 
+## Amendment 1 (2026-10-29, after the registered results, before its own test is run): the live model switch
+
+**Defect 5 (D2, found by review after the results).**
+- `Simulation::reconfigure_turbulence` (F-044, the live model switch) builds the new model with
+  `TurbState::new(new_case, geom, &old.inlet_speeds)`, the inlet patches of the old model.
+- Before D2 the role under `auto` did not depend on the model, so that list was right. Under D2 it does:
+  - **SA to SST or k-epsilon** with an `auto` free-stream far field: the far field is in the old list, so the new model
+    gets a `FixedValue` k/omega (epsilon) there. That is the inlet defect of ADR 0164 amendment 1, with values from an
+    unset `turbulence_length`.
+  - **SST to SA**: the far field is not in the old list, so SA keeps a zero-gradient far field. A fresh SA build of the
+    same case gets `freestream`.
+- Fresh builds (`Simulation::new`, every run of R1-R3) do not take this path.
+
+**Correction 5 (code).**
+- `reconfigure_turbulence` keeps only the old entries whose `turb::role(new_case, patch)` is still `Inlet`.
+- It adds every patch that `turb::freestream_role(new_case, patch)` makes an inlet and that is not yet listed, with the
+  per-face speed `|velocity_value|`, which is what `Simulation::new` computes for a free-stream patch.
+- A switch between models whose roles agree keeps the old list unchanged, so it is bit-identical to before.
+
+**T8** (registered now, `defaults_w49c.rs`), on T5's free-stream plate:
+- (a) SA for 20 iterations, then a live switch to SST and 10 more iterations: the far-field faces of `k` and `omega` are
+  finite and equal to their owner cells (zero gradient), as in a fresh SST build.
+- (b) SST for 20 iterations, then a live switch to SA and 10 more iterations: the inflow faces hold `nuTilda = 3 nu`.
+- (c) A live switch SA to SA (a coefficient change only) gives the same inlet list as before the correction.
+
+R1-R3 and the binary `rcfd-w49c.exe` stay valid: they are fresh builds, and the correction touches only the live switch.
+
 ## Addendum: results (2026-10-29)
 
 Commits on the branch:
