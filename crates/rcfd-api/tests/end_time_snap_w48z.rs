@@ -377,14 +377,17 @@ fn s1_fixed_step_paths_report_the_end_time_with_unchanged_states() {
         let s = sums(dt, N);
         let (hy, hx, last) = monitor_hashes(&sim);
         eprintln!(
-            "S1 {}: end {end:.17e}, {} steps, times {times:?}, sim.time() {:.17e}; series last x {:?}",
+            "S1 {}: end {end:.17e}, {} steps, times {times:?}, sim.time() {:.17e}; {} series, distinct last x {:?}",
             kind.name(),
             times.len(),
             sim.time(),
+            last.len(),
             last.iter()
-                .map(|(_, x)| *x)
+                .map(|(_, x)| x.to_bits())
                 .collect::<std::collections::BTreeSet<_>>()
-                .len()
+                .into_iter()
+                .map(f64::from_bits)
+                .collect::<Vec<_>>()
         );
         if times.len() != N {
             problems.push(format!("S1 {}: {} steps (registered {N})", kind.name(), times.len()));
