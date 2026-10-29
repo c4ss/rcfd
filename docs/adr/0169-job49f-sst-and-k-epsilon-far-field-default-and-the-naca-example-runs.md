@@ -282,3 +282,13 @@ added exactly the 4 NACA runs, but **each meets the residual targets**: solver s
 W1 holds: wall times 7.9-16.3 s, closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293). Per the
 registered reading rule the runs are kept as made (nothing tuned, `max_iterations` untouched), the missed limits move to
 ignored `*_known_miss` tests with the limits intact, and L1 runs with the same limits (the same miss is expected there).
+
+## Amendment 2 (2026-10-29, after W1 and L1, before its run): R2, which change moves the drag
+
+Not a defect: one more run, registered now, reported without a limit. The regenerated `cd` at 4 degrees is 0.02820
+against the stored 0.02536; two changes act together (ADR 0166's effective wall shear in `cd`, this ADR's far field).
+**R2**: `scripts/w49f_legacy_check.py run --variant molecular` (the R1 procedure with only the two
+`component = "total_molecular"` lines, the far field at its new default) on the 4-degree flow-rotated case, Windows, the
+same binary, work folder `E:\projects\cfd\w49f-work\r2`. Reported: iterations, solver state, final `cl` and `cd`.
+Reading: R2's `cd` minus the stored 0.02536 is the far field's part (molecular shear); the regenerated 0.02820 minus R2's
+`cd` is the wall-shear part. No limit; it changes no committed file except this ADR.
