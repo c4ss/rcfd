@@ -1,7 +1,10 @@
 # ADR 0157: Job 48W, merging job 48U (rotated aerofoil cases) with job 48P's per-platform trees; Linux-built runs of the two rotated cases
 
 Status: **registered 2026-10-29**, before any registered run (the merge was resolved and the changed tests compiled
-first; nothing was run). Results follow in an addendum. Not yet accepted by the maintainer. House rules of
+first; nothing was run); amendments 1 and 2 (two set-up defects, Q1's package name and S1's binaries) before their
+corrected runs; results in the addendum: every registered limit met except S1, whose one failure is a pre-existing
+timing test of ADR 0133 (R1) in code this job does not touch, which passed three times on its own (question 2). Not yet
+accepted by the maintainer. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
 the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
@@ -115,3 +118,69 @@ container).
 
 1. The regeneration command (D3): (a) `--docker --add-missing` as here; (b) a full `--docker` rebuild of the Linux tree.
    **Recommendation (a)**; R1L shows whether (b) would give the same bytes.
+
+## Amendment 1 (2026-10-29, before the corrected run)
+
+Q1 named the graph test in the wrong package: `cargo test --release -p rcfd-mcp --test workspace_graph` stops with `no test
+target named workspace_graph in rcfd-mcp` (exit 101, nothing ran); the test is `crates/rcfd-cli/tests/workspace_graph.rs`.
+Corrected command: `cargo test --release --locked -p rcfd-cli --test workspace_graph`; the limit (it passes) is unchanged.
+
+## Amendment 2 (2026-10-29, before the corrected run)
+
+S1's set-up built only `fake-claude`; the suite also needs `rcfd` and `rcfd-runner` of its profile (`crates/rcfd-studio/tests/
+common/mod.rs` `binaries()`). The first run stopped after 14 s in `bins_g4` `g3_solver_check_refuses_a_stale_or_broken_rcfd`:
+`target\release\rcfd-runner.exe missing` (3 passed, 1 failed there; no other test binary ran). Corrected set-up: `cargo build
+--release --locked -p rcfd-cli -p rcfd-runner` and `-p rcfd-claude --bin fake-claude` first, then the suite with
+`--no-fail-fast` (so that every binary reports); the limit is unchanged.
+
+## Addendum: results against the registered limits (2026-10-29)
+
+Commits: the merge 5f4b07e (parents aad08fe, 48U's d91c2d7; the conflict resolution, D2's script change, DV5/DV6, the
+notes, this ADR's registration); the regeneration 1226977 (`example-projects-linux/` only, written by L1); then this
+addendum and the two amendments (docs only). Logs: `E:\tmp\w48w\` (outside the checkout).
+
+| Id | Limit | Result | Verdict |
+|---|---|---|---|
+| M0 | problems only under `example-projects-linux` | 5 problems, all in the Linux tree: wind-tunnel's manifest lists 6 runs and the spec 8; the two rotated case files missing; `notes/README.md` and `notes/naca0012.md` differ; 0 in `example-projects` | as required |
+| L1 | exit 0; inputs copied; exactly 2 runs added, `finished` / `not_converged` at 2000, exit 5; closing check 0; the 10 runs and the polyMesh unchanged | container exit 0 (1579 source files; `rcfd` and `rcfd-runner` built in 1 min 41 s); inputs copied: 14 files (wind-tunnel), 7 (quick-start); added `r-20261029T000812-6c75` (aoa4-rotated) and `r-20261029T000812-00f3` (aoa2-rotated), both `finished`, solver `not_converged` at 2000, exit code 5; quick-start: nothing to add; closing `--check` of both trees: 0 problems; `git status`: 2 new run folders (28 files), the 2 copied case files, `manifest.json`, the ledger, `notes/README.md` (the copied text and the run table), `notes/naca0012.md`; no other file of the tree changed | pass |
+| L2 | each <= 180 s; sum of 12 <= 20 min | the new runs 112.5 s and 108.9 s; the ten of ADR 0150 unchanged (largest 100.5 s); sum 569.0 s | pass |
+| L3 | E2 1e-6 final, 1e-5 over 1001-2000; E3 order; the controls fail | Linux: aoa4 `cl` 6.43e-8 / 1.81e-7, `cd` 5.96e-8 / 1.43e-7; aoa2 `cl` 1.36e-8 / 4.69e-8, `cd` 7.94e-9 / 2.48e-8 (largest differences 7.9e-4 at iteration 26, early as on Windows); E3 `cl` 0.3482 (4 deg) > 0.1988 (2 deg) > 0. Control: 7.51e-1 and 3.44e-1 against 1e-6, fails as required; E3 swapped fails. The mirror script on the Windows tree printed the values of `example_rotated_w48u.rs` digit for digit (aoa4 `cl` 1.772e-8, ...), and that test passed in the L4 container too | pass |
+| T5 | caps per tree; stop rule | Linux: wind-tunnel 34 823 333 bytes (176 667 under 35 000 000), quick-start 4 248 948, the tree 39 076 957 (923 043 under 40 000 000); Windows (48U's, unchanged): 34 826 293 and 39 080 436. The regeneration commit adds 30 blobs, 27 of them new to the repository, 7 425 291 bytes uncompressed (two `store.rts` of 2 574 878 each make most of it). Of the new runs' reproducible files only `case.snapshot` is byte-equal to the Windows tree's; `residuals.jsonl`, `store.rts`, `index.json` and `monitors.json` differ (the Linux tree's aerofoil polyMesh is its own, ADR 0150) | pass; stop rule not triggered |
+| L4 | `example_projects_w48h` on Linux: all pass, the known miss ignored; S5 exact for the 12 Linux runs; T1-T3 | on an archive of 1226977: 21 passed, 0 failed, 1 ignored (`g3_cylinders_cross_at_least_7_times_known_miss`); S1 8 (4) runs per tree with 0 problems; S3 12 per tree; S4 the rotated cases 4 and 2 deg from the transform, equal to each tree's ledger; S5's mesh hash asserted for all 12 Linux runs; S8 as in T5; G2 Linux sum 569.0 s. T3: both Windows cylinder runs differ (stored 2159359318246829613, built 10791892230985098653); every other Windows run equal, including the two rotated ones. The S1, S7, T1 (a)-(c) reported, (d) not, T2 and G3 controls as required | pass |
+| L5 | H1 on Linux: 8 (4) cases and runs | `/src/example-projects-linux/wind-tunnel`: 8 cases, 8 runs, 0 skipped; quick-start 4 and 4; 1 passed | pass |
+| W1 | `example_projects_w48h` on Windows | 1226977: 21 passed, 0 failed, 1 ignored (the known miss); S5 exact for the 12 Windows runs; T3: both Linux cylinder runs differ (stored 10791892230985098653, built 2159359318246829613); the Linux rotated runs' stored hashes (503197937189928989, 8049855970594904693) equal the meshes built on Windows from the Linux tree's polyMesh, i.e. the rotation itself gave the same bits on both platforms here | pass |
+| W2 | H1 on Windows with 8 (4) | `example-projects/wind-tunnel`: 8 cases, 8 runs, 0 skipped; 1 passed | pass |
+| R1L | 65 of 65 byte-equal | `--docker --rerun-check` on 1226977 (1607 source files, 16 min 31 s): all 12 Linux runs rebuilt in a temporary copy with the states and step counts of the committed ones; 60 of 60 run files byte-equal and the 5 polyMesh files equal (0 problems); so a full `--docker` rebuild (D3 option b) gives the same reproducible bytes as L1's `--add-missing` | pass |
+| T4 | `git diff --stat worktree-agent-a19b8077ee9b9bd5a 1226977 -- example-projects/` empty | empty | pass |
+| P1 | `--check` 0 and the self-test on both | Windows (Python 3.9.13): `--check` 0 problems, self-test 15 passed; container (3.12.3): 0 problems, 15 passed (the new forwarding/refusal test among them) | pass |
+| DV | DV5 19, DV6 22 and exactly the two left out | `dv5_explicit_non_default_store_keys_behave_as_before` ok, `dv6_unedited_plans_are_bit_identical` ok (in S1's run) | pass |
+| S1 | the whole `rcfd-studio` suite: 0 failed | first attempt stopped by a set-up defect (amendment 2). Corrected run on 1226977 (12 min 24 s, about 10 GB free at its start): 249 passed, **1 failed**, 7 ignored. Ignored: the four known misses (ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b), DV6's recorder, and ADR 0154's two tools `w48t_display_matches_store`, `w48t_dump_stores` (ignored by design). The failure: `run_control_r1_r3.rs` `r1_model_states_follow_status_json` (ADR 0133 R1): one of 43 snapshots showed `r-20261029T004404-452c` Queued while `status.json` read just before said Queued and just after Running, but the run's own state sequence held only `[Queued]` at the time the test read it. This test and `crates/rcfd-studio/src/runs.rs` are untouched by this job and by 48U. Re-run alone three times (`--test run_control_r1_r3 --test-threads 1`): 5 passed each (R1 checked 47, 37 and 38 snapshots, 0 problems) | **missed on the counted run** (a timing test outside this job's change); question 2 |
+| Q1 | clippy, fmt, graph, baselines | `cargo clippy --release --locked -p rcfd-mcp -p rcfd-studio --tests -- -D warnings` clean on Windows and in the container; `cargo fmt -p rcfd-mcp -p rcfd-studio -- --check` clean (run on the resolved merge before its commit, after the registration was written); `workspace_graph` (amendment 1: `-p rcfd-cli`) 3 passed; `git diff aad08fe 1226977 -- crates/rcfd-api/tests/baseline_hashes.rs`: empty | pass |
+
+**Deviations.**
+1. D3: the Linux tree was regenerated with `--docker --add-missing`, not the plain `--docker` the brief named; registered
+   with reasons before the run; R1L shows the plain rebuild gives the same reproducible bytes (question 1).
+2. Amendment 1 (Q1's package) and amendment 2 (S1's binaries): set-up defects, corrected before the corrected runs.
+3. S1's one failure was followed by three re-runs of that test file alone; the counted result stays a miss.
+4. Unregistered, run in the L4 container: `example_rotated_w48u` on Linux (2 passed; it reads the Windows tree) and
+   clippy there.
+5. `example-projects-linux/README.md` got one command line by hand in the merge commit (the tree's README is not
+   written by the script), noted in Placement before the run.
+
+**Not run.** The full gate (`rcfd-api`, `rcfd-core`, `rcfd-mesh` suites and the rest) on this merge, on either platform:
+only `rcfd-studio`'s suite, the example tests and `workspace_graph` ran (48U's ADR 0155 H2 ran its suites on its own
+branch). The `rcfd-studio` suite on Linux. `--add-missing` on Windows after the merge (the Windows tree needed nothing;
+its code path is the Linux one minus the copy). The "Not in CI" checklist (a person at the window). CI.
+
+## Questions for the maintainer (continued)
+
+2. S1's miss, `r1_model_states_follow_status_json` (ADR 0133 R1), failed once in the whole suite and passed three times
+   alone. Options: (a) accept as a timing flake of the shared host (the suite ran while other agents and their
+   containers used the machine) and leave the test as it is; (b) make it an ignored `*_known_miss` with its limit, and
+   open a job to find whether the test's before/after bracket of `status.json` can miss a transition the Studio already
+   showed; (c) re-run the whole suite on a quiet machine before deciding. **Recommendation (c), then (a) if it passes**:
+   nothing this job changed is on that path, and a known miss would hide a test that passes.
+3. Size margin: the Linux wind-tunnel is 176 667 bytes under its cap, the Windows one 173 707; the next aerofoil run in
+   either tree does not fit. Options (as ADR 0155 question 5): (a) raise the per-project caps; (b) keep one platform's
+   stores in git, the other built on demand (`--docker`); (c) move the stores out of git (release asset or LFS).
+   **Recommendation (b)** before the examples grow, (c) later; nothing changed here.
