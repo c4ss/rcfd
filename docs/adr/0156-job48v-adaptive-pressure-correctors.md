@@ -476,6 +476,10 @@ the adaptive count without touching a setting:
    `finished`, clean at t = 1 and 3 (`M_hf`), with `finish.correctors.mode = "adaptive"`; (iv) ADR 0152's DV6 record
    (`plans_6867e40.txt`, never re-recorded) changes for its transient entries: register the expected difference, as ADR 0152 did.
 
+   *Note (2026-10-29):* carried out by [ADR 0158](0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) (job 48X), with
+   its deviations: the corrector has a toolbar line of its own instead of a place in the "overrides" indicator, and DV6 does not
+   change (the dialog's plans get no entry); item 4's `residuals.jsonl` field and item 5's re-estimate are its questions 1 and 2.
+
 ### Deviations
 
 1. The worktree started at 1248a76, the merge base with local main; it was fast-forwarded to local main aad08fe (48A to 48T, 48P,

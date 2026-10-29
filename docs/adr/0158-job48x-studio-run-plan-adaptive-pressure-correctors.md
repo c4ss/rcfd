@@ -1,7 +1,9 @@
 # ADR 0158: Job 48X, the Studio's Run makes the pressure correctors adaptive (`solver.corrector_control=adaptive` as a run-time setting), with a toolbar line, a switch in Advanced and coherent pre-run messages
 
 Status: **registered** 2026-10-29, after the code and the tests below were written and compiled and before any registered
-run (what had run before is listed under "What I already knew"); not yet accepted by the maintainer. House rules of
+run (what had run before is listed under "What I already knew"); amendment 1 (X2's check, a set-up defect) before its
+corrected run; **results in the addendum**: every registered limit met but the registered X2 (set-up defect, corrected by
+X2b, met), every control failed as required; not yet accepted by the maintainer. House rules of
 [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
 limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
 corrected run; defaults of existing code stay bit-identical outside the Studio's run plan; `rcfd run`, the runner and the
@@ -187,3 +189,99 @@ test is kept as the ignored `x2_entries_in_order_and_the_plan_text_known_miss` (
 (`x2b_entries_in_order_and_the_plan_text`): X2's procedure and every limit, the `Debug` text read for the fields (`, time: `
 and `, correctors: `, the derived form's separator before a field name). What I knew when writing this: the output of that run
 (the values of X1, X3 and X4 are in the addendum); X2b had not run.
+
+## Addendum (2026-10-29): results against the registered limits
+
+Code at 405e219 (registration; X1, X3, X4 ran on it) and b52505d (amendment 1: the test file only; X2b, X5, W and the lints
+ran on it). Release builds in this worktree's `target/`; this host (Windows 11, 16 threads, 93.6 GB, 4 to 5 GB free during
+the runs: another agent's WSL workload held 55 GB), so wall times are rough.
+
+### The answer
+
+Run now adds `solver.corrector_control=adaptive` to the run of every transient iterative piso/pimple case that does not
+choose the key itself, records it in `run.json` `settings.set` and nowhere else, and says so in a toolbar line, Run's hover
+and the Advanced popover, where it can be switched off. On the maintainer's 256 x 256 cylinder at the step that showed the
+spokes (1/64) the Studio run is clean (M_hf 2.7e-7 / 9.1e-8 at t = 1 / 3, 5 correctors, no SV301), and the same run with the
+switch off reproduces 48T's spokes (M_hf 42.6 / 48.3) and SV301 at 2.42. At ADR 0153's automatic step the opt-in chose 2
+correctors (the estimate 0.406 at the first step's dt 0.00116 s) and the run equals the switched-off one: clean either way
+over 3 s, no extra cost; but see "a finding" below.
+
+### Results
+
+| Check | Limit (registered) | Measured | Outcome |
+|---|---|---|---|
+| X1 | scope as registered; the 4 transient example files get the entry | 16 set-ups as registered: the 10 in scope `Adaptive` (n 2; n 3 with `n_correctors = 3`) and built by the solver with the key; `"adaptive"` `CaseAdaptive`; fractional_step, error_tolerance, the piston, the low-Mach box, the steady cavity and `sod` `Fixed { Scope }` with the D2 reasons, each refused by the solver at `solver.corrector_control`; files: 34 (12 in each example tree, 10 in `cases/`), 4 with the entry (the cylinders Re 100 and Re 200 of both trees, each built with it), 30 without (steady or compressible) | met |
+| X2 | as registered | stopped at its first assertion: `time:` matched `end_time:` (set-up defect, amendment 1) | known miss (ignored) |
+| X2b | X2's limits, the fields read | the five entries in order, the user's `solver.corrector_control=fixed` after them, four entries with the switch off, `correctors: Adaptive { n: 2 }` in a Run plan's text, neither `, time: ` nor `, correctors: ` in `StartPlan::new`'s | met |
+| X3 | (i)-(v) as registered | every text drawn exactly; the line at [8, 67] to [670, 82] in the 1280 x 800 window; the switch off in the run-time settings after the drawn click; the file unchanged, the editor clean | met |
+| X3 control | no corrector text in the route before | none drawn | fails as required |
+| X4 | on: the five entries, finished at 2, 2 correctors per event, summary adaptive / max 2 / cap 0, file and snapshot; off: the four entries, no corrector keys; `monitors.csv` byte-identical | on: 138 steps, 2.0 s wall, every event 2, one estimate (step 1, rho 0.0401), `triggered` 0; off: 138 steps, no `correctors` in any event, no summary; both files and snapshots unchanged; `monitors.csv` byte-identical | met |
+| X5 (a) | the five entries, finished at 3, adaptive summary, clean, no SV301, file and snapshot | `set` `solver.end_time=3`, `solver.dt=0.00116`, `solver.max_courant=0.5`, `solver.max_dt=0.03`, `solver.corrector_control=adaptive`; 891 steps, 297 s; one estimate (step 1: 2 correctors, rho 0.406), 2 at every step; M_hf 1.05e-7 (t = 1.0005) and 1.17e-7 (t = 3); no SV301; file and snapshot unchanged | met |
+| X5 (a) control | the four entries, no corrector keys; reported | 891 steps, 310 s; no corrector keys; M_hf 1.05e-7 / 1.17e-7 (the same values as X5 (a): the count stayed 2); no SV301 | as registered (predicted, not discriminating) |
+| X5 (b) | `solver.end_time=3` and the entry, finished at 3, count above 2, clean, no SV301, file and snapshot | 192 steps, 137 s; one estimate (step 1: 5 correctors, rho 0.361), 5 at every step; M_hf 2.68e-7 / 9.06e-8 (ADR 0156 TV256: the same); no SV301; file and snapshot unchanged | met |
+| X5 (b) control | must fail (b): `set` exactly `solver.end_time=3`, SV301 in `check.json` and the events, spoky | 192 steps, 93 s; `check.json`'s `rules` hold SV301 (`amplified by 2.42 per step ... cell 129 at (-0.50093, -0.01845, 0.05), typically a thin wall cell`, fix `adaptive`) and `events.jsonl` its warning event; M_hf 42.63 / 48.33 (ADR 0154 R256 / ADR 0156 TR256: the same) | fails as required |
+| W | 0 failures; ignored = main's plus this job's; lints; `workspace_graph` | the whole `rcfd-studio` suite on b52505d (`--test-threads 1`): 62 test binaries, **279 passed, 0 failed, 18 ignored**: main's 13 and this job's 5 (the four X5 and amendment 1's X2 known miss); the changed ADR 0153 tests ((a) control, (d), (g1), (g2), (h)) and the unchanged (b), (c), f3, (f2) and ADR 0152's DV6 among the passed; clippy and fmt clean (below); `workspace_graph` 3 passed | met |
+| N | only the Studio and this ADR | `git diff --stat 4e795b1`: `crates/rcfd-studio/src/{quick_run,quick_run_ui,runs,time_step,ui}.rs`, `tests/{correctors_x,run_time_s}.rs`, this ADR | met |
+
+`cargo clippy -j 2 -p rcfd-studio --release --all-targets -- -D warnings`: clean (b52505d). `cargo fmt -p rcfd-studio --
+--check`: clean.
+
+### A finding: the count is chosen at the automatic step's first dt
+
+At ADR 0153's automatic step the first estimate is made at dt0 = 0.00116 s, where two correctors give 0.406 on the 256 x 256
+cylinder; the controller then grows the step about threefold within 70 steps (to 0.0033 to 0.0039 s, ADR 0153 (a)), where
+DG1 measured 1.166 for two correctors at 1/256 = 0.0039 s (ADR 0154): above ADR 0156's target 0.5, below 1. The adaptive
+control re-estimates only every 1000 steps or when its growth monitor fires; a 3 s run has 891 steps, so it kept 2 throughout.
+The run was clean (M_hf 1.2e-7 at 3 s) because the amplification stays below 1 at that step, not because of the margin the
+opt-in is meant to give. ADR 0156 D8 item 5 named this; it is a solver matter (`crates/rcfd-fv`), outside this job:
+question 2.
+
+### Deviations
+
+1. Amendment 1: X2's first assertion matched `end_time:` (a set-up defect of the check); the registered X2 is the ignored
+   `x2_entries_in_order_and_the_plan_text_known_miss`, X2b is the corrected check (met).
+2. ADR 0156 D8 item 4 put the corrector into ADR 0153's "overrides the case's ..." indicator; here it has a line of its own
+   and a line in Run's hover (D4), the indicator unchanged: by ADR 0152's rule a `"fixed"` key is not the case's own, and
+   ADR 0153's f3 checks the indicator's text exactly.
+3. ADR 0156 D8 item 6 (iv) expected ADR 0152's DV6 record to change for transient entries; it does not: DV6 records the
+   Start run dialog's plans (`StartPlan::new`), which get no corrector entry (D6), and the plan prints `correctors` only when
+   set.
+4. The brief's example wording "1.3x cost" is not used: the measured figures are 1.0 (count 2) to about 1.6 per step (5
+   correctors on 256 x 256 against 2), ADR 0156 A7.
+5. The Studio shows no SV301 text of its own (D5): with the switch on the solver makes no SV301 estimate at all; with it off,
+   SV301 reaches the run's `check.json` and events (X5 (b) control), which the Log panel lists, and the corrector line's hover
+   says so.
+
+### Not run
+
+* ADR 0153's heavy tests (`--ignored`: (a) 40 s, D1-D4), now with the corrector entry; ADR 0153's (a) at 40 s would make
+  about 10 estimates (every 1000 steps) and may raise the count above 2 later in the run (not measured).
+* The gate's other crates (nothing outside `crates/rcfd-studio` changed);
+  `baseline_hashes` (untouched, and its `kepsilon_channel` fails on this machine at earlier commits too).
+* A person at the real window; Linux.
+* The developed shedding regime (t > 10) at 256 x 256 through the Studio (ADR 0156 C3 ran it through `rcfd run` with the
+  fixed step 1/64).
+
+### Questions for the maintainer (with recommendations)
+
+1. **`residuals.jsonl` without the corrector count** (ADR 0156 question 6): `crates/rcfd-runner` `drain` copies only `u`, `p`,
+   `continuity` and `monitors`, so the residual plot cannot show the count; the count is in `solver-status.jsonl` and the
+   `finish` summary (forwarded into `events.jsonl`). Add `"coupling": {"correctors": n, "cap": c}` there, and a Plots series in
+   the Studio? Recommendation: yes, a small runner job with its own check (no change for fixed runs), then a Studio line
+   `correctors <n>` in the strip.
+2. **A re-estimate when the step has grown** (the finding above; ADR 0156 D8 item 5): with ADR 0153's automatic step the
+   count is chosen at the first step's dt (0.00116 s) and kept while the step grows threefold, so on 256 x 256 the coupling
+   runs near an amplification of 1 instead of the target 0.5 for the first 1000 steps. Options: (a) keep (the 3 s run was
+   clean); (b) a solver change in `PimpleSolver`: re-estimate when dt has changed by a factor 1.5 since the last estimate;
+   (c) a Studio change: start the automatic step at the controller's later step size. Recommendation: (b), registered with
+   ADR 0156's harness (V256 under the controller to 10 s, cost reported), since it is what makes "stable whatever the
+   resolution" hold under the automatic step.
+3. **The Start run dialog**: it keeps the case's own correctors (D6, with a line saying Run on the toolbar makes them
+   adaptive). Should the dialog's plan add the entry too (its `set` and ADR 0140/0152's dialog checks would change)?
+   Recommendation: yes together with ADR 0153 question 3 (the dialog taking the toolbar's time plan), in one registered job,
+   so that the dialog and Run never differ in more than the user's overrides.
+4. **SV301 in the Studio before the run**: the Studio could read `check.json` (the runner writes it before the launch) and
+   show SV301 with a button that turns the switch on, for runs with the switch off or started from the dialog.
+   Recommendation: yes, small (no estimate in the Studio process; the runner's check already made it).
+5. **The cost line**: the hover quotes ADR 0156's measured counts and cost. Calibrate it from the project's own finished runs
+   (`finish.correctors.mean`) when they exist? Recommendation: later, with ADR 0153 question 5's wall-time calibration.
