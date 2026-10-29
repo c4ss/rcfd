@@ -270,7 +270,7 @@ a time. Wall times (results.json) are therefore rough.
 | L2 | 0.90 <= slope / 2 pi <= 1.05 | 0.1009 per degree = 5.779 per rad = **0.920** x 2 pi (intercept 0.0083) | met (0.02 above the lower edge) |
 | L3 | some cl after the peak <= 0.90 cl_max | base sweep: peak at 20 degrees (1.5278), nothing after it, so no stall, and D8's extension ran. With 22 and 24 degrees: 1.3951 (0.913) and **1.2039 (0.788)**. Stall detected, first below 0.9 at 24 degrees | met (with the extension) |
 | L4 | abs(cl(0)) <= 0.005 | -2.3e-11 | met |
-| B1 | folder <= 400 000 bytes, each PNG <= 120 000 | about 300 000 bytes with this README (the test prints the exact value); PNGs 37 520, 35 009, 80 749 | met |
+| B1 | folder <= 400 000 bytes, each PNG <= 120 000 | 288 909 bytes (7 files); PNGs 37 520, 35 009, 80 749 | met |
 | P1 | selftest | passed (registration, amendments, final) | met |
 | G0 | fmt, clippy, baseline_hashes untouched | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release --locked -p rcfd-api --tests -- -D warnings` clean; `git diff 4e795b1 -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
 
