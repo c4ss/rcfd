@@ -146,6 +146,26 @@ fn velocity_is_zero(case: &Case, b: &str) -> bool {
     !has_expr && vec3::norm(v) == 0.0
 }
 
+/// Does the patch take the free-stream turbulence condition (inlet values on the inflow faces, zero gradient on the
+/// outflow faces)? Explicitly by `turbulence = "freestream"` (ADR 0164 amendment 1), or by default (ADR 0166 D2): under
+/// `turbulence = "auto"`, a `velocity = "freestream"` patch with a non-zero `velocity_value` with Spalart-Allmaras (whose
+/// free-stream value `nutilde_ratio * nu` needs no further key). Catalogue and wall-motion kinds resolve first, as in
+/// [`role`]. Every other `auto` patch, and every other model, resolves as before.
+pub fn freestream_role(case: &Case, patch: &str) -> bool {
+    let b = format!("boundaries.{patch}");
+    match get_s(case, &format!("{b}.turbulence")).as_str() {
+        "freestream" => true,
+        "auto" => {
+            is_sa(case)
+                && get_s(case, &format!("{b}.velocity")) == "freestream"
+                && crate::bc_cat::role(case, patch).is_none()
+                && !crate::wall_motion::is_wall_motion(case, patch)
+                && vec3::norm(get_v(case, &format!("{b}.velocity_value"), [0.0; 3])) > 0.0
+        }
+        _ => false,
+    }
+}
+
 /// Turbulence role of a boundary entry (`turbulence = auto` is resolved from the velocity condition).
 pub fn role(case: &Case, patch: &str) -> Role {
     let b = format!("boundaries.{patch}");
@@ -167,6 +187,9 @@ pub fn role(case: &Case, patch: &str) -> Role {
                 } else {
                     Role::Inlet
                 }
+            } else if freestream_role(case, patch) {
+                // ADR 0166 D2: a Spalart-Allmaras free-stream far field takes the `freestream` role by default
+                Role::Inlet
             } else {
                 Role::ZeroGradient
             }
@@ -907,8 +930,9 @@ impl TurbState {
                 Vec::new()
             };
             // ADR 0164 amendment 1: a `freestream` turbulence role fixes the values on the inflow faces only (zero gradient
-            // on outflow faces, so that what the flow carries can leave); its velocity is a uniform free stream (checked)
-            let freestream = get_s(case, &format!("{b}.turbulence")) == "freestream";
+            // on outflow faces, so that what the flow carries can leave); its velocity is a uniform free stream (checked).
+            // ADR 0166 D2: also the default of a Spalart-Allmaras free-stream far field (`freestream_role`)
+            let freestream = freestream_role(case, patch);
             let u_ref = get_v(case, &format!("{b}.velocity_value"), [0.0; 3]);
             for (name, vals) in per_scalar {
                 let bc: Box<dyn rcfd_fv::bc::Bc> = if freestream {
@@ -1058,5 +1082,45 @@ mod tests {
         assert_eq!(role(&c, "o"), Role::ZeroGradient);
         c.set("boundaries.i.turbulence", "wall".into()).unwrap();
         assert_eq!(role(&c, "i"), Role::Wall);
+    }
+
+    /// ADR 0166 T6 (D2): under `auto`, a free-stream far field is `freestream` (an inlet role) with Spalart-Allmaras only,
+    /// and only with a non-zero free stream; every other model, and the explicit spellings, resolve as before.
+    #[test]
+    fn freestream_far_field_default_is_sa_only() {
+        let mut c = Case::new();
+        c.set("boundaries.f.velocity", "freestream".into()).unwrap();
+        c.set("boundaries.f.velocity_value", serde_json::json!([1.0, 0.0, 0.0]))
+            .unwrap();
+        c.set("boundaries.z.velocity", "freestream".into()).unwrap();
+        // laminar: no turbulence model, the role is the old one
+        assert_eq!(role(&c, "f"), Role::ZeroGradient);
+        assert!(!freestream_role(&c, "f"));
+        for (model, inlet) in [
+            ("spalart_allmaras", true),
+            ("k_omega_sst", false),
+            ("k_epsilon", false),
+            ("rsm", false),
+            ("smagorinsky", false),
+            ("mixing_length", false),
+        ] {
+            c.set("turbulence.model", model.into()).unwrap();
+            let want = if inlet { Role::Inlet } else { Role::ZeroGradient };
+            assert_eq!(role(&c, "f"), want, "{model}");
+            assert_eq!(freestream_role(&c, "f"), inlet, "{model}");
+            // a zero free stream has no inflow faces: the old role
+            assert_eq!(role(&c, "z"), Role::ZeroGradient, "{model} zero free stream");
+            assert!(!freestream_role(&c, "z"), "{model} zero free stream");
+        }
+        c.set("turbulence.model", "spalart_allmaras".into()).unwrap();
+        // the old behaviour stays spellable; the explicit opt-in is unchanged
+        c.set("boundaries.f.turbulence", "zero_gradient".into()).unwrap();
+        assert_eq!(role(&c, "f"), Role::ZeroGradient);
+        assert!(!freestream_role(&c, "f"));
+        c.set("boundaries.f.turbulence", "freestream".into()).unwrap();
+        assert_eq!(role(&c, "f"), Role::Inlet);
+        assert!(freestream_role(&c, "f"));
+        c.set("boundaries.f.turbulence", "inlet".into()).unwrap();
+        assert!(!freestream_role(&c, "f"));
     }
 }

@@ -2773,7 +2773,23 @@ impl Simulation {
         if !errs.is_empty() {
             return Err(errs);
         }
-        let mut st = TurbState::new(new_case, &self.geom, &old.inlet_speeds)?;
+        // ADR 0166 amendment 1: the free-stream far-field default depends on the model, so the old model's inlet list is
+        // filtered by the new roles and completed by the patches the new model makes free-stream inlets
+        let mut speeds: Vec<(String, Vec<f64>)> = old
+            .inlet_speeds
+            .iter()
+            .filter(|(n, _)| turb::role(new_case, n) == turb::Role::Inlet)
+            .cloned()
+            .collect();
+        for n in new_case.tree.names("boundaries").unwrap_or_default() {
+            if turb::freestream_role(new_case, &n) && !speeds.iter().any(|(m, _)| *m == n) {
+                if let Some(patch) = self.geom.mesh.patch(&n) {
+                    let u = vec3::norm(get_v(new_case, &format!("boundaries.{n}.velocity_value"), [0.0; 3]));
+                    speeds.push((n, vec![u; patch.faces().count()]));
+                }
+            }
+        }
+        let mut st = TurbState::new(new_case, &self.geom, &speeds)?;
         st.model.initialize_from_nut(old.model.nut());
         self.turb = Some(st);
         self.case = new_case.clone();
@@ -4082,8 +4098,17 @@ impl Simulation {
                 _ => {}
             }
         }
-        // ADR 0164: the `*_effective` components take the viscous stress with the momentum equation's face viscosity
-        let effective = matches!(r.component.as_str(), "total_effective" | "viscous_effective");
+        // ADR 0164: the `*_effective` components take the viscous stress with the momentum equation's face viscosity.
+        // ADR 0166 D1, D3: so do the default `total` and `viscous` of force and force-coefficient reports when a
+        // turbulence model is active; `*_molecular` (and every moment report not asking for `*_effective`) keep
+        // `physics.nu`, the computation these had before
+        let effective = match r.component.as_str() {
+            "total_effective" | "viscous_effective" => true,
+            "total" | "viscous" => {
+                self.turb.is_some() && matches!(r.kind, ReportKind::Force | ReportKind::ForceCoefficient)
+            }
+            _ => false,
+        };
         let wall = |origin: Vec3| {
             if effective {
                 if let Some(nu_face) = self.momentum_face_viscosity() {
@@ -4110,7 +4135,7 @@ impl Simulation {
         };
         let pick = |f: ig::PatchForce| match r.component.as_str() {
             "pressure" => f.pressure,
-            "viscous" | "viscous_effective" => f.viscous,
+            "viscous" | "viscous_effective" | "viscous_molecular" => f.viscous,
             _ => f.total(),
         };
         Ok(match r.kind {

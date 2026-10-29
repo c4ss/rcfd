@@ -79,6 +79,17 @@ also after an interrupted or failed run.
 | 7 | interrupted through the stop file | `interrupted` |
 | 8 | `--max-elapsed` reached | `time_limit` |
 
+**`solver.min_iterations` does not hold a run to a count** (ADR 0164 amendment 1, ADR 0166). It only delays the
+`convergence.<name>` conditions (stop and interrupt conditions on monitors): they are evaluated from that iteration or
+step on. The built-in stops come first and ignore it:
+- a steady run stops as soon as its residual targets are met (`solver.tolerance_u`, `solver.tolerance_p`, and `res_nut`
+  with a turbulence model; exit 0);
+- a run also stops at `solver.max_iterations` (exit 5) or `solver.end_time`.
+
+So `min_iterations = max_iterations` does not make a steady run take `max_iterations` iterations. To run a steady case
+for a fixed count, set the residual targets below what the run reaches (for example `tolerance_u = 1e-12` and
+`tolerance_p = 1e-12`, as `cases/channel/kepsilon_channel.toml` does) and let `max_iterations` end it.
+
 ## Status stream
 
 Every line is a JSON object with `format: "rcfd-status"`, `version: 1`, `event`, `seq` (1, 2, 3, ...

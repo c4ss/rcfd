@@ -628,7 +628,7 @@ pub fn case_schema() -> Schema {
         .field(
             "turbulence",
             Schema::enumeration("auto", &["auto", "wall", "inlet", "zero_gradient", "freestream"]).doc(
-                "Turbulence role of the patch (k-epsilon, k-omega SST): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega) from the turbulence_* settings, zero_gradient = outlet / symmetry. auto: a fixed zero velocity is a wall, any other fixed velocity an inlet, everything else zero_gradient (so a velocity = \"freestream\" far field is zero_gradient). freestream (opt-in, ADR 0164; needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves",
+                "Turbulence role of the patch (k-epsilon, k-omega SST, Spalart-Allmaras): wall = wall functions / SST wall treatment, inlet = fixed k and epsilon (omega, nuTilda) from the turbulence_* settings, zero_gradient = outlet / symmetry. freestream (needs velocity = \"freestream\"): the inlet values on the faces where velocity_value enters the domain, zero gradient where it leaves (ADR 0164). auto: a fixed zero velocity is a wall, any other fixed velocity an inlet; a velocity = \"freestream\" far field with a non-zero velocity_value is freestream with Spalart-Allmaras (ADR 0166) and zero_gradient with the other models; everything else zero_gradient. zero_gradient on an SA far field gives the pre-ADR 0166 behaviour",
             ),
         )
         .field(
@@ -1013,7 +1013,7 @@ pub fn case_schema() -> Schema {
             "min_iterations",
             Schema::int(0)
                 .range(0.0, 1e9)
-                .doc("Convergence conditions are only evaluated from this iteration / step on"),
+                .doc("The convergence.<name> conditions (stop and interrupt) are only evaluated from this iteration / step on. It does not hold a run to this count: the residual targets (tolerance_u, tolerance_p, and res_nut with a turbulence model), the iteration limit and the end time stop a run before it (ADR 0164, ADR 0166)"),
         )
         .field(
             "max_courant",
@@ -1236,9 +1236,17 @@ pub fn case_schema() -> Schema {
             "component",
             Schema::enumeration(
                 "total",
-                &["total", "pressure", "viscous", "total_effective", "viscous_effective"],
+                &[
+                    "total",
+                    "pressure",
+                    "viscous",
+                    "total_effective",
+                    "viscous_effective",
+                    "total_molecular",
+                    "viscous_molecular",
+                ],
             )
-            .doc("Force part to report (force, force_coefficient). total, viscous: the viscous stress with the molecular physics.nu (default; with a wall function this misses most of the wall shear the model applies); total_effective, viscous_effective: with the face viscosity of the momentum equation (molecular plus eddy viscosity, on wall faces the wall-function value), i.e. the wall shear the solver applies (ADR 0164; equal to total/viscous for laminar constant-viscosity runs)"),
+            .doc("Force part to report (force, force_coefficient). total (default), viscous: with a turbulence model the viscous stress with the face viscosity of the momentum equation (molecular plus eddy viscosity, on wall faces the wall-function value), i.e. the wall shear the solver applies (ADR 0166); without one the molecular physics.nu, as before. total_effective, viscous_effective: always the face viscosity (ADR 0164; equal to total/viscous with a turbulence model and in laminar constant-viscosity runs). total_molecular, viscous_molecular: always the molecular physics.nu, the pre-ADR 0166 total/viscous (with a wall function this misses most of the wall shear the model applies). pressure: no viscous part. moment reports take the molecular viscosity unless total_effective/viscous_effective is set"),
         )
         .field(
             "direction",
