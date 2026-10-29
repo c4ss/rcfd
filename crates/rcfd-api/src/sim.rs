@@ -2540,8 +2540,8 @@ impl Simulation {
     }
 
     /// Run summary of the adaptive corrector count (ADR 0156 D4): `mode`, `steps`, `mean`, `max`, `last`, `estimates`,
-    /// `cap_bound`, `triggered` and the `log` of every estimate (`[step, correctors, rho, cap_bound, triggered]`); `None` for a
-    /// `fixed` run.
+    /// `cap_bound`, `triggered`, `dt_triggered` (ADR 0162) and the `log` of every estimate (`[step, correctors, rho, cap_bound,
+    /// triggered, dt, dt_triggered, work]`); `None` for a `fixed` run.
     pub fn corrector_summary(&self) -> Option<serde_json::Value> {
         let Engine::Transient(s) = &self.engine else {
             return None;
@@ -2552,12 +2552,76 @@ impl Simulation {
         let log: Vec<serde_json::Value> = r
             .estimates
             .iter()
-            .map(|e| serde_json::json!([e.step, e.correctors, num(e.rho), e.cap_bound, e.triggered]))
+            .map(|e| {
+                serde_json::json!([
+                    e.step,
+                    e.correctors,
+                    num(e.rho),
+                    e.cap_bound,
+                    e.triggered,
+                    num(e.dt),
+                    e.dt_triggered,
+                    e.work
+                ])
+            })
             .collect();
         Some(serde_json::json!({
             "mode": "adaptive", "steps": r.steps, "mean": num(r.mean()), "max": r.max, "last": r.last,
-            "estimates": r.estimates.len(), "cap_bound": r.cap_bound, "triggered": r.triggered, "log": log,
+            "estimates": r.estimates.len(), "cap_bound": r.cap_bound, "triggered": r.triggered,
+            "dt_triggered": r.dt_triggered, "log": log,
         }))
+    }
+
+    /// Test switch of ADR 0162 (its control B): set the dt trigger's factor of the adaptive corrector count (0 turns the trigger
+    /// off, ADR 0156's schedule). `false` (and nothing changed) when the run has no adaptive count.
+    pub fn set_corrector_dt_factor(&mut self, factor: f64) -> bool {
+        match &mut self.engine {
+            Engine::Transient(s) => match &mut s.settings.corrector_control {
+                Some(c) => {
+                    c.dt_factor = factor;
+                    true
+                }
+                None => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Diagnostic of ADR 0162 (D5): the ADR 0073 pressure-lag estimate at the next step with the count in use (the adaptive
+    /// count's current one, else `solver.n_correctors`) and `iterations` cold power iterations, on a copy of the solver (the
+    /// simulation is not changed). The step is the controller's planned one, else the last step's, else `solver.dt`. `None`
+    /// for another engine, the fractional step, a dynamic mesh or a stopped run.
+    pub fn lag_estimate_next_step(&self, iterations: usize) -> Option<LagPreflight> {
+        let Engine::Transient(s) = &self.engine else {
+            return None;
+        };
+        if self.dynmesh.is_some() {
+            return None;
+        }
+        let n = if s.settings.corrector_control.is_some() && s.correctors.current > 0 {
+            s.correctors.current
+        } else {
+            s.settings.n_correctors
+        };
+        let dt = match &self.timectl {
+            Some(c) if c.ctl.settings.error_tol <= 0.0 => c.plan(s, self.end_time).0,
+            _ => s.history.last().map_or(self.dt, |h| h.dt),
+        };
+        let w = s.lag_trial(dt, iterations, n)?;
+        let x = self
+            .geom
+            .mesh
+            .cell_centres()
+            .get(w.cell)
+            .copied()
+            .unwrap_or([f64::NAN; 3]);
+        Some(LagPreflight {
+            rho: w.rho,
+            step: w.step,
+            cell: w.cell,
+            position: x,
+            n_correctors: n,
+        })
     }
 
     /// Add `dp` (one value per cell) to the kinematic pressure of the incompressible transient solver: a perturbation for
@@ -3297,6 +3361,13 @@ impl Simulation {
                     (dt, last) = fixed_step(s.time, dt, self.end_time);
                 } else if planned.is_none() {
                     dt = dt.min((self.end_time - s.time).max(1e-12));
+                }
+                // ADR 0162 D2: a step landed on a write or end time (or the fixed step's short last step) is not compared by the
+                // adaptive corrector count's dt trigger
+                if s.settings.corrector_control.is_some()
+                    && (planned.is_some_and(|p| p.1.is_some()) || dt.to_bits() != proposed.to_bits())
+                {
+                    s.correctors.mark_landing_step();
                 }
                 if let (Some(c), Some(_)) = (&self.timectl, &planned) {
                     if c.extrapolate {

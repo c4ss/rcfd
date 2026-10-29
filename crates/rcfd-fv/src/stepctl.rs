@@ -386,6 +386,10 @@ impl ControlledRun {
             if self.extrapolate {
                 extrapolate_initial(s, dt);
             }
+            if dt != dt_prop {
+                // ADR 0162 D2: a step landed on a target is not compared by the corrector count's dt trigger
+                s.correctors.mark_landing_step();
+            }
             let i = s.step(dt);
             self.finish(s, dt, target);
             return i;
