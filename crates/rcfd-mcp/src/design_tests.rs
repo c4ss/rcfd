@@ -47,7 +47,10 @@ fn err_code(r: &Value) -> i64 {
 }
 
 fn sandbox(tag: &str) -> (PathBuf, McpServer) {
-    let root = std::env::temp_dir().join(format!("rcfd_mcp_design_{tag}_{}", std::process::id()));
+    sandbox_at(std::env::temp_dir().join(format!("rcfd_mcp_design_{tag}_{}", std::process::id())))
+}
+
+fn sandbox_at(root: PathBuf) -> (PathBuf, McpServer) {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
     let s = McpServer::new(
@@ -164,7 +167,11 @@ fn t1_permissions() {
 
 #[test]
 fn t2_paths_are_sandboxed_and_names_are_restricted() {
-    let (root, s) = sandbox("t2");
+    // ADR 0163 S4: the root sits under a parent of its own, so `../x` and `a/../../x` resolve inside the test's own
+    // directory and not to a shared `%TEMP%\x`.
+    let parent = std::env::temp_dir().join(format!("rcfd_mcp_design_t2_parent_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&parent);
+    let (root, s) = sandbox_at(parent.join("root"));
     std::fs::write(root.join("cavity.toml"), cavity_text(6)).unwrap();
     let outside = std::env::temp_dir().join(format!("rcfd_mcp_design_outside_{}", std::process::id()));
     let abs = outside.to_string_lossy().to_string();
@@ -243,7 +250,7 @@ fn t2_paths_are_sandboxed_and_names_are_restricted() {
     }
     assert!(!root.join("study_names").exists());
     assert!(!root.join("v.toml").exists());
-    let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(&parent);
 }
 
 #[test]

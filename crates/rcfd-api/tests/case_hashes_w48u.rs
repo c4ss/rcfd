@@ -5,6 +5,10 @@
 //! before any code change (`RCFD_W48U_RECORD=1` writes `tests/fixtures/case_hashes_6867e40.txt`). A file that does not
 //! parse is recorded with the paths of its diagnostics (their texts list the known keys, which a new key extends).
 //! The record also holds the base code's answer to a case with `[mesh.transform]` (R0's control: the key was unknown).
+//! ADR 0163: the text columns are compared after removing `solver.corrector_control` when it holds its default `"fixed"`
+//! (ADR 0156 added the key after R0; the settings hash omits it at its default, the written text lists it), with controls
+//! that the test's serialisers equal the library's (C1), every recorded valid case holds the default (C2), the raw lines
+//! differ from R0 in the text columns only (C3), and a non-default value is not normalised away (C4).
 
 use rcfd_api::case::Case;
 use std::path::{Path, PathBuf};
@@ -110,10 +114,50 @@ fn est_cells(c: &Case) -> u64 {
     n("mesh.nx") * n("mesh.ny") * n("mesh.nz")
 }
 
+/// The text `Case::to_toml` writes, for a settings value.
+fn toml_text(v: &serde_json::Value) -> String {
+    toml::to_string_pretty(v).unwrap_or_else(|e| format!("# serialisation failed: {e}\n"))
+}
+
+/// The text `Case::to_json_string` writes, for a settings value.
+fn json_text(v: &serde_json::Value) -> String {
+    serde_json::to_string_pretty(v).unwrap()
+}
+
+/// ADR 0163 S1: the case's settings value without `solver.corrector_control` when (and only when) it holds its default
+/// `"fixed"`. ADR 0156 added that key after R0 (6867e40); the settings hash omits it at its default, the written text lists
+/// it. This is the one normalisation of the text columns; a non-default value is kept and so differs from R0.
+fn without_default_corrector_control(c: &Case) -> serde_json::Value {
+    let mut v = c.tree.to_json();
+    if let Some(s) = v.get_mut("solver").and_then(|s| s.as_object_mut()) {
+        if s.get("corrector_control").and_then(|x| x.as_str()) == Some("fixed") {
+            s.remove("corrector_control");
+        }
+    }
+    v
+}
+
+/// One source of the current code: its record line with the text columns normalised (ADR 0163 S1), the same line with
+/// the raw text columns (as R0's recorder wrote them) and its `solver.corrector_control` value.
+struct Entry {
+    norm: String,
+    raw: String,
+    corrector_control: Option<String>,
+}
+
+fn src_of(l: &str) -> &str {
+    l.split('\t').next().unwrap()
+}
+
 /// One record line of a parsed (or refused) case.
-fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> String {
+fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Entry {
     match parsed {
         Ok(c) => {
+            let raw = c.tree.to_json();
+            // ADR 0163 C1: the test's serialisers write what the library writes.
+            assert_eq!(toml_text(&raw), c.to_toml(), "C1 toml {src}");
+            assert_eq!(json_text(&raw), c.to_json_string(), "C1 json {src}");
+            let norm = without_default_corrector_control(&c);
             let mesh = if est_cells(&c) > 400_000 {
                 "mesh skipped (large)".to_string()
             } else {
@@ -125,22 +169,39 @@ fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Str
                     ),
                 }
             };
-            format!(
-                "{src}\tvalid\tsettings {:016x}\ttoml {}\tjson {}\t{mesh}",
-                c.tree.content_hash(),
-                fnv(c.to_toml().as_bytes()),
-                fnv(c.to_json_string().as_bytes())
-            )
+            let mk = |v: &serde_json::Value| {
+                format!(
+                    "{src}\tvalid\tsettings {:016x}\ttoml {}\tjson {}\t{mesh}",
+                    c.tree.content_hash(),
+                    fnv(toml_text(v).as_bytes()),
+                    fnv(json_text(v).as_bytes())
+                )
+            };
+            Entry {
+                norm: mk(&norm),
+                raw: mk(&raw),
+                corrector_control: c
+                    .get("solver.corrector_control")
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string)),
+            }
         }
-        Err(d) => format!(
-            "{src}\tinvalid at {}",
-            d.iter().map(|x| x.path.clone()).collect::<Vec<_>>().join(",")
-        ),
+        Err(d) => {
+            let l = format!(
+                "{src}\tinvalid at {}",
+                d.iter().map(|x| x.path.clone()).collect::<Vec<_>>().join(",")
+            );
+            Entry {
+                norm: l.clone(),
+                raw: l,
+                corrector_control: None,
+            }
+        }
     }
 }
 
-/// Every record line (sorted by source).
-fn current() -> Vec<String> {
+/// Every source (sorted by source).
+fn current() -> Vec<Entry> {
     let mut out = Vec::new();
     for f in case_files() {
         out.push(line(&rel(&f), Case::load(&f)));
@@ -151,16 +212,19 @@ fn current() -> Vec<String> {
             out.push(line(&format!("{} block {}", rel(&f), fnv(text.as_bytes())), parsed));
         }
     }
-    out.sort();
+    out.sort_by(|a, b| a.norm.cmp(&b.norm));
     out
 }
 
-/// H1 against R0. With `RCFD_W48U_RECORD=1` the record is written instead (R0, on the base code only).
+/// H1 against R0. With `RCFD_W48U_RECORD=1` the record is written instead (R0, on the base code only; raw text columns).
+/// Otherwise the text columns are compared after ADR 0163's normalisation (S1) with its controls C1 to C4.
 #[test]
 fn h1_case_files_are_unchanged_against_the_base_record() {
-    let lines = current();
+    let entries = current();
+    let lines: Vec<String> = entries.iter().map(|e| e.norm.clone()).collect();
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(RECORD);
     if std::env::var("RCFD_W48U_RECORD").as_deref() == Ok("1") {
+        let lines: Vec<String> = entries.iter().map(|e| e.raw.clone()).collect();
         let control = match Case::parse_toml(WITH_TABLE) {
             Ok(c) => format!("accepted, settings {:016x}", c.tree.content_hash()),
             Err(d) => d
@@ -221,6 +285,52 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
     assert!(valid >= 20 && meshes >= 20, "set-up: {valid} valid, {meshes} meshes");
+    // ADR 0163 C2 and C3: every recorded valid source holds the default `"fixed"`; count the recorded lines whose raw text
+    // columns differ (and check that settings and mesh columns are equal raw, i.e. only the text columns differ).
+    let mut raw_text_differs = 0;
+    let mut raw_other_differs = Vec::new();
+    for w in &want {
+        let Some(e) = entries.iter().find(|e| src_of(&e.norm) == src_of(w)) else {
+            continue;
+        };
+        if w.contains("\tvalid\t") {
+            assert_eq!(e.corrector_control.as_deref(), Some("fixed"), "C2 {}", src_of(w));
+        }
+        if e.raw != *w {
+            raw_text_differs += 1;
+            let keep = |l: &str| -> String {
+                l.split('\t')
+                    .filter(|f| !f.starts_with("toml ") && !f.starts_with("json "))
+                    .collect::<Vec<_>>()
+                    .join("\t")
+            };
+            if keep(&e.raw) != keep(w) {
+                raw_other_differs.push(src_of(w).to_string());
+            }
+        }
+    }
+    println!("H1 C3: {raw_text_differs} of {valid} recorded valid sources differ raw (text columns only), 0 after normalisation");
+    assert!(raw_other_differs.is_empty(), "C3: {raw_other_differs:?}");
+    // ADR 0163 C4: a non-default value is not normalised away (one recorded valid case file, set to adaptive).
+    let w = want
+        .iter()
+        .find(|l| l.contains("\tvalid\t") && !src_of(l).contains(" block "))
+        .expect("a recorded valid case file");
+    let mut c = Case::load(repo().join(src_of(w))).expect("C4 case loads");
+    c.set("solver.corrector_control", serde_json::json!("adaptive"))
+        .expect("C4 set");
+    let n = without_default_corrector_control(&c);
+    let toml_col = format!("toml {}", fnv(toml_text(&n).as_bytes()));
+    let json_col = format!("json {}", fnv(json_text(&n).as_bytes()));
+    assert!(
+        !w.split('\t').any(|f| f == toml_col) && !w.split('\t').any(|f| f == json_col),
+        "C4: an adaptive copy of {} still matches R0's text columns",
+        src_of(w)
+    );
+    println!(
+        "H1 C4: {} with corrector_control = adaptive differs from R0 ({toml_col}, {json_col})",
+        src_of(w)
+    );
     let control = rec.lines().nth(1).unwrap_or_default();
     println!("H1 R0 {control}");
     assert!(
