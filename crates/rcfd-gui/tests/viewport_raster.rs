@@ -329,7 +329,7 @@ fn frame_sized(app: &mut RcfdApp, ctx: &egui::Context, w: f32, h: f32) -> egui::
         screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h))),
         ..Default::default()
     };
-    ctx.run(input, |ctx| app.ui(ctx))
+    ctx.run_ui(input, |ui| app.ui(ui))
 }
 
 fn all_shapes<'a>(s: &'a Shape, out: &mut Vec<&'a Shape>) {

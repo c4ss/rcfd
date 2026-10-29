@@ -47,7 +47,7 @@ fn frame(app: &mut RcfdApp, ctx: &egui::Context) {
         screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
         ..Default::default()
     };
-    let _ = ctx.run(input, |ctx| app.ui(ctx));
+    let _ = ctx.run_ui(input, |ui| app.ui(ui));
 }
 
 fn setup_for(dir: &std::path::Path, mock: &Mock, keychain_fails: bool) -> AssistantSetup {

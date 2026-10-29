@@ -32,9 +32,9 @@ fn main() -> eframe::Result<()> {
         st.ctrl.message = Some(e);
     }
     st.prefs_path = rcfd_assistant::config::config_dir().map(|d| d.join("gui-prefs.json"));
-    let opts = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
-        ..Default::default()
-    };
-    eframe::run_native("rcfd", opts, Box::new(move |_cc| Box::new(RcfdApp::new(st))))
+    eframe::run_native(
+        "rcfd",
+        rcfd_gui::ui::native_options(),
+        Box::new(move |_cc| Ok(Box::new(RcfdApp::new(st)))),
+    )
 }

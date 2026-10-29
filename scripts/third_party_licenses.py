@@ -28,13 +28,10 @@ file). For rcfd's own licence see `LICENSE` and `NOTICE`; for data, see `NOTICE`
 
 A binary distribution of rcfd must carry the licence texts and notices of the packages it contains. These need particular care:
 
-* `epaint` (through `egui`, only in the desktop app `rcfd-gui`): declares `(MIT OR Apache-2.0) AND OFL-1.1 AND
-  LicenseRef-UFL-1.0` because it bundles fonts. The SIL Open Font License 1.1 and the Ubuntu Font Licence 1.0 texts must ship
-  with any binary that embeds those fonts. Which font carries which licence is recorded in the `epaint` package (not checked
-  here: UNVERIFIED).
-* `epaint_default_fonts` (through `egui` 0.36, only in the Studio `rcfd-studio`): the same fonts, moved out of `epaint`;
-  declares `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`. The same two font licence texts must ship with the Studio
-  binary.
+* `epaint_default_fonts` (through `egui` 0.36, in the two desktop apps `rcfd-studio` and `rcfd-gui`): bundles egui's default
+  fonts and declares `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`. The SIL Open Font License 1.1 and the Ubuntu Font
+  Licence 1.0 texts must ship with any binary that embeds those fonts. Which font carries which licence is recorded in the
+  package (not checked here: UNVERIFIED).
 * Unicode-3.0 (`unicode-ident` and the `icu_*`, `zerovec`, `yoke`, `tinystr`, `litemap`, `writeable`, `zerofrom` family): the
   Unicode licence notice must accompany copies of the data.
 * CDLA-Permissive-2.0 (`webpki-roots`, a bundle of certificate-authority data): the licence text must accompany the data.
