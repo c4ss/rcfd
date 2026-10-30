@@ -10,6 +10,7 @@ with a short iteration cap and a snapshot every iteration. Meshes are built with
 `w49e_sa_wall.py mesh` (M1w15, M1w05) into <work>/meshes.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -164,6 +165,117 @@ def long_summary(work):
     return out
 
 
+TMR = {"cd": 0.008192, "cd_friction": 0.006831}
+LADSON_CL6 = 0.645
+D49_A06 = {"cl_eff": 0.653988, "cd_eff": 0.00988193}
+TE_CELLS = {0, 1, 254, 255}
+TE_CELLS_WIDE = {0, 1, 254, 255, 256, 511}
+
+
+def run_record(work, i):
+    """End of one run: clean (cap), guard stop (iteration, cell, position), or missing."""
+    path = os.path.join(work, "runs", i, "solver-status.jsonl")
+    if not os.path.exists(path):
+        return None
+    its, fin, _ = w.read_stream(path)
+    if fin is None:
+        return {"id": i, "finished": False}
+    r = {"id": i, "finished": True, "exit": fin.get("exit_code"), "iterations": its[-1]["index"] if its else 0,
+         "wall_s": fin.get("wall_s")}
+    d = fin.get("divergence")
+    r["guard_stop"] = d is not None
+    if d:
+        r.update({"kind": d["kind"], "stop_iteration": d["iteration"], "cell": d["cell"], "position": d["position"],
+                  "last_good": d["last_good"]})
+    return r
+
+
+def long_summary_data(work):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        out = long_summary(work)
+    return out
+
+
+def collect(work, outdir):
+    rec = {i: run_record(work, i) for i in REGISTRY if not REGISTRY[i].get("long")}
+    long = json.loads(json.dumps(long_summary_data(work)))
+    ev = {}
+
+    def stop(i):
+        return bool(rec.get(i) and rec[i].get("guard_stop"))
+
+    def clean(i):
+        r = rec.get(i)
+        return bool(r and r.get("finished") and not r["guard_stop"] and r["exit"] == 5 and r["iterations"] == 300)
+
+    def near_te(i, alpha):
+        r = rec[i]
+        a = math.radians(alpha)
+        te = (0.25 + 0.75 * math.cos(a), -0.75 * math.sin(a))
+        return math.hypot(r["position"][0] - te[0], r["position"][1] - te[1])
+
+    ev["LR1"] = {"RA": stop("RA"), "RB": stop("RB"), "met": stop("RA") or stop("RB")}
+    stops = [i for i in ("RA", "RB", "RC", "RD", "RE") if stop(i)]
+    ev["LR2"] = {"stops": {i: [rec[i]["cell"], round(near_te(i, REGISTRY[i]["alpha"]), 6)] for i in stops},
+                 "met": all(rec[i]["cell"] in TE_CELLS or near_te(i, REGISTRY[i]["alpha"]) <= 0.02 for i in stops)}
+    ev["LR3"] = {"met": clean("RC")}
+    ev["LR4"] = {"stop_iteration": rec["RD"].get("stop_iteration"), "met": stop("RD")}
+    ev["LR5"] = {"met": clean("RF")}
+    ev["LR6"] = {"stop_iteration": rec["RE"].get("stop_iteration"), "met": stop("RE")}
+    ev["LM1"] = {"PA_stop": rec["PA"].get("stop_iteration"), "met": clean("PA")}
+    ev["LM2"] = {"PB_stop": rec["PB"].get("stop_iteration"), "met": clean("PB")}
+    ev["LM3"] = {"PE": [rec["PE"].get("stop_iteration"), rec["PE"].get("cell")],
+                 "met": stop("PE") and rec["PE"]["cell"] in TE_CELLS_WIDE and 10 <= rec["PE"]["stop_iteration"] <= 20}
+    ev["LM4"] = {"PF_clean": clean("PF"), "met": stop("PF") and rec["PF"]["cell"] in TE_CELLS_WIDE}
+    ev["LM5"] = {"PG": [rec["PG"].get("stop_iteration"), rec["PG"].get("cell")],
+                 "met": stop("PG") and math.hypot(rec["PG"]["position"][0] - 1.0, rec["PG"]["position"][1]) <= 0.001
+                 and 10 <= rec["PG"]["stop_iteration"] <= 20}
+    ev["LM6"] = {"PD_stop": rec["PD"].get("stop_iteration"), "met": clean("PD")}
+    for k, i in (("LN1", "QA"), ("LN2", "QB"), ("LN3", "QC"), ("LN4", "QD"), ("LN5", "QE")):
+        ev[k] = {i + "_clean": clean(i), "met": clean(i)}
+
+    def win(i, k):
+        return long.get(i, {}).get("window", {}).get(k, {}).get("mean")
+
+    def rel(a, b):
+        return None if a is None else a / b - 1.0
+
+    def ok(i):
+        return bool(long.get(i, {}).get("finished") and long[i]["exit"] in (0, 5))
+
+    ev["LL1"] = {"LB0": ok("LB0"), "LB6": ok("LB6"), "met": ok("LB0") and ok("LB6")}
+    ev["LL2"] = {"cd_eff": win("LB0", "cd_eff"), "rel": rel(win("LB0", "cd_eff"), TMR["cd"])}
+    ev["LL2"]["met"] = ev["LL2"]["rel"] is not None and abs(ev["LL2"]["rel"]) <= 0.06
+    ev["LL3"] = {"cd_veff": win("LB0", "cd_veff"), "rel": rel(win("LB0", "cd_veff"), TMR["cd_friction"])}
+    ev["LL3"]["met"] = ev["LL3"]["rel"] is not None and abs(ev["LL3"]["rel"]) <= 0.06
+    a, b = win("LB0", "cd_eff"), win("LA0", "cd_eff")
+    ev["LL4"] = {"LB0": a, "LA0": b, "rel": None if a is None or b is None else a / b - 1.0}
+    ev["LL4"]["met"] = ev["LL4"]["rel"] is not None and abs(ev["LL4"]["rel"]) <= 0.03
+    ev["LL5"] = {"cl_eff": win("LB6", "cl_eff"), "rel": rel(win("LB6", "cl_eff"), LADSON_CL6)}
+    ev["LL5"]["met"] = ev["LL5"]["rel"] is not None and abs(ev["LL5"]["rel"]) <= 0.05
+    ev["LL6"] = {"steady": long.get("LB6", {}).get("steady"), "met": bool(long.get("LB6", {}).get("steady"))}
+    ev["LL7"] = {"cd_eff": win("LB6", "cd_eff"), "rel": rel(win("LB6", "cd_eff"), D49_A06["cd_eff"])}
+    ev["LL7"]["met"] = ev["LL7"]["rel"] is not None and abs(ev["LL7"]["rel"]) <= 0.10
+    ev["LL8"] = {"LA0_exit": long.get("LA0", {}).get("exit"), "met": ok("LA0")}
+    ev["LL9"] = {"QE_clean": clean("QE"), "met": clean("QE")}
+    os.makedirs(outdir, exist_ok=True)
+    with open(os.path.join(outdir, "results.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump({"adr": 171, "runs": rec, "long": long, "evaluation": ev}, f, indent=1, sort_keys=True)
+    with open(os.path.join(outdir, "results.csv"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("id,mesh,alpha_deg,arm,end,iterations,stop_iteration,cell\n")
+        for i, r in rec.items():
+            if r is None:
+                continue
+            sp = REGISTRY[i]
+            end = "guard_stop" if r.get("guard_stop") else ("cap" if r.get("exit") == 5 else str(r.get("exit")))
+            f.write(f'{i},{sp["mesh"]},{sp["alpha"]},{sp["arm"]},{end},{r.get("iterations")},'
+                    f'{r.get("stop_iteration", "")},{r.get("cell", "")}\n')
+    print(json.dumps(ev, indent=1))
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -178,6 +290,8 @@ def main():
             print(i, run_one(a[1], a[2], i), flush=True)
     elif a[0] == "summary":
         summary(a[1])
+    elif a[0] == "collect":
+        collect(a[1], a[2])
     elif a[0] == "longsummary":
         long_summary(a[1])
     else:
