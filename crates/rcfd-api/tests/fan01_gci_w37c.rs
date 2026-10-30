@@ -132,8 +132,12 @@ fn case_toml(c: Counts, construction: &str, blade: bool) -> String {
     } else {
         casing.clone()
     };
+    // ADR 0170 D5 (report only, bladed): companions with the molecular moment, the default before ADR 0170
     let blade_t = if blade {
-        "[boundaries.blade]\nvelocity = \"fixed\"\n[reports.m_blade]\ntype = \"moment\"\npatch = \"blade\"\ndirection = [0.0, 0.0, 1.0]\n"
+        "[boundaries.blade]\nvelocity = \"fixed\"\n[reports.m_blade]\ntype = \"moment\"\npatch = \"blade\"\ndirection = [0.0, 0.0, 1.0]\n\
+         [reports.m_blade_mol]\ntype = \"moment\"\npatch = \"blade\"\ndirection = [0.0, 0.0, 1.0]\ncomponent = \"total_molecular\"\n\
+         [reports.m_hub_mol]\ntype = \"moment\"\npatch = \"hub\"\ndirection = [0.0, 0.0, 1.0]\ncomponent = \"total_molecular\"\n\
+         [reports.m_shroud_mol]\ntype = \"moment\"\npatch = \"shroud\"\ndirection = [0.0, 0.0, 1.0]\ncomponent = \"total_molecular\"\n"
     } else {
         ""
     };
@@ -508,6 +512,12 @@ fn run(label: &str, c: Counts, blade: bool) -> Outcome {
     let cells = sim.geom.mesh.n_cells();
     let t0 = Instant::now();
     let mut hist: Vec<(usize, f64, f64)> = Vec::new();
+    // ADR 0170 D5 (report only): the bladed torque with the molecular moment, sampled like `hist`
+    let torque_mol = |sim: &Simulation| {
+        let mon = |k: &str| sim.monitors.last(k).unwrap_or(f64::NAN);
+        -N_BLADES * (mon("m_blade_mol") + mon("m_hub_mol"))
+    };
+    let mut hist_mol: Vec<(usize, f64)> = Vec::new();
     let (mut n, mut stop) = (0usize, None);
     while n < CAP && !sim.is_done() {
         let st = sim.step();
@@ -515,6 +525,9 @@ fn run(label: &str, c: Counts, blade: bool) -> Outcome {
         if n % 50 == 0 || sim.is_done() {
             let (a, b) = functionals(&sim, blade);
             hist.push((n, a, b));
+            if blade {
+                hist_mol.push((n, torque_mol(&sim)));
+            }
         }
         if n % 500 == 0 || n <= 3 || n == 10 || n == 30 {
             let (a, b) = functionals(&sim, blade);
@@ -601,6 +614,29 @@ fn run(label: &str, c: Counts, blade: bool) -> Outcome {
         -N_BLADES * mon("m_hub"),
         -N_BLADES * mon("m_shroud"),
     );
+    if blade {
+        // ADR 0170 D5: the molecular torque (ADR 0086's f_a), its change over the same window, and the excess with it
+        let t_mol = torque_mol(&sim);
+        if hist_mol.last().map(|h| h.0) != Some(n) {
+            hist_mol.push((n, t_mol));
+        }
+        let back_mol = hist_mol
+            .iter()
+            .rev()
+            .find(|h| h.0 + window <= n)
+            .copied()
+            .unwrap_or(hist_mol[0]);
+        let wall_mol = -N_BLADES * (mon("m_hub_mol") + mon("m_shroud_mol") + mon("m_blade_mol"));
+        println!(
+            "W37C {label} ADR 0170: torque {f_a:.6} N m (effective, the default; change {nu_a:.3e}), molecular {t_mol:.6} N m (change {:.3e}); L excess effective {:.5}, molecular {:.5} N m; torque blade {:.5} hub {:.5} shroud {:.5} N m (molecular)",
+            (t_mol - back_mol.1).abs(),
+            (l_out - l_in) - wall,
+            (l_out - l_in) - wall_mol,
+            -N_BLADES * mon("m_blade_mol"),
+            -N_BLADES * mon("m_hub_mol"),
+            -N_BLADES * mon("m_shroud_mol"),
+        );
+    }
     Outcome {
         converged,
         how,
@@ -760,7 +796,8 @@ fn e_l_e_s_empty_passage_band_contains_zero_known_miss() {
 }
 
 /// ADR 0086 B-M, B-P: the bladed studies of torque and Delta p_ts are VALID (met: p 1.51 and 1.74, ADR 0086 addendum). The fine run took 58.8 of
-/// the 60 wall-clock minutes on a shared machine.
+/// the 60 wall-clock minutes on a shared machine. Re-read with the effective moment default (ADR 0170 R2, the same fields bit for bit): torque
+/// 2.098164 / 2.028692 / 1.918189 N m, p 1.39, VALID; Delta p_ts unchanged, VALID (met). B1 took 46.4 minutes alone.
 #[test]
 #[ignore = "heavy, ADR 0086 part B: three runs, about 1.5 h in release (met in the addendum)"]
 fn b_m_b_p_bladed_studies_are_valid() {

@@ -157,6 +157,16 @@ direction = [0.0, 0.0, 1.0]
 type = "moment"
 patch = "hub"
 direction = [0.0, 0.0, 1.0]
+[reports.m_blade_mol]
+type = "moment"
+patch = "blade"
+direction = [0.0, 0.0, 1.0]
+component = "total_molecular"
+[reports.m_hub_mol]
+type = "moment"
+patch = "hub"
+direction = [0.0, 0.0, 1.0]
+component = "total_molecular"
 "#,
         fan_section("h_slit", Some(ATTEMPT2_FIRST_CELL))
     )
@@ -415,6 +425,25 @@ fn run_point(q: f64) -> PointResult {
         "FAN-01 h_slit Q {q} m^3/s: converged {} ({}); Delta p_ts {:.2} Pa, Delta p_tt {:.2} Pa, torque {:.4} N m (pressure part {:.4}), eta_ts {:.4}; m_in {m_in:.6e} m_out {m_out:.6e}",
         r.converged, r.how, r.dp_ts, r.dp_tt, r.torque, r.torque_pressure_part, r.eta
     );
+    // ADR 0170 D5 (report only): the torque with the molecular moment, the default before ADR 0170 (ADR 0075's numbers),
+    // and its relative change over the last 1000 iterations
+    let torque_mol = -N_BLADES * (mon("m_blade_mol") + mon("m_hub_mol"));
+    let ct_mol = match (series("m_blade_mol"), series("m_hub_mol")) {
+        (Some(b), Some(h)) => rel_change(
+            &rcfd_post::monitors::Series {
+                unit: String::new(),
+                x: b.x.clone(),
+                y: b.y.iter().zip(&h.y).map(|(x, y)| x + y).collect(),
+            },
+            1000,
+        ),
+        _ => f64::INFINITY,
+    };
+    println!(
+        "FAN-01 h_slit Q {q} m^3/s ADR 0170: torque {:.6} N m (effective, the default), molecular {torque_mol:.6} N m (change over 1000 iterations {ct_mol:.3e}), eta_ts with the molecular torque {:.4}",
+        r.torque,
+        q * r.dp_ts / (torque_mol * w)
+    );
     r
 }
 
@@ -453,9 +482,12 @@ fn f126_outcome() -> (Vec<String>, Vec<PointResult>) {
 
 /// F-126 attempt 3 (ADR 0075 amendment 3), measured once per operating point (about 16 min each): both runs converge by the steady-monitor
 /// criterion; design point Delta p_ts -3.8 Pa (measured 126.5), torque 1.320 N m (2.142, -38 %), eta_ts -0.03 (0.532); off-design
-/// -84.4 Pa (63.9), 1.010 N m (1.882, -46 %), eta_ts -0.97 (0.394). MISSED; the limits are unchanged.
+/// -84.4 Pa (63.9), 1.010 N m (1.882, -46 %), eta_ts -0.97 (0.394). MISSED; the limits are unchanged. Those torques are
+/// molecular moments. Re-read with the effective moment default (ADR 0170 R1, the same fields bit for bit): torque
+/// 1.3471 N m (-37.1 %) and 1.0420 N m (-44.6 %), eta_ts -0.026 and -0.94, both converged by the cap rule; still MISSED on
+/// every limit.
 #[test]
-#[ignore = "known miss: F-126 on FAN-01 (attempt 3) misses every limit: torque -38 % / -46 %, Delta p_ts -3.8 / -84.4 Pa against 126.5 / 63.9 Pa; two 16-minute SST sector runs"]
+#[ignore = "known miss: F-126 on FAN-01 (attempt 3) misses every limit: torque -37 % / -45 % (ADR 0170; molecular -38 % / -46 %), Delta p_ts -3.8 / -84.4 Pa against 126.5 / 63.9 Pa; two 17-minute SST sector runs"]
 fn f126_fan01_rotor_against_the_measured_characteristic_known_miss() {
     let (bad, res) = f126_outcome();
     for r in &res {

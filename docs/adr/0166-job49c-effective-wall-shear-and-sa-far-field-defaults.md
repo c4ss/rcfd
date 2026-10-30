@@ -9,6 +9,8 @@ accepted by the maintainer. 2026-10-29: questions 1 (b) and 3 (b) are taken in
 SA-only scope and with it T6 and T8 (a). Job 49C, on local main f9a520a (the
 worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest in this worktree and in the main
 checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
+**2026-10-29: D3 and test T4 are superseded by [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md)
+(question 2 (a)): `moment` reports now follow the force default; T4 is respelled as T4'.**
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit

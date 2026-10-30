@@ -306,9 +306,16 @@ wall-function mesh (wall-cell y+ well above 1) the momentum equation uses `nu + 
 shear is `u_tau^2`. The molecular value is only about `u+/y+` of that (about 0.35 at y+ = 40). That is why ADR 0159's
 NACA 0012 drag at 0 degrees was about half the measured value, with SA and SST alike (ADR 0164).
 
-`moment` reports keep the molecular viscosity unless `component` is `total_effective` or `viscous_effective` (ADR 0166 D3).
-To reproduce numbers made before ADR 0166 with a turbulence model, set `component = "total_molecular"` (or
-`viscous_molecular`).
+`moment` reports always give the moment of the whole wall force (pressure plus viscous); `component` only picks the
+viscosity (ADR 0170):
+* `total` (default) and `viscous`: the same rule as force reports above, so with a turbulence model the effective wall
+  shear. Before ADR 0170 a moment took `physics.nu` here (ADR 0166 D3).
+* `total_effective`, `viscous_effective`: always the face viscosity.
+* `total_molecular`, `viscous_molecular` and `pressure`: always `physics.nu`, the moment before ADR 0170.
+
+To reproduce numbers made before ADR 0166 (forces) or ADR 0170 (moments) with a turbulence model, set
+`component = "total_molecular"` (or `viscous_molecular`). The FAN-01 torques of ADRs 0075 to 0136 are such molecular
+moments.
 
 Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
 unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field

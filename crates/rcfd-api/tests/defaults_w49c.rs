@@ -1,5 +1,6 @@
 //! ADR 0166 (job 49C): the effective wall shear is the default of force reports with a turbulence model (D1), moment
-//! reports keep their default (D3), the old values stay spellable as `total_molecular` / `viscous_molecular` (D4), and a
+//! reports keep their default (D3; superseded by ADR 0170, test T4'), the old values stay spellable as
+//! `total_molecular` / `viscous_molecular` (D4), and a
 //! Spalart-Allmaras free-stream far field takes the `freestream` turbulence role by default (D2). Limits T1-T6 of ADR 0166,
 //! registered before this file was written. T6 and T8 (a) are superseded by ADR 0169 (SST and k-epsilon far fields are
 //! `freestream` by default too) and replaced in `far_field_w49f.rs`.
@@ -140,11 +141,12 @@ fn t2_laminar_variable_viscosity_default_is_unchanged() {
     );
 }
 
-/// T3 / T4: Spalart-Allmaras with its wall function at y+ about 40: the default force components are the effective
-/// ones; the molecular ones are ADR 0164 C2/C3's (ratio > 1.5, pressure part the same); a moment keeps the molecular
-/// default (D3), control: its effective value differs.
+/// T3 / T4': Spalart-Allmaras with its wall function at y+ about 40: the default force components are the effective
+/// ones; the molecular ones are ADR 0164 C2/C3's (ratio > 1.5, pressure part the same). T4 (a moment keeps the
+/// molecular default, ADR 0166 D3) is superseded by ADR 0170 T4': the default moment is the effective one; control:
+/// `total_molecular` (the moment before ADR 0170) differs.
 #[test]
-fn t3_t4_sa_default_force_is_effective_and_moment_is_unchanged() {
+fn t3_t4_sa_default_force_is_effective_and_moment_follows() {
     let mut c = Case::parse_toml(&with_reports(PLATE)).unwrap();
     c.set("turbulence.model", serde_json::json!("spalart_allmaras"))
         .unwrap();
@@ -161,11 +163,11 @@ fn t3_t4_sa_default_force_is_effective_and_moment_is_unchanged() {
         (p_default - p_mol).abs() <= 1e-12 * (get(&v, "d_total").abs() + 1e-30),
         "{v:?}"
     );
-    // T4
-    same(&v, "m_unset", "m_total_molecular");
+    // T4' (ADR 0170)
+    same(&v, "m_unset", "m_total_effective");
     assert_ne!(
         get(&v, "m_unset").to_bits(),
-        get(&v, "m_total_effective").to_bits(),
+        get(&v, "m_total_molecular").to_bits(),
         "control: {v:?}"
     );
 }

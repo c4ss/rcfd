@@ -7,6 +7,8 @@ re-recorded. Clean-room: first principles and published literature only; every r
 UNVERIFIED. Parent: ADR 0071 (wave 33D, addendum: F-126 not attempted, C2/C3 finest-mesh limits registered without a mesh study and missed,
 C4 spurious radial/axial speed missed), ADR 0055/0059 (F-126 frozen rotor / mixing plane), ADR 0065/0068 (fan sector meshes), `docs/milestone-fan.md`.
 
+**2026-10-30, [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md):** the torques below are molecular moments. With the effective moment default (same fields bit for bit) attempt 3 gives 1.3471 / 1.0420 N m (-37.1 % / -44.6 %); F-126 still misses every limit.
+
 ## Registered
 
 ### Part A: reading published rotating-machinery data
