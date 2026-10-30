@@ -44,7 +44,7 @@
           "run": "r-20261029T230332-c6be"
         }
       ],
-      "bytes": 28095017
+      "bytes": 28096175
     },
     "quick-start": {
       "runs": [
@@ -66,13 +66,23 @@
         }
       ],
       "bytes": 4250540
+    },
+    "axial-fan": {
+      "runs": [
+        {
+          "case": "cases/fan01-passage-upwind.toml",
+          "run": "r-20261030T223519-0489"
+        }
+      ],
+      "bytes": 3499558
     }
   },
   "caps": {
     "total": 40000000,
     "projects": {
       "wind-tunnel": 35000000,
-      "quick-start": 6000000
+      "quick-start": 6000000,
+      "axial-fan": 6000000
     }
   }
 }

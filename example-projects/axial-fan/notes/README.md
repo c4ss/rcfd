@@ -45,6 +45,10 @@ Written by `scripts/make_example_projects.py` from the run folder; wall-clock ti
 
 <!-- generated: runs (scripts/make_example_projects.py) -->
 
+| Case | Run | State | Steps | Wall time | Snapshots | Results (final values) |
+|---|---|---|---|---|---|---|
+| `cases/fan01-passage-upwind.toml` | `runs/r-20261030T223519-0489` | finished (not_converged) | 1500 | 65.5 s | 10 | m_blade -0.153, m_hub -0.002782, m_in -0.186, m_out 0.186, m_shroud 0.007274, p_in -41.57, p_out 0 |
+
 <!-- end of generated runs -->
 
 ## Limits

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "Axial fan: one blade passage of FAN-01 (3D)",
+  "created": "2026-10-30T22:35:19.000Z",
+  "solver_version_created": "rcfd 0.1.0"
+}
