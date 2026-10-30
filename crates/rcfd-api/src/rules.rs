@@ -582,6 +582,177 @@ pub fn lag_preflight_rule(p: &crate::sim::LagPreflight) -> Option<RuleDiagnostic
     })
 }
 
+/// The computed setup rule SV301 found while the run is going (ADR 0172 D1): the estimate `p` made at the step the controller
+/// settled on (`dt`, after `step` steps of this launch). Same id, path and fix as [`lag_preflight_rule`].
+pub fn lag_watch_rule(p: &crate::sim::LagPreflight, step: usize, dt: f64) -> Option<RuleDiagnostic> {
+    if p.rho.is_nan() || p.rho < SV301_LEVEL {
+        return None;
+    }
+    let x = p.position;
+    Some(RuleDiagnostic {
+        id: "SV301".into(),
+        severity: Severity::Warning,
+        category: "solver".into(),
+        path: "solver.corrector_control".into(),
+        message: format!(
+            "with solver.n_correctors = {} the pressure-velocity coupling has become unstable on this mesh at the time step the \
+             run has reached (step {} of this launch, dt = {:.4e}): a lagged pressure error is amplified by {:.2} per step \
+             (pressure-lag estimate, ADR 0073, on the present state; warning level {}), its largest entry in cell {} at \
+             ({:.4e}, {:.4e}, {:.4e}), typically a thin wall cell; the run may develop grid-scale pressure oscillations (spokes) \
+             there or diverge. Remedy: set solver.corrector_control = \"adaptive\" (the solver then adds pressure correctors until \
+             the estimate is at most 0.5)",
+            p.n_correctors, step, dt, p.rho, SV301_LEVEL, p.cell, x[0], x[1], x[2]
+        ),
+        fix: Some(json!({"path": "solver.corrector_control", "value": "adaptive"})),
+    })
+}
+
+/// Level of the computed setup rule SV302 (ADR 0172 D3): a wall-cell `aspect ratio x tan(non-orthogonality)` at or above it
+/// warns when `linear_upwind` is unlimited. It lies between ADR 0171's values for M1w15 (about 1 600, clean at 6 degrees) and
+/// M1w05 (about 6 900, diverged at 6 degrees); a judgement, not a fit.
+pub const SV302_LEVEL: f64 = 3000.0;
+
+/// The wall cell of largest `aspect ratio x tan(non-orthogonality)` of a mesh (ADR 0172 D3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WallRisk {
+    /// `aspect * tan(non_orth)`.
+    pub metric: f64,
+    /// The cell.
+    pub cell: usize,
+    /// Its centre.
+    pub position: [f64; 3],
+    /// Its aspect ratio (longest over shortest edge, `rcfd_mesh::quality`).
+    pub aspect: f64,
+    /// Its largest face non-orthogonality, degrees (clamped to 89.9).
+    pub non_orth_deg: f64,
+}
+
+/// True when the patch `p` is a wall for the case (ADR 0172 D3, amendment 1): the turbulence role `Wall` of its boundary entry
+/// (defaults included: a fixed zero velocity), the definition the wall treatments use, on a patch that is not an empty,
+/// symmetry or cyclic one.
+pub fn is_wall_patch(case: &Case, p: &rcfd_mesh::mesh::Patch) -> bool {
+    use rcfd_mesh::mesh::PatchKind;
+    !matches!(p.kind, PatchKind::Empty | PatchKind::Symmetry | PatchKind::Cyclic)
+        && crate::turb::role(case, &p.name) == crate::turb::Role::Wall
+}
+
+/// The wall cell with the largest `aspect x tan(non-orthogonality)` (ADR 0172 D3), `None` without a wall cell. The aspect
+/// ratio of a cell and the non-orthogonality of its faces are `rcfd_mesh::quality::compute_metrics`'s; the angle is the largest
+/// over all faces of the cell, clamped to 89.9 degrees.
+pub fn wall_cell_risk(case: &Case, mesh: &rcfd_mesh::mesh::Mesh) -> Option<WallRisk> {
+    let flags: Vec<bool> = mesh.patches().iter().map(|p| is_wall_patch(case, p)).collect();
+    if !flags.iter().any(|&w| w) {
+        return None;
+    }
+    let m = rcfd_mesh::quality::compute_metrics(mesh);
+    let cc = mesh.cell_centres();
+    let mut seen = vec![false; mesh.n_cells()];
+    let mut best: Option<WallRisk> = None;
+    for (p, _) in mesh.patches().iter().zip(&flags).filter(|(_, w)| **w) {
+        for f in p.faces() {
+            let c = mesh.owner()[f];
+            if std::mem::replace(&mut seen[c], true) {
+                continue;
+            }
+            let theta = mesh
+                .cell_faces(c)
+                .iter()
+                .map(|&g| m.non_orthogonality[g])
+                .fold(0.0_f64, f64::max)
+                .min(89.9);
+            let metric = m.aspect_ratio[c] * theta.to_radians().tan();
+            let metric = if metric.is_nan() { 0.0 } else { metric };
+            if best.is_none_or(|b| metric > b.metric) {
+                best = Some(WallRisk {
+                    metric,
+                    cell: c,
+                    position: cc[c],
+                    aspect: m.aspect_ratio[c],
+                    non_orth_deg: theta,
+                });
+            }
+        }
+    }
+    best
+}
+
+/// The computed setup rule SV302 (ADR 0172 D3): a risk notice for unlimited `linear_upwind` on thin, strongly skewed wall cells.
+/// A warning, no fix (the limiter costs accuracy), and honest about false positives.
+pub fn linear_upwind_wall_rule(r: &WallRisk) -> Option<RuleDiagnostic> {
+    if r.metric.is_nan() || r.metric < SV302_LEVEL {
+        return None;
+    }
+    let x = r.position;
+    Some(RuleDiagnostic {
+        id: "SV302".into(),
+        severity: Severity::Warning,
+        category: "solver".into(),
+        path: "solver.linear_upwind_limiter".into(),
+        message: format!(
+            "solver.convection = \"linear_upwind\" is unlimited (solver.linear_upwind_limiter = \"none\") and the mesh has thin, \
+             strongly skewed wall cells: aspect ratio x tan(non-orthogonality) reaches {:.0} (notice level {}) in cell {} at \
+             ({:.4e}, {:.4e}, {:.4e}), aspect ratio {:.0}, non-orthogonality {:.1} degrees. This is a risk, not a prediction: in \
+             ADR 0171's NACA 0012 runs (wall y+ about 2 to 5, metric 6900 to 21000) the unlimited extrapolation on such cells at \
+             the trailing edge made the steady solver diverge within 30 iterations once the flow was off-axis (6 degrees), \
+             while the same mesh at 0 degrees, with the same metric, converged, and a mesh with metric 1600 converged at 6 degrees; \
+             lowering the relaxation factors did not help. If the run diverges at a wall cell, set \
+             solver.linear_upwind_limiter = \"barth_jespersen\" (it limits the extrapolation in the convection term; cost in ADR \
+             0171: about +3 % in cd_eff at 0 degrees, all in the pressure drag). The default is unchanged",
+            r.metric, SV302_LEVEL, r.cell, x[0], x[1], x[2], r.aspect, r.non_orth_deg
+        ),
+        fix: None,
+    })
+}
+
+/// What the dynamic set-up rules (SV301, SV302) need from a built simulation, taken while the simulation is at hand
+/// (ADR 0172 D2); [`crate::runctl::check_only`] builds the simulation, takes this and drops it before it builds its mesh.
+#[derive(Debug, Clone, Copy)]
+pub struct SimFacts {
+    /// The pre-run pressure-lag estimate (SV301), at the settled step.
+    pub lag: Option<crate::sim::LagPreflight>,
+    /// The steady solver runs `linear_upwind` without a limiter (SV302 applies).
+    pub unlimited_linear_upwind: bool,
+}
+
+impl SimFacts {
+    /// The facts of `sim` now (a continued run's restarted state, a fresh run's initial state).
+    pub fn of(sim: &crate::sim::Simulation) -> Self {
+        SimFacts {
+            lag: sim.pressure_lag_preflight(),
+            unlimited_linear_upwind: sim.unlimited_linear_upwind(),
+        }
+    }
+}
+
+/// The dynamic set-up diagnostics, SV301 then SV302 (ADR 0172 D2): they need a built simulation or its mesh.
+pub fn dynamic_diagnostics(case: &Case, facts: &SimFacts, mesh: &rcfd_mesh::mesh::Mesh) -> Vec<RuleDiagnostic> {
+    let mut out = Vec::new();
+    out.extend(facts.lag.as_ref().and_then(lag_preflight_rule));
+    if facts.unlimited_linear_upwind {
+        out.extend(wall_cell_risk(case, mesh).as_ref().and_then(linear_upwind_wall_rule));
+    }
+    out
+}
+
+/// [`dynamic_diagnostics`] of a built simulation and its own mesh.
+pub fn dynamic_setup_diagnostics(sim: &crate::sim::Simulation) -> Vec<RuleDiagnostic> {
+    dynamic_diagnostics(&sim.case, &SimFacts::of(sim), &sim.geom.mesh)
+}
+
+/// Every set-up diagnostic of a case about to run (ADR 0172 D2): the static rules ([`check_case`], with the mesh quality `q`)
+/// followed by the dynamic ones ([`dynamic_diagnostics`]). The one list that `run.check`, `rcfd run`, `run.headless` and the
+/// chain driver show.
+pub fn setup_diagnostics(
+    case: &Case,
+    facts: &SimFacts,
+    mesh: &rcfd_mesh::mesh::Mesh,
+    q: &rcfd_mesh::quality::QualityReport,
+) -> Vec<RuleDiagnostic> {
+    let mut out = check_case(case, Some(&mesh_context(q)));
+    out.extend(dynamic_diagnostics(case, facts, mesh));
+    out
+}
+
 /// The mesh context of the rules: the serialised quality report.
 pub fn mesh_context(q: &rcfd_mesh::quality::QualityReport) -> Value {
     serde_json::to_value(q).unwrap_or(Value::Null)

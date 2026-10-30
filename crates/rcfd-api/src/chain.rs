@@ -336,7 +336,7 @@ fn run_stage(
         }
         return (None, exit::INVALID);
     }
-    let warnings = crate::rules::warnings_json(&rd);
+    let mut warnings = crate::rules::warnings_json(&rd);
     // where the stage starts from
     let mode = scase
         .get(&format!("chain.stages.{name}.restart"))
@@ -359,6 +359,11 @@ fn run_stage(
         Ok(Some(r)) => extra("restart", json!({"stage": name, "report": r})),
         Ok(None) => {}
         Err(e) => return fail(extra, exit::FAIL, e),
+    }
+    // ADR 0172 D2: the dynamic set-up rules (SV301 at the settled step, SV302) of the stage's restarted state, as `rcfd run`
+    let dynamic = crate::rules::dynamic_setup_diagnostics(&sim);
+    if let (Some(all), Value::Array(w)) = (warnings.as_array_mut(), crate::rules::warnings_json(&dynamic)) {
+        all.extend(w);
     }
     let mut opts = base.clone();
     opts.checkpoint = Some(dir.join("restart.rcfd"));

@@ -543,20 +543,18 @@ fn cmd_run(args: &[String]) -> u8 {
             return FAIL;
         }
     }
-    // ADR 0156 D7: the computed setup rule SV301 from the pre-run pressure-lag estimate (made on a copy of the solver, so the
-    // run itself is unchanged); like the static rules' warnings: stderr and a `warning` status event after `start`
+    // ADR 0156 D7, ADR 0172 D2: the dynamic set-up rules (SV301 at the settled step, SV302) of the one shared list, after the
+    // restart is applied (so a continued run estimates its restarted state); like the static rules' warnings: stderr and a
+    // `warning` status event after `start`
     let mut rule_warnings = rule_warnings;
-    if let Some(d) = sim
-        .pressure_lag_preflight()
-        .and_then(|p| rcfd_api::rules::lag_preflight_rule(&p))
-    {
+    let dynamic = rcfd_api::rules::dynamic_setup_diagnostics(&sim);
+    for d in &dynamic {
         eprintln!("{label}: {d}");
-        if let (Some(all), serde_json::Value::Array(w)) = (
-            rule_warnings.as_array_mut(),
-            rcfd_api::rules::warnings_json(std::slice::from_ref(&d)),
-        ) {
-            all.extend(w);
-        }
+    }
+    if let (Some(all), serde_json::Value::Array(w)) =
+        (rule_warnings.as_array_mut(), rcfd_api::rules::warnings_json(&dynamic))
+    {
+        all.extend(w);
     }
     let mut status_file = match opt(args, "--status-file") {
         Some(f) => match std::fs::File::create(f) {

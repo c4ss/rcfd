@@ -1437,6 +1437,15 @@ pub struct SteadyDivergence {
 impl SteadyDivergence {
     /// One-line located message; `centres` (cell centres of the mesh) adds the position of the cell.
     pub fn message(&self, centres: Option<&[Vec3]>) -> String {
+        self.message_with_hint(centres, None)
+    }
+
+    /// [`message`](Self::message) with the closing advice replaced by `hint` when it is `Some` (ADR 0172 D4: the caller knows
+    /// the scheme and the cell; this crate does not). `None` gives exactly the text of [`message`](Self::message).
+    pub fn message_with_hint(&self, centres: Option<&[Vec3]>, hint: Option<&str>) -> String {
+        let advice = hint.unwrap_or(
+            "lower the relaxation factors (solver.alpha_u, solver.alpha_p) or use a more dissipative convection scheme",
+        );
         let at = match (self.cell, centres) {
             (Some(c), Some(x)) if c < x.len() => {
                 format!(", cell {c} at ({:.4e}, {:.4e}, {:.4e})", x[c][0], x[c][1], x[c][2])
@@ -1458,7 +1467,7 @@ impl SteadyDivergence {
             )
         };
         format!(
-            "steady divergence guard: {}: {what} at iteration {}{at}; {good}; lower the relaxation factors (solver.alpha_u, solver.alpha_p) or use a more dissipative convection scheme",
+            "steady divergence guard: {}: {what} at iteration {}{at}; {good}; {advice}",
             self.kind, self.iteration
         )
     }

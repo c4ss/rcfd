@@ -1118,17 +1118,19 @@ impl Service {
                 .interpolate_from(&src_case, &ck, mode)
                 .map_err(|e| RpcError::params(format!("interpolate: {e}")))?;
         }
-        // ADR 0160 D5: the computed setup rule SV301 at the start of a run (no step taken yet: fresh, continued or interpolated
-        // in this call), as `rcfd run` shows it: a `warning` event after `start`; `info` gains `warnings` only when it fires
+        // ADR 0160 D5, ADR 0172 D2: the set-up diagnostics at the start of a run (no step taken yet: fresh, continued or
+        // interpolated in this call), the warning-severity ones of the one list `rcfd run` shows (static rules, SV301 at the
+        // settled step, SV302), as `rcfd run` shows them: a `warning` event after `start`; `info` gains `warnings` only when
+        // there are any. A rule error does not refuse a headless call (it never did).
         let mut info = json!({"driver": "service", "continue_from": cont.as_ref().map(|c| c.display().to_string())});
         {
             let g = lock(&sim);
             if g.iteration() == 0 {
-                if let Some(d) = g
-                    .pressure_lag_preflight()
-                    .and_then(|pf| crate::rules::lag_preflight_rule(&pf))
-                {
-                    info["warnings"] = crate::rules::warnings_json(std::slice::from_ref(&d));
+                let q = rcfd_mesh::quality::check_mesh(&g.geom.mesh);
+                let all = crate::rules::setup_diagnostics(&g.case, &crate::rules::SimFacts::of(&g), &g.geom.mesh, &q);
+                let w = crate::rules::warnings_json(&all);
+                if w.as_array().is_some_and(|a| !a.is_empty()) {
+                    info["warnings"] = w;
                 }
             }
         }

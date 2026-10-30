@@ -606,6 +606,15 @@ impl RunPoller {
                 c.0.push(x);
                 c.1.push(*v);
             }
+            // ADR 0172 D5: the adaptive corrector count and cap (ADR 0160 D4) go to the Monitors plot (linear axis), only for
+            // the lines that carry them
+            for (k, v) in [("correctors", r.correctors), ("corrector_cap", r.corrector_cap)] {
+                if let Some(v) = v {
+                    let c = monitors.entry(k.to_string()).or_default();
+                    c.0.push(x);
+                    c.1.push(v as f64);
+                }
+            }
             last = Some(r);
         }
         if bad > 0 {

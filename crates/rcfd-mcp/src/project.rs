@@ -136,7 +136,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "read_residuals",
-            description: "Residual and monitor series of a run (residuals.<equation>, monitors.<name>) against the step, each decimated to at most max_points (default 200) keeping first, last and every bucket's minimum and maximum. A result over the size budget is written to runs/<id>/mcp/ and returned as a path.",
+            description: "Residual and monitor series of a run (residuals.<equation>, monitors.<name>, and, for runs with adaptive pressure correctors, correctors = the count of the step's final outer iteration and corrector_cap = the estimates so far that ended at the cap) against the step, each decimated to at most max_points (default 200) keeping first, last and every bucket's minimum and maximum. A result over the size budget is written to runs/<id>/mcp/ and returned as a path.",
             access: Access::Read,
             schema: || {
                 obj(
@@ -365,7 +365,8 @@ pub fn decimate_minmax(points: &[[f64; 2]], max_points: usize) -> Vec<[f64; 2]> 
     keep.into_iter().map(|i| points[i]).collect()
 }
 
-/// Series of `residuals.jsonl` bytes: `residuals.<eq>` and `monitors.<name>` against the step, decimated to
+/// Series of `residuals.jsonl` bytes: `residuals.<eq>`, `monitors.<name>` and (adaptive correctors only) `correctors` and
+/// `corrector_cap` against the step, decimated to
 /// `max_points` each (`None`: no decimation). Returns (series, complete lines read, lines that did not parse).
 pub fn residual_series(
     bytes: &[u8],
@@ -397,6 +398,13 @@ pub fn residual_series(
                     .entry(format!("{group}.{k}"))
                     .or_default()
                     .push([step as f64, x.as_f64().unwrap_or(f64::NAN)]);
+            }
+        }
+        // ADR 0172 D5: the adaptive corrector count and the estimates that ended at the cap (ADR 0160 D4), only in the lines
+        // of runs with solver.corrector_control = "adaptive"
+        for k in ["correctors", "corrector_cap"] {
+            if let Some(x) = v.get(k).and_then(Value::as_f64) {
+                series.entry(k.to_string()).or_default().push([step as f64, x]);
             }
         }
     }
