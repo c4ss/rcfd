@@ -487,14 +487,14 @@ fn v1_v2_cells_and_beta_one() {
 
 /// ADR 0177 acceptance on B3 (Z2a, Z2b, Z2c, Z2t, Z2p, Z2le) with beta = 0.25.
 #[test]
-#[ignore = "ADR 0177 F-R(0.25) B3 (about 2.5 min in release)"]
-fn fr_025_b3() {
+#[ignore = "known miss (ADR 0177 Z2a, Z2b, Z2c): F-R(0.25) rho_med 1.038, rho_du 1.929, tolerance not reached, probe 8.25e-4 / 6.19e-4; Z2t, Z2p, Z2le met (about 2.5 min in release)"]
+fn fr_025_b3_known_miss() {
     assert_limits(&fr_arm("FR-0.25", 0.25));
 }
 
 /// ADR 0177 conditional arm: beta = 0.1, run only if F-R(0.25) misses Z2a.
 #[test]
-#[ignore = "ADR 0177 F-R(0.1) B3, conditional on F-R(0.25) missing Z2a (about 2.5 min in release)"]
-fn fr_010_b3() {
+#[ignore = "known miss (ADR 0177, conditional arm): F-R(0.1) misses every limit (rho_med 28.4, rho_du 5.85, Delta p_ts 42.48 outside its band) (about 2.5 min in release)"]
+fn fr_010_b3_known_miss() {
     assert_limits(&fr_arm("FR-0.1", 0.1));
 }
