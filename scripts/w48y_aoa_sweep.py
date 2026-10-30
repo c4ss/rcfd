@@ -1,6 +1,8 @@
 """ADR 0159 (job 48Y): NACA 0012 angle-of-attack sweep up to and through stall, run on demand.
 
-    python scripts/w48y_aoa_sweep.py mesh <rcfd> <work> [M1|M2 ...]     build the aerofoil O-grids into <work>/meshes
+    python scripts/w48y_aoa_sweep.py mesh <rcfd> <work> [M1|M2 ...] [--far C]   build the aerofoil O-grids into
+                                                                         <work>/meshes (--far: far field at C chords,
+                                                                         first cell kept, named <mesh>-far<C>; ADR 0167)
     python scripts/w48y_aoa_sweep.py cases <work>                        write every case of the registry to <work>/cases
     python scripts/w48y_aoa_sweep.py run <rcfd> <work> <id> ... [--parallel K]   run cases (one thread each)
     python scripts/w48y_aoa_sweep.py plan <work>                         the DDES and extension ids the registered rules ask
@@ -137,6 +139,23 @@ def mesh_params(name):
         ref = MESHES[p["grading"].split(":")[1]]
         p["grading"] = grading_for_first(geometric_first(ref["grading"], ref["ny"]), p["ny"])
     return p
+
+
+def far_field_variant(name, far):
+    """ADR 0167 (job 49D): the mesh `name` with its far-field circle at `far` chords instead of the registered one, and
+    the grading changed so that the first radial step (about the first cell at mid-chord) stays the same. Registers the
+    variant in MESHES as `<name>-far<far>` and returns that name; `far` equal to the registered value returns `name`
+    itself, so the registered meshes (and ADR 0159's results) are unchanged. The grading expression is ADR 0164's for its
+    F500w (M1w at 500 chords), in the same order of operations, so that the same points are written."""
+    p = MESHES[name]
+    if float(far) == float(p["far"]):
+        return name
+    if isinstance(p["grading"], str):
+        raise SystemExit(f"{name}: a far-field variant needs a numeric grading")
+    new = f"{name}-far{fmt(far)}"
+    MESHES[new] = {**p, "far": float(far),
+                   "grading": grading_for_first(geometric_first(p["grading"], p["ny"]) * p["far"] / float(far), p["ny"])}
+    return new
 
 
 def surface(th):
@@ -882,6 +901,12 @@ def selftest():
     # every registered case is a distinct text
     texts = {case_text(s) for s in registry().values()}
     assert len(texts) == len(registry())
+    # ADR 0167: the far-field variant keeps the first radial step and leaves the registered meshes alone
+    assert far_field_variant("M1w", 50.0) == "M1w" and MESHES["M1w"]["far"] == 50.0
+    v = far_field_variant("M1w", 500.0)
+    assert v == "M1w-far500" and MESHES[v]["far"] == 500.0
+    assert MESHES[v]["grading"] == grading_for_first(geometric_first(1.0e4, 128) * 50.0 / 500.0, 128)
+    del MESHES[v]
     print("selftest: ok")
 
 
@@ -897,8 +922,17 @@ def main():
         for i, s in registry().items():
             print(i, json.dumps(s))
     elif cmd == "mesh":
-        rcfd, work = a[1], a[2]
-        for name in a[3:] or [SWEEP_MESH, GRID_MESH]:
+        args = a[1:]
+        far = None
+        if "--far" in args:  # ADR 0167: far-field circle in chords (default: each mesh's registered value)
+            k = args.index("--far")
+            far = float(args[k + 1])
+            del args[k:k + 2]
+        rcfd, work = args[0], args[1]
+        names = args[2:] or [SWEEP_MESH, GRID_MESH]
+        if far is not None:
+            names = [far_field_variant(n, far) for n in names]
+        for name in names:
             info = build_mesh(rcfd, work, name)
             print(json.dumps({k: v for k, v in info.items() if k != "quality"}, indent=1))
             q = info["quality"]
