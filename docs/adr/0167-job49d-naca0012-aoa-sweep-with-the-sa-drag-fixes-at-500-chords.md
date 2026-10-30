@@ -2,7 +2,7 @@
 
 Status: **registered 2026-10-29**, before any solver run of this job. The set-up, every limit, the reading rules and the
 not-run list are fixed here. **Results in the addendum (2026-10-30):** every limit met except LT15 (cd at 15 degrees
-+26.0 %, band 25 %) and LD (the drift metric), which are known misses. No amendment was needed. Not yet accepted by the
++26.0 %, band 25 %) and LD (the drift metric), which are known misses. No amendment was needed; one driver correction to D7's text (deviation 2). Not yet accepted by the
 maintainer. Job 49D, on local main f9a520a (the worktree branch was fast-forwarded to it before any
 work; branch `job49d-aoa-sweep-fixed`). Number: 0165 is the highest ADR in the main checkout and in every worktree; 0166 is
 left to job 49C as the brief says.
@@ -228,7 +228,7 @@ Why these bands and this threshold:
 Commits:
 - f0334a2: the registration and the driver.
 - 6a4d260: a plot and the limit tests, before any evaluation.
-- Then the results, the D7 correction of the driver (deviation 2) and this addendum.
+- 57bcd89: the results, the D7 correction of the driver (deviation 2) and this addendum; then a note on G0.
 
 Every run used `E:\projects\cfd\w49d-work\rcfd-w49d.exe`, the registration's binary. Its sha256 was checked again after
 the restart (deviation 1). Work folder: `E:\projects\cfd\w49d-work\w`. Results:
@@ -252,7 +252,7 @@ solver processes ran at once.
 | P2 | mesh hashes | M1w and M1w-far500 equal the registered values | met |
 | B1 | folder <= 400 000 bytes, PNG <= 120 000 | 311 288 bytes with the README (test `w49d_b1_storage_budget`); PNGs 32 596, 31 519 and 103 190 bytes | met |
 | P1 | self-tests | both pass | met |
-| G0 | fmt, clippy, baseline_hashes | `cargo fmt -p rcfd-api -- --check` clean; clippy (`-D warnings`) of the new test target clean; `git diff f9a520a -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
+| G0 | fmt, clippy, baseline_hashes | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release --locked -p rcfd-api --tests -- -D warnings` clean (all rcfd-api test targets); `git diff f9a520a -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
 
 **About the two misses.**
 - **LT15.** It misses the cd band by 1.0 point; cl is inside its band. ADR 0164 left the remaining +10 % at 10 degrees
@@ -356,7 +356,7 @@ The full table is in the folder's README.
 - The point-vortex far-field correction; Linux.
 - The workspace test suite and the gate. What ran instead:
   - the new test file: 8 passed; the 2 known misses fail, as expected, under `--include-ignored`;
-  - fmt and clippy of rcfd-api's new test target;
+  - fmt, and clippy of all rcfd-api test targets (`--tests`);
   - the two driver self-tests.
 
   No crate source changed, so `baseline_hashes` was not re-run.
