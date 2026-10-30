@@ -670,8 +670,8 @@ fn a_le1() {
 
 /// A-LE2 (P4, P6: the remaining cycle sits at HUB).
 #[test]
-#[ignore = "ADR 0175 A-LE2 (about 2.5 min in release; needs the phase-1 records in W49L_OUT)"]
-fn a_le2() {
+#[ignore = "known miss (ADR 0175 P6): the A-LE2 cycle sits at 'other' (2 of the top 5 in HUB2), not at HUB; P4 met (about 2.5 min in release; needs the phase-1 records in W49L_OUT)"]
+fn a_le2_known_miss() {
     let r = local("A-LE2", "LE2", |_, rg| rg.le2.clone());
     p4(&r);
     assert_eq!(r["location_end"]["site"].as_str(), Some("HUB"), "P6");
@@ -699,8 +699,8 @@ fn a_u1() {
 
 /// A-U2 (P3: calms).
 #[test]
-#[ignore = "ADR 0175 A-U2 (about 2.5 min in release; needs the phase-1 records in W49L_OUT)"]
-fn a_u2() {
+#[ignore = "known miss (ADR 0175 P3): A-U2 is NO EFFECT, rho_med 0.651, rho_du 0.416 (about 2.5 min in release; needs the phase-1 records in W49L_OUT)"]
+fn a_u2_known_miss() {
     let r = local("A-U2", "U2", |_, rg| union(&rg.le2, &rg.hub2));
     assert_eq!(verdict_of(&r), "CALMS", "P3");
 }
