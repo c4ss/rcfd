@@ -101,8 +101,9 @@ pub enum SaWallMode {
     /// value whose `nut` equals the Spalding eddy viscosity `nu (dy+/du+ - 1)`. Works from y+ about 1 into the log layer.
     Auto,
     /// Opt-in (ADR 0168): the model's own inner-layer solution instead of Spalding's law. Wall shear, y+ and wall-face
-    /// `nu_t` from [`SaInnerLaw`]; for a wall cell with y+ > `fix_y_plus` the cell `nuT` is fixed to `kappa u_tau y` and
-    /// the face between the wall cell and its wall-normal neighbour gets the law's series-resistance viscosity
+    /// `nu_t` from [`SaInnerLaw`]; in every wall cell (no `fix_y_plus` switch, amendment 1) the cell `nuT` is fixed to
+    /// `kappa u_tau y`, and the face between the wall cell and its wall-normal neighbour gets the law's tangential velocity
+    /// in the velocity gradient (amendment 1) and the law's series-resistance viscosity
     /// `nu (y2+ - y1+)/(u+(y2+) - u+(y1+))`; every other internal face gets `nut` of the interpolated `nuT`.
     SaLaw,
 }
@@ -526,6 +527,49 @@ impl SpalartAllmaras {
         out
     }
 
+    /// Wall mode SaLaw (ADR 0168 amendment 1): on every wall-normal first face, the Green-Gauss velocity gradient of the
+    /// two cells takes the inner law's tangential velocity `u_tau u+(y_f+)` at the face centre instead of the linear
+    /// interpolation (the component along the wall cell's tangential direction is replaced).
+    fn law_face_gradient(&self, u: &VectorField, gr: &mut [Vec<[f64; 3]>]) {
+        let (Some(il), Some(lf)) = (self.inner.as_ref(), self.law_faces.as_ref()) else {
+            return;
+        };
+        let g = &self.geom;
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        let (cc, fcen, sf) = (g.mesh.cell_centres(), g.mesh.face_centres(), g.mesh.face_area_vectors());
+        let vol = g.mesh.cell_volumes();
+        for &(fw, fi, _) in lf {
+            let c1 = own[fw];
+            let nw = g.normal(fw);
+            let v1 = u.values[c1];
+            let t = vec3::sub(v1, vec3::scale(nw, vec3::dot(v1, nw)));
+            let tm = vec3::norm(t);
+            if tm <= 0.0 {
+                continue;
+            }
+            let th = vec3::scale(t, 1.0 / tm);
+            let y1 = g.dn[fw - g.n_internal];
+            let ut = il.u_tau(self.nu, tm, y1);
+            let yf = y1 - vec3::dot(vec3::sub(fcen[fi], cc[c1]), nw);
+            if ut <= 0.0 || yf <= 0.0 {
+                continue;
+            }
+            let w = g.weights[fi];
+            let lin = vec3::add(
+                vec3::scale(u.values[own[fi]], w),
+                vec3::scale(u.values[nei[fi]], 1.0 - w),
+            );
+            let d = vec3::scale(th, ut * il.u_plus(ut * yf / self.nu) - vec3::dot(lin, th));
+            for (c, sign) in [(own[fi], 1.0), (nei[fi], -1.0)] {
+                for (i, gi) in gr.iter_mut().enumerate() {
+                    for j in 0..3 {
+                        gi[c][j] += sign * d[i] * sf[fi][j] / vol[c];
+                    }
+                }
+            }
+        }
+    }
+
     /// Wall mode SaLaw: number of wall cells with a wall-normal first face (zero before the first sweep).
     pub fn law_face_count(&self) -> usize {
         self.law_faces.as_ref().map_or(0, Vec::len)
@@ -613,7 +657,16 @@ impl SpalartAllmaras {
         let (nu, cf) = (self.nu, self.coef);
         let cw1 = cf.cw1();
         let vol = g.mesh.cell_volumes().to_vec();
-        let gr = velocity_gradient(&g, u);
+        let mut gr = velocity_gradient(&g, u);
+        if self.wall_mode == SaWallMode::SaLaw {
+            if self.inner.is_none() {
+                self.inner = Some(SaInnerLaw::new(cf.kappa, cf.cv1));
+            }
+            if self.law_faces.is_none() {
+                self.law_faces = Some(self.build_law_faces());
+            }
+            self.law_face_gradient(u, &mut gr);
+        }
         let mut vort: Vec<f64> = (0..n)
             .map(|c| {
                 let mut w2 = 0.0;
@@ -662,19 +715,14 @@ impl SpalartAllmaras {
             }
         }
         if self.wall_mode == SaWallMode::SaLaw {
-            if self.inner.is_none() {
-                self.inner = Some(SaInnerLaw::new(cf.kappa, cf.cv1));
-            }
-            if self.law_faces.is_none() {
-                self.law_faces = Some(self.build_law_faces());
-            }
             let il = self.inner.as_ref().unwrap();
             for &c in &wall_cells {
                 let f = self.cell_wall_face[c];
                 let y = g.dn[f - g.n_internal];
                 let ut = il.u_tau(nu, self.tangential_speed(u, f), y);
-                if ut > 0.0 && ut * y / nu > self.fix_y_plus {
-                    // the inner-layer solution nuT = kappa u_tau y and its strain u_tau^2/(nu + nut)
+                if ut > 0.0 {
+                    // the inner-layer solution nuT = kappa u_tau y and its strain u_tau^2/(nu + nut), at every y+
+                    // (ADR 0168 amendment 1: no switch at fix_y_plus)
                     vort[c] = ut * ut / nu / (1.0 + il.nut_plus(ut * y / nu));
                     fixed[c] = Some(cf.kappa * ut * y);
                 }
@@ -817,7 +865,7 @@ impl SpalartAllmaras {
                 let y1 = g.dn[fw - g.n_internal];
                 let ut = il.u_tau(nu, self.tangential_speed(u, fw), y1);
                 let (y1p, y2p) = (ut * y1 / nu, ut * (y1 + dy) / nu);
-                if ut > 0.0 && y1p > self.fix_y_plus {
+                if ut > 0.0 {
                     let du = il.u_plus(y2p) - il.u_plus(y1p);
                     if du > 0.0 {
                         target[fi] = (nu * (y2p - y1p) / du - nu).clamp(0.0, cap);

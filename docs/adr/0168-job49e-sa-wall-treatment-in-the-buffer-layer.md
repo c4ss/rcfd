@@ -293,3 +293,77 @@ Why these bands:
    Recommendation in the addendum.
 3. **The same face interpolation in SST / k-epsilon.** Whether to characterise their buffer-layer error in a job of its
    own. Recommendation in the addendum.
+
+## Amendment 1 (2026-10-30, after all 26 registered runs and before any amended run): two defects of D1; arms F, AF and G
+
+**What had run.** All 26 registered runs ended (L1). The registered results are committed as collected (commit 8d59b02).
+They stand as the record of D1 as registered: every registered limit is evaluated on them as registered, with a
+`*_known_miss` test for each miss and the limit intact. Nothing below moves a registered limit onto other runs.
+- Met: L1, LR, LH1, LH2, LH3, LP3, LA1, LA2, LA3.
+- Missed: LP1, LP2 and LP4, each at y+ 5 only (E05).
+- Details are in the addendum.
+
+**What I saw, and the profile diagnostics that led to this amendment.** I read the stored `solution.vtu` of E05, E08,
+E12, E15, E01 and E03 with a scratch script; no run was made for this.
+1. **Defect 5: the switch at `fix_y_plus` = 5 makes D1 bistable at y+ 5.**
+   - E05's wall-cell y+ is pinned at 4.97 to 5.05 along x = 0.8 to 1.2. D05's falls smoothly from 5.40 to 5.22.
+   - Above 5 the cell is fixed and gets the series-resistance face; below 5 it is free and gets the interpolated face.
+     The two branches give different u_tau, so the cell flips between them.
+   - E05 ran to the cap (exit 5) with Cf(0.97) +7.5 % against TMR. D5's 1-D jump at the switch is only about
+     0.9 points.
+   - AE40 (wall y+ minimum 5.08) and AE05 also ran to the cap; AD40 met its targets at iteration 261.
+2. **Defect 6: the second cell's nuTilda is over-produced next to the series-resistance face.**
+   - At x = 0.97 the second cell's nuTilda/(kappa u_tau y) is 1.26 (E05), 1.28 (E08), 1.19 (E12) and 1.14 (E15). The
+     defaults' values are 1.06 to 1.09.
+   - Its strain comes from the Green-Gauss gradient with the face velocity linearly interpolated between the two cells.
+     Across the buffer-layer profile that velocity is too low (E05: 7.83 u_tau against the inner law's 8.98 at the face).
+     So the strain of the second cell is about 34 % high.
+   - Its eddy viscosity then makes the next face too viscous. E05 loses 0.4 of u+ between the second and third cells,
+     E08 0.22.
+   - The 1-D model (D7) has no production and could not show this.
+   - Provenance: this correction was designed after these profile diagnostics, not before the runs.
+
+**Correction (code, opt-in only; the default `auto` is unchanged).** In mode `auto_sa_law`:
+- **(a) No switch.** Every wall cell with u_tau > 0 gets nuTilda = kappa u_tau dn, its law strain and the
+  series-resistance face, at every y+. `fix_y_plus` is not used in this mode.
+  - Why: nuTilda = kappa u_tau y is the exact constant-stress solution at every y+ (derived above), so the switch has no
+    basis in this mode.
+  - The 1-D model's predictions move at y+ 2 to 4 (the cells were free there): y+ 1 -0.7 %, 2 -0.6 %, 3 +0.5 %, 5 +0.6 %.
+    Above 5 they are unchanged (+0.1 % to +0.4 %).
+- **(b) The law's face velocity in the gradient.** In the Green-Gauss velocity gradient of the two cells beside a
+  series-resistance face, the face velocity's component along the wall cell's tangential direction is the inner law's
+  `u_tau u+(y_f+)`, with y_f = dn plus the wall-normal offset of the face centre. It replaces the linear interpolation.
+  - This is the same consistency as the series-resistance flux (the face quantity from the law, not from the
+    interpolation), with no constant.
+  - The gradient feeds only SA's vorticity, and the DDES `grad_mag`. It does not feed the momentum equation.
+- Code: `crates/rcfd-turb/src/sa.rs`. `law_face_gradient` is new. The SaLaw wall-cell branch and the series-resistance
+  branch lose their `fix_y_plus` condition. The lazy builds of the table and the face list move ahead of the vorticity.
+  The default path's text changes only by `let mut gr`, so the default bits are re-checked (LR_A1). Also changed: the
+  doc sentences in `schema.rs` and `docs/case-schema.md`.
+- **Binary** for every amended run: `E:\projects\cfd\w49e-work\rcfd-w49e-am1.exe`, sha256
+  `89b0ecda12fc3a832e4d7841e64b3d7a747a351b953f13de8113b0f4c960992b`, the code of the amendment commit.
+
+**New arms** (same cases; the amended binary; at most 2 solver processes):
+- **Fnn**: Enn with the amended opt-in, nn = 01 ... 60.
+- **AFyy**: AEyy with the amended opt-in, yy = 05, 15, 40.
+- **G05, G40, GA40**: D05, D40 and AD40 again, the default bits of the amended build.
+
+**New limits** (fixed now; the registered limits keep their values and their runs):
+
+| Id | Check | Limit |
+|---|---|---|
+| L1_A1 | Runs complete | every F, AF and G run exits 0 or 5 |
+| LR_A1 | Defaults bit-identical, amended build | G05, G40, GA40 equal P05, P40, F00 in every compared monitor value and in iteration count |
+| LP1_A1 to LP4_A1 | LP1 to LP4 on Fnn | the registered bands unchanged: +-5 % against TMR; 3 % against F01; 2 % report against integral; +-5 % against Kármán-Schoenherr; at all 10 y+ |
+| LA1_A1 to LA3_A1 | LA1 to LA3 on AFyy | unchanged: +-6 % cd; +-6 % friction; spread <= 4 % |
+| M1_A1 | (a) removes the pin | every Fnn: wall-cell y+ non-increasing along x = 0.8 to 1.2 |
+| M2_A1 | (b) removes the over-production | F05 ... F60: second cell's nuTilda/(kappa u_tau y) at x = 0.97 **<= 1.10** |
+| M3_A1 | Steady runs settle | F05 ... F60, AF15, AF40 end with exit 0 (residual and turbulence-change targets met before the cap). F01 to F03 and AF05 are excluded: their defaults D01 to D03 and AD05 also ran to the cap |
+| G0 | Hygiene | as registered, on the final code, including `flat_plate_sa` |
+
+Reading rules unchanged. Not changed: the cases, the meshes, the window, every band.
+
+**Honest difference added.** Without the switch, every wall cell gets the equilibrium inner-layer value and the
+series-resistance face. That includes a wall cell resolving the viscous sublayer (y+ about 1) and cells where u_tau tends
+to zero (stagnation, separation, the trailing edge). Below y+ about 3 the law is the viscous law u+ = y+ and imposes
+little. Near separation it is the equilibrium assumption of every wall function.

@@ -66,6 +66,18 @@ def registry():
     for yp, mesh in AF_MESH_OF.items():
         for arm in ("AD", "AE"):
             out[f"{arm}{yp:02d}"] = {"kind": "af", "y_plus": float(yp), "mesh": mesh, "opt_in": arm == "AE"}
+    # amendment 1 (binary rcfd-w49e-am1.exe): Fnn / AFyy = Enn / AEyy with the amended opt-in; G05, G40, GA40 = D05,
+    # D40, AD40 again (default bits of the amended build)
+    for yp, (layers, ny) in PLATES.items():
+        out[f"F{yp:02d}"] = {"kind": "plate", "y_plus": float(yp), "layers": layers, "ny": ny, "opt_in": True,
+                             "amended": True}
+    for yp, mesh in AF_MESH_OF.items():
+        out[f"AF{yp:02d}"] = {"kind": "af", "y_plus": float(yp), "mesh": mesh, "opt_in": True, "amended": True}
+    for yp in (5, 40):
+        layers, ny = PLATES[yp]
+        out[f"G{yp:02d}"] = {"kind": "plate", "y_plus": float(yp), "layers": layers, "ny": ny, "opt_in": False,
+                             "amended": True}
+    out["GA40"] = {"kind": "af", "y_plus": 40.0, "mesh": "M1w", "opt_in": False, "amended": True}
     return out
 
 
@@ -295,7 +307,28 @@ def af_wall_yplus(vtu):
             "p10": v[len(v) // 10], "p90": v[(9 * len(v)) // 10], "above_5": sum(1 for x in v if x > 5.0)}
 
 
-REF_OF = {"D01": "P01", "D05": "P05", "D40": "P40", "AD40": "F00"}
+def plate_profile(vtu):
+    """Amendment 1 diagnostics: the wall-cell y+ along x in [0.8, 1.2] (non-increasing?) and, in the cell column nearest
+    x = 0.97, the second cell's nuTilda / (kappa u_tau y) with u_tau from the wall cell's y+."""
+    a = w49a.read_vtu(vtu)
+    pts = a["Points"]
+    cells = []
+    for c, ids in enumerate(w49a.cell_points(a)):
+        xc, yc, _ = w49a.centre(pts, ids)
+        cells.append((round(xc, 9), yc, c))
+    wall = sorted((x, a["y_plus"][c]) for x, y, c in cells if a["y_plus"][c] > 0.0)
+    band = [v for x, v in wall if 0.8 <= x <= 1.2]
+    x0 = min({x for x, _, _ in cells}, key=lambda x: abs(x - X))
+    col = sorted((y, c) for x, y, c in cells if x == x0)
+    (y1, c1), (y2, c2) = col[0], col[1]
+    ut = a["y_plus"][c1] * NU / y1
+    return {"wall_yplus_08_12": [round(v, 4) for v in band],
+            "non_increasing": all(b <= a_ + 1e-9 for a_, b in zip(band, band[1:])),
+            "x_column": x0, "second_cell_yplus": y2 * ut / NU,
+            "second_cell_nutilde_over_kappa_ut_y": a["nuTilda"][c2] / (K * ut * y2)}
+
+
+REF_OF = {"D01": "P01", "D05": "P05", "D40": "P40", "AD40": "F00", "G05": "P05", "G40": "P40", "GA40": "F00"}
 PLATE_KEYS = ("cf_v", "cf_veff")
 AF_KEYS = ("cl", "cd", "cd_p", "cd_v", "cd_eff", "cd_veff", "cl_eff", "nut_avg")
 
@@ -327,6 +360,7 @@ def analyse(work, ref49a):
         if os.path.exists(vtu):
             if spec["kind"] == "plate":
                 r["wall"] = w49a.plate_wall(vtu)
+                r["profile"] = plate_profile(vtu)
                 zs = [p[2] for p in w49a.read_vtu(vtu)["Points"]]
                 r["depth"] = max(zs) - min(zs)
             else:
@@ -358,21 +392,22 @@ def evaluate(runs, tmr):
 
     ok = lambda r: r is not None and r.get("exit") in (0, 5)  # noqa: E731
     # L1
-    ev["L1"] = {i: runs[i]["exit"] for i in runs}
-    ev["L1"]["missing"] = [i for i in registry() if i not in runs]
-    ev["L1"]["met"] = all(runs[i]["exit"] in (0, 5) for i in runs) and not ev["L1"]["missing"]
-    # LR
-    lr = {}
-    for i, ref in REF_OF.items():
-        b = (runs.get(i) or {}).get("bits_vs_adr0164")
-        lr[i] = b
-    ev["LR"] = {"runs": lr, "met": all(b is not None and b["compared"] > 0 and b["different"] == 0
-                                       and b["ref_iterations"] == b["run_iterations"] for b in lr.values())}
+    reg = registry()
+    for key, amended in (("L1", False), ("L1_A1", True)):
+        ids = [i for i, s in reg.items() if bool(s.get("amended")) == amended]
+        ev[key] = {i: runs[i]["exit"] for i in ids if i in runs}
+        ev[key]["missing"] = [i for i in ids if i not in runs]
+        ev[key]["met"] = all(runs[i]["exit"] in (0, 5) for i in ids if i in runs) and not ev[key]["missing"]
+    # LR (registered: D01, D05, D40, AD40) and LR_A1 (amendment 1: G05, G40, GA40)
+    for key, amended in (("LR", False), ("LR_A1", True)):
+        lr = {i: (runs.get(i) or {}).get("bits_vs_adr0164") for i in REF_OF if bool(reg[i].get("amended")) == amended}
+        ev[key] = {"runs": lr, "met": all(b is not None and b["compared"] > 0 and b["different"] == 0
+                                          and b["ref_iterations"] == b["run_iterations"] for b in lr.values())}
     # plate table
     table = {}
     for yp in PLATES:
         row = {}
-        for arm in ("D", "E"):
+        for arm in ("D", "E", "F"):
             i = f"{arm}{yp:02d}"
             r = runs.get(i)
             if not ok(r) or law(i) is None:
@@ -388,6 +423,9 @@ def evaluate(runs, tmr):
                         "CF_report": None if cf_eff is None else cf_eff / 2.0 / r["depth"]}
             if row[arm]["CF_report"] is not None:
                 row[arm]["report_vs_law_integral"] = row[arm]["CF_report"] / wl["CF_law"] - 1.0
+            row[arm]["profile"] = r.get("profile")
+            row[arm]["exit"] = r["exit"]
+            row[arm]["iterations"] = r["iterations"]
         table[yp] = row
     ev["plate"] = table
     # LH1 / LH2: the default curve against the 1-D model shifted by D01's measured offset
@@ -406,24 +444,44 @@ def evaluate(runs, tmr):
     mx = [table[yp]["D"]["vs_tmr"] for yp in (5, 8, 12, 15) if table.get(yp, {}).get("D")]
     ev["LH2"] = {"max_default_error_yplus_5_to_15": max(mx) if mx else None,
                  "met": bool(mx) and len(mx) == 4 and max(mx) >= 0.10}
-    # LP1-LP4: the opt-in
-    e = {yp: table[yp]["E"] for yp in PLATES}
-    full = all(v is not None for v in e.values())
-    ev["LP1"] = {"vs_tmr": {yp: (v or {}).get("vs_tmr") for yp, v in e.items()}, "band": 0.05,
-                 "met": full and all(abs(v["vs_tmr"]) <= 0.05 for v in e.values())}
-    if e.get(1):
-        ref = e[1]["cf097_law"]
-        ev["LP2"] = {"vs_E01": {yp: (v["cf097_law"] / ref - 1.0 if v else None) for yp, v in e.items()},
-                     "band": 0.03, "met": full and all(abs(v["cf097_law"] / ref - 1.0) <= 0.03 for v in e.values())}
-    ev["LP3"] = {"report_vs_law_integral": {yp: (v or {}).get("report_vs_law_integral") for yp, v in e.items()},
-                 "band": 0.02, "met": full and all(v.get("report_vs_law_integral") is not None
-                                                   and abs(v["report_vs_law_integral"]) <= 0.02 for v in e.values())}
-    ev["LP4"] = {"CF_vs_ks": {yp: (v or {}).get("CF_vs_ks") for yp, v in e.items()}, "ks": w49a.ks_mean_cf(RE_L),
-                 "band": 0.05, "met": full and all(abs(v["CF_vs_ks"]) <= 0.05 for v in e.values())}
+    # LP1-LP4: the opt-in (registered on E; amendment 1: the same limits as LPn_A1 on F)
+    for arm, sfx in (("E", ""), ("F", "_A1")):
+        e = {yp: table[yp][arm] for yp in PLATES}
+        full = all(v is not None for v in e.values())
+        ev["LP1" + sfx] = {"vs_tmr": {yp: (v or {}).get("vs_tmr") for yp, v in e.items()}, "band": 0.05,
+                           "met": full and all(abs(v["vs_tmr"]) <= 0.05 for v in e.values())}
+        if e.get(1):
+            ref = e[1]["cf097_law"]
+            ev["LP2" + sfx] = {f"vs_{arm}01": {yp: (v["cf097_law"] / ref - 1.0 if v else None) for yp, v in e.items()},
+                               "band": 0.03,
+                               "met": full and all(abs(v["cf097_law"] / ref - 1.0) <= 0.03 for v in e.values())}
+        else:
+            ev["LP2" + sfx] = {"met": False, "not_evaluated": True}
+        ev["LP3" + sfx] = {"report_vs_law_integral": {yp: (v or {}).get("report_vs_law_integral")
+                                                      for yp, v in e.items()},
+                           "band": 0.02, "met": full and all(v.get("report_vs_law_integral") is not None
+                                                             and abs(v["report_vs_law_integral"]) <= 0.02
+                                                             for v in e.values())}
+        ev["LP4" + sfx] = {"CF_vs_ks": {yp: (v or {}).get("CF_vs_ks") for yp, v in e.items()},
+                           "ks": w49a.ks_mean_cf(RE_L), "band": 0.05,
+                           "met": full and all(abs(v["CF_vs_ks"]) <= 0.05 for v in e.values())}
+    # amendment 1 mechanism checks on F
+    fp = {yp: table[yp]["F"] for yp in PLATES}
+    ffull = all(v is not None and v.get("profile") for v in fp.values())
+    ev["M1_A1"] = {"non_increasing": {yp: ((v or {}).get("profile") or {}).get("non_increasing") for yp, v in fp.items()},
+                   "met": ffull and all(v["profile"]["non_increasing"] for v in fp.values())}
+    fp5 = {yp: v for yp, v in fp.items() if yp >= 5}  # the second cell next to the law face in the buffer / log layer
+    ev["M2_A1"] = {"second_cell_ratio": {yp: ((v or {}).get("profile") or {}).get("second_cell_nutilde_over_kappa_ut_y")
+                                         for yp, v in fp5.items()}, "band": 1.10,
+                   "met": ffull and all(v["profile"]["second_cell_nutilde_over_kappa_ut_y"] <= 1.10
+                                        for v in fp5.values())}
+    m3 = [f"F{yp:02d}" for yp in PLATES if yp >= 5] + ["AF15", "AF40"]
+    ev["M3_A1"] = {"exit": {i: (runs.get(i) or {}).get("exit") for i in m3},
+                   "met": all((runs.get(i) or {}).get("exit") == 0 for i in m3)}
     # aerofoil
     af = {}
     for yp in AF_MESH_OF:
-        for arm in ("AD", "AE"):
+        for arm in ("AD", "AE", "AF"):
             i = f"{arm}{yp:02d}"
             r = runs.get(i)
             if not ok(r) or w(i, "cd_eff") is None:
@@ -436,18 +494,21 @@ def evaluate(runs, tmr):
             af[i]["wall_yplus"] = r.get("wall_yplus")
             af[i]["iterations"] = r["iterations"]
     ev["aerofoil"] = af
-    ae = [af.get(f"AE{yp:02d}") for yp in AF_MESH_OF]
-    aefull = all(v is not None for v in ae)
-    ev["LA1"] = {"cd_eff_vs_tmr": {k: (v or {}).get("cd_eff_vs_tmr") for k, v in af.items() if k.startswith("AE")},
-                 "band": 0.06, "met": aefull and all(abs(v["cd_eff_vs_tmr"]) <= 0.06 for v in ae)}
-    ev["LA2"] = {"friction_vs_tmr": {k: (v or {}).get("friction_vs_tmr") for k, v in af.items() if k.startswith("AE")},
-                 "band": 0.06, "met": aefull and all(abs(v["friction_vs_tmr"]) <= 0.06 for v in ae)}
-    if aefull:
-        cds = [v["cd_eff"] for v in ae]
-        ev["LA3"] = {"spread_over_tmr": (max(cds) - min(cds)) / tmr["cd_alpha0"], "band": 0.04,
-                     "met": (max(cds) - min(cds)) / tmr["cd_alpha0"] <= 0.04}
-    else:
-        ev["LA3"] = {"met": False, "not_evaluated": True}
+    for arm, sfx in (("AE", ""), ("AF", "_A1")):
+        ae = [af.get(f"{arm}{yp:02d}") for yp in AF_MESH_OF]
+        aefull = all(v is not None for v in ae)
+        ev["LA1" + sfx] = {"cd_eff_vs_tmr": {k: (v or {}).get("cd_eff_vs_tmr") for k, v in af.items()
+                                             if k.startswith(arm)},
+                           "band": 0.06, "met": aefull and all(abs(v["cd_eff_vs_tmr"]) <= 0.06 for v in ae)}
+        ev["LA2" + sfx] = {"friction_vs_tmr": {k: (v or {}).get("friction_vs_tmr") for k, v in af.items()
+                                               if k.startswith(arm)},
+                           "band": 0.06, "met": aefull and all(abs(v["friction_vs_tmr"]) <= 0.06 for v in ae)}
+        if aefull:
+            cds = [v["cd_eff"] for v in ae]
+            ev["LA3" + sfx] = {"spread_over_tmr": (max(cds) - min(cds)) / tmr["cd_alpha0"], "band": 0.04,
+                               "met": (max(cds) - min(cds)) / tmr["cd_alpha0"] <= 0.04}
+        else:
+            ev["LA3" + sfx] = {"met": False, "not_evaluated": True}
     ad05 = af.get("AD05")
     ev["LH3"] = {"AD05_friction_vs_tmr": (ad05 or {}).get("friction_vs_tmr"),
                  "met": ad05 is not None and ad05["friction_vs_tmr"] >= 0.08}
@@ -490,7 +551,8 @@ def make_plot(ev, outdir):
     fig, ax = plt.subplots(figsize=(6.4, 3.8))
     ys = sorted(PLATES)
     ax.axhspan(-5, 5, color="0.9", label="LP1 band (TMR SA +-5 %)")
-    for arm, lab, mk in (("D", "default (auto)", "o"), ("E", "opt-in (auto_sa_law)", "s")):
+    for arm, lab, mk in (("D", "default (auto)", "o"), ("E", "opt-in as registered", "s"),
+                         ("F", "opt-in, amendment 1", "^")):
         pts = [(ev["plate"][y][arm]["y_plus_097"], 100 * ev["plate"][y][arm]["vs_tmr"]) for y in ys
                if ev["plate"][y][arm]]
         if pts:
@@ -512,7 +574,7 @@ def make_plot(ev, outdir):
 
 def selftest():
     reg = registry()
-    assert len(reg) == 2 * len(PLATES) + 6
+    assert len(reg) == 3 * len(PLATES) + 9 + 3
     for i, spec in reg.items():
         t = case_text(i, spec)
         assert ("auto_sa_law" in t) == spec["opt_in"], i

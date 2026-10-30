@@ -135,12 +135,15 @@ mode changes four things:
 - The wall function uses the SA model's own inner-layer law, `u+ = integral dy+/(1 + kappa y+ fv1(kappa y+))` (log
   intercept about 5.0), instead of Spalding's. This applies to the wall shear, the reported y+ and the wall-face eddy
   viscosity. `turbulence.e_wall` is not used.
-- Wall cells above y+ 5 get `nuTilda = kappa u_tau y`, the model's exact constant-stress solution.
-- The face between such a wall cell and its wall-normal neighbour gets the law's series-resistance viscosity
-  `nu (y2+ - y1+)/(u+(y2+) - u+(y1+))`.
+- Every wall cell gets `nuTilda = kappa u_tau y`, the model's exact constant-stress solution, at every y+. There is no
+  switch at y+ 5 in this mode (ADR 0168 amendment 1).
+- The face between a wall cell and its wall-normal neighbour gets the law's series-resistance viscosity
+  `nu (y2+ - y1+)/(u+(y2+) - u+(y1+))`. In the velocity gradient of the two cells, that face also takes the law's
+  tangential velocity `u_tau u+(y_f+)` instead of the linear interpolation (amendment 1).
 - Every other internal face gets `nut` of the linearly interpolated `nuTilda` (`nuTilda_f fv1(nuTilda_f/nu)`).
 
-It assumes the equilibrium inner layer over the first two cells. Its validation is in ADR 0168.
+It assumes the equilibrium inner layer over the first two cells, also where the wall cell resolves the viscous sublayer
+and where u_tau tends to zero (stagnation, separation). Its validation is in ADR 0168.
 
 Far fields (ADR 0164): a patch with `velocity = "freestream"` has the turbulence role `zero_gradient` unless
 `boundaries.<patch>.turbulence` says otherwise, so `nuTilda` is fixed on none of its faces. Around a lifting body the
