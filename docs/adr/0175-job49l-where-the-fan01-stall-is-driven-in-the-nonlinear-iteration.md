@@ -279,7 +279,14 @@ the 0.04 m/s outlet-hub cycle of S10, as in ADR 0111 G1.
      set: r 0.17-0.20 at z 0.12, and hub cells at z 0.14.
    - So the convection deferred correction is unstable at several places of B3, in a ranked order: leading-edge root,
      then hub mid-chord, then mid-span near the leading edge. Removing the strongest exposes the next.
-   - That fits a "two (or more) drivers" picture. P3's limit for it was missed, so it is not claimed.
+   - That fits a "two (or more) drivers" picture. P3's limit for it was missed, so it is not claimed. A single driver
+     larger than ring 2 is also still open.
+   - Amplitudes are compared through `|du|_2` (`rho_du`), not through `rho_med`. The distant control A-D2 has the
+     lowest `rho_med` of the local arms (0.436), yet its cycle stays at the leading edge with `rho_du` 0.81. So among
+     NO EFFECT arms, a difference in `rho_med` says nothing about the site.
+   - Some relocated cells (c77 and c41 in A-HUB1 and A-U1, c420 and c708 in A-U2) may sit on the first ring outside the
+     mask, so in those arms the mask interface itself is an alternative explanation. I did not check their ring
+     distance. The A-LE1 / A-LE2 relocation to hub cells at z 0.16-0.18 lies far from the leading-edge mask.
 4. **Consequence for the choice of fix** (not a rule of this ADR): the data do not support a fix aimed at one site,
    whether the leading-edge root or the hub mid-chord cells. Each site alone, and both together up to ring 2, leave a
    cycle elsewhere. The phase-1 result points to a scheme change that acts on the convection deferred correction
