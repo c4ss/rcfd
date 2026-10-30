@@ -155,3 +155,88 @@ another ADR, or a known miss.
   `W49N_OUT=<dir>`.
 - `docs/investigations/job49n-fan01-fr-b3/`: the JSON, a `results.csv` and the logs, committed as soon as they exist.
 - This ADR's addendum; one appended sentence at the end of the robustness row of `docs/milestone-fan.md`.
+
+## Addendum: results (2026-10-30)
+
+Data: `docs/investigations/job49n-fan01-fr-b3/` (`FR-0.25.json`, `FR-0.1.json`, `results.csv`, `logs/`). Release, on
+029c56d. Each arm was run once, alone.
+
+### Validity
+
+- **V1 met.** B3 has 4 920 cells. The reference medians are 1.089e-3 / 4.87e-4 and the torque at iteration 1000 is
+  1.9177 N m.
+- **V2 met.** The field left `None` is bit-identical on E3. On B3, beta = 1 differs from the default iteration by
+  7.5e-15 (u), 2.2e-16 (p) and 5.2e-15 (phi), relative.
+- **V3 met.** The three `fan01_stall_w43c` bit-identity tests, `w49l_empty_mask_is_bit_identical` and
+  `baseline_hashes.rs` (3 passed, 1 ignored as before) pass unchanged.
+
+### F-R(0.25): limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| Z2a | `rho_med` 1.038, `rho_du` 1.929 | **MISSED** |
+| Z2b | tolerance never reached (arm medians 7.8e-4 / 5.1e-4) | **MISSED** |
+| Z2c | probe 8.25e-4 / 6.19e-4 | **MISSED** |
+| Z2t | torque 1.9210 N m in [1.9072, 1.9279] | met |
+| Z2p | Delta p_ts 46.999 Pa in [46.263, 47.130] | met |
+| Z2le | max `|du|` over LE2 2.287 -> 0.0103 m/s (limit 0.0229) | met |
+
+**Not accepted.** The known miss is `fr_025_b3_known_miss`, with the limits intact. `is_converged()` stays false
+(c_u 0.10, period ratio 1.67).
+
+The LE2 record:
+- The leading-edge cycle is gone within 10 iterations: max `|du|` over LE2 is 0.015 m/s at iteration 1010 and stays at
+  or below 0.03 m/s.
+- By iteration 1100 a larger cycle has grown at hub cells at r 0.124-0.125, z 0.170-0.177: c149, c150, c113, c114, c77,
+  c437, c438, c402, about half of them in HUB2.
+- That is the axial height of the ADR 0111 Jacobian mode (c365 and c401 at z 0.172) and of ADR 0175's relocated cycle.
+- `|du|_2` grows from 5.7 to 10-15 m/s. HUB2 holds 24-50 % of `sum |du|^2` and LE2 holds 0.000.
+
+### F-R(0.1) (the conditional arm, run because F-R(0.25) missed Z2a)
+
+This arm is worse than the stall.
+- `rho_med` is 28.4 and `rho_du` 5.85; `res_u` is 3.2e-2 at the end.
+- Delta p_ts is 42.48 Pa, outside its band; the torque is 1.9354 N m, outside its band.
+- Max `|du|` over LE2 falls to 0.03 m/s, then returns to 0.9-1.1 m/s.
+- From iteration 1250 a cycle of 30-37 m/s spreads to the hub cells at z 0.17 and to mid-span / tip-side cells at
+  r 0.20-0.23, z 0.11-0.14.
+
+Every limit is missed. The known miss is `fr_010_b3_known_miss`. By the registration this does not change F-R(0.25)'s
+verdict.
+
+### Reading (by the registered rules)
+
+**Rule 3 applies: Z2a was missed, Z2le was met.**
+
+1. **F-R removes the autonomous leading-edge cycle (Z2le), but the stall is not removed.** A stronger cycle takes over
+   at the hub mid-chord cells, at z 0.17.
+   - It is the same place where ADR 0175's leading-edge masks relocated the cycle, and where ADR 0111's linearisation
+     put its leading mode.
+   - The functionals stay inside the stalled cycle's range.
+2. **Stronger relaxation makes it worse.** Beta 0.1 is far worse than 0.25.
+   - This agrees in direction with ADR 0111's J(beta), whose leading eigenvalue grew as beta fell (1.335, 1.338,
+     1.341) and whose mode was at the hub. That is an observation only; ADR 0111's linearisation is still not
+     attributed (M3 failed).
+3. **Next job (rule 3, the maintainer's decision):** the hub's wider cycle. Use ADR 0175 complement arms at ring 3 / 4
+   of the hub seeds, with F-R(0.25) on so that the leading-edge driver is out of the way. Reading 1 suggests adding
+   the cells at r 0.124-0.125, z 0.170-0.177 (c149, c113 and their neighbours) to the seeds, but that is a choice for
+   that registration.
+   - Under-relaxation is not a fix on the bladed passage at these beta (rule 4 in part).
+   - A scheme change that is not a relaxation will be needed for the hub cycle, and is to be proposed after the
+     diagnosis.
+
+Nothing here is a statement about accuracy or agreement with the measured fan. No default, limit or known miss of another
+ADR changes.
+
+### Deviations
+
+None in the set-up or the runs. F-R(0.1) asserted the full acceptance as registered ("same limits"), so its test is a
+known miss too.
+
+### Questions for the maintainer
+
+1. **Next job: the hub diagnosis with F-R(0.25) on**, as rule 3 says? Recommendation: yes. Use ring-3 / ring-4
+   complement and necessity arms at the hub, with seeds extended by the z 0.17 hub cells this job found (c149, c113),
+   registered before any run.
+2. **Keep the test-only F-R field?** Recommendation: yes. The next job needs it to hold the leading-edge driver off,
+   it is default `None`, and V2 shows it bit-identical.
