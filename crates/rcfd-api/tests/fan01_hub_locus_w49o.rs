@@ -515,8 +515,8 @@ fn fc_control() {
 
 /// N-H3 (P1: does not calm).
 #[test]
-#[ignore = "ADR 0178 N-H3 (about 2 min in release)"]
-fn n_h3() {
+#[ignore = "known miss (ADR 0178 P1): N-H3 CALMS (rho_med 9.085e-9, rho_du 2.758e-9, reached 1298) (about 2 min in release)"]
+fn n_h3_known_miss() {
     let (r, _) = arm("N-H3", |rg| Some(rg.h3.clone()));
     assert_ne!(verdict_of(&r), "CALMS", "P1");
 }
