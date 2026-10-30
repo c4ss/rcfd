@@ -257,7 +257,7 @@ impl Claude {
         let stderr = child.stderr.take().expect("piped");
         let tail = Arc::new(Mutex::new(Vec::<u8>::new()));
         let tail_w = Arc::clone(&tail);
-        std::thread::spawn(move || {
+        let stderr_reader = std::thread::spawn(move || {
             let mut r = BufReader::new(stderr);
             let mut buf = [0u8; 4096];
             while let Ok(n) = r.read(&mut buf) {
@@ -328,6 +328,9 @@ impl Claude {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             };
+            // ADR 0134 Amendment 5: the tail is complete only once the stderr reader has seen EOF; the exit status
+            // can be seen before the last bytes are read. A reader that panicked leaves the tail as read so far.
+            let _ = stderr_reader.join();
             let stderr_tail = String::from_utf8_lossy(&lock(&tail)).into_owned();
             let _ = tx.send(StreamEvent::Exited { code, stderr_tail });
         });
