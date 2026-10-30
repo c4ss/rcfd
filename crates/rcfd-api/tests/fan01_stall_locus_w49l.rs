@@ -778,8 +778,8 @@ fn k0_control() {
 
 /// K-LE1 (Q5: sustains).
 #[test]
-#[ignore = "ADR 0175 amendment 2 K-LE1 (about 2.5 min in release)"]
-fn k_le1() {
+#[ignore = "known miss (ADR 0175 Q5): K-LE1 CALMS (rho_med 3.959e-3, rho_du 6.889e-3), not SUSTAINS (about 2.5 min in release)"]
+fn k_le1_known_miss() {
     let r = complement("K-LE1", "ALL minus LE1 (C)", |rg| rg.le1.clone(), |rg| rg.le2.clone());
     assert_eq!(vk(&r), "SUSTAINS", "Q5");
 }
@@ -807,8 +807,8 @@ fn k_hub1() {
 
 /// K-HUB2 (Q2: sustains).
 #[test]
-#[ignore = "ADR 0175 amendment 2 K-HUB2 (about 2.5 min in release)"]
-fn k_hub2() {
+#[ignore = "known miss (ADR 0175 Q2): K-HUB2 CALMS (rho_med 4.003e-3, rho_du 7.003e-3), not SUSTAINS (about 2.5 min in release)"]
+fn k_hub2_known_miss() {
     let r = complement(
         "K-HUB2",
         "ALL minus HUB2 (C)",
