@@ -400,3 +400,80 @@ the job after this phase and needs its own registration. Also not run: rings lar
 **Deliverables:** the seven arms as ignored tests in `fan01_stall_locus_w49l.rs` (phase-2 records not needed; T = C
 fixed), one JSON per arm in `docs/investigations/job49l-fan01-stall-locus/` (committed as soon as they exist),
 `results.csv` extended, and an addendum section for amendment 2. `docs/milestone-fan.md` is not edited.
+
+## Addendum: amendment 2 results (2026-10-30)
+
+Data: `K-*.json`, `results.csv` (rows K-0 to K-D2, with `verdict_k` and `top5_in_own_site`) and `logs/K-*.log` in
+`docs/investigations/job49l-fan01-stall-locus/`. Release, on ebe5116. Each arm was run once, in its own process, at
+most two at a time. `|du|_2` at the switch is 5.74 m/s in every arm.
+
+### Validity
+
+V6 met. K-0 gives `rho_med` 3.957e-3, `rho_du` 6.897e-3 and `reached` 1115, which is the C-C record to every printed
+digit. V3 held in every arm.
+
+### Arms
+
+| Arm | Kept site (cells with C removed) | `rho_med` | `rho_du` | Phase-1 rule | Amendment-2 verdict | End cycle |
+|---|---|---|---|---|---|---|
+| K-0 | none (4 920) | 3.96e-3 | 6.90e-3 | CALMS | CALMS | 0.04 m/s at the outlet-hub corner (as S10), `reached` 1115 |
+| K-LE1 | LE1 (4 900) | 3.96e-3 | 6.89e-3 | CALMS | CALMS | as K-0, `reached` 1115 |
+| K-LE2 | LE2 (4 874) | 3.48e-2 | 0.326 | PARTIAL | **SUSTAINS** | 1.87 m/s period-two cycle (ratio 0.00); 5 of 5 top cells in LE2: c665, c989, c341, c17, c988; 90 % of `sum |du|^2` in LE2 |
+| K-HUB1 | HUB1 (4 892) | 3.98e-3 | 6.94e-3 | CALMS | CALMS | as K-0, `reached` 1115 |
+| K-HUB2 | HUB2 (4 837) | 4.00e-3 | 7.00e-3 | CALMS | CALMS | as K-0, `reached` 1115 |
+| K-U2 | LE2 ∪ HUB2 (4 791) | 3.52e-2 | 0.326 | PARTIAL | **SUSTAINS** | the K-LE2 cycle to three digits (1.87 m/s, the same five cells; share in HUB2 0.001) |
+| K-D2 | D2 (4 855) | 3.94e-3 | 6.89e-3 | CALMS | CALMS | as K-0, `reached` 1116 |
+
+### Limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| Q1: K-LE2 SUSTAINS | `rho_du` 0.326, 5 of 5 in LE2 | met |
+| Q2: K-HUB2 SUSTAINS | CALMS (4.00e-3 / 7.00e-3) | **MISSED** (known miss `k_hub2_known_miss`) |
+| Q3: K-U2 SUSTAINS | `rho_du` 0.326, 5 of 5 in U2 | met |
+| Q4: K-D2 CALMS | 3.94e-3 / 6.89e-3 | met |
+| Q5: K-LE1 SUSTAINS | CALMS (3.96e-3 / 6.89e-3) | **MISSED** (known miss `k_le1_known_miss`) |
+| Q6: K-HUB1 CALMS | 3.98e-3 / 6.94e-3 | met |
+
+### Reading (by the registered rules)
+
+Rule 0 does not apply, because K-D2 calms. **Rule 1 applies: the leading edge sustains a cycle and the hub does not.**
+
+1. **The blade-root leading edge is an autonomous driver.** With the convection deferred correction live only inside
+   LE2 (46 cells), the passage keeps a cycle of a third of the reference amplitude, and the whole of it sits in LE2.
+   - The cycle is an exact period-two cycle (period ratio 0.00), whereas the reference cycle has a period of about
+     three. It involves c665, c341 and c17, and also c989 and c988 (r 0.140, z 0.105).
+   - The site needs ring 2. With LE1 alone (20 cells, so only the faces between two LE1 cells keep the correction), the
+     passage calms.
+2. **The hub mid-chord cells are not an autonomous driver at ring 2.** With the correction live only in HUB2 (83 cells),
+   B3 converges like C-C. Adding HUB2 to LE2 (K-U2) changes nothing to three digits.
+   - So the hub cycle that phase 2 saw once the leading edge was masked needs high order over a wider region than HUB2.
+     It is non-local.
+   - Neither ring of the hub reproduces the ADR 0111 hub mode as a nonlinear driver.
+3. **For the next job (rule 1):** a global treatment of the deferred correction, F-R on B3, with the leading-edge root
+   (LE2) as the cell set to watch. A treatment at the leading edge alone is already ruled out by phase 2 (A-LE1, A-LE2:
+   the cycle relocates).
+4. **Combined with phase 2 (observation, not a rule):**
+   - The leading-edge root is sufficient to drive a cycle, but not necessary: without it, a non-local cycle takes over
+     at the hub.
+   - The hub site is neither necessary (A-HUB) nor sufficient (K-HUB) within ring 2.
+
+Nothing here is a statement about torque, Delta p_ts or accuracy. No default, limit or known miss of another ADR changes.
+`docs/milestone-fan.md` was not edited in this phase.
+
+### Deviations
+
+None in the set-up or the runs. Predictions Q2 and Q5 were missed and stay as known misses with their limits.
+
+### Not run
+
+F-R (ADR 0111, beta 0.25) on B3: the registered candidate for the next job, which needs its own registration. Also not
+run: rings larger than 2, E3 / E2 / E1, B2.
+
+### Questions for the maintainer
+
+1. **Register F-R on B3 as the next job?** Recommendation: yes, with the ADR 0111 acceptance (switch at 1000; `rho_med`
+   and `rho_du` at most 0.01; the probe). Add a location record of LE2 so that it shows whether the leading-edge period-two
+   cycle is what F-R removes.
+2. **Is the hub's wider, non-local cycle worth its own diagnosis?** Recommendation: not before F-R. If F-R calms B3, the
+   question is moot. If it does not, a ring-3 or ring-4 complement arm at the hub is the cheap next test.
