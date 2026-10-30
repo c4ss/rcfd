@@ -378,8 +378,13 @@ def analyse(runs, work, w49a_work=None):
         if "value" not in r:
             continue
         w = r["window"]
-        curve.append({"alpha": a, "cl": r["value"]["cl_eff"], "cd": r["value"]["cd_eff"],
-                      "cl_molecular": r["value"]["cl"], "cd_molecular": r["value"]["cd"],
+        # D7: a steady angle enters with its D5 value; an angle not steady by D5 with its window mean, flagged (the
+        # driver of the registration commit took the D5 value in both cases; corrected to the ADR's text, see its
+        # addendum)
+        v = r["value"] if r["steady"] else {k: w[k]["mean"] for k in ("cl_eff", "cd_eff", "cl", "cd")}
+        curve.append({"alpha": a, "cl": v["cl_eff"], "cd": v["cd_eff"],
+                      "cl_molecular": v["cl"], "cd_molecular": v["cd"],
+                      "cl_final": w["cl_eff"]["final"], "cd_final": w["cd_eff"]["final"],
                       "cl_min": w["cl_eff"]["min"], "cl_max": w["cl_eff"]["max"], "cd_min": w["cd_eff"]["min"],
                       "cd_max": w["cd_eff"]["max"], "steady": r["steady"], "exit": r["exit"],
                       "iterations": r["iterations"],
@@ -458,8 +463,9 @@ def analyse(runs, work, w49a_work=None):
     for a in sorted(sst):
         r = sst[a]
         if "value" in r:
-            sst_curve.append({"alpha": a, "cl": r["value"]["cl_eff"], "cd": r["value"]["cd_eff"],
-                              "cl_molecular": r["value"]["cl"], "cd_molecular": r["value"]["cd"],
+            v = r["value"] if r["steady"] else {k: r["window"][k]["mean"] for k in ("cl_eff", "cd_eff", "cl", "cd")}
+            sst_curve.append({"alpha": a, "cl": v["cl_eff"], "cd": v["cd_eff"],
+                              "cl_molecular": v["cl"], "cd_molecular": v["cd"],
                               "cl_min": r["window"]["cl_eff"]["min"], "cl_max": r["window"]["cl_eff"]["max"],
                               "steady": r["steady"], "exit": r["exit"], "iterations": r["iterations"],
                               "drift_cd_eff": r.get("drift_cd_eff")})
@@ -594,10 +600,10 @@ def make_plots(runs, res, outdir):
     sel = sorted((r for r in runs.values() if (r["arm"] == "SA" and not r.get("steady", True)) or r["arm"] == "N"),
                  key=lambda r: (r["arm"], r["alpha"]))
     if sel:
-        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(6.4, 5.6), dpi=80, sharex=True)
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(6.4, 5.6), dpi=72, sharex=True)
         for r in sel:
             h = r["history"]
-            stride = max(1, len(h) // 1500)
+            stride = max(1, len(h) // 80)  # B1: the PNG at most 120 000 bytes
             ls = "-" if r["arm"] == "SA" else "--"
             ax.plot([i for i, _, _ in h[::stride]], [c for _, c, _ in h[::stride]], ls, lw=0.6, label=r["id"])
             ax2.plot([i for i, _, _ in h[::stride]], [d for _, _, d in h[::stride]], ls, lw=0.6, label=r["id"])

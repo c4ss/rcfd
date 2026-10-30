@@ -1,7 +1,9 @@
 # ADR 0167: Job 49D, the NACA 0012 angle-of-attack sweep again, with ADR 0164's two fixes and a 500-chord far field
 
 Status: **registered 2026-10-29**, before any solver run of this job. The set-up, every limit, the reading rules and the
-not-run list are fixed here. Job 49D, on local main f9a520a (the worktree branch was fast-forwarded to it before any
+not-run list are fixed here. **Results in the addendum (2026-10-30):** every limit met except LT15 (cd at 15 degrees
++26.0 %, band 25 %) and LD (the drift metric), which are known misses. No amendment was needed. Not yet accepted by the
+maintainer. Job 49D, on local main f9a520a (the worktree branch was fast-forwarded to it before any
 work; branch `job49d-aoa-sweep-fixed`). Number: 0165 is the highest ADR in the main checkout and in every worktree; 0166 is
 left to job 49C as the brief says.
 
@@ -221,9 +223,175 @@ Why these bands and this threshold:
 - The point-vortex far-field correction; a C-grid; Linux.
 - Any change of SA or SST coefficients, of a mesh parameter other than the far-field radius, or of any default.
 
-## Questions for the maintainer (registered now; answers are not assumed)
+## Addendum: results (2026-10-30)
 
-1. **SST's far-field values.** The `freestream` role with SST uses the boundary's inlet settings, whose defaults
-   (`intensity_length`, length unset) give omega of about 1e29. Options: (a) document that `turbulence_spec` must be set
-   with that role for k-omega and k-epsilon; (b) a located error when the role is used with an unset length; (c) take the
-   initial field's values by default. Recommendation: after the results, in the addendum.
+Commits:
+- f0334a2: the registration and the driver.
+- 6a4d260: a plot and the limit tests, before any evaluation.
+- Then the results, the D7 correction of the driver (deviation 2) and this addendum.
+
+Every run used `E:\projects\cfd\w49d-work\rcfd-w49d.exe`, the registration's binary. Its sha256 was checked again after
+the restart (deviation 1). Work folder: `E:\projects\cfd\w49d-work\w`. Results:
+[`docs/investigations/job49d-aoa-sweep-fixed/`](../investigations/job49d-aoa-sweep-fixed/README.md).
+
+The host was shared with other jobs throughout, so wall times are rough: 56 s to 37 min per run. At most 2 of my
+solver processes ran at once.
+
+### Limits
+
+| Id | Limit | Measured | Outcome |
+|---|---|---|---|
+| L1 | every run exit 0 or 5 | 28 of 28. 16 SA: exit 0 from 0 to 13 degrees and at 16 (residual targets met at iterations 254 to 2008); exit 5 at 14, 15 and from 17 up. 4 N: exit 5. 8 SST: exit 0 up to 16, exit 5 at 18 and 20 | met |
+| L2 | 0.90 <= slope / 2 pi <= 1.05 | 0.1081 per degree = **0.986** x 2 pi (intercept 0.0030) | met |
+| L3 | some C after the peak <= 0.9 cl_max | peak **1.542 at 16 degrees**; at 17 degrees 1.048 (0.68 cl_max; an iteration mean, not steady). The base angles alone give the same | met |
+| L4 | abs(cl(0)) <= 0.005 | -1.4e-6 | met |
+| LT0 | cd(0) within 12 % of TMR | 0.008399, **+2.5 %** | met |
+| LT10 | cd within 15 %, cl within 5 % | cd 0.013516, **+9.8 %**; cl 1.0656, **-2.3 %** | met |
+| LT15 | cd within 25 %, cl within 5 % | cd 0.026762, **+26.0 %**; cl 1.4932, -3.4 % | **missed** (cd), `w49d_lt15_..._known_miss` |
+| LD | every SA run abs(D) <= 0.5 % | over at 12 (-0.58 %), 13 (-0.52 %), 16 (-0.70 %), 17 (+0.78 %) and 24 (+1.40 %) | **missed**, `w49d_ld_..._known_miss` |
+| P2 | mesh hashes | M1w and M1w-far500 equal the registered values | met |
+| B1 | folder <= 400 000 bytes, PNG <= 120 000 | 311 288 bytes with the README (test `w49d_b1_storage_budget`); PNGs 32 596, 31 519 and 103 190 bytes | met |
+| P1 | self-tests | both pass | met |
+| G0 | fmt, clippy, baseline_hashes | `cargo fmt -p rcfd-api -- --check` clean; clippy (`-D warnings`) of the new test target clean; `git diff f9a520a -- crates/rcfd-api/tests/baseline_hashes.rs example-projects example-projects-linux` empty | met |
+
+**About the two misses.**
+- **LT15.** It misses the cd band by 1.0 point; cl is inside its band. ADR 0164 left the remaining +10 % at 10 degrees
+  unattributed (the y+ 40 wall law, wall cells in the buffer layer, first-order nuTilda, the O-grid). That remainder
+  grows towards the stall: +2.5 % at 0, +9.8 % at 10, +26.0 % at 15. At 15 degrees cd splits into a pressure part of
+  0.0223 and a friction part (`viscous_effective`) of 0.0045. TMR's 15-degree split is not in the repository, so it is
+  not known which part holds the excess. The band was fixed before the run and is not changed.
+- **LD.** The metric does what it was chosen for on the old set-up: the N runs give +1.2 % to +1.4 % at 10, 15 and 18
+  degrees, the drift ADR 0164 found. Its misses on the fixed set-up have two causes.
+  - At 12, 13 and 16 degrees the runs met the residual targets (1e-6) after 648, 777 and 2008 iterations. Their two
+    quarters still hold the start-up tail, as ADR 0164's LA6 did.
+  - At 17 and 24 degrees the steady iteration never settles (next section), so no metric of a steady value applies.
+
+### The sweep (SA, both fixes, 500 chords)
+
+The full table is in the folder's README.
+
+- **Attached range.** From 2 to 15 degrees, cl is within 0.013 of Ladson's, and within 0.006 from 12 to 15. ADR 0159
+  fell increasingly below Ladson from 6 degrees up, by 0.14 at 15.
+- **Stall.** Steady SA peaks at **1.542 at 16 degrees**. Ladson peaks at 1.612 at 17.13. So SA is 4.3 % low and about
+  1 degree early.
+  - From 17 degrees up, steady SIMPLEC does not converge: cl swings between about 0 and 2 up to the 8000-iteration
+    cap.
+  - The flagged iteration means are 1.05, 1.00, 1.08, 1.23 and 1.27 at 17, 18, 20, 22 and 24 degrees. Ladson's 1.00
+    at 18.02 is close to the 18-degree mean, but an iteration mean is not a flow value.
+  - ADR 0159's steady SA stayed attached to 20 degrees because of its outer eddy viscosity of about 6e4 nu. The N runs
+    show this at 18 degrees.
+- **Drag.**
+  - At 0 degrees cd is 0.0084, against Ladson's 0.0081.
+  - From 6 degrees up it is increasingly above the measurement: +14 % at 10 and +46 % at 15.
+  - Against TMR's fully turbulent SA: +2.5 % at 0, +9.8 % at 10 and +26 % at 15.
+- **13 and 16 degrees** are flagged "not steady" by D5's window rule, although both runs met the residual targets. By
+  D7 they enter C with their window means:
+
+  | alpha | window mean (in C) | final iterate |
+  |---|---|---|
+  | 13 | 1.3423 | 1.3429 |
+  | 16 | 1.5420 | 1.5436 |
+- **D8.** SA-a10 equals ADR 0164's C10 at all 1599 compared values (cl, cd and cd_eff over 533 iterations), and both
+  runs end at iteration 533. Today's main reproduces ADR 0164's amended build bit for bit on this case.
+
+### Four-way comparison (D4; cl / cd, 500 chords)
+
+| alpha | old | effective only | freestream only | both | TMR |
+|---|---|---|---|---|---|
+| 0 | 0.0000 / 0.00365 | 0.0000 / 0.00842 | 0.0000 / 0.00364 | 0.0000 / 0.00840 | 0.0000 / 0.00819 |
+| 10 | 0.9878 / 0.03849 | 0.9879 / 0.04344 | 1.0654 / 0.00949 | 1.0656 / 0.01352 | 1.0909 / 0.01231 |
+| 15 | 1.3563 / 0.08234 | 1.3567 / 0.08640 | 1.4926 / 0.02381 | 1.4932 / 0.02676 | 1.5461 / 0.02124 |
+| 18 | 1.5016 / 0.11982 | 1.5022 / 0.12334 | 0.9982 / 0.31946 | 0.9981 / 0.32078 | |
+
+- **The effective force** changes only the friction: cd rises by 0.003 to 0.005 where the flow is attached.
+- **The freestream role** changes the solution.
+  - Outer nuTilda/nu is 3.0 at every SA angle with the role. Without it: 7.3 at 0 degrees, and 5.9e4, 8.1e4 and 8.9e4
+    at 10, 15 and 18 degrees.
+  - At 10 degrees the pressure part of cd falls from 0.0363 to 0.0075.
+  - cl rises by 0.08 at 10 degrees and by 0.14 at 15.
+  - At 18 degrees the old set-up stays attached (cl 1.50); with the role the steady iteration separates.
+- Neither fix alone is right at lift; both are needed.
+- **Far-field size.** With the old set-up, going from 50 to 500 chords (against ADR 0159) changes cl by at most 0.006
+  and cd by 1-3 %. With both fixes, cd at 10 degrees goes from +26 % (ADR 0164's F10, 50 chords) to +9.8 % here.
+
+### SST (report only, both fixes)
+
+| | 0 | 4 | 8 | 12 | 14 | 16 | 18 | 20 |
+|---|---|---|---|---|---|---|---|---|
+| cl | 0.0000 | 0.4368 | 0.8596 | 1.2457 | 1.4063 | 1.5089 | 1.0385 | 1.0597 |
+| cd | 0.00832 | 0.00893 | 0.01125 | 0.01723 | 0.02342 | 0.03553 | 0.3174 | 0.3666 |
+
+- Slope 0.980 x 2 pi.
+- Peak 1.509 at 16 degrees; first angle below 0.9 cl_max at 18.
+  - The window rule flags 16 degrees, although that run met the targets at iteration 1826.
+  - 18 and 20 degrees are not steady.
+- In ADR 0159, SST peaked at 14 degrees with 1.397.
+- With both fixes, SST and SA now agree within 0.02 in cl up to 14 degrees (0.033 at 16), and within 2 % in cd up to
+  12 degrees.
+
+### Deviations
+
+1. **PC restart.** The host restarted without warning while N-a00 and N-a18 were running.
+   - Their partial folders were moved to `E:\projects\cfd\w49d-work\w\aborted-by-restart\` and are not counted.
+   - Both runs were made again from the free stream, with the same binary and case.
+   - No SST run had started. Every other run had written its `wall.json` before the restart.
+2. **D7 in the driver.** The registration commit's `collect` put the D5 value (the final iterate when exit 0) into C at
+   every angle. D7's text says an angle not steady by D5 enters with its window mean. I found this while reading the
+   first full evaluation, and corrected the driver to the ADR's text before committing any results.
+   - It changes only 13 and 16 degrees: cl 1.3429 becomes 1.3423, and 1.5436 becomes 1.5420.
+   - No limit outcome changes: L3's peak stays at 16 degrees, and the LT angles are steady.
+   - The report-only SST curve uses the same rule.
+3. **Run order.** The SA arm ran first, two at a time. The N and SST runs then went in two single-process queues, so
+   never more than 2 solver processes at once. One N run started while SA-a24 was still running.
+4. **Report additions after registration** (report only, no limit):
+   - `histories.png`, showing the not-steady SA runs and the N runs, thinned to stay under B1's PNG cap;
+   - at most 61 samples per run in `histories.csv`;
+   - final iterates next to the window means in the curve.
+5. **Python.** The plots use matplotlib from the user's site packages without `python -I`, as in ADR 0159.
+
+### Not run
+
+- SA-DDES at 17 degrees and up, where steady SA does not converge (registered as not run; question 2).
+- The M2w grid check, wall-resolved meshes, and the trailing-edge divergence (ADR 0159 question 5).
+- The point-vortex far-field correction; Linux.
+- The workspace test suite and the gate. What ran instead:
+  - the new test file: 8 passed; the 2 known misses fail, as expected, under `--include-ignored`;
+  - fmt and clippy of rcfd-api's new test target;
+  - the two driver self-tests.
+
+  No crate source changed, so `baseline_hashes` was not re-run.
+
+## Questions for the maintainer (1 registered, 2-5 from the results; none is decided here)
+
+1. **SST's far-field values with the `freestream` role.** The defaults (`intensity_length`, no length) give omega of
+   about 1e29 on the inflow faces. Options:
+   - (a) document that `turbulence_spec` must be set;
+   - (b) a located error when the role meets an unset length;
+   - (c) default to the initial field's values.
+
+   **Recommendation (b)**, together with job 49C's defaults. A silent 1e29 is the kind of value nobody notices.
+2. **Stall from 17 degrees, where steady SA does not converge.** Options:
+   - (a) a DDES or URANS arm (ADR 0159 question 3) at 16 to 20 degrees on M1w-far500 with both fixes;
+   - (b) accept the steady curve with its flagged means.
+
+   **Recommendation (a).** The peak at 16 degrees is credible; the post-stall values are not.
+3. **The remaining drag excess at lift** (+9.8 % at 10 degrees and +26 % at 15, against TMR). The candidates are ADR
+   0164's unattributed list. Options:
+   - (a) a wall-treatment job (ADR 0164 question 8, the buffer layer), using this sweep's 10 and 15 degree cases as
+     checks;
+   - (b) second-order nuTilda convection;
+   - (c) leave it.
+
+   **Recommendation (a), then (b).**
+4. **The drift metric (LD).** It catches slow drift (the N runs: +1.2 % to +1.4 %). It also flags converged runs that
+   stopped early, and runs that swing. Options:
+   - (a) in future jobs, evaluate D only on runs that reached their cap, and count exit 0 at the residual targets as
+     converged;
+   - (b) keep it as registered.
+
+   **Recommendation (a)**, registered in the next job that uses the metric.
+5. **Which curve is now the repository's NACA 0012 reference.** Options:
+   - (a) this one (SA, both fixes, 500 chords) replaces ADR 0159's as the sweep the repository quotes;
+   - (b) keep both.
+
+   **Recommendation (a)**, keeping ADR 0159 as the record of the defect.
