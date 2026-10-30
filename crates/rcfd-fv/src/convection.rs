@@ -175,6 +175,33 @@ pub fn convection(
     scheme: ConvScheme,
     grad: Option<&[Vec3]>,
 ) -> FvMatrix {
+    convection_impl(geom, flux, cells, bc, scheme, grad, None)
+}
+
+/// [`convection`] with the deferred correction removed on the faces where `face_mask` is true (internal faces: the
+/// high-order correction; periodic faces: the central correction). Test-only diagnostic of ADR 0175.
+#[doc(hidden)]
+pub fn convection_masked(
+    geom: &FvGeometry,
+    flux: &[f64],
+    cells: &[f64],
+    bc: &[FaceCoeffs],
+    scheme: ConvScheme,
+    grad: Option<&[Vec3]>,
+    face_mask: &[bool],
+) -> FvMatrix {
+    convection_impl(geom, flux, cells, bc, scheme, grad, Some(face_mask))
+}
+
+fn convection_impl(
+    geom: &FvGeometry,
+    flux: &[f64],
+    cells: &[f64],
+    bc: &[FaceCoeffs],
+    scheme: ConvScheme,
+    grad: Option<&[Vec3]>,
+    face_mask: Option<&[bool]>,
+) -> FvMatrix {
     let mesh = &geom.mesh;
     let n_int = geom.n_internal;
     let mut m = FvMatrix::zeros(geom);
@@ -182,7 +209,7 @@ pub fn convection(
     let q: Vec<f64> = (0..n_int)
         .into_par_iter()
         .map(|f| {
-            if scheme == ConvScheme::Upwind {
+            if scheme == ConvScheme::Upwind || face_mask.is_some_and(|m| m[f]) {
                 return 0.0;
             }
             let forward = flux[f] >= 0.0;
@@ -227,7 +254,11 @@ pub fn convection(
                             rhs -= fl * q;
                             q
                         };
-                        let k = scheme.periodic_correction();
+                        let k = if face_mask.is_some_and(|m| m[f]) {
+                            0.0
+                        } else {
+                            scheme.periodic_correction()
+                        };
                         if k == 1.0 {
                             rhs -= fl * (co.a * cells[c] + co.b - ud);
                         } else if k != 0.0 {

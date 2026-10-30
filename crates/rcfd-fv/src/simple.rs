@@ -546,6 +546,11 @@ pub struct SimpleSolver {
     /// Diagnostic hook on the momentum convection gradient (ADR 0111): called per component with the cell values, the boundary values
     /// and the (limited) gradient the high-order correction uses, which it may change. `None` (default) leaves the solver unchanged.
     pub conv_gradient_hook: Option<ConvGradientHook>,
+    /// Test-only localisation hook of ADR 0175: per-cell regions in which the momentum convection deferred correction
+    /// (`conv`) or the explicit non-orthogonal Laplacian correction (`lap`) is removed. `None` (default) leaves the solver
+    /// unchanged. Not set by the API.
+    #[doc(hidden)]
+    pub high_order_mask_test_only: Option<HighOrderMask>,
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -554,6 +559,40 @@ pub struct SimpleSolver {
     wall_grad: Vec<f64>,
     /// `rAU / rAtU` of the previous iteration (wall pressure extrapolation with body forces).
     body_ratio: Vec<f64>,
+}
+
+/// Regions of [`SimpleSolver::high_order_mask_test_only`] (ADR 0175), one entry per cell. A face is masked for a term iff its
+/// owner or neighbour is in that term's region; a periodic face also iff the owner of its partner face is.
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct HighOrderMask {
+    /// Cells whose faces carry no convection deferred correction (internal high-order and periodic central corrections).
+    pub conv: Vec<bool>,
+    /// Cells whose faces carry no explicit non-orthogonal correction in the momentum Laplacian.
+    pub lap: Vec<bool>,
+}
+
+impl HighOrderMask {
+    /// Per-face mask of a per-cell region (the face rule above).
+    pub fn face_mask(geom: &FvGeometry, region: &[bool]) -> Vec<bool> {
+        let mesh = &geom.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let n_int = geom.n_internal;
+        let mut m: Vec<bool> = (0..mesh.n_faces())
+            .map(|f| region[own[f]] || (f < n_int && region[nei[f]]))
+            .collect();
+        for (pi, patch) in mesh.patches().iter().enumerate() {
+            let Some(map) = &geom.periodic_partner[pi] else {
+                continue;
+            };
+            for (j, f) in patch.faces().enumerate() {
+                if region[own[map[j]]] {
+                    m[f] = true;
+                }
+            }
+        }
+        m
+    }
 }
 
 /// Diagnostic hook of [`SimpleSolver::conv_gradient_hook`]: (component, cell values, boundary values, convection gradient).
@@ -642,6 +681,7 @@ impl SimpleSolver {
             simplec_boundary_compensation: false,
             frozen_limiter: None,
             conv_gradient_hook: None,
+            high_order_mask_test_only: None,
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -798,6 +838,12 @@ impl SimpleSolver {
         } else {
             Vec::new()
         };
+        let ho_masks: Option<(Vec<bool>, Vec<bool>)> = self.high_order_mask_test_only.as_ref().map(|m| {
+            (
+                HighOrderMask::face_mask(&g, &m.conv),
+                HighOrderMask::face_mask(&g, &m.lap),
+            )
+        });
         for k in 0..3 {
             if !g.active[k] {
                 continue;
@@ -832,16 +878,36 @@ impl SimpleSolver {
                 hook(k, &cells, &bvals, &mut v);
                 limited = Some(v);
             }
-            let mut m = convection(
-                &g,
-                &phi_conv,
-                &cells,
-                &bc,
-                s.convection,
-                limited.as_deref().or(grad.as_deref()),
-            );
+            let mut m = match &ho_masks {
+                None => convection(
+                    &g,
+                    &phi_conv,
+                    &cells,
+                    &bc,
+                    s.convection,
+                    limited.as_deref().or(grad.as_deref()),
+                ),
+                Some((fc, _)) => crate::convection::convection_masked(
+                    &g,
+                    &phi_conv,
+                    &cells,
+                    &bc,
+                    s.convection,
+                    limited.as_deref().or(grad.as_deref()),
+                    fc,
+                ),
+            };
             lag_boundary_inflow(&g, &phi_conv, &cells, &bc, &mut m);
-            m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
+            match &ho_masks {
+                None => m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref())),
+                Some((_, fl)) => m.add(&crate::diffusion::laplacian_masked(
+                    &g,
+                    &gamma_nu,
+                    &bc,
+                    grad.as_deref(),
+                    fl,
+                )),
+            }
             if let Some(sink) = &self.sink {
                 for c in 0..n {
                     m.a.diag[c] += sink[c] * vol[c];
