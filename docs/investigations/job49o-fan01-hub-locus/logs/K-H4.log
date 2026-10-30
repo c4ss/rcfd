@@ -1,0 +1,21 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized] target(s) in 0.27s
+     Running tests\fan01_hub_locus_w49o.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_hub_locus_w49o-91a40b3c5127d3b7.exe)
+
+running 1 test
+W49O K-H4 it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (20.6 s)
+W49O K-H4 it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (41.0 s)
+test k_h4 has been running for over 60 seconds
+W49O K-H4 it 1500: res_u 4.561e-4 res_p 3.113e-4 |du|_2 3.092e0 (61.2 s)
+W49O K-H4 it 2000: res_u 3.367e-4 res_p 2.601e-4 |du|_2 4.500e0 (81.6 s)
+W49O K-H4 it 2500: res_u 3.395e-4 res_p 2.326e-4 |du|_2 6.459e0 (101.7 s)
+W49O K-H4 it 3000: res_u 4.326e-4 res_p 2.977e-4 |du|_2 3.739e0 (121.9 s)
+W49O K-H4 RESULT {"adr":"0178","arm":"K-H4","arm_median_res_p":0.0002842442871688394,"arm_median_res_u":0.0004227913038502345,"c_removed_cells":4408,"dpts_end":-2.856977193197113,"dpts_switch":46.643469998593375,"du_end":3.739374921510992,"du_switch":5.742138973481199,"is_converged_end":false,"location_end":{"max_du_le2":0.0010395702916928835,"share_d3":0.0010821702788398823,"share_h4":0.9972337622513628,"share_le2":7.09904759794945e-7,"top5":[{"cell":905,"class":"HUB","du":1.3499600413801245,"r":0.12556683910320737,"z":0.17659913469699948},{"cell":906,"class":"HUB","du":1.2614106051522471,"r":0.12556545921270354,"z":0.1744080815833693},{"cell":908,"class":"HUB","du":0.9589754009242242,"r":0.12553920194640486,"z":0.1658260792961493},{"cell":909,"class":"HUB","du":0.9302330945497778,"r":0.12552360920067743,"z":0.15843755881476027},{"cell":581,"class":"HUB","du":0.841196434253177,"r":0.12482088275305157,"z":0.17669724970304332}]},"reached":null,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"rho_du":0.6512163740342178,"rho_med":0.5842425493319972,"seconds":121.9138311,"stopped":null,"torque_end":1.4150870211386009,"torque_switch":1.9177249776178935,"verdict":"NO EFFECT"}
+W49O K-H4 VERDICT NO EFFECT (rho_med 5.842e-1, rho_du 6.512e-1, reached None)
+W49O K-H4 VERDICT_K SUSTAINS (5 of the top 5 in the site)
+test k_h4 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 121.92s
+
