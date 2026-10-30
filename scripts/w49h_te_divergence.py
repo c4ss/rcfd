@@ -28,6 +28,26 @@ REGISTRY = {
     "RF": {"mesh": "M1w15", "alpha": 6, "arm": "SA", "iterations": 300},
 }
 
+# Phase 2 (ADR 0171 amendment 1): one change against RB (M1, 6 degrees, SA, 300 iterations) per run.
+_B = {"mesh": "M1", "alpha": 6, "arm": "SA", "iterations": 300}
+_A = 'algorithm = "simplec"\n'
+_NOROT = ("[mesh.transform]\nrotate_z_deg = -6   # angle of attack 6 deg: the aerofoil turns by -alpha about the quarter "
+          "chord (ADR 0155)\nrotate_origin = [0.25, 0.0, 0.0]\n\n", "")
+_V6 = "[0.9945218953682733, 0.10452846326765347, 0.0]"
+REGISTRY.update({
+    "PA": dict(_B, edit={"a": (_A, _A + 'velocity_correction = "face_flux"\n')}),
+    "PB": dict(_B, edit={"a": (_A, _A + "alpha_p = 0.3\n")}),
+    "PC": dict(_B, edit={"a": (_A, _A + "non_orthogonal_correctors = 2\nsimplec_non_orthogonal_compensation = true\n")}),
+    "PD": dict(_B, edit={"a": (_A, 'algorithm = "simple"\n')}),
+    "PE": dict(_B, edit={"a": ('model = "spalart_allmaras"', 'model = "laminar"')}),
+    "PF": dict(_B, edit={"a": ('convection = "linear_upwind"', 'convection = "upwind"')}),
+    "PG": dict(_B, edit={"a": _NOROT,
+                         "b": ("[initial]\nvelocity = [1.0, 0.0, 0.0]", "[initial]\nvelocity = " + _V6),
+                         "c": ("velocity_value = [1.0, 0.0, 0.0]", "velocity_value = " + _V6)}),
+    "PH": dict(_B, edit={"a": (_A, _A + "alpha_u = 0.7\n")}),
+    "PI": dict(_B, edit={"a": (_A, _A + "alpha_p = 0.7\n")}),
+})
+
 
 def case_text(spec):
     s = dict(spec)

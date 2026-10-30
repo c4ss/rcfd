@@ -100,3 +100,80 @@ refusal at 85 degrees stops those at the mesh check); any change of a default.
 ## Questions for the maintainer
 
 None yet; the questions are written in the addendum, with a recommendation each.
+
+## Amendment 1 (2026-10-30, after the six Phase 1 runs and before any Phase 2 run): what Phase 1 showed, what I read in the repository, and the Phase 2 diagnostic runs
+
+### What Phase 1 showed (binary `rcfd-w49h0.exe`, runs in `E:\projects\cfd\w49h-work\w\runs`)
+
+| Run | End | Cell |
+|---|---|---|
+| RA (M1, 0 deg, SA) | clean, 300 iterations, exit 5 | |
+| RB (M1, 6 deg, SA) | guard stop, velocity runaway, iteration 15 | 0, (0.99581, -0.07837), the trailing-edge tip of the rotated mesh |
+| RC (M1w05, 0 deg, SA) | clean | |
+| RD (M1w05, 6 deg, SA) | guard stop, velocity runaway, iteration 28 | 0, same position |
+| RE (M1, 6 deg, SST) | guard stop, iteration 16 | 0 |
+| RF (M1w15, 6 deg, SA) | clean | |
+
+Limits LR1 to LR6: **all met** (the evaluation is in the addendum). RB reproduces ADR 0159's iteration 15 and cell 0 exactly.
+Two things were not predicted: M1 at **0 degrees is clean** (the divergence needs the angle, on the same mesh), and
+M1w05 at 6 degrees diverges (so wall cells of 4.2e-5 chord are not safe at 6 degrees; at 0 degrees they are, ADR 0168).
+
+Fields read from the per-iteration store of RB (scratch script, not a registered measurement): the growth starts in the first
+5 iterations in the four cells next to the trailing-edge tip (0, 255 across the seam, 1, 254) and in their radial
+neighbours (256, 511); cell 0 and 255 carry velocities of order 1 to 6 by iteration 5 and 30 to 60 by iteration 8, growing
+about two to four times per iteration, with pressures of opposite sign in neighbouring cells. SA's `nut` there stays at
+1e-7 to 1e-6 until iteration 9, so the eddy viscosity follows the runaway; it does not start it. RA's same cells stay at
+|u| < 0.01 after iteration 5, with u_y exactly mirrored.
+
+Geometry of the trailing-edge cells of M1 (unrotated, scratch script on the polyMesh): the seam between cell 0 and cell 255 is
+the wake ray y = 0; cell 0 is a trapezoid of tangential length 1.56e-4 and radial height 1.56e-5 with its centre 4.2e-6 from
+the wall; the vertex at the tip has an interior angle of 171.8 degrees (the wedge angle of the trailing edge, 8.2 degrees
+half angle). Face non-orthogonality of cell 0: 66.7 degrees (to cell 1), 73.0 degrees (to its radial neighbour 256), 0
+(to cell 255, the seam). Cell 1: 29 and 47 degrees. So the largest non-orthogonality of M1 (77.6 degrees) sits in this
+region, and it is a localised feature of a sharp-trailing-edge O-grid (it is why `te_fan` exists, ADR 0159 D2).
+
+### What I read in the repository (before choosing Phase 2)
+
+`docs/case-schema.md` "SIMPLEC on uniformly sheared meshes" (ADR 0081 part X, ADR 0084): the default SIMPLEC
+(`alpha_u` 0.9, `alpha_p` 1.0, `velocity_correction = "gradient"`) has a **period-two pressure mode** whose eigenvalue passes
+-1 at 57.5 to 60 degrees of non-orthogonality (65 to 70 at `alpha_p` 0.7); on a channel the converged state is stable and the
+instability is that of the start-up states. Cause (ADR 0084, linearisation): the cell velocity is corrected with the full
+Green-Gauss gradient of the pressure change while the face flux is corrected with its orthogonal part only. Existing
+opt-ins: `solver.velocity_correction = "face_flux"` (stable to 79 degrees on the sheared channel and box, "not tested with
+turbulence models, moving meshes or face jumps"), a lower `solver.alpha_p`, `solver.non_orthogonal_correctors` with
+`solver.simplec_non_orthogonal_compensation`. The wall cells at the trailing edge of M1 (73 degrees) are above that
+threshold, and the angle of attack changes the start-up state (the pressure difference across the wake ray), which would
+explain why 0 degrees survives. This is **a hypothesis (H-084)**, written before the Phase 2 runs; the candidates G, W,
+T, C and L above remain open.
+
+### Phase 2 set-up: one change against RB per run (M1, 6 degrees, SA, 300 iterations; the registry in `scripts/w49h_te_divergence.py`)
+
+| Run | Change against RB | Tests |
+|---|---|---|
+| PA | `solver.velocity_correction = "face_flux"` | H-084 (the ADR 0084 mode) |
+| PB | `solver.alpha_p = 0.3` | H-084 (lower pressure relaxation) |
+| PI | `solver.alpha_p = 0.7` | the dependence on `alpha_p` (report only) |
+| PH | `solver.alpha_u = 0.7` | the dependence on `alpha_u` (report only) |
+| PC | `non_orthogonal_correctors = 2`, `simplec_non_orthogonal_compensation = true` | ADR 0084's table says this is stable to 70 degrees only (report; predicted to diverge) |
+| PD | `algorithm = "simple"` (its defaults 0.7 / 0.3) | SIMPLE against SIMPLEC |
+| PE | `turbulence.model = "laminar"` | T (turbulence source) |
+| PF | `convection = "upwind"` | L (limiter / gradient of the linear-upwind scheme) |
+| PG | mesh not rotated; free stream and initial velocity (cos 6, sin 6, 0) | the mesh transform (ADR 0155) |
+
+### Phase 2 limits (fixed before the runs)
+
+| Limit | Statement |
+|---|---|
+| LM1 | **H-084 supported by PA:** PA is clean for 300 iterations (exit 5, no guard stop) |
+| LM2 | **H-084 supported by PB:** PB is clean for 300 iterations |
+| LM3 | **Not turbulence:** PE ends in a guard stop in a trailing-edge cell (0, 1, 254, 255, 256 or 511) between iteration 10 and 20 |
+| LM4 | **Not the convection scheme:** PF ends in a guard stop in a trailing-edge cell (as LM3's cells) before iteration 300 |
+| LM5 | **Not the mesh transform:** PG ends in a guard stop in a cell within 0.001 chord of the trailing edge between iteration 10 and 20 |
+| LM6 | **SIMPLE:** PD is clean for 300 iterations |
+
+PI, PH, PC are reported without a limit (they set the shape of the dependence). If LM1 and LM2 are both met, Phase 3 is the
+fix, registered by Amendment 2: the question is then whether the default can move (it cannot, house rules) so which opt-in
+is made available automatically and safely, and what "no hand-tuning" asks of it. If either is missed, H-084 is not the whole
+mechanism and the next amendment tests G, W, T, C and L by direct probes.
+
+Runs PA to PI: at most 2 solver processes at a time, the same binary `rcfd-w49h0.exe`.
