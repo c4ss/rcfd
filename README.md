@@ -79,7 +79,10 @@ Studio on a project folder (the folder is optional):
 Finished example projects that open straight to a picture are in
 `example-projects/` (runs made on Windows) and `example-projects-linux/` (the
 same projects, runs made on x86_64 Linux); open the folder of your platform,
-for example `sh scripts/studio.sh example-projects-linux/wind-tunnel`.
+for example `sh scripts/studio.sh example-projects-linux/wind-tunnel`. The
+cases of `wind-tunnel` and `quick-start` are 2D; `axial-fan` holds a 3D blade
+passage of an axial fan that the Studio shows in an orbitable 3D view (for
+viewing only: a first-order run, not a validated fan prediction).
 
 ## Where to go next
 
