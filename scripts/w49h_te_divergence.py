@@ -17,6 +17,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import w48y_aoa_sweep as w  # noqa: E402
+import w49a_sa_drag as w49a  # noqa: E402
 
 # id -> spec. Phase 1 (ADR 0171 set-up): reproduction. Later phases are added by amendments of the ADR.
 REGISTRY = {
@@ -60,12 +61,24 @@ REGISTRY.update({
 })
 
 
+# Phase 4 (ADR 0171 amendment 3): full-length runs on M1, 8000 iterations, the last snapshot only, ADR 0164's extra reports.
+_L = {"mesh": "M1", "arm": "SA", "iterations": 8000, "long": True}
+REGISTRY.update({
+    "LA0": dict(_L, alpha=0),
+    "LB0": dict(_L, alpha=0, edit={"a": _BJ}),
+    "LB6": dict(_L, alpha=6, edit={"a": _BJ}),
+})
+
+
 def case_text(spec):
     s = dict(spec)
     text = w.case_text(s)
     n = s["iterations"]
-    # a snapshot every iteration (scratch only), instead of the last one
-    text = text.replace(f"store_interval = {n}   # the last snapshot only", "store_interval = 1")
+    if spec.get("long"):
+        text += w49a.EXTRA_REPORTS + w49a.NT_REPORT
+    else:
+        # a snapshot every iteration (scratch only), instead of the last one
+        text = text.replace(f"store_interval = {n}   # the last snapshot only", "store_interval = 1")
     for k, v in spec.get("edit", {}).items():  # amendments: textual edits of the case, key -> (old, new)
         old, new = v
         assert old in text, (k, old)
@@ -94,7 +107,7 @@ def run_one(rcfd, work, i):
         g.write(f.read())
     cmd = [rcfd, "run", snap, "--case-dir", cases, "--out", os.path.join(run, "output"),
            "--status-file", os.path.join(run, "solver-status.jsonl"), "--status-every", "1", "--quiet",
-           "--threads", "1", "--store-dir", os.path.join(run, "fields"), "--status-monitors", "--max-elapsed", "1500"]
+           "--threads", "1", "--store-dir", os.path.join(run, "fields"), "--status-monitors", "--max-elapsed", "9000" if i.startswith("L") else "1500"]
     t0 = time.time()
     with open(os.path.join(run, "log.txt"), "w", encoding="utf-8") as log:
         r = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT)

@@ -239,3 +239,42 @@ fix question is then not "a new scheme" but whether and how a limiter becomes av
 it costs in accuracy and convergence over a full run. That is Amendment 3, written after these runs: long runs
 (8000 iterations) on M1 at 0 and 6 degrees against TMR's 0.008192 and the 49D curve, and the no-opt-in default's
 behaviour, are not run before then.
+
+## Amendment 3 (2026-10-30, after QA to QD and before any Phase 4 run): the limiter removes the divergence in four runs; full-length runs on M1
+
+### Phase 3 so far
+
+QA (M1, 6 degrees, SA), QB (M1, 16 degrees, SA), QC (M1, 6 degrees, SST) and QD (M1w05, 6 degrees, SA), each with
+`solver.linear_upwind_limiter = "barth_jespersen"`, ran their 300 iterations clean (exit 5 at the cap, no guard stop).
+LN1 to LN4 are **met**. QE (M1, 0 degrees, BJ) was still running when this was written; LN5 is read from it, not from here.
+Together with PF (first-order upwind clean) the unlimited second-order extrapolation is the trigger: H-LU is supported at
+the level of these runs. It is not yet shown that the limited scheme converges to a usable answer over a full run.
+
+### Phase 4 set-up: three 8000-iteration runs on M1 (same binary, one thread, `min_iterations` = the cap, last snapshot only, ADR 0164's extra reports and `nut_avg`)
+
+| Run | Alpha | Change against the default |
+|---|---|---|
+| LA0 | 0 | none (the default: this is the case that is clean for 300 iterations, RA, and shows the unlimited scheme's full-length answer on M1) |
+| LB0 | 0 | `linear_upwind_limiter = "barth_jespersen"` |
+| LB6 | 6 | `linear_upwind_limiter = "barth_jespersen"` |
+
+LB6 without the limiter is not run (it diverges: RB). Reading follows ADR 0159 D4 / ADR 0164 amendment 1: window means over
+the last 1000 iterations of `cl`, `cd` and the effective reports (`cd_eff`, `cd_veff`, `cd_p`, `cl_eff`); TMR's
+NACA 0012 SA values at 0 degrees: total 0.008192, friction 0.006831, pressure 0.001361 (ADR 0164); Ladson (80 grit,
+interpolated, ADR 0167/0159) at 6 degrees: cl 0.645, cd 0.0088; 49D's SA curve on M1w at 500 chords at 6 degrees:
+cl_eff 0.654, cd_eff 0.00988 (a different wall spacing and far field: a comparison, not a reference).
+
+| Limit | Statement |
+|---|---|
+| LL1 | LB0 and LB6 end with exit 0 or 5 (no guard stop, no wall-clock stop) |
+| LL2 | **Accuracy at 0 degrees:** LB0 `cd_eff` within +-6 % of 0.008192 (the band of ADR 0168 LA1) |
+| LL3 | LB0 `cd_veff` within +-6 % of 0.006831 |
+| LL4 | **The limiter's cost:** LB0 `cd_eff` and LA0 `cd_eff` differ by at most 3 % |
+| LL5 | **Accuracy at 6 degrees:** LB6 `cl_eff` within +-5 % of Ladson's 0.645 |
+| LL6 | LB6 steady by ADR 0159 D4: over the last 1000 iterations cl's max - min <= 0.005 and cd's max - min <= 0.0005 |
+| LL7 | LB6 `cd_eff` within +-10 % of 49D's 0.00988 |
+| LL8 | LA0 ends with exit 0 or 5 (reported: whether the default is stable at 0 degrees over a full run on M1) |
+| LL9 | QE (300 iterations, BJ, M1, 0 degrees) is clean |
+
+LL4 and LL8 are what separate "the limiter hurts" from "the mesh at y+ 2 is not as accurate as TMR's". No change of
+code is made before these results; an opt-in key or a default is Amendment 4's subject (or the addendum's question).
