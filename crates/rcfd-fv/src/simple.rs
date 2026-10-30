@@ -551,6 +551,14 @@ pub struct SimpleSolver {
     /// unchanged. Not set by the API.
     #[doc(hidden)]
     pub high_order_mask_test_only: Option<HighOrderMask>,
+    /// Test-only under-relaxed deferred correction of ADR 0177 (ADR 0111 F-R): with `Some(beta)` the momentum convection
+    /// correction source `c(u)` (the right-hand side beyond the upwind one) of every cell is relaxed,
+    /// `c = c_prev + beta (c(u) - c_prev)`, the first relaxed iteration taking `c(u)`. `None` (default) leaves the solver
+    /// unchanged and clears the state. Not set by the API.
+    #[doc(hidden)]
+    pub deferred_correction_relaxation_test_only: Option<f64>,
+    /// State of `deferred_correction_relaxation_test_only`: the relaxed correction of each component.
+    dc_state: [Vec<f64>; 3],
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
     jump_state: Vec<f64>,
     iteration: usize,
@@ -682,6 +690,8 @@ impl SimpleSolver {
             frozen_limiter: None,
             conv_gradient_hook: None,
             high_order_mask_test_only: None,
+            deferred_correction_relaxation_test_only: None,
+            dc_state: [Vec::new(), Vec::new(), Vec::new()],
             jump_state: Vec::new(),
             pseudo: None,
             pseudo_control: None,
@@ -897,6 +907,24 @@ impl SimpleSolver {
                     fc,
                 ),
             };
+            match self.deferred_correction_relaxation_test_only {
+                None => self.dc_state[k].clear(),
+                Some(beta) => {
+                    let m_up = convection(&g, &phi_conv, &cells, &bc, ConvScheme::Upwind, None);
+                    let first = self.dc_state[k].len() != n;
+                    let mut c_new = vec![0.0; n];
+                    for c in 0..n {
+                        let cu = m.b[c] - m_up.b[c];
+                        c_new[c] = if first {
+                            cu
+                        } else {
+                            self.dc_state[k][c] + beta * (cu - self.dc_state[k][c])
+                        };
+                        m.b[c] = m_up.b[c] + c_new[c];
+                    }
+                    self.dc_state[k] = c_new;
+                }
+            }
             lag_boundary_inflow(&g, &phi_conv, &cells, &bc, &mut m);
             match &ho_masks {
                 None => m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref())),
