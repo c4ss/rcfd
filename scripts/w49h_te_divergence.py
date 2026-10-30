@@ -120,7 +120,7 @@ def run_one(rcfd, work, i):
 def summary(work):
     for i in REGISTRY:
         run = os.path.join(work, "runs", i)
-        if not os.path.isdir(run):
+        if not os.path.isdir(run) or REGISTRY[i].get("long"):
             continue
         try:
             wall = json.load(open(os.path.join(run, "wall.json")))
@@ -138,6 +138,22 @@ def summary(work):
               "|", guard[0][:260] if guard else text[-1][:160])
 
 
+def _from_monitors(work, i):
+    run = os.path.join(work, "runs", i)
+    csvp, wallp = os.path.join(run, "output", "monitors.csv"), os.path.join(run, "wall.json")
+    if not (os.path.exists(csvp) and os.path.exists(wallp)):
+        return None, None
+    import csv
+    its = []
+    with open(csvp, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            its.append({"index": int(row["iteration"]),
+                        "monitors": {k: float(v) for k, v in row.items()
+                                     if k in ("cd", "cd_eff", "cd_p", "cd_v", "cd_veff", "cl", "cl_eff", "nut_avg")}})
+    wall = json.load(open(wallp, encoding="utf-8"))
+    return its, {"exit_code": wall["exit"], "wall_s": wall.get("wall_s", wall.get("process_wall_s"))}
+
+
 def long_summary(work):
     """Window means (last 1000 iterations) of every report of the full-length runs, and the steady rule of ADR 0159 D4."""
     out = {}
@@ -146,8 +162,13 @@ def long_summary(work):
             continue
         path = os.path.join(work, "runs", i, "solver-status.jsonl")
         if not os.path.exists(path):
-            continue
-        its, fin, _ = w.read_stream(path)
+            # the status stream is gone (a scratch folder was cleaned during the job, ADR 0171 addendum): read the
+            # run's own monitors.csv (every iteration, all reports) and wall.json instead
+            its, fin = _from_monitors(work, i)
+            if its is None:
+                continue
+        else:
+            its, fin, _ = w.read_stream(path)
         if fin is None:
             out[i] = {"finished": False, "iterations": its[-1]["index"] if its else 0}
             continue

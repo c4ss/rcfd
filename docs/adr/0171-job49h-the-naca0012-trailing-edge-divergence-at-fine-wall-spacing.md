@@ -278,3 +278,82 @@ cl_eff 0.654, cd_eff 0.00988 (a different wall spacing and far field: a comparis
 
 LL4 and LL8 are what separate "the limiter hurts" from "the mesh at y+ 2 is not as accurate as TMR's". No change of
 code is made before these results; an opt-in key or a default is Amendment 4's subject (or the addendum's question).
+
+## Addendum: results
+
+Data: `docs/investigations/job49h-te-divergence/results.json` and `results.csv`, written by `scripts/w49h_te_divergence.py collect`;
+limits are tested in `crates/rcfd-api/tests/te_divergence_w49h.rs`. No solver code changed in this job: the opt-in key that removes the
+divergence already exists (`solver.linear_upwind_limiter = "barth_jespersen"`, ADR 0081 part L).
+
+### Limits
+
+Met: LR1 to LR6, LM3, LM5, LN1 to LN5, LL1, LL3, LL4, LL5, LL6, LL8, LL9.
+Missed (ignored `*_known_miss` tests, limits intact): LM1, LM2, LM4, LM6 (the H-084 predictions, Amendment 1), **LL2** (LB0 `cd_eff` 0.008776, +7.1 %
+against TMR 0.008192, limit 6 %), **LL7** (LB6 `cd_eff` 0.011140, +12.7 % against 49D's 0.00988, limit 10 %).
+LL4 is met by a margin of 0.01 % (+2.99 % against 3 %); it is not a robust pass.
+
+### Findings
+
+1. **Reproduced.** M1 (first cell 1.57e-5 chord) at 6 degrees hits the guard at iteration 15 in the trailing-edge tip cell 0 (SA; SST at 16); M1w05 at 6
+   degrees at 28. M1 and M1w05 at 0 degrees, and M1w15 at 6 degrees, are clean. So the divergence needs fine wall spacing and an angle of attack.
+2. **Not the pressure-velocity coupling, the relaxation, the turbulence model or the mesh transform.** `face_flux` (PA), `alpha_p` 0.3 and 0.7 (PB, PI),
+   SIMPLE (PD), `alpha_u` 0.7 (PH), two non-orthogonal correctors (PC), laminar (PE) and the unrotated mesh with a rotated free stream (PG) all stop at
+   the trailing-edge cells within 12 to 28 iterations. H-084 (the ADR 0084 period-two mode) is rejected.
+3. **Mechanism (H-LU), supported but not proved by a registered run.** The unlimited `linear_upwind` face value `u_c + grad u . (x_f - x_c)` over the
+   long side of the 171.8 degree tip cell (aspect 1e1 to 1e2, face non-orthogonality 67 to 73 degrees; aspect times tan(non-orthogonality) about 21 000
+   on M1, 6 900 on M1w05, 1 600 on M1w15) lies far outside the neighbour range (offline, iteration 1: face increments +3.6, -4.8, -0.9 against a cell
+   value of 0.56; iteration 5: 14, -19, -3 against 2.8), and cells 0, 255, 1, 254 grow together by 2 to 4 times per iteration. This is the mechanism ADR
+   0077 part B documents for the FAN-01 sector mesh; the new fact is that it also arises on a standard O-grid airfoil at y+ about 2 once the flow is
+   off-axis. The offline analysis and the aspect times tan metric were not registered; the metric alone does not predict divergence (M1 at 0 degrees has
+   the same metric and is clean).
+4. **Discriminating evidence.** `barth_jespersen` (it limits only the convection gradient; the Laplacian correction keeps the unlimited gradient) makes
+   all five 300-iteration runs clean: M1 at 6 and 16 degrees, SST at 6, M1w05 at 6, M1 at 0. **Correction to Amendment 2:** PF (`convection =
+   upwind`, clean) is confounded. With neither a gradient-based convection nor non-orthogonal correctors the gradient is not computed at all, so PF
+   also drops the Laplacian's non-orthogonal correction; PF alone cannot say that the convection extrapolation is the cause. QA is the run that
+   discriminates, because it changes only the convection gradient.
+5. **Full length (8000 iterations, M1, SA, window means over the last 1000).**
+
+   | Run | cl_eff | cd_eff | cd_p | cd_veff | State |
+   |---|---|---|---|---|---|
+   | LA0 default, 0 deg | 2e-7 | 0.008521 (+4.0 % TMR) | 0.001390 (+2.2 %) | 0.007131 (+4.4 %) | steady, exit 5 |
+   | LB0 BJ, 0 deg | 5e-9 | 0.008776 (+7.1 %) | 0.001632 (+20 %) | 0.007143 (+4.6 %) | steady, exit 5 |
+   | LB6 BJ, 6 deg | 0.64425 (Ladson -0.1 %) | 0.011140 (+12.7 % of 49D; +26.6 % of Ladson 0.0088) | 0.004218 | 0.006922 | steady, exit 5 |
+
+   The limiter costs +3.0 % of `cd_eff` at 0 degrees, all in the pressure drag (+17 %, 0.00024), with the friction drag unchanged (+0.2 %). The default
+   (unlimited) scheme is stable at 0 degrees for the full run and 4 % high; at 6 degrees the only answer available on M1 is the limited one. Lift at 6
+   degrees is accurate; the total drag at 6 degrees is high by an excess in the pressure drag (0.00422 against 49D's 0.00323 on a different mesh and a
+   500-chord far field). How much of that excess is the limiter (the 0-degree cost alone is 0.00024 of 0.00099), the 50-chord far field or M1's wall
+   spacing is not separated by any run here.
+
+### Scope of the claims
+
+Stability with the limiter: 300-iteration runs only for 16 degrees (QB), SST (QC) and M1w05 (QD); full length only for SA at 0 and 6 degrees on M1. The
+unlimited scheme's divergence is shown for three meshes and one family of grids. Nothing here says that the limiter removes the divergence on other
+meshes, other turbulence models at full length, or transonic flow.
+
+### Deviations
+
+- **Scratch wiped mid-job.** `E:\projects\cfd\w49h-work` was deleted (cause unknown) between Phase 4 starting and finishing: binary, target, meshes,
+  cases, logs and all Phase 1 to 3 run folders. LA0 and LB6 had finished; only their `output/monitors.csv` and `wall.json` survived (kept in
+  `w49h-work/keep`), so their rows are read through the `monitors.csv` fallback in `scripts/w49h_te_divergence.py` (the same numbers as the status
+  stream would give: the monitors are written every iteration). LB0 had not run. The binary was rebuilt as `rcfd-w49h1.exe` (solver code identical to
+  f24b4f3; only tests, scripts and docs differ), the three meshes were rebuilt and their hashes match this ADR, and all 20 short runs and LB0 were rerun
+  from scratch. The 20 reruns reproduce the first set's exit codes; the first 15 also reproduced stop iterations and cells exactly. The committed
+  `results.json` comes from the rerun set.
+- The offline gradient analysis, the cell-0 geometry study and the aspect times tan metric were not registered; they are evidence for H-LU and say nothing
+  that a limit depends on.
+- Amendment 1's H-084 prediction was wrong; the PF reading in Amendment 2 was confounded (finding 4).
+- LL4 passes by 0.01 %.
+
+### Questions for the maintainer
+
+1. Make `barth_jespersen` the steady `linear_upwind` default? Recommend no for now: it costs 3 % of `cd_eff` at 0 degrees, LL2 and LL7 miss, and the
+   default is bit-identical by house rule. Keep it opt-in and document it (done in `docs/case-schema.md`).
+2. A static set-up warning for unlimited `linear_upwind` on steady cases with wall cells of high aspect times tan(non-orthogonality)? Recommend yes, as
+   queue item A2, as a warning not an error, because the metric alone does not predict divergence (M1 at 0 degrees is clean).
+3. The guard's message hint says to lower the relaxation factors; here that is wrong (PB, PH, PI). Recommend a hint that names the limiter when the
+   locus is a wall cell with `linear_upwind`.
+4. Is a C-grid generator (ADR 0159 Q2) wanted as the mesh-side alternative? Recommend yes later: it removes the tip cell's 172 degree wedge, so no
+   solver compromise is needed.
+5. This branch is on pre-rewrite history (f24b4f3); it needs porting after the history rewrite.
+6. `w49h-work` was deleted while a job was running. Was that deliberate?
