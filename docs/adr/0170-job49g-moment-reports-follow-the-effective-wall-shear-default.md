@@ -1,7 +1,9 @@
 # ADR 0170: Job 49G, moment reports follow the effective wall-shear default (ADR 0166 question 2 (a))
 
 Status: **registered 2026-10-29**, before any code and before any solver run of this job. The enumeration, the design,
-the limits, the reading rules and the not-run list are fixed here. Not yet accepted by the maintainer. Job 49G, on local
+the limits, the reading rules and the not-run list are fixed here. **Results in the addendum (2026-10-30):** every
+registered limit was met; the F-126 known miss stands (torque -37 % / -45 %); B-M and B-P stay VALID (torque p 1.39); no
+`baseline_hashes.rs`, example or case change. Not yet accepted by the maintainer. Job 49G, on local
 main 1a04d46 (the merge of job 49C; the worktree branch was reset to it before any work). Number: 0167 (49D), 0168 (49E)
 and 0169 (49F) are committed on other branches; 0170 was free in every worktree and in `git log --all` when this was
 written.
