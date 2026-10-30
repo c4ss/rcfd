@@ -7,6 +7,8 @@ principles and published literature only; references recalled from memory are ma
 design point), ADR 0078 (deficit diagnosis, X2 empty-passage check), ADR 0079 / 0083 (C-grid `camber_seam` / `camber_seam_h`), ADR 0081 (the
 Barth-Jespersen-limited `linear_upwind`), ADR 0082 (location and first-order mesh dependence of the spurious angular momentum).
 
+**2026-10-30, [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md):** the torques below are molecular moments. With the effective moment default (same fields bit for bit) the bladed torques are 2.098164 / 2.028692 / 1.918189 N m, p 1.39, f_ext 2.2114, band +-0.2119 N m, B-M still VALID (met); B-P unchanged.
+
 ## Question
 
 How large is the numerical (discretisation) error of the FAN-01 torque and Delta p_ts at the design point on the C-grid passage with the now-stable

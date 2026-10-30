@@ -796,7 +796,8 @@ fn e_l_e_s_empty_passage_band_contains_zero_known_miss() {
 }
 
 /// ADR 0086 B-M, B-P: the bladed studies of torque and Delta p_ts are VALID (met: p 1.51 and 1.74, ADR 0086 addendum). The fine run took 58.8 of
-/// the 60 wall-clock minutes on a shared machine.
+/// the 60 wall-clock minutes on a shared machine. Re-read with the effective moment default (ADR 0170 R2, the same fields bit for bit): torque
+/// 2.098164 / 2.028692 / 1.918189 N m, p 1.39, VALID; Delta p_ts unchanged, VALID (met). B1 took 46.4 minutes alone.
 #[test]
 #[ignore = "heavy, ADR 0086 part B: three runs, about 1.5 h in release (met in the addendum)"]
 fn b_m_b_p_bladed_studies_are_valid() {

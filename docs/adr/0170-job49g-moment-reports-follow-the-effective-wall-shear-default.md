@@ -207,3 +207,133 @@ Hygiene:
    `docs/milestone-fan.md`). (a) One dated line in each saying its torques are molecular moments and a re-run needs
    `component = "total_molecular"` to reproduce them. (b) One line in `docs/milestone-fan.md` only. Recommendation: (b),
    plus the pointer lines in ADR 0075 / 0086 that this job adds with its results.
+
+## Addendum: results (2026-10-30)
+
+Commits on the branch:
+- 7ab5c3f: this registration;
+- 2487bcf: the code, T4', M1-M3, the D5 companions and the docs;
+- the commit of this addendum: the D6 record lines in the two FAN-01 tests and the pointer lines in ADR 0075 / 0086.
+  These edits after 2487bcf are doc comments and ignore strings only.
+
+The runs used the release test executables of 2487bcf, built in my own target directory
+`E:\projects\cfd\w49g-work\target`, and launched directly. The logs are in `E:\projects\cfd\w49g-work\logs` and are not
+committed.
+
+Host: shared with jobs 49D and 49E, whose four solver processes ran throughout; 37-39 GB free. At most 2 of my solver
+processes ran at a time: F-126 alongside X2a-36, B3 and B2 in sequence, then B1 alone. The host restarted without warning
+after every run had ended, so no run was cut short.
+
+### Limits
+
+| Id | Measured | Outcome |
+|---|---|---|
+| M1 | SA plate: default, `total`, `viscous` and `viscous_effective` equal `total_effective`; `pressure` and `viscous_molecular` equal `total_molecular`, bit for bit. Molecular differs (-1.45034e-5 against -1.45205e-5) | met |
+| M2 | SST plate: default and `total` equal `total_effective` bit for bit. Molecular differs (-1.65056e-5 against -1.65214e-5) | met |
+| M3 | laminar, constant viscosity and power law: every non-effective spelling equals `total_molecular` bit for bit | met |
+| T4' | default moment equals `m_total_effective`; `m_total_molecular` differs. `defaults_w49c` 6 passed (T1-T3, T5, T6, T8 unchanged) | met |
+| F1 | passed: `fan01_validation` 6, `fan01_diagnosis_w35c` 4, `fan01_gci_w37c` 2, `fan01_rotor_frame_w36c` 1, `fan01_stall_w43c` 5 (including the w45a P5 field hashes), `fan01_mesh_w35d` 1, `fan01_p10_w36d` 1. Ignored counts unchanged | met |
+| L1 | passed / ignored: `mrf` 10 / 11, `wall_motion` 10 / 5, `cylindrical_interface_w43b` 4 / 6, `mesh_transform_w48u` 13 / 0 | met |
+| R1 | see below. It still misses every limit, as the reading rule fixed in advance | known miss stands |
+| R2 B-M | torque 2.098164 / 2.028692 / 1.918189 N m (F1 / F2 / F3); eps21 -0.06947, eps32 -0.11050, s +, **p 1.393**, f_ext 2.2114. Largest last-1000 change 1.34e-5 (limit 6.95e-3). Every run CONVERGED by the cap rule at 8000 | **VALID, met** |
+| R2 B-P | Delta p_ts 73.98805 / 64.23286 / 46.77758 Pa, p 1.738, unchanged. The cap rule still holds on all three runs with the effective torque | **VALID, met** |
+| K1 | molecular companion 1.320065 / 1.010304 N m, pressure part 1.2287 / 0.9060, Delta p_ts -3.81 / -84.40 Pa, Delta p_tt 112.52 / 43.54 Pa: these are ADR 0075's printed values | met |
+| K2 | 8000 iterations each. Delta p_ts 46.77758 / 64.23286 / 73.98805 Pa and molecular torque 1.849759 / 1.967401 / 2.038428 N m equal ADR 0086's. `evaluate` on the molecular values gives p 1.5114, f_ext 2.142799, VALID, as in ADR 0086 | met |
+| K3 | X2a-36 `E_s` 2.30241 N m (374 iterations, converged), as in ADR 0082 | met |
+| G1 | `baseline_hashes.rs` unchanged against 1a04d46: 3 passed, 1 ignored. `case_hashes_w48u` 1 passed. `w33b_default_bits` 1 passed. `workspace_graph` 3 passed | met |
+| G2 | no file changed under `example-projects`, `example-projects-linux` or `cases` since 1a04d46 | met |
+| G3 | passed: rcfd-api lib 106 (2 ignored), `force_effective_w49a` 4, `physics_schema` 11, `rules_w19c` 5 (1 ignored) | met |
+| G4 | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy --release -p rcfd-api --lib --test moments_w49g --test defaults_w49c --test fan01_gci_w37c --test fan01_validation -- -D warnings` clean | met |
+
+### R1: F-126 attempt 3 re-read (effective moment, same fields)
+
+| Point | Torque (limit 5 %) | eta_ts (limit 0.03) | Delta p_ts | Converged (cap rule) |
+|---|---|---|---|---|
+| design, Q 1.4032 | **1.3471** N m against 2.1418 (**-37.1 %**; molecular 1.3201, -38.4 %) | -0.0255 against 0.5324 | -3.81 against 126.46 Pa | yes (torque change 3.45e-5, Delta p_ts change 9.42e-4) |
+| off-design, Q 1.8039 | **1.0420** N m against 1.8822 (**-44.6 %**; molecular 1.0103, -46.3 %) | -0.9389 against 0.3935 | -84.40 against 63.9 Pa | yes (torque change 1.10e-4, Delta p_ts change 6.9e-5) |
+
+- Every limit still misses. The test stays `f126_..._known_miss` with its limits intact; its ignore string and doc
+  comment now carry the new numbers.
+- No sub-limit moved to met, so no amendment was needed.
+- The effective moment adds 0.027 N m (2.1 %) at the design point and 0.032 N m (3.1 %) off design.
+
+### R2: the ADR 0086 bladed family re-read
+
+| Run | Minutes | Torque, effective (change over 1000) | Torque, molecular (change) | L excess, effective / molecular |
+|---|---|---|---|---|
+| B3 x0.75 | 8.2 | 1.918189 (1.3e-5) | 1.849759 (1.9e-5) | 0.06427 / 0.13213 N m |
+| B2 x0.75 sqrt 2 | 18.0 | 2.028692 (3.1e-7) | 1.967401 (3.9e-7) | -0.05241 / 0.00717 N m |
+| B1 x1.5 | 46.4 (alone) | 2.098164 (5.8e-6) | 2.038428 (5.1e-6) | -0.05935 / -0.00076 N m |
+
+- **Size of the shift.** The effective moment adds 0.068 / 0.061 / 0.060 N m (3.7 / 3.1 / 2.9 %). By patch: the blade
+  +0.049 to +0.058, the hub +0.011, the shroud -0.0006 to -0.0012 N m. The shift shrinks a little with refinement, so
+  p falls from 1.51 to 1.39.
+- **Verdicts.** B-M and B-P stay VALID. `b_m_b_p_bladed_studies_are_valid` stays as it is; its doc comment has the new
+  numbers.
+- **R-B reading** (a reading, not a limit). It is still "not shown credible on this family", because part E is
+  unchanged.
+  - Torque band: f1 +- 0.2119 = [1.886, 2.310] N m.
+  - The measured 2.1418 N m is inside it (|meas - f1| = 0.044 N m, 2.0 %), and inside the alternative band +- 0.1416.
+  - f_ext 2.2114 N m is 3.2 % above the measured shaft torque. ADR 0086's 0.05 % "coincidence" was a number of the
+    molecular moment.
+  - No agreement is claimed.
+- **Prediction check.**
+  - The F-126 sub-limits stayed missed and B-M stayed VALID, as predicted.
+  - On F1 and F2 the excess opened with the effective torque, as predicted: F1 went from -0.0008 to -0.059 N m (2.8 % of
+    the torque).
+  - On F3 it closed further instead, from 0.132 to 0.064 N m.
+  - So ADR 0086's "balance closes to 0.04 % on F1" holds for the molecular moment only.
+
+### R3: X2a-36 (reported)
+
+- `E_s` is 2.30241 N m (K3).
+- The report-based excess is now 2.31372 N m with the effective moment, against 2.31265 N m with the molecular one
+  (ADR 0082).
+- So the effective report is not the solver's own wall flux. The report takes the face viscosity with its own
+  wall-normal gradient and the report pressure; `E_s` uses the kernel's fluxes.
+- The gap, 0.011 N m on the hub and shroud of the empty passage, is not explained here (question 4).
+
+### Deviations
+
+- **B1 restart (the registered rule).**
+  - The first B1 reached iteration 500 at 3.7 minutes, which projects to 59.2 minutes, over the 57-minute rule. I
+    stopped it there (my process) and restarted it alone after F-126.
+  - Both starts had identical values at iteration 500 (f_a 2.098233, f_b 73.9912).
+  - The restart reached iteration 500 at 3.0 minutes and ended at 46.4 minutes.
+  - The log of the stopped start is kept as `R2_B1_aborted_at_500.log`.
+- M1 checks two equalities more than registered: `viscous_molecular` = `total_molecular` and `viscous_effective` =
+  `total_effective`. Both follow from D2.
+- `b_m_b_p_bladed_studies_are_valid` itself was not run. Its registered content was evaluated through `registered_run`
+  and `evaluate`, which is ADR 0086's own procedure.
+
+### Not run
+
+- The ignored FAN-01 arms whose torques are printed only. Their verdicts do not read the moment (see the enumeration).
+  - ADR 0078's 22 `registered` arms. That includes the E0 reproduction rule: its printed torque would now be about
+    1.347 N m, not 1.320 N m; K1 shows the molecular value.
+  - ADR 0082's X2d run and its B and R studies.
+  - ADR 0110, 0111, 0115 and 0117's stall arms, Z1 / Z2, the F family and the smoke tests.
+- ADR 0086 part E (the empty passage), whose functionals come from the fields.
+- The `rcfd-mcp` and Studio tests. No example, registry entry or stored run has a moment report, and no UI code names
+  moments or components.
+- Linux, the full workspace suite and the gate.
+
+### Questions for the maintainer
+
+Questions 1-3 above stand. In short:
+1. **Moment parts:** should `component` select the part of a moment, as it does for force reports? Recommendation:
+   (a) yes, in its own job; that moves laminar records.
+2. **`torque_on_fluid`:** recommendation (b), leave it as it is.
+3. **Records with molecular torques that were not re-run:** recommendation (b), one line in `docs/milestone-fan.md`,
+   giving F-126 at -37 % / -45 % and the GCI at 2.098 N m, p 1.39, f_ext 2.211 N m.
+
+Added by the results:
+
+4. **The moment report against the solver's wall flux.** With the effective default the report still differs from the
+   kernel's own wall torque: by 0.011 N m between `E_s` and the report-based excess on X2a-36, and the bladed F1 excess
+   is -0.059 N m.
+   - (a) Diagnose it in its own job: compare the report's viscous wall torque with the wall-face terms of the budget
+     (`fan01_rotor_frame_w36c`, `budget`) on X2a and B1.
+   - (b) Leave it.
+
+   Recommendation: (a). A torque meant for a fan design loop should be the torque the solver applies.
