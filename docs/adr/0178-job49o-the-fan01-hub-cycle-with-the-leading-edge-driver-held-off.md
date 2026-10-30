@@ -141,3 +141,14 @@ miss.
   process, at most two at a time). Each arm writes JSON with `W49O_OUT=<dir>`.
 - `docs/investigations/job49o-fan01-hub-locus/`: the JSON, `results.csv` and the logs, committed as soon as they exist.
 - This ADR's addendum; one sentence appended at the end of the robustness row of `docs/milestone-fan.md`.
+
+## Amendment 1 (2026-10-30, after the V4 check, before any arm)
+
+What I knew when writing it: only the V4 printout. No arm has run. |S_H| is 19, |H3| 322, |H4| 512, |D3| 351, |LE2|
+46. H3 and H4 are disjoint from LE2. **V4 failed**: D3 shares 4 cells with H4, because the hub rings reach 4 cells
+into the distant ring. This is a defective set-up of mine: I chose the distant point without knowing how far ring 4
+reaches.
+
+Correction (fixed now): the distant region is **D3' = D3 minus H4** (347 cells, disjoint from H4 and LE2; |D3'| / |H3|
+= 1.08). N-D3, K-D3, the class "D" and K-D3's own site use D3'. Everything else is unchanged, including V4's
+requirements, now applied to D3'.
