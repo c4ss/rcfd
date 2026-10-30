@@ -184,3 +184,21 @@ a limit of another ADR, or a known miss.
   `frozen_limiter_hook_is_bit_identical_at_the_freeze`, `w45a_p5_defaults_are_bit_identical_to_main`
   (`fan01_stall_w43c.rs`) and `baseline_hashes.rs`.
 - This ADR's addendum; a line in `docs/milestone-fan.md`'s robustness row.
+
+## Amendment 1 (2026-10-30, after C0 and C-CL ran, before any other arm)
+
+What I knew when writing it: V1, V2 (a) and (b) and V4 held (ring sizes: LE1 20, LE2 46, HUB1 28, HUB2 83, U1 48, U2
+129, D2 65 cells; LE2, HUB2 and D2 pairwise disjoint; |D2| / |LE2| = 1.41). C0 and C-CL ran once each and wrote their
+records. Both stopped at **V3**: the median `res_u` / `res_p` over 500-1000 reproduce ADR 0110 to the printed digits
+(1.089e-3 / 4.87e-4), but the torque at iteration 1000 is 1.9177 N m against the registered 1.8493. I read neither
+arm's verdict before writing this, except what the failing test printed on the way (the C0 and C-CL verdict lines).
+
+Cause: a registration defect of mine, not a solver change. [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md)
+(job 49G, after ADRs 0110 and 0111) made the `moment` reports follow the effective wall-shear default. That changes the
+torque monitor of the same flow, and ADR 0170 records FAN-01's torque monitors as moving. The residual medians, which come
+from the iteration itself, match to every printed digit, so the flow at iteration 1000 is the ADR 0110 flow.
+
+Correction (fixed now): V3 = the two residual medians to the printed digits. The torque at iteration 1000 is reported,
+with no limit. Torque and Delta p_ts stay outside every verdict here (as registered). C0 and C-CL are run again with the
+corrected test, which also checks that the arm is deterministic: the two runs must give the same `rho_med`, `rho_du` and
+`reached`. Nothing else changes.

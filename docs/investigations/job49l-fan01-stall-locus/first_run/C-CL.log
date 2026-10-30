@@ -1,0 +1,33 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling rcfd-fv v0.1.0 (E:\projects\cfd\rcfd\.claude\worktrees\job49l\crates\rcfd-fv)
+   Compiling rcfd-turb v0.1.0 (E:\projects\cfd\rcfd\.claude\worktrees\job49l\crates\rcfd-turb)
+   Compiling rcfd-post v0.1.0 (E:\projects\cfd\rcfd\.claude\worktrees\job49l\crates\rcfd-post)
+   Compiling rcfd-api v0.1.0 (E:\projects\cfd\rcfd\.claude\worktrees\job49l\crates\rcfd-api)
+    Finished `release` profile [optimized] target(s) in 49.60s
+     Running tests\fan01_stall_locus_w49l.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_stall_locus_w49l-6ba2d4394e164219.exe)
+
+running 1 test
+W49L C-CL it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (52.7 s)
+test c_cl_both_terms_everywhere has been running for over 60 seconds
+W49L C-CL it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (73.5 s)
+W49L C-CL it 1500: res_u 4.673e-6 res_p 7.927e-7 |du|_2 4.223e-2 (94.2 s)
+W49L C-CL it 2000: res_u 4.673e-6 res_p 7.927e-7 |du|_2 4.223e-2 (115.1 s)
+W49L C-CL it 2500: res_u 4.673e-6 res_p 7.927e-7 |du|_2 4.223e-2 (135.4 s)
+W49L C-CL it 3000: res_u 4.673e-6 res_p 7.927e-7 |du|_2 4.223e-2 (155.7 s)
+W49L C-CL RESULT {"adr":"0175","arm":"C-CL","arm_median_res_p":7.927137464377004e-7,"arm_median_res_u":4.67327965300342e-6,"dpts_end":-4.023945344735765,"dpts_switch":46.643469998593375,"du_end":0.04223461575297942,"du_switch":5.742138973481199,"is_converged_end":false,"location_end":{"share_hub2":1.8745095030029103e-7,"share_le2":1.3863059237114547e-8,"share_top1pct":0.993541541708314,"site":"other","top5":[{"cell":215,"class":"other","du":0.014789529580397922,"r":0.1241708513591847,"z":0.371436517588301},{"cell":252,"class":"other","du":0.01344116259658093,"r":0.12417141173423309,"z":0.3714672698141614},{"cell":216,"class":"other","du":0.013374304416028994,"r":0.12417161642138659,"z":0.37147378848228135},{"cell":287,"class":"other","du":0.01085330834456642,"r":0.12417119863531655,"z":0.3714579400734998},{"cell":179,"class":"other","du":0.010589113096154784,"r":0.12422939464829018,"z":0.3714258154117385}]},"location_switch":{"share_hub2":0.04820625050027438,"share_le2":0.41220449198230014,"share_top1pct":0.7695601787328042,"site":"LE","top5":[{"cell":665,"class":"LE","du":2.2868310309839974,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":17,"class":"LE","du":1.4786603270651004,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":341,"class":"LE","du":1.1780082445680358,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":904,"class":"other","du":1.141015159400505,"r":0.1255336085984213,"z":0.182924670096604},{"cell":1068,"class":"other","du":1.0081055703932955,"r":0.14046877951782227,"z":0.13964709356642088}]},"mask_cells_conv":4920,"mask_cells_lap":4920,"period_ratio_end":1.845487292663098e-9,"reached":1114,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"region":"ALL (C and L)","rho_du":0.007355206125806196,"rho_med":0.004290155251448855,"seconds":155.6602987,"stopped":null,"torque_end":1.4022682158945257,"torque_switch":1.9177249776178935,"verdict":"CALMS"}
+W49L C-CL VERDICT CALMS (rho_med 4.290e-3, rho_du 7.355e-3, reached Some(1114))
+
+thread 'c_cl_both_terms_everywhere' (63496) panicked at crates\rcfd-api\tests\fan01_stall_locus_w49l.rs:478:5:
+V3 failed: median res_u 1.089e-3 res_p 4.87e-4 torque 1.9177
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test c_cl_both_terms_everywhere ... FAILED
+
+failures:
+
+failures:
+    c_cl_both_terms_everywhere
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 155.67s
+
+error: test failed, to rerun pass `-p rcfd-api --test fan01_stall_locus_w49l`

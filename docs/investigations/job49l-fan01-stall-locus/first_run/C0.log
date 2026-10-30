@@ -1,0 +1,30 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized] target(s) in 49.70s
+     Running tests\fan01_stall_locus_w49l.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_stall_locus_w49l-6ba2d4394e164219.exe)
+
+running 1 test
+W49L C0 it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (52.8 s)
+test c0_empty_mask has been running for over 60 seconds
+W49L C0 it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (73.6 s)
+W49L C0 it 1500: res_u 1.025e-3 res_p 4.729e-4 |du|_2 5.971e0 (94.5 s)
+W49L C0 it 2000: res_u 1.398e-3 res_p 5.823e-4 |du|_2 6.098e0 (115.7 s)
+W49L C0 it 2500: res_u 1.000e-3 res_p 4.536e-4 |du|_2 6.282e0 (136.4 s)
+W49L C0 it 3000: res_u 1.001e-3 res_p 4.061e-4 |du|_2 5.713e0 (156.9 s)
+W49L C0 RESULT {"adr":"0175","arm":"C0","arm_median_res_p":0.0004934335006321999,"arm_median_res_u":0.0011031631743024105,"dpts_end":46.714947048073135,"dpts_switch":46.643469998593375,"du_end":5.713000335703856,"du_switch":5.742138973481199,"is_converged_end":false,"location_end":{"share_hub2":0.054082957935445465,"share_le2":0.4142038791801837,"share_top1pct":0.7985519354058978,"site":"LE","top5":[{"cell":665,"class":"LE","du":2.2807004642292386,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":17,"class":"LE","du":1.4706180542162415,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":341,"class":"LE","du":1.1728178965733,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":905,"class":"other","du":1.134072081013698,"r":0.12556683910320737,"z":0.17659913469699948},{"cell":906,"class":"other","du":1.039485360291438,"r":0.12556545921270354,"z":0.1744080815833693}]},"location_switch":{"share_hub2":0.04820625050027438,"share_le2":0.41220449198230014,"share_top1pct":0.7695601787328042,"site":"LE","top5":[{"cell":665,"class":"LE","du":2.2868310309839974,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":17,"class":"LE","du":1.4786603270651004,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":341,"class":"LE","du":1.1780082445680358,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":904,"class":"other","du":1.141015159400505,"r":0.1255336085984213,"z":0.182924670096604},{"cell":1068,"class":"other","du":1.0081055703932955,"r":0.14046877951782227,"z":0.13964709356642088}]},"mask_cells_conv":0,"mask_cells_lap":0,"period_ratio_end":1.1211000105511466,"reached":null,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"region":"empty","rho_du":0.9949254732579769,"rho_med":1.0142150936666976,"seconds":156.9046093,"stopped":null,"torque_end":1.9181686701301341,"torque_switch":1.9177249776178935,"verdict":"NO EFFECT"}
+W49L C0 VERDICT NO EFFECT (rho_med 1.014e0, rho_du 9.949e-1, reached None)
+
+thread 'c0_empty_mask' (42456) panicked at crates\rcfd-api\tests\fan01_stall_locus_w49l.rs:478:5:
+V3 failed: median res_u 1.089e-3 res_p 4.87e-4 torque 1.9177
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test c0_empty_mask ... FAILED
+
+failures:
+
+failures:
+    c0_empty_mask
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 156.91s
+
+error: test failed, to rerun pass `-p rcfd-api --test fan01_stall_locus_w49l`

@@ -468,16 +468,18 @@ fn verdict_of(r: &Value) -> &str {
     r["verdict"].as_str().unwrap()
 }
 
-/// V3 (checked in every arm): the reference reproduces ADR 0110 / 0111 to the printed digits.
+/// V3 (checked in every arm; ADR 0175 amendment 1): the reference reproduces the ADR 0110 / 0111 residual medians to the
+/// printed digits. The torque is reported only: ADR 0170 changed the moment reports after ADR 0110.
 fn v3(r: &Value) {
     let (u, p, t) = (
         r["ref_median_res_u"].as_f64().unwrap(),
         r["ref_median_res_p"].as_f64().unwrap(),
         r["torque_switch"].as_f64().unwrap(),
     );
+    println!("W49L V3: median res_u {u:.3e} res_p {p:.2e}; torque at 1000 {t:.4} N m (reported)");
     assert!(
-        format!("{u:.3e}") == "1.089e-3" && format!("{p:.2e}") == "4.87e-4" && format!("{t:.4}") == "1.8493",
-        "V3 failed: median res_u {u:.3e} res_p {p:.2e} torque {t:.4}"
+        format!("{u:.3e}") == "1.089e-3" && format!("{p:.2e}") == "4.87e-4",
+        "V3 failed: median res_u {u:.3e} res_p {p:.2e}"
     );
 }
 
