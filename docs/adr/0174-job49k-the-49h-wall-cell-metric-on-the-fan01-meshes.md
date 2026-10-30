@@ -194,3 +194,8 @@ of another ADR changes.
    needs its own registration.
 3. **The unlimited path.** Is a follow-up run worth it (limiter on the top-m cells only, to test reading 2's candidate)?
    Recommendation: no. The product path uses Barth-Jespersen, and its stall is reading 1's problem, not this one.
+
+### Maintainer decisions
+
+- Question 1 (2026-10-30): "we can skip the fan for now in the SV302 case". The SV302 level stays at 3 000 and its
+  definition is unchanged; the FAN-01 false negative stays recorded here and in `docs/milestone-fan.md` only.
