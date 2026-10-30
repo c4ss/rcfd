@@ -177,3 +177,65 @@ is made available automatically and safely, and what "no hand-tuning" asks of it
 mechanism and the next amendment tests G, W, T, C and L by direct probes.
 
 Runs PA to PI: at most 2 solver processes at a time, the same binary `rcfd-w49h0.exe`.
+
+## Amendment 2 (2026-10-30, after Phase 2 and before any Phase 3 run): H-084 rejected; first-order upwind is clean; Phase 3 tests the linear-upwind extrapolation
+
+### Phase 2 results (the full evaluation is in the addendum)
+
+| Run | End |
+|---|---|
+| PA face_flux | guard stop, iteration 18, cell 255 |
+| PB alpha_p 0.3 | guard stop, iteration 25, cell 0 |
+| PI alpha_p 0.7 | guard stop, iteration 17, cell 0 |
+| PH alpha_u 0.7 | guard stop, iteration 19, cell 1 |
+| PC two correctors + compensation | guard stop, iteration 15, cell 254 |
+| PD SIMPLE (0.7 / 0.3) | guard stop, iteration 12, cell 255 |
+| PE laminar | guard stop, iteration 15, cell 0 |
+| PG flow rotated, mesh not | guard stop, iteration 15, cell 0 (the same iteration as RB) |
+| PF `convection = "upwind"` | **clean, 300 iterations** |
+
+Limits: LM1 (PA clean) **missed**, LM2 (PB clean) **missed**, LM6 (PD clean) **missed**, LM4 (PF stops) **missed** (PF is
+clean, the opposite of the prediction), LM3 (PE stops at the trailing edge between 10 and 20) met, LM5 (PG) met. So the
+ADR 0084 period-two mode (H-084) is **not** the mechanism: the pressure-velocity coupling variants (SIMPLE, SIMPLEC with
+three relaxation sets, `face_flux`, correctors) all diverge, turbulence is not needed (laminar diverges at the same
+iteration), and the mesh transform is not involved. Only the **convection scheme** changes the outcome.
+
+### Offline look at the extrapolation (scratch script on the stored RB fields, not a registered measurement)
+
+`linear_upwind` extrapolates the cell value to a face with the inverse-distance-weighted least-squares gradient
+(`least_squares_partner`, `crates/rcfd-fv/src/gradient.rs`), unlimited by default. For cell 0 of RB the least-squares matrix is
+well conditioned (eigenvalue ratio 2.2), so the gradient is not wrong because of conditioning; but the velocity profile
+between the no-slip wall (4.2e-6 chord from the cell centre) and the radial neighbour is steep, the stencil is skewed
+(73 degrees), and the tangential derivative the fit returns is of order 1e4 to 1e5 per chord. At iteration 1 the face
+increments `grad . (x_f - x_c)` of cell 0 are +3.6, -4.8 and -0.9 against a cell value of 0.56 (faces then carry values
+of -4.2 to 4.1, outside the neighbour range); at iteration 5 they are 14, -19 and -3 against 2.8. The same cell pair
+(0, 255) and cells 1 and 254 grow together. This is **H-LU:** the unlimited linear-upwind extrapolation on the sliver wall
+cells of the trailing edge produces face values far outside the range of the neighbouring cells, and the deferred
+correction of the convection term feeds that back into the iteration, in every coupling variant, and only when the flow
+puts a strong velocity difference on those cells (6 degrees; at 0 degrees the symmetric start-up does not).
+
+### Phase 3 set-up: the limiter that already exists (`solver.linear_upwind_limiter = "barth_jespersen"`, ADR 0081 part L, "measured stable on the FAN-01 sector mesh where the unlimited scheme diverges")
+
+One change against the Phase 1 runs (same binary `rcfd-w49h0.exe`, 300 iterations, `store_interval = 1`):
+
+| Run | Phase 1 counterpart | Mesh, alpha, model |
+|---|---|---|
+| QA | RB (guard stop at 15) | M1, 6, SA |
+| QB | ADR 0159's SA at 16 (stop at 11) | M1, 16, SA |
+| QC | RE (stop at 16) | M1, 6, SST |
+| QD | RD (stop at 28) | M1w05, 6, SA |
+| QE | RA (clean) | M1, 0, SA |
+
+| Limit | Statement |
+|---|---|
+| LN1 | QA is clean (300 iterations, exit 5, no guard stop) |
+| LN2 | QB is clean |
+| LN3 | QC is clean |
+| LN4 | QD is clean |
+| LN5 | QE is clean (the limiter does not break the case that already ran) |
+
+If LN1 to LN4 are met the unlimited extrapolation is confirmed as the trigger (H-LU) at the level these runs can show; the
+fix question is then not "a new scheme" but whether and how a limiter becomes available without hand-tuning, and what
+it costs in accuracy and convergence over a full run. That is Amendment 3, written after these runs: long runs
+(8000 iterations) on M1 at 0 and 6 degrees against TMR's 0.008192 and the 49D curve, and the no-opt-in default's
+behaviour, are not run before then.

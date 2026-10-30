@@ -49,6 +49,17 @@ REGISTRY.update({
 })
 
 
+# Phase 3 (ADR 0171 amendment 2): the existing Barth-Jespersen limiter of the linear-upwind extrapolation.
+_BJ = ('algorithm = "simplec"\n', 'algorithm = "simplec"\nlinear_upwind_limiter = "barth_jespersen"\n')
+REGISTRY.update({
+    "QA": dict(_B, edit={"a": _BJ}),
+    "QB": dict(_B, alpha=16, edit={"a": _BJ}),
+    "QC": dict(_B, arm="SST", edit={"a": _BJ}),
+    "QD": dict(_B, mesh="M1w05", edit={"a": _BJ}),
+    "QE": dict(_B, alpha=0, edit={"a": _BJ}),
+})
+
+
 def case_text(spec):
     s = dict(spec)
     text = w.case_text(s)
