@@ -712,3 +712,125 @@ fn a_d2() {
     let r = local("A-D2", "D2", |_, rg| rg.d2.clone());
     assert_ne!(verdict_of(&r), "CALMS", "P5");
 }
+
+// ---------------------------------------------------------------- amendment 2: complement arms (C removed everywhere except a site)
+
+/// Run a complement arm: R_C = ALL minus the kept site, R_L empty (T = C, fixed by phase 1). Returns the record with the
+/// amendment-2 verdict (`CALMS` / `SUSTAINS` / `WEAK`) added under `verdict_k` (and rewritten to `W49L_OUT`).
+fn complement(
+    id: &str,
+    name: &str,
+    kept: impl Fn(&Regions) -> Vec<bool>,
+    own_site: impl Fn(&Regions) -> Vec<bool>,
+) -> Value {
+    let mut r = arm(id, name, |_, rg| {
+        let k = kept(rg);
+        (Some(k.iter().map(|b| !b).collect()), None)
+    });
+    v3(&r);
+    let sim = b3();
+    let rg = regions(&sim);
+    let site = own_site(&rg);
+    let in_site = r["location_end"]["top5"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| site[t["cell"].as_u64().unwrap() as usize])
+        .count();
+    let rho_du = r["rho_du"].as_f64().unwrap();
+    let vk = match verdict_of(&r) {
+        "CALMS" => "CALMS",
+        "NOT EVALUABLE" => "NOT EVALUABLE",
+        _ if rho_du >= 0.1 && in_site >= 3 => "SUSTAINS",
+        _ => "WEAK",
+    };
+    r["verdict_k"] = json!(vk);
+    r["top5_in_own_site"] = json!(in_site);
+    println!("W49L {id} VERDICT_K {vk} (rho_du {rho_du:.3e}, {in_site} of the top 5 in the site)");
+    if let Ok(dir) = std::env::var("W49L_OUT") {
+        let p = std::path::Path::new(&dir).join(format!("{id}.json"));
+        std::fs::write(p, serde_json::to_string_pretty(&r).unwrap()).unwrap();
+    }
+    r
+}
+
+fn vk(r: &Value) -> &str {
+    r["verdict_k"].as_str().unwrap()
+}
+
+/// K-0 (V6): nothing kept; the C-C record to every printed digit.
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-0 (about 2.5 min in release)"]
+fn k0_control() {
+    let r = complement(
+        "K-0",
+        "ALL minus nothing (C)",
+        |rg| vec![false; rg.le2.len()],
+        |rg| rg.le2.clone(),
+    );
+    let (rm, rd) = (r["rho_med"].as_f64().unwrap(), r["rho_du"].as_f64().unwrap());
+    assert!(
+        r["reached"].as_u64() == Some(1115) && format!("{rm:.3e}") == "3.957e-3" && format!("{rd:.3e}") == "6.897e-3",
+        "V6: reached {:?} rho_med {rm:.3e} rho_du {rd:.3e}",
+        r["reached"]
+    );
+}
+
+/// K-LE1 (Q5: sustains).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-LE1 (about 2.5 min in release)"]
+fn k_le1() {
+    let r = complement("K-LE1", "ALL minus LE1 (C)", |rg| rg.le1.clone(), |rg| rg.le2.clone());
+    assert_eq!(vk(&r), "SUSTAINS", "Q5");
+}
+
+/// K-LE2 (Q1: sustains).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-LE2 (about 2.5 min in release)"]
+fn k_le2() {
+    let r = complement("K-LE2", "ALL minus LE2 (C)", |rg| rg.le2.clone(), |rg| rg.le2.clone());
+    assert_eq!(vk(&r), "SUSTAINS", "Q1");
+}
+
+/// K-HUB1 (Q6: calms).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-HUB1 (about 2.5 min in release)"]
+fn k_hub1() {
+    let r = complement(
+        "K-HUB1",
+        "ALL minus HUB1 (C)",
+        |rg| rg.hub1.clone(),
+        |rg| rg.hub2.clone(),
+    );
+    assert_eq!(vk(&r), "CALMS", "Q6");
+}
+
+/// K-HUB2 (Q2: sustains).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-HUB2 (about 2.5 min in release)"]
+fn k_hub2() {
+    let r = complement(
+        "K-HUB2",
+        "ALL minus HUB2 (C)",
+        |rg| rg.hub2.clone(),
+        |rg| rg.hub2.clone(),
+    );
+    assert_eq!(vk(&r), "SUSTAINS", "Q2");
+}
+
+/// K-U2 (Q3: sustains).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-U2 (about 2.5 min in release)"]
+fn k_u2() {
+    let u = |rg: &Regions| union(&rg.le2, &rg.hub2);
+    let r = complement("K-U2", "ALL minus U2 (C)", u, u);
+    assert_eq!(vk(&r), "SUSTAINS", "Q3");
+}
+
+/// K-D2 (Q4: calms).
+#[test]
+#[ignore = "ADR 0175 amendment 2 K-D2 (about 2.5 min in release)"]
+fn k_d2() {
+    let r = complement("K-D2", "ALL minus D2 (C)", |rg| rg.d2.clone(), |rg| rg.d2.clone());
+    assert_eq!(vk(&r), "CALMS", "Q4");
+}
