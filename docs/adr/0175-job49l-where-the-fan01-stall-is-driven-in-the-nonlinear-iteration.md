@@ -324,3 +324,79 @@ of another ADR changes.
 3. **Milestone wording.** The fan milestone row said "first-order `upwind` converges". Should it say that the
    convection deferred correction alone carries that (C-C), not the Laplacian correction? Recommendation: yes. This
    job's milestone line says it.
+
+### Maintainer decisions
+
+- Question 1 (2026-10-30): the complement arms (the "reverse test") are approved as amendment 2 below. F-R is not part
+  of this phase.
+- Question 2 (2026-10-30): the test-only hook `high_order_mask_test_only` is kept.
+- Question 3: pending; the coordinator handles `docs/milestone-fan.md`, which this phase does not edit.
+
+## Amendment 2 (2026-10-30, before any run of this phase): can each site sustain the cycle on its own?
+
+What I knew when writing it: everything in the addendum above. No run of this phase has been made. The necessity arms of
+phase 2 cannot say whether a site is an autonomous driver. This phase tests sufficiency: the convection deferred
+correction C is removed **everywhere except** in one site, so `linear_upwind` (Barth-Jespersen limited) stays live only
+there.
+
+**Set-up.** Everything as registered above: the case, the hook, the arm protocol (1000 default iterations, the mask set
+at the switch, 2000 more, the same windows), and the same rings (LE1 20, LE2 46, HUB1 28, HUB2 83, U2 129, D2 65
+cells). The term set is T = C, as fixed by phase 1. R_C = ALL minus the kept site K; R_L is empty. By the face rule, a
+face keeps its correction only if both its cells are in K (and, for a seam face, the partner owner too). So the
+live high-order part is the interior of K; this is stated, not corrected.
+
+| Id | Kept site K | Prediction |
+|---|---|---|
+| **K-0** | none (R_C = ALL: the control, the C-C mask through the complement code path) | CALMS, record identical to C-C |
+| **K-LE1** | LE1 | SUSTAINS |
+| **K-LE2** | LE2 | SUSTAINS |
+| **K-HUB1** | HUB1 | CALMS |
+| **K-HUB2** | HUB2 | SUSTAINS |
+| **K-U2** | LE2 ∪ HUB2 | SUSTAINS |
+| **K-D2** | D2 (distant control) | CALMS |
+
+**Verdict of a complement arm** (`rho_med`, `rho_du` as above, against the same stalled reference):
+- **CALMS**: `rho_med <= 0.01` and `rho_du <= 0.01` (the phase 1 rule). The site cannot sustain a cycle alone.
+- **SUSTAINS**: not CALMS, `rho_du >= 0.1` (the cycle keeps at least a tenth of the reference amplitude), and at least
+  3 of the 5 end top cells lie in ring 2 of K's own site (class LE for LE1, LE2; HUB for HUB1, HUB2; LE or HUB, counted
+  together, for U2; D2 for K-D2). The site alone drives a cycle that lives in it.
+- **WEAK** otherwise: either a small residual cycle (`rho_du < 0.1`) or a cycle that sits outside the site (for example at
+  the mask interface). It is reported and enters no reading rule.
+
+**Validity (a failure is a defective set-up).** **V6**: K-0 gives the C-C record to every printed digit: `rho_med`
+3.957e-3, `rho_du` 6.897e-3, `reached` 1115.
+
+**Limits** (my predictions): **Q1** K-LE2 SUSTAINS; **Q2** K-HUB2 SUSTAINS; **Q3** K-U2 SUSTAINS; **Q4** K-D2 CALMS;
+**Q5** K-LE1 SUSTAINS; **Q6** K-HUB1 CALMS. A miss is a known miss. K-0 is V6, not a limit.
+
+**Reading rules (fixed now; made only if V6 holds).** A site "sustains" iff its ring-1 or ring-2 arm SUSTAINS.
+
+0. **K-D2 SUSTAINS**: any 65-cell high-order patch sustains a cycle on this mesh, so sustaining is not specific to the
+   sites. No site reading is made. Next job: a global treatment of the deferred correction (F-R on B3); no local
+   treatment.
+1. **LE sustains, HUB does not**: the leading-edge root is an autonomous driver. The hub cycle that phase 2 saw once the
+   leading edge was masked needs high order over a wider region, so it is non-local. Next job: a global treatment (F-R
+   on B3), with the leading-edge root as the cell set to watch. A leading-edge-only treatment is already ruled out by
+   phase 2.
+2. **HUB sustains, LE does not**: the hub mid-chord cells are the autonomous driver, where the ADR 0111 mode sits. The
+   leading-edge cycle needs a wider region. Next job: as rule 1, watching the hub cells. The ADR 0111 linearisation at
+   the hub becomes worth repeating at a fixed point.
+3. **Both sustain**: at least two autonomous local drivers (with phase 2's third set after U2, possibly more). A local
+   treatment would have to find and cover every such site, and that set is open-ended. Next job: a global treatment (F-R
+   on B3) first; a site-limited variant only as a secondary arm.
+4. **Neither sustains, K-U2 SUSTAINS**: the two sites drive the cycle only together, coupled. A treatment must cover
+   both. Next job: global F-R on B3, with a both-site variant as a secondary arm.
+5. **Nothing sustains** (all CALMS or WEAK): no site within ring 2, alone or paired, carries a cycle. The cycle needs
+   high order over a region wider than these sites, so a local treatment is ruled out. Next job: a global treatment (F-R
+   on B3).
+
+In every rule the global candidate is the same, because phase 2 already ruled out a one-site fix within ring 2. What
+this phase decides is whether a site-limited treatment remains a credible secondary arm (rules 3, 4), or whether the
+sites are not autonomous drivers at all (rules 1, 2, 5). Nothing here is a statement about torque, Delta p_ts or accuracy.
+
+**Not run in this phase:** F-R (ADR 0111's under-relaxed deferred correction, beta 0.25) on B3. It is the candidate for
+the job after this phase and needs its own registration. Also not run: rings larger than 2, E3 / E2 / E1, B2.
+
+**Deliverables:** the seven arms as ignored tests in `fan01_stall_locus_w49l.rs` (phase-2 records not needed; T = C
+fixed), one JSON per arm in `docs/investigations/job49l-fan01-stall-locus/` (committed as soon as they exist),
+`results.csv` extended, and an addendum section for amendment 2. `docs/milestone-fan.md` is not edited.
