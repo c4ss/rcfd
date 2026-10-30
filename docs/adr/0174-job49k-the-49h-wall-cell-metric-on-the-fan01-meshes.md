@@ -121,3 +121,62 @@ ten largest-m cells.
   printed with `--nocapture`.
 - `docs/investigations/job49k-fan01-wall-metric/results.json`: the printed values, committed with the results.
 - This ADR's addendum; a line in `docs/milestone-fan.md`'s robustness row.
+
+## Addendum: results (2026-10-30)
+
+Data: `docs/investigations/job49k-fan01-wall-metric/results.json`, written by the `report` test (`W49K_OUT`); one run, release,
+on 12603be plus the test file. Every value below is from that file.
+
+### Validity
+
+V1 met (B3 4 920, B2 13 627, B1 38 184, E3 5 040; E2 13 882 and E1 38 688 printed). V2 and V3 met: the cell numbering of ADRs
+0110 and 0111 holds, and for every cell of the three sets the harness angle equals the metric's angle.
+
+### Limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| K1 | c4971: rank 1.000 in A and W (it is the largest-m cell of E3), m 750; c4970: rank 0.999, m 585; c4935: rank 0.955 (W 0.948), m 130 | **FALSIFIED** (known miss: m < 3000 for all three, c4935 outside the top 1 %) |
+| K2 | 0 of 5 in the top 5 %: ranks 0.206-0.277, m 3.7-5.4, aspect 7.0-8.4, 26-36 deg | FALSIFIED, as predicted |
+| K3 | 0 of 5 in the top 5 %: ranks 0.207-0.320, m 3.7-6.7, aspect 3.6-4.7, 38-59 deg | FALSIFIED, as predicted |
+| K4 | N (m >= 3000) 0 / 0 / 0; M 750 / 708 / 1497 on E3 / E2 / E1 | DOES NOT TRACK, as predicted (M falls E3 -> E2) |
+| D1 | SV302 count, unlimited / Barth-Jespersen: 0 / 0 on E3 and on B3 | **MISSED** (known miss) |
+| D2 | `wall_cell_risk` on E3 names c4971 | met |
+
+Reported: the largest m on every mesh is a shroud tip-layer cell at the leading-edge plane (r 0.2477-0.2491, z 0.093-0.104, 77
+deg on F3): B3 / E3 750, B2 / E2 708, B1 / E1 1 497; the 99th percentile over all cells is 196-286 and the median 5.6-12.5. No
+FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
+
+### Reading (by the registered rules)
+
+1. **The Barth-Jespersen stall is not the ADR 0171 mechanism** (K2, K3). The limit-cycle cells at the blade-root leading edge
+   and the leading Jacobian mode's hub cells are among the most benign cells of B3 (about the 20th to 30th percentile, aspect
+   below 9). A mesh change aimed at high-metric cells is not expected to remove the stall; the next stall job belongs on the
+   scheme side at the leading-edge root, as the reading rule says.
+2. **The unlimited divergence: K1 is falsified as registered, with a split result.** The location agrees exactly: unlimited
+   `linear_upwind` fails first in the largest-m cell of E3, and SV302's own search names that cell (D2). The level does not:
+   750, against 6 900 to 21 000 where the aerofoil diverged and 1 600 where it did not. So ADR 0171's mechanism is not claimed
+   for FAN-01. What this does show is that a metric level taken from the aerofoil does not carry over to a swirling, strongly
+   off-axis flow, consistent with ADR 0171's own caveat that the metric alone does not predict divergence. Reported without a
+   verdict: an extrapolation over the long side of the worst cell is a candidate on both meshes; testing it needs a run
+   (Barth-Jespersen limited only at the top-m cells), which was not registered here.
+3. **SV302 is a false negative on FAN-01** (D1). Its level of 3 000 is a judgement from three aerofoil meshes (ADR 0172 D3).
+   No change is made here (warnings are another job's subject); see question 1.
+4. **Part L**: the metric does not track it (K4); part L stays open. Reported: M doubles from E2 to E1 at the shroud
+   tip-layer cell, so the prediction's reason (the aspect ratio falls with in-plane refinement) holds for the median, not for
+   the worst cell.
+
+Nothing here is a statement about torque, Delta p_ts or agreement with the measured fan. No default, limit or known miss
+of another ADR changes.
+
+### Questions for the maintainer
+
+1. **SV302 level.** Lower it, or make it depend on the flow angle at the cell? Recommendation: neither yet. One more data
+   point (FAN-01 at 750) does not make a rule. Record it in `docs/case-schema.md` as a known false negative and revisit
+   when a third geometry diverges.
+2. **Next stall job.** Recommendation: scheme side at the blade-root leading edge (K2 and K3 say a mesh change aimed at
+   high-metric cells will not help). The record already points at the explicit high-order part of `linear_upwind` in the
+   five root cells. One candidate that has not been tried is an implicit or blended treatment of that part in the cells with
+   two wall faces. It needs its own registration.
+3. **The unlimited path.** Is a follow-up run worth it (limiter on the top-m cells only, to test reading 2's candidate)?
+   Recommendation: no. The product path uses Barth-Jespersen, and its stall is reading 1's problem, not this one.
