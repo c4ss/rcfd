@@ -202,3 +202,118 @@ Correction (fixed now): V3 = the two residual medians to the printed digits. The
 with no limit. Torque and Delta p_ts stay outside every verdict here (as registered). C0 and C-CL are run again with the
 corrected test, which also checks that the arm is deterministic: the two runs must give the same `rho_med`, `rho_du` and
 `reached`. Nothing else changes.
+
+## Addendum: results (2026-10-30)
+
+Data: `docs/investigations/job49l-fan01-stall-locus/` (one JSON per arm, `results.csv`, the logs; `first_run/` holds the
+first C0 and C-CL records, which stopped at the old V3). Release, on b37b11e plus amendment 1's test change. Each arm was run
+in its own process, at most two at a time; C0 and C-CL ran twice and gave identical records (`rho_med`, `rho_du`,
+`reached`, `|du|` at the end, the medians: deterministic). Every value below is from those files.
+
+### Validity
+
+| Id | Measured | Result |
+|---|---|---|
+| V1 | 4 920 cells; c665, c17, c341, c1234, c365, c401 within 6e-4 m | met |
+| V2 | (a) empty mask = default, (b) full mask = `upwind` switch, bit for bit in u, p, phi; E3 default test bit-identical | met |
+| V3 (amendment 1) | reference medians 1.089e-3 / 4.87e-4 in every arm; torque at 1000 1.9177 N m (reported; ADR 0170) | met |
+| V4 | LE1 20, LE2 46, HUB1 28, HUB2 83, U1 48, U2 129, D2 65 cells; pairwise disjoint; abs(D2) / abs(LE2) 1.41 | met |
+| V5 | C-CL: `reached` 1114, `rho_med` 4.290e-3, `rho_du` 7.355e-3 (S10: 1114, 4.3e-3, 7.4e-3) | met |
+
+The existing bit-identity tests pass unchanged (`w44a_hooks_at_defaults_are_bit_identical`,
+`frozen_limiter_hook_is_bit_identical_at_the_freeze`, `w45a_p5_defaults_are_bit_identical_to_main`), as do
+`baseline_hashes.rs` (3 passed, 1 ignored as before) and the rcfd-fv unit tests (84 passed).
+
+### Arms
+
+`|du|_2` at the switch is 5.74 m/s in every arm; the end site is from the five largest-`|du|` cells of the last iteration.
+
+| Arm | Region (cells) | `rho_med` | `rho_du` | Verdict | `reached` | End site; share of `sum |du|^2` in LE2 / HUB2 | End top cells |
+|---|---|---|---|---|---|---|---|
+| C0 | empty | 1.014 | 0.995 | NO EFFECT | - | LE; 0.41 / 0.05 | c665, c17, c341 (LE); c905, c906 (hub, z 0.174-0.177) |
+| C-CL | ALL, C and L | 4.29e-3 | 7.36e-3 | CALMS | 1114 | outlet-hub corner (z 0.371), 0.04 m/s | as S10 |
+| C-C | ALL, C | 3.96e-3 | 6.90e-3 | CALMS | 1115 | outlet-hub corner, 0.04 m/s | as S10 |
+| C-L | ALL, L | 0.490 | 0.931 | NO EFFECT | - | LE; 0.52 / 0.07 | c665, c17, c341 (LE); c1067, c1068 |
+| A-LE1 | LE1 (20) | 0.980 | 1.123 | NO EFFECT | - | other; 0.02 / 0.06 | c905, c581, c580, c904, c582: hub, r 0.125, z 0.175-0.183 |
+| A-LE2 | LE2 (46) | 0.975 | 0.868 | NO EFFECT | - | other; 0.00 / 0.20 | c909, c908 (HUB2), c584, c260 (hub, z 0.166), c1675 (r 0.20, z 0.12) |
+| A-HUB1 | HUB1 (28) | 0.718 | 0.939 | NO EFFECT | - | LE; 0.51 / 0.16 | c665, c17, c341 (LE); c77 (HUB2); c1068 |
+| A-HUB2 | HUB2 (83) | 0.742 | 0.840 | NO EFFECT | - | LE; 0.58 / 0.04 | c665, c17, c341 (LE); c1068, c1067 |
+| A-U1 | U1 (48) | 0.757 | 0.678 | NO EFFECT | - | other; 0.05 / 0.31 | c1068, c1067 (r 0.140, z 0.13-0.14), c41, c77 (HUB2), c1675 |
+| A-U2 | U2 (129) | 0.651 | 0.416 | NO EFFECT | - | other; 0.00 / 0.16 | c1675, c1712 (r 0.20, z 0.12), c1351 (r 0.17), c420, c708 (hub, z 0.141) |
+| A-D2 | D2 (65) | 0.436 | 0.813 | NO EFFECT | - | LE; 0.59 / 0.05 | c665, c17, c341 (LE); c1066, c1065 |
+
+T = C by the registered rule (C-C CALMS). `is_converged()` is false at the end of every arm; in C-C and C-CL this is
+the 0.04 m/s outlet-hub cycle of S10, as in ADR 0111 G1.
+
+### Limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| P0: C0 NO EFFECT | 1.014 | met |
+| P1: C-C CALMS | 3.96e-3 / 6.90e-3 | met |
+| P2: C-L NO EFFECT | 0.490 | met |
+| P3: A-U2 CALMS | 0.651 / 0.416, NO EFFECT | **MISSED** (known miss `a_u2_known_miss`) |
+| P4: no single-site arm CALMS | 0.718-0.980 | met |
+| P5: A-D2 does not CALM | 0.436 | met |
+| P6: A-LE2 cycle at HUB | site "other": 2 of 5 in HUB2 (c909, c908); share in HUB2 0.20, in LE2 0.00 | **MISSED** (known miss `a_le2_known_miss`) |
+
+### Reading (by the registered rules)
+
+1. **Phase 1: the S10 stabilisation comes from the convection deferred correction, not from the Laplacian.**
+   - Removing C everywhere reproduces S10 to within 8 % in every number (C-C against C-CL).
+   - Removing L everywhere leaves the cycle at the leading edge: NO EFFECT, although the residual medians halve.
+   - So ADR 0110's reading of S10 holds once the confound found here is separated out.
+   - ADR 0111 branch 5's remaining candidate, the Laplacian non-orthogonal correction, is not what S10 removed in order to
+     converge.
+2. **Phase 2: rule 6, nothing calms. The drive is not inside ring 2 of either site, nor of both together. The locus is
+   not decided by the registered rules.** No local mask up to 129 cells (2.6 % of the mesh) brings `rho_med` below
+   0.4. Rule 1 does not apply, because D2 does not calm.
+3. What the location records show (observations, no verdict):
+   - **The leading-edge root carries the largest cycle in the reference** (c665, c17, c341). The cycle stays there
+     whenever the leading edge is not masked: HUB1, HUB2, D2, and also C-L.
+   - **Masking the leading edge (LE1, LE2) removes the cycle there** (share in LE2 0.02 and 0.00) but does not calm the
+     passage. The cycle reappears at full amplitude (`rho_du` 0.87-1.12) at hub cells at r 0.125, z 0.158-0.183. Those
+     cells were already in C0's top five (c905, c906). Most of them lie just outside HUB2, on the hub at the axial height
+     of the ADR 0111 mode (z 0.149-0.172). This is S12's relocation, now seen in the live iteration.
+   - **Masking both sites (U2) halves the amplitude** (`|du|_2` from 5.7 to 2.4 m/s), and the cycle moves on to a third
+     set: r 0.17-0.20 at z 0.12, and hub cells at z 0.14.
+   - So the convection deferred correction is unstable at several places of B3, in a ranked order: leading-edge root,
+     then hub mid-chord, then mid-span near the leading edge. Removing the strongest exposes the next.
+   - That fits a "two (or more) drivers" picture. P3's limit for it was missed, so it is not claimed.
+4. **Consequence for the choice of fix** (not a rule of this ADR): the data do not support a fix aimed at one site,
+   whether the leading-edge root or the hub mid-chord cells. Each site alone, and both together up to ring 2, leave a
+   cycle elsewhere. The phase-1 result points to a scheme change that acts on the convection deferred correction
+   wherever it is unstable, that is, in all cells.
+
+Nothing here is a statement about torque, Delta p_ts or agreement with the measured fan. No default, limit or known miss
+of another ADR changes.
+
+### Deviations
+
+1. **V3.** I registered it with the ADR 0110 torque (1.8493 N m), which ADR 0170 had already moved.
+   - C0 and C-CL failed V3 on their first run.
+   - Amendment 1 corrected V3 to the residual medians before any other arm ran.
+   - Both arms were then run again and gave identical records. The first records are kept in `first_run/`.
+2. **P6's site rule** counts LE2 and HUB2 only. The A-LE2 cycle sits on hub cells, most of them just outside HUB2, so it
+   is classed "other". The miss stands as registered. The hub location is reported in reading 3 and is not used for a
+   verdict.
+3. **Extra fields.** The arm records carry fields beyond the registered ones (period ratio, location at the switch).
+   None of them enters a verdict.
+
+### Questions for the maintainer
+
+1. **Next stall job.** Recommendation: one cheap registered follow-up with this hook before any scheme change, then F-R
+   on B3.
+   - The follow-up (about 15 min of runs): complement arms that remove C everywhere *except* LE2, everywhere except
+     HUB2, and everywhere except the mid-span set.
+   - Each complement arm tests whether that site alone can sustain a cycle. This is the sufficiency half, which this
+     job's necessity arms cannot give.
+   - If more than one site can sustain a cycle alone, the fix must be global.
+   - Then try ADR 0111's under-relaxed deferred correction (F-R, beta 0.25) on B3. It acts on exactly the term phase 1
+     isolated, it converged E3 and E1, and it was never run on the bladed passage.
+2. **The hook.** Keep `high_order_mask_test_only`? It is doc-hidden, defaults to `None`, and is shown bit-identical by
+   V2 and the default test. Recommendation: yes. The registered tests need it, and question 1's follow-up would reuse
+   it.
+3. **Milestone wording.** The fan milestone row said "first-order `upwind` converges". Should it say that the
+   convection deferred correction alone carries that (C-C), not the Laplacian correction? Recommendation: yes. This
+   job's milestone line says it.
