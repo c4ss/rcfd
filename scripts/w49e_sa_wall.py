@@ -527,7 +527,7 @@ def collect(work, outdir, ref49a, plots):
         json.dump({"runs": slim, "evaluation": ev}, f, indent=1)
     cols = ["id", "exit", "iterations", "wall_s", "y_plus_097", "cf097_law", "vs_tmr", "cd", "cd_eff", "cd_veff"]
     with open(os.path.join(outdir, "results.csv"), "w", encoding="utf-8", newline="\n") as f:
-        wr = csv.writer(f)
+        wr = csv.writer(f, lineterminator="\n")
         wr.writerow(cols)
         for i, r in runs.items():
             wl = r.get("wall") or {}

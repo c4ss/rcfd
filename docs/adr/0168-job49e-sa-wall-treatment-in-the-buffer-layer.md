@@ -446,7 +446,7 @@ Results: [`docs/investigations/job49e-sa-wall/`](../investigations/job49e-sa-wal
 | M3_A1 | F05-F60, AF15, AF40 exit 0 | all exit 0 | met |
 | B1 | folder <= 250 000 bytes, PNG <= 100 000 | test `b1_storage` | met |
 | P1 | selftest | passes | met |
-| G0 | hygiene on the final code | see below | see below |
+| G0 | hygiene on the final code | see below | met |
 
 G0 in detail:
 - fmt clean.
@@ -454,7 +454,11 @@ G0 in detail:
 - `baseline_hashes.rs` unchanged; the test gives 3 passed and 1 ignored, as before.
 - `case_hashes_w48u`, `w33b_default_bits` and `workspace_graph` pass.
 - `w48v_case_hashes` is a tool test, ignored as before.
-- `flat_plate_sa`: FLAT_PLATE_SA_RESULT.
+- `flat_plate_sa` (ADR 0014's checks, default mode `auto`, all ignored by default as heavy): run with `--ignored` in
+  release. 6 passed: S1 TMR, S5 wall-function mesh, S6 resolved mode, theory curves, White, report. The registered
+  known miss `sa_flat_plate_cf_vs_power_law_known_miss` fails as recorded (+5.3 %, band 5 %).
+
+G0 is met.
 
 ### Reported, no limit
 
