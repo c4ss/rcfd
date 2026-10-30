@@ -206,3 +206,44 @@ limits above name them. Builds with `CARGO_TARGET_DIR=E:\projects\cfd\w49j-work\
 
 A change of any default, including making the limiter default; an automatic switch of the limiter; the C-grid generator;
 rule errors in `run.headless`; the Studio's own pre-run SV301 display (it shows the runner's `check.json`).
+
+## Amendment 1 (before any test of this job ran)
+
+Four points where the implementation differs from the registration above. No limit changes.
+
+1. **Wall patch (D3).** A wall cell is a cell with a face on a patch whose turbulence role (`turb::role`, defaults included: a
+   fixed zero velocity) is `Wall` and whose patch kind is not Empty, Symmetry or Cyclic. Reason: an Empty patch defaults to the
+   role Wall, which would make every 2D cell a wall cell. The registration said "PatchKind::Wall" only.
+2. **Signature (D2).** `rules::setup_diagnostics(case, &SimFacts, mesh, &q)`, not `(case, sim, mesh, q)`. `check_only` drops
+   the simulation before it builds its check mesh, so the few facts the dynamic rules need (`SimFacts::of(&sim)`) are taken
+   first. `rules::dynamic_setup_diagnostics(&sim)` is the path of the CLI, which keeps its static gate (exit 3 on rule errors)
+   and adds the dynamic rules after the restart, as SV301 was before.
+3. **LH2/LH3 route.** `steady_diverged` is private, so LH2/LH3 are tested through `Simulation::steady_guard_hint` (the function
+   `steady_divergence_message` calls) and `SteadyDivergence::message_with_hint`. LH4 (RB end to end) covers the real path.
+4. **Test files.** `crates/rcfd-api/tests/setup_warnings_w49j.rs` (+ `_meshes`, env-gated by `RCFD_W49J_WORK`),
+   `crates/rcfd-cli/tests/w49j_warnings.rs`, `crates/rcfd-fv/tests/hint_w49j.rs`, `crates/rcfd-mcp/tests/correctors_w49j.rs`,
+   `crates/rcfd-studio/tests/correctors_w49j.rs`.
+
+## Addendum: results (job 49J)
+
+All tests in release, on the branch `job49j-warnings` (from local main aef580d).
+
+**Met:** LS1 to LS7 (K1 rho 4.358667 bit-identical at the fixed step; C-small settled dt 2.6e-5, rho 0.0009, no SV301; C-grow
+settled dt 1/64, pre-run SV301 at rho 4.3587 equal to K1; the watch emits exactly one SV301 (rho 1.97, step 10) with 3
+evaluations in 60 steps and fields bit-identical to a manual loop; silent after a pre-run SV301). LP1 to LP3 (headless, chain,
+CLI `check`/`run`/chain give the same text; SV105 and SV302 appear in `run.headless` and the chain). LW1 to LW3, LW5 to LW9
+(RB and RD fire, RF silent, RA fires: the registered false positive, QA/upwind/piso silent; `rcfd check` exit 0; all 12 shipped
+examples exit 0 and none carries SV302). LH1 to LH4 (RB stops at iteration 15, cell 0, as in ADR 0171; the message names
+`barth_jespersen` and no longer says "lower the relaxation factors"). LC1 to LC3. LD1/LD2: the existing suites pass.
+
+**Missed:** LW4 on two of three meshes. Measured W_max: M1 29043 (ADR 0171: 21000, +38 %), M1w05 6944 (inside), M1w15 2406
+(1600, +50 %). The 30 % limit is unchanged; the two misses are ignored tests
+`lw4_m1_value_is_within_30_percent_of_adr_0171_known_miss` and `lw4_m1w15_value_is_within_30_percent_of_adr_0171_known_miss`.
+Probable cause (not verified): ADR 0171 aggregated the metric differently (this one takes the largest face non-orthogonality per
+cell and counts the span edge in the aspect ratio). The firing decisions LW1 to LW3 hold, but M1w15 (2406) sits close under the
+level 3000.
+
+**Expected firing (registered):** fires on M1 at any angle (RA false positive, RB true positive) and M1w05 (RD); silent on M1w15
+(RF) and whenever a limiter is set or the solver is not the steady one.
+
+**Unrelated defect fixed:** ADR 0171 linked a misnamed file for ADR 0159, which failed `docs_site_builds_with_no_broken_links`.

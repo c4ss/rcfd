@@ -2439,10 +2439,22 @@ impl Simulation {
         self.steady_diverged.as_ref()
     }
 
+    /// The closing advice of the steady divergence guard's message that replaces "lower the relaxation factors ..." (ADR 0172 D4):
+    /// `Some` when the failing `cell` is a wall cell and the steady solver runs unlimited `linear_upwind` (ADR 0171: lowering the
+    /// relaxation factors did not help there; the limiter did), else `None` (the unchanged text).
+    pub fn steady_guard_hint(&self, cell: Option<usize>) -> Option<&'static str> {
+        (cell.is_some_and(|c| c < self.geom.mesh.n_cells() && self.is_wall_cell(c)) && self.unlimited_linear_upwind()).then_some(
+            "the failing cell is a wall cell and solver.convection = \"linear_upwind\" is unlimited: set \
+             solver.linear_upwind_limiter = \"barth_jespersen\" (ADR 0171: lowering the relaxation factors did not help in the \
+             trailing-edge divergence of the NACA 0012 at y+ about 2) or use a more dissipative convection scheme",
+        )
+    }
+
     /// Located message of [`Simulation::steady_divergence`].
     pub fn steady_divergence_message(&self) -> Option<String> {
         let d = self.steady_diverged.as_ref()?;
-        let mut m = d.message(Some(self.geom.mesh.cell_centres()));
+        let limiter_hint = self.steady_guard_hint(d.cell);
+        let mut m = d.message_with_hint(Some(self.geom.mesh.cell_centres()), limiter_hint);
         let conv = get_s(&self.case, "solver.convection");
         if conv == "linear_upwind" || conv == "tvd_van_leer" {
             // ADR 0077 part B (amendment 3): the safe-scheme rule
@@ -2664,22 +2676,19 @@ impl Simulation {
     /// Pre-run estimate of the pressure-lag amplification with the configured correctors (ADR 0156 D7, the setup rule SV301):
     /// made for the incompressible transient solver with `time_advance = "iterative"`, no dynamic mesh, `n_correctors >= 2`,
     /// `corrector_control = "fixed"` and `pressure_lag_check != "off"`, on a copy of the solver (the simulation is not changed)
-    /// with [`LAG_PREFLIGHT_ITERATIONS`] power iterations at the next step (the second from the start under bdf2).
+    /// with [`LAG_PREFLIGHT_ITERATIONS`] power iterations at the settled step ([`Self::settled_dt_estimate`], ADR 0172 D1:
+    /// `solver.dt` for a fixed step, so a fixed-step case is estimated exactly as before) (the second step from the start
+    /// under bdf2).
     pub fn pressure_lag_preflight(&self) -> Option<LagPreflight> {
-        let Engine::Transient(s) = &self.engine else {
-            return None;
-        };
-        if s.settings.fractional.is_some()
-            || self.dynmesh.is_some()
-            || s.settings.n_correctors < 2
-            || s.settings.corrector_control.is_some()
-            || get_s(&self.case, "solver.pressure_lag_check") == "off"
-        {
-            return None;
-        }
+        self.pressure_lag_preflight_at(self.settled_dt_estimate())
+    }
+
+    /// [`pressure_lag_preflight`](Self::pressure_lag_preflight) at the step `dt` (ADR 0172 D1).
+    pub fn pressure_lag_preflight_at(&self, dt: f64) -> Option<LagPreflight> {
+        let s = self.lag_watch_solver()?;
         // ADR 0160 D6: the trial step gets the face viscosity the next step would set (a law's error: no estimate)
         let nu = self.next_step_viscosity_of(s).ok()?;
-        let w = s.lag_preflight_with(self.dt, LAG_PREFLIGHT_ITERATIONS, nu.as_deref())?;
+        let w = s.lag_preflight_with(dt, LAG_PREFLIGHT_ITERATIONS, nu.as_deref())?;
         let x = self
             .geom
             .mesh
@@ -2694,6 +2703,95 @@ impl Simulation {
             position: x,
             n_correctors: s.settings.n_correctors,
         })
+    }
+
+    /// The transient solver when the SV301 conditions hold (incompressible transient, `time_advance = "iterative"`, no dynamic
+    /// mesh, `n_correctors >= 2`, `corrector_control = "fixed"`, `pressure_lag_check != "off"`), else `None`.
+    fn lag_watch_solver(&self) -> Option<&PimpleSolver> {
+        let Engine::Transient(s) = &self.engine else {
+            return None;
+        };
+        if s.settings.fractional.is_some()
+            || self.dynmesh.is_some()
+            || s.settings.n_correctors < 2
+            || s.settings.corrector_control.is_some()
+            || get_s(&self.case, "solver.pressure_lag_check") == "off"
+        {
+            return None;
+        }
+        Some(s)
+    }
+
+    /// True when SV301 applies to this run (the conditions of [`pressure_lag_preflight`](Self::pressure_lag_preflight)): the
+    /// run-time watch of `runctl::drive` runs only then (ADR 0172 D1).
+    pub fn lag_watch_applies(&self) -> bool {
+        self.lag_watch_solver().is_some()
+    }
+
+    /// True for the steady incompressible `simple` / `simplec` solver with `solver.convection = "linear_upwind"` and no
+    /// limiter (`solver.linear_upwind_limiter = "none"`): the set-up SV302 (ADR 0172 D3) and the guard hint (D4) apply.
+    pub fn unlimited_linear_upwind(&self) -> bool {
+        matches!(self.engine, Engine::Steady(_))
+            && get_s(&self.case, "solver.convection") == "linear_upwind"
+            && get_s(&self.case, "solver.linear_upwind_limiter") == "none"
+    }
+
+    /// True when `cell` has a face on a wall patch (the turbulence role `Wall` of the patch's boundary entry).
+    pub fn is_wall_cell(&self, cell: usize) -> bool {
+        let n_int = self.geom.n_internal;
+        self.geom
+            .mesh
+            .cell_faces(cell)
+            .iter()
+            .filter(|&&f| f >= n_int)
+            .filter_map(|&f| self.geom.mesh.patch_of_face(f))
+            .any(|p| crate::rules::is_wall_patch(&self.case, p))
+    }
+
+    /// The step of the last step taken (`None` before the first step or for another engine).
+    pub fn last_step_dt(&self) -> Option<f64> {
+        match &self.engine {
+            Engine::Transient(s) => s.history.last().map(|h| h.dt),
+            _ => None,
+        }
+    }
+
+    /// The step the run will use once its step control has settled, estimated before the run (ADR 0172 D1): for the adaptive
+    /// controller of ADR 0050 (not the error control) and the legacy `solver.max_courant` controller, the step at which the
+    /// largest (or rms) Courant number of the present flux equals the controller's aim, `dt_ref aim / Co(dt_ref)` over the
+    /// active criteria, clamped to the controller's `min_dt` / `max_dt`; the next proposed step when the present flux gives no
+    /// Courant number (rest start) or the controller is not Courant-driven; `solver.dt` for a fixed step and for every other
+    /// engine (bit-identical to the estimate before ADR 0172). A flow that has not developed yet is not seen: the
+    /// run-time watch of `runctl::drive` covers that.
+    pub fn settled_dt_estimate(&self) -> f64 {
+        let Engine::Transient(s) = &self.engine else {
+            return self.dt;
+        };
+        if let Some(c) = &self.timectl {
+            let st = &c.ctl.settings;
+            if st.error_tol > 0.0 {
+                return self.dt;
+            }
+            let dt_ref = c.ctl.dt_next;
+            let co = rcfd_fv::stepctl::courant_stats(&s.geom, &s.phi, dt_ref);
+            let mut dt = f64::INFINITY;
+            for (target, x) in [(st.co_max, co.max), (st.co_rms, co.rms)] {
+                if target > 0.0 && x > 1e-300 {
+                    dt = dt.min(dt_ref * st.safety * target / x);
+                }
+            }
+            if !dt.is_finite() {
+                return dt_ref;
+            }
+            return dt.min(st.max_dt).max(st.min_dt);
+        }
+        if let Some(c) = &self.cfl {
+            let co = rcfd_fv::ddt::max_courant(&s.geom, &s.phi, self.dt);
+            if co > 1e-300 {
+                return (self.dt * c.max_cfl / co).min(c.max_dt).max(c.min_dt);
+            }
+        }
+        self.dt
     }
 
     /// The face viscosity that [`step`](Self::step) would hand the incompressible transient solver before its next step,

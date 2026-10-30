@@ -133,10 +133,10 @@ pub fn check_only(case: &Case) -> (u8, Value) {
     let mut diags: Vec<Diagnostic> = case.semantic_errors();
     // ADR 0156 D7: the pre-run pressure-lag estimate (on a copy of the solver) for the computed rule SV301; the simulation
     // is dropped before the mesh is built, as before
-    let mut preflight = None;
+    let mut facts = None;
     if diags.is_empty() {
         match Simulation::new(case) {
-            Ok(s) => preflight = s.pressure_lag_preflight(),
+            Ok(s) => facts = Some(crate::rules::SimFacts::of(&s)),
             Err(d) => diags = d,
         }
     }
@@ -161,10 +161,12 @@ pub fn check_only(case: &Case) -> (u8, Value) {
         return (exit::INVALID, v);
     };
     let q = check_mesh(&mesh);
-    let mut rules = crate::rules::check_case(case, Some(&crate::rules::mesh_context(&q)));
-    if let Some(d) = preflight.as_ref().and_then(crate::rules::lag_preflight_rule) {
-        rules.push(d);
-    }
+    // ADR 0172 D2: the one list of set-up diagnostics (static rules, then SV301, SV302)
+    let facts = facts.unwrap_or(crate::rules::SimFacts {
+        lag: None,
+        unlimited_linear_upwind: false,
+    });
+    let rules = crate::rules::setup_diagnostics(case, &facts, &mesh, &q);
     let code = if !q.is_ok() {
         exit::BAD_MESH
     } else if crate::rules::has_errors(&rules) {
@@ -183,6 +185,79 @@ pub fn check_only(case: &Case) -> (u8, Value) {
         }),
     );
     (code, v)
+}
+
+/// The run-time watch of the set-up rule SV301 (ADR 0172 D1). The pre-run estimate is made at the step the controller is
+/// expected to settle on, from the initial flow; a flow that has not developed yet, or a controller that settles elsewhere, is
+/// not seen there. The watch looks again, on the present state, when the step has changed by a factor of 1.5 since its last
+/// look (or since the first step), or has stayed within 2 % for 10 steps after changing by more than 5 %: the estimate is
+/// [`Simulation::lag_estimate_next_step`] (on a copy of the solver: the run is not changed). It warns at most once per run.
+#[derive(Debug)]
+pub struct LagWatch {
+    active: bool,
+    fired: bool,
+    basis: Option<f64>,
+    prev: f64,
+    stable: usize,
+    evaluations: usize,
+    steps: usize,
+}
+
+/// Steps of a stable step before the watch looks at a changed step (ADR 0172 D1).
+const LAG_WATCH_STABLE_STEPS: usize = 10;
+
+impl LagWatch {
+    /// A watch for `sim`: active when SV301 applies to it ([`Simulation::lag_watch_applies`]) and the pre-run SV301 did not
+    /// already fire (`pre_run_fired`).
+    pub fn new(sim: &Simulation, pre_run_fired: bool) -> Self {
+        LagWatch {
+            active: sim.lag_watch_applies() && !pre_run_fired,
+            fired: false,
+            basis: None,
+            prev: f64::NAN,
+            stable: 0,
+            evaluations: 0,
+            steps: 0,
+        }
+    }
+
+    /// Estimates made so far.
+    pub fn evaluations(&self) -> usize {
+        self.evaluations
+    }
+
+    /// Call after each step. Returns the `warning` event body (`message`, `rule`, `path`, `category`, `fix`) the first time the
+    /// estimate at the step the run has reached is at or above [`crate::rules::SV301_LEVEL`].
+    pub fn observe(&mut self, sim: &Simulation) -> Option<Value> {
+        if !self.active || self.fired {
+            return None;
+        }
+        self.steps += 1;
+        let dt = sim.last_step_dt().filter(|d| d.is_finite() && *d > 0.0)?;
+        let basis = *self.basis.get_or_insert(dt);
+        if self.prev.is_finite() && (dt / self.prev - 1.0).abs() < 0.02 {
+            self.stable += 1;
+        } else {
+            self.stable = 0;
+        }
+        self.prev = dt;
+        let ratio = dt / basis;
+        let moved = (ratio - 1.0).abs() > 0.05;
+        let look = !(1.0 / 1.5..1.5).contains(&ratio) || (self.stable >= LAG_WATCH_STABLE_STEPS && moved);
+        if !look || sim.is_done() {
+            return None;
+        }
+        self.basis = Some(dt);
+        self.stable = 0;
+        self.evaluations += 1;
+        let p = sim.lag_estimate_next_step(crate::sim::LAG_PREFLIGHT_ITERATIONS)?;
+        let d = crate::rules::lag_watch_rule(&p, self.steps, dt)?;
+        self.fired = true;
+        let mut w = crate::rules::warnings_json(std::slice::from_ref(&d));
+        let mut body = w.as_array_mut().and_then(|a| a.pop())?;
+        body["fix"] = d.fix.unwrap_or(Value::Null);
+        Some(body)
+    }
 }
 
 /// Drive `sim` to its end, an interrupt or a limit, emitting status events to `sink`.
@@ -230,6 +305,15 @@ pub fn drive(
             sink(&event("warning", &mut seq, 0.0, w.clone()));
         }
     }
+    // ADR 0172 D1: SV301 on the run's own state when the step moves; silent after the pre-run SV301
+    let mut lag_watch = {
+        let pre_run = opts
+            .info
+            .get("warnings")
+            .and_then(Value::as_array)
+            .is_some_and(|ws| ws.iter().any(|w| w["rule"] == "SV301"));
+        LagWatch::new(&lock_sim(sim), pre_run)
+    };
     let finish = |state: &'static str, code: u8, reason: String| {
         let g = lock_sim(sim);
         RunOutcome {
@@ -352,6 +436,10 @@ pub fn drive(
         steps += 1;
         // run-time warnings of the step (ADR 0077: the pressure-lag check)
         for w in lock_sim(sim).take_runtime_warnings() {
+            sink(&event("warning", &mut seq, t0.elapsed().as_secs_f64(), w));
+        }
+        let lag_warning = lag_watch.observe(&lock_sim(sim));
+        if let Some(w) = lag_warning {
             sink(&event("warning", &mut seq, t0.elapsed().as_secs_f64(), w));
         }
         if let Some(h) = &mut store {

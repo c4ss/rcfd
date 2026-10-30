@@ -26,7 +26,7 @@ or characterise it if it cannot be fixed safely.
 ## What I knew when writing this (rule d)
 
 From the ADRs; no solver run of this job:
-- [ADR 0159](0159-job48y-naca0012-aoa-sweep-up-to-and-through-stall.md) amendment 1: on M1 (256 x 128, grading 3e5, first
+- [ADR 0159](0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md) amendment 1: on M1 (256 x 128, grading 3e5, first
   cell 1.574e-5 chord at mid-chord, y+ about 2, 77.6 degrees maximum non-orthogonality) every smoke run diverged within
   30 iterations: SA at 6 degrees at iteration 15 (velocity runaway, cell 0, a trailing-edge wall cell), SA at 16 degrees
   at 11 (cell 0), SA-DDES at step 8 (cell 255, the other trailing-edge wall cell); SST at 6 degrees at 16 (cell 0). M1

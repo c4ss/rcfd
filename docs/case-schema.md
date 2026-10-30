@@ -1612,6 +1612,21 @@ step uses the viscosity the first step would use (ADR 0160): a rheology law's on
 model's present eddy viscosity. The run service's `run.check` and `run.headless` (MCP `check_case_headless`, `run_headless`)
 give it too; `run.headless` only at a run's start (no step taken yet).
 
+ADR 0172 (job 49J) changes three things here. (1) SV301 is evaluated at the *settled* step: when `solver.max_courant`, a
+`time_control` block or the legacy Courant controller will move the step, the estimate uses the step the controller is expected to
+settle on (its target over the initial flow's Courant number, clamped to the step limits; the next proposed step for a start from
+rest), and during the run a watch re-evaluates (at most about a dozen estimates) when the step has moved by a factor 1.5 or has
+settled after moving, and emits one `warning` event if the coupling has become unstable; it is silent after a pre-run SV301. A
+fixed step is evaluated exactly as before. (2) The static rules and the computed ones are one list: `rcfd check`, `rcfd run`,
+the chain driver, `run.check` and `run.headless` (the latter two never refuse because of rule errors) all show it. (3) **SV302**
+(warning, `solver`, path `solver.linear_upwind_limiter`, no `fix`): a steady `simple`/`simplec` case with
+`convection = "linear_upwind"` and `linear_upwind_limiter = "none"` on a mesh whose wall cells reach `aspect ratio x
+tan(non-orthogonality)` of 3000 or more (wall = a patch with the turbulence role wall that is not empty, symmetry or cyclic). It is
+a risk notice, not a prediction: ADR 0171 found this combination diverging at a NACA 0012 trailing edge at 6 degrees while the same
+mesh was clean at 0 degrees; `barth_jespersen` removes the divergence at about +3 % in `cd_eff`. The default is unchanged. The
+steady divergence guard's message names the limiter instead of "lower the relaxation factors" when the failing cell is such a wall
+cell.
+
 ## Wave 20C: `study` (F-095, ADR 0034)
 
 A parametric study is part of the settings tree; an empty `study.parameters` means no study and every older case is unchanged.
