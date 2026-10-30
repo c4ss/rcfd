@@ -152,3 +152,87 @@ reaches.
 Correction (fixed now): the distant region is **D3' = D3 minus H4** (347 cells, disjoint from H4 and LE2; |D3'| / |H3|
 = 1.08). N-D3, K-D3, the class "D" and K-D3's own site use D3'. Everything else is unchanged, including V4's
 requirements, now applied to D3'.
+
+## Addendum: results (2026-10-30)
+
+Data: `docs/investigations/job49o-fan01-hub-locus/` (one JSON per arm, `results.csv`, `logs/`). Release, on 768f960
+(no solver change on this branch). Each arm was run once, in its own process, at most two at a time.
+
+### Validity
+
+- **V1 met.** B3 has 4 920 cells. In every arm the reference medians are 1.089e-3 / 4.87e-4 and the torque at 1000 is
+  1.9177 N m.
+- **V2 met.** F0 gives `rho_med` 1.038, `rho_du` 1.929 and LE2 1.032e-2, which is ADR 0177's record.
+- **V3 met.** FC gives 3.957e-3 / 6.897e-3 with `reached` 1115, which is C-C.
+- **V4 met after amendment 1.** |S_H| 19, H3 322, H4 512, D3' 347 cells; H3 and H4 are disjoint from LE2; D3' is
+  disjoint from H4 and LE2.
+- **V5 met.** The bit-identity tests and `baseline_hashes.rs` pass unchanged.
+
+### Arms
+
+`|du|_2` at the switch is 5.74 m/s. Every arm has F-R(0.25) on from iteration 1000.
+
+| Arm | C removed in (cells) | `rho_med` | `rho_du` | Verdict | `reached`, `is_converged()` | Torque / Delta p_ts at the end | End cycle |
+|---|---|---|---|---|---|---|---|
+| F0 | nothing | 1.038 | 1.929 | NO EFFECT | -, false | 1.9210 / 47.00 | 11 m/s, 99 % in H4 (c149, c113, c150, c77, c257) |
+| FC | ALL (4 920) | 3.96e-3 | 6.90e-3 | CALMS | 1115, false | 1.4029 / -3.99 | 0.04 m/s outlet-hub corner (C-C) |
+| N-H3 | H3 (322) | 9.1e-9 | 2.8e-9 | **CALMS** | 1298, **true** | 1.9144 / 45.75 | none (1e-8 m/s, arm medians 9e-12 / 4e-12) |
+| N-H4 | H4 (512) | 2.9e-8 | 1.9e-9 | **CALMS** | 1340, **true** | 1.9093 / 44.83 | none (1e-8 m/s) |
+| K-H3 | ALL minus H3 (4 598) | 0.539 | 0.577 | NO EFFECT, **SUSTAINS** (5 of 5 in H4) | -, false | 1.4075 / -3.48 | 3.3 m/s, 99.5 % in H4 (c906, c905, c581, c257, c907) |
+| K-H4 | ALL minus H4 (4 408) | 0.584 | 0.651 | NO EFFECT, **SUSTAINS** (5 of 5) | -, false | 1.4151 / -2.86 | 3.7 m/s, 99.7 % in H4 |
+| N-D3 | D3' (347) | 1.031 | 1.657 | NO EFFECT | -, false | 1.9208 / 48.13 | 9.5 m/s, 98 % in H4 (c113, c149, ...) |
+| K-D3 | ALL minus D3' (4 573) | 4.0e-8 | 3.1e-9 | CALMS (CALMS) | 1353, true | 1.4054 / -12.32 | none (1e-8 m/s) |
+
+### Limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| P1: N-H3 does not CALM | CALMS, 9.1e-9 / 2.8e-9 | **MISSED** (known miss `n_h3_known_miss`) |
+| P2: N-H4 CALMS | 2.9e-8 / 1.9e-9 | met |
+| P3: K-H3 SUSTAINS | `rho_du` 0.577, 5 of 5 in H4 | met |
+| P4: K-H4 SUSTAINS | `rho_du` 0.651, 5 of 5 in H4 | met |
+| P5: N-D3 does not CALM | 1.031 | met |
+| P6: K-D3 CALMS | 4.0e-8 / 3.1e-9 | met |
+
+### Reading (by the registered rules)
+
+Rule 0 does not apply: N-D3 does not calm and K-D3 does not sustain. **Rule 1 applies: the hub is necessary and
+sufficient.**
+
+1. **With the leading edge held off by F-R(0.25), the hub mid-chord region is the second autonomous driver.**
+   - Keeping C only there (K-H3, K-H4) sustains a 3-4 m/s cycle that lives in it (99.5 % of `sum |du|^2`).
+   - Removing C there (N-H3, 322 cells, 6.5 % of the mesh) stops the stall completely. The residuals fall to 1e-11
+     within 300 iterations, `is_converged()` becomes true (the first time any B3 arm of ADRs 0110, 0111, 0175, 0177 or
+     this job has done so, apart from K-D3 here), and the probe-free state is a fixed point.
+   - The same patch removed far away (N-D3) changes nothing.
+2. **For a fix (rule 1):** F-R(0.25) plus first-order convection correction in the hub region H3 is a working
+   configuration on B3. Its functionals (torque 1.9144 N m, Delta p_ts 45.75 Pa) stay close to the stalled cycle's
+   (1.9177 / 46.64 at 1000), unlike first order everywhere (1.40 / -4.0).
+   - It is not a fix: the 322 cells are hand-picked from this mesh's own cycle records.
+   - The next job must find what distinguishes these cells (geometry, flux, limiter state), so that an automatic cell
+     rule can be registered and tested on B2.
+3. Observations, no verdict:
+   - P1's miss means ring 3 already suffices, where rings 1-2 of the old seeds did not (ADR 0175). The extended seeds
+     (the z 0.17 hub cells) are what changed.
+   - K-D3 (C relaxed only in D3') also converges fully, with `is_converged()` true. C-C, where every cell is first
+     order, does not: it keeps a 0.04 m/s outlet-hub cycle. Why is not explained here.
+
+Nothing here is a statement about accuracy or agreement with the measured fan. No default, limit or known miss of another
+ADR changes.
+
+### Deviations
+
+1. **V4.** I chose the distant point without knowing how far ring 4 reaches, and D3 met H4 in 4 cells. Amendment 1
+   (D3' = D3 minus H4) was written before any arm ran.
+2. **N-H3 / N-H4 end location.** Their records list the five largest-`|du|` cells of a converged state (1e-8 m/s),
+   which carry no information.
+
+### Questions for the maintainer
+
+1. **Next job: an automatic rule for the hub cells.** Find which measurable property separates H3 from the rest of B3:
+   face non-orthogonality, flux magnitude or sign changes, Barth-Jespersen factor history, distance to the hub and
+   seam. Then register the rule (F-R plus first order where the rule fires), and test it on B3 and B2 against N-H3.
+   Recommendation: yes.
+2. **Is a local first-order treatment acceptable in principle**, given that it lowers the order in about 6 % of the
+   cells? Recommendation: accept it as a candidate only if B2 shows the torque change between the treated and the
+   untreated cycle range shrinking with refinement.
