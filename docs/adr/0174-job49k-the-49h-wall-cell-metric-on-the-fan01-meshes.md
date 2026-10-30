@@ -151,8 +151,8 @@ FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
 
 1. **The Barth-Jespersen stall is not the ADR 0171 mechanism** (K2, K3). The limit-cycle cells at the blade-root leading edge
    and the leading Jacobian mode's hub cells are among the most benign cells of B3 (about the 20th to 30th percentile, aspect
-   below 9). A mesh change aimed at high-metric cells is not expected to remove the stall; the next stall job belongs on the
-   scheme side at the leading-edge root, as the reading rule says.
+   below 9). K2 and K3 alone say that a mesh change aimed at high-metric cells is not expected to remove the stall. The
+   registered rule that names the next job assumed K1 STANDS, so no rule here decides the next job (deviation 1).
 2. **The unlimited divergence: K1 is falsified as registered, with a split result.** The location agrees exactly: unlimited
    `linear_upwind` fails first in the largest-m cell of E3, and SV302's own search names that cell (D2). The level does not:
    750, against 6 900 to 21 000 where the aerofoil diverged and 1 600 where it did not. So ADR 0171's mechanism is not claimed
@@ -162,9 +162,19 @@ FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
    (Barth-Jespersen limited only at the top-m cells), which was not registered here.
 3. **SV302 is a false negative on FAN-01** (D1). Its level of 3 000 is a judgement from three aerofoil meshes (ADR 0172 D3).
    No change is made here (warnings are another job's subject); see question 1.
-4. **Part L**: the metric does not track it (K4); part L stays open. Reported: M doubles from E2 to E1 at the shroud
-   tip-layer cell, so the prediction's reason (the aspect ratio falls with in-plane refinement) holds for the median, not for
-   the worst cell.
+4. **Part L**: K4 is DOES NOT TRACK by its rule, but the verdict is not robust. N is 0 on all three meshes, so it rests
+   on M alone, which falls 6 % from E3 to E2 (750 to 708) while abs(L) rises sixfold, and then doubles from E2 to E1 (to
+   1 497). Part L stays open, and nothing is claimed either way. The prediction's reason (the aspect ratio falls with
+   in-plane refinement) holds for the median, not for the worst cell.
+
+### Deviations
+
+1. Reading 1: the reading rules did not cover the combination K1 FALSIFIED with K2 and K3 FALSIFIED for the choice of
+   the next job. The first draft of this addendum applied the K1-STANDS rule anyway; it was corrected before the commit
+   that closes the job.
+2. The F1-family tests (`v1_cell_counts_f2_f1`, `k4_*`, `report`) were ignored without measuring their debug time, as
+   the deliverables required. The gate runs in release (`docs/test-process.md`), where the whole binary, the ignored tests
+   included, took 23 s.
 
 Nothing here is a statement about torque, Delta p_ts or agreement with the measured fan. No default, limit or known miss
 of another ADR changes.
@@ -174,9 +184,13 @@ of another ADR changes.
 1. **SV302 level.** Lower it, or make it depend on the flow angle at the cell? Recommendation: neither yet. One more data
    point (FAN-01 at 750) does not make a rule. Record it in `docs/case-schema.md` as a known false negative and revisit
    when a third geometry diverges.
-2. **Next stall job.** Recommendation: scheme side at the blade-root leading edge (K2 and K3 say a mesh change aimed at
-   high-metric cells will not help). The record already points at the explicit high-order part of `linear_upwind` in the
-   five root cells. One candidate that has not been tried is an implicit or blended treatment of that part in the cells with
-   two wall faces. It needs its own registration.
+2. **Next stall job.** Recommendation: scheme side, with the locus still open (K2 and K3 say a mesh change aimed at
+   high-metric cells is not expected to help). The record points two ways. ADR 0110's nonlinear runs grow at the five
+   blade-root leading-edge cells. ADR 0111's linearisation puts the leading mode at the hub mid-chord cells (c1234, c365,
+   c401), and ADR 0110 S12 saw the oscillation move to hub seam cells at z 0.16-0.17 once the leading-edge cells were
+   calmed. ADR 0111 part J already held the convection gradient of c17 and of the five root cells fixed (H17, H5) and swapped
+   c17's gradient formula (GG17): each changed rho by less than 1e-5, though that linearisation was not testable (M3 failed).
+   A next job should first locate the drive in the nonlinear iteration, at both sites, before choosing a scheme change. It
+   needs its own registration.
 3. **The unlimited path.** Is a follow-up run worth it (limiter on the top-m cells only, to test reading 2's candidate)?
    Recommendation: no. The product path uses Barth-Jespersen, and its stall is reading 1's problem, not this one.
