@@ -590,6 +590,30 @@ def make_plots(runs, res, outdir):
     fig.savefig(os.path.join(outdir, "polar.png"))
     plt.close(fig)
 
+    # iteration histories of the SA runs that are not steady by D5, and of the N runs (the old far field)
+    sel = sorted((r for r in runs.values() if (r["arm"] == "SA" and not r.get("steady", True)) or r["arm"] == "N"),
+                 key=lambda r: (r["arm"], r["alpha"]))
+    if sel:
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(6.4, 5.6), dpi=80, sharex=True)
+        for r in sel:
+            h = r["history"]
+            stride = max(1, len(h) // 1500)
+            ls = "-" if r["arm"] == "SA" else "--"
+            ax.plot([i for i, _, _ in h[::stride]], [c for _, c, _ in h[::stride]], ls, lw=0.6, label=r["id"])
+            ax2.plot([i for i, _, _ in h[::stride]], [d for _, _, d in h[::stride]], ls, lw=0.6, label=r["id"])
+        ax.set_ylabel("cl_eff")
+        ax.set_ylim(-0.5, 2.5)
+        ax.set_title("SA runs not steady by D5 (solid) and the old far field N (dashed) (ADR 0167)", fontsize=9)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=6, ncol=4)
+        ax2.set_ylabel("cd_eff")
+        ax2.set_yscale("log")
+        ax2.set_xlabel("iteration")
+        ax2.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        fig.savefig(os.path.join(outdir, "histories.png"))
+        plt.close(fig)
+
 
 # ------------------------------------------------------------------------------------------------------------ selftest
 
