@@ -59,7 +59,9 @@ Written by `scripts/make_example_projects.py` from the run folder; wall-clock ti
   scheme the residuals stall near 1e-3 in a limit cycle and never meet the tolerances (ADR 0110). First-order `upwind`
   is the less accurate solution: when ADR 0110 (S10) switched the stalled run to it, the u and p residuals fell below
   1e-5 and the fan torque was 1.335 N m, 38 % below the measured shaft torque of 2.142 N m; the stalled second-order run
-  gave 1.850 N m (ADR 0086). The run here starts from the uniform initial state; the table above gives what it reached. The measured pressure rise is an installation value (bellmouth, struts, diffuser) that a rotor-only passage
+  gave 1.850 N m (ADR 0086). The run here starts from the uniform initial state: at its iteration cap of 1500 the u
+  and p residuals are below 1e-5 (4.7e-6 and 7.9e-7) but the solver reports `not_converged` (exit 5), and the torque
+  -9 (`m_blade` + `m_hub`) is 1.40 N m, 35 % below the measured value (ADR 0176). The measured pressure rise is an installation value (bellmouth, struts, diffuser) that a rotor-only passage
   cannot reproduce. The state of the fan work is in `../../docs/milestone-fan.md`.
 * **Coarse mesh.** 4 920 cells, no mesh study here; the largest face non-orthogonality is about 78 degrees, so `rcfd check`
   warns (SV101).

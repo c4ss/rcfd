@@ -137,3 +137,41 @@ person at the window). A screenshot of the Studio window is attempted only if ti
    capped iteration count (stored at its stall, `not_converged`). **Recommendation (a)**: (b) shows no 3D field, and
    (c) stores a state of a limit cycle, which looks like a solution and is not one.
 2. The new cap (6 MB per tree) is registered here, not by the maintainer; the whole-tree cap of 40 MB is unchanged.
+
+## Addendum: results against the registered limits (2026-10-30)
+
+Commits: registration 7305c5c; the Windows run 2d7e3ea (W-L1); the Linux run 6fa072b (L-L1); P5's known miss 70e6c9e
+(test only); then the notes sentence on the run's outcome (both trees, outside the generated run table) and this
+addendum. Logs in the session scratchpad (not kept).
+
+| Id | Limit | Result | Verdict |
+|---|---|---|---|
+| M0 | problems only about `axial-fan` | 11 problems, all `axial-fan` (no `rcfd-project.json`, `runs`, `designs`, `.rcfd`, ledger, manifest entry; Linux tree: project and 3 inputs missing) | as required |
+| W-L1 | exit 0; 1 run; check 0; only `axial-fan/**` and `manifest.json` | exit 0; `r-20261030T223519-0489` added; check 0 problems; `git status`: `example-projects/axial-fan/` (new files, run table) and `manifest.json` (the axial-fan entry and cap; wind-tunnel's `bytes` refreshed 28 095 017 -> 28 096 175, its run list unchanged) | pass |
+| L-L1 | exit 0; 1 run; closing check 0; only Linux `axial-fan/**` and `manifest.json` | container exit 0 (`rcfd`, `rcfd-runner` built in 48.5 s); 4 inputs copied; `r-20261030T223744-ad62` added; closing `--check` of both trees 0 problems; `git status`: `example-projects-linux/axial-fan/` and its `manifest.json` only | pass |
+| P1 | `finished`, `not_converged` at 1500, exit 5 | both trees: finished, solver `not_converged` at 1500 ("iteration limit 1500 reached without meeting the residual targets"), exit 5 | pass |
+| P2 | extent > 0.05 m on each axis | cell centres span 0.1825 / 0.2185 / 0.3669 m (both trees) | pass |
+| P3 | u, p < 1e-5 at the last line | res_u 4.673e-6, res_p 7.927e-7 (both trees) | pass |
+| P4 | mass imbalance <= 1e-3 | m_in -0.1860073, m_out 0.1860073, imbalance 1.98e-10 | pass |
+| P5 | torque > 0 and within 5 % of 1.335 N m | 1.4023 N m on both trees: positive, but +5.04 % against S10 | **missed** (the 5 % part): kept as the ignored `g4_fan_torque_within_5_percent_of_s10_known_miss`; the sign part stays in G4 |
+| G2 | fan run <= 180 s; tree sum <= 20 min | Windows 65.5 s, Linux 125.6 s (container, 4 cpus); Linux tree sum 361.1 s | pass |
+| T5 | axial-fan <= 6 MB; tree <= 40 MB | Windows: axial-fan 3 499 558 bytes, tree 35 850 618; Linux: 3 499 676, tree 35 846 833 (store.rts 2 022 206, residuals.jsonl 484 236 of the run); about 3.5 MB added per tree | pass |
+| W1 | `example_projects_w48h` on Windows | 22 passed, 0 failed, 3 ignored (the two earlier known misses and P5's); S5 exact for the 13 Windows runs; T3: the Linux fan store differs from the mesh built on Windows (12850526753399533395 against 13719360332065067188: the fan generator calls libm, as the cylinder does) | pass |
+| W2 | H1, M1, DV5, DV6 on Windows | H1: axial-fan 1 case, 1 run, `Ready`, `p` at snapshot 9 (step 1500), 2D false, 1 872 faces; the other runs 2D true. M1: `two_d` false, 4 920 cells, surface 1 872 faces / 3 740 triangles, parts inlet, outlet, seam_lo, seam_hi, hub, shroud, blade; extent 0.188 / 0.257 / 0.4 m; preview mesh hash = store's; control cavity 2D true. `saved_store_r` 6 passed (DV5 20 texts, DV6 as registered) | pass |
+| L4 | the same in a Linux container on an archive of 70e6c9e | `example_projects_w48h` 22 passed, 3 ignored (S5 exact for the 13 Linux runs; T3 the Windows fan store differs); H1 and M1 passed on `example-projects-linux` (M1's preview hash = the Linux store's) | pass |
+| P6 | `--check` 0; self-test passes | 0 problems; 15 tests OK | pass |
+| Q1 | clippy, fmt, baselines, no `src` change | clippy `-D warnings` clean; fmt clean; `git diff edb4839 -- crates/rcfd-api/tests/baseline_hashes.rs 'crates/*/src'` empty | pass |
+
+**Deviations.** 1. L4's first container attempt failed before compiling (Git Bash rewrote `CARGO_TARGET_DIR=/target` to a
+Windows path); rerun with `MSYS_NO_PATHCONV=1`, otherwise the same command. 2. After the runs, one sentence on the run's
+outcome (residuals, `not_converged`, torque 1.40 N m, 35 % below the measured 2.142 N m) was added to both trees'
+`notes/README.md`, outside the run table; `--check` and `example_projects_w48h` (22 passed) re-ran on Windows after it.
+
+**Not run.** The full suites of any crate; the other `rcfd-studio` tests on either platform; CI; a person at the
+Studio window (no screenshot was taken).
+
+## Questions for the maintainer (continued)
+
+3. P5: the cold-start first-order torque (1.4023 N m) is 5.04 % above S10's switched-from-second-order value (1.335 N m).
+   Both runs stop with a small cycle left, so the two first-order states need not be the same point. Options: (a) leave
+   the known miss; (b) nothing more for an example that claims no accuracy. **Recommendation (a)**, no further work here.
