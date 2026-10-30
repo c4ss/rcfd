@@ -170,8 +170,8 @@ FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
 ### Deviations
 
 1. Reading 1: the reading rules did not cover the combination K1 FALSIFIED with K2 and K3 FALSIFIED for the choice of
-   the next job. The first draft of this addendum applied the K1-STANDS rule anyway; it was corrected before the commit
-   that closes the job.
+   the next job. The first draft of this addendum applied the K1-STANDS rule anyway; that draft was committed in 3c2dac5
+   and corrected in the next commit, before the job was reported.
 2. The F1-family tests (`v1_cell_counts_f2_f1`, `k4_*`, `report`) were ignored without measuring their debug time, as
    the deliverables required. The gate runs in release (`docs/test-process.md`), where the whole binary, the ignored tests
    included, took 23 s.
