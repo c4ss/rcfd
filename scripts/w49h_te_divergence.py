@@ -137,6 +137,33 @@ def summary(work):
               "|", guard[0][:260] if guard else text[-1][:160])
 
 
+def long_summary(work):
+    """Window means (last 1000 iterations) of every report of the full-length runs, and the steady rule of ADR 0159 D4."""
+    out = {}
+    for i, spec in REGISTRY.items():
+        if not spec.get("long"):
+            continue
+        path = os.path.join(work, "runs", i, "solver-status.jsonl")
+        if not os.path.exists(path):
+            continue
+        its, fin, _ = w.read_stream(path)
+        if fin is None:
+            out[i] = {"finished": False, "iterations": its[-1]["index"] if its else 0}
+            continue
+        win = [e for e in its if "cl" in e.get("monitors", {})][-1000:]
+        keys = sorted(win[0]["monitors"]) if win else []
+        r = {"finished": True, "exit": fin.get("exit_code"), "iterations": its[-1]["index"], "wall_s": fin.get("wall_s"),
+             "window": {k: w.stats([e["monitors"][k] for e in win]) for k in keys}}
+        if "divergence" in fin:
+            r["divergence"] = fin["divergence"]
+        cl, cd = r["window"].get("cl"), r["window"].get("cd")
+        if cl and cd:
+            r["steady"] = (cl["max"] - cl["min"] <= 0.005) and (cd["max"] - cd["min"] <= 0.0005)
+        out[i] = r
+    print(json.dumps(out, indent=1))
+    return out
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -151,6 +178,8 @@ def main():
             print(i, run_one(a[1], a[2], i), flush=True)
     elif a[0] == "summary":
         summary(a[1])
+    elif a[0] == "longsummary":
+        long_summary(a[1])
     else:
         raise SystemExit(__doc__)
 
