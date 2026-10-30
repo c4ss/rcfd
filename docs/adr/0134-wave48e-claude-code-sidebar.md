@@ -521,3 +521,22 @@ Record per item: pass or fail, the Claude Code version, and anything the panel s
 Known limit: a missing `rcfd-mcp` next to the Studio is not reported in the panel; the chat then runs without the project
 tools (its MCP server fails to start inside Claude Code). The checklist builds `rcfd-mcp` for this reason.
 
+
+## Amendment 5 (2026-10-30, job 49I: `Exited` waits for the stderr reader)
+
+`d1_new_session_sets_its_id_and_streams_events` (`crates/rcfd-claude/tests/driver_fake.rs`) failed once on the Ubuntu gate
+(run 41036426503): the last event was `Exited { code: Some(0), .. }` but its `stderr_tail` did not contain `replayed`.
+Cause (reproduced): the stderr reader thread of `Claude::spawn` was detached. The event thread read stdout to EOF, saw the
+exit status, and built `Exited` from the shared tail buffer while the reader could still be between the pipe and the
+buffer, so the tail could be empty or short. Measured before the fix on Linux (Docker, release, the one test run as a
+separate process): 7 failures in 300 serial runs, 12 in 200 with 8 parallel, 97 in 1000 with 16 parallel; the failing
+assertion is the `stderr_tail` one at line 130 every time it was captured.
+
+Fix: the reader's `JoinHandle` goes to the event thread, which joins it after the exit status and before it builds
+`Exited`. `Exited` is therefore sent only after stdout and stderr have both reached EOF. No sleep, no change to any
+assertion, no change to the event order, the argument list or the default behaviour. After the fix: 0 failures in 300
+serial, 5000 with 16 parallel and 5000 with 32 parallel on Linux, 0 in 1500 with 12 parallel on Windows; the whole
+`rcfd-claude` test set passes on both.
+
+Known limit (unchanged in kind): a descendant that keeps the stderr pipe open after `claude` exits delays `Exited` until it
+closes it or the chat is cancelled (cancel kills the process group / tree); stdout had this property already.
