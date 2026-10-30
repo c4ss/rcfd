@@ -819,6 +819,7 @@ impl TurbState {
             },
             sa_wall_mode: match get_s(case, "turbulence.sa.wall_mode").as_str() {
                 "resolved" => SaWallMode::Resolved,
+                "auto_sa_law" => SaWallMode::SaLaw,
                 _ => SaWallMode::Auto,
             },
             sa_limiter: match get_s(case, "turbulence.sa.limiter").as_str() {

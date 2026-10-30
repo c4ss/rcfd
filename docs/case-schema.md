@@ -121,7 +121,7 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 | --- | --- | --- |
 | `nutilde_ratio` | 3 | `nuTilda / nu` of the initial field and of inlets without `nutilde_value` (TMR: 3 to 5) |
 | `boundaries.<patch>.nutilde_value` | 0 | inlet `nuTilda` in m^2/s (0: use `nutilde_ratio`); `turbulence_spec` and the k/epsilon/omega values are not used |
-| `sa.wall_mode` | `auto` | `auto`: Spalding law of the wall for the wall shear, plus a wall-cell `nuTilda` matching the law for wall-cell y+ > 5 (works from y+ about 1 into the log layer); `resolved`: `nuTilda = 0` on the wall and no wall function (y+ of order 1) |
+| `sa.wall_mode` | `auto` | `auto`: Spalding law of the wall for the wall shear, plus a wall-cell `nuTilda` matching the law for wall-cell y+ > 5 (works from y+ about 1 into the log layer); `resolved`: `nuTilda = 0` on the wall and no wall function (y+ of order 1); `auto_sa_law` (opt-in, ADR 0168): see below |
 | `sa.limiter` | `allmaras` | `S~` limiter: `allmaras` (Allmaras, Johnson and Spalart 2012, c2 0.7, c3 0.9), `min_0p3` (`S~ >= 0.3 Omega`), `positive` |
 | `sa.negative_nutilde` | true | SA-neg treatment of negative `nuTilda` (production `cb1 Omega nuTilda`, destruction `+cw1 (nuTilda/d)^2`, diffusion `nu + fn nuTilda`, `nut = 0`); off: clip at zero |
 | `sa.des` | `off` | `off`: RANS length scale `d` (wall distance). `des`: detached-eddy simulation, `d~ = min(d, C_DES Delta)`. `ddes`: delayed DES, `d~ = d - f_d max(0, d - C_DES Delta)`, `f_d = 1 - tanh((8 r_d)^3)`, `r_d = (nu + nut)/(max(sqrt(U_ij U_ij), 1e-10) kappa^2 d^2)`. `des` and `ddes` run with the transient algorithms (`piso`, `pimple`) only and add an implicit-Euler time derivative on `nuTilda` (ADR 0032) |
@@ -148,6 +148,24 @@ Do not use `turbulence = "inlet"` on such a far field. It fixes the value on the
 operator then carries the fixed value out instead of the cell value, so the quantity cannot leave the domain and
 accumulates. In ADR 0164 amendment 1, nuTilda grew to the eddy-viscosity cap of `1e5 nu` in the whole domain within about
 1500 iterations.
+
+Wall mode `auto_sa_law` (opt-in, ADR 0168; the default `auto` is unchanged). It addresses wall cells in the buffer layer.
+There, `auto` over-predicts the friction (ADR 0164: +20 % on a flat plate at wall-cell y+ 5) because the eddy viscosity
+is linearly interpolated to the face between the wall cell and the next cell, across a steep, non-linear profile. The
+mode changes four things:
+- The wall function uses the SA model's own inner-layer law, `u+ = integral dy+/(1 + kappa y+ fv1(kappa y+))` (log
+  intercept about 5.0), instead of Spalding's. This applies to the wall shear, the reported y+ and the wall-face eddy
+  viscosity. `turbulence.e_wall` is not used.
+- Every wall cell gets `nuTilda = kappa u_tau y`, the model's exact constant-stress solution, at every y+. There is no
+  switch at y+ 5 in this mode (ADR 0168 amendment 1).
+- The face between a wall cell and its wall-normal neighbour gets the law's series-resistance viscosity
+  `nu (y2+ - y1+)/(u+(y2+) - u+(y1+))`. In the velocity gradient of the two cells, that face also takes the law's
+  tangential velocity `u_tau u+(y_f+)` instead of the linear interpolation (amendment 1).
+- Every other internal face gets `nut` of the linearly interpolated `nuTilda` (`nuTilda_f fv1(nuTilda_f/nu)`).
+
+It assumes the equilibrium inner layer over the first two cells, also where the wall cell resolves the viscous sublayer
+and where u_tau tends to zero (stagnation, separation). Its validation is in ADR 0168.
+
 
 `convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
 `wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are

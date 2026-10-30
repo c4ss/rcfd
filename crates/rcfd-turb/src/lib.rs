@@ -24,7 +24,7 @@ pub use model::{
 pub use rsm::{rsm_coefficient_table, PressureStrain, ReynoldsStress, RsmCoefficients};
 pub use sa::{
     cell_delta, ddes_fd, ddes_length, ddes_rd, des_length, sa_local_source, sa_s_fw, DesDelta, DesMode, SLimiter,
-    SaCoefficients, SaWallMode, SpalartAllmaras,
+    SaCoefficients, SaInnerLaw, SaWallMode, SpalartAllmaras,
 };
 pub use sst::KOmegaSst;
 pub use wall::{wall_distance, wall_y_plus, SpaldingLaw, WallConstants};

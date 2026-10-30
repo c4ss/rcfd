@@ -1454,7 +1454,7 @@ pub fn case_schema() -> Schema {
         .doc("Spalart-Allmaras options")
         .field(
             "wall_mode",
-            Schema::enumeration("auto", &["auto", "resolved"]).doc("auto: Spalding law of the wall for the wall shear and, for wall-cell y+ > 5, a wall-cell nuTilda matching the law, so that y+ from about 1 into the log layer works; resolved: nuTilda = 0 on the wall, no wall function (needs y+ of order 1)"),
+            Schema::enumeration("auto", &["auto", "resolved", "auto_sa_law"]).doc("auto: Spalding law of the wall for the wall shear and, for wall-cell y+ > 5, a wall-cell nuTilda matching the law, so that y+ from about 1 into the log layer works; resolved: nuTilda = 0 on the wall, no wall function (needs y+ of order 1); auto_sa_law (opt-in, ADR 0168): the SA model's own inner-layer law for the wall shear, nuTilda = kappa u_tau y in every wall cell, the law's series-resistance viscosity and tangential velocity on their wall-normal face, and nut of the interpolated nuTilda on the other internal faces"),
         )
         .field(
             "limiter",
