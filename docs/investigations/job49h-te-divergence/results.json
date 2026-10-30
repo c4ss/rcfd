@@ -1,0 +1,568 @@
+{
+ "adr": 171,
+ "evaluation": {
+  "LL1": {
+   "LB0": true,
+   "LB6": true,
+   "met": true
+  },
+  "LL2": {
+   "cd_eff": 0.008775804134519895,
+   "met": false,
+   "rel": 0.07126515313963577
+  },
+  "LL3": {
+   "cd_veff": 0.007143374787695312,
+   "met": true,
+   "rel": 0.045728998345090366
+  },
+  "LL4": {
+   "LA0": 0.008521326845421683,
+   "LB0": 0.008775804134519895,
+   "met": true,
+   "rel": 0.029863575674830223
+  },
+  "LL5": {
+   "cl_eff": 0.6442462359476572,
+   "met": true,
+   "rel": -0.0011686264377408495
+  },
+  "LL6": {
+   "met": true,
+   "steady": true
+  },
+  "LL7": {
+   "cd_eff": 0.011139599274077512,
+   "met": false,
+   "rel": 0.12726959956987272
+  },
+  "LL8": {
+   "LA0_exit": 5,
+   "met": true
+  },
+  "LL9": {
+   "QE_clean": true,
+   "met": true
+  },
+  "LM1": {
+   "PA_stop": 18,
+   "met": false
+  },
+  "LM2": {
+   "PB_stop": 25,
+   "met": false
+  },
+  "LM3": {
+   "PE": [
+    15,
+    0
+   ],
+   "met": true
+  },
+  "LM4": {
+   "PF_clean": true,
+   "met": false
+  },
+  "LM5": {
+   "PG": [
+    15,
+    0
+   ],
+   "met": true
+  },
+  "LM6": {
+   "PD_stop": 12,
+   "met": false
+  },
+  "LN1": {
+   "QA_clean": true,
+   "met": true
+  },
+  "LN2": {
+   "QB_clean": true,
+   "met": true
+  },
+  "LN3": {
+   "QC_clean": true,
+   "met": true
+  },
+  "LN4": {
+   "QD_clean": true,
+   "met": true
+  },
+  "LN5": {
+   "QE_clean": true,
+   "met": true
+  },
+  "LR1": {
+   "RA": false,
+   "RB": true,
+   "met": true
+  },
+  "LR2": {
+   "met": true,
+   "stops": {
+    "RB": [
+     0,
+     8e-05
+    ],
+    "RD": [
+     0,
+     6.6e-05
+    ],
+    "RE": [
+     0,
+     8e-05
+    ]
+   }
+  },
+  "LR3": {
+   "met": true
+  },
+  "LR4": {
+   "met": true,
+   "stop_iteration": 28
+  },
+  "LR5": {
+   "met": true
+  },
+  "LR6": {
+   "met": true,
+   "stop_iteration": 16
+  }
+ },
+ "long": {
+  "LA0": {
+   "exit": 5,
+   "finished": true,
+   "iterations": 8000,
+   "steady": true,
+   "wall_s": 1591.4086956977844,
+   "window": {
+    "cd": {
+     "max": 0.008539322919839411,
+     "mean": 0.008521326845421683,
+     "min": 0.008503330771003525,
+     "n": 1000
+    },
+    "cd_eff": {
+     "max": 0.008539322919839411,
+     "mean": 0.008521326845421683,
+     "min": 0.008503330771003525,
+     "n": 1000
+    },
+    "cd_p": {
+     "max": 0.0013905367255765768,
+     "mean": 0.001390475269732743,
+     "min": 0.0013904138138882553,
+     "n": 1000
+    },
+    "cd_v": {
+     "max": 0.00714878619426334,
+     "mean": 0.007130851575688945,
+     "min": 0.007112916957114458,
+     "n": 1000
+    },
+    "cd_veff": {
+     "max": 0.00714878619426334,
+     "mean": 0.007130851575688945,
+     "min": 0.007112916957114458,
+     "n": 1000
+    },
+    "cl": {
+     "max": 3.9872321200216223e-07,
+     "mean": 2.0717673964396663e-07,
+     "min": 1.5630267968288054e-08,
+     "n": 1000
+    },
+    "cl_eff": {
+     "max": 3.9872321200216223e-07,
+     "mean": 2.0717673964396663e-07,
+     "min": 1.5630267968288054e-08,
+     "n": 1000
+    },
+    "nut_avg": {
+     "max": 4.302293490651807e-08,
+     "mean": 4.3022934857926816e-08,
+     "min": 4.302293480933477e-08,
+     "n": 1000
+    }
+   }
+  },
+  "LB0": {
+   "exit": 5,
+   "finished": true,
+   "iterations": 8000,
+   "steady": true,
+   "wall_s": 1484.8080327,
+   "window": {
+    "cd": {
+     "max": 0.008793092999786393,
+     "mean": 0.008775804134519895,
+     "min": 0.0087585152692544,
+     "n": 1000
+    },
+    "cd_eff": {
+     "max": 0.008793092999786393,
+     "mean": 0.008775804134519895,
+     "min": 0.0087585152692544,
+     "n": 1000
+    },
+    "cd_p": {
+     "max": 0.001632442411644782,
+     "mean": 0.0016324293468245716,
+     "min": 0.0016324162820056834,
+     "n": 1000
+    },
+    "cd_v": {
+     "max": 0.007160650588143208,
+     "mean": 0.007143374787695312,
+     "min": 0.0071260989872476465,
+     "n": 1000
+    },
+    "cd_veff": {
+     "max": 0.007160650588143208,
+     "mean": 0.007143374787695312,
+     "min": 0.0071260989872476465,
+     "n": 1000
+    },
+    "cl": {
+     "max": 9.209492146556328e-09,
+     "mean": 4.738213863597842e-09,
+     "min": 2.669310439634811e-10,
+     "n": 1000
+    },
+    "cl_eff": {
+     "max": 9.209492146556328e-09,
+     "mean": 4.738213863597842e-09,
+     "min": 2.669310439634811e-10,
+     "n": 1000
+    },
+    "nut_avg": {
+     "max": 4.226805896692601e-08,
+     "mean": 4.226805891892436e-08,
+     "min": 4.226805887092291e-08,
+     "n": 1000
+    }
+   }
+  },
+  "LB6": {
+   "exit": 5,
+   "finished": true,
+   "iterations": 8000,
+   "steady": true,
+   "wall_s": 1630.424293756485,
+   "window": {
+    "cd": {
+     "max": 0.01114925437335512,
+     "mean": 0.011139599274077512,
+     "min": 0.011129944174795623,
+     "n": 1000
+    },
+    "cd_eff": {
+     "max": 0.01114925437335512,
+     "mean": 0.011139599274077512,
+     "min": 0.011129944174795623,
+     "n": 1000
+    },
+    "cd_p": {
+     "max": 0.004217829427183949,
+     "mean": 0.00421776779672838,
+     "min": 0.004217706166273896,
+     "n": 1000
+    },
+    "cd_v": {
+     "max": 0.006931548207032479,
+     "mean": 0.006921831477349155,
+     "min": 0.006912114747666711,
+     "n": 1000
+    },
+    "cd_veff": {
+     "max": 0.006931548207032479,
+     "mean": 0.006921831477349155,
+     "min": 0.006912114747666711,
+     "n": 1000
+    },
+    "cl": {
+     "max": 0.6442462362047069,
+     "mean": 0.6442462359476572,
+     "min": 0.6442462356905824,
+     "n": 1000
+    },
+    "cl_eff": {
+     "max": 0.6442462362047069,
+     "mean": 0.6442462359476572,
+     "min": 0.6442462356905824,
+     "n": 1000
+    },
+    "nut_avg": {
+     "max": 4.614255241914819e-08,
+     "mean": 4.614255241017212e-08,
+     "min": 4.614255240119618e-08,
+     "n": 1000
+    }
+   }
+  }
+ },
+ "runs": {
+  "PA": {
+   "cell": 255,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PA",
+   "iterations": 18,
+   "kind": "velocity_runaway",
+   "last_good": 8,
+   "position": [
+    0.9958119153338313,
+    -0.07840174331639672,
+    0.05
+   ],
+   "stop_iteration": 18,
+   "wall_s": 2.4113088
+  },
+  "PB": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PB",
+   "iterations": 25,
+   "kind": "velocity_runaway",
+   "last_good": 15,
+   "position": [
+    0.9958147745984435,
+    -0.07837453923080737,
+    0.05
+   ],
+   "stop_iteration": 25,
+   "wall_s": 3.1353284
+  },
+  "PC": {
+   "cell": 254,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PC",
+   "iterations": 15,
+   "kind": "velocity_runaway",
+   "last_good": 6,
+   "position": [
+    0.9954880980711996,
+    -0.07841749836027362,
+    0.05000000000000002
+   ],
+   "stop_iteration": 15,
+   "wall_s": 3.0120347
+  },
+  "PD": {
+   "cell": 255,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PD",
+   "iterations": 12,
+   "kind": "velocity_runaway",
+   "last_good": 1,
+   "position": [
+    0.9958119153338313,
+    -0.07840174331639672,
+    0.05
+   ],
+   "stop_iteration": 12,
+   "wall_s": 1.6153971999999999
+  },
+  "PE": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PE",
+   "iterations": 15,
+   "kind": "velocity_runaway",
+   "last_good": 7,
+   "position": [
+    0.9958147745984435,
+    -0.07837453923080737,
+    0.05
+   ],
+   "stop_iteration": 15,
+   "wall_s": 1.4701698
+  },
+  "PF": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "PF",
+   "iterations": 300,
+   "wall_s": 49.4199902
+  },
+  "PG": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PG",
+   "iterations": 15,
+   "kind": "velocity_runaway",
+   "last_good": 5,
+   "position": [
+    0.9999214933724122,
+    1.3676966649048195e-05,
+    0.049999999999999996
+   ],
+   "stop_iteration": 15,
+   "wall_s": 1.8148049
+  },
+  "PH": {
+   "cell": 1,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PH",
+   "iterations": 19,
+   "kind": "velocity_runaway",
+   "last_good": 8,
+   "position": [
+    0.9955013091777356,
+    -0.07829180307785,
+    0.05000000000000001
+   ],
+   "stop_iteration": 19,
+   "wall_s": 2.0587781
+  },
+  "PI": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "PI",
+   "iterations": 17,
+   "kind": "velocity_runaway",
+   "last_good": 8,
+   "position": [
+    0.9958147745984435,
+    -0.07837453923080737,
+    0.05
+   ],
+   "stop_iteration": 17,
+   "wall_s": 1.9846806
+  },
+  "QA": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "QA",
+   "iterations": 300,
+   "wall_s": 57.7515903
+  },
+  "QB": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "QB",
+   "iterations": 300,
+   "wall_s": 47.4581705
+  },
+  "QC": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "QC",
+   "iterations": 300,
+   "wall_s": 95.8323568
+  },
+  "QD": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "QD",
+   "iterations": 300,
+   "wall_s": 48.581189
+  },
+  "QE": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "QE",
+   "iterations": 300,
+   "wall_s": 42.8243236
+  },
+  "RA": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "RA",
+   "iterations": 300,
+   "wall_s": 39.6096114
+  },
+  "RB": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "RB",
+   "iterations": 15,
+   "kind": "velocity_runaway",
+   "last_good": 5,
+   "position": [
+    0.9958147745984435,
+    -0.07837453923080737,
+    0.05
+   ],
+   "stop_iteration": 15,
+   "wall_s": 1.6722666
+  },
+  "RC": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "RC",
+   "iterations": 300,
+   "wall_s": 44.2035779
+  },
+  "RD": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "RD",
+   "iterations": 28,
+   "kind": "velocity_runaway",
+   "last_good": 6,
+   "position": [
+    0.9958288915970952,
+    -0.07837422556755276,
+    0.05000000000000002
+   ],
+   "stop_iteration": 28,
+   "wall_s": 3.4159889
+  },
+  "RE": {
+   "cell": 0,
+   "exit": 6,
+   "finished": true,
+   "guard_stop": true,
+   "id": "RE",
+   "iterations": 16,
+   "kind": "velocity_runaway",
+   "last_good": 8,
+   "position": [
+    0.9958147745984435,
+    -0.07837453923080737,
+    0.05
+   ],
+   "stop_iteration": 16,
+   "wall_s": 2.1594035
+  },
+  "RF": {
+   "exit": 5,
+   "finished": true,
+   "guard_stop": false,
+   "id": "RF",
+   "iterations": 300,
+   "wall_s": 42.0736496
+  }
+ }
+}

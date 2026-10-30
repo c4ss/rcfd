@@ -1887,6 +1887,12 @@ wall cells with the largest aspect ratio times the tangent of their non-orthogon
 such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or `tvd_minmod` on such meshes, or
 `linear_upwind` with `solver.linear_upwind_limiter = "barth_jespersen"` (below; ADR 0081).
 
+The same mechanism stops the NACA 0012 O-grid (256 x 128, first cell 1.6e-5 chord, y+ about 2) at 6 degrees in 15 iterations (SA; 16 with SST), at the
+trailing-edge tip cells 0 and 255 (aspect times tan of the non-orthogonality about 21 000); it needs the angle of attack, since the same mesh at 0 degrees
+runs clean (ADR 0171). Neither the pressure-velocity coupling (`face_flux`, `alpha_p`, `simple`) nor the relaxation factors nor the turbulence model
+changes it; `barth_jespersen` removes it in every run tried (300 iterations at 0, 6 and 16 degrees, SA and SST, two wall spacings; 8000 iterations at 0 and 6
+degrees). The limiter costs about 3 % of `cd_eff` at 0 degrees, all of it in the pressure drag (ADR 0171 LL4).
+
 ## Limited linear-upwind extrapolation (`solver.linear_upwind_limiter`)
 
 `solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) applies to `solver.convection = "linear_upwind"` with `solver.algorithm = "simple"` or
