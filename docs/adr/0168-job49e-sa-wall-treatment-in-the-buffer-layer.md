@@ -1,6 +1,10 @@
 # ADR 0168: Job 49E, Spalart-Allmaras wall treatment with the wall cell in the buffer layer (ADR 0164 question 8)
 
-Status: **registered 2026-10-29**, before any solver run of this job. The set-ups, limits, reading rules and the not-run
+Status: **registered 2026-10-29**, before any solver run of this job. **Amendment 1** (2026-10-30, after the 26 registered
+runs, before any amended run): the opt-in had a y+ 5 switch (bistable) and over-produced nuTilda in the second cell;
+both were fixed, with new arms F, AF, G. **Results in the addendum:** the default's buffer-layer error and its cause are
+confirmed; the amended opt-in meets every limit; as registered, it missed LP1, LP2 and LP4 at y+ 5 (known misses). The
+set-ups, limits, reading rules and the not-run
 list are fixed here. Results go in an addendum. Not yet accepted by the maintainer.
 
 Job 49E, on local main f9a520a; the worktree branch was fast-forwarded to it before any work. Number: 0165 is the highest
@@ -367,3 +371,173 @@ Reading rules unchanged. Not changed: the cases, the meshes, the window, every b
 series-resistance face. That includes a wall cell resolving the viscous sublayer (y+ about 1) and cells where u_tau tends
 to zero (stagnation, separation, the trailing edge). Below y+ about 3 the law is the viscous law u+ = y+ and imposes
 little. Near separation it is the equilibrium assumption of every wall function.
+
+## Addendum: results (2026-10-30)
+
+Commits:
+- 22dd93f: registration, D1 code, driver, T1/T2.
+- 3b1b967: the T2 clippy fix.
+- 8d59b02: the registered results, collected as committed.
+- 812f078: amendment 1, its code and driver.
+- Then the amended results, the limit tests and this addendum.
+
+Binaries:
+- `rcfd-w49e.exe` (registered) for the 26 registered runs;
+- `rcfd-w49e-am1.exe` (amendment 1) for F, AF and G.
+
+Host: shared with jobs 49C and 49D, at most 2 of my solver processes, 16 to 58 GB free. Wall times in `results.json` are
+rough.
+
+Results: [`docs/investigations/job49e-sa-wall/`](../investigations/job49e-sa-wall/README.md).
+
+### The finding
+
+1. **The default's buffer-layer error is real, and its mechanism is the one identified before the runs.**
+   - Plate Cf(0.97) against TMR in `auto`: +3.1 / +4.9 / +7.7 / **+19.9** / **+19.7** / +14.2 / +11.4 / +5.7 / +4.3 /
+     +2.9 % at wall y+ 1 / 2 / 3 / 5 / 8 / 12 / 15 / 30 / 40 / 60.
+   - The 1-D model of the linear face eddy viscosity (D7), shifted by D01's offset (+2.2 points), predicts every one of
+     them within 1.2 points (LH1).
+   - On the NACA 0012 at 0 degrees, the mesh with median wall y+ 5 gives friction +17.4 % and cd +17.8 %. Median 15 gives
+     +9.5 % and +9.3 %; median 42 (ADR 0164's F00) +2.5 % and +2.6 %.
+   - Not the cause: the u_tau iteration, the wall-face viscosity and the wall nuTilda. The y+ 5 switch of `auto` is not
+     the cause either: the error is the same on both sides of it.
+2. **The opt-in `auto_sa_law`, as amended, removes it.**
+   - Plate: **+2.3 % to +4.4 %** against TMR at all 10 y+, and within 2.0 % of its own y+ 1 value.
+   - Aerofoil cd: **+2.0 %, +1.3 %, +2.3 %** at median wall y+ 5, 15, 42. The spread is 1.0 % of TMR, against 15.3 % for
+     the default.
+   - The remaining +2 % to +3 % is the plate set-up's baseline, already present at y+ 1 in every mode. It is not a wall
+     treatment error.
+3. **As registered, the opt-in missed at y+ 5 for two reasons that amendment 1 fixed.**
+   - Its y+ 5 switch was bistable: E05's wall y+ was pinned at 4.97 to 5.05, and Cf was +7.5 %.
+   - The second cell's strain came from a linearly interpolated face velocity, so its nuTilda was 1.14 to 1.28 times
+     kappa u_tau y.
+   - After the amendment: the wall y+ is monotone on every plate, the second-cell ratio is at most 1.065, and every F
+     plate from y+ 5 up and AF15/AF40 meet their residual targets (F: 187 to 296 iterations).
+
+### Limits
+
+| Id | Limit | Measured | Outcome |
+|---|---|---|---|
+| L1 | 26 registered runs exit 0 or 5 | all; exit 5 (cap) for D01-D03, E01-E03, E05, AD05, AE05, AE40 | met |
+| LR | D01, D05, D40, AD40 bit-identical to P01, P05, P40, F00 | 30 000 / 634 / 406 / 2088 values, 0 different, same iteration counts | met |
+| T1 | inner law | passes | met |
+| T2 | wiring | passes | met |
+| LH1 | default vs 1-D model within 3 points | largest difference 1.19 points (y+ 5); the others -1.05 to +0.77 | met |
+| LH2 | default max over y+ 5-15 >= +10 % | +19.9 % | met |
+| LH3 | AD05 friction >= +8 % | +17.4 % | met |
+| LP1 | E: +-5 % against TMR | +2.3 to +3.9 % except **E05 +7.49 %** | **missed**, `lp1_opt_in_against_tmr_known_miss` |
+| LP2 | E: within 3 % of E01 | <= 1.5 % except **E05 +5.08 %** | **missed**, `lp2_opt_in_yplus_independence_known_miss` |
+| LP3 | E: report vs law integral 2 % | <= 1.8 % (E03) | met |
+| LP4 | E: mean C_F +-5 % of Kármán-Schoenherr | -0.1 to +2.4 % except **E05 +6.16 %** | **missed**, `lp4_opt_in_mean_friction_known_miss` |
+| LA1 | AE cd +-6 % | +5.1 / +1.9 / +2.9 % | met |
+| LA2 | AE friction +-6 % | +5.6 / +2.1 / +2.6 % | met |
+| LA3 | AE spread <= 4 % | 3.2 % | met |
+| L1_A1 | F, AF, G exit 0 or 5 | all; exit 5 for F01-F03 and AF05 (as their defaults) | met |
+| LR_A1 | G05, G40, GA40 bit-identical (amended build) | 634 / 406 / 2088 values, 0 different | met |
+| LP1_A1 | F: +-5 % against TMR | +2.3 / +3.2 / +4.4 / +4.2 / +3.1 / +2.6 / +2.5 / +2.4 / +2.4 / +2.4 % | met |
+| LP2_A1 | F: within 3 % of F01 | <= 2.0 % (F03) | met |
+| LP3_A1 | F: report vs law integral 2 % | <= 0.58 % | met |
+| LP4_A1 | F: mean C_F +-5 % of K-S | -0.1 to +2.0 % | met |
+| LA1_A1 | AF cd +-6 % | +2.0 / +1.3 / +2.3 % | met |
+| LA2_A1 | AF friction +-6 % | +2.6 / +1.5 / +2.1 % | met |
+| LA3_A1 | AF spread <= 4 % | 1.0 % | met |
+| M1_A1 | F wall y+ non-increasing over x 0.8-1.2 | all 10 | met |
+| M2_A1 | F05-F60 second-cell ratio <= 1.10 | 1.065 (F05) down to 0.918 (F60) | met |
+| M3_A1 | F05-F60, AF15, AF40 exit 0 | all exit 0 | met |
+| B1 | folder <= 250 000 bytes, PNG <= 100 000 | test `b1_storage` | met |
+| P1 | selftest | passes | met |
+| G0 | hygiene on the final code | see below | see below |
+
+G0 in detail:
+- fmt clean.
+- clippy `-D warnings` of rcfd-turb and rcfd-api (lib and tests) clean.
+- `baseline_hashes.rs` unchanged; the test gives 3 passed and 1 ignored, as before.
+- `case_hashes_w48u`, `w33b_default_bits` and `workspace_graph` pass.
+- `w48v_case_hashes` is a tool test, ignored as before.
+- `flat_plate_sa`: FLAT_PLATE_SA_RESULT.
+
+### Reported, no limit
+
+- Plates against Schlichting's local law (0.002881): default -3.2 % (y+ 1) to +12.6 % (y+ 5); F -3.9 % to -2.0 %. TMR's
+  SA value is itself 6.1 % below Schlichting.
+- The molecular / wall-law ratio of F: 1.004 (y+ 1), 0.75 (15), 0.36 (40), 0.26 (60). The default `viscous` report needs
+  the effective component from about y+ 5 up (ADR 0164).
+- Opt-in minus default at y+ 1: -0.8 points (+2.3 % against +3.1 %). It comes from the interpolated-nuTilda faces of the
+  resolved buffer layer; the 1-D model gave -1.6 points.
+- Aerofoil pressure part against TMR's 0.001361: default +20.1 / +8.6 / +3.0 %, AF -0.8 / 0.0 / +3.3 % (y+ 5 / 15 / 42).
+  The default's buffer-layer error also inflates the pressure drag, presumably through a thicker boundary layer.
+- Wall-cell y+ of the meshes (median; 10-90 %; range):
+  - M1w05: 5.4; 3.2-7.2; 0.8-7.5.
+  - M1w15: 15.6; 10.0-20.7; 2.1-21.6.
+  - M1w: 42.1; 26.7-56.6; 5.5-60.8.
+
+  The number of wall cells that got a series-resistance face (`law_face_count`) was **not counted** on the aerofoil
+  (deviation). Every wall cell of the O-grid has a radial neighbour, so all 256 are expected to qualify. The trailing-edge
+  fan, where the grid lines turn, was not checked against the 0.5 cosine threshold.
+- Steady stop: the y+ 1-3 plates and the M1w05 aerofoil run to the cap in every mode. Their targets are not met, though
+  Cf and cd settle. The other plates and aerofoils meet their targets in 187 to 335 iterations, except E05 and AE40 (the
+  registered switch).
+- Wall times:
+  - plates: 8 s (y+ 60) to 990 s (y+ 1, at the cap);
+  - aerofoil: 66-110 s converged, 1700-2150 s at the cap.
+
+### Deviations
+
+1. **Amendment 1.** It corrects two defects of D1, found from the profile diagnostics of the registered runs. Its
+   correction was designed after seeing E05 and E08, as the amendment states. The registered limits stay on the
+   registered runs (three known misses). The amended arms have their own limits, with the same bands.
+2. **PC restart (2026-10-30, about 00:30).** The host restarted without warning while F03 and AF05 were running.
+   - F03 had reached iteration 13 492 of 15 000; AF05 iteration 2660 of 8000.
+   - Their folders were moved to `E:\projects\cfd\w49e-work\w\killed-by-restart\`.
+   - Both were rerun from scratch with the same amended binary (sha256 checked again). Both ended normally: exit 5 at the
+     cap, like their defaults.
+   - All other runs had finished before the restart.
+3. **Driver changes after registration** (amendment 1): `plate_profile` (the M1 and M2 data), the generalised evaluation
+   (the `_A1` keys), the F, AF and G arms, and the CSV line terminator. The amended `collect` reproduced the registered
+   evaluation unchanged: every registered key compared equal before the amended runs started.
+4. **Scratch diagnostics.** A scratch script read the profiles of the stored registered runs, which led to amendment 1.
+   It is not committed; its logic is `plate_profile`. The interim `collect` calls wrote to a scratch folder and changed
+   nothing.
+5. **Before the registration** I looked at 1-D model variants, each piece alone, to choose D1. This is disclosed in
+   "What I knew". Of Kalitzin et al. 2005 only the abstract was read.
+
+### Not run
+
+- The full workspace test suite and the gate; Linux.
+- SST and k-epsilon in the buffer layer (question 3).
+- SA with DES / DDES or the transient algorithms in mode `auto_sa_law`.
+- Non-equilibrium checks of the opt-in: separation, a pressure-gradient case, angles other than 0 degrees.
+- The 500-chord far field.
+- Plate streamwise refinement; the +2 % to +3 % baseline is not attributed further.
+- Skewed near-wall cells. The series-resistance face uses the wall-normal distance, and this is untested off wall-aligned
+  layers.
+
+### Questions for the maintainer (none is decided here)
+
+1. **Default SA wall mode.**
+   - (a) Keep `auto` as the default, with `auto_sa_law` opt-in (as now).
+   - (b) Make `auto_sa_law` the default. That changes every SA result with wall cells above y+ about 1: buffer-layer
+     meshes by up to 15 % in drag, M1w-like meshes by about 0.3 %.
+   - (c) Drop it.
+
+   **Recommendation (a) now, and (b) after one more job.** That job would check the opt-in in non-equilibrium flow: a
+   separated or adverse-pressure-gradient case (e.g. the TMR bump or a backward-facing step) and an aerofoil angle sweep.
+   The opt-in imposes the equilibrium inner layer on two cells at every y+, and nothing here tests that away from
+   equilibrium.
+2. **The `auto` documentation** ("works from y+ about 1 into the log layer", in the schema doc string and
+   `docs/case-schema.md`).
+   - (a) Correct it: "+20 % friction at wall y+ 5-8, +11 % at 15 (ADR 0168); use y+ <= 1 or >= 30, or `auto_sa_law`".
+   - (b) Leave it.
+
+   **Recommendation (a)**, a doc-only change with no effect on results.
+3. **SST and k-epsilon.** They use the same linear face interpolation of nut (`effective_viscosity`). ADR 0063 already
+   saw a buffer-layer fall for k-epsilon.
+   - (a) A characterisation job: the same plate y+ sweep for SST `automatic` and for k-epsilon.
+   - (b) Leave it.
+
+   **Recommendation (a)**, with this job's driver and 1-D model as the template.
+4. **The steady stop at y+ <= 3 and on M1w05.** These runs go to the cap in every mode, though Cf and cd settle.
+   - (a) Leave it.
+   - (b) Find which target (residual or turbulence change) blocks.
+
+   **Recommendation (a)** for now; it is not a wall-treatment item.
