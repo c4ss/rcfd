@@ -504,6 +504,9 @@ G0 is met.
    nothing.
 5. **Before the registration** I looked at 1-D model variants, each piece alone, to choose D1. This is disclosed in
    "What I knew". Of Kalitzin et al. 2005 only the abstract was read.
+6. **`law_face_count` not reported for the aerofoil.** D1 names the count, but the driver reads no solver-internal state,
+   so the number of wall cells with a series-resistance face was not recorded. The plates (200 wall cells, straight
+   layers) qualify by construction. On the aerofoil it is expected to be 256, with the trailing-edge fan unchecked.
 
 ### Not run
 
