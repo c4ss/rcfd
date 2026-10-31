@@ -499,16 +499,16 @@ fn b3_ok(r: &Value) -> bool {
 
 /// S-B3(0.1), the a-priori arm (Q1: C1, C2, C3, S, H).
 #[test]
-#[ignore = "ADR 0179 S-B3(0.1) (about 2.5 min in release; budget 10 min)"]
-fn s_b3_010() {
+#[ignore = "known miss (ADR 0179 Q1: C1, C2, C3, S): S-B3(0.1) hits the 10 % cap at 417 cells (8.5 %) and keeps a 0.34 m/s cycle (rho_du 0.204); H met (about 2.5 min in release; budget 10 min)"]
+fn s_b3_010_known_miss() {
     let r = selector_arm("S-B3-0.1", "B3", 0.1, 600.0);
     assert_limits(&r, &["C1", "C2", "C3", "S", "H"]);
 }
 
 /// Conditional calibration arm S-B3(0.3) (run only if S-B3(0.1) misses C1, C2, C3 or S).
 #[test]
-#[ignore = "ADR 0179 S-B3(0.3), conditional (about 2.5 min in release; budget 10 min)"]
-fn s_b3_030() {
+#[ignore = "known miss (ADR 0179 C2, S): S-B3(0.3) reaches the tolerance at 2453 and rho_du 1.3e-4, but the cap is hit (442 cells, 9.0 %) and is_converged() is false at 3000 (about 2.5 min in release; budget 10 min)"]
+fn s_b3_030_known_miss() {
     assert!(!b3_ok(&read("S-B3-0.1")), "not registered: S-B3(0.1) met C1-C3 and S");
     let r = selector_arm("S-B3-0.3", "B3", 0.3, 600.0);
     assert_limits(&r, &["C1", "C2", "C3", "S"]);
@@ -516,8 +516,8 @@ fn s_b3_030() {
 
 /// Conditional calibration arm S-B3(0.03).
 #[test]
-#[ignore = "ADR 0179 S-B3(0.03), conditional (about 2.5 min in release; budget 10 min)"]
-fn s_b3_003() {
+#[ignore = "known miss (ADR 0179 C1, C2, C3): S-B3(0.03) would exceed the cap in its first round, so its mask stays empty (F-R alone) (about 2.5 min in release; budget 10 min)"]
+fn s_b3_003_known_miss() {
     assert!(!b3_ok(&read("S-B3-0.1")), "not registered: S-B3(0.1) met C1-C3 and S");
     let r = selector_arm("S-B3-0.03", "B3", 0.03, 600.0);
     assert_limits(&r, &["C1", "C2", "C3", "S"]);
@@ -544,8 +544,8 @@ fn theta_b2() -> f64 {
 
 /// S-B2 (held out; Q2: C1, C2, C3, S; Q3: R1 against the B3 arm of the same theta).
 #[test]
-#[ignore = "ADR 0179 S-B2 (about 8 min in release; budget 30 min; needs the B3 records in W49P_OUT)"]
-fn s_b2() {
+#[ignore = "known miss (ADR 0179 Q2, Q3: C1, C2, C3, S, R1): S-B2 (theta 0.1) hits the cap at 1065 cells (7.8 %), res_u rises to 7.8e-3, rho_du 2.45; Delta_B2 0.0288 > Delta_B3 0.0043 (about 5 min in release; budget 30 min; needs the B3 records in W49P_OUT)"]
+fn s_b2_known_miss() {
     let th = theta_b2();
     println!("W49P theta for B2: {th}");
     let r = selector_arm("S-B2", "B2", th, 1800.0);
