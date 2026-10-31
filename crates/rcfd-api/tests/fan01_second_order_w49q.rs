@@ -486,23 +486,23 @@ fn accepted(arm: &str) -> bool {
 // B3 arms (Q1, Q3 B3 part, Q4); budget 10 min each.
 
 #[test]
-#[ignore = "ADR 0180 T-MM on B3 (about 2.5 min in release; budget 10 min)"]
-fn t_mm_b3() {
+#[ignore = "known miss (ADR 0180 Q1: C1, C2, C3): T-MM on B3 keeps a cycle at the hub cells r 0.125, z 0.13-0.17 (rho_med 2.20, rho_du 0.85, res_u 2.2e-3) (about 2 min in release; budget 10 min)"]
+fn t_mm_b3_known_miss() {
     let r = arm_run("T-MM", "B3", 600.0);
     assert_limits(&r, &["C1", "C2", "C3"]);
 }
 
 #[test]
-#[ignore = "ADR 0180 T-VA on B3 (about 2.5 min in release; budget 10 min)"]
-fn t_va_b3() {
+#[ignore = "known miss (ADR 0180 Q3: C1, C2, C3): T-VA on B3 falls to res_u 4.5e-4 and keeps a cycle at the shroud tip-layer cells z 0.12 (rho_med 0.52, rho_du 0.31) (about 2 min in release; budget 10 min)"]
+fn t_va_b3_known_miss() {
     let r = arm_run("T-VA", "B3", 600.0);
     assert_limits(&r, &["C1", "C2", "C3"]);
 }
 
 /// Q4 predicts that T-VL misses C3 on B3; the test asserts the acceptance limits of the arm, as for the others.
 #[test]
-#[ignore = "ADR 0180 T-VL on B3 (about 2.5 min in release; budget 10 min)"]
-fn t_vl_b3() {
+#[ignore = "known miss (ADR 0180 C1, C2, C3; Q4 held): T-VL on B3 keeps a 3-5 m/s cycle at the hub cells r 0.126, z 0.10-0.12 (rho_med 4.88, rho_du 3.39) (about 2 min in release; budget 10 min)"]
+fn t_vl_b3_known_miss() {
     let r = arm_run("T-VL", "B3", 600.0);
     assert_limits(&r, &["C1", "C2", "C3"]);
 }
@@ -518,20 +518,20 @@ fn b2_arm(arm: &str) {
 }
 
 #[test]
-#[ignore = "ADR 0180 T-MM on B2 (about 6 min in release; budget 30 min; needs T-MM-B3 in W49Q_OUT)"]
-fn t_mm_b2() {
+#[ignore = "known miss (ADR 0180 Q2: C1, C2, C3, RN): T-MM on B2 cycles at the hub cells z 0.17 (rho_du 1.41); D_T 0.0073 -> 0.0139 grows (about 5 min in release; budget 30 min; needs T-MM-B3 in W49Q_OUT)"]
+fn t_mm_b2_known_miss() {
     b2_arm("T-MM");
 }
 
 #[test]
-#[ignore = "ADR 0180 T-VA on B2 (about 6 min in release; budget 30 min; needs T-VA-B3 in W49Q_OUT)"]
-fn t_va_b2() {
+#[ignore = "known miss (ADR 0180 Q3: C1, C2, C3, RN): T-VA on B2 cycles at the hub cells z 0.17 (rho_du 1.48); D_T 0.0035 -> 0.0117 grows (about 5 min in release; budget 30 min; needs T-VA-B3 in W49Q_OUT)"]
+fn t_va_b2_known_miss() {
     b2_arm("T-VA");
 }
 
 #[test]
-#[ignore = "ADR 0180 T-VL on B2 (about 6 min in release; budget 30 min; needs T-VL-B3 in W49Q_OUT)"]
-fn t_vl_b2() {
+#[ignore = "known miss (ADR 0180 C1, C2, C3; RN met on cycle samples): T-VL on B2 cycles at the hub cells z 0.17 (rho_du 1.39) (about 5 min in release; budget 30 min; needs T-VL-B3 in W49Q_OUT)"]
+fn t_vl_b2_known_miss() {
     b2_arm("T-VL");
 }
 
@@ -542,7 +542,7 @@ fn recommended() -> Option<&'static str> {
 
 /// Report-only run from the start through the case value of the recommended arm (only if reading rule 1 applies).
 #[test]
-#[ignore = "ADR 0180 report-only B3 run from the start with the recommended case value (about 2.5 min; budget 10 min; needs every arm record)"]
+#[ignore = "ADR 0180 report-only B3 run from the start with the recommended case value; NOT RUN: no arm was accepted, so reading rule 1 does not apply (about 2.5 min; budget 10 min)"]
 fn from_start_b3() {
     let Some(arm) = recommended() else {
         panic!("not registered: no arm accepted (reading rule 1 does not apply)");
