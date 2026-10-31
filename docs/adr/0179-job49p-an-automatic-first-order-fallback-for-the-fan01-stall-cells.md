@@ -189,3 +189,99 @@ another ADR, or a known miss.
 - `docs/investigations/job49p-fan01-auto-fallback/`: the JSON, `results.csv` and the logs, committed as soon as they
   exist.
 - This ADR's addendum; one sentence appended at the end of the robustness row of `docs/milestone-fan.md`.
+
+## Addendum: results (2026-10-31)
+
+Data: `docs/investigations/job49p-fan01-auto-fallback/` (one JSON per arm with the round-by-round record, `results.csv`,
+`logs/`). Release, on b99a352 (no solver change). Each arm was run once. The two calibration arms ran side by side; B2
+ran alone. No run reached its budget (B3 about 2 min, B2 4.7 min).
+
+### Validity
+
+- **V1 met.** B3 has 4 920 cells; medians 1.089e-3 / 4.87e-4; torque 1.9177 N m at 1000.
+- **V2 met.** B2 has 13 627 cells and is stalled: median `res_u` / `res_p` over 501-1000 1.004e-3 / 6.23e-4. Its
+  reference-window means are torque 2.0308 N m and Delta p_ts 63.860 Pa. These are current reports; ADR 0086's B2
+  values (1.9674 N m / 64.23 Pa) predate ADR 0170.
+- **V3 met.** The bit-identity tests and `baseline_hashes.rs` pass unchanged.
+
+### Arms
+
+| Arm | theta | Mask at end (share) | Cap hit | `reached` | `is_converged()` | `rho_du` | Torque end / ref mean (Delta) | Delta p_ts end / ref mean |
+|---|---|---|---|---|---|---|---|---|
+| S-B3(0.1) | 0.1 | 417 (8.5 %) | yes, round 4 (iteration 1200) | - | false | 0.204 | 1.9258 / 1.9176 (0.43 %) | 45.43 / 46.70 |
+| S-B3(0.3) | 0.3 | 442 (9.0 %) | yes, round 12 (1600) | 2453 | false | 1.3e-4 | 1.9105 / 1.9176 (0.37 %) | 44.07 / 46.70 |
+| S-B3(0.03) | 0.03 | 0 | yes, round 1 (1050) | - | false | 1.929 | 1.9210 / 1.9176 (0.18 %) | 47.00 / 46.70 |
+| S-B2 (held out) | 0.1 | 1 065 (7.8 %) | yes, round 4 (1200) | - | false | 2.453 | 1.9723 / 2.0308 (2.88 %) | 63.47 / 63.86 |
+
+Arm notes:
+- **S-B3(0.1).** The first round, during F-R's start-up transient, selected 262 cells; the next two rounds selected
+  40 and 115 more. A further 0.34 m/s cycle then remains: an exact cycle, with `res_u` frozen at 8.488e-4.
+- **S-B3(0.3).** The mask grew in 11 rounds to 442 cells. The run then converges slowly, reaching `res_u` 9.8e-7 at
+  3000, but the cap flag was set at round 12, and `is_converged()` is still false at 3000.
+- **S-B3(0.03).** The first round's selection already exceeded the cap, so the mask stayed empty: this is F-R alone,
+  as in ADR 0177.
+- **S-B2.** The mask makes B2 worse than its stall: `res_u` rises from 1.0e-3 to 7.8e-3, in an exact cycle.
+
+Scored after the runs, as registered:
+- the S-B3(0.1) mask holds 195 of H3's 322 cells (222 in H4), and S-B3(0.3) holds 179 (227);
+- the masks' median rank on the ADR 0174 metric is 0.44-0.50, i.e. ordinary cells.
+
+### Limits
+
+| Id | Measured | Verdict |
+|---|---|---|
+| C1 B3 (S-B3(0.1)) | not reached | **MISSED** |
+| C2 B3 | false | **MISSED** |
+| C3 B3 | `rho_du` 0.204 | **MISSED** |
+| S B3 | 8.5 %, cap hit | **MISSED** |
+| H | torque 1.9258 (0.6 % from 1.9144); Delta p_ts 45.43 (0.7 % from 45.753) | met |
+| Calibration | no theta in {0.3, 0.1, 0.03} meets C1, C2, C3 and S (0.3 meets C1 and C3 but misses C2 and S), so theta* = 0.1 and the selector is **failed on B3** by the registered rule | - |
+| C1 B2 | not reached | **MISSED** |
+| C2 B2 | false | **MISSED** |
+| C3 B2 | `rho_du` 2.45 | **MISSED** |
+| S B2 | 7.8 %, cap hit | **MISSED** |
+| R1 | Delta_B3 0.0043, Delta_B2 0.0288 (> Delta_B3 and > 0.002) | **MISSED** |
+
+Predictions: Q1, Q2 and Q3 are missed. Q4 is missed too: 8.5 % against the predicted under 6.5 %.
+
+Known misses: `s_b3_010_known_miss`, `s_b3_030_known_miss`, `s_b3_003_known_miss`, `s_b2_known_miss`.
+
+### Reading (by the registered rules)
+
+**Not accepted.** By the registration, no theta meets the B3 criteria, so **rule 4 applies**: the oscillation amplitude
+is not a usable selector at these parameters.
+
+1. **The selector chases the cycle into the cap.** Each round masks where the iterate oscillates. The cycle then moves
+   to the next cells (the relocation seen in ADRs 0175 and 0177), and the 10 % cap is reached before the cycle dies.
+   - With theta 0.3 the growth is slower and B3 does converge numerically, but only after the cap was flagged.
+   - With theta 0.03 the first round alone exceeds the cap.
+   - Part of the cap is spent on the F-R start-up transient: 262 of the 417 cells came from round 1, while the
+     leading-edge cycle was still decaying.
+2. **B2, held out, gets worse.** On B2 the masked state cycles at eight times the stall's residual, and the torque moves
+   2.9 % from the stalled mean, against 0.43 % on B3. R1 is missed. Strictly that compares a cycle with a cycle, since
+   neither run converged. It is still the wrong direction for the maintainer's condition.
+3. **What did work.** On B3 the automatic mask overlaps the hand-picked H3 by about 60 % and gives H's functionals
+   within 1 %. So the oscillation does find the hub region; the problem is the growth rule, not the property.
+
+Nothing here is a statement about accuracy or agreement with the measured fan. No default, limit or known miss of another
+ADR changes.
+
+### Deviations
+
+1. **Rule 4's wording versus S-B3(0.3).** Rule 4 is worded "does not converge on B3 at any theta". S-B3(0.3) met C1
+   and C3 (residual convergence) but missed C2 and S. I applied the registered calibration outcome (selector failed on
+   B3), which leads to rule 4. The reading rules did not cover a partial convergence; stated here.
+2. The cap rule rejects a whole round's addition and stops all later growth, as registered. S-B3(0.3) and S-B2 hit it
+   in a round that wanted more cells; nothing else differed from the registration.
+
+### Questions for the maintainer
+
+1. **One more selector job, or move to a scheme change?** Recommendation: one cheap registered variant first.
+   - It differs from this job in three ways: it starts selecting only after the F-R transient (for example 200
+     iterations after the switch); it selects cells by persistence (oscillating above the threshold in several
+     consecutive rounds) rather than by a single round; and it uses no ring growth.
+   - Test it on B3 with B2 held out, keeping the same C1-C3, S, H and R1.
+   - If it also misses, stop the selector line and register a scheme change that keeps second order in the cycling
+     cells (for example a smooth limiter there), since local first order then fails the refinement condition anyway.
+2. **The 10 % cap.** Is it the right bound? Recommendation: keep it. Both theta 0.1 runs stopped below it (8.5 %,
+   7.8 %) and still did not converge, so a larger cap would not have saved them.
