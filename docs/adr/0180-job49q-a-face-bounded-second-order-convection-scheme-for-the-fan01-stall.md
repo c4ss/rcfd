@@ -307,16 +307,24 @@ report-only run from the start (`from_start_b3`) was not run: reading rule 1 doe
 
 **Rule 6 applies: all three arms miss. The job stops here; no further arm was run.**
 
-1. **Bounding the face blend is not enough.** Minmod has `kappa <= lambda` on every face, so its frozen convection
-   operator does not anti-dissipate, and it still cycles on both meshes (worse than the baseline: `rho_med` 2.2 / 1.9).
-   So the energy argument for the frozen convection operator, which is the reason for the arms, does not capture what
-   drives the stall. Whatever it is lies outside that operator alone: the SIMPLEC coupling, the rotating-frame source,
-   SST, or the switching of the limiter itself (minmod has kinks at r = 0 and 1).
-2. **On B2 every scheme cycles at the same hub cells.** The B2 cycles of minmod, van Albada and van Leer sit in the
-   same five hub cells (r 0.124-0.126, z 0.171-0.172). That is the axial height of the hub cycle that took over on B3 under
-   F-R (ADRs 0177 and 0178) and of ADR 0111's leading linear mode. A site that survives a change of limiter family,
-   reconstruction (face TVD against cell extrapolation) and smoothness is unlikely to be a limiter property. I report it
-   as an observation; this job does not attribute it.
+1. **The bound `kappa <= lambda` is not enough.** Minmod has `kappa <= lambda` on every internal face and still cycles
+   on both meshes, worse than the baseline (`rho_med` 2.2 / 1.9).
+   - This does not show that a non-anti-dissipative operator still cycles. With `lambda = 1 - w` above 1/2 on stretched
+     faces (growth 1.2 in the wall stacks), `kappa` can exceed 1/2.
+   - The energy identity also leaves out the lagged central correction on periodic faces, and the discrete flux is not
+     divergence-free during the iteration.
+   - A strict `kappa <= 1/2` bound was not tested.
+   - Even so, the face bound that the arms were chosen for did not remove the stall. Other candidates are outside the
+     convection operator (the SIMPLEC coupling, the rotating-frame source, SST) or in the switching of the limiter
+     itself (minmod has kinks at r = 0 and 1).
+2. **On B2 every scheme cycles at the same hub cells, and the baseline stall is already there.** The B2 cycles of
+   minmod, van Albada and van Leer sit in the same five hub cells (c157, c621, c1235, c107, c7; r 0.124-0.126,
+   z 0.171-0.172). The five largest-`|du|` cells of the Barth-Jespersen stall at the B2 switch are c7, c621, c57, c1235
+   and c107, so four of the five are the same cells. On B2, then, the cell-extrapolation baseline and all three face-TVD
+   schemes cycle at one hub site. The site is at the axial height of the hub cycle that took over on B3 under F-R
+   (ADRs 0177 and 0178) and of ADR 0111's leading linear mode. B3 is different: the three TVD cycles sit in three
+   places (hub z 0.13-0.17, shroud tip layer z 0.119, leading-edge root), and the B3 baseline stall is at the leading-edge
+   root (c665, c17, c341). This is an observation per mesh; this job does not attribute it.
 3. **Record K.** The Barth-Jespersen face value lies beyond the central blend (`kappa > 1/2`) on about a third of all
    faces, and beyond the downwind value (`kappa > 1`) on a tenth of them. That is everywhere, not just at the stall
    cells: at the top-20 cells `kappa > 1/2` is in fact rarer (27.5 %), and only `kappa > 1` and `kappa < 0` are
@@ -345,9 +353,9 @@ ADR changes.
 ### Questions for the maintainer
 
 1. **What "second order everywhere" means.** Is a limited scheme of the baseline's class acceptable (second order where
-   the solution is smooth, limited at extrema, no cell forced to first order by a rule)? Recommendation: yes. Every
-   unlimited second-order scheme tried on these meshes trips the guard within 30 iterations (ADR 0110), so the stricter
-   reading has no runnable candidate.
+   the solution is smooth, limited at extrema, no cell forced to first order by a rule)? Recommendation: yes. Unlimited
+   `linear_upwind`, the only unlimited second-order scheme tried, trips the guard within 7-27 iterations on these meshes
+   (ADR 0110), so the stricter reading has no candidate known to run.
 2. **Next job: the z 0.17 hub site itself, not another limiter?** Recommendation: yes. On B2 all three limiter families cycle
    at the same hub cells, and on B3 the Barth-Jespersen run with F-R cycled at the same axial height (ADR 0177). Register a diagnosis of that site's mesh and
    coupling: the cells' geometry against the C-grid construction (seam, hub wall layer, the junction at mid-chord), and
@@ -355,5 +363,5 @@ ADR changes.
    site, which would keep the scheme second order everywhere, removes the cycle.
 3. **Meanwhile, keep the cycle-mean functionals with a band for the milestone?** ADR 0086 reports torque and Delta
    p_ts as means over a cycle with a band. Recommendation: yes, keep them as the reported values until a converged
-   second-order state exists, and mark them as cycle values. No scheme tried so far changes the B2 torque by more than
-   1.4 % from the Barth-Jespersen cycle mean.
+   second-order state exists, and mark them as cycle values. None of the three TVD schemes here moves the B2 torque by more
+   than 1.4 % from the Barth-Jespersen cycle mean. ADR 0179's first-order mask moved it by 2.9 %.
