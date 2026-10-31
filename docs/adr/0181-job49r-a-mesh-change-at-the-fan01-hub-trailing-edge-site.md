@@ -263,3 +263,34 @@ candidate because it is the one feature that differs strongly between B3 and B2.
 - `crates/rcfd-api/tests/fan01_hub_mesh_w49r.rs`: the diagnosis, V2-V3, the arms (ignored, one per process), RN and SB.
 - `docs/investigations/job49r-fan01-hub-mesh/`: the records, `results.csv` and logs.
 - This ADR's addendum; at most one sentence in `docs/milestone-fan.md`.
+
+## Amendment 1 (2026-10-31, before any arm run): V3 fails for the wake rule; M-W and M-RW withdrawn; G2 numbers corrected
+
+Written after the generator change (opt-in, defaults bit-identical: `w49r_default_meshes_are_bit_identical` passes with
+the key absent and with `c_grid_grading = "capped"`) and after V3 was evaluated on the six arm meshes
+(`docs/investigations/job49r-fan01-hub-mesh/V3.json`). **No arm has run.** Limits, M-R and the protocol are unchanged.
+
+1. **V3 failed for the registered wake rule.**
+   - M-W-B3 and M-RW-B3 do not build: "a directed edge appears twice ... at C block (i, j) = (27, 3), layer k = 7" (a
+     tangled cell family at mid-span).
+   - M-W-B2 does not build: "the line family is folded at layer 8 (r = 0.19400), C block around line 25, row 4".
+   - M-RW-B2 builds (largest hub wake step 1.85, radial 1.81), M-R-B3 and M-R-B2 build and meet V3 (radial 2.914 and
+     1.810, first layer `h1` to 7e-15, cell counts kept, construction step 0).
+
+   Cause (read from the code, not run): with `n_down` fixed, a smaller first wake step forces outlet cells of about 0.1 m
+   (B2: 1.4 mm growing by 1.85 to 106 mm). The C-block seam stations follow the wake-edge positions (`z_avg`, `z_out`
+   in `build_layer`), so the passage lines of the mid-span layers move with them and fold. A wake rule that keeps the
+   junction step near 2 within the given counts therefore does not build on this family.
+
+   **Decision (fixed now)**: M-W and M-RW are **withdrawn as defective set-ups and not run**. An arm must be applied to
+   both B3 and B2, so M-RW goes with M-W although it builds on B2. No replacement arm is registered: any other wake rule
+   would be chosen by trying it until it builds, and the brief allows no extra arms. **M-R runs as registered.** The
+   choice rule then has one candidate. The registered tests `m_w_*` and `m_rw_*` stay in the harness, ignored, and say
+   that they are withdrawn. G2 stays untested (a question for the maintainer in the addendum).
+2. **G2 numbers corrected.** The step-1 record lists wall-curve segment lengths along `j = 0`, and the diagnosis text
+   above quoted their ratios as axial wake steps. The axial wake cells at the hub (from the V3 records, the unchanged
+   wake of M-R) are 2.41, 10.34, 44.4, 57.1, ... mm on B3 and 1.44, 4.30, 12.9, 38.5, 42.8, ... mm on B2: the axial
+   steps from the trailing edge are **4.29 (B3) and 2.99 (B2)**, not 3.85 / 2.83; `dz_te` is 2.41 / 1.44 mm, not 2.72 /
+   1.62 mm (those are along the curve). The chord-side steps of 2.0 / 1.9 are surface-length ratios. The reading of G2
+   does not change (the first wake step is 3-4 times, the chord-side step about 2).
+3. V3 is recorded for all six meshes; the test asserts it for M-R only.
