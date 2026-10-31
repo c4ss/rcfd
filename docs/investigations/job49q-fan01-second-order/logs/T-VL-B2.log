@@ -1,0 +1,35 @@
+    Finished `release` profile [optimized] target(s) in 0.22s
+     Running tests\fan01_second_order_w49q.rs (target\release\deps\fan01_second_order_w49q-902dda3afce79e4c.exe)
+
+running 1 test
+W49Q T-VL-B2 it 250: res_u 1.002e-3 res_p 6.254e-4 torque 2.0287 dpts 64.234 (24.1 s)
+W49Q T-VL-B2 it 500: res_u 1.004e-3 res_p 6.287e-4 torque 2.0287 dpts 64.233 (47.0 s)
+test t_vl_b2 has been running for over 60 seconds
+W49Q T-VL-B2 it 750: res_u 1.004e-3 res_p 6.281e-4 torque 2.0287 dpts 64.233 (69.8 s)
+W49Q T-VL-B2 it 1000: res_u 1.004e-3 res_p 6.270e-4 torque 2.0287 dpts 64.233 (92.9 s)
+W49Q T-VL-B2 it 1250: res_u 1.603e-3 res_p 1.066e-3 torque 2.0403 dpts 60.629 (115.5 s)
+W49Q T-VL-B2 it 1500: res_u 1.595e-3 res_p 1.131e-3 torque 2.0403 dpts 60.643 (138.3 s)
+W49Q T-VL-B2 it 1750: res_u 1.591e-3 res_p 1.055e-3 torque 2.0403 dpts 60.638 (161.0 s)
+W49Q T-VL-B2 it 2000: res_u 1.594e-3 res_p 1.035e-3 torque 2.0403 dpts 60.631 (183.4 s)
+W49Q T-VL-B2 it 2250: res_u 1.592e-3 res_p 1.086e-3 torque 2.0404 dpts 60.649 (208.0 s)
+W49Q T-VL-B2 it 2500: res_u 1.598e-3 res_p 1.061e-3 torque 2.0403 dpts 60.634 (233.3 s)
+W49Q T-VL-B2 it 2750: res_u 1.588e-3 res_p 1.097e-3 torque 2.0404 dpts 60.639 (256.0 s)
+W49Q T-VL-B2 it 3000: res_u 1.585e-3 res_p 1.077e-3 torque 2.0404 dpts 60.642 (278.9 s)
+W49Q T-VL-B2 RESULT {"adr":"0180","arm":"T-VL","arm_median_res_p":0.001053776137890333,"arm_median_res_u":0.0015907609884888577,"budget_hit":false,"case_value":"tvd_van_leer","d_dpts":0.05040087062447792,"d_torque":0.00471875124295423,"dpts_end":60.64169447339555,"dpts_gap_measured":-0.5206190160205886,"dpts_ref_mean":63.860309679595964,"dpts_switch":64.23270667037504,"dpts_vs_nh3":0.3254146061109775,"du_end":11.493165140981525,"du_switch":8.247795155256615,"end_res_p":0.001077134926424931,"end_res_u":0.0015846529183349942,"id":"T-VL-B2","is_converged_end":false,"limits":{"C1":false,"C2":false,"C3":false},"mesh":"B2","n_cells":13627,"reached":null,"record_k":null,"ref_median_res_p":0.0006232756991793002,"ref_median_res_u":0.0010038281648462864,"res_nut_end":0.26367238532137366,"rho_du":1.3934833400483424,"rho_med":1.690706278582488,"seconds":278.8698632,"stopped":null,"top5_end":[{"cell":157,"du":4.116843139554269,"r":0.12427891445117657,"z":0.1716220469622247},{"cell":107,"du":3.617767947791232,"r":0.12427990456057164,"z":0.17144889452112014},{"cell":621,"du":3.5524193295465216,"r":0.12490260453777288,"z":0.17155648935692755},{"cell":7,"du":2.9691851578292585,"r":0.12428034394232657,"z":0.17196315868758238},{"cell":1235,"du":2.879612503665399,"r":0.125648816745695,"z":0.17106999958369265}],"top5_switch":[7,621,57,1235,107],"torque_end":2.0403548050177647,"torque_gap_measured":-0.04745340568731804,"torque_ref_mean":2.030772096662482,"torque_switch":2.028693635697279,"torque_vs_nh3":0.06579335824162379}
+W49Q T-VL-B2 reached None conv false rho_med 1.691e0 rho_du 1.393e0 torque 2.0404 (ref mean 2.0308, D 0.0047) dpts 60.642 (ref mean 63.860, D 0.0504); limits {"C1":false,"C2":false,"C3":false}
+W49Q refinement {"D_P_B2":0.05040087062447792,"D_P_B3":0.13394808434313965,"D_T_B2":0.00471875124295423,"D_T_B3":0.013365652693795688,"RN":true,"RS":true,"arm":"T-VL","order_P":2.89453653903089,"order_T":3.0831738591159956,"ratio_P":0.37627167922285615,"ratio_T":0.3530505655847743}
+W49Q T-VL RN true RS Some(true)
+
+thread 't_vl_b2' (51640) panicked at crates\rcfd-api\tests\fan01_second_order_w49q.rs:445:5:
+"T-VL-B2": missed ["C1", "C2", "C3"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test t_vl_b2 ... FAILED
+
+failures:
+
+failures:
+    t_vl_b2
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 278.88s
+
+error: test failed, to rerun pass `-p rcfd-api --test fan01_second_order_w49q`

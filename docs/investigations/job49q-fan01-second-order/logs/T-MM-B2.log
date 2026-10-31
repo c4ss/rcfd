@@ -1,0 +1,37 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized] target(s) in 0.30s
+     Running tests\fan01_second_order_w49q.rs (target\release\deps\fan01_second_order_w49q-902dda3afce79e4c.exe)
+
+running 1 test
+W49Q T-MM-B2 it 250: res_u 1.002e-3 res_p 6.254e-4 torque 2.0287 dpts 64.234 (27.4 s)
+W49Q T-MM-B2 it 500: res_u 1.004e-3 res_p 6.287e-4 torque 2.0287 dpts 64.233 (53.1 s)
+test t_mm_b2 has been running for over 60 seconds
+W49Q T-MM-B2 it 750: res_u 1.004e-3 res_p 6.281e-4 torque 2.0287 dpts 64.233 (79.3 s)
+W49Q T-MM-B2 it 1000: res_u 1.004e-3 res_p 6.270e-4 torque 2.0287 dpts 64.233 (105.6 s)
+W49Q T-MM-B2 it 1250: res_u 1.871e-3 res_p 1.045e-3 torque 2.0591 dpts 60.036 (131.4 s)
+W49Q T-MM-B2 it 1500: res_u 1.871e-3 res_p 1.042e-3 torque 2.0590 dpts 60.030 (157.6 s)
+W49Q T-MM-B2 it 1750: res_u 1.872e-3 res_p 1.038e-3 torque 2.0590 dpts 60.035 (184.2 s)
+W49Q T-MM-B2 it 2000: res_u 1.871e-3 res_p 1.049e-3 torque 2.0590 dpts 60.028 (210.2 s)
+W49Q T-MM-B2 it 2250: res_u 1.878e-3 res_p 1.038e-3 torque 2.0590 dpts 60.035 (236.0 s)
+W49Q T-MM-B2 it 2500: res_u 1.869e-3 res_p 1.039e-3 torque 2.0590 dpts 60.029 (262.3 s)
+W49Q T-MM-B2 it 2750: res_u 1.874e-3 res_p 1.038e-3 torque 2.0590 dpts 60.032 (288.6 s)
+W49Q T-MM-B2 it 3000: res_u 1.869e-3 res_p 1.042e-3 torque 2.0590 dpts 60.031 (314.7 s)
+W49Q T-MM-B2 RESULT {"adr":"0180","arm":"T-MM","arm_median_res_p":0.0010328354525303606,"arm_median_res_u":0.0018720911456985441,"budget_hit":false,"case_value":"tvd_minmod","d_dpts":0.05997063215824927,"d_torque":0.013922662320294434,"dpts_end":60.03056653828903,"dpts_gap_measured":-0.5254500668909957,"dpts_ref_mean":63.860309679595964,"dpts_switch":64.23270667037504,"dpts_vs_nh3":0.3120574943345579,"du_end":11.641596273052189,"du_switch":8.247795155256615,"end_res_p":0.0010415094124798941,"end_res_u":0.0018694119415336,"id":"T-MM-B2","is_converged_end":false,"limits":{"C1":false,"C2":false,"C3":false},"mesh":"B2","n_cells":13627,"reached":null,"record_k":null,"ref_median_res_p":0.0006232756991793002,"ref_median_res_u":0.0010038281648462864,"res_nut_end":0.16336951194733323,"rho_du":1.4114798020453483,"rho_med":1.8649518027671725,"seconds":314.723159,"stopped":null,"top5_end":[{"cell":157,"du":3.8522333712467294,"r":0.12427891445117657,"z":0.1716220469622247},{"cell":621,"du":3.396494418935856,"r":0.12490260453777288,"z":0.17155648935692755},{"cell":1235,"du":3.2410204641530074,"r":0.125648816745695,"z":0.17106999958369265},{"cell":107,"du":3.0322812812448565,"r":0.12427990456057164,"z":0.17144889452112014},{"cell":7,"du":2.5910118253788537,"r":0.12428034394232657,"z":0.17196315868758238}],"top5_switch":[7,621,57,1235,107],"torque_end":2.05904585081379,"torque_gap_measured":-0.038727427257801136,"torque_ref_mean":2.030772096662482,"torque_switch":2.028693635697279,"torque_vs_nh3":0.0755567544994723}
+W49Q T-MM-B2 reached None conv false rho_med 1.865e0 rho_du 1.411e0 torque 2.0590 (ref mean 2.0308, D 0.0139) dpts 60.031 (ref mean 63.860, D 0.0600); limits {"C1":false,"C2":false,"C3":false}
+W49Q refinement {"D_P_B2":0.05997063215824927,"D_P_B3":0.15139589897523126,"D_T_B2":0.013922662320294434,"D_T_B3":0.007272378537434772,"RN":false,"RS":false,"arm":"T-MM","order_P":2.742322342756257,"order_T":-1.9231916567539826,"ratio_P":0.3961179435121992,"ratio_T":1.9144578694064314}
+W49Q T-MM RN false RS Some(false)
+
+thread 't_mm_b2' (64136) panicked at crates\rcfd-api\tests\fan01_second_order_w49q.rs:445:5:
+"T-MM-B2": missed ["C1", "C2", "C3"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test t_mm_b2 ... FAILED
+
+failures:
+
+failures:
+    t_mm_b2
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 314.74s
+
+error: test failed, to rerun pass `-p rcfd-api --test fan01_second_order_w49q`
