@@ -308,7 +308,8 @@ M-R-B3 ran alone and its record was committed (16bebbc) before M-R-B2 ran. No ru
   printed digits (B3 1.089e-3 / 4.87e-4, 1.9177, 1.9176, 46.704, 5.742; B2 1.004e-3 / 6.23e-4, 2.0308, 63.860, 8.248).
 - **V2 met**: `w49r_default_meshes_are_bit_identical` (key absent and `"capped"`), all non-ignored `rcfd-mesh` tests, the
   5 non-ignored `fan01_stall_w43c.rs` tests, `cgrid_case_w34a`, `fan01_mesh_w35d`, `w49l_empty_mask_is_bit_identical`,
-  `w49n_field_none_is_bit_identical` and the 3 `baseline_hashes.rs` tests pass unchanged.
+  `w49n_field_none_is_bit_identical`, the 3 `baseline_hashes.rs` tests and the `rcfd-api` library tests (106) pass
+  unchanged.
 - **V3**: met for M-R on B3 and B2; failed for M-W (both meshes) and M-RW (B3), see amendment 1.
 
 ### Runs
@@ -369,6 +370,12 @@ No default, limit or known miss of another ADR changes.
 3. **V2 ran beside M-R-B3** in separate processes. The results are deterministic, and M-R-B3 stayed well inside its budget.
 4. The workspace gate was not run (fmt and clippy only on the touched targets: `rcfd-mesh` lib, `rcfd-api` lib and the
    new test). The local Jacobian was not built (optional).
+5. **Commit order.** Amendment 1 (f556d86) is committed before the generator change (dd73d0c). V3 was evaluated on the
+   uncommitted working tree, and dd73d0c then recorded that tree unchanged. The amendment's "written after the generator
+   change" is true of the working tree, not of the history.
+6. **The withdrawal reason.** Amendment 1 cites "the brief allows no extra arms". That clause is the stop rule after
+   misses, and it does not forbid correcting a defective arm within the cap of three. The reason that stands is the other
+   one: a replacement wake rule would have been chosen by trying rules until one builds.
 
 ### Questions for the maintainer
 
@@ -377,8 +384,9 @@ No default, limit or known miss of another ADR changes.
    pseudo-time. Look at whether the corner pocket keeps oscillating at a physical frequency. If it does, a steady
    converged solution may not exist at this operating point, and the cycle-mean functionals (ADR 0180 question 3) are
    the right report.
-2. **Test G2 with more wake cells?** A wake rule with a junction step near 2 needs more than `n_down` cells, and that
-   changes the family. Recommendation: not before question 1. The B2 cycle stayed at the site when the strongest
+2. **Test G2?** There are two options: a capped wake variant at the same `n_down`, which reduces the junction step less
+   and is picked for buildability; or more wake cells, which changes the family. Recommendation: neither before
+   question 1. The B2 cycle stayed at the site when the strongest
    neighbouring mesh feature was removed.
 3. **Keep the opt-in `mesh.fan.c_grid_grading` key?** Recommendation: keep it, marked experimental, until question 1 is
    answered, then remove it unless it is used. M-R moves torque toward the measured value (-3.0 % on B2), but outside
