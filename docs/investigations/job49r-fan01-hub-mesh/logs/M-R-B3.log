@@ -1,0 +1,35 @@
+   Compiling rcfd-api v0.1.0 (E:\projects\cfd\rcfd\.claude\worktrees\job49r\crates\rcfd-api)
+    Finished `release` profile [optimized] target(s) in 2.74s
+     Running tests\fan01_hub_mesh_w49r.rs (target\release\deps\fan01_hub_mesh_w49r-d63bdf747d0dd4a2.exe)
+
+running 1 test
+W49R V3 M-R-B3 {"V3":true,"arm":"M-R","construction_step":0,"first_layer_rel_to_h1":6.90338124024594e-15,"grading":"radial_geometric","hash":"0xd497b6394cc01b62","max_nonorth_deg":78.39324741887627,"max_skewness":1.3655284568980044,"mesh":"B3","n_cells":4920,"radial_max_ratio":2.9137167054502937,"simulation_accepts":true,"span_thickness":[0.000565393636120376,0.0016473968827191154,0.004800047817685116,0.013985979513348568,0.040751182150126825,0.040751182150126825,0.013985979513348568,0.004800047817685116,0.0016473968827191432,0.0005653936361203482],"wake_dz_hub":[0.0024084284269053624,0.010335770949046502,0.04435596255123908,0.05710016192719092,0.05710016192719092,0.05710016192719092],"wake_max_ratio_hub":4.291500147391619}
+W49R M-R-B3 it 250: res_u 5.875e-4 res_p 2.722e-4 torque 2.0140 dpts 55.917 (9.5 s)
+test m_r_b3 has been running for over 60 seconds
+W49R M-R-B3 it 500: res_u 5.699e-4 res_p 2.515e-4 torque 2.0139 dpts 55.924 (18.6 s)
+W49R M-R-B3 it 750: res_u 5.774e-4 res_p 2.678e-4 torque 2.0139 dpts 55.906 (27.7 s)
+W49R M-R-B3 it 1000: res_u 5.332e-4 res_p 2.501e-4 torque 2.0138 dpts 55.906 (36.8 s)
+W49R M-R-B3 it 1250: res_u 5.850e-4 res_p 2.656e-4 torque 2.0138 dpts 55.893 (45.9 s)
+W49R M-R-B3 it 1500: res_u 5.968e-4 res_p 2.775e-4 torque 2.0138 dpts 55.889 (54.7 s)
+W49R M-R-B3 it 1750: res_u 5.729e-4 res_p 2.471e-4 torque 2.0139 dpts 55.892 (63.6 s)
+W49R M-R-B3 it 2000: res_u 5.535e-4 res_p 2.626e-4 torque 2.0139 dpts 55.911 (72.6 s)
+W49R M-R-B3 it 2250: res_u 6.018e-4 res_p 2.575e-4 torque 2.0140 dpts 55.918 (81.6 s)
+W49R M-R-B3 it 2500: res_u 5.602e-4 res_p 2.761e-4 torque 2.0139 dpts 55.922 (90.1 s)
+W49R M-R-B3 it 2750: res_u 5.648e-4 res_p 2.466e-4 torque 2.0138 dpts 55.903 (98.6 s)
+W49R M-R-B3 it 3000: res_u 5.371e-4 res_p 2.544e-4 torque 2.0139 dpts 55.908 (108.2 s)
+W49R M-R-B3 RESULT {"V3":{"V3":true,"arm":"M-R","construction_step":0,"first_layer_rel_to_h1":6.90338124024594e-15,"grading":"radial_geometric","hash":"0xd497b6394cc01b62","max_nonorth_deg":78.39324741887627,"max_skewness":1.3655284568980044,"mesh":"B3","n_cells":4920,"radial_max_ratio":2.9137167054502937,"simulation_accepts":true,"span_thickness":[0.000565393636120376,0.0016473968827191154,0.004800047817685116,0.013985979513348568,0.040751182150126825,0.040751182150126825,0.013985979513348568,0.004800047817685116,0.0016473968827191432,0.0005653936361203482],"wake_dz_hub":[0.0024084284269053624,0.010335770949046502,0.04435596255123908,0.05710016192719092,0.05710016192719092,0.05710016192719092],"wake_max_ratio_hub":4.291500147391619},"adr":"0181","arm":"M-R","arm_median_res_p":0.0002612163848430106,"arm_median_res_u":0.0005782381871325457,"budget_hit":false,"d_dpts":0.19706401858312023,"d_torque":0.05018337271950986,"dpts_end":55.90827418807406,"dpts_gap_measured":-0.558037358197043,"du_1000_self":4.656979444579381,"du_end":4.5956758158240545,"end_res_p":0.0002544117821605474,"end_res_u":0.0005370574867910581,"grading":"radial_geometric","hub_te_du2_share_end":0.03455303135199453,"id":"M-R-B3","is_converged_end":false,"limits":{"C1":false,"C2":false,"C3":false,"SB":false},"mesh":"B3","n_cells":4920,"reached":null,"ref":{"dpts_mean":46.70449810549708,"du_1000":5.742138973481199,"median_res_p":0.0004865176072742982,"median_res_u":0.001089303155503563,"seconds":47.0348614,"torque_1000":1.9177249776178935,"torque_mean":1.917619177269791},"res_nut_end":0.0986449921596468,"rho_du":0.8003421437635293,"rho_du_self":0.9868361822325236,"rho_med":0.5369104446321447,"seconds":108.1781111,"stopped":null,"top5_end":[{"cell":1067,"du":1.916132723421772,"r":0.13788891048492097,"tag":["C",23,2,3],"z":0.1332128412741587},{"cell":1313,"du":1.4126393080943773,"r":0.16444656561573687,"tag":["C",17,0,4],"z":0.11163939830713324},{"cell":1069,"du":1.3427784838687102,"r":0.1379167727368182,"tag":["C",25,2,3],"z":0.1462231535873196},{"cell":1675,"du":1.0768485170931819,"r":0.20570615141552626,"tag":["C",19,1,5],"z":0.12199326309122849},{"cell":97,"du":0.9396555633582059,"r":0.12421794119194057,"tag":["C",25,2,0],"z":0.14977213398336192}],"torque_end":2.013851775176801,"torque_gap_measured":-0.05982643549168959}
+W49R M-R-B3 reached None conv false rho_med 5.369e-1 rho_du 8.003e-1 torque 2.0139 (D 0.0502) dpts 55.908 (D 0.1971) te_share 0.035; limits {"C1":false,"C2":false,"C3":false,"SB":false}
+
+thread 'm_r_b3' (65016) panicked at crates\rcfd-api\tests\fan01_hub_mesh_w49r.rs:919:5:
+"M-R-B3": missed ["C1", "C2", "C3", "SB"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test m_r_b3 ... FAILED
+
+failures:
+
+failures:
+    m_r_b3
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 155.60s
+
+error: test failed, to rerun pass `-p rcfd-api --test fan01_hub_mesh_w49r`
