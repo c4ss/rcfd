@@ -365,7 +365,10 @@ fn zs(p: Vec3) -> (f64, f64) {
     (p[2], r * p[1].atan2(p[0]))
 }
 
-fn tag_json(t: (u8, usize, usize, usize)) -> Value {
+/// Generator tag of a cell: (block, a, b, k).
+type Tag = (u8, usize, usize, usize);
+
+fn tag_json(t: Tag) -> Value {
     let blk = match t.0 {
         0 => "C",
         1 => "F",
@@ -539,7 +542,7 @@ fn diagnose(mesh_id: &str) -> Value {
     let id_of = |t: (u8, usize, usize, usize)| tags.iter().position(|x| *x == t);
     let k_mid = n_span / 2;
     let i_mid = nd + n_chord / 2;
-    let shifted = |cells: &[usize], f: &dyn Fn((u8, usize, usize, usize)) -> (u8, usize, usize, usize)| -> Vec<usize> {
+    let shifted = |cells: &[usize], f: &dyn Fn(Tag) -> Tag| -> Vec<usize> {
         cells.iter().filter_map(|&c| id_of(f(tags[c]))).collect()
     };
     let site_c: Vec<usize> = site.iter().copied().filter(|&c| tags[c].0 == 0).collect();
