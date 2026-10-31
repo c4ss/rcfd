@@ -294,3 +294,95 @@ the key absent and with `c_grid_grading = "capped"`) and after V3 was evaluated 
    1.62 mm (those are along the curve). The chord-side steps of 2.0 / 1.9 are surface-length ratios. The reading of G2
    does not change (the first wake step is 3-4 times, the chord-side step about 2).
 3. V3 is recorded for all six meshes; the test asserts it for M-R only.
+
+## Addendum: results (2026-10-31)
+
+Data: `docs/investigations/job49r-fan01-hub-mesh/` (`D-B3.json`, `D-B2.json`, `V3.json`, `M-R-B3.json`, `M-R-B2.json`,
+`M-R-refinement.json`, `results.csv`, `logs/`). Release build, generator change in dd73d0c (opt-in), runs on dd73d0c.
+M-R-B3 ran alone and its record was committed (16bebbc) before M-R-B2 ran. No run reached its budget (B3 108 s, B2
+276 s, each plus the reference run) or tripped the divergence guard.
+
+### Validity
+
+- **V1 met** in both arm runs: the unchanged-mesh reference was rerun in the same process and reproduced step 1 to the
+  printed digits (B3 1.089e-3 / 4.87e-4, 1.9177, 1.9176, 46.704, 5.742; B2 1.004e-3 / 6.23e-4, 2.0308, 63.860, 8.248).
+- **V2 met**: `w49r_default_meshes_are_bit_identical` (key absent and `"capped"`), all non-ignored `rcfd-mesh` tests, the
+  5 non-ignored `fan01_stall_w43c.rs` tests, `cgrid_case_w34a`, `fan01_mesh_w35d`, `w49l_empty_mask_is_bit_identical`,
+  `w49n_field_none_is_bit_identical` and the 3 `baseline_hashes.rs` tests pass unchanged.
+- **V3**: met for M-R on B3 and B2; failed for M-W (both meshes) and M-RW (B3), see amendment 1.
+
+### Runs
+
+| Run | `reached` | `is_converged()` | `rho_med` | `rho_du` | `res_u` end | Torque end (D_T) | Delta p_ts end (D_P) | Hub TE share of `sum |du|^2` | End cycle (five largest `|du|`) |
+|---|---|---|---|---|---|---|---|---|---|
+| M-R-B3 | - | false | 0.537 | 0.800 | 5.4e-4 | 2.0139 (0.0502) | 55.91 (0.197) | 0.035 (default 0.179) | 0.9-1.9 m/s: pressure side k 3 (r 0.138, z 0.13-0.15), LE root k 4-5, one hub cell k 0 |
+| M-R-B2 | - | false | 0.699 | 0.756 | 7.1e-4 | 2.0771 (0.0228) | 69.08 (0.0818) | 0.230 (default 0.404) | 1.2-1.6 m/s: **c7, c107, c621** (hub trailing edge, i 7, k 0-1) and pressure side k 5 (r 0.142) |
+
+Neither run converged, so the end values are cycle samples. The hub TE share counts the first wake and last chord
+columns at `k <= 2`; the default values are from `D-B3` / `D-B2` at iteration 1000.
+
+Gap to the measured values (a report, not a limit; cycle samples): torque -6.0 % (B3) and -3.0 % (B2); Delta p_ts
+-55.8 % and -45.4 %.
+
+### Limits
+
+| Arm | C1 B3 | C2 B3 | C3 B3 | C1 B2 | C2 B2 | C3 B2 | RN | SB B3 | SB B2 |
+|---|---|---|---|---|---|---|---|---|---|
+| M-R | MISSED | MISSED | MISSED | MISSED | MISSED | MISSED | met (D_T 0.050 -> 0.023, D_P 0.197 -> 0.082; ratios 0.45 / 0.42) | **MISSED** (D_T 0.050, D_P 0.197) | **MISSED** (D_T 0.0228 > 0.02, D_P 0.0818 > 0.08) |
+| M-W | withdrawn (amendment 1) | | | | | | | | |
+| M-RW | withdrawn (amendment 1) | | | | | | | | |
+
+**No arm is accepted.** Predictions: P1 holds; P2 is missed (`rho_du` 0.76, not below 0.5); P3, P4 and PS are not
+evaluable (arms withdrawn); P5 holds. Known misses: `m_r_b3_known_miss`, `m_r_b2_known_miss`.
+
+### Reading (by the registered rules)
+
+**Rule 6 applies: every arm that could run missed. The job stops here; no further arm was run.**
+
+1. **Removing the radial stack-to-middle jump does not remove the cycle.** With the largest radial step down from 36.2 to
+   2.91 (B3) and from 4.28 to 1.81 (B2), the residual medians fall by about a third to a half (`rho_med` 0.54 / 0.70),
+   but the velocity change at the end is 76-80 % of the stalled reference, and the run's own `|du|` does not decay
+   between iterations 1000 and 3000 (ratio 0.99 / 1.05).
+2. **Mechanism (rule 5).** On B2 the cycle stays at the hub trailing-edge cells (c7, c107, c621 are three of the five
+   largest; share 0.23, above a third of the default's 0.40). So the B2 hub cycle does not depend on G1 at the tested
+   size. On B3 it moves off the hub trailing edge (share 0.035 against 0.179) to pressure-side mid-chord cells at k 3 and
+   the leading-edge root, but the hub trailing edge is not the B3 default stall site, so this says little.
+3. **The answer moves too much.** M-R raises the torque by 5.0 % (B3) and 2.3 % (B2) and Delta p_ts by 20 % and 8 %. That is
+   outside the sanity band on both meshes (on B2 just outside). The difference shrinks with refinement (RN met; implied
+   order 2.3-2.6), which fits a consistent change of the radial resolution: M-R coarsens mid-span (B2 16.5 -> 36 mm) and
+   thickens hub layers 1-2. These are cycle samples, so I read nothing into the order.
+4. **G2 (the wake step at the trailing edge) is untested.** No rule that keeps the junction step near 2 builds with the
+   given `n_down` (amendment 1).
+5. Together with the step-1 diagnosis: the site is not a geometric outlier, and removing the strongest mesh feature
+   next to it leaves the B2 cycle where it was. **The evidence points at the flow at the site** (a near-stagnant,
+   partly reversed corner pocket behind the hub trailing edge, oscillating at the order of its own speed) rather than at
+   a mesh defect. This is a reading, not a proof: G2 and local refinement were not tested.
+
+No default, limit or known miss of another ADR changes.
+
+### Deviations
+
+1. **Amendment 1**: two of the three registered arms were withdrawn before any run because their meshes do not build
+   (V3). The registration's G2 numbers were wall-curve ratios; amendment 1 corrected them to axial steps before any run.
+2. **V1 interpretation**: "reproduce step 1" was met by rerunning the 1000-iteration unchanged-mesh reference inside
+   each arm test (about 45 s on B3, 100 s on B2, outside the arm's budget clock), not by reading the step-1 records.
+3. **V2 ran beside M-R-B3** in separate processes. The results are deterministic, and M-R-B3 stayed well inside its budget.
+4. The workspace gate was not run (fmt and clippy only on the touched targets: `rcfd-mesh` lib, `rcfd-api` lib and the
+   new test). The local Jacobian was not built (optional).
+
+### Questions for the maintainer
+
+1. **Next job: is the hub trailing-edge pocket physically unsteady?** Recommendation: yes. Register a report-only check of
+   whether a steady state exists there, for example a time-accurate (PIMPLE) run on B2 from the stalled state, or local
+   pseudo-time. Look at whether the corner pocket keeps oscillating at a physical frequency. If it does, a steady
+   converged solution may not exist at this operating point, and the cycle-mean functionals (ADR 0180 question 3) are
+   the right report.
+2. **Test G2 with more wake cells?** A wake rule with a junction step near 2 needs more than `n_down` cells, and that
+   changes the family. Recommendation: not before question 1. The B2 cycle stayed at the site when the strongest
+   neighbouring mesh feature was removed.
+3. **Keep the opt-in `mesh.fan.c_grid_grading` key?** Recommendation: keep it, marked experimental, until question 1 is
+   answered, then remove it unless it is used. M-R moves torque toward the measured value (-3.0 % on B2), but outside
+   the registered band and from cycle samples. That is a resolution effect, not a convergence fix, and no default
+   should change on it.
+4. **The "hub mid-chord" label** in ADRs 0111 and 0175-0180 means the hub trailing edge (z 0.1716). Recommendation: leave
+   those ADRs as written and let this ADR be the correction. Their numbers do not change.
