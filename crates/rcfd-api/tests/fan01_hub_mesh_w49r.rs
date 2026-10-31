@@ -942,8 +942,8 @@ fn refinement(arm: &str) -> (bool, Value) {
 // B3 arms (calibration); budget 10 min each.
 
 #[test]
-#[ignore = "ADR 0181 arm M-R on B3 (about 3 min in release with the reference; budget 10 min)"]
-fn m_r_b3() {
+#[ignore = "known miss (ADR 0181 C1, C2, C3, SB; P1 held): M-R on B3 keeps the cycle (rho_du 0.80, res_u 5.4e-4), moved to pressure-side cells at k 3 and the LE root; torque D 0.050, Delta p_ts D 0.197 (about 3 min in release with the reference; budget 10 min)"]
+fn m_r_b3_known_miss() {
     let r = arm_run("M-R", "B3", 600.0);
     assert_limits(&r, &["C1", "C2", "C3", "SB"]);
 }
@@ -972,8 +972,8 @@ fn b2_arm(arm: &str) {
 }
 
 #[test]
-#[ignore = "ADR 0181 arm M-R on B2 (about 7 min in release with the reference; budget 30 min; needs M-R-B3 in W49R_OUT)"]
-fn m_r_b2() {
+#[ignore = "known miss (ADR 0181 C1, C2, C3, SB; RN met): M-R on B2 keeps the cycle at the hub trailing-edge cells c7, c107, c621 (rho_du 0.76); torque D 0.0228 > 0.02, Delta p_ts D 0.0818 > 0.08 (about 7 min in release with the reference; budget 30 min; needs M-R-B3 in W49R_OUT)"]
+fn m_r_b2_known_miss() {
     b2_arm("M-R");
 }
 
