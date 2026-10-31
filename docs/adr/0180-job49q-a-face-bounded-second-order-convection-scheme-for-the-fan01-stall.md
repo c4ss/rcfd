@@ -244,3 +244,116 @@ Nothing here changes a default, a limit of another ADR, or a known miss.
 - `docs/investigations/job49q-fan01-second-order/`: the JSON, `results.csv` and the logs, committed as soon as they
   exist.
 - This ADR's addendum; one sentence appended at the end of the robustness row of `docs/milestone-fan.md`.
+
+## Addendum: results (2026-10-31)
+
+Data: `docs/investigations/job49q-fan01-second-order/` (one JSON per run, `*-refinement.json`, `results.csv`, `logs/`).
+Release, on d17b2ca (no solver change). Each run was made once: T-MM-B3 and T-VA-B3 side by side, then T-VL-B3 alone; the
+three B3 records were committed (206fc97, 98426a5) before any B2 run; then T-MM-B2 and T-VA-B2 side by side, T-VL-B2
+alone. No run reached its budget (B3 about 2 min, B2 about 5 min); no run tripped the divergence guard.
+
+### Validity
+
+- **V1 met.** B3 has 4 920 cells; medians 1.089e-3 / 4.87e-4; torque 1.9177 N m at 1000 (every B3 run).
+- **V2 met.** B2 has 13 627 cells; medians 1.004e-3 / 6.23e-4; reference means 2.0308 N m and 63.860 Pa (every B2 run).
+- **V3 met.** `w44a_hooks_at_defaults_are_bit_identical`, `frozen_limiter_hook_is_bit_identical_at_the_freeze`,
+  `w45a_p5_defaults_are_bit_identical_to_main`, `w49l_empty_mask_is_bit_identical`, `w49n_field_none_is_bit_identical`
+  and the three `baseline_hashes.rs` tests pass unchanged.
+
+### Runs
+
+Every run switches at iteration 1000 and runs to 3000. `|du|_2` at the switch: 5.74 m/s (B3), 8.25 m/s (B2).
+
+| Run | `reached` | `is_converged()` | `rho_med` | `rho_du` | `res_u` end | Torque end (D_T) | Delta p_ts end (D_P) | End cycle (five largest `|du|`) |
+|---|---|---|---|---|---|---|---|---|
+| T-MM-B3 | - | false | 2.20 | 0.849 | 2.2e-3 | 1.9037 (0.0073) | 39.63 (0.151) | 1.0-1.4 m/s, hub, r 0.124-0.126, z 0.13-0.17 |
+| T-VA-B3 | - | false | 0.519 | 0.306 | 4.5e-4 | 1.9110 (0.0035) | 41.59 (0.109) | 0.3-0.8 m/s, shroud tip layer r 0.248-0.249, z 0.119 |
+| T-VL-B3 | - | false | 4.88 | 3.39 | 3.3e-3 | 1.8920 (0.0134) | 40.45 (0.134) | 3-5 m/s, hub r 0.126, z 0.10-0.12 (leading-edge root) |
+| T-MM-B2 | - | false | 1.87 | 1.41 | 1.9e-3 | 2.0590 (0.0139) | 60.03 (0.060) | 2.6-3.9 m/s, hub r 0.124-0.126, z 0.171-0.172 |
+| T-VA-B2 | - | false | 1.87 | 1.48 | 1.9e-3 | 2.0545 (0.0117) | 60.82 (0.048) | 2.8-3.8 m/s, the same hub cells |
+| T-VL-B2 | - | false | 1.69 | 1.39 | 1.6e-3 | 2.0404 (0.0047) | 60.64 (0.050) | 2.9-4.1 m/s, the same hub cells |
+
+None of these runs converged, so every end value is one sample of a cycle, not a solution.
+
+Gap to the measured values (2.142 N m, 126.5 Pa; a report, not a limit; cycle samples): torque -11.1 / -10.8 / -11.7 % on
+B3 and -3.9 / -4.1 / -4.7 % on B2 (T-MM / T-VA / T-VL); Delta p_ts -69 / -67 / -68 % on B3 and -53 / -52 / -52 % on B2.
+
+Record K (the Barth-Jespersen `linear_upwind` face blend at iteration 1000 on B3; 41 340 face-components with
+`|phi_D - phi_U| > 1e-3` m/s, 258 of them at the faces of the 20 largest-`|du|` cells):
+
+| Share | All faces | Top-20 cells' faces |
+|---|---|---|
+| `kappa > 1/2` | 35.9 % | 27.5 % |
+| `kappa > 1` | 10.0 % | 13.2 % |
+| `kappa < 0` | 14.9 % | 22.5 % |
+
+### Limits
+
+| Arm | C1 B3 | C2 B3 | C3 B3 | C1 B2 | C2 B2 | C3 B2 | RN | RS |
+|---|---|---|---|---|---|---|---|---|
+| T-MM | MISSED | MISSED | MISSED | MISSED | MISSED | MISSED | **MISSED** (D_T 0.0073 -> 0.0139) | MISSED |
+| T-VA | MISSED | MISSED | MISSED | MISSED | MISSED | MISSED | **MISSED** (D_T 0.0035 -> 0.0117) | MISSED |
+| T-VL | MISSED | MISSED | MISSED | MISSED | MISSED | MISSED | met (D_T 0.0134 -> 0.0047, D_P 0.134 -> 0.050) | met |
+
+RN and RS are computed as registered, from the end samples. With no run converged they compare cycle samples, so T-VL's
+"met" says nothing about consistency and I read nothing into it.
+
+**No arm is accepted.** Predictions: Q1, Q2 and Q3 are missed; Q4 holds (T-VL misses C3 on B3); Q5 is not evaluable (no
+accepted arm); QK holds as worded (13.2 % against 10.0 %), but see reading 3. Known misses: `t_mm_b3_known_miss`,
+`t_va_b3_known_miss`, `t_vl_b3_known_miss`, `t_mm_b2_known_miss`, `t_va_b2_known_miss`, `t_vl_b2_known_miss`. The
+report-only run from the start (`from_start_b3`) was not run: reading rule 1 does not apply.
+
+### Reading (by the registered rules)
+
+**Rule 6 applies: all three arms miss. The job stops here; no further arm was run.**
+
+1. **Bounding the face blend is not enough.** Minmod has `kappa <= lambda` on every face, so its frozen convection
+   operator does not anti-dissipate, and it still cycles on both meshes (worse than the baseline: `rho_med` 2.2 / 1.9).
+   So the energy argument for the frozen convection operator, which is the reason for the arms, does not capture what
+   drives the stall. Whatever it is lies outside that operator alone: the SIMPLEC coupling, the rotating-frame source,
+   SST, or the switching of the limiter itself (minmod has kinks at r = 0 and 1).
+2. **On B2 every scheme cycles at the same hub cells.** The B2 cycles of minmod, van Albada and van Leer sit in the
+   same five hub cells (r 0.124-0.126, z 0.171-0.172). That is the axial height of the hub cycle that took over on B3 under
+   F-R (ADRs 0177 and 0178) and of ADR 0111's leading linear mode. A site that survives a change of limiter family,
+   reconstruction (face TVD against cell extrapolation) and smoothness is unlikely to be a limiter property. I report it
+   as an observation; this job does not attribute it.
+3. **Record K.** The Barth-Jespersen face value lies beyond the central blend (`kappa > 1/2`) on about a third of all
+   faces, and beyond the downwind value (`kappa > 1`) on a tenth of them. That is everywhere, not just at the stall
+   cells: at the top-20 cells `kappa > 1/2` is in fact rarer (27.5 %), and only `kappa > 1` and `kappa < 0` are
+   somewhat more common. So the anti-dissipative faces are not localised where the cycle lives. This agrees with
+   reading 1.
+4. **Van Albada on B3 came closest** (`rho_med` 0.52, `res_u` 4.5e-4), with the residual cycle moved to the shroud tip
+   layer. On B2 it is back at the hub, at the stall level. Q3 is missed on both meshes.
+5. The functionals of the TVD cycles are 11-15 % lower in Delta p_ts on B3 than the Barth-Jespersen cycle mean, and
+   within 1.4 % in torque. On B2, which is closer to the measured torque, the differences are 4.8-6.0 % (Delta p_ts) and
+   0.5-1.4 % (torque). These are values from cycles, not solutions.
+
+Nothing here is a statement about accuracy or agreement with the measured fan. No default, limit or known miss of another
+ADR changes.
+
+### Deviations
+
+1. **The JSON location.** `W49Q_OUT` was a relative path in the B3 runs, and cargo runs tests from the crate directory.
+   So the three B3 JSON files were written under `crates/rcfd-api/docs/...`. The B3 logs were committed first (206fc97);
+   the JSON files were then moved, unchanged, and committed in 98426a5, before any B2 run. The B2 runs used an absolute
+   path.
+2. **V3 ran beside T-VL-B2.** The V3 tests ran in a separate process while T-VL-B2 was running. The results are
+   deterministic, and the T-VL-B2 run did not reach its budget.
+3. **Interpreting RN and RS.** The registration did not say how to read RN and RS when no run converges. They are
+   reported as computed, and not interpreted (above).
+
+### Questions for the maintainer
+
+1. **What "second order everywhere" means.** Is a limited scheme of the baseline's class acceptable (second order where
+   the solution is smooth, limited at extrema, no cell forced to first order by a rule)? Recommendation: yes. Every
+   unlimited second-order scheme tried on these meshes trips the guard within 30 iterations (ADR 0110), so the stricter
+   reading has no runnable candidate.
+2. **Next job: the z 0.17 hub site itself, not another limiter?** Recommendation: yes. On B2 all three limiter families cycle
+   at the same hub cells, and on B3 the Barth-Jespersen run with F-R cycled at the same axial height (ADR 0177). Register a diagnosis of that site's mesh and
+   coupling: the cells' geometry against the C-grid construction (seam, hub wall layer, the junction at mid-chord), and
+   a localised Jacobian of the TVD map there (the ADR 0084 harness). The aim is to find whether a mesh change at that
+   site, which would keep the scheme second order everywhere, removes the cycle.
+3. **Meanwhile, keep the cycle-mean functionals with a band for the milestone?** ADR 0086 reports torque and Delta
+   p_ts as means over a cycle with a band. Recommendation: yes, keep them as the reported values until a converged
+   second-order state exists, and mark them as cycle values. No scheme tried so far changes the B2 torque by more than
+   1.4 % from the Barth-Jespersen cycle mean.
