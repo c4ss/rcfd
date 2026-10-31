@@ -347,6 +347,75 @@ fn graded_two_sided(len: f64, n: usize, h1: f64, g: f64, nb: usize) -> Result<Ve
     Ok(x)
 }
 
+/// The ratio `rho >= 1` for which `sizes(rho)` sums to `len` (bisection; `sizes` increases with `rho`), or 1 when even `rho = 1`
+/// overfills the length.
+fn solve_ratio(len: f64, sizes: impl Fn(f64) -> Vec<f64>) -> f64 {
+    if sizes(1.0).iter().sum::<f64>() >= len {
+        return 1.0;
+    }
+    let (mut a, mut b) = (1.0, 1e3);
+    for _ in 0..200 {
+        let c = 0.5 * (a + b);
+        if sizes(c).iter().sum::<f64>() > len {
+            b = c;
+        } else {
+            a = c;
+        }
+    }
+    0.5 * (a + b)
+}
+
+/// Offsets `0 .. len` from cell sizes, scaled to end exactly at `len`.
+fn offsets(len: f64, h: &[f64]) -> Vec<f64> {
+    let sc = len / h.iter().sum::<f64>();
+    let mut x = vec![0.0; h.len() + 1];
+    for (m, hm) in h.iter().enumerate() {
+        x[m + 1] = x[m] + hm * sc;
+    }
+    x[h.len()] = len;
+    x
+}
+
+/// ADR 0181 M-W: `n + 1` offsets `0 .. len` of cells `first rho^m` with one ratio solved to fill the length (no cap). When `n`
+/// cells of size `first` already fill the length the cells are uniform.
+fn geometric_cells(len: f64, n: usize, first: f64) -> Result<Vec<f64>, String> {
+    if n == 0 || !(len > 0.0) || !(first > 0.0) {
+        return Err(format!(
+            "needs a positive length, first cell and at least one cell (length {len:e}, first {first:e}, {n} cells)"
+        ));
+    }
+    let sizes = |rho: f64| -> Vec<f64> { (0..n).map(|m| first * rho.powi(m as i32)).collect() };
+    let h = if first * n as f64 >= len {
+        vec![len / n as f64; n]
+    } else {
+        sizes(solve_ratio(len, sizes))
+    };
+    Ok(offsets(len, &h))
+}
+
+/// ADR 0181 M-R: `n + 1` offsets `0 .. len` of cells `h1 rho^min(m, n - 1 - m)` (symmetric, first and last cell `h1`) with one
+/// ratio solved to fill the length: for a given count and end cell, the distribution with the smallest largest neighbour ratio.
+fn geometric_two_sided(len: f64, n: usize, h1: f64) -> Result<Vec<f64>, String> {
+    if n == 0 || !(len > 0.0) || !(h1 > 0.0) {
+        return Err(format!(
+            "needs a positive length, first cell and at least one cell (length {len:e}, first {h1:e}, {n} cells)"
+        ));
+    }
+    let sizes = |rho: f64| -> Vec<f64> { (0..n).map(|m| h1 * rho.powi(m.min(n - 1 - m) as i32)).collect() };
+    let h = if h1 * n as f64 >= len {
+        vec![len / n as f64; n]
+    } else {
+        sizes(solve_ratio(len, sizes))
+    };
+    let x = offsets(len, &h);
+    if !(x.windows(2).all(|w| w[1] > w[0])) {
+        return Err(format!(
+            "the geometric span layers are not increasing (length {len:e}, {n} cells)"
+        ));
+    }
+    Ok(x)
+}
+
 /// Largest cell as a multiple of the mean cell in the outer parts of a line (see [`capped_cells`]).
 const CAP_FACTOR: f64 = 1.5;
 
@@ -438,6 +507,13 @@ pub struct CGridOptions {
     /// wall normal and the 3-D surface normal, so that the wall-normal thickness of every stack cell is `h1 g^q` in every layer; the wake
     /// lines take the trailing-edge factor faded to 1 over the first quarter of the wake lines.
     pub lean_stack: bool,
+    /// ADR 0181 arm M-R (opt-in, experimental): the span layers from hub to tip are `h1 rho^min(k, n_span - 1 - k)` with one ratio
+    /// `rho` solved to fill the span ([`geometric_two_sided`]): no exact stack and no capped middle, so there is no
+    /// stack-to-middle jump. The first layer at each end stays `h1`; the tip gap is unchanged.
+    pub radial_geometric: bool,
+    /// ADR 0181 arm M-W (opt-in, experimental): the wake axial cells of every layer are `dz_te rho^m` with one ratio `rho` solved to
+    /// fill the wake ([`geometric_cells`]) instead of the growth capped at 1.5 times the mean wake cell.
+    pub wake_geometric: bool,
 }
 
 impl CGridOptions {
@@ -1071,7 +1147,12 @@ fn build_layer(
     let dz_te = (z_te - sp[nc - 1].0).abs().max(1e-12);
     // wake axial cells start at the trailing-edge spacing and stop growing at twice the mean cell
     let len_w = fan.axial_extent - z_te;
-    let zz = capped_cells(len_w, nd, dz_te, false).map_err(|e| err("n_down", e))?;
+    let zz = if opts.wake_geometric {
+        geometric_cells(len_w, nd, dz_te)
+    } else {
+        capped_cells(len_w, nd, dz_te, false)
+    }
+    .map_err(|e| err("n_down", e))?;
     let wk: Vec<(f64, f64)> = zz
         .iter()
         .map(|d| {
@@ -1705,7 +1786,12 @@ pub fn build_cgrid_mesh_with(
         n_core: spec.n_core,
     };
     let n_k = spec.n_span + spec.n_gap;
-    let rs_span = graded_two_sided(fan.r_tip - fan.r_hub, spec.n_span, h1, g, nb).map_err(|e| one(e, "n_span"))?;
+    let rs_span = if opts.radial_geometric {
+        geometric_two_sided(fan.r_tip - fan.r_hub, spec.n_span, h1)
+    } else {
+        graded_two_sided(fan.r_tip - fan.r_hub, spec.n_span, h1, g, nb)
+    }
+    .map_err(|e| one(e, "n_span"))?;
     // ADR 0079: with `gap_fit` the gap stacks start at the largest height for which both stacks and a middle of continuous growth fit
     let h_gap = if opts.gap_fit && spec.n_gap >= 2 * nb {
         let stack: f64 = (0..nb).map(|q| g.powi(q as i32)).sum();

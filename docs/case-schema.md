@@ -473,6 +473,9 @@ to the gap, a radial filter of the far grid between layers and two Laplace-start
 range with a located error (`0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`).
 `camber_seam_h` is `camber_seam` with a second local untangling after the in-plane smoothing and blade wall stacks whose wall-normal (not in-plane)
 thickness is `h1 g^q` on a leaning blade; it checks the same range as `camber_seam`.
+`mesh.fan.c_grid_grading` (experimental, ADR 0181, not accepted): `capped` (the default, as above), `radial_geometric` (span layers
+`h1 rho^min(k, n_span - 1 - k)` with one solved ratio, no stack-to-middle jump), `wake_geometric` (wake axial cells with one solved ratio
+from the trailing-edge spacing, no cap) or `radial_wake_geometric` (both).
 Measured quality and robustness are in docs/meshing.md.
 
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)

@@ -613,13 +613,378 @@ fn w49r_default_meshes_are_bit_identical() {
         ("B3", F3, 4920, 0xbe64f588a252d0b4u64),
         ("B2", F2, 13627, 0xcae52c4997c9463fu64),
     ] {
-        let case = Case::parse_toml(&case_toml(c)).unwrap();
-        let m = rcfd_api::sim::build_mesh(&case).unwrap();
-        println!("W49R {id} cells {} hash {:#018x}", m.n_cells(), m.content_hash());
-        assert_eq!(
-            (m.n_cells(), m.content_hash()),
-            (cells, hash),
-            "{id}: default mesh changed"
-        );
+        // the case without the key and with the explicit default value
+        for text in [case_toml(c), case_toml_g(c, Some("capped"))] {
+            let case = Case::parse_toml(&text).unwrap();
+            let m = rcfd_api::sim::build_mesh(&case).unwrap();
+            println!("W49R {id} cells {} hash {:#018x}", m.n_cells(), m.content_hash());
+            assert_eq!(
+                (m.n_cells(), m.content_hash()),
+                (cells, hash),
+                "{id}: default mesh changed"
+            );
+        }
     }
+}
+
+// ---------------------------------------------------------------- arms (ADR 0181, fixed before any arm mesh was built)
+
+/// The case of the harness with `mesh.fan.c_grid_grading = g` (None: the key absent).
+fn case_toml_g(c: Counts, g: Option<&str>) -> String {
+    let t = case_toml(c);
+    match g {
+        None => t,
+        Some(v) => t.replacen(
+            "growth = 1.2\n",
+            &format!("growth = 1.2\nc_grid_grading = \"{v}\"\n"),
+            1,
+        ),
+    }
+}
+
+fn grading_of(arm: &str) -> &'static str {
+    match arm {
+        "M-R" => "radial_geometric",
+        "M-W" => "wake_geometric",
+        "M-RW" => "radial_wake_geometric",
+        _ => panic!("unknown arm {arm}"),
+    }
+}
+
+/// The generator mesh of the case with the arm's flags (as `fan_case::build`), or the build error.
+fn try_generator_mesh_g(case: &Case, grading: &str) -> Result<CGridMesh, String> {
+    let mut o = CGridOptions::camber_seam_h_construction();
+    o.radial_geometric = grading.starts_with("radial");
+    o.wake_geometric = grading.contains("wake");
+    build_cgrid_mesh_with(&fan_of(case), &cgrid_spec_of(case), &o).map_err(|e| format!("{e:?}"))
+}
+
+fn generator_mesh_g(case: &Case, grading: &str) -> CGridMesh {
+    try_generator_mesh_g(case, grading).expect("C-grid builds")
+}
+
+/// V3 of one arm and mesh: same cell count, the simulation accepts the mesh, the targeted feature changed. Returns the record.
+fn v3(arm: &str, mesh_id: &str) -> (Value, bool) {
+    let c = if mesh_id == "B3" { F3 } else { F2 };
+    let g = grading_of(arm);
+    let case = Case::parse_toml(&case_toml_g(c, Some(g))).unwrap();
+    let cg = match try_generator_mesh_g(&case, g) {
+        Ok(m) => m,
+        Err(e) => {
+            let rec = json!({"arm": arm, "mesh": mesh_id, "grading": g, "builds": false, "error": e, "V3": false});
+            println!("W49R V3 {arm}-{mesh_id} {rec}");
+            return (rec, false);
+        }
+    };
+    let sim_mesh = rcfd_api::sim::build_mesh(&case).unwrap();
+    assert_eq!(
+        cg.mesh.content_hash(),
+        sim_mesh.content_hash(),
+        "generator mesh differs from the case mesh"
+    );
+    let n = cg.mesh.n_cells();
+    let n_span = c.5;
+    let nd = c.2;
+    let dr: Vec<f64> = cg.radii[..=n_span].windows(2).map(|w| w[1] - w[0]).collect();
+    let radial_max = dr
+        .windows(2)
+        .map(|w| (w[1] / w[0]).max(w[0] / w[1]))
+        .fold(0.0f64, f64::max);
+    let first_rel = (dr[0] - cg.h1).abs() / cg.h1;
+    // wake axial cells of layer 0, from the trailing edge (node i = nd) downstream (i decreasing)
+    let z: Vec<f64> = (0..=nd).rev().map(|i| cg.grid[cg.c_node(i, 0, 0)][2]).collect();
+    let dz: Vec<f64> = z.windows(2).map(|w| w[1] - w[0]).collect();
+    let wake_max = dz.windows(2).map(|w| w[1] / w[0]).fold(0.0f64, f64::max);
+    let q = rcfd_mesh::quality::compute_metrics(&cg.mesh);
+    let mx = |v: &[f64]| v.iter().cloned().fold(0.0f64, f64::max);
+    let (r_lim, w_lim) = if mesh_id == "B3" { (3.0, 2.25) } else { (1.9, 1.9) };
+    let cells = if mesh_id == "B3" { 4920 } else { 13627 };
+    let radial_ok = !g.starts_with("radial") || (first_rel < 1e-9 && radial_max <= r_lim);
+    let wake_ok = !g.contains("wake") || wake_max <= w_lim;
+    let sim_ok = Simulation::new(&case).is_ok();
+    let ok = n == cells && sim_ok && radial_ok && wake_ok;
+    let rec = json!({
+        "arm": arm, "mesh": mesh_id, "grading": g, "n_cells": n, "construction_step": cg.construction_step,
+        "hash": format!("{:#018x}", cg.mesh.content_hash()), "simulation_accepts": sim_ok,
+        "span_thickness": dr, "radial_max_ratio": radial_max, "first_layer_rel_to_h1": first_rel,
+        "wake_dz_hub": dz, "wake_max_ratio_hub": wake_max,
+        "max_nonorth_deg": mx(&q.non_orthogonality), "max_skewness": mx(&q.skewness),
+        "V3": ok,
+    });
+    println!("W49R V3 {arm}-{mesh_id} {rec}");
+    (rec, ok)
+}
+
+#[test]
+#[ignore = "ADR 0181 V3: the arm meshes build, keep their cell counts and change the targeted feature (about 1 min in release)"]
+fn w49r_v3_arm_meshes() {
+    let mut all = Vec::new();
+    let mut ok = true;
+    for arm in ["M-R", "M-W", "M-RW"] {
+        for m in ["B3", "B2"] {
+            let (r, o) = v3(arm, m);
+            // amendment 1: M-W and M-RW failed V3 and are withdrawn; V3 is asserted for M-R only
+            if arm == "M-R" {
+                ok &= o;
+            }
+            all.push(r);
+        }
+    }
+    write("V3.json", &json!(all));
+    assert!(ok, "V3 failed (defective set-up: amendment before any run)");
+}
+
+const N_RUN: usize = 3000;
+const N_REF: usize = 1000;
+const W: usize = 500;
+const FLOOR_T: f64 = 0.002;
+const FLOOR_P: f64 = 0.005;
+const SB_T: f64 = 0.02;
+const SB_P: f64 = 0.08;
+const T_MEAS: f64 = 2.142;
+const P_MEAS: f64 = 126.5;
+
+/// The unchanged-mesh reference of step 1 (V1): medians of iterations 501-1000, `|du|_2` at 1000, cycle means.
+struct Ref {
+    med_u: f64,
+    med_p: f64,
+    du: f64,
+    t_mean: f64,
+    p_mean: f64,
+    t_1000: f64,
+}
+
+fn reference(c: Counts) -> Ref {
+    let mut sim = Simulation::new(&Case::parse_toml(&case_toml(c)).unwrap()).unwrap();
+    let mut hist = Vec::new();
+    let mut f = Vec::new();
+    let mut prev = sim.velocity().values.clone();
+    for it in 1..=N_REF {
+        prev = sim.velocity().values.clone();
+        let st = sim.step();
+        hist.push((st.res_u, st.res_p));
+        if it > N_REF - W {
+            f.push(functionals(&sim));
+        }
+    }
+    Ref {
+        med_u: median(hist[N_REF - W..].iter().map(|h| h.0).collect()),
+        med_p: median(hist[N_REF - W..].iter().map(|h| h.1).collect()),
+        du: l2(&speed_change(&sim.velocity().values, &prev)),
+        t_mean: f.iter().map(|x| x.0).sum::<f64>() / f.len() as f64,
+        p_mean: f.iter().map(|x| x.1).sum::<f64>() / f.len() as f64,
+        t_1000: functionals(&sim).0,
+    }
+}
+
+fn arm_run(arm: &str, mesh_id: &str, budget_s: f64) -> Value {
+    let id = format!("{arm}-{mesh_id}");
+    let c = if mesh_id == "B3" { F3 } else { F2 };
+    let g = grading_of(arm);
+    let (v3rec, v3ok) = v3(arm, mesh_id);
+    assert!(v3ok, "{id}: V3 failed (defective set-up)");
+    // V1: the unchanged-mesh reference reproduces step 1
+    let tr = Instant::now();
+    let rf = reference(c);
+    let ref_s = tr.elapsed().as_secs_f64();
+    let v1 = if mesh_id == "B3" {
+        format!("{:.3e}", rf.med_u) == "1.089e-3"
+            && format!("{:.2e}", rf.med_p) == "4.87e-4"
+            && format!("{:.4}", rf.t_1000) == "1.9177"
+            && format!("{:.4}", rf.t_mean) == "1.9176"
+            && format!("{:.3}", rf.p_mean) == "46.704"
+            && format!("{:.3}", rf.du) == "5.742"
+    } else {
+        format!("{:.3e}", rf.med_u) == "1.004e-3"
+            && format!("{:.2e}", rf.med_p) == "6.23e-4"
+            && format!("{:.4}", rf.t_mean) == "2.0308"
+            && format!("{:.3}", rf.p_mean) == "63.860"
+            && format!("{:.3}", rf.du) == "8.248"
+    };
+    assert!(
+        v1,
+        "{id}: V1 failed: reference {:.3e} {:.2e} {:.4} {:.4} {:.3} {:.3}",
+        rf.med_u, rf.med_p, rf.t_1000, rf.t_mean, rf.p_mean, rf.du
+    );
+    // the arm, from iteration 1
+    let t0 = Instant::now();
+    let case = Case::parse_toml(&case_toml_g(c, Some(g))).unwrap();
+    let cg = generator_mesh_g(&case, g);
+    let mut sim = Simulation::new(&case).unwrap();
+    assert_eq!(cg.mesh.content_hash(), sim.geom.mesh.content_hash());
+    let tags = cg.cell_tags.clone();
+    let n = sim.geom.mesh.n_cells();
+    let mut hist: Vec<(f64, f64)> = Vec::new();
+    let mut prev = sim.velocity().values.clone();
+    let mut du_1000_self = f64::NAN;
+    let (mut reached, mut stopped, mut budget_hit) = (None, None, false);
+    for it in 1..=N_RUN {
+        prev = sim.velocity().values.clone();
+        let st = sim.step();
+        hist.push((st.res_u, st.res_p));
+        if it == N_REF {
+            du_1000_self = l2(&speed_change(&sim.velocity().values, &prev));
+        }
+        if it > N_REF && reached.is_none() && st.res_u < 1e-5 && st.res_p < 1e-5 {
+            reached = Some(it);
+        }
+        if !(st.res_u.is_finite() && st.continuity.is_finite()) || sim.steady_divergence().is_some() {
+            stopped = Some(it);
+            println!("W49R {id} STOP at {it}");
+            break;
+        }
+        if t0.elapsed().as_secs_f64() > budget_s {
+            budget_hit = true;
+            stopped = Some(it);
+            println!("W49R {id} BUDGET HIT at {it}");
+            break;
+        }
+        if it % 250 == 0 {
+            let f = functionals(&sim);
+            println!(
+                "W49R {id} it {it}: res_u {:.3e} res_p {:.3e} torque {:.4} dpts {:.3} ({:.1} s)",
+                st.res_u,
+                st.res_p,
+                f.0,
+                f.1,
+                t0.elapsed().as_secs_f64()
+            );
+        }
+    }
+    let nh = hist.len();
+    let a = nh.saturating_sub(W);
+    let arm_u = median(hist[a..].iter().map(|h| h.0).collect());
+    let arm_p = median(hist[a..].iter().map(|h| h.1).collect());
+    let rho_med = (arm_u / rf.med_u).max(arm_p / rf.med_p);
+    let d_end = speed_change(&sim.velocity().values, &prev);
+    let du_end = l2(&d_end);
+    let rho_du = du_end / rf.du;
+    let f_end = functionals(&sim);
+    let d_t = (f_end.0 - rf.t_mean).abs() / rf.t_mean.abs();
+    let d_p = (f_end.1 - rf.p_mean).abs() / rf.p_mean.abs();
+    let converged = sim.is_converged();
+    let ok = stopped.is_none();
+    // share of sum |du|^2 at the end in the hub trailing-edge columns (first wake and last chord columns, k <= 2)
+    let (nd, n_i) = (c.2, cg.n_i());
+    let d2: f64 = d_end.iter().map(|x| x * x).sum();
+    let te_share = (0..n)
+        .filter(|&q| {
+            let t = tags[q];
+            t.0 == 0 && t.3 <= 2 && [nd - 1, nd, n_i - nd - 1, n_i - nd].contains(&t.1)
+        })
+        .map(|q| d_end[q] * d_end[q])
+        .sum::<f64>()
+        / d2.max(1e-300);
+    let top_end: Vec<Value> = top(&d_end, 5)
+        .into_iter()
+        .map(|q| {
+            let x = sim.geom.mesh.cell_centres()[q];
+            json!({"cell": q, "tag": tag_json(tags[q]), "du": d_end[q], "r": x[0].hypot(x[1]), "z": x[2]})
+        })
+        .collect();
+    let last = hist.last().copied().unwrap_or((f64::NAN, f64::NAN));
+    let rec = json!({
+        "adr": "0181", "arm": arm, "id": id, "mesh": mesh_id, "grading": g, "n_cells": n, "V3": v3rec,
+        "ref": {"median_res_u": rf.med_u, "median_res_p": rf.med_p, "du_1000": rf.du, "torque_mean": rf.t_mean,
+                "dpts_mean": rf.p_mean, "torque_1000": rf.t_1000, "seconds": ref_s},
+        "arm_median_res_u": arm_u, "arm_median_res_p": arm_p, "end_res_u": last.0, "end_res_p": last.1,
+        "res_nut_end": sim.monitors.last("res_nut").unwrap_or(f64::NAN),
+        "rho_med": rho_med, "du_1000_self": du_1000_self, "du_end": du_end, "rho_du": rho_du,
+        "rho_du_self": du_end / du_1000_self,
+        "reached": reached, "stopped": stopped, "budget_hit": budget_hit, "is_converged_end": converged,
+        "torque_end": f_end.0, "dpts_end": f_end.1, "d_torque": d_t, "d_dpts": d_p,
+        "torque_gap_measured": (f_end.0 - T_MEAS) / T_MEAS, "dpts_gap_measured": (f_end.1 - P_MEAS) / P_MEAS,
+        "hub_te_du2_share_end": te_share, "top5_end": top_end,
+        "limits": {"C1": ok && reached.is_some(), "C2": ok && converged, "C3": ok && rho_du <= 0.01,
+                   "SB": ok && d_t <= SB_T && d_p <= SB_P},
+        "seconds": t0.elapsed().as_secs_f64(),
+    });
+    println!("W49R {id} RESULT {}", serde_json::to_string(&rec).unwrap());
+    println!(
+        "W49R {id} reached {reached:?} conv {converged} rho_med {rho_med:.3e} rho_du {rho_du:.3e} torque {:.4} (D {d_t:.4}) dpts {:.3} (D {d_p:.4}) te_share {te_share:.3}; limits {}",
+        f_end.0, f_end.1, rec["limits"]
+    );
+    write(&format!("{id}.json"), &rec);
+    rec
+}
+
+fn read(id: &str) -> Value {
+    let d = out_dir().expect("W49R_OUT");
+    let p = d.join(format!("{id}.json"));
+    serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))).unwrap()
+}
+
+fn assert_limits(r: &Value, keys: &[&str]) {
+    let missed: Vec<&&str> = keys.iter().filter(|k| r["limits"][**k] != json!(true)).collect();
+    assert!(missed.is_empty(), "{}: missed {missed:?}", r["id"]);
+}
+
+/// RN of an arm from its B3 and B2 records (ADR 0181), with the ratio and the implied order (report only).
+fn refinement(arm: &str) -> (bool, Value) {
+    let (b3, b2) = (read(&format!("{arm}-B3")), read(&format!("{arm}-B2")));
+    let gf = |r: &Value, k: &str| r[k].as_f64().unwrap_or(f64::NAN);
+    let (t3, t2, p3, p2) = (
+        gf(&b3, "d_torque"),
+        gf(&b2, "d_torque"),
+        gf(&b3, "d_dpts"),
+        gf(&b2, "d_dpts"),
+    );
+    let rn = t2 <= t3.max(FLOOR_T) && p2 <= p3.max(FLOOR_P);
+    let r32: f64 = 1.4017;
+    let rec = json!({"arm": arm, "D_T_B3": t3, "D_T_B2": t2, "D_P_B3": p3, "D_P_B2": p2,
+        "ratio_T": t2 / t3, "ratio_P": p2 / p3, "order_T": (t3 / t2).ln() / r32.ln(), "order_P": (p3 / p2).ln() / r32.ln(),
+        "RN": rn, "SB_B3": b3["limits"]["SB"], "SB_B2": b2["limits"]["SB"]});
+    println!("W49R refinement {rec}");
+    write(&format!("{arm}-refinement.json"), &rec);
+    (rn, rec)
+}
+
+// B3 arms (calibration); budget 10 min each.
+
+#[test]
+#[ignore = "ADR 0181 arm M-R on B3 (about 3 min in release with the reference; budget 10 min)"]
+fn m_r_b3() {
+    let r = arm_run("M-R", "B3", 600.0);
+    assert_limits(&r, &["C1", "C2", "C3", "SB"]);
+}
+
+#[test]
+#[ignore = "ADR 0181 arm M-W on B3: WITHDRAWN by amendment 1 (V3 failed: the uncapped wake rule tangles the C-grid); not run"]
+fn m_w_b3() {
+    let r = arm_run("M-W", "B3", 600.0);
+    assert_limits(&r, &["C1", "C2", "C3", "SB"]);
+}
+
+#[test]
+#[ignore = "ADR 0181 arm M-RW on B3: WITHDRAWN by amendment 1 (V3 failed on B3); not run"]
+fn m_rw_b3() {
+    let r = arm_run("M-RW", "B3", 600.0);
+    assert_limits(&r, &["C1", "C2", "C3", "SB"]);
+}
+
+// B2 arms (held out: run only after the three B3 records are committed); budget 30 min each. Each also checks RN.
+
+fn b2_arm(arm: &str) {
+    let r = arm_run(arm, "B2", 1800.0);
+    let (rn, _) = refinement(arm);
+    assert_limits(&r, &["C1", "C2", "C3", "SB"]);
+    assert!(rn, "{arm}: RN missed");
+}
+
+#[test]
+#[ignore = "ADR 0181 arm M-R on B2 (about 7 min in release with the reference; budget 30 min; needs M-R-B3 in W49R_OUT)"]
+fn m_r_b2() {
+    b2_arm("M-R");
+}
+
+#[test]
+#[ignore = "ADR 0181 arm M-W on B2: WITHDRAWN by amendment 1 (V3 failed: the uncapped wake rule folds the C-grid); not run"]
+fn m_w_b2() {
+    b2_arm("M-W");
+}
+
+#[test]
+#[ignore = "ADR 0181 arm M-RW on B2: WITHDRAWN by amendment 1 (V3 failed on B3, so the arm cannot be applied to the family); not run"]
+fn m_rw_b2() {
+    b2_arm("M-RW");
 }
