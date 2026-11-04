@@ -3,9 +3,10 @@
 *   **Author:** job J4 (agent session), for review by the maintainer
 *   **Status:** Proposed
 *   **Date:** 2026-11-04
-*   **Parent design:** [`unblock-roadmap-fan01-fea.md`](unblock-roadmap-fan01-fea.md), Part 2, milestone M-FAN-B (goal G9).
-    That file, [ADR 0182](../adr/0182-tiered-gate-and-nightly.md), `docs/milestones.json` and roadmap items F-270 to F-277
-    are on branch `m0-gate-roadmap` and not yet on main, so those links do not resolve on main until that branch merges.
+*   **Parent design:** `docs/designs/unblock-roadmap-fan01-fea.md`, Part 2, milestone M-FAN-B (goal G9).
+    That file, ADR 0182 (`docs/adr/0182-tiered-gate-and-nightly.md`), `docs/milestones.json` and roadmap items F-270 to
+    F-277 are on branch `m0-gate-roadmap` and not yet on main, so they are named here as paths, not links, until that
+    branch merges.
 *   **Registration:** [ADR 0184](../adr/0184-m-fan-b-registration-and-obj-gltf-readers.md) fixes the limits of this
     milestone's acceptance and of step 1 (F-274) before any run.
 
@@ -288,6 +289,7 @@ Each step's ADR repeats the split for its items, with the item notes to add to `
 | Risk | Impact | Mitigation | Step |
 |---|---|---|---|
 | Unit error on import (mm read as m). | A body 1000 times too large meshes and runs, and gives wrong answers. | The unit is a required argument with no default; the intake prints the size in metres; acceptance A1 checks the blade's tip radius. | 1, 2, 5 |
+| Wrong coordinate frame (glTF is +Y up by its specification, and exporters such as Blender's rotate a Z-up model to Y-up by default). | The blade sits rotated in the domain; a check of distance from one axis can still pass. | The readers apply no axis change; the intake prints the bounding box; the case states the rotation axis; step 5's ADR may tighten A1 with a check of the blade's extent along that axis (ADR 0184 D1 allows tightening). | 2, 4, 5 |
 | Leaky or non-manifold surface. | Meshing fails or meshes the wrong region. | Repair, then refusal with counts per patch; wrapping before the pipeline is called usable for downloaded models. | 2 |
 | Vertices split at seams (glTF, some OBJ exporters). | Free edges on a closed body. | Bitwise welding in the readers, with the count in the notes. | 1 |
 | Coordinates that should meet differ in the last bits (two CAD faces tessellated separately). | Free edges that bitwise welding does not close. | The intake reports them per patch; a tolerance weld (`TriSurface::from_soup` with `tol > 0`) is an option of step 2, off by default. | 2 |
