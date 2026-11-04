@@ -394,3 +394,18 @@ No default, limit or known miss of another ADR changes.
    should change on it.
 4. **The "hub mid-chord" label** in ADRs 0111 and 0175-0180 means the hub trailing edge (z 0.1716). Recommendation: leave
    those ADRs as written and let this ADR be the correction. Their numbers do not change.
+
+## Addendum: the open questions (2026-11-04)
+
+Written when the FAN-01 diagnosis stack (jobs 49K-49R and 49M) was merged into main. Each question takes the
+recommendation above, decided under the 2026-11-04 loop instruction to take the documented recommendation. No result,
+limit, verdict, known miss or default changes.
+1. Question 1: **yes**. The next FAN-01 stall job is a report-only check of whether a steady state exists at the hub
+   trailing-edge pocket, for example a time-accurate (PIMPLE) run on B2 from the stalled state, or local pseudo-time. It
+   needs its own registration; nothing is registered or run here.
+2. Question 2: **neither** G2 option before question 1 is answered.
+3. Question 3: **keep** the opt-in `mesh.fan.c_grid_grading` key, marked experimental, until question 1 is answered,
+   then remove it unless it is used. `docs/case-schema.md` already marks it "experimental, ADR 0181, not accepted". No
+   default changes on it.
+4. Question 4: ADRs 0111 and 0175-0180 stay as written. This ADR is the correction: their "hub mid-chord" means the hub
+   trailing edge (z 0.1716).

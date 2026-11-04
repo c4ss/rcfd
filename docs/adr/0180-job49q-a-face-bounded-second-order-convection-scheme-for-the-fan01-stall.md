@@ -365,3 +365,18 @@ ADR changes.
    p_ts as means over a cycle with a band. Recommendation: yes, keep them as the reported values until a converged
    second-order state exists, and mark them as cycle values. None of the three TVD schemes here moves the B2 torque by more
    than 1.4 % from the Barth-Jespersen cycle mean. ADR 0179's first-order mask moved it by 2.9 %.
+
+## Addendum: the open questions (2026-11-04)
+
+Written when the FAN-01 diagnosis stack (jobs 49K-49R and 49M) was merged into main. No result, limit, verdict or known
+miss above changes.
+1. Question 1 (what "second order everywhere" means): **yes**, as recommended. A limited scheme of the baseline's class
+   is acceptable: second order where the solution is smooth, limited at extrema, and no cell forced to first order by a
+   rule. Decided under the 2026-11-04 loop instruction to take the documented recommendation. ADR 0181's request states
+   the same class.
+2. Question 2 (next job: the z 0.17 hub site itself): taken by the maintainer, as ADR 0181 records under "The request".
+   Job 49R ran it. Not decided under the loop instruction.
+3. Question 3 (cycle-mean functionals for the milestone): **yes**, as recommended. Torque and Delta p_ts stay the
+   ADR 0086 cycle means with a band, marked as cycle values, until a converged second-order state exists. Decided under
+   the 2026-11-04 loop instruction to take the documented recommendation. This addendum does not edit
+   `docs/milestone-fan.md`. Marking its reported values as cycle values is a follow-up.

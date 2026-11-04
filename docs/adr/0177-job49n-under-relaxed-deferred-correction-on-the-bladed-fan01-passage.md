@@ -240,3 +240,13 @@ known miss too.
    registered before any run.
 2. **Keep the test-only F-R field?** Recommendation: yes. The next job needs it to hold the leading-edge driver off,
    it is default `None`, and V2 shows it bit-identical.
+
+## Addendum: the open questions (2026-11-04)
+
+Written when the FAN-01 diagnosis stack (jobs 49K-49R and 49M) was merged into main. Both questions above were decided
+by the maintainer before that merge, so neither is decided under the 2026-11-04 loop instruction. This records where:
+1. Question 1 (the hub diagnosis with F-R(0.25) on): approved, as ADR 0178 records under "The request". Job 49O ran it.
+2. Question 2 (keep the test-only F-R field): kept. ADR 0178's house rules record
+   `deferred_correction_relaxation_test_only` as kept by the maintainer.
+
+Both decisions match the recommendations above. No result, limit, verdict or known miss above changes.

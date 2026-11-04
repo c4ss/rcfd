@@ -477,3 +477,21 @@ run: rings larger than 2, E3 / E2 / E1, B2.
    cycle is what F-R removes.
 2. **Is the hub's wider, non-local cycle worth its own diagnosis?** Recommendation: not before F-R. If F-R calms B3, the
    question is moot. If it does not, a ring-3 or ring-4 complement arm at the hub is the cheap next test.
+
+## Addendum: the open questions (2026-11-04)
+
+Written when the FAN-01 diagnosis stack (jobs 49K-49R and 49M) was merged into main. No result, limit, verdict or known
+miss above changes.
+
+Phase-1 questions:
+- Questions 1 and 2: decided on 2026-10-30, as recorded under "Maintainer decisions" above.
+- Question 3 (milestone wording): **yes**, as recommended, decided under the 2026-11-04 loop instruction to take the
+  documented recommendation. The robustness row of `docs/milestone-fan.md` already says it: commit 6a41ecf (its message
+  cites the maintainer's option C) replaced the phase-1 text with one summary of both phases, and that summary says
+  that of the three terms only the convection deferred correction matters. No further edit is made.
+
+Amendment-2 questions (not decided under the loop instruction; the maintainer's decisions are recorded elsewhere):
+- Question 1 (register F-R on B3): approved by the maintainer, as ADR 0177 records under "The request". Job 49N ran it.
+- Question 2 (the hub's wider cycle): ADR 0177's reading rule 3 records the maintainer's decision that, if F-R removes
+  the leading-edge cycle and a cycle stays, the hub's wider cycle is the next job. Rule 3 applied, and ADR 0178
+  (job 49O) ran it.

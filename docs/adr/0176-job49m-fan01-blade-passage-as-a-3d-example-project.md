@@ -175,3 +175,15 @@ Studio window (no screenshot was taken).
 3. P5: the cold-start first-order torque (1.4023 N m) is 5.04 % above S10's switched-from-second-order value (1.335 N m).
    Both runs stop with a small cycle left, so the two first-order states need not be the same point. Options: (a) leave
    the known miss; (b) nothing more for an example that claims no accuracy. **Recommendation (a)**, no further work here.
+
+## Addendum: the open questions (2026-11-04)
+
+Written when the FAN-01 diagnosis stack (jobs 49K-49R and 49M) was merged into main. No result, limit or known miss
+above changes.
+1. Question 1: **(a)**. The first-order run stays in the examples, labelled for viewing. Decided under the 2026-11-04
+   loop instruction to take the documented recommendation.
+2. Question 2 (the 6 MB per-tree cap of `axial-fan`): **open**. This ADR gives no recommendation for it, so none is
+   invented here and the maintainer still has to decide it. Until then, the script and the tests check the registered
+   value.
+3. Question 3: **(a)**. The known miss `g4_fan_torque_within_5_percent_of_s10_known_miss` stays, and no further work is
+   done here. Decided under the 2026-11-04 loop instruction to take the documented recommendation.
