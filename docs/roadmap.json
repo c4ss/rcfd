@@ -2158,5 +2158,52 @@
     "status": "partial",
     "acceptance": "The full gate runs each test in its own process from a small pool with a per-test time limit, prints the summary format the older scripts read, and a scanner lists tests that cannot fail (ADRs 0127 to 0129, docs/test-process.md).",
     "note": "Open items: a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case), an environment switch that makes the 12 data-gated tests fail rather than skip, limit headroom on one stage, a test for the R3 limit, a re-measurement at 5 jobs, scanning of inline test modules, and a slot queue in place of the directory locks. Size M."
+  },
+  {
+    "id": "F-270",
+    "title": "Workspace layer (rcfd-workspace) shared by the MCP server and the Studio",
+    "phase": 8,
+    "deps": [
+      "F-261",
+      "F-262",
+      "F-267"
+    ],
+    "status": "todo",
+    "acceptance": "One crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and the Studio use it: the existing project-tool and Studio tests pass unchanged, a Studio save and an edit_case on the same file give one write and one conflict naming the current hash, a comment line in a case survives a Studio save, and the crate graph stays acyclic with rcfd-studio not depending on rcfd-mcp (ADR 0173 W1 to W3, checks C1, C2 and C6).",
+    "note": "ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L."
+  },
+  {
+    "id": "F-271",
+    "title": "Project journal and change feed with the actor of each change",
+    "phase": 8,
+    "deps": [
+      "F-270"
+    ],
+    "status": "todo",
+    "acceptance": "Every accepted write, run submission and run control call appends an entry with an actor and a sequence number to .rcfd/edits.jsonl (additive fields only); one ordered feed merges the journal, the run records and events, and the watcher's changes; a change made by one process appears in a second process's feed within the limit fixed by an amendment of ADR 0173, a write made outside the workspace appears as external, and the Studio shows who made each change (ADR 0173 W4, check C3).",
+    "note": "ADR 0173 (proposed). Priority 2. Linking an MCP actor to a Claude Code session is NOT VERIFIED (ADR 0173 D4). Size M."
+  },
+  {
+    "id": "F-272",
+    "title": "Design study evaluations as runner runs in project mode",
+    "phase": 8,
+    "deps": [
+      "F-270",
+      "F-268"
+    ],
+    "status": "todo",
+    "acceptance": "In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W5, check C4).",
+    "note": "ADR 0173 (proposed). Priority 3. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M."
+  },
+  {
+    "id": "F-273",
+    "title": "Project-mode MCP tool list and plugin edit hook",
+    "phase": 8,
+    "deps": [
+      "F-272"
+    ],
+    "status": "todo",
+    "acceptance": "With --project, tools/list holds no tool whose state lives only in the server's memory, and without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case, checked in a real session where possible (ADR 0173 W6, check C5, decisions D2 and D5).",
+    "note": "ADR 0173 (proposed). Priority 4. The hook contract is to be checked on an installed Claude Code build first. Size S."
   }
 ]
