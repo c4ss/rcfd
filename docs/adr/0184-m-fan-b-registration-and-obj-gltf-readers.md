@@ -118,4 +118,45 @@ rcfd (design Q2), in the CAD frame (axis +x), read with its stated unit. The dom
 
 ## Addenda
 
-To be added: step 1 results against R1 to R12, and the roadmap note for F-274.
+### Addendum 1 (2026-11-04): step 1 results, job J4
+
+Branch `j4-mfanb-readers`, release builds. All registered checks pass at their first run except R3, whose extra sub-case
+had a set-up error (below). No limit moved.
+
+| Id | Result | Verdict |
+|---|---|---|
+| R1 | 8 vertices, 12 triangles, patch `cube`, closed manifold, Euler 2; area 6 exactly, volume 1 - 1.1e-16; unit `m` coordinates bit-identical | pass |
+| R1b | factor 1e-3, every coordinate bit-equal to file value times factor; volume 1 - 1.1e-16; units `""`, `s`, `degC`, `1`, `m/s`, `kg` refused | pass |
+| R2 | octagon 6 triangles; L hexagon 4 triangles, area 3 (error 0), no inverted triangle, every centroid inside the L, no fan note; bow tie 2 triangles with a fan note | pass |
+| R3 | relative-index cube equal to the positive-index cube | pass (see the set-up note) |
+| R4 | same surface and patches; notes "1 mtllib, 1 s, 1 usemtl, 2 vn, 4 vt" | pass |
+| R5 | patches `default`, `a`, `b`, tags 0, 1, 2, 1; groups give `left`, `right`; the default reading gives `default` with "3 g" in the notes | pass |
+| R6 | (i) to (vi) equal triangle sets and tags, closed, Euler 2 (split cube: "16 vertices ... merged"; soup: 28); (vii) modes 4, 5, 6 each 2 triangles of area 1 with normal +z | pass |
+| R7 | TRS worst vertex error 8.9e-16, volume 8; matrix equal within 1e-12; child composition exact; mirror volume 1 - 1.1e-16, 0 misoriented; two named instances give two patches, 24 triangles | pass |
+| R8 | 12 OBJ, 18 glTF edits, 1 base64, 6 URI and 6 GLB cases return errors naming line, JSON path or byte offset; no buffers, JSON root not an object and truncated JSON return errors | pass |
+| R9 | every prefix plus 3000 mutations of each fixture, no panic (accepted: OBJ 349 of 3192, glTF 140 of 4211, GLB 148 of 3681) | pass |
+| R10 | (a) two-patch box and icosphere OBJ round trip equal (54 points); (b) GLB box equal; (c) STL solids equal per patch | pass |
+| R11 | exporter GLB of a 3 x 2 x 2 box: 64 triangles written and read, 34 vertices after welding, closed, Euler 2; area error 0, volume error 4.4e-16 relative; same with a cell scalar | pass |
+| R12 | `obj` and `gltf` supported, conformance passes; tampered: "obj: area 7.414... and volume 1.333..." and "gltf: area 5.618... and volume 0.833..."; W27C tests pass (4) | pass |
+
+Gate: `cargo fmt -p rcfd-io -p rcfd-post -- --check` clean; `cargo clippy -p rcfd-io -p rcfd-post --all-targets --locked
+-- -D warnings` clean; `cargo test --release -p rcfd-io`: 88 passed, 0 failed, 7 ignored (all 7 ignored before this job);
+`rcfd-post` `j4_glb_reader_cross`: 1 passed. `Cargo.toml` and `Cargo.lock` unchanged.
+
+**Set-up note (R3).** A sub-case added to R3 beyond the registered text (a triangle written right after its vertices)
+expected `f -4 -2 -3` after four vertices to give `[0, 3, 1]`; by the relative rule it gives `[0, 2, 1]`. The fixture was
+corrected to `f -4 -1 -3` before the registered comparison was judged; the reader was not changed.
+
+**Beyond the registration.** (1) A non-convex OBJ polygon with more than 1024 vertices is refused (ear clipping is cubic
+in the worst case; a convex polygon of any size is fanned). (2) glTF indices equal to the primitive-restart value of their
+type are refused (the specification forbids them). (3) An OBJ `v` line with more than 7 values is refused. (4) `gltf::read_file`
+and `obj::read_file` were checked once on files in a temporary folder (sidecar in a subfolder, unit `cm`).
+
+**Not shown.** No file written by Blender, FreeCAD or another third-party exporter was read; the only independent writer is
+rcfd's own F-117 GLB exporter.
+
+**Roadmap note for F-274** (to add to `docs/roadmap.json` when `m0-gate-roadmap` has merged, since F-274 is not on main):
+"Job J4 (ADR 0184): rcfd_io::obj and rcfd_io::gltf read OBJ, .gltf (data URI or sidecar buffers) and .glb into a TriSurface
+with a required length unit and one patch per OBJ object or glTF mesh node; boundary types are never guessed; registered
+checks R1 to R12 pass (crates/rcfd-io/tests/j4_surface_readers.rs, crates/rcfd-post/tests/j4_glb_reader_cross.rs). Not
+tested on files from third-party exporters." Proposed status: done, with this ADR and the two test files as evidence.
