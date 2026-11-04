@@ -1,0 +1,20 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized] target(s) in 0.27s
+     Running tests\fan01_hub_locus_w49o.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_hub_locus_w49o-91a40b3c5127d3b7.exe)
+
+running 1 test
+W49O N-H4 it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (19.5 s)
+W49O N-H4 it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (38.9 s)
+W49O N-H4 it 1500: res_u 7.412e-7 res_p 2.463e-7 |du|_2 9.780e-4 (59.5 s)
+test n_h4 has been running for over 60 seconds
+W49O N-H4 it 2000: res_u 5.411e-9 res_p 3.156e-9 |du|_2 1.435e-5 (81.2 s)
+W49O N-H4 it 2500: res_u 1.481e-10 res_p 8.614e-11 |du|_2 3.943e-7 (102.8 s)
+W49O N-H4 it 3000: res_u 4.100e-12 res_p 2.366e-12 |du|_2 1.085e-8 (122.8 s)
+W49O N-H4 RESULT {"adr":"0178","arm":"N-H4","arm_median_res_p":1.42321341788372e-11,"arm_median_res_u":2.4551606803347922e-11,"c_removed_cells":512,"dpts_end":44.83121163380003,"dpts_switch":46.643469998593375,"du_end":1.0846766876912259e-8,"du_switch":5.742138973481199,"is_converged_end":true,"location_end":{"max_du_le2":1.2439830735314134e-11,"share_d3":0.0012792070558072265,"share_h4":0.0028580368327681717,"share_le2":0.00001310326644119815,"top5":[{"cell":4909,"class":"other","du":8.293345703271085e-9,"r":0.24978119586619946,"z":0.12209122559208542},{"cell":1701,"class":"other","du":2.2800298987959377e-9,"r":0.20047490560180226,"z":0.13587116048281955},{"cell":1665,"class":"other","du":1.2407827533675401e-9,"r":0.20058958717810976,"z":0.13613588402565463},{"cell":1702,"class":"other","du":1.1813165627665852e-9,"r":0.20045499296475466,"z":0.13182798603232065},{"cell":1663,"class":"other","du":1.0511030384863872e-9,"r":0.20059691442009372,"z":0.14237752804646583}]},"reached":1340,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"rho_du":1.8889767257472617e-9,"rho_med":2.925307114489103e-8,"seconds":122.8465716,"stopped":null,"torque_end":1.9092967727774375,"torque_switch":1.9177249776178935,"verdict":"CALMS"}
+W49O N-H4 VERDICT CALMS (rho_med 2.925e-8, rho_du 1.889e-9, reached Some(1340))
+test n_h4 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 122.85s
+

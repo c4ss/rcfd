@@ -1,0 +1,21 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized] target(s) in 0.26s
+     Running tests\fan01_stall_locus_w49l.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_stall_locus_w49l-6ba2d4394e164219.exe)
+
+running 1 test
+W49L K-0 it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (20.7 s)
+W49L K-0 it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (40.9 s)
+test k0_control has been running for over 60 seconds
+W49L K-0 it 1500: res_u 4.310e-6 res_p 7.259e-7 |du|_2 3.960e-2 (61.5 s)
+W49L K-0 it 2000: res_u 4.310e-6 res_p 7.259e-7 |du|_2 3.960e-2 (81.5 s)
+W49L K-0 it 2500: res_u 4.310e-6 res_p 7.259e-7 |du|_2 3.960e-2 (101.4 s)
+W49L K-0 it 3000: res_u 4.310e-6 res_p 7.259e-7 |du|_2 3.960e-2 (121.5 s)
+W49L K-0 RESULT {"adr":"0175","arm":"K-0","arm_median_res_p":7.259809954295859e-7,"arm_median_res_u":4.310092250684133e-6,"dpts_end":-3.9940986877437323,"dpts_switch":46.643469998593375,"du_end":0.0396037961268753,"du_switch":5.742138973481199,"is_converged_end":false,"location_end":{"share_hub2":2.222039865259096e-7,"share_le2":1.7471763244492427e-8,"share_top1pct":0.9919953767450377,"site":"other","top5":[{"cell":215,"class":"other","du":0.013910369438213284,"r":0.1241708513591847,"z":0.371436517588301},{"cell":216,"class":"other","du":0.012559810713976332,"r":0.12417161642138659,"z":0.37147378848228135},{"cell":252,"class":"other","du":0.01249096691519917,"r":0.12417141173423309,"z":0.3714672698141614},{"cell":179,"class":"other","du":0.010583198640959458,"r":0.12422939464829018,"z":0.3714258154117385},{"cell":287,"class":"other","du":0.010109274656338266,"r":0.12417119863531655,"z":0.3714579400734998}]},"location_switch":{"share_hub2":0.04820625050027438,"share_le2":0.41220449198230014,"share_top1pct":0.7695601787328042,"site":"LE","top5":[{"cell":665,"class":"LE","du":2.2868310309839974,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":17,"class":"LE","du":1.4786603270651004,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":341,"class":"LE","du":1.1780082445680358,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":904,"class":"other","du":1.141015159400505,"r":0.1255336085984213,"z":0.182924670096604},{"cell":1068,"class":"other","du":1.0081055703932955,"r":0.14046877951782227,"z":0.13964709356642088}]},"mask_cells_conv":4920,"mask_cells_lap":0,"period_ratio_end":2.22953793686873e-9,"reached":1115,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"region":"ALL minus nothing (C)","rho_du":0.006897045910901266,"rho_med":0.003956742646808605,"seconds":121.4878553,"stopped":null,"torque_end":1.402929214546008,"torque_switch":1.9177249776178935,"verdict":"CALMS"}
+W49L K-0 VERDICT CALMS (rho_med 3.957e-3, rho_du 6.897e-3, reached Some(1115))
+W49L V3: median res_u 1.089e-3 res_p 4.87e-4; torque at 1000 1.9177 N m (reported)
+W49L K-0 VERDICT_K CALMS (rho_du 6.897e-3, 0 of the top 5 in the site)
+test k0_control ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 121.68s
+

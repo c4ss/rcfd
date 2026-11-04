@@ -80,6 +80,11 @@ pub fn schema() -> Schema {
             Schema::enumeration("pursuit", &["pursuit", "smoothed", "camber_seam", "camber_seam_h"])
                 .doc("c_grid only: pursuit (ADR 0068, the default), smoothed (ADR 0072: elliptic in-plane smoothing with periodic seams and the radial remap of the far grid; better orthogonality, more robust against the controls) or camber_seam (ADR 0079: smoothed, plus seams that follow the blade where straight seams leave no margin, a fitted tip-gap block, the accepted ADR 0079 quality changes and a checked control range) or camber_seam_h (ADR 0083: camber_seam with the changes accepted by ADR 0083: a post-smoothing untangling and lean-following wall stacks)"),
         )
+        .field(
+            "c_grid_grading",
+            Schema::enumeration("capped", &["capped", "radial_geometric", "wake_geometric", "radial_wake_geometric"])
+                .doc("c_grid only, experimental (ADR 0181, not accepted): capped (the default, the construction above) or one geometric ratio solved to fill the length instead of the capped growth, for the span layers (radial_geometric: h1 at hub and tip, no stack-to-middle jump), the wake axial cells (wake_geometric), or both"),
+        )
         .field("station_radius", flist("Optional radial stations [m] of the blade (ADR 0075): when this list is not empty, the station_* lists (all of the same length, first radius r_hub, last radius r_tip, strictly increasing) replace the hub_* / tip_* values and the blade varies linearly between neighbouring stations"))
         .field("station_chord", flist("Chord [m] at each station_radius"))
         .field("station_stagger", flist("Stagger [deg] at each station_radius (angle of the chord from the axis, as hub_stagger)"))
@@ -288,7 +293,7 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             .collect()
     };
     if get_s(case, "mesh.fan.topology") == "c_grid" {
-        let opts = match get_s(case, "mesh.fan.c_grid_construction").as_str() {
+        let mut opts = match get_s(case, "mesh.fan.c_grid_construction").as_str() {
             "smoothed" => CGridOptions {
                 radial_remap: true,
                 smoothing: true,
@@ -298,6 +303,10 @@ pub fn build(case: &Case) -> std::result::Result<Mesh, Vec<Diagnostic>> {
             "camber_seam_h" => CGridOptions::camber_seam_h_construction(),
             _ => CGridOptions::default(),
         };
+        // ADR 0181 (opt-in): the default "capped" leaves both flags false, so the default construction is unchanged
+        let grading = get_s(case, "mesh.fan.c_grid_grading");
+        opts.radial_geometric = matches!(grading.as_str(), "radial_geometric" | "radial_wake_geometric");
+        opts.wake_geometric = matches!(grading.as_str(), "wake_geometric" | "radial_wake_geometric");
         return build_cgrid_mesh_with(&fan, &cgrid_spec_of(case), &opts)
             .map(|s| s.mesh)
             .map_err(to_diag);

@@ -1,0 +1,22 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `release` profile [optimized] target(s) in 0.33s
+     Running tests\fan01_stall_locus_w49l.rs (E:/projects/cfd/rcfd/target-w49l\release\deps\fan01_stall_locus_w49l-6ba2d4394e164219.exe)
+
+running 1 test
+W49L K-LE2 it 500: res_u 1.011e-3 res_p 4.536e-4 |du|_2 6.175e0 (20.7 s)
+W49L K-LE2 it 1000: res_u 1.013e-3 res_p 5.108e-4 |du|_2 5.742e0 (41.4 s)
+test k_le2 has been running for over 60 seconds
+W49L K-LE2 it 1500: res_u 3.787e-5 res_p 1.155e-5 |du|_2 1.870e0 (62.5 s)
+W49L K-LE2 it 2000: res_u 3.787e-5 res_p 1.155e-5 |du|_2 1.870e0 (83.0 s)
+W49L K-LE2 it 2500: res_u 3.787e-5 res_p 1.155e-5 |du|_2 1.870e0 (103.4 s)
+W49L K-LE2 it 3000: res_u 3.787e-5 res_p 1.155e-5 |du|_2 1.870e0 (123.7 s)
+W49L K-LE2 RESULT {"adr":"0175","arm":"K-LE2","arm_median_res_p":0.000011550595765511885,"arm_median_res_u":0.000037870808682274135,"dpts_end":-3.870168862132965,"dpts_switch":46.643469998593375,"du_end":1.8702271785694715,"du_switch":5.742138973481199,"is_converged_end":false,"location_end":{"share_hub2":0.000586569200152597,"share_le2":0.8962616261918251,"share_top1pct":0.9689473675908634,"site":"LE","top5":[{"cell":665,"class":"LE","du":1.0965469455267518,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":989,"class":"LE","du":0.95811941244852,"r":0.1401268454509933,"z":0.1053764533876604},{"cell":341,"class":"LE","du":0.3984045633320042,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":17,"class":"LE","du":0.36582178650416924,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":988,"class":"LE","du":0.32579406781817394,"r":0.14010240327729628,"z":0.10591838918689599}]},"location_switch":{"share_hub2":0.04820625050027438,"share_le2":0.41220449198230014,"share_top1pct":0.7695601787328042,"site":"LE","top5":[{"cell":665,"class":"LE","du":2.2868310309839974,"r":0.12563532186180185,"z":0.1003372400592615},{"cell":17,"class":"LE","du":1.4786603270651004,"r":0.12426988334824587,"z":0.09976895422258171},{"cell":341,"class":"LE","du":1.1780082445680358,"r":0.12488885239252931,"z":0.10002295199643413},{"cell":904,"class":"other","du":1.141015159400505,"r":0.1255336085984213,"z":0.182924670096604},{"cell":1068,"class":"other","du":1.0081055703932955,"r":0.14046877951782227,"z":0.13964709356642088}]},"mask_cells_conv":4874,"mask_cells_lap":0,"period_ratio_end":4.338998409564189e-11,"reached":null,"ref_median_res_p":0.0004865176072742982,"ref_median_res_u":0.001089303155503563,"region":"ALL minus LE2 (C)","rho_du":0.325702179485154,"rho_med":0.034766087375159786,"seconds":123.6587433,"stopped":null,"torque_end":1.4033260879599583,"torque_switch":1.9177249776178935,"verdict":"PARTIAL"}
+W49L K-LE2 VERDICT PARTIAL (rho_med 3.477e-2, rho_du 3.257e-1, reached None)
+W49L V3: median res_u 1.089e-3 res_p 4.87e-4; torque at 1000 1.9177 N m (reported)
+W49L K-LE2 VERDICT_K SUSTAINS (rho_du 3.257e-1, 5 of the top 5 in the site)
+test k_le2 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 123.83s
+

@@ -22,7 +22,20 @@ use rcfd_core::vec3::{self, Vec3};
 /// * `grad` – cell gradients for the non-orthogonal correction; `None`
 ///   disables the correction.
 pub fn laplacian(geom: &FvGeometry, gamma: &[f64], bc: &[FaceCoeffs], grad: Option<&[Vec3]>) -> FvMatrix {
-    laplacian_impl(geom, gamma, bc, grad, None)
+    laplacian_impl(geom, gamma, bc, grad, None, None)
+}
+
+/// [`laplacian`] without the explicit non-orthogonal correction on the faces where `face_mask` is true (internal and
+/// Dirichlet boundary faces; the matrix is unchanged). Test-only diagnostic of ADR 0175.
+#[doc(hidden)]
+pub fn laplacian_masked(
+    geom: &FvGeometry,
+    gamma: &[f64],
+    bc: &[FaceCoeffs],
+    grad: Option<&[Vec3]>,
+    face_mask: &[bool],
+) -> FvMatrix {
+    laplacian_impl(geom, gamma, bc, grad, None, Some(face_mask))
 }
 
 /// Treatment of the explicit non-orthogonal flux on Dirichlet boundary faces.
@@ -62,7 +75,7 @@ pub fn laplacian_with(
     bvals: &[f64],
     opts: GradientOptions,
 ) -> FvMatrix {
-    laplacian_impl(geom, gamma, bc, grad, Some((cells, bvals, opts)))
+    laplacian_impl(geom, gamma, bc, grad, Some((cells, bvals, opts)), None)
 }
 
 fn laplacian_impl(
@@ -71,6 +84,7 @@ fn laplacian_impl(
     bc: &[FaceCoeffs],
     grad: Option<&[Vec3]>,
     ext: Option<(&[f64], &[f64], GradientOptions)>,
+    face_mask: Option<&[bool]>,
 ) -> FvMatrix {
     let limited: Option<Vec<Vec3>> = match (grad, ext) {
         (Some(gr), Some((cells, bvals, o))) => o.secondary_limiter.map(|kind| {
@@ -94,6 +108,7 @@ fn laplacian_impl(
         .map(|f| {
             let g = gamma[f] * geom.lap_coeff[f];
             let corr = match grad {
+                Some(_) if face_mask.is_some_and(|m| m[f]) => 0.0,
                 Some(gr) => {
                     let d = geom.delta[f];
                     let delta = vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d));
@@ -144,7 +159,8 @@ fn laplacian_impl(
                     rhs += gamma[f] * a * co.d;
                     // Dirichlet faces: the cell-to-face vector is not normal to the face on
                     // skewed boundary cells, so add the non-orthogonal part of the flux.
-                    if let (Some(gr), true) = (grad, co.a == 0.0) {
+                    let masked = face_mask.is_some_and(|m| m[f]);
+                    if let (Some(gr), true, false) = (grad, co.a == 0.0, masked) {
                         let d = geom.delta[f];
                         let k = vec3::sub(sf[f], vec3::scale(d, a * a / vec3::dot(sf[f], d)));
                         match ext.map(|(_, _, o)| o.boundary).unwrap_or_default() {
