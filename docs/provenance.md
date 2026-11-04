@@ -64,6 +64,10 @@ The cases below are all the exceptions on record. They come from the project's o
   of item 2. See [mesh import](mesh-import.md).
 * EnSight Gold export: written from the vendor's public description of the file format (ADR 0048).
 * Nastran-style bulk data export: from memory of the public Nastran manuals (ADR 0051).
+* OBJ and glTF 2.0 surface readers (job J4, ADR 0184): from memory of the public Wavefront OBJ format description and of
+  the public Khronos glTF 2.0 specification. The specification's triangle-strip and triangle-fan formulas, the
+  `byteStride` and data-URI media-type rules, the GLB rule for a buffer with no `uri` and the primitive-restart rule were
+  checked against the published Khronos page on 2026-11-04; the rest is unverified. No other reader's source was read.
 
 ## Third-party data and code
 

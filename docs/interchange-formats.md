@@ -1,4 +1,4 @@
-# Interchange formats, registers and GLB validation (F-119, F-124, F-117; ADR 0011)
+# Interchange formats, registers and GLB validation (F-119, F-124, F-117, F-274; ADR 0011, ADR 0184)
 
 This page lists the interchange formats rcfd converts, reads and writes, the library entry points for them, what is not done or
 not verified for each, and related library features: registers (named cell sets), the GLB checker, the format registry and a
@@ -27,6 +27,36 @@ Library entry points: `rcfd_io::stl`, `rcfd_io::tecplot` (also a reader for FE a
 packing, `VARLOCATION`), `rcfd_io::plot3d` (multi-block, ASCII and Fortran-unformatted binary, single / double
 precision, either byte order, iblank, function files, headerless C-binary single-grid files via `read_grid_raw`),
 `rcfd_io::xdmf` (writer).
+
+## Surface readers: OBJ and glTF (F-274, ADR 0184)
+
+`rcfd_io::obj` and `rcfd_io::gltf` read a triangulated surface for meshing. Both return
+`rcfd_io::common::SurfaceImport { surface, patches, notes }`: an `rcfd_mesh::surface::TriSurface` in metres whose triangle
+tag `k` is patch `patches[k]`, and notes that count what was ignored or changed. `SurfaceImport::patch_names()` gives the
+map that `TetMesh::to_mesh` takes. No case key or CLI command uses them yet (M-FAN-B, [design](designs/m-fan-b.md)).
+
+* **Units.** The length unit is a required argument (`"m"`, `"mm"`, `"in"`, ...; anything that is not a length is an
+  error). It is never guessed, for glTF too. `"m"` leaves coordinates bit-identical.
+* **Patches and boundary types.** OBJ: one patch per `o` object; faces before the first `o` go to `default`; a repeated
+  name adds to the same patch; `ObjOptions { patches: ObjPatches::Groups }` uses `g` groups instead. glTF: one patch per
+  node that has a mesh, named by the node, else the mesh, else `mesh<i>`. Boundary types are never guessed.
+* **Welding.** Vertices with bitwise-equal coordinates are merged and unused vertices dropped, so a glTF cube split at its
+  face seams arrives as a closed surface.
+* **OBJ.** `v` (extra values such as colours ignored), `f` with `v`, `v/vt`, `v//vn`, `v/vt/vn`, negative (relative)
+  indices, `\` line continuation. Polygons are ear-clipped in the plane of their Newell normal; a polygon with no ear
+  becomes a fan, with a note. Texture, normal, material, smoothing, line and curve statements are ignored with a note;
+  `surf` is refused. Non-convex polygons above 1024 vertices are refused.
+* **glTF 2.0.** `.gltf` with base64 data URIs or sidecar files, and `.glb`. `gltf::read_file` resolves sidecar files in
+  the document's folder and refuses absolute paths, `..` and other URI schemes; `gltf::read_bytes` takes a resolver
+  closure. Primitive modes 4, 5 and 6, indexed by unsigned 8, 16 or 32 bit integers or not indexed; points and lines are
+  skipped with a note. Node transforms are applied; a mirroring transform reverses the triangle order. Refused:
+  `extensionsRequired` (Draco, meshopt, quantization), sparse accessors, versions other than 2.x, primitive-restart index
+  values. Positions are `f32` in the format.
+* **Checks** (`crates/rcfd-io/tests/j4_surface_readers.rs`, R1 to R12 of ADR 0184): cubes, polygons, negative indices,
+  ignored attributes, several objects, seven glTF layouts against the OBJ cube, node transforms, located errors for 43
+  malformed inputs, no panic on every prefix plus 3000 mutations per format, round trips through `TriSurface` and STL.
+  `crates/rcfd-post/tests/j4_glb_reader_cross.rs` reads GLB files written by the F-117 exporter. No third-party exporter's
+  files were read: Blender and FreeCAD output is untested.
 
 ## What is NOT done or not verified
 
@@ -98,8 +128,8 @@ types, reference ranges, hostile input) with a JSON pointer in every error; `glt
 ## Format registry and structural load deck (F-237, ADR 0051)
 
 `rcfd_io::registry` lists every format with its direction and a conformance case: `registry::run_all()` writes a small
-known data set per supported format, reads it back where a reader exists, and checks the values. Supported (12): vtu, vtp,
-vtk_legacy, openfoam, ensight, stl, tecplot, xdmf, plot3d, gmsh, fluent, nastran_deck. Registered as `NotSupported` with a
+known data set per supported format, reads it back where a reader exists, and checks the values. Supported (14): vtu, vtp,
+vtk_legacy, openfoam, ensight, stl, tecplot, xdmf, plot3d, gmsh, fluent, nastran_deck, obj, gltf. Registered as `NotSupported` with a
 reason: cgns and hdf5 (not delivered). A tampered data value makes the case fail with the format name.
 
 Fluent `.msh` / `.cas` (reader `rcfd_io::fluent`): no public specification document is named for this format in the record. The

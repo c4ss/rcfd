@@ -9,12 +9,14 @@ read [case-schema.md](case-schema.md); for the quality report and the meaning of
 [tutorials/quick-start-cli.md](tutorials/quick-start-cli.md).
 
 Surface meshing and tetrahedral volume meshing (wave 19B, ADR 0030): library-level tools in `rcfd-mesh`; there is no CLI or
-case-file hook for these yet. F-232, F-131 and F-132 are `partial`.
+case-file hook for these yet. The OBJ and glTF surface readers (F-274, ADR 0184) feed the same pipeline; the plan that connects it to
+a case is the [M-FAN-B design](designs/m-fan-b.md). F-232, F-131 and F-132 are `partial`.
 All literature attributions below are from memory and unverified (see the ADR).
 
 ## Pipeline
 
 ```text
+STL / OBJ / glTF file + unit    ->  TriSurface with named patches   (rcfd_io::stl, obj, gltf; F-119, F-274)
 TriSurface (soup or generator)  ->  diagnose / repair   (surface.rs, F-232)
                                 ->  remesh with a size field   (surface_remesh.rs, F-131)
                                 ->  tetrahedralize   (tetmesh.rs, F-132)
