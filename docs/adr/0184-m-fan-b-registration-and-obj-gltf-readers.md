@@ -141,7 +141,9 @@ had a set-up error (below). No limit moved.
 
 Gate: `cargo fmt -p rcfd-io -p rcfd-post -- --check` clean; `cargo clippy -p rcfd-io -p rcfd-post --all-targets --locked
 -- -D warnings` clean; `cargo test --release -p rcfd-io`: 88 passed, 0 failed, 7 ignored (all 7 ignored before this job);
-`rcfd-post` `j4_glb_reader_cross`: 1 passed. `Cargo.toml` and `Cargo.lock` unchanged.
+`rcfd-post` `j4_glb_reader_cross`: 1 passed. The same `rcfd-io` suite in a debug build (overflow checks on, fuzz
+included): same counts. `rcfd-cli` `docs_site` (relative links in `docs/`): 2 passed, after the two links of the design to
+files that exist only on `m0-gate-roadmap` were turned into code paths. `Cargo.toml` and `Cargo.lock` unchanged.
 
 **Set-up note (R3).** A sub-case added to R3 beyond the registered text (a triangle written right after its vertices)
 expected `f -4 -2 -3` after four vertices to give `[0, 3, 1]`; by the relative rule it gives `[0, 2, 1]`. The fixture was
