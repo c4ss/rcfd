@@ -774,9 +774,9 @@ fn dv5_explicit_non_default_store_keys_behave_as_before() {
     {
         texts.push((format!("(h) {}", e.label), e.text, e.base));
     }
-    // ADR 0157: the ten cases of ADR 0142 and the two rotated aerofoil cases of ADR 0155 (DV5 compares two routes of
-    // today's code, not a record, so it takes every case of example-projects/)
-    assert_eq!(texts.len(), 19, "7 texts and the twelve cases of example-projects/");
+    // ADR 0157: the ten cases of ADR 0142 and the two rotated aerofoil cases of ADR 0155; ADR 0176: the fan passage
+    // (DV5 compares two routes of today's code, not a record, so it takes every case of example-projects/)
+    assert_eq!(texts.len(), 20, "7 texts and the thirteen cases of example-projects/");
     for (id, text, base) in &texts {
         let a = StartPlan::new_route("cases/cavity.toml", text, base, PlanRoute::default()).unwrap();
         let b = StartPlan::new_route("cases/cavity.toml", text, base, before()).unwrap();
@@ -803,8 +803,8 @@ fn dv5_explicit_non_default_store_keys_behave_as_before() {
 
 /// DV6: the plans of the 22 unedited cases equal the record made on 6867e40 byte for byte (a) and the route before (b);
 /// the saved control differs from the record, and its route-before plan equals it. ADR 0157: DV6 takes the cases its
-/// record names; a case added after 6867e40 has no recorded plan (ADR 0155's two rotated aerofoil cases, the only ones
-/// left out, by name), and a recorded case that is gone fails the label comparison.
+/// record names; a case added after 6867e40 has no recorded plan (ADR 0155's two rotated aerofoil cases and ADR 0176's
+/// fan passage, the only ones left out, by name), and a recorded case that is gone fails the label comparison.
 #[test]
 fn dv6_unedited_plans_are_bit_identical() {
     let record = dv::blocks(&dv::recorded());
@@ -817,6 +817,7 @@ fn dv6_unedited_plans_are_bit_identical() {
     assert_eq!(
         added,
         [
+            "example-projects/axial-fan/cases/fan01-passage-upwind.toml",
             "example-projects/wind-tunnel/cases/naca0012-aoa2-rotated.toml",
             "example-projects/wind-tunnel/cases/naca0012-aoa4-rotated.toml",
         ],

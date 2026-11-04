@@ -1,0 +1,6 @@
+E:\projects\cfd\rcfd\.claude\worktrees\job49m\example-projects\axial-fan\runs\r-20261030T223519-0489\case.snapshot: ok, 4920 cells
+E:\projects\cfd\rcfd\.claude\worktrees\job49m\example-projects\axial-fan\runs\r-20261030T223519-0489\case.snapshot: SV101 [warning/mesh] mesh: the maximum non-orthogonality exceeds 70 degrees: expect slower convergence and reduced accuracy
+4920 cells, algorithm simplec
+warning: the maximum non-orthogonality exceeds 70 degrees: expect slower convergence and reduced accuracy
+results written to E:\projects\cfd\rcfd\.claude\worktrees\job49m\example-projects\axial-fan\runs\r-20261030T223519-0489\output
+warning: stopped after 1500 iterations without meeting the tolerances

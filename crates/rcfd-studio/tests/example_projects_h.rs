@@ -46,8 +46,10 @@ fn committed(project: &str) -> Vec<(String, String)> {
 
 #[test]
 fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
-    // wind-tunnel: the six cases of ADR 0142 and the two rotated aerofoil cases of ADR 0155
-    for (name, n_cases) in [("wind-tunnel", 8), ("quick-start", 4)] {
+    // wind-tunnel: the six cases of ADR 0142 and the two rotated aerofoil cases of ADR 0155; axial-fan: the 3D fan
+    // passage of ADR 0176, the only example drawn in 3D
+    for (name, n_cases) in [("wind-tunnel", 8), ("quick-start", 4), ("axial-fan", 1)] {
+        let flat = name != "axial-fan";
         let root = rcfd_project::paths::canonicalize(&examples().join(name)).unwrap();
         let runs = committed(name);
         let mut st = Studio::in_memory();
@@ -98,7 +100,11 @@ fn h1_example_projects_open_to_a_picture_in_the_studio_model() {
             assert_eq!(vp.snaps.len(), n, "{name}/{id}: snapshots");
             assert_eq!(f.field, "p", "{name}/{id}: default field");
             assert_eq!(f.index, n - 1, "{name}/{id}: the last snapshot is shown first");
-            assert!(vp.two_d, "{name}/{id}: a 2D case is drawn face-on");
+            assert_eq!(
+                vp.two_d, flat,
+                "{name}/{id}: a 2D case is drawn face-on, the fan passage in 3D"
+            );
+            assert!(!f.faces.is_empty(), "{name}/{id}: no faces drawn");
             assert!(vp.error.is_none(), "{name}/{id}: {:?}", vp.error);
         }
         for case in &cases {

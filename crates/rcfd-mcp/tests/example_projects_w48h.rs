@@ -25,9 +25,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Registered caps (ADR 0142 D7, per tree since ADR 0150): bytes of every file of a project folder (committed runs only),
-/// and of a whole tree.
+/// and of a whole tree. ADR 0176 registered the cap of the third project, `axial-fan`; the others are unchanged.
 const CAP_TOTAL: u64 = 40_000_000;
-const CAP_PROJECTS: [(&str, u64); 2] = [("wind-tunnel", 35_000_000), ("quick-start", 6_000_000)];
+const CAP_PROJECTS: [(&str, u64); 3] = [
+    ("wind-tunnel", 35_000_000),
+    ("quick-start", 6_000_000),
+    ("axial-fan", 6_000_000),
+];
 const MAX_SNAPSHOTS: usize = 100;
 /// The aerofoil cases name a mesh file; every other case uses a generator (ADR 0142 D3, E1 known miss). The two rotated
 /// ones set the angle by `[mesh.transform]` (ADR 0155 D9).
@@ -267,7 +271,8 @@ fn tmp(tag: &str) -> PathBuf {
 fn s1_projects_open_validate_and_list_every_committed_run() {
     for (tree, _) in TREES {
         let ps = tree_projects(tree);
-        assert_eq!(ps.len(), 2, "{tree}: two example projects");
+        // ADR 0176: wind-tunnel, quick-start and axial-fan
+        assert_eq!(ps.len(), 3, "{tree}: three example projects");
         for ex in &ps {
             let probs = project_problems(&ex.dir, &ex.runs);
             println!("S1 {}: {} runs, {} problems", ex.label(), ex.runs.len(), probs.len());
@@ -398,8 +403,8 @@ fn s3_every_case_validates_through_rcfd_api() {
                 n += 1;
             }
         }
-        // ten of ADR 0142 and the two rotated aerofoil cases of ADR 0155, in each tree
-        assert_eq!(n, 12, "{tree}: twelve case files");
+        // ten of ADR 0142, the two rotated aerofoil cases of ADR 0155 and the fan passage of ADR 0176, in each tree
+        assert_eq!(n, 13, "{tree}: thirteen case files");
     }
 }
 
@@ -432,7 +437,8 @@ fn case_dir(dir: &Path, rel: &str) -> PathBuf {
     dir.join(rel).parent().unwrap().to_path_buf()
 }
 
-/// E1: the eight generator cases open and validate through the Studio editor's calls.
+/// E1: the nine generator cases (eight of ADR 0142, the fan passage of ADR 0176) open and validate through the Studio
+/// editor's calls.
 #[test]
 fn e1_generator_cases_validate_through_the_editor_calls() {
     for (tree, _) in TREES {
@@ -450,7 +456,7 @@ fn e1_generator_cases_validate_through_the_editor_calls() {
                 n += 1;
             }
         }
-        assert_eq!(n, 8, "{tree}");
+        assert_eq!(n, 9, "{tree}");
     }
 }
 
@@ -883,6 +889,10 @@ fn g1_g2_tree(tree: &'static str, aerofoils: bool) {
             );
             let want = if case_rel.contains("cylinder") {
                 ("finished", Some(1280), Some(0))
+            } else if case_rel.contains("fan01") {
+                // ADR 0176 P1: first-order upwind leaves a small cycle that keeps the SST change criterion open (ADR
+                // 0110 S10), so the run stops at its iteration cap
+                ("not_converged", Some(1500), Some(5))
             } else if case_rel.contains("naca0012") {
                 ("not_converged", Some(2000), Some(5))
             } else {
@@ -1059,6 +1069,75 @@ fn g3_flow_tree(tree: &str) {
     );
     assert_eq!(swapped.len(), 4);
     assert_eq!(failed.len(), swapped.len(), "{tree}: {failed:#?}");
+}
+
+// ------------------------------------------------------------------------------------------------ G4: the fan passage
+
+/// G4 (ADR 0176, sanity of the 3D example, not validation), on each tree's fan run: P2 its stored mesh is 3D (the cell
+/// centres span more than 0.05 m along each of x, y and z); P3 the last residual line has `u` and `p` below 1e-5, the
+/// case's tolerances; P4 the mass flows balance, |m_in + m_out| <= 1e-3 max(|m_in|, |m_out|); P5's first part, the rotor
+/// torque -9 (m_blade + m_hub) is positive. P5's second part is the known miss below. Nothing is compared with the
+/// measured fan data.
+#[test]
+fn g4_fan_passage_is_3d_and_its_first_order_run_is_sane() {
+    for (tree, _) in TREES {
+        g4_tree(tree, false);
+    }
+}
+
+/// KNOWN MISS (ADR 0176 addendum): P5's second part, the torque within 5 % of ADR 0110 S10's first-order value on the
+/// same mesh (1.335 N m). The cold-start run gives 1.4023 N m on both trees (+5.04 %); S10 switched to `upwind` from
+/// the stalled second-order state, and both stop with a small cycle left. The limit is kept as registered.
+#[test]
+#[ignore = "KNOWN MISS (ADR 0176 P5): the cold-start first-order torque is 1.4023 N m, +5.04 % against S10's 1.335 N m, limit 5 %"]
+fn g4_fan_torque_within_5_percent_of_s10_known_miss() {
+    for (tree, _) in TREES {
+        g4_tree(tree, true);
+    }
+}
+
+/// G4 on one tree; `s10` checks only P5's 5 % limit (the known miss), otherwise P2-P4 and the sign of the torque.
+fn g4_tree(tree: &'static str, s10: bool) {
+    let ex = tree_projects(tree)
+        .into_iter()
+        .find(|e| e.name == "axial-fan")
+        .expect("axial-fan");
+    let (id, case_rel) = &ex.runs[0];
+    let run = ex.dir.join("runs").join(id);
+    let mut r = Reader::open(&run.join("fields")).unwrap();
+    let mesh = r.mesh().unwrap();
+    let mut span = [(f64::INFINITY, f64::NEG_INFINITY); 3];
+    for c in mesh.cell_centres() {
+        for k in 0..3 {
+            span[k] = (span[k].0.min(c[k]), span[k].1.max(c[k]));
+        }
+    }
+    let ext: Vec<f64> = span.iter().map(|(a, b)| b - a).collect();
+    let lines = jsonl::read::<ResidualLine>(&run.join("residuals.jsonl")).unwrap();
+    let last = lines.items.last().unwrap();
+    let (ru, rp) = (last.residuals["u"], last.residuals["p"]);
+    let met = read_json(&run.join("metrics.json"));
+    let rep = |k: &str| met["reports"][k].as_f64().unwrap_or(f64::NAN);
+    let (m_in, m_out) = (rep("m_in"), rep("m_out"));
+    let imbalance = (m_in + m_out).abs() / m_in.abs().max(m_out.abs());
+    let torque = -9.0 * (rep("m_blade") + rep("m_hub"));
+    println!(
+        "G4 {tree}/axial-fan/{id} {case_rel}: {} cells, extent x {:.4} y {:.4} z {:.4} m; step {}: res_u {ru:.3e} res_p {rp:.3e}; m_in {m_in:.6e} m_out {m_out:.6e} (imbalance {imbalance:.2e}); torque {torque:.4} N m ({:+.2} % against 1.335)",
+        mesh.n_cells(),
+        ext[0],
+        ext[1],
+        ext[2],
+        last.step,
+        100.0 * (torque / 1.335 - 1.0)
+    );
+    if s10 {
+        assert!((torque / 1.335 - 1.0).abs() <= 0.05, "{tree}: P5 torque {torque}");
+        return;
+    }
+    assert!(ext.iter().all(|e| *e > 0.05), "{tree}: P2 extent {ext:?}");
+    assert!(ru < 1e-5 && rp < 1e-5, "{tree}: P3 res_u {ru}, res_p {rp}");
+    assert!(imbalance <= 1e-3, "{tree}: P4 imbalance {imbalance}");
+    assert!(torque > 0.0, "{tree}: P5 torque {torque}");
 }
 
 // ------------------------------------------------------------------------------------------------ S7, S8, S9
@@ -1306,7 +1385,8 @@ fn t1_the_trees_share_their_inputs() {
         assert!(probs.is_empty(), "{}: {probs:#?}", ex.name);
         n += 1;
     }
-    assert_eq!(n, 2);
+    // ADR 0176: three projects
+    assert_eq!(n, 3);
 }
 
 /// T1 control on copies of the Linux tree's quick-start: (a) a case edited, (b) an extra case, (c) a notes line outside

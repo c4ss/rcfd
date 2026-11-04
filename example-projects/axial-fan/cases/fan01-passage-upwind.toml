@@ -1,0 +1,150 @@
+# One periodic blade passage of the FAN-01 low-pressure axial fan (FAU / EAA, CC BY 4.0 CAD and data; ADR 0075):
+# 9 blades, hub radius 0.124 m, tip radius 0.2475 m, 2.5 mm tip gap, 1486 rpm, design flow 1.4032 m^3/s. Steady,
+# k-omega SST, SIMPLEC, solved in the rotating frame of the blade (rotating_frame source), on the coarsest C-grid of the
+# ADR 0086 mesh family (F3, 4 920 cells, construction camber_seam_h) (ADR 0176).
+#
+# FOR VIEWING THE 3D GEOMETRY AND FLOW PATTERN ONLY: this is not a validated fan prediction. Every setting is that of the
+# bladed run B3 of ADR 0110 (crates/rcfd-api/tests/fan01_stall_w43c.rs, case_toml(F3, ...)) except three:
+#   * convection = "upwind" (first order). With the registered second-order scheme (Barth-Jespersen-limited
+#     linear_upwind) the steady solve does not converge on this mesh: the residuals stall near 1e-3 in a limit cycle
+#     (ADR 0110). In ADR 0110 S10, switching that stalled run to first-order upwind at iteration 1000 brought the u and p
+#     residuals below 1e-5 (a small cycle stayed at the outlet-hub corner), with a fan torque of 1.335 N m, 38 % below
+#     the measured 2.142 N m; the stalled second-order run gave 1.850 N m (ADR 0086). First order is the less accurate
+#     solution. This file starts from the uniform initial state instead; what its run reached is in its run folder.
+#   * max_iterations = 1500 (B3: 100000), so the run ends in bounded time.
+#   * [output] stores fields for the Studio.
+# The measured pressure rise is an installation value that a rotor-only passage cannot reproduce (docs/milestone-fan.md).
+# Nothing in this project agrees with the measured fan data, and nothing claims to.
+title = "FAN-01 axial fan, one blade passage, F3 mesh, first-order upwind (for viewing, not validated)"
+
+[mesh]
+generator = "axial_fan_sector"
+
+[mesh.fan]
+n_blades = 9
+r_hub = 0.124
+r_tip = 0.2475
+tip_clearance = 0.0025
+axial_extent = 0.4
+z_le_root = 0.1
+family = "naca4"
+# The 16 blade sections of the CAD (validation-data/reference/w34d_fan01_cad_sections.csv, the 247 mm row left out),
+# in metres and degrees: radius, chord, stagger, NACA 4-digit camber, camber position and thickness, sweep and lean.
+station_radius = [0.124, 0.127, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2, 0.21, 0.22, 0.23, 0.24, 0.245, 0.2475]
+station_chord = [0.09892000000000001, 0.09638, 0.09384, 0.08599, 0.07923000000000001, 0.07368000000000001, 0.06941, 0.06589, 0.06288, 0.06051, 0.058570000000000004, 0.05711, 0.05619, 0.055490000000000005, 0.05508, 0.054869999999999995]
+station_stagger = [43.63, 44.81, 45.99, 49.94, 53.26, 55.89, 58.2, 60.21, 61.97, 63.57, 65.04, 66.39, 67.67, 68.83, 69.35, 69.6]
+station_camber = [0.0364, 0.0365, 0.0366, 0.0369, 0.0372, 0.0374, 0.0375, 0.0375, 0.0376, 0.0376, 0.0376, 0.0376, 0.0376, 0.0376, 0.0376, 0.0376]
+station_camber_pos = [0.53, 0.53, 0.53, 0.52, 0.52, 0.52, 0.52, 0.52, 0.52, 0.52, 0.52, 0.52, 0.52, 0.515, 0.515, 0.515]
+station_thickness = [0.1086, 0.1088, 0.109, 0.1094, 0.1097, 0.11, 0.1102, 0.1104, 0.1106, 0.1107, 0.1109, 0.111, 0.1111, 0.1111, 0.1111, 0.1112]
+station_sweep = [0.0, 0.0013000000000000008, 0.0025999999999999977, 0.006649999999999999, 0.009899999999999999, 0.01235, 0.01427, 0.01583, 0.01711, 0.01817, 0.01908, 0.01983, 0.02047, 0.02102, 0.02127, 0.021410000000000002]
+station_lean = [0.0, -0.0009087929415134477, -0.001860520982625956, -0.005180137219919173, -0.008717919613711681, -0.012287117934040078, -0.015666075365901106, -0.018912387774610556, -0.022118557610524146, -0.02516764781375824, -0.028112018261872672, -0.030909781052819576, -0.03355919085734697, -0.03610737156525869, -0.03745825640630231, -0.03814286180539709]
+# The coarsest member F3 of the ADR 0086 C-grid family (F2 and F1 have 13 627 and 38 184 cells).
+topology = "c_grid"
+c_grid_construction = "camber_seam_h"
+n_up = 6
+n_chord = 12
+n_down = 6
+n_side = 8
+n_nose = 3
+n_core = 1
+front_gap = 0.3
+n_span = 10
+n_gap = 5
+n_bl = 2
+growth = 1.2
+first_cell_height = 0.0
+y_plus = 30.0
+ref_speed = 30.456512260547154
+nu = 1.5e-5
+
+[physics]
+nu = 1.5e-5
+rho = 1.2   # assumed (ADR 0075)
+
+[turbulence]
+model = "k_omega_sst"
+
+[initial]
+# Relative velocity: the axial design velocity Q / annulus area minus the frame rotation (Omega = 1486 rpm = 155.6 1/s).
+velocity = [0.0, 0.0, 9.478236828221185]
+velocity_expression_x = "155.61355610781442 [1/s] * y"
+velocity_expression_y = "-155.61355610781442 [1/s] * x"
+
+[boundaries.inlet]
+velocity = "fixed"
+velocity_value = [0.0, 0.0, 9.478236828221185]
+velocity_expression_x = "155.61355610781442 [1/s] * y"
+velocity_expression_y = "-155.61355610781442 [1/s] * x"
+turbulence = "inlet"
+turbulence_spec = "values"
+k_value = 0.01347554600577726
+omega_value = 12.04203514474123
+
+[boundaries.outlet]
+velocity = "zero_gradient"
+pressure = "fixed"
+
+[boundaries.hub]
+velocity = "fixed"   # rotates with the blade: at rest in this frame
+
+[boundaries.blade]
+velocity = "fixed"
+
+[boundaries.shroud]
+# The casing stands still in the absolute frame: it moves at -Omega x r in the rotating frame.
+velocity = "moving_wall"
+wall_rotation_rate = -155.61355610781442
+wall_velocity_projection = "tangential"
+turbulence = "wall"
+
+[sources.frame]
+type = "rotating_frame"
+rotation_axis = [0.0, 0.0, 1.0]
+angular_velocity = 155.61355610781442
+centrifugal = true
+
+[solver]
+algorithm = "simplec"
+convection = "upwind"   # first order; see the head of this file before changing it
+max_iterations = 1500
+tolerance_u = 1e-5
+tolerance_p = 1e-5
+
+[output]
+store_interval = 150   # a snapshot every 150 iterations and the final state, single precision
+store_precision = "f32"
+store_fields = ["ux", "uy", "uz", "p", "nut"]
+
+# Reports. Moments about the fan axis of one passage; the rotor torque of the whole fan is -9 (m_blade + m_hub).
+[reports.m_blade]
+type = "moment"
+patch = "blade"
+direction = [0.0, 0.0, 1.0]
+
+[reports.m_hub]
+type = "moment"
+patch = "hub"
+direction = [0.0, 0.0, 1.0]
+
+[reports.m_shroud]
+type = "moment"
+patch = "shroud"
+direction = [0.0, 0.0, 1.0]
+
+[reports.m_in]
+type = "mass_flow"
+patch = "inlet"
+
+[reports.m_out]
+type = "mass_flow"
+patch = "outlet"
+
+[reports.p_in]
+type = "area_average"
+patch = "inlet"
+field = "p"
+
+[reports.p_out]
+type = "area_average"
+patch = "outlet"
+field = "p"

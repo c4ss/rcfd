@@ -1,0 +1,48 @@
+{
+  "exit_code": 5,
+  "last_residuals": {
+    "monitors": {
+      "m_blade": -0.15302580169056973,
+      "m_hub": -0.0027817778532472108,
+      "m_in": -0.18600726700438708,
+      "m_out": 0.18600726696746786,
+      "m_shroud": 0.007274015962035609,
+      "p_in": -41.56519889863361,
+      "p_out": 0.0
+    },
+    "residuals": {
+      "continuity": 3.110619500194917e-8,
+      "p": 7.926818512560957e-7,
+      "u": 4.673279697343178e-6
+    },
+    "step": 1500,
+    "time": 0.0
+  },
+  "reason": "not_converged: iteration limit 1500 reached without meeting the residual targets",
+  "reports": {
+    "m_blade": -0.15302580169056973,
+    "m_hub": -0.0027817778532472108,
+    "m_in": -0.18600726700438708,
+    "m_out": 0.18600726696746786,
+    "m_shroud": 0.007274015962035609,
+    "p_in": -41.56519889863361,
+    "p_out": 0.0
+  },
+  "solver_finish": {
+    "elapsed_s": 125.101739945,
+    "event": "finish",
+    "exit_code": 5,
+    "format": "rcfd-status",
+    "iterations": 1500,
+    "ok": false,
+    "reason": "iteration limit 1500 reached without meeting the residual targets",
+    "seq": 1503,
+    "state": "not_converged",
+    "time": 0.0,
+    "version": 1,
+    "wall_s": 125.101739945
+  },
+  "state": "finished",
+  "steps": 1500,
+  "time": 0.0
+}

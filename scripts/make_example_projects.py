@@ -2,7 +2,7 @@
 
     python scripts/make_example_projects.py                  rebuild every project of this platform's tree: mesh
                                                              recipe, runs, ledger, run table
-    python scripts/make_example_projects.py --project NAME   rebuild one project (wind-tunnel or quick-start)
+    python scripts/make_example_projects.py --project NAME   rebuild one project (wind-tunnel, quick-start or axial-fan)
     python scripts/make_example_projects.py --docker         build the Linux tree in Docker (Ubuntu 24.04, glibc 2.39,
                                                              Rust 1.99.0, the CI runner's distribution), from this
                                                              checkout's files, and put it in place
@@ -70,7 +70,7 @@ DOCKER_VOLUMES = [("rcfd-examples-target", "/target"), ("rcfd-examples-cargo-reg
 
 # Size caps registered in ADR 0142 (bytes, every file of the project folder counted, `.rcfd/` included).
 CAP_TOTAL = 40_000_000
-CAP_PROJECT = {"wind-tunnel": 35_000_000, "quick-start": 6_000_000}
+CAP_PROJECT = {"wind-tunnel": 35_000_000, "quick-start": 6_000_000, "axial-fan": 6_000_000}  # axial-fan: ADR 0176
 MAX_SNAPSHOTS = 100
 
 # Files of a run folder that a rebuild removes (not in the folder contract; bulky or duplicated).
@@ -128,6 +128,15 @@ PROJECTS = {
              "params": [["Ra", 1000.0, "1"]], "kind": "steady"},
             {"case": "cases/heated-cavity-ra1e4.toml", "study": "heated-cavity-rayleigh",
              "params": [["Ra", 10000.0, "1"]], "kind": "steady"},
+        ],
+    },
+    # ADR 0176: one 3D case, for viewing the geometry and the flow pattern (first-order upwind; not a validated fan run)
+    "axial-fan": {
+        "name": "Axial fan: one blade passage of FAN-01 (3D)",
+        "meshes": [],
+        "runs": [
+            {"case": "cases/fan01-passage-upwind.toml", "study": "fan01-passage",
+             "params": [["speed", 1486.0, "rpm"], ["flow_rate", 1.4032, "m^3/s"]], "kind": "steady"},
         ],
     },
 }
