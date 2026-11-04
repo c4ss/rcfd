@@ -6,7 +6,7 @@ Conventions: `- [ ] F-xxx` checkbox, `depends on` lists prerequisite ids (build 
 
 Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F-028 > F-030 > F-074 > F-085 > F-090 > F-091 > F-146 > F-147 > F-148 > F-145 > F-094. The Claude Code mod panel (F-092/F-093) is an optional extra off this path.
 
-Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-273, the workspace layer of [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), ahead of the FAN-01 diagnosis.
+Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-273 > F-274 > F-275, the workspace layer of [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), ahead of the FAN-01 diagnosis.
 
 ## Phase 0 - Workspace and architecture
 
@@ -823,23 +823,31 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the summary format the older scripts read, and a scanner lists tests that cannot fail (ADRs 0127 to 0129, docs/test-process.md).
   - note: Open items: a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case), an environment switch that makes the 12 data-gated tests fail rather than skip, limit headroom on one stage, a test for the R3 limit, a re-measurement at 5 jobs, scanning of inline test modules, and a slot queue in place of the directory locks. Size M.
 
-## Revision additions (F-270 to F-273)
+## Revision additions (F-270 to F-275)
 
 Added with [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), one workspace layer between the project folder, the MCP server and the Studio. Priority set by the maintainer on 2026-11-04: these items come before the FAN-01 diagnosis.
 
 - [ ] **F-270** Workspace layer (rcfd-workspace) shared by the MCP server and the Studio
   - depends on: F-261, F-262, F-267
-  - acceptance: One crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and the Studio use it: the existing project-tool and Studio tests pass unchanged, a Studio save and an edit_case on the same file give one write and one conflict naming the current hash, a comment line in a case survives a Studio save, and the crate graph stays acyclic with rcfd-studio not depending on rcfd-mcp (ADR 0173 W1 to W3, checks C1, C2 and C6).
+  - acceptance: One crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and the Studio use it: the existing project-tool and Studio tests pass unchanged, a Studio save and an edit_case on the same file give one write and one conflict naming the current hash, a comment line in a case survives a Studio save, and the crate graph stays acyclic with rcfd-studio not depending on rcfd-mcp (ADR 0173 W1, W2 and W5, checks C1, C2 and C6).
   - note: ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L.
-- [ ] **F-271** Project journal and change feed with the actor of each change
+- [ ] **F-271** New simulations from the MCP server in project mode
   - depends on: F-270
-  - acceptance: Every accepted write, run submission and run control call appends an entry with an actor and a sequence number to .rcfd/edits.jsonl (additive fields only); one ordered feed merges the journal, the run records and events, and the watcher's changes; a change made by one process appears in a second process's feed within the limit fixed by an amendment of ADR 0173, a write made outside the workspace appears as external, and the Studio shows who made each change (ADR 0173 W4, check C3).
-  - note: ADR 0173 (proposed). Priority 2. Linking an MCP actor to a Claude Code session is NOT VERIFIED (ADR 0173 D4). Size M.
-- [ ] **F-272** Design study evaluations as runner runs in project mode
+  - acceptance: In project mode the MCP server creates a case in cases/ (from a shipped example, a built-in template, TOML, settings or a copy of a project case, never replacing a file) and starts a run of it through the runner, in one call if asked, with the same start plan as the Studio, so the run's fields are stored and the Studio lists the run and can read its snapshots (ADR 0173 R1, W3, check C7, decisions D7 and D2).
+  - note: ADR 0173 (proposed). Priority 2. The shared start plan changes start_run's output for cases with no store setting, so it needs the maintainer's approval (D7). Size M.
+- [ ] **F-272** Mesh set-up from the MCP server in project mode
+  - depends on: F-270
+  - acceptance: In project mode the MCP server checks a case's mesh (the report of rcfd check-mesh and the patch list), draws it with the CPU renderer, imports a Gmsh, Fluent or OpenFOAM file from the project folder into meshes/ with its cell, face and patch counts, lists meshes/ with the cases that use each file, and returns the mesh check when edit_case changes a mesh setting; an invalid mesh setting is refused with a located diagnostic and writes nothing (ADR 0173 R2, W4, check C8, decision D8).
+  - note: ADR 0173 (proposed). Priority 3. Not included: a mesh recipe format and the surface-to-volume pipeline, which no case or command reaches today (D8 (b), a later ADR). Size M.
+- [ ] **F-273** Project journal and change feed with who, what and why; the Studio updates from it
+  - depends on: F-270
+  - acceptance: Every accepted write, case creation, mesh import, run submission and run control call appends an entry to .rcfd/edits.jsonl with an actor, a sequence number, the settings changed (path, old and new value) and an optional reason (additive fields only); one ordered feed merges the journal, the run records and events, and the watcher's changes; a change made by one process appears in a second process's feed within the limit fixed by an amendment of ADR 0173, a write made outside the workspace appears as external, and the Studio updates its views from the feed and shows who changed what and why (ADR 0173 R3, W6, check C3, decision D4).
+  - note: ADR 0173 (proposed). Priority 4. Linking an MCP actor to a Claude Code session is NOT VERIFIED (ADR 0173 D4). Size M.
+- [ ] **F-274** Design study evaluations as runner runs in project mode
   - depends on: F-270, F-268
-  - acceptance: In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W5, check C4).
-  - note: ADR 0173 (proposed). Priority 3. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M.
-- [ ] **F-273** Project-mode MCP tool list and plugin edit hook
-  - depends on: F-272
-  - acceptance: With --project, tools/list holds no tool whose state lives only in the server's memory, and without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case, checked in a real session where possible (ADR 0173 W6, check C5, decisions D2 and D5).
-  - note: ADR 0173 (proposed). Priority 4. The hook contract is to be checked on an installed Claude Code build first. Size S.
+  - acceptance: In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W7, check C4).
+  - note: ADR 0173 (proposed). Priority 5. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M.
+- [ ] **F-275** Project-mode MCP tool list and plugin edit hook
+  - depends on: F-271, F-272, F-274
+  - acceptance: With --project, each session tool is hidden once its project equivalent has passed its check, until tools/list holds no tool whose state lives only in the server's memory; without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case and create_case, checked in a real session where possible (ADR 0173 W8, check C5, decisions D2 and D5).
+  - note: ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first. Size S.

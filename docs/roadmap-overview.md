@@ -1,6 +1,6 @@
 # Roadmap overview
 
-This page is the short, plain-language version of the plan. The full list of 188 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
+This page is the short, plain-language version of the plan. The full list of 190 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
 
 It is for anyone who wants to know what rcfd can do today and what comes next. To learn how to use rcfd, start at [the documentation home](index.md) instead.
 
@@ -12,7 +12,7 @@ It is early-stage software. It has not been validated for engineering decisions,
 
 ## Where it stands
 
-Of the 188 roadmap items, 95 are done, 63 are partly done and 30 have not started. Counting each partly done item as half gives about 67%. That figure measures how many planned items have landed, not how accurate the solver is. A partly done item usually works for some cases and has a stated gap.
+Of the 190 roadmap items, 95 are done, 63 are partly done and 32 have not started. Counting each partly done item as half gives about 67%. That figure measures how many planned items have landed, not how accurate the solver is. A partly done item usually works for some cases and has a stated gap.
 
 | Area | Done | Partly done | Not started |
 | --- | --- | --- | --- |
@@ -24,7 +24,7 @@ Of the 188 roadmap items, 95 are done, 63 are partly done and 30 have not starte
 | Compressible flow | 3 | 2 | 1 |
 | Post-processing and VTK output | 11 | 4 | 0 |
 | Scripting API, CLI and settings tree | 8 | 1 | 0 |
-| AI assistant and desktop app integration | 16 | 10 | 7 |
+| AI assistant and desktop app integration | 16 | 10 | 9 |
 | Advanced physics and scale (stretch) | 8 | 20 | 20 |
 
 ## What works today
@@ -44,7 +44,7 @@ Of the 188 roadmap items, 95 are done, 63 are partly done and 30 have not starte
 
 ### One workspace layer for Claude Code and the Studio
 
-This comes first (set on 2026-11-04). Claude Code can do work through the MCP server that the Studio never sees: some of its tools keep their state in the server's memory and run solves inside it. [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) proposes one shared layer, so that every change Claude makes lands in the project folder, goes through one rule for writing files, and shows in the Studio with who made it. The work is roadmap items F-270 to F-273.
+This comes first (set on 2026-11-04). Claude Code can do work through the MCP server that the Studio never sees: some of its tools keep their state in the server's memory and run solves inside it. [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) proposes one shared layer, so that every change Claude makes lands in the project folder, goes through one rule for writing files, and shows in the Studio with who made it, what changed and why. Through it, Claude can create cases and run new simulations, and check, draw and import meshes, all inside the project. The work is roadmap items F-270 to F-275.
 
 ### Computer fan
 
@@ -60,7 +60,7 @@ A full test run takes over an hour. We are adding per-test time limits and a bet
 
 ## What comes next
 
-1. The workspace layer of ADR 0173 (F-270 to F-273), in the order the ADR sets out.
+1. The workspace layer of ADR 0173 (F-270 to F-275), in the order the ADR sets out.
 2. Close the FAN-01 diagnosis, or choose a different reference case for the rotating machinery path.
 3. Studio shell and plugin, then 3D rendering of fields and animation.
 4. A structural solver, so stress and strain can be shown. This is waiting on a decision.
