@@ -48,7 +48,8 @@ Code read for this registration (read only, main at edb4839):
   `crates/rcfd-fv/src/ale.rs` gives a following wall the mesh's tangential velocity plus a normal part that carries the
   swept volume; any other wall keeps its own condition.
 - `solver.linear_upwind_limiter = "barth_jespersen"` is refused for every algorithm except `simple` / `simplec`
-  (`sim.rs`, the check after the engine is built). The `tvd_*` schemes are accepted on every incompressible path.
+  (`sim.rs`, the check after the engine is built). The `tvd_*` names map to `ConvScheme::Tvd` for every incompressible
+  algorithm (`conv_scheme` in `sim.rs`); their behaviour on the moving-mesh step was not checked.
 - `rotating_frame` and `mrf` sources are refused with `piso` / `pimple` (`crates/rcfd-api/src/sources.rs`).
 - `CoupledSolver::with_solids` refuses periodic patches. With `algorithm = "coupled"`, `sim.rs` refuses turbulence and
   sources ("closed-domain laminar flow only"). `coupled.rs` has no limiter.
@@ -59,8 +60,8 @@ Code read for this registration (read only, main at edb4839):
   4.5e-3 (shroud) of `Omega r |S|`. A rigidly rotating face of that patch therefore sweeps a volume of that relative size.
 
 Fixed values (ADR 0075 / 0086): Omega = 155.614 rad/s about +z through the origin, 9 blades, r_hub 0.124 m, r_tip
-0.2475 m, shroud 0.250 m, axial extent 0.4 m (inlet z = 0), U_in = 9.478 m/s (Q = 1.4032 m^3/s), nu = 1.5e-5 m^2/s, rho = 1.2
-(assumed). One revolution takes 40.377 ms, one blade passage 4.486 ms and one flow-through 42.20 ms. Full-annulus
+0.2475 m, shroud 0.250 m, axial extent 0.4 m (inlet z = 0), U_in = 9.478 m/s (Q = 1.4032 m^3/s), nu = 1.5e-5 m^2/s,
+rho = 1.2 (assumed). One revolution takes 40.377 ms, one blade passage 4.486 ms and one flow-through 42.20 ms. Full-annulus
 values are 9 times the sector values.
 
 ## Decisions
@@ -96,6 +97,7 @@ convection `linear_upwind` with `barth_jespersen` in every run):
 | **R1(h)** control | relative, `rotating_frame` (Omega, centrifugal), SIMPLEC, steady: the ADR 0086 case text with `[turbulence] model = "laminar"` and the boundary turbulence lines removed | ADR 0086 empty set-up (hub and shroud `moving_wall` at -Omega, projection tangential) | E3, E2, E1 |
 | **Y1(h)** arm | absolute, `dynamic_mesh` rigid, `rotation_angle_expression = "155.614 [1/s] * t"`, axis z, origin 0, PISO, Euler | hub and shroud at rest (P-B) | E3, E2, E1 |
 | **I1(h)** inertial control | absolute, no mesh motion, PISO, Euler, otherwise Y1 | hub and shroud `fixed` 0 | E3, E2, E1 |
+| **I1S(h)** algorithm control, report only | absolute, no mesh motion, no source, steady SIMPLEC, otherwise R1 (no code needed) | hub and shroud `fixed` 0 | E3, E2, E1 |
 | **Y1b(h)** bladed, report only | as Y1 | hub and blade follow the mesh; shroud at rest (P-B) | B3, B2 |
 
 Inlet `fixed` (0, 0, 9.478) in the absolute runs, outlet fixed static pressure 0 with zero-gradient velocity, initial
@@ -144,9 +146,9 @@ from iteration 1, the ADR 0181 protocol): **Y2(h)** coupled with R-1 to R-6; **Y
 (rotation explicit, as ADR 0082), the attribution control. References: the ADR 0181 step-1 unchanged-mesh SIMPLEC runs
 (rotating frame), reproduced in the same process (V1).
 
-**D8. Concurrency and order.** At most two registered runs at a time. Order: R1 family (records committed), then Y1 and
-I1 families, then Y1(E2) at dt/2 (A1-T), then Y1b; H(dt), then H(dt/2); arm 2 last, after its rebuild. Records:
-JSON per run under `docs/investigations/exp-rot/`, written to an absolute path.
+**D8. Concurrency and order.** At most two registered runs at a time. Order: R1 and I1S families (records committed),
+then Y1 and I1 families, then Y1(E2) at dt/2 (A1-T), then Y1b; H(dt), then H(dt/2); arm 2 last, after its rebuild.
+Records: JSON per run under `docs/investigations/exp-rot/`, written to an absolute path.
 
 **D9. Decision mapping.** The rows marked "design" are the design's decision rule. The other rows are not covered by
 the design; they go to the maintainer as questions 3 and 6, and this ADR does not decide them.
@@ -155,13 +157,15 @@ the design; they go to the maintainer as questions 3 and 6, and this ADR does no
 |---|---|---|
 | Q-ROT **YES** | M-FAN-A1 is built on rigid rotation, time-marched, which needs F-271 | design |
 | Q-ROT **NO** | the cause is not the rotating-frame term; A1 stays on a rotating-frame solve and its design reopens the diagnosis | design |
-| Q-LC **STAYS** in arm 2 and the pocket is not PHYSICAL in H | the blocker is the mesh or the scheme, not the rotor model; A1's design starts from the M-FAN-B mesh | design (the "both arms" clause read as below) |
+| Q-LC **STAYS** in arm 2 and H is **STEADY** or **NUMERICAL** | the blocker is the mesh or the scheme, not the rotor model; A1's design starts from the M-FAN-B mesh | design (the "both arms" clause read as below) |
 | Q-ROT **NOT REPRODUCED** or **NOT EVALUABLE** | open question 3 | this ADR |
 | H **PHYSICAL** | open question 6 (cycle means as the reported values; steady convergence not expected) | ADR 0181 Q1 reading |
+| H **NOT EVALUABLE** (or not run) | the clause of row 3 is not read, so row 3 does not fire | this ADR |
 
 The design's "the limit cycle stays in both arms" cannot be read from Y1b: laminar flow at a chord Reynolds number of
 about 1.4e5 is expected to be unsteady behind a trailing edge, so a Y1b oscillation is not evidence of a limit cycle.
-This registration reads the clause from arm 2 (STAYS) and check H (not PHYSICAL). Open question 4 asks the maintainer to
+This registration reads the clause from arm 2 (STAYS) and check H (STEADY or NUMERICAL; a NOT EVALUABLE H gives no
+reading). Open question 4 asks the maintainer to
 confirm this reading.
 
 ## Registered limits and checks (fixed now)
@@ -191,8 +195,9 @@ most `max(0.5 % abs(L), 1e-4 N m)` and of the swirl energy at most `max(0.5 %, 0
 clock is 90 minutes instead of ADR 0086's 60, because ADR 0086 E1 missed 60 minutes by 82 iterations. Anything else is
 NOT CONVERGED.
 
-**Pathology (P)**, from R1 only, evaluated before any Y1 record is read: **P-GROW** iff all three R1 runs converge,
-`abs(L_R1(E1)) > abs(L_R1(E3))` and `abs(L_R1(E1)) >= 1e-2 N m`; otherwise **P-ABSENT**. P-GROW means the ADR 0086 growth
+**Pathology (P)**, from R1 only, evaluated before any Y1 record is read: P is defined only when all three R1 runs
+converge; otherwise P is **NOT EVALUABLE**. **P-GROW** iff `abs(L_R1(E1)) > abs(L_R1(E3))` and
+`abs(L_R1(E1)) >= 1e-2 N m`; otherwise **P-ABSENT**. P-GROW means the ADR 0086 growth
 is reproduced laminar. The 1e-2 N m floor makes the A1-R limit (1 % of it) no smaller than the 1e-4 N m settle floor, so
 a removal by two orders can be measured. ADR 0086 E1 had 0.106 N m.
 
@@ -204,14 +209,21 @@ a removal by two orders can be measured. ADR 0086 E1 had 0.106 N m.
 | A1-E | on every member `Delta p_tt(Y1(h)) <= 0` (a passive duct with walls at rest gains no total pressure) | ADR 0085 A3 |
 | A1-T | time-step floor: Y1(E2) is also run at dt/2; if `abs(L_Y1(E2)) > 1e-4 N m` and L changes by more than 50 % between dt and dt/2, A1-N and A1-R are "not measurable (time-step floor)"; if it changes by more than 10 %, Y1(E3) and Y1(E1) are run once more at dt/2 and those runs count (the dt runs are reported) | ADR 0085 floor rule, applied to dt |
 
-**Verdict Q-ROT** (exactly one):
-- **YES**: P-GROW; every Y1 and I1 run settled; A1-R and A1-N met.
-- **NO**: P-GROW; every Y1 and I1 run settled; A1-R or A1-N missed.
-- **NOT REPRODUCED**: P-ABSENT. Y1 is still run and reported against A1-N, A1-L and A1-E. Those results say whether
-  rigid rotation is clean on these meshes, but they do not say that it removes the ADR 0086 growth.
-- **NOT EVALUABLE**: an R1, Y1 or I1 run diverged, was NOT SETTLED or NOT CONVERGED, hit its cap, or A1-T floored.
+**Verdict Q-ROT** (exactly one; the classes are tested in this order and the first that applies is the verdict):
+1. **NOT EVALUABLE**: P is NOT EVALUABLE; or a Y1 or I1 run diverged, was NOT SETTLED or hit its cap; or A1-T floored
+   (A1-R and A1-N then neither met nor missed).
+2. **NOT REPRODUCED**: P-ABSENT. Y1 is still run and reported against A1-N, A1-L and A1-E. Those results say whether
+   rigid rotation is clean on these meshes, but they do not say that it removes the ADR 0086 growth.
+3. **YES**: P-GROW; A1-R and A1-N met.
+4. **NO**: P-GROW; A1-R or A1-N missed.
 
 A1-L and A1-E do not enter the verdict. A miss of either is a known miss and is reported beside the verdict.
+
+**Algorithm confound.** Y1 runs on PISO and R1 on steady SIMPLEC, so A1-R compares the frame and the algorithm together
+(ADR 0085 used one algorithm for each arm and its control; A1-L does, Y1 against I1). I1S, the inertial case on R1's
+algorithm, is reported beside I1. If on some member `abs(L_I1S)` and `abs(L_I1)` differ by more than a factor of 10 and
+either exceeds 1e-4 N m, the verdict (YES or NO) is labelled **ALGORITHM-CONFOUNDED**: on that member the algorithm alone
+moves L by more than the margin of A1-L.
 
 **Y1b (report only, no limit)**: settled or not; torque, L, the angular-momentum excess and Delta p_ts (revolution means
 and spreads); the five cells with the largest velocity amplitude over the last revolution, with generator tags; the
@@ -227,13 +239,14 @@ beside it; at a window of 0.1266 s its bin width (7.9 Hz) is too coarse for the 
 Outer-iteration rule: in at least 99 % of the window's steps, the velocity change of the 5th outer iteration is at most
 1e-2 of the 1st. If not, the run is NOT TIME-ACCURATE.
 
-Class (exactly one):
+Class (exactly one; tested in this order):
+- **NOT EVALUABLE** (tested first): a budget hit, a divergence, or a NOT TIME-ACCURATE run in H(dt) or H(dt/2).
 - **STEADY**: `A <= 0.01 Omega r_hub` (0.193 m/s) in H(dt) and in H(dt/2).
 - **PHYSICAL**: `A` above that in both runs; the window holds at least 5 periods (`n >= 6`) in both; at least 20 steps
-  per period in H(dt); `f(dt/2) / f(dt)` in [0.9, 1.1]; `A(dt/2) / A(dt)` in [0.75, 1.33]; both runs TIME-ACCURATE.
+  per period in H(dt); `f(dt/2) / f(dt)` in [0.9, 1.1]; `A(dt/2) / A(dt)` in [0.75, 1.33].
 - **NUMERICAL**: `A` above the threshold, and either the period in steps agrees within 10 % between H(dt) and H(dt/2), or
   the period is at most 4 steps.
-- **NOT EVALUABLE**: anything else, including a budget hit, a divergence or a NOT TIME-ACCURATE run.
+- **NOT EVALUABLE**: anything else.
 
 Reported beside the class, without a limit: the time means of torque and Delta p_ts over the window against the ADR 0181
 B2 cycle means (2.0308 N m, 63.860 Pa); the seam-pair flux sum (the ADR 0076 seam body-force risk); the five
@@ -253,8 +266,8 @@ The ADR 0181 limits, per run, on B3 and B2:
 **MIXED** otherwise; **NOT RUNNABLE** under V4. Y2S gets the same limits. Attribution, reported without a rule: Y2 GONE
 with Y2S not GONE points at the coupled solve with the rotation implicit; both GONE points at the formulation; Y2 STAYS
 says that none of the three changes matters on these meshes. Reported per run, without a limit: torque and Delta p_ts
-at the end against the ADR 0181 references, the five largest-`abs(du)` cells with tags, r and z, and the share of `sum abs(du)^2` in the hub
-trailing-edge columns (ADR 0181 definition).
+at the end against the ADR 0181 references, the five largest-`abs(du)` cells with tags, r and z, and the share of
+`sum abs(du)^2` in the hub trailing-edge columns (ADR 0181 definition).
 
 ## Predictions (mine; moderate confidence)
 
@@ -278,6 +291,7 @@ changes with the smoke, except the single dt fallback of D4.
 | Runs | Estimate per run |
 |---|---|
 | R1 E3 / E2 / E1 | 5 / 15 / 45 min |
+| I1S E3 / E2 / E1 | 5 / 15 / 45 min |
 | Y1, I1 E3 / E2 / E1 (15 revolutions at most) | 10 / 25 / 65 min |
 | Y1b B3 / B2 | 10 / 25 min |
 | H(dt) / H(dt/2) (5 498 / 10 996 steps, 5 outer) | 50 / 100 min |
@@ -329,8 +343,8 @@ and its key is documented in `docs/case-schema.md`. Code of a part that is NOT R
    A1 on rigid rotation provisionally if Y1 meets A1-N, A1-L and A1-E (the formulation is clean on these meshes), and
    repeat arm 1 with SST as part of F-271's verification before A1 is graded. For NOT EVALUABLE, keep A1's frame open,
    and decide after one registered amendment that addresses the cause.
-4. **Reading "the limit cycle stays in both arms" (D9).** Recommendation: read it from arm 2 and check H, not from the
-   laminar Y1b, for the reason given under D9.
+4. **Reading "the limit cycle stays in both arms" (D9).** Recommendation: read it as arm 2 STAYS and H STEADY or
+   NUMERICAL, not from the laminar Y1b, for the reason given under D9. A NOT EVALUABLE H gives no reading.
 5. **The form of arm 2.** Options: (a) ADR 0085 arm C as the design names it (F-RP, coupled, rotation implicit; size L);
    (b) the relative frame on the coupled solver with Coriolis as implicit blocks (no F-RP; smaller; it separates the
    treatment of the rotation term from the change of formulation; untested anywhere). Recommendation: (a), as the
@@ -340,7 +354,7 @@ and its key is documented in `docs/case-schema.md`. Code of a part that is NOT R
 7. **When arm 2 runs.** It is the costliest part (size L). Its answer changes A1 only when A1 stays on a steady
    rotating-frame solve. Options: (a) as the design says, both arms regardless; (b) build and run arm 2 only if Q-ROT is
    not YES. Recommendation: (b). With Q-ROT YES, A1 is time-marched on a moving mesh, and the "both arms" clause is read
-   from check H.
+   from check H alone (STEADY or NUMERICAL; not read if H is NOT EVALUABLE).
 
 ## Addenda
 

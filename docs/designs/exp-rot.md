@@ -34,9 +34,9 @@ What is known about FAN-01 on the C-grid family of [ADR 0086](../adr/0086-wave37
 - **Spurious angular momentum.** In the empty passage the exact outlet angular-momentum flux L is zero. The
   rotating-frame solve (SST, SIMPLEC, Barth-Jespersen `linear_upwind`) gives -0.0095, 0.0596 and 0.1060 N m, so L grows
   with refinement, and the passive duct gains 4.5 to 9.2 Pa of total pressure.
-  [ADR 0082](../adr/0082-wave36c-rotating-frame-angular-momentum-source.md) located a first-order part of this error on the H-slit mesh: upwind convection of the rigid part `-Omega x r` of the
-  relative velocity. The growth under the limited scheme on the C-grid is undiagnosed
-  ([`milestone-fan.md`](../milestone-fan.md)).
+  [ADR 0082](../adr/0082-wave36c-rotating-frame-angular-momentum-source.md) located a first-order part of this error on
+  the H-slit mesh: upwind convection of the rigid part `-Omega x r` of the relative velocity. The growth under the
+  limited scheme on the C-grid is undiagnosed ([`milestone-fan.md`](../milestone-fan.md)).
 - **The absolute-velocity formulation.** It removes the source where it converges. ADR 0082's rotor passage (F-RP) gave
   -1.4e-5 N m on the H-slit M1. [ADR 0085](../adr/0085-wave37b-rotor-passage-robustness.md) made F-RP converge on M0 and
   M1 with a pseudo-time step or with the coupled solver (arm C), but neither converged on M2 in 60 minutes. All of that
@@ -59,7 +59,8 @@ starts from the CAD mesh of M-FAN-B.
 
 *   **EG1 (Q-ROT, arm 1).** On E3, E2 and E1, compare L under rigid rotation (Y1) with L under the rotating frame (R1),
     with the same laminar physics and the same convection scheme. A stationary-mesh run (I1) gives the inertial
-    discretisation floor. The verdict is YES, NO, NOT REPRODUCED or NOT EVALUABLE by the rules of ADR 0183.
+    discretisation floor, and the same case on steady SIMPLEC (I1S) shows how much the algorithm alone moves L. The
+    verdict is YES, NO, NOT REPRODUCED or NOT EVALUABLE by the rules of ADR 0183.
 *   **EG2 (arm 1, bladed).** Run B3 and B2 rigidly rotating. Report whether they settle, the angular-momentum balance,
     and the wall time per revolution. The last number sizes the 4-hour budget per operating point of G8.
 *   **EG3 (Q-POCKET, check H).** Classify the B2 hub pocket under time-accurate SST as STEADY, PHYSICAL, NUMERICAL or
@@ -85,9 +86,10 @@ cover, and those are left to the maintainer:
 |---|---|
 | Q-ROT YES | A1 on rigid rotation, time-marched; F-271 moves into A1 (parent design) |
 | Q-ROT NO | A1 stays on a rotating-frame solve; its design reopens the diagnosis (parent design) |
-| Q-LC STAYS and H not PHYSICAL | the blocker is the mesh or the scheme; A1 starts from the M-FAN-B mesh (parent design) |
+| Q-LC STAYS and H STEADY or NUMERICAL | the blocker is the mesh or the scheme; A1 starts from the M-FAN-B mesh (parent design) |
 | Q-ROT NOT REPRODUCED or NOT EVALUABLE | open question 3 |
 | H PHYSICAL | open question 6 |
+| H NOT EVALUABLE or not run | the third row is not read and does not fire |
 
 The parent rule says "the limit cycle stays in both arms". Arm 1 is laminar, and laminar flow at a chord Reynolds
 number of about 1.4e5 is expected to oscillate behind a trailing edge whatever the rotor model. So the bladed arm-1 runs
@@ -134,8 +136,9 @@ effort bound). The sizes are estimates. No line count exists for any earlier ver
   `moving_wall` with the tangential projection is checked on that path. The seam body-force term uses the coupled mean
   `rAU`: [ADR 0076](../adr/0076-wave35a-transient-seams-and-relaxation.md) Y5 measured order 2.04 on its rotational
   sector with this term, against 1.72 without it (both with that wave's fix set K, since removed). It named the missing
-  term as an open item for any transient rotating-frame run of a sector. The rotating-frame wall-pressure treatment of the steady path (F-031 note, `wall_pressure_trapezoid`) is
-  checked on the transient path too. If it is missing there, it is added under the same key.
+  term as an open item for any transient rotating-frame run of a sector. The rotating-frame wall-pressure treatment of
+  the steady path (F-031 note, `wall_pressure_trapezoid`) is checked on the transient path too. If it is missing there,
+  it is added under the same key.
 
 ### 3. Arm 1: rigid rotation, laminar, absolute frame
 
@@ -145,6 +148,7 @@ effort bound). The sizes are estimates. No line count exists for any earlier ver
 - **Y1**, the arm: the same mesh in the absolute frame, rotating at `Omega t` about z, PISO with Euler, walls at rest
   (P-B), inlet (0, 0, 9.478) m/s.
 - **I1**, the inertial control: Y1 with the mesh at rest.
+- **I1S**, the algorithm control (report only, no code): I1 on R1's steady SIMPLEC.
 
 The bladed **Y1b** runs on B3 and B2, with the hub and blade following the mesh and the shroud at rest. It is report
 only.
@@ -175,6 +179,11 @@ the time-step floor, using ADR 0085's 10 % / 50 % rule applied to dt.
 YES needs P-GROW with A1-R and A1-N. A1-L and A1-E are recorded and become known misses if missed. This follows ADR 0085,
 which used the inertial control and the energy check as acceptance companions.
 
+Y1 runs on PISO and R1 on steady SIMPLEC, so A1-R compares the frame and the algorithm together. ADR 0085 kept one
+algorithm per arm and control; here only A1-L (Y1 against I1) does. I1S is the cheap way to see the algorithm's share. If
+I1S and I1 differ by more than a factor of 10 on a member (above the 1e-4 N m floor), the verdict is labelled
+ALGORITHM-CONFOUNDED.
+
 ### 4. Check H: the hub pocket in time
 
 ADR 0181 recommends a time-accurate PIMPLE run on B2 to see whether the pocket keeps oscillating at a physical
@@ -193,6 +202,9 @@ The class comes from the relative speed of the six ADR 0181 site cells:
   with at least 5 periods in the window and 20 steps per period.
 - **NUMERICAL**: the period is fixed in steps, not in seconds.
 - **NOT EVALUABLE**: anything else.
+
+The classes are tested in a fixed order, with the NOT EVALUABLE conditions (budget hit, divergence, a run that is not
+time-accurate) first, so every outcome has exactly one class. The Q-ROT verdict has the same precedence.
 
 An outer-iteration rule guards the time accuracy. The window means of torque and Delta p_ts are reported against the
 ADR 0181 cycle means. They are the values ADR 0180 question 3 asks for if the pocket is unsteady.
@@ -249,12 +261,12 @@ two SIMPLEC iterations):
 
 | Part | Runs | Estimate |
 |---|---|---|
-| Arm 1 | R1 x3, Y1 x3, I1 x3, Y1(E2) at dt/2, Y1b x2 | about 6 h |
+| Arm 1 | R1 x3, I1S x3, Y1 x3, I1 x3, Y1(E2) at dt/2, Y1b x2 | about 7 h |
 | Check H | H(dt), H(dt/2) | about 2.5 h |
 | Arm 2 | Y2 x2, Y2S x2, references | about 1.1 h |
 
-That is about 9.5 machine-hours, or about 5 hours of wall time at two runs at a time, plus the build and gate time of
-the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so their gate runs the rcfd-fv heavy tests
+That is about 10.5 machine-hours, or about 5 to 6 hours of wall time at two runs at a time, plus the build and gate
+time of the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so their gate runs the rcfd-fv heavy tests
 (the core-crate rule of ADR 0182 D1).
 
 ## Alternatives considered
@@ -268,7 +280,8 @@ the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so their g
 
 ### B. `tvd_van_albada` in arm 1 and check H, no limiter code
 
-*   **Pros:** accepted on every path today. ADR 0180 found it cycling at the same B2 hub cells as Barth-Jespersen.
+*   **Pros:** the case tree maps it to the TVD convection for every incompressible algorithm today (its behaviour on the
+    moving-mesh step was not checked). ADR 0180 found it cycling at the same B2 hub cells as Barth-Jespersen.
 *   **Cons:** the ADR 0086 growth was never measured with it, so R1 would have to establish a new pathology first.
 *   **Not chosen.** Option (c) of open question 2.
 
@@ -319,10 +332,10 @@ ADR 0183 lists them, each with a recommendation. In short:
 2. Prerequisites: build P-A and P-B as registered.
 3. Q-ROT NOT REPRODUCED: build A1 on rigid rotation provisionally if Y1 is clean, and repeat arm 1 with SST in F-271's
    verification. NOT EVALUABLE: one registered amendment, then decide.
-4. "Both arms": read the clause from arm 2 and check H, not from the laminar bladed runs.
+4. "Both arms": read the clause as arm 2 STAYS and H STEADY or NUMERICAL, not from the laminar bladed runs.
 5. Arm 2's form: ADR 0085 arm C as the parent design names it, with the Y2S control.
 6. H PHYSICAL: report the window means as the FAN-01 values, and stop steady-iteration fixes of the pocket.
-7. Arm 2 only if Q-ROT is not YES.
+7. Arm 2 only if Q-ROT is not YES. The clause is then read from H alone, and not at all if H is NOT EVALUABLE.
 
 These are recommendations, not decisions. The parent design's own rules are used where it gives them and are marked as
 such.
