@@ -289,6 +289,22 @@ heat transfer of the film, any effect of the film on the carrier (mass, momentum
 - **Q4. Impact regimes.** Splash and rebound at a film are not in F-253. Options: (a) add them to F-254 (wall
   interaction); (b) a new item. Recommendation: (a).
 
+## Amendment 1 (2026-11-05): the set-up of case K
+
+Written before the corrected run. The library checks A, B and D1 had run (their results go in the addendum); no check of C
+had measured anything.
+
+The first run of C1, C2-C3 and C4 stopped at the set-up. `Simulation::new` refuses case K as registered with
+`solver.frozen_flow: a prescribed flow field is for the energy equation: set energy.enabled = true`. C1 failed at its
+precondition (the valid K has no diagnostic), and C2-C3 and C4 at building the simulation. This is a defect of the
+registered case text, not of the code under test: the PT14 frozen-flow case of ADR 0028 has the same two lines for the
+same reason.
+
+Correction: case K gains `[energy] enabled = true` and `[initial] temperature = 300.0`, as PT14 has. Nothing else
+changes: the mesh, the gravity, the particles, the film, the limits and the checks stay as registered. The energy
+equation runs on the frozen field at rest and does not reach the particles or the film (`heat_transfer` is off). The three
+tests on the registered K stay as ignored records (`*_k_setup_defect`), and the corrected tests are new.
+
 ## Addendum
 
 To be written after the runs.
