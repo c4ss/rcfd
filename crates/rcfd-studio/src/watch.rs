@@ -1,9 +1,16 @@
-//! The project worker (ADR 0131 Watching, Threads): one thread per open project owns the `Project` and its poll `Watcher`,
+//! The project worker (ADR 0131 Watching, Threads): one thread per open project owns the `Project` and its change feed,
 //! does every file operation of the browser and the editor, and sends the results to the UI by channel. The UI thread only
 //! drains the channel.
+//!
+//! The change feed (`rcfd_workspace::feed::Feed`, ADR 0188 J8) polls the project's watcher as before, so the changed paths
+//! and what follows from them are the same; it also reads the project journal and the runs' events, and its new entries go
+//! out as [`Event::Feed`]. The worker's saves and creations name the Studio's actor in the journal.
 
 use crate::project_view::{self, Browser};
-use rcfd_project::{Project, Watcher};
+use rcfd_project::Project;
+use rcfd_workspace::feed::{Change, Feed, JOURNAL};
+use rcfd_workspace::journal::{Actor, Origin, STUDIO};
+use rcfd_workspace::save::SAVE_CASE;
 use rcfd_workspace::{SaveError, SaveForm};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -40,8 +47,9 @@ pub enum Command {
     Load(String),
     /// Stop reporting changes of a file.
     Untrack(String),
-    /// Write a file if its hash is still `base`: `rcfd_workspace::save_case` (ADR 0185 E4), under the file's edit lock
-    /// and with an `.rcfd/edits.jsonl` line; the bytes as given ([`SaveForm::Whole`]).
+    /// Write a file if its hash is still `base`: `rcfd_workspace::save::save_case_by` (ADR 0185 E4), under the file's
+    /// edit lock and with an `.rcfd/edits.jsonl` line naming the Studio's actor and the changed settings (ADR 0188 J5);
+    /// the bytes as given ([`SaveForm::Whole`]).
     Save {
         /// Project-relative path.
         rel: String,
@@ -50,9 +58,10 @@ pub enum Command {
         /// New content.
         bytes: Vec<u8>,
     },
-    /// Create a case file that does not exist yet, with its data files ([`crate::case_starter::create_with`], never
-    /// replaces one), send the lists that hold it and [`Event::Created`]; with `open`, stop reporting `untrack`, report
-    /// the new file from now on and send it as [`Event::Loaded`] (ADR 0139 D5, ADR 0147).
+    /// Create a case file that does not exist yet, with its data files (the write of [`crate::case_starter::create_with`]
+    /// through `rcfd_workspace::cases::create_by`, which never replaces one and journals the creation with the Studio's
+    /// actor, ADR 0188 J5), send the lists that hold it and [`Event::Created`]; with `open`, stop reporting `untrack`,
+    /// report the new file from now on and send it as [`Event::Loaded`] (ADR 0139 D5, ADR 0147).
     Create {
         /// Project-relative path (`cases/<name>.toml`).
         rel: String,
@@ -133,6 +142,21 @@ pub enum Event {
         /// Its data files, each with whether it was written (`false`: it was there with the same bytes).
         companions: Vec<(String, bool)>,
     },
+    /// New entries of the change feed, in order (ADR 0188 J8): journal lines with who changed what and why, run state
+    /// changes, and paths changed outside the workspace. Sent after the events of the same poll.
+    Feed(Vec<Change>),
+}
+
+/// The Studio's actor in the project journal (`studio` and this process).
+pub fn studio_actor() -> Actor {
+    Actor::this_process(STUDIO)
+}
+
+/// Whether the Studio says a feed entry in its messages (ADR 0188 J8): a journal entry whose actor is present and is not
+/// this Studio's. Entries without an actor, run entries and outside changes are shown by the run list and the "Changed
+/// on disk" list already.
+pub fn announce(c: &Change) -> bool {
+    c.source == JOURNAL && c.actor().is_some_and(|a| a != studio_actor())
 }
 
 /// Handle of a running worker. Dropping it stops and joins the thread.
@@ -209,13 +233,14 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
             return;
         }
     };
-    let mut watcher = match poll.map(|_| Watcher::new(project.root())).transpose() {
-        Ok(w) => w,
+    let mut feed = match poll.map(|_| Feed::open(project.root())).transpose() {
+        Ok(f) => f,
         Err(e) => {
             send(Event::Failed(format!("watcher: {e}")));
             None
         }
     };
+    let actor = studio_actor();
     // the lists as last sent; a change under runs/ re-reads only the runs it touches (ADR 0133 R12)
     let mut current = Browser::load(&project);
     if !send(Event::Opened(current.clone())) {
@@ -249,7 +274,15 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                         continue;
                     }
                     Command::Save { rel, base, bytes } => {
-                        match rcfd_workspace::save_case(project.root(), &rel, &base, &bytes, SaveForm::Whole) {
+                        let origin = Origin::new(SAVE_CASE, Some(actor.clone()), None);
+                        match rcfd_workspace::save::save_case_by(
+                            project.root(),
+                            &rel,
+                            &base,
+                            &bytes,
+                            SaveForm::Whole,
+                            &origin,
+                        ) {
                             Ok(s) => {
                                 tracked.insert(rel.clone());
                                 Event::Saved { rel, hash: s.new_hash }
@@ -267,7 +300,14 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                         companions,
                         open,
                         untrack,
-                    } => match crate::case_starter::create_with(&project, &rel, &bytes, &companions) {
+                    } => match rcfd_workspace::cases::create_by(
+                        &project,
+                        &rel,
+                        &bytes,
+                        &companions,
+                        &Origin::new("case_starter", Some(actor.clone()), None),
+                        None,
+                    ) {
                         Ok(companions) => {
                             current = Browser::load(&project);
                             let mut ok = send(Event::Listing(current.clone()));
@@ -298,11 +338,16 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
             Err(RecvTimeoutError::Disconnected) => return,
             Err(RecvTimeoutError::Timeout) => {
                 next_poll = Instant::now() + period;
-                let Some(w) = watcher.as_mut() else { continue };
-                let before = w.token();
-                match w.poll() {
-                    Ok(t) if t != before => {
-                        let changed = w.changes_since(before);
+                let Some(f) = feed.as_mut() else { continue };
+                match f.poll() {
+                    Ok(polled) => {
+                        let changed = polled.paths;
+                        if changed.is_empty() {
+                            if !polled.changes.is_empty() && !send(Event::Feed(polled.changes)) {
+                                return;
+                            }
+                            continue;
+                        }
                         let files: Vec<Event> = changed
                             .iter()
                             .filter(|c| tracked.contains(*c))
@@ -319,11 +364,13 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                         if read {
                             ok &= send(Event::Listing(current.clone()));
                         }
+                        if !polled.changes.is_empty() {
+                            ok &= send(Event::Feed(polled.changes));
+                        }
                         if !ok {
                             return;
                         }
                     }
-                    Ok(_) => {}
                     Err(e) => {
                         if !send(Event::Failed(format!("watcher: {e}"))) {
                             return;

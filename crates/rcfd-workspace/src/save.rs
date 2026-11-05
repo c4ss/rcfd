@@ -1,10 +1,12 @@
 //! The save of the Studio's case editor through the write rule of [`crate::write`] (ADR 0185 E4, E5): a base-hash
-//! compare-and-replace under the file's edit lock, with one `.rcfd/edits.jsonl` line (`who` [`SAVE_CASE`]).
+//! compare-and-replace under the file's edit lock, with one `.rcfd/edits.jsonl` line (`who` [`SAVE_CASE`]; with
+//! [`save_case_by`] also the actor and the settings the save changed, ADR 0188 J5).
 //! [`save_case`] writes the text it is given ([`SaveForm::Whole`], what the Studio writes) or, in [`SaveForm::Lines`],
 //! only the lines of the settings that differ from the file (ADR 0173 D6 (a)); the Studio keeps `Whole` until the
 //! maintainer answers ADR 0185 Q1.
 
 use crate::case_text::apply_sets;
+use crate::journal::Origin;
 use rcfd_api::case::Case;
 use rcfd_project::records::{hash_bytes, hash_matches};
 use rcfd_project::{atomic, paths, ProjectError};
@@ -78,9 +80,24 @@ fn is_json_case(path: &Path) -> bool {
 
 /// Save the case file `rel` (project-relative) of the project at `root` with `bytes`, only if it still has the hash
 /// `base` (`hash_bytes` form; an empty `base`: only if there is no file), under its edit lock, with one
-/// `.rcfd/edits.jsonl` line (`who` [`SAVE_CASE`]). `form` says what is written ([`SaveForm`]).
+/// `.rcfd/edits.jsonl` line (`who` [`SAVE_CASE`], no actor). `form` says what is written ([`SaveForm`]).
 pub fn save_case(root: &Path, rel: &str, base: &str, bytes: &[u8], form: SaveForm) -> Result<Saved, SaveError> {
+    save_case_by(root, rel, base, bytes, form, &Origin::new(SAVE_CASE, None, None))
+}
+
+/// [`save_case`] whose journal line names `origin` (its command, actor and reason) and lists the settings whose values
+/// the save changed (ADR 0188 J5: both texts read as the case is read; no list when either does not read as a case).
+pub fn save_case_by(
+    root: &Path,
+    rel: &str,
+    base: &str,
+    bytes: &[u8],
+    form: SaveForm,
+    origin: &Origin,
+) -> Result<Saved, SaveError> {
     let base = (!base.is_empty()).then_some(base);
+    // the file as it is now, when it still has the base hash (else the write below reports the conflict)
+    let mut before: Option<(std::path::PathBuf, Vec<u8>)> = None;
     let (text, written) = match (form, base) {
         (SaveForm::Lines, Some(b)) => {
             let path = paths::resolve_in(root, rel).map_err(save_error)?;
@@ -95,20 +112,53 @@ pub fn save_case(root: &Path, rel: &str, base: &str, bytes: &[u8], form: SaveFor
                     current: Some(hash_bytes(&disk)),
                 });
             }
-            match lines_text(root, &path, &disk, bytes) {
+            let out = match lines_text(root, &path, &disk, bytes) {
                 Some(t) => (t.into_bytes(), SaveForm::Lines),
                 None => (bytes.to_vec(), SaveForm::Whole),
+            };
+            before = Some((path, disk));
+            out
+        }
+        (_, Some(b)) => {
+            if let Ok(path) = paths::resolve_in(root, rel) {
+                before = atomic::read(&path)
+                    .ok()
+                    .filter(|d| hash_matches(b, d))
+                    .map(|d| (path, d));
             }
+            (bytes.to_vec(), SaveForm::Whole)
         }
         _ => (bytes.to_vec(), SaveForm::Whole),
     };
-    let r = atomic::replace_if_hash(root, rel, base, &text, SAVE_CASE).map_err(save_error)?;
+    let mut extra = origin.fields();
+    if let Some((path, disk)) = &before {
+        if let Some(list) = saved_changes(root, path, disk, &text) {
+            crate::journal::put_list(&mut extra, "changes", list);
+        }
+    }
+    let r = atomic::replace_if_hash_with(root, rel, base, &text, &origin.who, extra).map_err(save_error)?;
     Ok(Saved {
         rel: r.rel,
         old_hash: r.old_hash,
         new_hash: r.new_hash,
         form: written,
     })
+}
+
+/// The settings whose values differ between the case file `disk` (at `path`) and the text `saved`, both read as the case
+/// is read; `None` when either is not a case.
+fn saved_changes(root: &Path, path: &Path, disk: &[u8], saved: &[u8]) -> Option<Vec<serde_json::Value>> {
+    let is_json = is_json_case(path);
+    let dir = path.parent().unwrap_or(root);
+    let parse = |b: &[u8]| {
+        let t = std::str::from_utf8(b).ok()?;
+        if is_json {
+            Case::parse_json_with(t, dir, Some(root)).ok()
+        } else {
+            Case::parse_toml_with(t, dir, Some(root)).ok()
+        }
+    };
+    Some(crate::journal::setting_changes(&parse(disk)?, &parse(saved)?))
 }
 
 /// The file `disk` (the case at `path`) with the settings of `saved` placed in its own lines, if that text re-parses to

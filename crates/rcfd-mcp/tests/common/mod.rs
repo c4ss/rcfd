@@ -199,6 +199,11 @@ impl Mcp {
         v
     }
 
+    /// The server's process id (ADR 0188 C3: the actor of its journal lines).
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
     /// A tool result (no JSON-RPC error).
     pub fn call(&mut self, tool: &str, args: Value) -> Value {
         let r = self.request("tools/call", json!({"name": tool, "arguments": args}));
