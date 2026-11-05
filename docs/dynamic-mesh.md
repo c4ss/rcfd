@@ -1,18 +1,24 @@
 # Dynamic mesh and rigid-body dynamics (F-063, F-229; ADR 0033)
 
 rcfd can move the mesh during a run and integrate a rigid body driven by the flow. Status: partial. Incompressible laminar
-PISO/PIMPLE with implicit Euler on a mesh whose points move every step. Decisions and checks are in
-`docs/adr/0033-wave20b-dynamic-mesh.md` (read its addendum for the misses).
+PISO/PIMPLE with implicit Euler on a mesh whose points move every step, and the explicit compressible solver with a
+prescribed motion or a layered piston. Decisions and checks are in `docs/adr/0033-wave20b-dynamic-mesh.md` (read its addendum
+for the misses), `docs/adr/0090-wave38c-dynamic-mesh-layering.md` and
+`docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md`.
 
 This page explains how the mesh moves, how the body is integrated, and where the method stops. It is for users who plan a
 moving-wall or moving-body case and want to know what the solver does and does not cover. For the exact keys and defaults of the
-case section see [case-schema.md](case-schema.md); for the full decision record and the measured checks read the ADR named above.
+case section see [case-schema.md](case-schema.md); for the full decision record and the measured checks read the ADRs named above.
 
 ## Limits and gaps
 
-* Euler time scheme only.
+* Euler time scheme only (PISO/PIMPLE).
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
-* No sliding interfaces (AMI, F-250). Layering is in F-230 and remeshing in F-247.
+* No sliding interfaces (AMI, F-250) and no local remeshing (F-247).
+* Layering only for the compressible solver, on a `box_3d` stack with one piston. Prism or unstructured layering and
+  layering on the PISO/PIMPLE path are F-257.
+* Compressible runs: no characteristic boundary condition on a moving face, and a time step without the mesh speed (F-258);
+  no six-DOF body (F-244).
 * No strong coupling or added-mass stabilisation. The explicit coupling needs a body that is not much lighter than the displaced
   fluid; the checks use a fluid-to-body mass ratio of 0.2.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
@@ -54,17 +60,55 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 The section is `dynamic_mesh`; keys, defaults and unset values are in `docs/case-schema.md`. Static errors are located at the
 key; incompatible sections are reported at `dynamic_mesh.enabled`.
 
-## Layering and compressible ALE (F-230, ADR 0090; library only)
+## Layering and compressible ALE (F-230, ADR 0090; case tree F-259, ADR 0191)
 
-- **Layering.** The type `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the
-  layer next to the piston deforms. Below `a_min h0` it merges with its neighbour; above `a_max h0` it splits into `h0` plus the
-  rest (`1 + a_min <= a_max` is required). Every change returns a cell source map, and `remap` carries cell totals over exactly.
-- **Compressible ALE.** The method `CompressibleSolver::step_ale(new_geom, dt)` advances the explicit density-based solver while
-  the points move (same topology). The fluxes are computed in the frame of the moving face, and moving slip walls mirror relative
-  to the wall. A uniform state stays uniform to round-off. The method `replace_mesh` installs the mesh and state after a layer
-  change.
+- **Compressible ALE.** `CompressibleSolver::step_ale(new_geom, dt)` advances the explicit density-based solver while the points
+  move (same topology). The fluxes are computed in the frame of the moving face, and a moving slip wall mirrors relative to the
+  wall. A uniform state stays uniform to round-off. In the case tree: `solver.algorithm = "compressible"`,
+  `compressible.mode = "transient"` and a prescribed `dynamic_mesh` motion with `deformation = "rigid"` or `"smoothing"`.
+- **Layering.** `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the layer
+  next to the piston deforms. Below `a_min h0` it merges with its neighbour; above `a_max h0` it splits into `h0` plus the rest
+  (`1 + a_min <= a_max` is required). Every change returns a cell source map, `remap` carries cell totals over exactly, and
+  `replace_mesh` installs the new mesh and state. In the case tree: `dynamic_mesh.deformation = "layering"` on a
+  `mesh.generator = "box_3d"` mesh, the piston `xmax` moved by `displacement_expression_x`, `h0 = lx / nx`, `a_min = 0.4`,
+  `a_max = 1.6`. The example below is ADR 0090's piston P as a case, with the compressible keys at their defaults (HLLC, van
+  Leer, SSP-RK3, CFL 0.4): 9191 steps, 24 removals and 24 additions, and `p_bar V^gamma` back within 3.4e-5 of its start
+  after the stroke.
+- **The tree equals the library.** Run through the case tree, the piston and the moving-mesh checks of ADR 0191 give the same
+  bits as the same set-ups driven by library calls, and `rcfd run` gives the same reports.
 - **Stiffness.** The smoothing method `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
-- **Not available:** local remeshing, unstructured layering, case-tree keys, and characteristic boundary conditions on moving faces.
+  It is a library call only (ADR 0191 Q2).
+- **Not available:** local remeshing, prism or unstructured layering, layering with PISO/PIMPLE, characteristic boundary
+  conditions on moving faces, and a time step that includes the mesh speed.
+
+```toml
+# ADR 0090's piston P: a closed box compressed to 0.4 of its length and re-expanded (peak piston Mach 0.05)
+[mesh]
+generator = "box_3d"
+nx = 40
+ny = 2
+nz = 2
+lx = 1.0
+ly = 0.1
+lz = 0.1
+
+[solver]
+algorithm = "compressible"
+end_time = 32.0
+
+[compressible]
+gamma = 1.4
+
+[compressible.initial.left]
+density = 1.0
+pressure = 1.0
+
+[dynamic_mesh]
+enabled = true
+deformation = "layering"
+moving_patches = ["xmax"]
+displacement_expression_x = "-0.3 [m] * (1 - cos(pi * t / 16 [s]))"
+```
 
 ## Where to go next
 
