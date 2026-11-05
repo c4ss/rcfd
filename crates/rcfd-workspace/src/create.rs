@@ -3,10 +3,11 @@
 //! of a project case), validated through `rcfd-api` before anything is written, and created without ever replacing a
 //! file ([`crate::cases::create_with`]). `start_run` with `new_case` makes the case the same way and then runs it.
 //!
-//! No `.rcfd/edits.jsonl` line is written for a creation (a `case_created` line is ADR 0173 W6), as for the Studio's.
+//! A creation leaves one `case_created` line in the project journal, with the caller's `reason` (ADR 0188 J4, J5).
 
-use crate::cases::{check_name, create_with};
+use crate::cases::{check_name, create_by};
 use crate::examples::EXAMPLES;
+use crate::journal::reason_arg;
 use crate::templates::TEMPLATES;
 use crate::{err, project_error, str_arg, RpcError, Workspace, INTERNAL, NOT_FOUND, PARAMS, REFUSED, VALIDATION};
 use rcfd_api::case::{Case, Diagnostic};
@@ -216,9 +217,18 @@ impl Workspace {
         })
     }
 
-    /// Write a prepared new case (never replacing a file); the `new_case` result object.
-    pub(crate) fn write_case(&self, nc: &NewCase) -> Result<Value, RpcError> {
-        let data = create_with(&self.project, &nc.rel, &nc.bytes, &nc.companions).map_err(|m| {
+    /// Write a prepared new case (never replacing a file) for command `who` with `reason`; the `new_case` result object.
+    pub(crate) fn write_case(&self, nc: &NewCase, who: &str, reason: Option<String>) -> Result<Value, RpcError> {
+        let origin = self.origin(who, reason);
+        let data = create_by(
+            &self.project,
+            &nc.rel,
+            &nc.bytes,
+            &nc.companions,
+            &origin,
+            Some(&nc.from),
+        )
+        .map_err(|m| {
             let code = if m.contains("exists") { REFUSED } else { INTERNAL };
             err(code, format!("new_case: {m}"))
         })?;
@@ -232,7 +242,8 @@ impl Workspace {
     }
 
     pub(crate) fn new_case(&self, args: &Value) -> Result<Value, RpcError> {
+        let reason = reason_arg(args)?;
         let nc = self.prepare_case(args)?;
-        self.write_case(&nc)
+        self.write_case(&nc, "new_case", reason)
     }
 }

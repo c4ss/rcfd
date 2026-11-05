@@ -519,6 +519,52 @@ impl Workspace {
             "truncated": out.len() < all.len(), "changes": out}))
     }
 
+    /// The change feed (ADR 0188 J6, J7): without `since` the latest number; with it the entries numbered after it.
+    pub(crate) fn read_feed(&self, args: &Value) -> Result<Value, RpcError> {
+        let mut g = self.feed.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            *g = Some(crate::feed::Feed::open(self.project.root()).map_err(perr)?);
+        }
+        let f = g.as_mut().expect("made above");
+        f.poll().map_err(perr)?;
+        let cursor = f.cursor();
+        let Some(since) = u64_arg(args, "since") else {
+            return Ok(json!({"cursor": cursor, "entries": [], "total": 0}));
+        };
+        let limit = u64_arg(args, "limit").unwrap_or(50).clamp(1, 200) as usize;
+        let (all, dropped) = f.since(since);
+        let mut v = json!({"since": since, "cursor": cursor, "entries": [], "total": all.len(), "next": null,
+            "dropped": dropped, "skipped_lines": f.skipped_lines()});
+        let mut size = text_len(&v);
+        let mut out = Vec::new();
+        for c in all.iter().take(limit) {
+            let mut j = c.to_json();
+            // an entry too large for a page loses its setting values (they stay in .rcfd/edits.jsonl)
+            if text_len(&j) > TEXT_BUDGET / 2 {
+                if let Some(o) = j.as_object_mut() {
+                    o.retain(|k, _| {
+                        matches!(
+                            k.as_str(),
+                            "n" | "source" | "kind" | "t" | "seq" | "path" | "run" | "who" | "actor" | "text"
+                        )
+                    });
+                    o.insert("omitted".into(), json!("over the size budget: read .rcfd/edits.jsonl"));
+                }
+            }
+            let n = text_len(&j) + 1;
+            if size + n > TEXT_BUDGET {
+                break;
+            }
+            size += n;
+            out.push(j);
+        }
+        if let Some(last) = out.last() {
+            v["next"] = last["n"].clone();
+        }
+        v["entries"] = json!(out);
+        Ok(v)
+    }
+
     pub(crate) fn read_project_file(&self, args: &Value) -> Result<Value, RpcError> {
         let rel = str_arg(args, "path");
         let path = self.project.resolve(rel).map_err(perr)?;
