@@ -78,6 +78,44 @@ fn c3s_two_writers_number_every_line_once_in_file_order() {
     }
 }
 
+/// Added to C3-S (ADR 0188 addendum 1): two writers of different files take different edit locks, so only the journal's
+/// lock keeps their numbers apart. Two threads append 300 lines each directly.
+#[test]
+fn c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once() {
+    let base = common::scratch("f273-seq2");
+    let p = Project::create(&base.join("p"), "seq2", "0").unwrap();
+    let root = p.root().to_path_buf();
+    let barrier = Arc::new(Barrier::new(2));
+    let hs: Vec<_> = ["a", "b"]
+        .into_iter()
+        .map(|who| {
+            let (root, barrier) = (root.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                (0..300)
+                    .filter(|i| append(&root, json!({"kind": "test", "who": who, "i": i})).is_none())
+                    .count()
+            })
+        })
+        .collect();
+    let unnumbered: usize = hs.into_iter().map(|h| h.join().unwrap()).sum();
+    let log = parsed(&root);
+    let mut seqs: Vec<u64> = log.iter().filter_map(|l| l["seq"].as_u64()).collect();
+    let in_order = seqs.windows(2).all(|w| w[0] < w[1]);
+    seqs.sort_unstable();
+    seqs.dedup();
+    eprintln!(
+        "C3-S two appenders: {} lines, {} distinct seq, {unnumbered} without seq (lock not had in {LOCK_WAIT:?}), in file \
+         order: {in_order}",
+        log.len(),
+        seqs.len()
+    );
+    assert_eq!(log.len(), 600);
+    assert_eq!(unnumbered, 0, "a writer waited longer than the lock's wait");
+    assert_eq!(seqs, (1..=600).collect::<Vec<u64>>(), "a seq repeated or missing");
+    assert!(in_order, "seq not increasing in file order");
+}
+
 #[test]
 fn c3s_a_held_lock_is_waited_for_then_passed_and_a_stale_one_is_removed() {
     let base = common::scratch("f273-lock");
