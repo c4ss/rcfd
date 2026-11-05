@@ -8,6 +8,9 @@
 //!
 //! ADR 0187 C-L restates it again for F-272 (M1, M8): the four mesh tools `check_case_mesh`, `preview_mesh`,
 //! `import_mesh` and `list_meshes` come right after `new_case`; without them the list is the F-271 one, byte for byte.
+//!
+//! ADR 0188 C-L restates it for F-273 (J4, J7): `read_feed` comes right after `list_changes`, and eight write tools gain
+//! the property `reason`; without `read_feed` and those eight properties the list is the F-272 one, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -21,6 +24,18 @@ const MESH_TOOLS: [(&str, &str, &[&str]); 4] = [
     ("preview_mesh", "read", &["case"]),
     ("import_mesh", "write_files", &["path"]),
     ("list_meshes", "read", &[]),
+];
+
+/// ADR 0188 J4: the tools that take a `reason`.
+const REASON_TOOLS: [&str; 8] = [
+    "edit_case",
+    "write_note",
+    "new_case",
+    "import_mesh",
+    "start_run",
+    "pause_run",
+    "resume_run",
+    "cancel_run",
 ];
 
 #[test]
@@ -52,20 +67,56 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         .strip_prefix(r#"{"id":1,"jsonrpc":"2.0","result":"#)
         .and_then(|b| b.strip_suffix('}'))
         .unwrap_or_else(|| panic!("unexpected response {}", &line[..line.len().min(80)]));
-    let live: Value = serde_json::from_str(got).unwrap();
+    let live_value: Value = serde_json::from_str(got).unwrap();
     let gold: Value = serde_json::from_str(GOLDEN).unwrap();
-    // the golden's own text is the serialisation of its value, so equal values are equal bytes
+    // the golden's own text is the serialisation of its value, so equal values are equal bytes; the same holds for the
+    // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
-    let (live, gold) = (live["tools"].as_array().unwrap(), gold["tools"].as_array().unwrap());
+    assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    let (live_f273, gold) = (
+        live_value["tools"].as_array().unwrap(),
+        gold["tools"].as_array().unwrap(),
+    );
     eprintln!(
         "A2/C-L: {} tools, {} bytes, golden {} tools, {} bytes",
-        live.len(),
+        live_f273.len(),
         got.len(),
         gold.len(),
         GOLDEN.len()
     );
     assert_eq!(gold.len(), 50, "the golden: 33 session tools and 17 project tools");
-    assert_eq!(live.len(), 55, "33 session tools and 22 project tools");
+    assert_eq!(live_f273.len(), 56, "33 session tools and 23 project tools");
+    // ADR 0188 C-L: read_feed right after list_changes, a read tool with no required argument
+    let fp = live_f273
+        .iter()
+        .position(|t| t["name"] == "read_feed")
+        .expect("read_feed listed");
+    assert_eq!(live_f273[fp - 1]["name"], "list_changes");
+    assert_eq!(live_f273[fp]["_meta"]["rcfd/access"], "read");
+    assert_eq!(live_f273[fp]["inputSchema"]["required"], json!([]));
+    assert_eq!(live_f273[fp]["inputSchema"]["additionalProperties"], false);
+    // the eight tools of J4 gain exactly the property reason, the same in each; the F-272 list is the rest
+    let mut reason: Option<Value> = None;
+    let mut f272: Vec<Value> = Vec::new();
+    for t in live_f273.iter().filter(|t| t["name"] != "read_feed") {
+        let mut t = t.clone();
+        let n = t["name"].as_str().unwrap().to_string();
+        // (a session tool, design_ledger_append, has a reason property of its own: the byte comparison below covers it)
+        if REASON_TOOLS.contains(&n.as_str()) {
+            let r = t["inputSchema"]["properties"]
+                .as_object_mut()
+                .unwrap()
+                .remove("reason")
+                .unwrap_or_else(|| panic!("{n} has no reason"));
+            assert_eq!(r["type"], "string", "{n}");
+            assert_eq!(r["maxLength"], 500, "{n}");
+            assert!(reason.as_ref().is_none_or(|x| *x == r), "{n}: another reason property");
+            reason = Some(r);
+        }
+        f272.push(t);
+    }
+    let live = &f272;
+    assert_eq!(live.len(), 55, "the F-272 list: 33 session tools and 22 project tools");
     let name = |t: &Value| t["name"].as_str().unwrap().to_string();
     // new_case: right after write_note, writes files
     let at = live
@@ -136,7 +187,8 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         want.insert(wn + 2 + k, live[at + 1 + k].clone());
     }
     assert!(
-        serde_json::to_string(&json!({"tools": want})).unwrap() == got,
-        "tools/list with --project differs from the golden with the registered changes"
+        serde_json::to_string(&json!({"tools": want})).unwrap()
+            == serde_json::to_string(&json!({"tools": live})).unwrap(),
+        "tools/list with --project, without the F-273 changes, differs from the golden with the registered changes"
     );
 }

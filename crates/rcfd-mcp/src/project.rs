@@ -5,11 +5,13 @@
 //! The tools are the commands and queries of the project's workspace (`rcfd_workspace`, ADR 0173 W2, ADR 0185 E3): this
 //! module holds their MCP descriptors (names, descriptions, input schemas, access classes) and wraps each answer of
 //! [`rcfd_workspace::Workspace::call`] as an MCP result. Paths, limits, error codes and the write rule are the
-//! workspace's.
+//! workspace's. The server's journal lines name the actor `mcp` of this process (ADR 0188 J3); the write tools take an
+//! optional `reason`, and `read_feed` lists the project's change feed (J7).
 
 use crate::policy::Access;
 use crate::{obj, ok_result, Tool};
 use rcfd_api::service::RpcError;
+use rcfd_workspace::journal::{Actor, MCP};
 use rcfd_workspace::{Answer, Workspace};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -26,6 +28,12 @@ fn run_schema() -> Value {
 
 fn state_schema() -> Value {
     json!({"type": "string", "enum": STATES})
+}
+
+/// The optional `reason` of a write tool (ADR 0188 J4): kept with the change in the project journal. The workspace
+/// enforces the length (the argument check here does not know `maxLength`).
+fn reason_schema() -> Value {
+    json!({"type": "string", "maxLength": rcfd_workspace::journal::MAX_REASON, "description": "why this change is made, in a short sentence (at most 500 characters): kept with it in the project journal (.rcfd/edits.jsonl), shown in the Studio and by read_feed"})
 }
 
 /// A project case argument of the mesh tools (ADR 0187).
@@ -147,6 +155,17 @@ pub(crate) fn tools() -> Vec<Tool> {
             schema: || obj(json!({"since": {"type": "integer", "minimum": 0}}), &[]),
         },
         Tool {
+            name: "read_feed",
+            description: "The project's change feed: who changed what and why. Each entry is a line of the project journal (an edit with its actor, command, changed settings with old and new values, and reason; a case created, a mesh imported, a run submitted, paused, resumed or cancelled), a run's state change, warning or stop, or a file changed outside the workspace (external, path only). Call without since to get the current cursor; with since, the entries numbered after it, oldest first (limit, default 50; next to continue).",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({"since": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 200}}),
+                    &[],
+                )
+            },
+        },
+        Tool {
             name: "read_project_file",
             description: "Text of a project file (a case, mesh recipe or note) with the hash of the whole file, which is the base_hash for edit_case and write_note. Read in pages of at most 32000 bytes (offset, limit; next_offset when more).",
             access: Access::Read,
@@ -171,7 +190,8 @@ pub(crate) fn tools() -> Vec<Tool> {
                         "path": {"type": "string", "description": "project-relative case file (.toml or .json)"},
                         "base_hash": {"type": "string", "description": "hash from read_project_file"},
                         "set": {"type": "object", "description": "{dotted setting path: value}"},
-                        "dry_run": {"type": "boolean"}
+                        "dry_run": {"type": "boolean"},
+                        "reason": reason_schema()
                     }),
                     &["path", "base_hash", "set"],
                 )
@@ -186,7 +206,8 @@ pub(crate) fn tools() -> Vec<Tool> {
                     json!({
                         "path": {"type": "string", "description": "project-relative path under notes/"},
                         "text": {"type": "string"},
-                        "base_hash": {"type": "string"}
+                        "base_hash": {"type": "string"},
+                        "reason": reason_schema()
                     }),
                     &["path", "text"],
                 )
@@ -196,7 +217,11 @@ pub(crate) fn tools() -> Vec<Tool> {
             name: "new_case",
             description: "Create a new case file cases/<name>.toml (or .json) in the project from exactly one source: a shipped example (byte for byte, with the data files it reads), a built-in template, TOML text, a settings object (written as JSON) or a copy of a project case. The case is validated before anything is written and no file is ever replaced. Returns its path and hash (the base_hash for edit_case).",
             access: Access::WriteFiles,
-            schema: new_case_schema,
+            schema: || {
+                let mut s = new_case_schema();
+                s["properties"]["reason"] = reason_schema();
+                s
+            },
         },
         Tool {
             name: "check_case_mesh",
@@ -229,7 +254,8 @@ pub(crate) fn tools() -> Vec<Tool> {
                 obj(
                     json!({
                         "path": {"type": "string", "description": "project-relative mesh file or OpenFOAM folder"},
-                        "name": {"type": "string", "description": "name in meshes/ (default the source's name; a file keeps its extension)"}
+                        "name": {"type": "string", "description": "name in meshes/ (default the source's name; a file keeps its extension)"},
+                        "reason": reason_schema()
                     }),
                     &["path"],
                 )
@@ -258,6 +284,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                     json!({
                         "new_case": {"description": "instead of case: a new case made first, with the arguments of new_case, then run", "type": "object", "properties": new_case_schema()["properties"], "required": ["name"], "additionalProperties": false},
                         "store": {"type": "string", "enum": ["plan", "none"], "description": "plan: the Studio's start plan stores the run's fields (about 100 snapshots, f32) unless the case or set gives the store; none: only what the case asks for. Default plan with new_case, none with case"},
+                        "reason": reason_schema(),
                         "case": {"type": "string", "description": "project-relative case file"},
                         "set": {"type": "array", "items": {"type": "string"}, "description": "overrides path=value, in order"},
                         "priority": {"type": "integer"},
@@ -272,19 +299,19 @@ pub(crate) fn tools() -> Vec<Tool> {
             name: "pause_run",
             description: "Hold a run: a queued run is not launched, a running one stops between two steps.",
             access: Access::Execute,
-            schema: || obj(json!({"run": run_schema()}), &["run"]),
+            schema: || obj(json!({"run": run_schema(), "reason": reason_schema()}), &["run"]),
         },
         Tool {
             name: "resume_run",
             description: "Release a held run.",
             access: Access::Execute,
-            schema: || obj(json!({"run": run_schema()}), &["run"]),
+            schema: || obj(json!({"run": run_schema(), "reason": reason_schema()}), &["run"]),
         },
         Tool {
             name: "cancel_run",
             description: "Cancel a run; a running solver stops cleanly and writes its results.",
             access: Access::Execute,
-            schema: || obj(json!({"run": run_schema()}), &["run"]),
+            schema: || obj(json!({"run": run_schema(), "reason": reason_schema()}), &["run"]),
         },
         Tool {
             name: "wait_run",
@@ -313,10 +340,11 @@ impl std::fmt::Debug for ProjectTools {
 
 impl ProjectTools {
     /// Open the project folder `dir` (a located error when it is not a project). Runs are started with the
-    /// `rcfd-runner` next to the current executable or named by `RCFD_RUNNER_BIN`.
+    /// `rcfd-runner` next to the current executable or named by `RCFD_RUNNER_BIN`. Journal lines name the actor `mcp` of
+    /// this process.
     pub fn open(dir: &Path) -> Result<Self, String> {
         Ok(ProjectTools {
-            ws: Workspace::open(dir)?,
+            ws: Workspace::open(dir)?.with_actor(Actor::this_process(MCP)),
         })
     }
 
