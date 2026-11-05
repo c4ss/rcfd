@@ -453,3 +453,27 @@ results stay bit-identical" for the case hash; V2 did not list H1, and the works
 | A5 | the workspace gate on a git archive of the final commit (with main merged) | 0 failed |
 
 A missed limit is reported, not hidden; no limit changes after a run.
+
+## Addendum: results of the hash-neutral default (2026-11-05)
+
+Fix in a4e9402 (registration 9c525e6, before it). Files: `crates/rcfd-api/src/fan_case.rs` (F1, one line),
+`crates/rcfd-api/tests/case_hashes_w48u.rs` (F2), `crates/rcfd-api/tests/fan01_hub_mesh_w49r.rs` (F3). Not changed: R0,
+`baseline_hashes.rs`, the generator, any other library code. Release build, `cargo test --release -p rcfd-api` on the
+targets below.
+
+| id | result | verdict |
+| --- | --- | --- |
+| A1 | `h1_case_files_are_unchanged_against_the_base_record ... ok`: "41 recorded sources (30 valid, 30 meshes built), 44 now, 0 differ"; C3 "30 of 30 recorded valid sources differ raw (text columns only), 0 after normalisation" and the settings and mesh columns of every recorded source equal R0 raw; C2 holds for both keys; C4: `cases/axial_fan_cgrid/axial_fan_cgrid.toml` with `corrector_control = "adaptive"` gives toml 5f70e423bab8ce24 / json cdfaf1b0e42d6037 (as ADR 0163), with `c_grid_grading = "radial_geometric"` toml 7defb2d220fc7199 / json dfe5390282def890, none equal to R0 | met |
+| A2 | `w49r_c_grid_grading_hash_and_text ... ok`: absent, written and set `"capped"` all 4a96fb1c0496ce94; `radial_geometric` 0175d0de26695f6c, `wake_geometric` 05ffafe9cc4c2623, `radial_wake_geometric` a71d24c1bc8f4de3, each the same after the TOML round trip | met |
+| A3 | `w49r_default_meshes_are_bit_identical`, `w48v_key_defaults_to_fixed_and_its_default_leaves_the_case_hash_unchanged` and the 3 `baseline_hashes.rs` tests pass; the `rcfd-api` library tests 106 passed, 0 failed | met |
+| A4 | `cargo fmt -p rcfd-api -- --check` clean, `cargo clippy -p rcfd-api --all-targets --locked -- -D warnings` clean | met |
+| A5 | run after this addendum, on the commit that merges main; its result is reported with the job, not written here | - |
+
+Beyond the limits: `cargo test --release -p rcfd-cli -p rcfd-mcp` and the `rcfd-studio` tests `example_fan_w49m` and
+`example_projects_h`: 153 passed, 2 failed, 14 ignored. The 2 failures (`project_runs_w48f::f3_f11_project_tools_on_runner_made_runs`,
+`runner_stdio_w48l::c2_control_a_runner_given_the_callers_stdout_holds_it`) were the set-up: the package selection did not
+build the `rcfd-runner` binary the tests need next to `rcfd-mcp` (their message says so). After `cargo build --release -p
+rcfd-runner -p rcfd-cli` both binaries passed (3 passed; 2 passed, 1 ignored).
+
+Deviation: the job brief asked for `cargo test -p rcfd-api`; the whole suite was not run here (a debug run of it took about
+3 h in ADR 0163). It runs in release in the workspace gate (A5), next to the targeted runs above.
