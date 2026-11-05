@@ -83,6 +83,12 @@ Repeating a call is safe:
 Metric values must be finite numbers. An unknown or missing parameter, a value outside its bounds, a name with separators or a
 leading dot, and a base case that changed since the study was created are located errors (-32602).
 
+With `--project`, `design_run_study` and `design_evaluate` evaluate each candidate at each operating condition as one run of the
+project's runner, tagged in its `run.json` with `study`, `variant` and `condition`, and add `evaluator` (`runner`), `runs` (at most
+50) and `runs_total` to their result. A study with chained conditions (`chain`, the default, with two or more conditions) or its
+own `max_steps` is evaluated in the server process as before, with `evaluator: process` and `evaluator_note`
+([ADR 0189](adr/0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md), `docs/design-loop.md`).
+
 ## Design ledger tools
 
 The design ledger (ADR 0121, `docs/design-loop.md`) is one JSON-lines file (for example `fan/ledger.jsonl`) that keeps every evaluated
