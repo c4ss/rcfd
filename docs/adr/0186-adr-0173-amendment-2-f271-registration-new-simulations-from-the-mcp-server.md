@@ -202,3 +202,30 @@ third edit, that count to `33 + 18`, and C-1 moves `project_w48f.rs` from "with 
 changed". Nothing else of that file changes. Because F3's per-tool loop covers the 17 tools of its own list, the
 read-only refusal of `new_case` is checked in `new_simulations_f271.rs` instead: under `Policy::read_only()` a `new_case`
 call is refused with 1100 and the project folder is unchanged.
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+Branch `f271-new-simulations`, after this text and amendment 1: `85440ca` (the workspace and `rcfd-mcp`), `4afe4cf` (the Studio's
+re-export and its test file), then the documents. Not merged.
+
+**Built as registered.** G1 to G8 as written, with amendment 1. `rcfd-workspace` gains `examples.rs` (moved from the Studio,
+text unchanged but two doc lines), `templates.rs` (moved from `rcfd-mcp`), `plan.rs` (the rule, `Plan::with_set` and
+`parse_case`, which `start_run` calls and the parity test calls), `create.rs` (`new_case`) and the `start_run` changes in
+`runs.rs`; the `RunSettings` lines of F-270 are unchanged. `rcfd-mcp` gains the `new_case` descriptor, `start_run`'s two
+properties (written above `case`, so the `threads`/`mem_mb` lines of the maintainer's hunk are untouched) and the re-export of
+the template. The Studio changes are `src/case_starter.rs` (the moved block replaced by one `pub use`, 3 lines of comment) and
+the new `tests/new_simulations_f271.rs`. Existing tests edited: `project_list_f270.rs` (C-L), and the tool counts of
+`project_runs_w48f.rs` (two) and `project_w48f.rs` (one, amendment 1).
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| C-7 | one `start_run` call wrote `cases/sod.toml` byte-equal to the example and queued the run with `store.set` `["output.store_time_interval=0.002", "output.store_precision=f32"]`, `snapshots` 100, `estimated_bytes` 160 000; `run.json` holds the same entries; finished in 0.25 s with 100 snapshots; `field_summary` p min 0.1, max 1.0. Controls: `store: "none"` finished with no store and no entry; `start_run {case}` gave exactly `case`, `run`, `state` and no entry; `SOD` refused with 1004 through `start_run` and `new_case`, bytes and run folders unchanged; a `set` entry `output.store_interval=0` with `store: "plan"` gave `applied: false` and only that entry |
+| C-S | the poller's first tick after the call listed the run (`cases/sod.toml`, queued); after it finished the next tick showed `finished`; `StoreView` read 100 snapshots and the last one's p (t = 0.2) as 100 finite face values in [0.1, 1.0] |
+| C-P | all 10 examples and the 9 variants: the workspace's entries, snapshots, estimate, verdict and note equal the Studio's (3 variants without a store: the moving mesh and the two own-interval cases); `solver.max_iterations=40` on the 600-iteration case planned as the edited text (`store_interval=1`); control: without it the plans differ |
+| C-N | five sources byte-equal (the settings tree equal), `profile_inlet.csv` written with its case; ten refusals with nothing written: invalid TOML 1003 (line 2), invalid `physics.nu` 1003 (located at the setting), `SOD` 1004, a space 1004, two sources and no source -32602, unknown example -32602, missing copy 1202, invalid copy 1003, `../x.toml` 1004; a malformed or unknown `set` entry with `new_case` 1003, no case and no run; no `edits.jsonl` line. Read-only server: `new_case` 1100, nothing written; control written |
+| C-L | 51 tools, 42 103 bytes; the golden (38 978 bytes, not re-recorded) with exactly the registered changes is the live text byte for byte; without `--project`, `default_f1.rs` passes |
+| C-1 | `project_w48f.rs` (count only), `project_runs_w48f.rs` (counts only), `runner_stdio_w48l.rs`, `sv301_mcp_w48z.rs`, `correctors_w49j.rs`, and the Studio files `case_starter_g2.rs`, `editor_b5.rs`, `watch_b6.rs`, `run_control_r1_r3.rs`, `starter_run_m.rs`, `live_preview_j.rs`, `workspace_f270.rs`, `start_plan_r10.rs` pass; every test of `rcfd-workspace` and `rcfd-mcp` passes (release); `workspace_graph.rs` 4 of 4 |
+| Can fail | with the time rule's 100 changed to 50 and `PLAN_FOR_PROJECT_CASES` set to true, `plan_values`, C-7 and C-P failed (C-S, which reads whatever store is written, passed); restored |
+| Defaults | `Cargo.lock`: only `toml` in `rcfd-workspace`'s list; `baseline_hashes.rs` untouched; no case-schema key or run-record field added; `scripts/limit_audit.py` reports none of the new tests |
