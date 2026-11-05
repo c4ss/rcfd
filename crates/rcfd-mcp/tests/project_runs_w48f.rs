@@ -97,7 +97,7 @@ fn f3_f11_project_tools_on_runner_made_runs() {
         .unwrap()
         .contains("project folder"));
     let list = m.request("tools/list", json!({}));
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 55);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 56);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -323,6 +323,6 @@ fn f13_server_start() {
             .as_array()
             .unwrap()
             .len(),
-        55
+        56
     );
 }

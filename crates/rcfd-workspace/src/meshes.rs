@@ -8,9 +8,11 @@
 //! A case's mesh is built by `rcfd_api::sim::build_mesh`, which reads `mesh.file` without a limit; every command here
 //! first confines that file to the project folder ([`resolve_mesh_file`], ADR 0187 M2).
 //!
-//! No `.rcfd/edits.jsonl` line is written for an import (a mesh import line is ADR 0173 W6).
+//! An import that wrote a file leaves one `mesh_imported` line in the project journal, with the caller's `reason`, the
+//! files' hashes and the cell, face and patch counts (ADR 0188 J5).
 
 use crate::create::invalid;
+use crate::journal::{append, reason_arg};
 use crate::{
     err, project_error as perr, str_arg, text_len, u64_arg, Answer, RpcError, Workspace, INTERNAL, NOT_FOUND, PARAMS,
     REFUSED, TEXT_BUDGET, VALIDATION,
@@ -21,7 +23,7 @@ use rcfd_mesh::quality::{check_mesh, compute_metrics, QualityReport};
 use rcfd_mesh::Mesh;
 use rcfd_project::atomic;
 use rcfd_project::records::hash_bytes;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::path::{Component, Path, PathBuf};
 
 /// The cell measures `preview_mesh` colours by (ADR 0187 M4, Q5).
@@ -366,6 +368,7 @@ impl Workspace {
     }
 
     pub(crate) fn import_mesh(&self, args: &Value) -> Result<Value, RpcError> {
+        let reason = reason_arg(args)?;
         let given = str_arg(args, "path");
         let src = self.project.resolve(given).map_err(perr)?;
         let src_rel = self.rel(&src);
@@ -487,6 +490,21 @@ impl Workspace {
             )
             .collect();
         let patches = patch_json(&mesh);
+        if written {
+            let mut line = Map::new();
+            line.insert("path".into(), json!(target_rel));
+            line.insert("source".into(), json!(src_rel));
+            line.insert("format".into(), json!(format));
+            let files: Vec<Value> = files
+                .iter()
+                .map(|(f, b)| json!({"path": file_rel(f), "bytes": b.len(), "hash": hash_bytes(b)}))
+                .collect();
+            line.insert("files".into(), json!(files));
+            line.insert("cells".into(), json!(mesh.n_cells()));
+            line.insert("faces".into(), json!(mesh.n_faces()));
+            line.insert("patches".into(), json!(patches.len()));
+            append(root, "mesh_imported", &self.origin("import_mesh", reason), line);
+        }
         let mut v = json!({
             "source": src_rel, "path": target_rel, "copied": written, "format": format, "files": files_json,
             "cells": mesh.n_cells(), "faces": mesh.n_faces(), "internal_faces": mesh.n_internal_faces(),

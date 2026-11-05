@@ -104,8 +104,16 @@ fn cn_each_source_makes_its_file() {
     let r = call(&ws, "new_case", json!({"name": "sod-copy", "copy": "cases/sod.toml"})).unwrap();
     assert_eq!(std::fs::read(dir.join("cases/sod-copy.toml")).unwrap(), want);
     assert_eq!(r["from"], "copy cases/sod.toml");
-    // no journal line for a creation (ADR 0186 G3)
-    assert!(!dir.join(".rcfd/edits.jsonl").exists());
+    // one case_created journal line per new case file (ADR 0188 J5; before F-273 a creation wrote none, ADR 0186 G3)
+    let lines: Vec<Value> = std::fs::read_to_string(dir.join(".rcfd/edits.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(lines.len(), 6);
+    assert!(lines
+        .iter()
+        .all(|l| l["kind"] == "case_created" && l["who"] == "new_case"));
     eprintln!("C-N sources: {:?}", listing(&dir));
 }
 

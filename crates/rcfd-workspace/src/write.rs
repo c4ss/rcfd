@@ -5,9 +5,12 @@
 //!
 //! The commands `edit_case` and `write_note` of the MCP project tools (moved from `rcfd-mcp`, text unchanged). An
 //! `edit_case` that sets a `mesh.*` setting also builds and checks the edited mesh before it writes, and returns the
-//! check as `mesh` (ADR 0187 M7); without one its result and bytes are as before.
+//! check as `mesh` (ADR 0187 M7); without one its result and bytes are as before. Both take an optional `reason`; the
+//! journal line of an accepted write names the workspace's actor, the reason and, for `edit_case`, each setting set with
+//! its old and new value (ADR 0188 J4, J5). Results are as before.
 
 use crate::case_text::apply_sets;
+use crate::journal::{change, put_list, reason_arg};
 use crate::meshes::{check_object, is_mesh_key};
 use crate::{
     err, project_error as perr, str_arg, text_len, RpcError, Workspace, CONFLICT, PARAMS, REFUSED, TEXT_BUDGET,
@@ -21,6 +24,7 @@ use serde_json::{json, Map, Value};
 
 impl Workspace {
     pub(crate) fn edit_case(&self, args: &Value) -> Result<Value, RpcError> {
+        let reason = reason_arg(args)?;
         let rel = str_arg(args, "path");
         let path = self.project.resolve(rel).map_err(perr)?;
         let norm = self.rel(&path);
@@ -144,7 +148,17 @@ impl Workspace {
                 "old_hash": old_hash, "new_hash": new_hash, "values": values}),
             ));
         }
-        let r = atomic::replace_if_hash(root, &norm, Some(base), new_text.as_bytes(), "edit_case").map_err(perr)?;
+        // ADR 0188 J5: each setting set, with the value the case read before and after
+        let mut extra = self.origin("edit_case", reason).fields();
+        put_list(
+            &mut extra,
+            "changes",
+            set.keys()
+                .map(|k| change(k, orig.get(k).ok(), expected.get(k).ok()))
+                .collect(),
+        );
+        let r = atomic::replace_if_hash_with(root, &norm, Some(base), new_text.as_bytes(), "edit_case", extra)
+            .map_err(perr)?;
         Ok(with_mesh(
             json!({"path": r.rel, "written": true, "valid": true, "form": form, "old_hash": r.old_hash,
             "new_hash": r.new_hash, "values": values}),
@@ -152,6 +166,7 @@ impl Workspace {
     }
 
     pub(crate) fn write_note(&self, args: &Value) -> Result<Value, RpcError> {
+        let reason = reason_arg(args)?;
         let rel = str_arg(args, "path");
         let path = self.project.resolve(rel).map_err(perr)?;
         let norm = self.rel(&path);
@@ -162,12 +177,13 @@ impl Workspace {
             return Err(err(REFUSED, format!("{norm} is a directory")));
         }
         let base = args.get("base_hash").and_then(Value::as_str);
-        let r = atomic::replace_if_hash(
+        let r = atomic::replace_if_hash_with(
             self.project.root(),
             &norm,
             base,
             str_arg(args, "text").as_bytes(),
             "write_note",
+            self.origin("write_note", reason).fields(),
         )
         .map_err(perr)?;
         Ok(

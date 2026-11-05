@@ -251,17 +251,10 @@ impl Drop for EditLock {
     }
 }
 
-/// Append one line to the edit log in a single write (no torn-tail repair: other writers append concurrently).
-/// Best effort: the log is informative, a failure to write it does not undo the edit.
+/// Append one line to the edit log in a single write, numbered under the journal's lock (`crate::journal::append`,
+/// ADR 0188 J2). Best effort: the log is informative, a failure to write it does not undo the edit.
 fn log_edit(root: &Path, line: serde_json::Value) {
-    let path = root.join(EDIT_LOG);
-    let _ = (|| -> io::Result<()> {
-        if let Some(d) = path.parent() {
-            fs::create_dir_all(d)?;
-        }
-        let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
-        f.write_all(format!("{line}\n").as_bytes())
-    })();
+    let _ = crate::journal::append(root, line);
 }
 
 fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, bool)> {
@@ -318,12 +311,26 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
 /// project-relative file `rel` with `bytes` only if its content still has the hash `base` (`fnv64:` or the legacy
 /// `fnv1a64:` spelling); `base = None` means the file must not exist yet. A mismatch is [`ProjectError::Conflict`]
 /// naming the current hash; nothing is written. Parent directories are created. Every accepted write appends
-/// `{t, kind: "edit", who, path, old_hash, new_hash}` to [`EDIT_LOG`].
+/// `{t, kind: "edit", who, path, old_hash, new_hash}` to [`EDIT_LOG`], with its `seq` (`crate::journal::append`).
 ///
 /// Limits: only writers that use this function take the lock. A writer that does not (an editor, Claude Code's own
 /// file tools) can still replace the file between the check and the rename; the watcher sees such edits afterwards.
 /// Breaking a stale lock is not atomic against a second writer breaking the same stale lock at the same moment.
 pub fn replace_if_hash(root: &Path, rel: &str, base: Option<&str>, bytes: &[u8], who: &str) -> Result<Replaced> {
+    replace_if_hash_with(root, rel, base, bytes, who, serde_json::Map::new())
+}
+
+/// [`replace_if_hash`] whose edit line also carries `extra` (ADR 0188 J1: the actor, the reason and the changed settings
+/// of the write). Keys this function writes itself (`t`, `kind`, `who`, `path`, `old_hash`, `new_hash`, `seq`) are not
+/// taken from `extra`.
+pub fn replace_if_hash_with(
+    root: &Path,
+    rel: &str,
+    base: Option<&str>,
+    bytes: &[u8],
+    who: &str,
+    extra: serde_json::Map<String, serde_json::Value>,
+) -> Result<Replaced> {
     let path = crate::paths::resolve_in(root, rel)?;
     let norm = crate::paths::rel_string(root, &path).unwrap_or_else(|| rel.to_string());
     let (_lock, broke) = acquire(root, &norm, &path, who)?;
@@ -349,11 +356,19 @@ pub fn replace_if_hash(root: &Path, rel: &str, base: Option<&str>, bytes: &[u8],
     }
     atomic_write(&path, bytes)?;
     let new_hash = crate::records::hash_bytes(bytes);
-    log_edit(
-        root,
-        serde_json::json!({"t": crate::time::now(), "kind": "edit", "who": who, "path": norm,
-            "old_hash": old_hash, "new_hash": new_hash}),
-    );
+    let mut line = extra;
+    for (k, v) in [
+        ("t", serde_json::json!(crate::time::now())),
+        ("kind", serde_json::json!("edit")),
+        ("who", serde_json::json!(who)),
+        ("path", serde_json::json!(norm)),
+        ("old_hash", serde_json::json!(old_hash)),
+        ("new_hash", serde_json::json!(new_hash)),
+    ] {
+        line.insert(k.into(), v);
+    }
+    line.remove("seq");
+    log_edit(root, serde_json::Value::Object(line));
     Ok(Replaced {
         path,
         rel: norm,

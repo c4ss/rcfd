@@ -1,8 +1,11 @@
 //! New case files in `cases/`, never replacing a file (ADR 0139 D4, D5; data files of ADR 0147). Moved from the Studio's
 //! case starter (ADR 0185 E6) with the same checks, order and messages, so that every client creates a case the same
-//! way.
+//! way. A creation leaves one `case_created` line in the project journal ([`create_by`], ADR 0188 J5).
 
+use crate::journal::{append, Origin};
+use rcfd_project::records::hash_bytes;
 use rcfd_project::Project;
+use serde_json::{json, Map};
 use std::path::Path;
 
 /// Longest accepted case name (ADR 0139 D4).
@@ -71,8 +74,52 @@ pub fn check_name(name: &str, ext: &str, cases: &[String]) -> Result<String, Str
 /// A data file that is there already with the same bytes is used as it is (a second case made from the same example
 /// shares it); one with other bytes refuses the creation before anything is written, because the new case would read
 /// it. When the case file cannot be written, the data files this call wrote are removed again. Returns each data file
-/// with whether this call wrote it. Errors are located.
+/// with whether this call wrote it. Errors are located. The journal line names no actor (`who` `create_with`).
 pub fn create_with(
+    project: &Project,
+    rel: &str,
+    bytes: &[u8],
+    companions: &[(String, Vec<u8>)],
+) -> Result<Vec<(String, bool)>, String> {
+    create_by(
+        project,
+        rel,
+        bytes,
+        companions,
+        &Origin::new("create_with", None, None),
+        None,
+    )
+}
+
+/// [`create_with`], and on success one `case_created` line in the project journal for `origin`: the case's path, hash
+/// and size, `from` when given, and each data file with its hash and whether this call wrote it (ADR 0188 J5).
+pub fn create_by(
+    project: &Project,
+    rel: &str,
+    bytes: &[u8],
+    companions: &[(String, Vec<u8>)],
+    origin: &Origin,
+    from: Option<&str>,
+) -> Result<Vec<(String, bool)>, String> {
+    let data = create_files(project, rel, bytes, companions)?;
+    let mut line = Map::new();
+    line.insert("path".into(), json!(rel));
+    line.insert("hash".into(), json!(hash_bytes(bytes)));
+    line.insert("bytes".into(), json!(bytes.len()));
+    if let Some(f) = from {
+        line.insert("from".into(), json!(f));
+    }
+    let files: Vec<_> = data
+        .iter()
+        .zip(companions)
+        .map(|((p, w), (_, b))| json!({"path": p, "hash": hash_bytes(b), "written": w}))
+        .collect();
+    line.insert("data_files".into(), json!(files));
+    append(project.root(), "case_created", origin, line);
+    Ok(data)
+}
+
+fn create_files(
     project: &Project,
     rel: &str,
     bytes: &[u8],

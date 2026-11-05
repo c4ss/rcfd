@@ -20,12 +20,19 @@
 //! (ADR 0187), with its mesh file confined to the project. Runs go through one handle on the project's run service
 //! ([`runs::RunService`]), with the start plan of [`plan`] (ADR 0173 D7) when asked.
 //!
+//! Every accepted write, case creation, mesh import, run submission and run control request leaves one line in the
+//! project journal with its command, its [`journal::Actor`] when the workspace has one ([`Workspace::with_actor`]), the
+//! caller's `reason` and what changed ([`journal`], ADR 0188); [`feed::Feed`] merges the journal, the runs' events and
+//! the watcher's changes into one ordered feed ([`Workspace::changes`], the `read_feed` query).
+//!
 //! The crate has no UI and no MCP types.
 
 pub mod case_text;
 pub mod cases;
 mod create;
 pub mod examples;
+pub mod feed;
+pub mod journal;
 pub mod meshes;
 pub mod plan;
 mod queries;
@@ -67,7 +74,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 22] = [
+pub const COMMANDS: [&str; 23] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -77,6 +84,7 @@ pub const COMMANDS: [&str; 22] = [
     "render_field",
     "compare_runs",
     "list_changes",
+    "read_feed",
     "read_project_file",
     "edit_case",
     "write_note",
@@ -137,11 +145,14 @@ pub fn project_error(e: ProjectError) -> RpcError {
     err(code, e.to_string())
 }
 
-/// One open project folder: the project, its run service and the change watcher (made on first use).
+/// One open project folder: the project, its run service, the change watcher and the change feed (each made on first
+/// use), and the actor its journal lines name (none unless [`Workspace::with_actor`]).
 pub struct Workspace {
     project: Project,
     runs: RunService,
     watcher: Mutex<Option<Watcher>>,
+    feed: Mutex<Option<feed::Feed>>,
+    actor: Option<journal::Actor>,
 }
 
 impl std::fmt::Debug for Workspace {
@@ -161,13 +172,44 @@ impl Workspace {
             project,
             runs,
             watcher: Mutex::new(None),
+            feed: Mutex::new(None),
+            actor: None,
         })
     }
 
     /// Start runs with the runner executable `exe` instead.
     pub fn with_runner_exe(mut self, exe: impl Into<PathBuf>) -> Self {
-        self.runs = RunService::new(self.project.root(), exe);
+        self.runs = RunService::new(self.project.root(), exe).with_actor(self.actor.clone());
         self
+    }
+
+    /// Name `actor` in the journal lines of this workspace's writes and runs (ADR 0188 J3).
+    pub fn with_actor(mut self, actor: journal::Actor) -> Self {
+        self.actor = Some(actor);
+        self.runs = self.runs.with_actor(self.actor.clone());
+        self
+    }
+
+    /// The actor of this workspace's journal lines.
+    pub fn actor(&self) -> Option<&journal::Actor> {
+        self.actor.as_ref()
+    }
+
+    /// The origin of a change by command `who` of this workspace.
+    pub(crate) fn origin(&self, who: &str, reason: Option<String>) -> journal::Origin {
+        journal::Origin::new(who, self.actor.clone(), reason)
+    }
+
+    /// Poll the change feed (made at the first call, from then on) and return its entries numbered after `since`, with
+    /// the latest number (ADR 0173 "Middle layer", ADR 0188 J6).
+    pub fn changes(&self, since: u64) -> Result<(Vec<feed::Change>, u64), RpcError> {
+        let mut g = self.feed.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            *g = Some(feed::Feed::open(self.project.root()).map_err(project_error)?);
+        }
+        let f = g.as_mut().expect("made above");
+        f.poll().map_err(project_error)?;
+        Ok((f.since(since).0, f.cursor()))
     }
 
     /// Canonical project root.
@@ -199,6 +241,7 @@ impl Workspace {
             "render_field" => self.render_field(args),
             "compare_runs" => value(self.compare_runs(args)),
             "list_changes" => value(self.list_changes(args)),
+            "read_feed" => value(self.read_feed(args)),
             "read_project_file" => value(self.read_project_file(args)),
             "edit_case" => value(self.edit_case(args)),
             "write_note" => value(self.write_note(args)),
@@ -214,9 +257,11 @@ impl Workspace {
         })
     }
 
-    /// Save a case file as the Studio's editor does ([`save::save_case`] on this project).
+    /// Save a case file as the Studio's editor does ([`save::save_case_by`] on this project, with this workspace's
+    /// actor).
     pub fn save_case(&self, rel: &str, base: &str, bytes: &[u8], form: SaveForm) -> Result<Saved, SaveError> {
-        save::save_case(self.project.root(), rel, base, bytes, form)
+        let origin = self.origin(save::SAVE_CASE, None);
+        save::save_case_by(self.project.root(), rel, base, bytes, form, &origin)
     }
 
     fn rel(&self, p: &Path) -> String {
