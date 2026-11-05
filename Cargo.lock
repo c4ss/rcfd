@@ -2837,6 +2837,7 @@ dependencies = [
  "rcfd-render",
  "rcfd-runner",
  "rcfd-tsstore",
+ "rcfd-workspace",
  "rfd",
  "serde",
  "serde_json",

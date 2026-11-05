@@ -2,8 +2,9 @@
 //! the schema tree, saved with the base-hash rule.
 //!
 //! The editor never touches files itself: it is built from the bytes a worker loaded, gives the worker the bytes to write, and
-//! is told the outcome. [`save_if_base`] is the compare-then-write the worker runs (ADR 0131 amendment 1 item 2; the
-//! cooperative lock of ADR 0135 replaces it when 48F merges). Messages that refuse an edit name the setting's path.
+//! is told the outcome. The worker saves through the project workspace (`rcfd_workspace::save_case`, ADR 0185 E4): the
+//! compare-and-replace of ADR 0131 amendment 1 item 2 under the cooperative edit lock of ADR 0135, with an
+//! `.rcfd/edits.jsonl` line. Messages that refuse an edit name the setting's path.
 
 use crate::schema_model::{build_tree, parse_input, Node};
 use rcfd_api::case::Case;
@@ -38,32 +39,6 @@ pub enum External {
     Reloaded,
     /// The editor was dirty (or the new content does not open): it is now in the conflict state.
     Conflict,
-}
-
-/// Outcome of [`save_if_base`].
-#[derive(Debug, Clone, PartialEq)]
-pub enum SaveOutcome {
-    /// Written; the new base hash.
-    Saved(String),
-    /// The file's hash differs from the base: nothing written. The current bytes (`None`: no file).
-    Conflict(Option<Vec<u8>>),
-}
-
-/// Replace `path` with `bytes` only if its current content hashes to `base` (`hash_bytes` form), or, with an empty `base`,
-/// only if there is no file. Written atomically.
-pub fn save_if_base(path: &Path, base: &str, bytes: &[u8]) -> Result<SaveOutcome, String> {
-    let disk = match std::fs::read(path) {
-        Ok(b) => Some(b),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-        Err(e) => return Err(format!("{}: {e}", path.display())),
-    };
-    match &disk {
-        Some(d) if hash_bytes(d) == base => {}
-        None if base.is_empty() => {}
-        _ => return Ok(SaveOutcome::Conflict(disk)),
-    }
-    rcfd_project::atomic::atomic_write(path, bytes).map_err(|e| e.to_string())?;
-    Ok(SaveOutcome::Saved(hash_bytes(bytes)))
 }
 
 /// The settings schema tree of the linked solver (`settings.schema`).

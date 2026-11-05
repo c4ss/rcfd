@@ -13,14 +13,16 @@
 //! (the min/max rule of the frozen GUI's monitors, ADR 0025 M3), files read in pages, and a residual set or image
 //! over the budget is written under `runs/<id>/` and returned as a path. Writes of existing files use the base-hash
 //! compare-and-replace of `rcfd_project::atomic::replace_if_hash` (ADR 0135 W48-15 (a)): under the file's edit lock,
-//! one `.rcfd/edits.jsonl` line per accepted write ([`write`]). Runs go through one handle on the project's run service
-//! ([`runs::RunService`]).
+//! one `.rcfd/edits.jsonl` line per accepted write ([`write`]; the Studio's save, [`save`]). New case files are created
+//! without ever replacing one ([`cases`]). Runs go through one handle on the project's run service ([`runs::RunService`]).
 //!
 //! The crate has no UI and no MCP types.
 
 pub mod case_text;
+pub mod cases;
 mod queries;
 pub mod runs;
+pub mod save;
 pub mod series;
 pub mod write;
 
@@ -31,6 +33,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub use rcfd_api::service::RpcError;
+pub use save::{save_case, SaveError, SaveForm, Saved};
 pub use series::{decimate_minmax, residual_series};
 
 /// Error code: the file changed since its base hash was read (`data.current_hash`, null when absent).
@@ -189,6 +192,11 @@ impl Workspace {
             "wait_run" => value(self.wait_run(args)),
             _ => return None,
         })
+    }
+
+    /// Save a case file as the Studio's editor does ([`save::save_case`] on this project).
+    pub fn save_case(&self, rel: &str, base: &str, bytes: &[u8], form: SaveForm) -> Result<Saved, SaveError> {
+        save::save_case(self.project.root(), rel, base, bytes, form)
     }
 
     fn rel(&self, p: &Path) -> String {
