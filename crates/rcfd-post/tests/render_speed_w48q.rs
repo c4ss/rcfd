@@ -11,6 +11,17 @@
 
 mod render_control_w48q;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "render_speed_w48q",
+        include_str!("fixtures/expected_hashes/render_speed_w48q.tsv"),
+    )
+}
+
 use rcfd_io::datapack::sha256_hex;
 use rcfd_mesh::gen::{
     annulus_3d, backward_step, box_mesh, cavity_2d, cavity_2d_rect, cylinder_ogrid, warp, Grading, StepSpec,
@@ -431,12 +442,6 @@ fn q1_negative_control_reversed_cell_order_is_detected() {
     assert!(detected.iter().all(|(_, n)| *n > 0), "{detected:?}");
 }
 
-// Recorded from the base code (main 6867e40), ADR 0151.
-const R1_RGBA_SHA256: &str = "8902a5bd06d0a563a8c8046330ccd2ffa63b6b09d05ab503d9be96683c1ea415";
-const R1_PNG_SHA256: &str = "26185d0854af3cadf9226ccb391a689489a81ad5b3c620f53a694463c839ec4b";
-const R3_RGBA_SHA256: &str = "a9cc025acfecf67490a370c03a338916e9c704b540d29008cc211e218c9477c0";
-const R3_PNG_SHA256: &str = "1cbd86702c2cde0805db44c2c10ac981638d2928dbd1963e562d4c6c0226839e";
-
 #[test]
 fn q2_r1_and_r3_images_are_as_before() {
     // r1's set-up (render_pixels.rs)
@@ -464,13 +469,12 @@ fn q2_r1_and_r3_images_are_as_before() {
         "Q2: r1 {} x {} RGBA {} PNG {}; r3 {} x {} RGBA {} PNG {}",
         r1.image.width, r1.image.height, got[0], got[1], r3.image.width, r3.image.height, got[2], got[3]
     );
-    assert_eq!(got, [R1_RGBA_SHA256, R1_PNG_SHA256, R3_RGBA_SHA256, R3_PNG_SHA256]);
+    let table = hash_table();
+    assert_eq!(
+        got,
+        ["r1-rgba", "r1-png", "r3-rgba", "r3-png"].map(|k| table.expect_sha256(k))
+    );
 }
-
-// Recorded from the base code (main 6867e40), ADR 0151.
-const R2_RGBA_SHA256: &str = "9ac74c0801a555bd5a16cfa724abedc4b6c522911f2d77b97c3d6284210bf027";
-const R2_PNG_SHA256: &str = "59638fce7adee79af86dbd727324e8db0724b9ca2202fb3b951eb1f79278c8b4";
-const R2_RANGE_BITS: (u64, u64) = (0xbfeffbe708600597, 0x3feffbe40acae0c8);
 
 fn r2_workload() -> (Mesh, Vec<f64>, RenderOptions) {
     let mesh = cavity_2d_rect(1000, 1000, 1.0, 1.0).unwrap();
@@ -504,8 +508,15 @@ fn q3_one_million_cell_image_is_as_before() {
     let d = differences(&r, &base, true);
     assert!(d.is_empty(), "against the base copy: {d:?}");
     assert_eq!(r.cells_drawn, 1_000_000);
-    assert_eq!((r.vmin.to_bits(), r.vmax.to_bits()), R2_RANGE_BITS);
-    assert_eq!([rgba_hash.as_str(), png_hash.as_str()], [R2_RGBA_SHA256, R2_PNG_SHA256]);
+    let table = hash_table();
+    assert_eq!(
+        (r.vmin.to_bits(), r.vmax.to_bits()),
+        (table.expect_hash("r2-vmin-bits"), table.expect_hash("r2-vmax-bits"))
+    );
+    assert_eq!(
+        [rgba_hash.as_str(), png_hash.as_str()],
+        [table.expect_sha256("r2-rgba"), table.expect_sha256("r2-png")]
+    );
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -12,6 +12,17 @@ use std::f64::consts::PI;
 use std::path::Path;
 use std::sync::Arc;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "fractional_step",
+        include_str!("fixtures/expected_hashes/fractional_step.tsv"),
+    )
+}
+
 fn tg(n: usize, nu: f64, f: impl FnOnce(PimpleSettings) -> PimpleSettings) -> PimpleSolver {
     let l = 2.0 * PI;
     let mesh = Arc::new(box_2d(n, n, l, l, true, true).unwrap());
@@ -516,19 +527,10 @@ fn fingerprint(s: &PimpleSolver) -> u64 {
 fn a1_euler_and_non_periodic_bdf2_unchanged_bitwise() {
     let mut s = tg_fs(32, 0.05, TimeScheme::ImplicitEuler, true);
     s.run_fixed(1.0, 0.02);
-    // The Taylor-Green initial field calls the platform's libm (sin, cos), so its fingerprint differs per platform: the value
-    // recorded on Windows, and the x86_64 Linux value proven equal at the pre-fix code (7b2d092) and at HEAD (ADR 0137); other
-    // platforms print it and skip. The cavity fingerprint below is the same on both.
-    let euler = if cfg!(windows) {
-        Some("8c2d50e6a8e9b9ee")
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some("b91593f04078212e")
-    } else {
-        None
-    };
+    let table = hash_table();
     let got = format!("{:016x}", fingerprint(&s));
-    match euler {
-        Some(want) => assert_eq!(got, want, "Euler Taylor-Green"),
+    match table.hash("a1 euler taylor-green") {
+        Some(want) => assert_eq!(got, format!("{want:016x}"), "Euler Taylor-Green"),
         None => eprintln!("Euler Taylor-Green: no recorded fingerprint for this platform; {got}"),
     }
 
@@ -546,5 +548,9 @@ fn a1_euler_and_non_periodic_bdf2_unchanged_bitwise() {
     st.fractional = fs(true, true);
     let mut c = PimpleSolver::new(geom, u, p, st);
     c.run_fixed(1.0, 0.05);
-    assert_eq!(format!("{:016x}", fingerprint(&c)), "e8bd7eaeefd7048b", "BDF2 cavity");
+    assert_eq!(
+        format!("{:016x}", fingerprint(&c)),
+        format!("{:016x}", table.expect_hash("a1 bdf2 cavity")),
+        "BDF2 cavity"
+    );
 }

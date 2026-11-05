@@ -152,3 +152,8 @@ The maintainer decided S4a and S4b, C3 and P1 of "Reported, not changed", and th
 [ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md): S4a and S4b by a production fix (a client
 reaps the runners it started, and on Unix `pid_alive` reads the process states `Z` and `X` as dead); C3 and P1 are ignored on
 every platform but Windows as Linux known misses, their test bodies and limits unchanged.
+
+## Note 2026-11-05: the values moved to tables
+
+[ADR 0190](0190-expected-hash-tables-and-the-w49r-linux-value.md) moved the expected hashes of this ADR's tests, unchanged, from the test
+source to `tests/fixtures/expected_hashes/<test_file>.tsv` of each crate. The rule above still decides whether a Linux value may be added.

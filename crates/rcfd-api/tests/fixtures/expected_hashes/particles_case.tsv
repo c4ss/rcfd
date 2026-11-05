@@ -1,0 +1,3 @@
+# Expected hashes of crates/rcfd-api/tests/particles_case.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# The registered 60-iteration SIMPLE cavity hash of baseline_hashes.rs, hashed the same way (see the test's comment).
+cavity-simple	any	0x07e7461c36893384

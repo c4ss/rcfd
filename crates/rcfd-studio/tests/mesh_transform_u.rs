@@ -22,8 +22,16 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// R0's mesh hash of `example-projects/wind-tunnel/cases/naca0012-aoa4.toml` (`rcfd-api/tests/fixtures`).
-const R0_AEROFOIL_MESH: u64 = 0x8516e4b6ee41c1d9;
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "mesh_transform_u",
+        include_str!("fixtures/expected_hashes/mesh_transform_u.tsv"),
+    )
+}
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
@@ -182,7 +190,8 @@ fn s2_the_preview_shows_the_rotated_mesh() {
     let plain = built(preview::build(&root, "cases/a.toml", &lim, false, &|| false));
     println!("S2 without the table: mesh {:016x}", plain.mesh_hash);
     assert_eq!(
-        plain.mesh_hash, R0_AEROFOIL_MESH,
+        plain.mesh_hash,
+        hash_table().expect_hash("r0-aerofoil-mesh"),
         "the preview of a case without the table is as before"
     );
     let bytes = std::fs::read(dir.join("a.toml")).unwrap();

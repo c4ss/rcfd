@@ -1,0 +1,16 @@
+# Expected hashes of crates/rcfd-api/tests/w34c_component_diagonal_default.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# The registered values of baseline_hashes.rs that this diagnostic (ADR 0074 part C, ignored, nothing asserted) prints a comparison with.
+# Every row is `any`, as the source compared them on every platform: cavity-coupled is the registered Windows value.
+cavity-simple	any	0x07e7461c36893384
+cavity-simplec	any	0x58d5c4fd29432b05
+cavity-coupled	any	0x123b5330dae3f36a
+heated-simple	any	0x30a23d946786fd8a
+heated-simplec	any	0x7d35b1f2f7fcc4b7
+heated-piso	any	0xfe7b5aa0a252ec0f
+packed_bed	any	0x19e53df373637262
+sod	any	0xe1612365139bf898
+wedge	any	0xe198a93b898bd79b
+kepsilon_channel	any	0x6ddc55969af2a835
+rotating_channel	any	0x54d9bee17b5895e8
+cavity-piso	any	0x2a042a42594c418b
+cavity-pimple	any	0x2a042a42594c418b

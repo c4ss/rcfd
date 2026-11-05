@@ -6,6 +6,17 @@ use rcfd_api::particles;
 use rcfd_api::sim::Simulation;
 use rcfd_particles::State;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "particles_case",
+        include_str!("fixtures/expected_hashes/particles_case.tsv"),
+    )
+}
+
 fn case(text: &str) -> Case {
     Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}"))
 }
@@ -248,8 +259,6 @@ fn pt14_mesh_dependent_errors_are_located() {
     assert!(has(&e, "particles.injection.p.patch"), "{e:?}");
 }
 
-const CAVITY_SIMPLE_HASH: u64 = 0x07e7461c36893384;
-
 fn cavity_hash(extra: &str) -> (usize, u64) {
     let text = format!(
         "[mesh]
@@ -305,7 +314,7 @@ fn pt14_disabled_section_leaves_the_cavity_run_bit_identical() {
     assert!(c.semantic_errors().is_empty());
     assert_eq!(c.tree.get("particles.enabled").unwrap(), serde_json::json!(false));
     let plain = cavity_hash("");
-    assert_eq!(plain, (60, CAVITY_SIMPLE_HASH));
+    assert_eq!(plain, (60, hash_table().expect_hash("cavity-simple")));
     let disabled = cavity_hash(
         "[particles]
 enabled = false

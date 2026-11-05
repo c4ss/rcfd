@@ -9,6 +9,17 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "aoa_sweep_w49d",
+        include_str!("fixtures/expected_hashes/aoa_sweep_w49d.tsv"),
+    )
+}
+
 fn folder() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/investigations/job49d-aoa-sweep-fixed")
 }
@@ -210,18 +221,9 @@ fn w49d_ld_drift_of_every_sa_run_known_miss() {
 fn w49d_p2_meshes_are_the_registered_ones() {
     let r = results();
     let m = r["evaluation"]["mesh"].as_object().expect("mesh");
-    let want = [
-        (
-            "M1w",
-            "bd8ef3c6da2dd3681d38c18914c8fbdcddab77bb1381c0688e1e2dce5f0c0299",
-        ),
-        (
-            "M1w-far500",
-            "59e707a866e34ec2fef6dd13a41de6411f844ceff99a2b6a644cb45f3a70c889",
-        ),
-    ];
-    for (name, sha) in want {
-        assert_eq!(m[name]["sha256"].as_str().unwrap(), sha, "{name}");
+    let table = hash_table();
+    for name in ["M1w", "M1w-far500"] {
+        assert_eq!(m[name]["sha256"].as_str().unwrap(), table.expect_sha256(name), "{name}");
     }
 }
 

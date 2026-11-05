@@ -1,0 +1,14 @@
+# Expected hashes of crates/rcfd-fv/tests/w33b_default_bits.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# ADR 0069 acceptance: recorded from the unchanged code and written into the ADR (amendment 1) before any solver change, on Windows.
+# The Taylor-Green initial fields call the platform's libm (sin, cos), so their fingerprints differ per platform: x86_64 Linux values proven
+# equal at the amendment-1 code (c4a593d) and at HEAD (ADR 0137); other platforms print and skip. The cavity fingerprints are the same on both.
+tg piso bdf2	windows	0xe9dca234e513bec8
+tg piso bdf2	linux-x86_64	0x793cc167a5c8dce3
+tg pimple2 euler	windows	0x72d935a8d4993955
+tg pimple2 euler	linux-x86_64	0x7a9cd18ebf2fcbc2
+tg frac bdf2	windows	0xe46fbe511183e9fc
+tg frac bdf2	linux-x86_64	0x275aa31d35e717ff
+cavity piso bounded	windows	0xc21a6553acb2a7a6
+cavity piso bounded	linux-x86_64	0xc21a6553acb2a7a6
+cavity pimple2 bdf2	windows	0x2c71144215f1d245
+cavity pimple2 bdf2	linux-x86_64	0x2c71144215f1d245

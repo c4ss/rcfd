@@ -1,0 +1,4 @@
+# Expected hashes of crates/rcfd-api/tests/fan01_hub_mesh_w49r.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# Content hashes of the default B3 and B2 meshes recorded on the unchanged generator (ADR 0181 bit-identity check, recorded on Windows).
+B3	any	0xbe64f588a252d0b4
+B2	any	0xcae52c4997c9463f

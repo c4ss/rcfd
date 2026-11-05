@@ -1,0 +1,8 @@
+# Expected hashes of crates/rcfd-fv/tests/fractional_step.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# ADR 0043 A1: the fingerprints were recorded from the code before the fix and written into the ADR before the fix.
+# The Taylor-Green initial field calls the platform's libm (sin, cos), so its fingerprint differs per platform: the value recorded on Windows,
+# and the x86_64 Linux value proven equal at the pre-fix code (7b2d092) and at HEAD (ADR 0137); other platforms print it and skip.
+a1 euler taylor-green	windows	0x8c2d50e6a8e9b9ee
+a1 euler taylor-green	linux-x86_64	0xb91593f04078212e
+# The cavity fingerprint is the same on both, and asserted on every platform.
+a1 bdf2 cavity	any	0xe8bd7eaeefd7048b

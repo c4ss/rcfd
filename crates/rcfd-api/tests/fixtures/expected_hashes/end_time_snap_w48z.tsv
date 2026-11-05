@@ -1,0 +1,24 @@
+# Expected hashes of crates/rcfd-api/tests/end_time_snap_w48z.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# (name, value) recorded on the unchanged tree (registration commit of ADR 0160) by run R1 on Windows x86_64 and written into the test
+# before any code of this job (R2). Compared on Windows x86_64 only; other platforms print (bit-identity is per platform, ADR 0137).
+s1-piso-state	windows	0xf183afd4fb113aeb
+s1-piso-monitor-y	windows	0x0297250c32dad91c
+s1-piso-monitor-x	windows	0xdc045cf946f98d75
+s1-piso_courant-state	windows	0xf183afd4fb113aeb
+s1-piso_courant-monitor-y	windows	0x0297250c32dad91c
+s1-piso_courant-monitor-x	windows	0xdc045cf946f98d75
+s1-frozen-state	windows	0xc28e21755765afb2
+s1-frozen-monitor-y	windows	0x421c68002d506f14
+s1-frozen-monitor-x	windows	0xf420ef5661ea56a5
+s1-variable_density-state	windows	0xf3b7338710ebdffe
+s1-variable_density-monitor-y	windows	0x9f8ac199d6dd3b6f
+s1-variable_density-monitor-x	windows	0x615ba4d967d9c49d
+s1-vof-state	windows	0x75ea9b9e2ea73dd7
+s1-vof-monitor-y	windows	0x77ec901b88fc01ec
+s1-vof-monitor-x	windows	0x9d3f7f9bec6b0de5
+s2-state	windows	0xcd611e803856ea20
+s3-statistics	windows	0x19ad55464579264d
+s3-state	windows	0xf183afd4fb113aeb
+s4-particles	windows	0xf02b919af84469b1
+s5-chained-state	windows	0xc1bdb6e9a6d012ec
+s6-store-ux	windows	0xeba9acd4fa177a4f

@@ -11,6 +11,17 @@ use rcfd_mesh::tetmesh::{circumsphere, tet_quality, tetrahedralize, TetMesh, Tet
 use rcfd_mesh::Mesh;
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "w41d_tet_quality",
+        include_str!("fixtures/expected_hashes/w41d_tet_quality.tsv"),
+    )
+}
+
 /// Box tag 0, inward-facing cylinder tag 1 (the `cyl_in_box` surface of crates/rcfd-mesh/tests/tetmesh.rs).
 fn in_code() -> TriSurface {
     let mut s = box_surface([-2.0, -2.0, -1.0], [2.0, 2.0, 1.0], [4, 4, 2]);
@@ -67,17 +78,16 @@ fn fingerprint(tm: &TetMesh) -> (usize, u64) {
     (tm.cells.len(), tm.to_mesh(&BTreeMap::new()).unwrap().content_hash())
 }
 
-/// The expected fingerprint on this platform (ADR 0137). The registered values were recorded on Windows; the surfaces call the
-/// platform's libm (`sin`, `cos`), so coordinates, cell counts and hashes differ per platform. The x86_64 Linux value was proven
-/// equal at the reference commit and at HEAD in one container (ADR 0137); other platforms print the fingerprint and skip.
-fn on_platform(windows: (usize, u64), linux_x86_64: (usize, u64)) -> Option<(usize, u64)> {
-    if cfg!(windows) {
-        Some(windows)
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some(linux_x86_64)
+/// The expected fingerprint on this platform (ADR 0137): the cell count of the platform given here, the hash from the table. The
+/// surfaces call the platform's libm (`sin`, `cos`), so coordinates, cell counts and hashes differ per platform; other platforms
+/// print the fingerprint and skip.
+fn on_platform(key: &str, windows_cells: usize, linux_x86_64_cells: usize) -> Option<(usize, u64)> {
+    let cells = if cfg!(windows) {
+        windows_cells
     } else {
-        None
-    }
+        linux_x86_64_cells
+    };
+    hash_table().hash(key).map(|h| (cells, h))
 }
 
 /// W0: default options give the fingerprints (cell count, `Mesh::content_hash`) recorded at HEAD a2e0bfd before any library
@@ -85,59 +95,39 @@ fn on_platform(windows: (usize, u64), linux_x86_64: (usize, u64)) -> Option<(usi
 #[test]
 fn w0_default_output_bit_identical() {
     let cases = [
-        (
-            "cube",
-            cube(2.0, 2),
-            None,
-            on_platform((108, 2507394269494118308), (108, 2507394269494118308)),
-        ),
-        (
-            "sphere",
-            icosphere(1.0, 2),
-            None,
-            on_platform((320, 15939201240145194707), (320, 15939201240145194707)),
-        ),
-        (
-            "torus",
-            torus(2.0, 0.5, 24, 12),
-            None,
-            on_platform((899, 826700040160655771), (910, 9410422296272373650)),
-        ),
-        (
-            "cyl_in_box",
-            in_code(),
-            None,
-            on_platform((1137, 9960403326714801105), (1134, 10856385456967318595)),
-        ),
+        ("cube", cube(2.0, 2), None, on_platform("cube", 108, 108)),
+        ("sphere", icosphere(1.0, 2), None, on_platform("sphere", 320, 320)),
+        ("torus", torus(2.0, 0.5, 24, 12), None, on_platform("torus", 899, 910)),
+        ("cyl_in_box", in_code(), None, on_platform("cyl_in_box", 1137, 1134)),
         (
             "p1_in_code",
             curvature_remesh(&in_code()),
             None,
-            on_platform((1061, 1192961234831520497), (1100, 8442970156282097805)),
+            on_platform("p1_in_code", 1061, 1100),
         ),
         (
             "s2_stl",
             curvature_remesh(&from_stl_file()),
             None,
-            on_platform((1115, 7631245200477700787), (1022, 10466773633785522690)),
+            on_platform("s2_stl", 1115, 1022),
         ),
         (
             "sphere_h0.3",
             icosphere(1.0, 2),
             Some(0.3),
-            on_platform((823, 4586941130221034709), (823, 4586941130221034709)),
+            on_platform("sphere_h0.3", 823, 823),
         ),
         (
             "sphere_h0.25",
             icosphere(1.0, 2),
             Some(0.25),
-            on_platform((1277, 9750081027263524416), (1277, 9750081027263524416)),
+            on_platform("sphere_h0.25", 1277, 1277),
         ),
         (
             "cube4_h0.5",
             cube(2.0, 4),
             Some(0.5),
-            on_platform((597, 11005660464813738162u64), (597, 11005660464813738162)),
+            on_platform("cube4_h0.5", 597, 597),
         ),
     ];
     for (n, s, size, want) in cases {

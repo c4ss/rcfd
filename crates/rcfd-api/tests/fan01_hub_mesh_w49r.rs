@@ -16,6 +16,17 @@ use serde_json::{json, Value};
 use std::f64::consts::PI;
 use std::time::Instant;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "fan01_hub_mesh_w49r",
+        include_str!("fixtures/expected_hashes/fan01_hub_mesh_w49r.tsv"),
+    )
+}
+
 const R_HUB: f64 = 0.124;
 const R_DUCT: f64 = 0.250;
 const RHO: f64 = 1.2; // ASSUMED (ADR 0075), UNVERIFIED
@@ -612,20 +623,21 @@ fn diagnose_b2() {
 /// Content hashes of the default B3 and B2 meshes recorded on the unchanged generator (ADR 0181 bit-identity check).
 #[test]
 fn w49r_default_meshes_are_bit_identical() {
-    for (id, c, cells, hash) in [
-        ("B3", F3, 4920, 0xbe64f588a252d0b4u64),
-        ("B2", F2, 13627, 0xcae52c4997c9463fu64),
-    ] {
+    let table = hash_table();
+    for (id, c, cells) in [("B3", F3, 4920), ("B2", F2, 13627)] {
         // the case without the key and with the explicit default value
         for text in [case_toml(c), case_toml_g(c, Some("capped"))] {
             let case = Case::parse_toml(&text).unwrap();
             let m = rcfd_api::sim::build_mesh(&case).unwrap();
             println!("W49R {id} cells {} hash {:#018x}", m.n_cells(), m.content_hash());
-            assert_eq!(
-                (m.n_cells(), m.content_hash()),
-                (cells, hash),
-                "{id}: default mesh changed"
-            );
+            match table.hash(id) {
+                Some(hash) => assert_eq!(
+                    (m.n_cells(), m.content_hash()),
+                    (cells, hash),
+                    "{id}: default mesh changed"
+                ),
+                None => eprintln!("{id}: no recorded hash for this platform (printed above)"),
+            }
         }
     }
 }

@@ -1,0 +1,9 @@
+# Expected hashes of crates/rcfd-api/tests/revolved_sector_w45b.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# G6: recorded on Windows. The fan mesh calls the platform's libm, so the hashes differ per platform: the x86_64 Linux values were produced
+# at 511bed4 (e65b4ea in the current history) and at HEAD in one Linux container (ADR 0137); other platforms print and skip.
+g6-default	windows	0x8471bf9a1aef1dd4
+g6-default	linux-x86_64	0x95aa2af7f4ed8b6c
+g6-b3	windows	0xbe64f588a252d0b4
+g6-b3	linux-x86_64	0xb2563dff49086f53
+g6-e3	windows	0x04fbabedbad41768
+g6-e3	linux-x86_64	0xec27db08c0154f65

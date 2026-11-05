@@ -1,0 +1,4 @@
+# Expected hashes of crates/rcfd-fv/tests/varden_ideal_hash.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# ADR 0007 check (R4): FNV-1a over the f64 bit patterns of u, p, T, rho and the mass flux after 30 iterations of a 40 x 6 subsonic nozzle,
+# SIMPLEC, compressible mode, stagnation inlet. Recorded on the tree before any real-gas edit.
+ideal-gas-nozzle	any	0xbbedca02b6f39a6d

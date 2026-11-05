@@ -11,6 +11,17 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "end_time_landing_w48k",
+        include_str!("fixtures/expected_hashes/end_time_landing_w48k.tsv"),
+    )
+}
+
 // ------------------------------------------------------------------------------------------------ set-ups
 
 /// The five fixed-step paths of ADR 0145 (Context 1 and the set-up table).
@@ -561,31 +572,32 @@ fn w1_short_last_step_warning_is_a_run_event() {
 
 // ------------------------------------------------------------------------------ B2: bit-identity against the unfixed tree
 
-/// (variant, steps, hash) of the final state on the unfixed tree, recorded by run R1 of ADR 0145 on Windows x86_64 and
-/// written here before any fix code (R2). Other platforms print (bit-identity is per platform, ADR 0137).
-const PRE_FIX: &[(&str, usize, u64)] = &[
-    ("piso-E", 3, 0x311aed3df1158964),
-    ("piso-T", 4, 0x01f98d890f4d0ebd),
-    ("piso-J", 4, 0x40f7c7404c3ae2f8),
-    ("piso-N", 4, 0x1f630542a2b74fcf),
-    ("piso-W-", 4, 0x1fe8a48c457d1e20),
-    ("piso-W+", 4, 0x8780c099cb836647),
-    ("piso_courant-E", 3, 0x311aed3df1158964),
-    ("piso_courant-T", 4, 0x01f98d890f4d0ebd),
-    ("piso_courant-J", 4, 0x40f7c7404c3ae2f8),
-    ("piso_courant-N", 4, 0x1f630542a2b74fcf),
-    ("frozen-E", 3, 0x63676cfc5953f9d8),
-    ("frozen-T", 4, 0x3bc1517691771c5e),
-    ("frozen-J", 4, 0x80176db8fb42f4ad),
-    ("frozen-N", 4, 0x46252b23e5531c31),
-    ("variable_density-E", 3, 0xf3b7338710ebdffe),
-    ("variable_density-T", 4, 0x738dbd15049f2063),
-    ("variable_density-J", 4, 0x62911882de788a97),
-    ("variable_density-N", 4, 0x8aefb8f9adb16758),
-    ("vof-E", 3, 0x75ea9b9e2ea73dd7),
-    ("vof-T", 4, 0xff4cd23857524e32),
-    ("vof-J", 4, 0x70e5191d8baaa2af),
-    ("vof-N", 4, 0x3c97d09f38ec2228),
+/// (variant, steps) of the final state on the unfixed tree, recorded by run R1 of ADR 0145 on Windows x86_64 and written here
+/// before any fix code (R2); the hash of each variant is in the table. Other platforms print (bit-identity is per platform,
+/// ADR 0137).
+const PRE_FIX: &[(&str, usize)] = &[
+    ("piso-E", 3),
+    ("piso-T", 4),
+    ("piso-J", 4),
+    ("piso-N", 4),
+    ("piso-W-", 4),
+    ("piso-W+", 4),
+    ("piso_courant-E", 3),
+    ("piso_courant-T", 4),
+    ("piso_courant-J", 4),
+    ("piso_courant-N", 4),
+    ("frozen-E", 3),
+    ("frozen-T", 4),
+    ("frozen-J", 4),
+    ("frozen-N", 4),
+    ("variable_density-E", 3),
+    ("variable_density-T", 4),
+    ("variable_density-J", 4),
+    ("variable_density-N", 4),
+    ("vof-E", 3),
+    ("vof-T", 4),
+    ("vof-J", 4),
+    ("vof-N", 4),
 ];
 
 #[test]
@@ -603,19 +615,24 @@ fn b2_final_states_equal_the_pre_fix_hashes_where_no_step_is_absorbed() {
         eprintln!("    (\"{name}\", {steps}, 0x{hash:016x}),");
     }
     let registered = cfg!(all(windows, target_arch = "x86_64"));
+    let table = hash_table();
     let mut problems = Vec::new();
     if registered {
         for (name, steps, hash) in &got {
-            match PRE_FIX.iter().find(|p| p.0 == name) {
+            match PRE_FIX
+                .iter()
+                .find(|p| p.0 == name)
+                .map(|&(n, s0)| (s0, table.expect_hash(n)))
+            {
                 None => problems.push(format!("{name}: no pre-fix hash recorded")),
-                Some(&(_, s0, h0)) if name.ends_with("-T") => {
+                Some((s0, h0)) if name.ends_with("-T") => {
                     if (*steps, *hash) == (s0, h0) {
                         problems.push(format!(
                             "{name}: ({steps}, {hash:016x}) equals the pre-fix state: the absorbed remainder is not seen"
                         ));
                     }
                 }
-                Some(&(_, s0, h0)) => {
+                Some((s0, h0)) => {
                     if (*steps, *hash) != (s0, h0) {
                         problems.push(format!(
                             "{name}: ({steps}, {hash:016x}) differs from the pre-fix ({s0}, {h0:016x})"

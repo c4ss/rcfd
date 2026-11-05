@@ -8,6 +8,17 @@ use rcfd_mesh::gen::{annulus_3d, Grading};
 use rcfd_mesh::non_conformal::join_non_conformal_cylindrical;
 use rcfd_mesh::Mesh;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "cylindrical_interface_w44b",
+        include_str!("fixtures/expected_hashes/cylindrical_interface_w44b.tsv"),
+    )
+}
+
 const RI: f64 = 0.5;
 const RO: f64 = 1.0;
 const V_I: f64 = 0.5;
@@ -33,15 +44,9 @@ fn t4_annulus_interface_case_without_the_keys_is_bit_identical() {
     sim.run(30);
     let h = fnv(&sim);
     println!("T4 hash {h:#018x}");
-    // recorded at HEAD 2f1a3ce before any code of this wave (two runs, identical), on Windows. The annulus generator calls the
-    // platform's libm (sin, cos), so the hash differs per platform: the x86_64 Linux value was produced at 2f1a3ce (fee6ecc in
-    // the current history) and at HEAD in one Linux container (ADR 0137); other platforms print it and skip.
-    if cfg!(windows) {
-        assert_eq!(h, 0x6eca7279950f43c3);
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        assert_eq!(h, 0xde77a7409c95de77);
-    } else {
-        eprintln!("T4: no recorded hash for this platform (printed above)");
+    match hash_table().hash("t4") {
+        Some(want) => assert_eq!(h, want, "T4"),
+        None => eprintln!("T4: no recorded hash for this platform (printed above)"),
     }
 }
 

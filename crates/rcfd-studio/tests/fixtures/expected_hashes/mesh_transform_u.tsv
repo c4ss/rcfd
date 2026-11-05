@@ -1,0 +1,3 @@
+# Expected hashes of crates/rcfd-studio/tests/mesh_transform_u.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# R0's mesh hash of example-projects/wind-tunnel/cases/naca0012-aoa4.toml (rcfd-api/tests/fixtures).
+r0-aerofoil-mesh	any	0x8516e4b6ee41c1d9
