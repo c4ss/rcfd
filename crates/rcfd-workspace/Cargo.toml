@@ -20,3 +20,6 @@ rcfd-runner = { path = "../rcfd-runner" }
 rcfd-tsstore.workspace = true
 rcfd-post.workspace = true
 serde_json.workspace = true
+# ADR 0186 G1: the shipped examples moved from the Studio read their TOML into a tree (`Example::parse`). Already in the
+# workspace (rcfd-api, rcfd-studio); not a new crate.
+toml.workspace = true

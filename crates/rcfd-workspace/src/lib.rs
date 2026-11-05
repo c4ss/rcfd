@@ -3,8 +3,8 @@
 //! implementation.
 //!
 //! [`Workspace`] is one open project with its run service and change watcher. [`Workspace::call`] runs one command or
-//! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `start_run`,
-//! `wait_run`) with that tool's arguments and returns the tool's result object ([`Answer`]); errors are
+//! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `new_case`,
+//! `start_run`, `wait_run`) with that tool's arguments and returns the tool's result object ([`Answer`]); errors are
 //! [`RpcError`]s with the codes of ADR 0135 ([`CONFLICT`], [`LOCK_BUSY`], [`NOT_FOUND`] and the service codes). The MCP
 //! descriptors (names, schemas, access classes) stay in `rcfd-mcp`, which wraps these answers as MCP results.
 //!
@@ -14,16 +14,22 @@
 //! over the budget is written under `runs/<id>/` and returned as a path. Writes of existing files use the base-hash
 //! compare-and-replace of `rcfd_project::atomic::replace_if_hash` (ADR 0135 W48-15 (a)): under the file's edit lock,
 //! one `.rcfd/edits.jsonl` line per accepted write ([`write`]; the Studio's save, [`save`]). New case files are created
-//! without ever replacing one ([`cases`]). Runs go through one handle on the project's run service ([`runs::RunService`]).
+//! without ever replacing one ([`cases`]), from the shipped [`examples`], the built-in [`templates`], text, settings or a
+//! copy (`new_case`, ADR 0186). Runs go through one handle on the project's run service ([`runs::RunService`]), with the
+//! start plan of [`plan`] (ADR 0173 D7) when asked.
 //!
 //! The crate has no UI and no MCP types.
 
 pub mod case_text;
 pub mod cases;
+mod create;
+pub mod examples;
+pub mod plan;
 mod queries;
 pub mod runs;
 pub mod save;
 pub mod series;
+pub mod templates;
 pub mod write;
 
 use rcfd_project::{Project, ProjectError, Watcher};
@@ -32,6 +38,7 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+pub use create::SOURCES;
 pub use rcfd_api::service::RpcError;
 pub use save::{save_case, SaveError, SaveForm, Saved};
 pub use series::{decimate_minmax, residual_series};
@@ -57,7 +64,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 17] = [
+pub const COMMANDS: [&str; 18] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -70,6 +77,7 @@ pub const COMMANDS: [&str; 17] = [
     "read_project_file",
     "edit_case",
     "write_note",
+    "new_case",
     "start_run",
     "pause_run",
     "resume_run",
@@ -187,6 +195,7 @@ impl Workspace {
             "read_project_file" => value(self.read_project_file(args)),
             "edit_case" => value(self.edit_case(args)),
             "write_note" => value(self.write_note(args)),
+            "new_case" => value(self.new_case(args)),
             "start_run" => value(self.start_run(args)),
             "pause_run" | "resume_run" | "cancel_run" => value(self.control(name, args)),
             "wait_run" => value(self.wait_run(args)),

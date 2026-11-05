@@ -23,37 +23,12 @@ use std::sync::{Arc, Mutex};
 /// Protocol revision offered when the client does not state one.
 pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 
-/// Built-in starting points for `create_case`.
-pub const TEMPLATES: &[(&str, &str)] = &[("lid_driven_cavity", LID_DRIVEN_CAVITY)];
-
-/// Lid-driven cavity at Re = 100 (unit lid speed, unit side, nu = 0.01).
-pub const LID_DRIVEN_CAVITY: &str = r#"title = "lid-driven cavity Re=100"
-[mesh]
-generator = "cavity_2d"
-nx = 16
-ny = 16
-[physics]
-nu = 0.01
-[boundaries.lid]
-velocity = "fixed"
-velocity_value = [1.0, 0.0, 0.0]
-[boundaries.walls]
-velocity = "fixed"
-[solver]
-algorithm = "simplec"
-convection = "upwind"
-max_iterations = 600
-tolerance_u = 1e-6
-tolerance_p = 1e-6
-[reports.lid_drag]
-type = "force"
-patch = "lid"
-direction = [1.0, 0.0, 0.0]
-component = "viscous"
-"#;
+// The built-in templates of `create_case` (and of the project tool `new_case`) live in the project workspace (ADR 0186
+// G2), unchanged; re-exported here at their old paths.
+pub use rcfd_workspace::templates::{LID_DRIVEN_CAVITY, TEMPLATES};
 
 /// Added to the `initialize` instructions when the server has a project (ADR 0135).
-const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; start_run, wait_run, pause_run, resume_run and cancel_run drive the project's run service.";
+const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; new_case makes a case file in cases/; start_run (which can make its case first), wait_run, pause_run, resume_run and cancel_run drive the project's run service.";
 
 pub(crate) struct Tool {
     pub(crate) name: &'static str,
