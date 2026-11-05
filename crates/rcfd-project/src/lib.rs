@@ -6,6 +6,7 @@
 //! solver dependency.
 
 pub mod atomic;
+pub mod journal;
 pub mod jsonl;
 pub mod paths;
 pub mod project;
