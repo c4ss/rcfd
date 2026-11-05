@@ -1,6 +1,14 @@
 # ADR 0189: ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode
 
-Status: **REGISTERED 2026-11-05**, written before any code of F-274. Not yet accepted by the maintainer.
+Status: **REGISTERED 2026-11-05**, written before any code of F-274. Not yet accepted by the maintainer. Addendum 1 reports S1
+to S11 built as written on branch `f274-design-evals`, not merged; main 201ea17 (F-273) was merged into the branch with no
+conflict. With `--project`, `design_run_study` and `design_evaluate` now evaluate each candidate at each operating condition as one
+run of the project's runner, tagged in `run.json` with `study`, `variant` and `condition`. Three points on the 32 x 32 cavity gave
+three tagged runs, at most `max_runs` = 2 at once, with records equal to the in-process ones bit for bit. One evaluation took
+0.64 s on the runner against 0.23 s in process. Chained studies with several conditions, studies with their own `max_steps` and
+operating maps stay in the server process (Q2, Q3). The gate at `a6554cb` gave 2854 passed, 0 failed, 800 ignored. The three
+run-record fields wait for the lead's approval (Q4).
+
 Parent: [ADR 0173](0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) (proposed, not accepted),
 work item W7, check C4, decision D2, the design section "Design studies on the runner", roadmap item F-274; it builds on
 [ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) (F-270),
@@ -279,3 +287,73 @@ hiding session tools (Q7, F-275); the Studio showing a study's runs by their tag
 * [ADR 0123](0123-wave47b-run-service.md) and [ADR 0130](0130-wave48a-overview-and-run-record-contract.md) for the runner and the
   run record.
 * [MCP tools](../mcp-tools.md) for the design and project tools.
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+The work is on branch `f274-design-evals`, after this text (46bd422):
+
+* `43294c3`: `rcfd-project` and `rcfd-runner`, the run-record fields and the tagged submission;
+* `75185dc`: `rcfd-api`, the seam of S2;
+* `4234acc`: the workspace module, `RunService::submit_tagged`, the MCP route and the tests;
+* `51d887e`: a merge of main 201ea17, which had meanwhile taken F-273 (ADR 0188); no file conflicted;
+* `a6554cb`: the documents.
+
+The gate ran on `a6554cb`, so it covers F-274 together with F-273. The branch is not merged.
+
+**Built as registered.** S1 to S11 were built as written.
+
+* `rcfd-project`: the three optional fields in `RunRecord`, its wire form and both constructors. `tests/records.rs` gains the
+  three `None` in its one literal, as C-1 allows.
+* `rcfd-runner`: `store::RunTags`; `FsStore::create_run_tagged`, which is the body of `create_run` (now a call of it with no tags);
+  `Client::submit_tagged`, which `submit` now calls with no tags.
+* `rcfd-api`: `design::tools::call_with`, `EvaluatorSource` and `StudyRun`. `run_study` and `evaluate` are `run_study_with` and
+  `evaluate_with` with no source.
+* `rcfd-workspace`: `src/design.rs` (the source, the evaluator, `set_entry`, `entries`, `variant_name`, `cond_result`,
+  `Workspace::design_call`), `pub mod design;` in `lib.rs`, and `RunService::submit_tagged` after `wait`.
+* `rcfd-mcp`: four lines in `dispatch`.
+
+No Studio file, MCP descriptor or `initialize` text changed. New tests:
+
+* `rcfd-project` `tests/run_tags_f274.rs` (1);
+* `rcfd-runner` `tests/run_tags_f274.rs` (1);
+* `rcfd-workspace` `tests/design_f274.rs` (2), and one unit test in `src/design.rs`;
+* `rcfd-mcp` `tests/design_runner_f274.rs` (1, C4-R, C4-M, C4-T and C4-C in one project).
+
+**Differences found while building.**
+
+1. serde_json writes 1e20 as `1e+20`. C4-U asks for "serde_json's text of it", so the entry is `p=1e+20`, which reads back as
+   1e20.
+2. The registered case converges in 86 to 106 iterations (tolerances 1e-6), far below the cap of 3000, so each run lasts a
+   fraction of a second. The queue still held the three runs together and the peak was 2; a slower machine or a faster one
+   could make the peak check tighter, which is noted here and was not changed.
+3. The source makes sure of a runner on every call it sends to the runner, also a call with nothing new to evaluate (the
+   second `design_run_study` of C4-R), as S3 says.
+4. Item 9 and S10 were written while F-273 was unmerged. With it merged: the files the design tools write under `designs/`
+   (`study.json`, `evaluations.jsonl`) have no journal line, so the change feed labels them `external` (ADR 0188 J6), as it did
+   for these tools before F-274; and the runs of a study have no `run_submitted` line, since `submit_tagged` writes none. Both
+   belong to Q6's follow-up, which is no longer blocked; nothing was built for them.
+5. In a parallel run of the four crates' tests after the merge, `rcfd-project` `case_path_wfix` `r9` failed once with "Access is
+   denied" when it replaced a `run.json` (a Windows file lock, in a test that rewrites the file itself), and passed 3 of 3 run
+   alone.
+
+**Results.** The numbers of C4-R, C4-M, C4-T and C4-C are those the test printed in its run at `4234acc`.
+
+| Check | Result |
+|---|---|
+| C4-R | three runs, all `finished`, each with `case` `cases/cavity.toml`, `study` `designs/nu3`, `condition` `base`, one `set` entry and a variant whose value reads back bit-equal to the store's (`nu=0.01`, `nu=0.015`, `nu=0.02`); created before the first ended; at most 2 running at once (peak exactly 2); 1.49 s for the call. A second call: 0 evaluations and no new run folder |
+| C4-M | the three records equal in `params`, `ok`, `status`, `iterations` (106, 102 and 100) and metric names; largest relative difference of `lid_drag` 0: bit for bit |
+| C4-T | one evaluation took 0.637 s on the runner and 0.225 s in process, 0.41 s more. The three-point calls took 1.49 s (workers 3, `max_runs` 2) and 0.29 s, which is 0.50 s and 0.10 s per evaluation. The fourth record was equal bit for bit |
+| C4-C | (i) `chain: false`: four runs, each tagged with its variant and condition; `slow` also has the entry `boundaries.lid.velocity_value=[0.5,0.0,0.0]`; the records were equal bit for bit (86 and 87 iterations). (ii) `chain` left to its default: `process`, with a note naming `chain`, and no run. (iii) `max_steps` set: `process`, with a note naming `max_steps`, and no run |
+| C4-U | the entries are `p=20`, `p=0.015`, `p=1e+20`, `p="piso"` and `p=[2.0,0.0,0.0]`. The four trees equal `apply_value`'s. Control: `mesh.nx=20.0` is refused ("expected integer, got 20.0"). The result rule holds on its five texts: converged, not converged at exit 5, diverged, no `solver_finish`, and a `null` report. The variant is `nu=0.015,u=2.0` |
+| C-RR | an untagged record writes the same JSON value as main's form, with no tag key; a tagged record round-trips, and the reader without the fields reads it. `Client::submit` writes main's 8 keys, and `submit_tagged` writes those keys plus the three |
+| C-1 | before the merge, every test of `rcfd-mcp`, `rcfd-workspace`, `rcfd-runner` and `rcfd-project`, `workspace_graph.rs` and the `design` unit tests of `rcfd-api` passed in release: 231 passed, 0 failed, 14 ignored. After the merge, see the gate |
+| Can fail | (1) The study tag dropped: C4-R failed at `study` (null). (2) The run state `finished` taken as converged: C4-U failed at the not-converged text. (3) The chain rule removed: C4-C (ii) failed (`evaluator` `runner`). Each file was restored and compared byte for byte with the committed one: equal |
+| Defaults | against eef6c09, `Cargo.lock`, `baseline_hashes.rs`, `case_hashes_w48u.rs` and the case schema are unchanged (`git diff` empty). `tools/list` is unchanged: `project_list_f270.rs` and `default_f1.rs` pass unedited. No case-schema key was added. `scripts/limit_audit.py` reports 152 hits on the merged branch as on main 201ea17, none in the new tests |
+| Gate | `a6554cb` (this branch with main 201ea17 merged in, and the documents before this addendum), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test): fmt 0, clippy `-D warnings` 0, 2854 passed, 0 failed, 800 ignored, 550 binaries, 76 min wall (63 min of tests). Against the F-273 gate (6cef342: 2846 passed, 2 failed, 800 ignored, 2848 processes, 546 binaries): the 6 tests of F-274 in 4 new binaries, and its two `runner_w47b` failures (`s1`, `s9`) did not recur. The first attempt stopped in clippy and the release build when the machine's free commit fell to 0 GB (the WSL VM, not this gate; rustc "memory allocation failed"); its target folder was removed. The run that passed waited for 16 GB of free commit instead of 25 (the VM kept about 60 GB); its lowest free commit was 14 GB |
+
+**Questions for the maintainer.** Q1 to Q8 stand as registered, each proceeding on its reversible choice. In order of weight:
+Q4 (the lead's approval of the three `run.json` fields, ADR 0130); Q7 (the design tools keep the access class `write_files`
+though in project mode they start runs); Q2 (d) and Q3 (d) (a run setting that the runner passes to `rcfd run --continue-from`
+and a step cap, which would bring chained studies, studies with `max_steps` and operating maps onto the runner); Q6 (journal
+lines for design runs and stored evaluations, no longer blocked now that F-273 is merged); Q5 (adopting runs that outlive a
+call); Q1 and Q8.
