@@ -193,7 +193,7 @@ the registered rules and fixes beta*.
   rho(1e-6) 1.330555, rho(1e-7) 1.330553, |diff| 2e-6 (limit 1e-3), met; the smallest |phi_f| / (U A_max) on the n5 faces is 1.16e-6 against
   the largest relative step 1e-6 (no flux sign can flip). M-A: the leading Ritz value converged (residual estimate below 1e-50), rho from
   150 steps equals rho from 200 to 5e-15: met. Resolution: rho_0 - 1 = 0.33 against 3 u0 = 6e-6: resolved.
-* **J0**: leading eigenvalue **-1.3306** (real), then +1.163, +1.112 +- 0.104i, -1.097, +1.047; 118 of 200 Ritz values converged. **P1
+* **J0**: leading eigenvalue -1.3306 (real), then +1.163, +1.112 +- 0.104i, -1.097, +1.047; 118 of 200 Ritz values converged. **P1
   holds.** The leading mode is NOT at the leading edge: 0.1 % of its scaled velocity energy is in the five cells and 0.2 % in n5, so **P2
   is falsified**. Its most energetic cells are c1234 (seam, r 0.1408, z 0.149, 59 deg), c365 and c401 (interior, r 0.1249, z 0.172, 38 and
   56 deg), c1250, c1233 (seam): hub-region cells in mid-chord, the region where the ADR 0110 S12 oscillation moved to. Velocity carries 98 %
@@ -201,7 +201,7 @@ the registered rules and fixes beta*.
 * **Attribution variants**: H17 1.330555, H5 1.330554, GG17 1.330555 (each changes rho by less than 1e-5: does not drive); Hall 1.291514
   (contributes: -0.039; the leading mode and its location unchanged, and Hall raises the positive eigenvalues to 1.284 and 1.229). By the
   precedence this is branch 5 (none drives).
-* **M3 fails**: the two frozen trajectories separate at a geometric-mean rate of **1.017** over k = 6..20 (limit |g - rho_0| <= 0.02 against
+* **M3 fails**: the two frozen trajectories separate at a geometric-mean rate of 1.017 over k = 6..20 (limit |g - rho_0| <= 0.02 against
   1.3306), and the difference changes sign in 5 of 15 steps (at least 12 required). The per-step ratio swings between 0.71 and 1.34. The
   linearisation at the cycle point x_ref does not predict the frozen iteration: the base trajectory moves away from x_ref (x_ref is not a
   fixed point, and J0 has four further eigenvalues above 1 with positive real part), so the Jacobian along it changes from step to step.

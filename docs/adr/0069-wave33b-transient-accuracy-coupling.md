@@ -48,12 +48,12 @@ cannot move the cylinder (which runs the iterative path).
 
 ### Common set-ups
 
-* **TG** (periodic Taylor-Green vortex, exact solution of the 2-D Navier-Stokes equations, any textbook): `box_2d(N, N, 2 pi, 2 pi, true, true)`,
+* TG (periodic Taylor-Green vortex, exact solution of the 2-D Navier-Stokes equations, any textbook): `box_2d(N, N, 2 pi, 2 pi, true, true)`,
   `u = (sin x cos y, -cos x sin y) exp(-2 nu t)`, `p = (cos 2x + cos 2y)/4 exp(-4 nu t)`, nu = 0.1, central convection, t_end = 1.
-* **MODE** (wall-bounded decaying mode of ADR 0043 `f2c`): `box_2d(N, N, 1, 1, false, false)`, `v = sin(pi x) exp(-nu pi^2 t)`, no-slip at
+* MODE (wall-bounded decaying mode of ADR 0043 `f2c`): `box_2d(N, N, 1, 1, false, false)`, `v = sin(pi x) exp(-nu pi^2 t)`, no-slip at
   xmin, xmax, zero gradient u on ymin, ymax, `p = 0` fixed there; nu = 0.1, t_end = 1. No convection, no pressure: it tests ddt, diffusion and
   the wall boundary term.
-* **MMS** (wall-bounded manufactured solution with convection, method of manufactured solutions, Roache 2002 UNVERIFIED reference for the name;
+* MMS (wall-bounded manufactured solution with convection, method of manufactured solutions, Roache 2002 UNVERIFIED reference for the name;
   the construction is elementary): unit square, no-slip on all four sides. `psi = g(t) X(x) Y(y)`, `X = x^2 (1 - x)^2`, `Y` the same in y,
   `u = g X Y'`, `v = -g X' Y`, `g(t) = 80 (1 + 0.5 sin(2 t + 0.3))`, pressure `p_ex = 0.5 (g/80)^2 cos(pi x) cos(pi y)`, nu = 0.05, t_end = 1.
   Source (acceleration, evaluated at the new time level) `f = u_t + u . grad u + grad p_ex - nu laplacian u` with
@@ -69,10 +69,10 @@ cannot move the cylinder (which runs the iterative path).
   REFERENCE run of the same scheme on the same mesh with the constant step `dt_ref = 1/1280` (so at least 16 times finer than the finest pair
   member and 128 times finer than the coarsest). This isolates the temporal error at fixed h. The error against the exact solution is printed
   too. Observed order of a pair: `log2(e(dt)/e(dt/2))`.
-* Pairs: **fine pair** (dt, dt/2) = (0.025, 0.0125) is the BINDING pair; **coarse pair** (0.1, 0.05) is registered with the same band (it was the
+* Pairs: fine pair (dt, dt/2) = (0.025, 0.0125) is the BINDING pair; coarse pair (0.1, 0.05) is registered with the same band (it was the
   pair of ADR 0043; the observed order of the fractional path falls with dt, so a pass on the coarse pair alone proves nothing).
-* Paths: **PISO** = `PimpleSettings::piso(nu)` (n_outer 1, 2 correctors, `ddt_correction` on); **PIMPLE-C** = the cylinder's setting (n_outer 2,
-  2 correctors, alpha_u = alpha_p = 0.9); **PIMPLE-4** = n_outer 4, 2 correctors, alpha 1 (outer loop to convergence); **FRAC** = fractional step,
+* Paths: PISO = `PimpleSettings::piso(nu)` (n_outer 1, 2 correctors, `ddt_correction` on); PIMPLE-C = the cylinder's setting (n_outer 2,
+  2 correctors, alpha_u = alpha_p = 0.9); PIMPLE-4 = n_outer 4, 2 correctors, alpha 1 (outer loop to convergence); FRAC = fractional step,
   `FractionalSettings::default()` (incremental, Kim-Moin).
 
 ### Order checks (limits fixed now; band [1.9, 2.3] for BDF2, [0.9, 1.15] for Euler, on the observed order of the pair)
@@ -116,14 +116,14 @@ amendment, together with the evidence of ADR 0043, if the matrix shows the face 
 
 * Problem: lid-driven cavity, lid speed U = 1 (ymax), no-slip walls, fluid at rest at t = 0 (impulsive start), `t_end = 10` (ten lid
   transit times), Re = U L/nu in {100, 1000}, linear upwind convection, uniform pressure level pinned as usual, default solver tolerances.
-* Meshes: **M-U** uniform 32 x 32 (`cavity_2d`) and **M-G** strongly graded 32 x 32 (`box_2d_graded`, `Grading::Symmetric(20)` in x and y, i.e.
+* Meshes: M-U uniform 32 x 32 (`cavity_2d`) and M-G strongly graded 32 x 32 (`box_2d_graded`, `Grading::Symmetric(20)` in x and y, i.e.
   cells of ratio 20 clustered at all four walls; the cylinder blew up on strongly stretched near-wall cells and a uniform cavity may never show it).
 * Time steps: `dt = Co_t h_min / U` with `h_min` the smallest cell width of the mesh. The achieved Courant number is the repo's `max_courant`
   (`0.5 sum|F| dt/V`) maximised over cells and steps; the table reports it, not only the target.
-* Algorithms: **PISO** (n_outer 1, 2 correctors), **PIMPLE-2** (n_outer 2, 1 corrector, alpha_u 0.8, alpha_p 0.5), **PIMPLE-4** (n_outer 4, same), each
+* Algorithms: PISO (n_outer 1, 2 correctors), PIMPLE-2 (n_outer 2, 1 corrector, alpha_u 0.8, alpha_p 0.5), PIMPLE-4 (n_outer 4, same), each
   with Euler and BDF2.
-* **Required stable set** (must pass, on both meshes, both Re, both time schemes): PISO `Co_t` in {0.25, 0.5, 1.0}; PIMPLE-2 and PIMPLE-4 `Co_t` in
-  {0.5, 1, 2, 4}. **Report-only scan above it** (never asserted): PISO `Co_t` in {2, 4, 8}; PIMPLE-2/4 `Co_t` in {8, 16}.
+* Required stable set (must pass, on both meshes, both Re, both time schemes): PISO `Co_t` in {0.25, 0.5, 1.0}; PIMPLE-2 and PIMPLE-4 `Co_t` in
+  {0.5, 1, 2, 4}. Report-only scan above it (never asserted): PISO `Co_t` in {2, 4, 8}; PIMPLE-2/4 `Co_t` in {8, 16}.
 * **Stable** means all of: (a) no divergence-guard trip (`PimpleSolver::diverged` is `None`) and every field finite, (b) `max |u| <= 1.5 U` over all
   cells and all steps, (c) `max |p| <= 50 U^2` over all cells and steps, (d) the normalised continuity error of every step <= 1e-3, (e) the run
   reaches `t_end`.
@@ -140,9 +140,9 @@ linear upwind, t = 160, statistics from t > 60, eight whole periods), with `time
 exactly once; the result is final whatever it is. Reference numbers (ADR 0062, Euler): St 0.15878, C_D 1.30996; dt-Richardson limits on this mesh St
 0.16536, C_D 1.3437 (temporal deficits 0.00658 and 0.0337).
 
-* **K1b (the registered K1)**: St within 3 % of 0.165, i.e. [0.16005, 0.16995].
-* **K2b**: C_D in [1.2883, 1.3957] (the unchanged K2).
-* **T1 (temporal error removed)**: `|St - 0.16536| <= 0.3 * 0.00658 = 0.001974`, i.e. St in [0.16339, 0.16733]; and `|C_D - 1.3437| <= 0.3 * 0.0337 = 0.0101`.
+* K1b (the registered K1): St within 3 % of 0.165, i.e. [0.16005, 0.16995].
+* K2b: C_D in [1.2883, 1.3957] (the unchanged K2).
+* T1 (temporal error removed): `|St - 0.16536| <= 0.3 * 0.00658 = 0.001974`, i.e. St in [0.16339, 0.16733]; and `|C_D - 1.3437| <= 0.3 * 0.0337 = 0.0101`.
 * K4: at least 9 zero crossings of the probe signal after t = 60.
 * Verdicts: all met = "the first-order PIMPLE time error was the cause of the K1 miss and BDF2 removes it". K1b met but T1 missed = St recovered but the
   remaining deficit is not the temporal error alone (reported). K1b missed = not recovered (reported, the Euler-to-BDF2 shift is stated). A guard trip or no shedding
@@ -218,23 +218,23 @@ N = 16 1.24 and 1.04); FRAC: 80.7 % ("present", misfit 0.192). Startup (X1) is c
 
 ### Hypotheses and fixes registered before the code is touched (all opt-in, default off, `PimpleSettings` fields)
 
-* **H-seam / F1 `ddt_correction_coupled`** (iterative path). The transient Rhie-Chow carry-over `ddt_defect` exists for internal faces only; the translationally periodic
+* H-seam / F1 `ddt_correction_coupled` (iterative path). The transient Rhie-Chow carry-over `ddt_defect` exists for internal faces only; the translationally periodic
   coupled boundary faces (the two seams of the doubly periodic vortex) are interpolated without it. Observations consistent with this: the floor appears only
   on the periodic problem (MODE and MMS fine pairs reach 2.0 and 1.94), is of the size expected when 2 of 32 face rows of the O(dt) `ddt_correction`-off error
   (X3: 1.9e-4 at dt = 0.0125) are unprotected (about 1.2e-5, measured floor 1.3e-5), and grows relative to the signal as N falls. F1 extends `ddt_defect` to coupled boundary faces with
   the face values of the solver's own periodic boundary interpolation. Acceptance: with F1 on, O1 (fine and coarse), O2 (fine and coarse), O3, O7 (TG) lie in [1.9, 2.3].
   If they do not, H-seam is falsified and the miss stays (ignored `*_known_miss` tests with the limits unchanged); F1 is kept only if it does not harm (O5, O6, O8, O9
   unchanged to 1e-12 with the flag on, because those problems have no coupled faces, and the TG errors vs exact within 5 % of the default).
-* **H-frac / F2 `fractional_ddt_carryover`** (fractional path). The face term `dte (interp(grad p^n).S - snGrad p^n |S|)` is the O(dt h^2) mechanism of ADR 0043; the
+* H-frac / F2 `fractional_ddt_carryover` (fractional path). The face term `dte (interp(grad p^n).S - snGrad p^n |S|)` is the O(dt h^2) mechanism of ADR 0043; the
   PISO path carries the old-level flux defects `d = phi - interp(u).S` over with the BDF2 weights and shows an error 9 times lower at the same dt (O1 against O4:
   4.4e-5 against 3.9e-4). F2 adds the same carry-over to the intermediate flux: `phi*_f += (c1 d^n_f - c2 d^{n-1}_f)/c0` with `c0 = c1 - c2` (so the factor is `dte/dt`, the
   fractional analogue of `gamma_p/dt`), on internal faces and (with F1's boundary definition) periodic coupled faces. Acceptance: with F2 on, O4 (fine and coarse) in [1.9, 2.3].
   The default Chorin/incremental behaviour, the Kim-Moin condition and the divergence-free projection are untouched.
-* **H-diag / F3 `component_diagonal`** (iterative path, any scheme whose diagonal differs between components). With the flag on, `HbyA_k = (H_k + (a_P - a_k) u_k)/a_P` with `u_k` the
+* H-diag / F3 `component_diagonal` (iterative path, any scheme whose diagonal differs between components). With the flag on, `HbyA_k = (H_k + (a_P - a_k) u_k)/a_P` with `u_k` the
   current corrector velocity and `a_k` the diagonal of component `k` (the standard consistent form). Acceptance: `Bdf2Bounded` on the PISO path, errors against the exact solution at
   dt = 0.05 at most three times the `Bdf2` values: MODE <= 5.6e-3 (Bdf2 1.855e-3), TG <= 5.2e-3 (1.709e-3), MMS <= 1.7e-2 (5.686e-3). With the flag on, every `Bdf2`/`ImplicitEuler`
   result changes by less than 1e-10 relative (the diagonal is component independent there except at boundaries where the standard form is exact).
-* **Default bit-identity (C1).** Fingerprints (rotate-xor-multiply over `u`, `p`, `phi`; test `w33b_default_bits.rs`), recorded from the UNCHANGED code: TG 32 x 32 nu 0.05 central dt 0.02 t = 1:
+* Default bit-identity (C1). Fingerprints (rotate-xor-multiply over `u`, `p`, `phi`; test `w33b_default_bits.rs`), recorded from the UNCHANGED code: TG 32 x 32 nu 0.05 central dt 0.02 t = 1:
   PISO BDF2 `e9dca234e513bec8`; PIMPLE n_outer 2 (alpha 0.9) Euler `72d935a8d4993955`; fractional BDF2 `e46fbe511183e9fc`; cavity 16 x 16 nu 0.01 linear upwind dt 0.05 t = 1:
   PISO `Bdf2Bounded` `c21a6553acb2a7a6`; PIMPLE n_outer 2 (alpha 0.9) BDF2 `2c71144215f1d245`. Limit: zero differing bits with every new option off; `baseline_hashes` unchanged.
 * **Not fixed, reported (no mechanism found or by design).** The PISO splitting error (X4: three correctors lower the MMS error by 30 %; X5: outer iteration to convergence lowers it
@@ -258,7 +258,7 @@ O7 variable step MMS 1.902 (met), TG 1.832 (miss). The limits were not changed.
   BUT the error against the exact solution at dt = 0.05 rises from 1.054e-3 to 2.728e-2 (25.9 times, registered no-harm limit 1.05 times). The order is then of a
   scheme that converges to the wrong spatial limit: the carried defect `d/c0` does not vanish as dt -> 0 (it is a spatial, O(h^2), quantity), so the metric
   "error against the same-scheme dt = 1/1280 reference" cannot see it. By the registered no-harm clause F2 is not kept; the O4 miss stays an ignored
-  `o4_tg_frac_bdf2_known_miss`. This is also a lesson about the order metric: a pass of the self-reference order is necessary, not sufficient (O9 against the exact
+  `o4_tg_frac_bdf2_known_miss`. A pass of the self-reference order is therefore necessary, not sufficient (O9 against the exact
   solution is the check that cannot be fooled this way).
 * **F3 `component_diagonal` (H-diag): MET, kept, default off.** `Bdf2Bounded` on the PISO path, error against the exact solution at dt = 0.05: MODE 2.893e-3 (limit
   5.6e-3, before 8.1e-2..3.7e-1), TG 1.277e-3 (limit 5.2e-3), MMS 4.032e-3 (limit 1.7e-2). With the flag on, `Bdf2` and `ImplicitEuler` change by exactly 0 on all three
@@ -295,7 +295,7 @@ unchanged with the new code (zero differing bits).
 
 ### Cylinder, one run with `time_scheme = Bdf2` (rule registered above, test `validation_cylinder_re100_w33b.rs`, no fixes active: F3 does not touch Bdf2)
 
-Set-up of the w31 runner (128 x 100, dt 0.05, n_outer 2, alpha 0.9, linear upwind): 16 zero crossings, **St 0.16480**, **C_D 1.35247** (290 s, no guard trip).
+Set-up of the w31 runner (128 x 100, dt 0.05, n_outer 2, alpha 0.9, linear upwind): 16 zero crossings, St 0.16480, C_D 1.35247 (290 s, no guard trip).
 K1b St in [0.16005, 0.16995]: met. K2b C_D in [1.2883, 1.3957]: met. K4 (>= 9 crossings): met (16). T1 (tight) St in [0.16339, 0.16733]: met; |C_D - 1.3437| = 0.0088 <= 0.0101:
 met. Euler baseline of the same set-up: St 0.15878, C_D 1.30996; the dt-Richardson targets of ADR 0062 were St 0.16536, C_D 1.3437, so the BDF2 value sits 0.34 % (St) and
 0.65 % (C_D) from them against 4.0 % and 2.5 % for Euler. The run was made once; the corrected BDF2 scheme is the unchanged `Bdf2` (the order loss of Amendment 1 is not

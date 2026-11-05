@@ -393,7 +393,7 @@ Results: [`docs/investigations/job49e-sa-wall/`](../investigations/job49e-sa-wal
 ### The finding
 
 1. **The default's buffer-layer error is real, and its mechanism is the one identified before the runs.**
-   - Plate Cf(0.97) against TMR in `auto`: +3.1 / +4.9 / +7.7 / **+19.9** / **+19.7** / +14.2 / +11.4 / +5.7 / +4.3 /
+   - Plate Cf(0.97) against TMR in `auto`: +3.1 / +4.9 / +7.7 / +19.9 / +19.7 / +14.2 / +11.4 / +5.7 / +4.3 /
      +2.9 % at wall y+ 1 / 2 / 3 / 5 / 8 / 12 / 15 / 30 / 40 / 60.
    - The 1-D model of the linear face eddy viscosity (D7), shifted by D01's offset (+2.2 points), predicts every one of
      them within 1.2 points (LH1).
@@ -402,8 +402,8 @@ Results: [`docs/investigations/job49e-sa-wall/`](../investigations/job49e-sa-wal
    - Not the cause: the u_tau iteration, the wall-face viscosity and the wall nuTilda. The y+ 5 switch of `auto` is not
      the cause either: the error is the same on both sides of it.
 2. **The opt-in `auto_sa_law`, as amended, removes it.**
-   - Plate: **+2.3 % to +4.4 %** against TMR at all 10 y+, and within 2.0 % of its own y+ 1 value.
-   - Aerofoil cd: **+2.0 %, +1.3 %, +2.3 %** at median wall y+ 5, 15, 42. The spread is 1.0 % of TMR, against 15.3 % for
+   - Plate: +2.3 % to +4.4 % against TMR at all 10 y+, and within 2.0 % of its own y+ 1 value.
+   - Aerofoil cd: +2.0 %, +1.3 %, +2.3 % at median wall y+ 5, 15, 42. The spread is 1.0 % of TMR, against 15.3 % for
      the default.
    - The remaining +2 % to +3 % is the plate set-up's baseline, already present at y+ 1 in every mode. It is not a wall
      treatment error.

@@ -48,9 +48,9 @@ No solver iteration of this job had run. What I had read, built or computed:
 
 1. **ADR 0159's and ADR 0164's records** (the ADRs, `docs/investigations/job48y-aoa-sweep/` and `.../job49a-sa-drag/`).
    Known results that bear on the limits below:
-   - ADR 0164 F00 (both fixes, 50 chords, alpha 0): cd (`total_effective`) 0.008402, **+2.6 %** against TMR's 0.008192.
-   - ADR 0164 **C10** (both fixes, **500 chords**, alpha 10): cd 0.013547 (window mean; final iterate 0.013516),
-     **+10.0 %** (+9.8 %) against TMR's 0.012311; cl 1.06495, **-2.4 %** against 1.0909. It met the residual targets at
+   - ADR 0164 F00 (both fixes, 50 chords, alpha 0): cd (`total_effective`) 0.008402, +2.6 % against TMR's 0.008192.
+   - ADR 0164 C10 (both fixes, 500 chords, alpha 10): cd 0.013547 (window mean; final iterate 0.013516),
+     +10.0 % (+9.8 %) against TMR's 0.012311; cl 1.06495, -2.4 % against 1.0909. It met the residual targets at
      iteration 533. Its case is, by construction, this job's SA-a10 apart from the title and the report list, so SA-a10
      is a re-run of C10 on today's main (D8).
    - ADR 0164 F10 (50 chords): cd +26 %, cl -3.3 %. ADR 0159 SA-a10 (no fixes, 50 chords): cd 0.0396, cl 0.982.
@@ -77,7 +77,7 @@ No solver iteration of this job had run. What I had read, built or computed:
    `python scripts/w49d_aoa_sweep_fixed.py selftest` and `python scripts/w48y_aoa_sweep.py selftest` pass.
 5. **The drift metric on ADR 0164's stored status streams** (computed before choosing LD's threshold, disclosed): the
    relative change of cd (`total_effective`) between the last quarter and the quarter before is -0.45 % for C10
-   (533 iterations), -0.27 % for F10, 0.00 % for F00 and A00, and **+0.64 % for A10** (ADR 0159's set-up at 10 degrees,
+   (533 iterations), -0.27 % for F10, 0.00 % for F00 and A00, and +0.64 % for A10 (ADR 0159's set-up at 10 degrees,
    8000 iterations, whose cd rose 18.7 % between iterations 1001-2000 and 7001-8000). On cl at 0 degrees the relative
    metric is meaningless (cl about 0), so it is applied to cd only.
 
@@ -242,11 +242,11 @@ solver processes ran at once.
 | Id | Limit | Measured | Outcome |
 |---|---|---|---|
 | L1 | every run exit 0 or 5 | 28 of 28. 16 SA: exit 0 from 0 to 13 degrees and at 16 (residual targets met at iterations 254 to 2008); exit 5 at 14, 15 and from 17 up. 4 N: exit 5. 8 SST: exit 0 up to 16, exit 5 at 18 and 20 | met |
-| L2 | 0.90 <= slope / 2 pi <= 1.05 | 0.1081 per degree = **0.986** x 2 pi (intercept 0.0030) | met |
-| L3 | some C after the peak <= 0.9 cl_max | peak **1.542 at 16 degrees**; at 17 degrees 1.048 (0.68 cl_max; an iteration mean, not steady). The base angles alone give the same | met |
+| L2 | 0.90 <= slope / 2 pi <= 1.05 | 0.1081 per degree = 0.986 x 2 pi (intercept 0.0030) | met |
+| L3 | some C after the peak <= 0.9 cl_max | peak 1.542 at 16 degrees; at 17 degrees 1.048 (0.68 cl_max; an iteration mean, not steady). The base angles alone give the same | met |
 | L4 | abs(cl(0)) <= 0.005 | -1.4e-6 | met |
-| LT0 | cd(0) within 12 % of TMR | 0.008399, **+2.5 %** | met |
-| LT10 | cd within 15 %, cl within 5 % | cd 0.013516, **+9.8 %**; cl 1.0656, **-2.3 %** | met |
+| LT0 | cd(0) within 12 % of TMR | 0.008399, +2.5 % | met |
+| LT10 | cd within 15 %, cl within 5 % | cd 0.013516, +9.8 %; cl 1.0656, -2.3 % | met |
 | LT15 | cd within 25 %, cl within 5 % | cd 0.026762, **+26.0 %**; cl 1.4932, -3.4 % | **missed** (cd), `w49d_lt15_..._known_miss` |
 | LD | every SA run abs(D) <= 0.5 % | over at 12 (-0.58 %), 13 (-0.52 %), 16 (-0.70 %), 17 (+0.78 %) and 24 (+1.40 %) | **missed**, `w49d_ld_..._known_miss` |
 | P2 | mesh hashes | M1w and M1w-far500 equal the registered values | met |
@@ -272,7 +272,7 @@ The full table is in the folder's README.
 
 - **Attached range.** From 2 to 15 degrees, cl is within 0.013 of Ladson's, and within 0.006 from 12 to 15. ADR 0159
   fell increasingly below Ladson from 6 degrees up, by 0.14 at 15.
-- **Stall.** Steady SA peaks at **1.542 at 16 degrees**. Ladson peaks at 1.612 at 17.13. So SA is 4.3 % low and about
+- **Stall.** Steady SA peaks at 1.542 at 16 degrees. Ladson peaks at 1.612 at 17.13. So SA is 4.3 % low and about
   1 degree early.
   - From 17 degrees up, steady SIMPLEC does not converge: cl swings between about 0 and 2 up to the 8000-iteration
     cap.

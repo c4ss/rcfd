@@ -22,7 +22,7 @@ modules (`sweep.rs`, `octree.rs`) plus small additive hunks in `lib.rs`, `schema
   growth, aspect, last-ratio with a GIVEN first height). Not used for F-234 because the gap staircase-to-surface is not a prescribed
   thickness (see D6).
 * `non_conformal.rs`: joins two PLANAR coplanar patches only. It cannot join a staircase to a curved layer cap, so the F-234 interface
-  is made conforming by construction (D6); the non-conformal machinery is not used. This is disclosed, not hidden.
+  is made conforming by construction (D6); the non-conformal machinery is not used.
 * `surface.rs` (`TriSurface`, `icosphere`, `box_surface`, `enclosed_volume`), `surface_remesh.rs::SurfaceQuery` (brute-force closest
   point). No point-in-solid test exists; added in `octree.rs`.
 * Case tree: generator enum at `schema.rs` (`mesh.generator`), branch in `sim.rs::build_mesh`, option refusal in
@@ -170,7 +170,7 @@ Rules for the heights of a column of thickness `T`, `N` layers and local lateral
 Lid-driven cavity: `Region::InteriorOf(box_surface)` of the unit square slab `[0,1]x[0,1]x[0,1/40]`, roots `40 x 40 x 1`, no
 refinement, no layers, patches `lid` (ymax), `walls` (xmin, xmax, ymin), `frontAndBack` (zmin, zmax, Empty). This exercises the
 whole fill path (classification, face emission, patches) but contains no refinement, no hanging nodes and no cut cell; a refined 2-D
-cavity is impossible with cubical cells of a single z layer. Disclosed as such.
+cavity is impossible with cubical cells of a single z layer.
 
 ## Registered checks, F-234 (all registered before any run)
 

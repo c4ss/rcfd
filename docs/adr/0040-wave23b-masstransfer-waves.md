@@ -31,20 +31,20 @@ exactly (bit-exact, they are negatives of one number) and the latent term is exa
 `PtTable::psat/tsat` or from `rcfd_core::iapws::saturation_pressure`); no property data is shipped. All entry points validate
 their inputs and return `Err(String)` whose text names the offending parameter (`alpha_l`, `t_sat`, ...).
 
-* **Lee model (temperature driven).** With `theta = (T - T_sat)/T_sat`:
+* Lee model (temperature driven). With `theta = (T - T_sat)/T_sat`:
   `mdot = c_e alpha_l rho_l theta` for `T > T_sat` (evaporation, uses the liquid present);
   `mdot = c_c alpha_v rho_v theta` for `T < T_sat` (condensation, `theta < 0` so `mdot < 0`, uses the vapour present);
   `mdot = 0` at `T = T_sat` (bit-exact). `c_e`, `c_c` are relaxation frequencies in 1/s (>= 0; case-dependent, tuned in
   practice, no default is claimed). The form is that of the model usually attributed to Lee (1980); the literature entry is
   recorded as UNVERIFIED (formula reproduced from knowledge, not read here).
-* **Hertz-Knudsen-Schrage (kinetic).** Interfacial flux (kg/(m^2 s), positive evaporation)
+* Hertz-Knudsen-Schrage (kinetic). Interfacial flux (kg/(m^2 s), positive evaporation)
   `j = f(sigma) sqrt(M/(2 pi R_u)) ( p_sat(T_l)/sqrt(T_l) - p_v/sqrt(T_v) )`, with `f = sigma` (plain Hertz-Knudsen) or
   `f = 2 sigma/(2 - sigma)` (Schrage correction for the net bulk motion), accommodation coefficient `sigma in (0, 1]`,
   `R_u = 8.314462618 J/(mol K)`, `M` in kg/mol. Volumetric rate `mdot = j a_i` with the interfacial area density
   `a_i` (1/m, an input; a VOF solver supplies `|grad alpha|`). `j = 0` exactly when `p_v = p_sat(T_l)` and `T_v = T_l`.
   The maximum (evaporation into vacuum) of plain Hertz-Knudsen with `sigma = 1` is the kinetic-theory one-way flux
   `p sqrt(M/(2 pi R_u T))` (= `n m vbar/4` with `vbar = sqrt(8 R_u T/(pi M))`), used as an independent check.
-* **Pressure driven (Zwart-Gerber-Belamri form), DERIVED here from the Rayleigh-Plesset equation.** Neglecting surface tension
+* Pressure driven (Zwart-Gerber-Belamri form), DERIVED here from the Rayleigh-Plesset equation. Neglecting surface tension
   and viscosity and the second-derivative term, a bubble of radius `R_B` grows at `dR/dt = sqrt((2/3) (p_v - p)/rho_l)`
   (negative = collapse). Each bubble carries vapour mass flow `rho_v 4 pi R_B^2 dR/dt`; with the number density `N` of
   bubbles, `alpha_v = N (4/3) pi R_B^3`, so `N 4 pi R_B^2 = 3 alpha_v/R_B`. Hence
@@ -53,19 +53,19 @@ their inputs and return `Err(String)` whose text names the offending parameter (
   `mdot = -F_cond (3 alpha_v rho_v/R_B) sqrt((2/3)(p - p_v)/rho_l)` for `p > p_v`, zero at `p = p_v`. Empirical factors
   `F_vap`, `F_cond`, `alpha_nuc`, `R_B` are inputs (the values 50, 0.01, 5e-4, 1e-6 m are the ones usually quoted with the
   original paper; recorded UNVERIFIED and offered only as `Default`, with the library tests not depending on them).
-* **Raoult's law (ideal liquid mixture, ideal gas).** `y_i p = x_i p_sat,i(T)`. API: `bubble_pressure(x, psat) = sum x_i psat_i`,
+* Raoult's law (ideal liquid mixture, ideal gas). `y_i p = x_i p_sat,i(T)`. API: `bubble_pressure(x, psat) = sum x_i psat_i`,
   `dew_pressure(y, psat) = 1/sum(y_i/psat_i)`, `raoult_vapour_fractions(x, psat, p)` (`y_i = x_i psat_i/p`, no normalisation; their
   sum is 1 exactly at the bubble pressure, > 1 below it, < 1 above it), and `k_values`. Optional activity coefficients
   `gamma_i` (default 1) multiply `psat_i`.
-* **Henry's law with van 't Hoff temperature dependence.** `p_i = H(T) x_i` (volatility form, Pa) with
+* Henry's law with van 't Hoff temperature dependence. `p_i = H(T) x_i` (volatility form, Pa) with
   `H(T) = H_0 exp(-C (1/T - 1/T_0))`, `C = -Delta_sol H/R_u` in K (`C > 0`: solubility falls with temperature, so `H` rises).
   `C = 0` gives a temperature-independent constant. `henry_liquid_fraction(y, p, H) = y p/H`. For an ideal solution
   `H = p_sat` and Henry's law coincides with Raoult's (used as a consistency check).
-* **Species transfer rate.** `m_i = k a_i rho_r (w_eq - w)` kg/(m^3 s), positive into the receiving phase `r`
+* Species transfer rate. `m_i = k a_i rho_r (w_eq - w)` kg/(m^3 s), positive into the receiving phase `r`
   (mass-transfer coefficient `k` m/s, area density `a_i`, receiving-phase density, equilibrium and actual mass fractions);
   the donor source is `-m_i` so a species conserves exactly. Mole -> mass fraction helper for a mixture.
-* **Wall condensation (Nusselt film, laminar, vertical plate, constant wall temperature, saturated stagnant vapour,
-  negligible vapour shear and sub-cooling of the film).**
+* Wall condensation (Nusselt film, laminar, vertical plate, constant wall temperature, saturated stagnant vapour,
+  negligible vapour shear and sub-cooling of the film).
   `delta(x) = [4 mu_l k_l (T_sat - T_w) x/(g rho_l (rho_l - rho_v) h_fg)]^(1/4)`; local `h(x) = k_l/delta`;
   wall mass flux `m''(x) = k_l (T_sat - T_w)/(delta h_fg)` (so the wall heat flux is `m'' h_fg`);
   film mass flow per unit width `Gamma(x) = rho_l (rho_l - rho_v) g delta^3/(3 mu_l)`; mean coefficient over length `L`
@@ -74,7 +74,7 @@ their inputs and return `Err(String)` whose text names the offending parameter (
   Wall-cell source: `mdot_cell = m'' A_wall/V_cell` (condensing: the vapour source is negative, the liquid source positive).
   `T_w >= T_sat` gives zero flux, `delta = infinity` is not returned (the function returns a zero flux and delta NaN is
   avoided: `delta` returns an `Err` for `T_w >= T_sat`).
-* **0-D relaxation cell (`LeeCell`).** One cell of volume 1 with liquid mass `m_l`, vapour mass `m_v` (per volume), temperature `T`,
+* 0-D relaxation cell (`LeeCell`). One cell of volume 1 with liquid mass `m_l`, vapour mass `m_v` (per volume), temperature `T`,
   heat capacity per volume `C = (rho c_p)` of the cell (constant), Lee rate on `alpha_l rho_l = m_l`. ODE
   `dm_v/dt = -dm_l/dt = c_e m_l (T - T_sat)/T_sat`, `C dT/dt = -h_fg dm_v/dt`. Integrated by classical RK4. With the liquid
   mass frozen (`frozen = true`; valid when the evaporated mass is small) the ODE is linear:
@@ -85,16 +85,16 @@ their inputs and return `Err(String)` whose text names the offending parameter (
 
 Coordinates: `x` along propagation, `z` vertical, `z = 0` the still-water level, bed at `z = -h`; phase `theta = k x - omega t + phi`.
 
-* **Dispersion** `omega^2 = g k tanh(k h)`, solved for `k` given `omega, h, g` by Newton iteration on
+* Dispersion `omega^2 = g k tanh(k h)`, solved for `k` given `omega, h, g` by Newton iteration on
   `f(k) = g k tanh(kh) - omega^2` from the Eckart-type start `k_0 = omega^2/g / sqrt(tanh(omega^2 h/g))`, until
   `|f|/omega^2 <= 1e-14` (cap 100 iterations, then an error). `h = INFINITY` uses `k = omega^2/g`.
   Derived: phase speed `c = omega/k`, group velocity `c_g = (c/2)(1 + 2kh/sinh 2kh)`.
-* **Airy (linear) wave**, amplitude `a`:
+* Airy (linear) wave, amplitude `a`:
   `eta = a cos(theta)`, `u = a omega cosh(k(z+h))/sinh(kh) cos(theta)`, `w = a omega sinh(k(z+h))/sinh(kh) sin(theta)`,
   dynamic pressure `p_d = rho g a cosh(k(z+h))/cosh(kh) cos(theta)`, potential `phi = (a g/omega) cosh(k(z+h))/cosh(kh) sin(theta)`
   (so `u = d phi/dx`, `w = d phi/dz`). The depth ratios are evaluated in the overflow-safe exponential form. Energy density
   `E = rho g a^2/2`, energy flux `E c_g`, mean mass flux (wave momentum) `E/c` (derived below, checked).
-* **Second-order Stokes wave** (first-harmonic amplitude `a` fixed, dispersion relation unchanged at this order, Eulerian
+* Second-order Stokes wave (first-harmonic amplitude `a` fixed, dispersion relation unchanged at this order, Eulerian
   description, no mean-flow term at fixed `z`), formulas from the standard textbook solution (UNVERIFIED citation, formulas from
   knowledge; they are checked below against the free-surface boundary conditions, which is independent of their provenance):
   `eta = a cos(theta) + (k a^2/4) cosh(kh)(2 + cosh 2kh)/sinh^3(kh) cos(2 theta)`,
@@ -102,11 +102,11 @@ Coordinates: `x` along propagation, `z` vertical, `z = 0` the still-water level,
   `w = a omega sinh(k(z+h))/sinh(kh) sin(theta) + (3/4) a^2 omega k sinh(2k(z+h))/sinh^4(kh) sin(2 theta)`,
   `phi = (a g/omega) cosh(k(z+h))/cosh(kh) sin(theta) + (3/8) a^2 omega cosh(2k(z+h))/sinh^4(kh) sin(2 theta)`.
   Deep-water limit of the second harmonic of `eta`: `k a^2/2`; shallow limit `3 a^2/(4 k^2 h^3)`.
-* **Wave-inlet boundary values**: `inlet_state(x_b, t, z)` returns `(eta, u, w)` for a chosen order (1 or 2), multiplied by a smooth
+* Wave-inlet boundary values: `inlet_state(x_b, t, z)` returns `(eta, u, w)` for a chosen order (1 or 2), multiplied by a smooth
   ramp `ramp(t, T_r) = (1 - cos(pi t/T_r))/2` (0 at `t <= 0`, exactly 1 at `t >= T_r`); `liquid_fraction(z_c, dz, eta)`
   returns the exact volume fraction below the surface in a cell `[z_c - dz/2, z_c + dz/2]`, `clamp((eta - (z_c - dz/2))/dz, 0, 1)`.
   These are the values a F-055 inlet would impose; no BC object is wired.
-* **Irregular waves.** Spectra in angular frequency, Bretschneider/Pierson-Moskowitz in significant-height/peak form
+* Irregular waves. Spectra in angular frequency, Bretschneider/Pierson-Moskowitz in significant-height/peak form
   `S(w) = (5/16) Hs^2 wp^4 w^-5 exp(-1.25 (wp/w)^4)` (exact `m0 = Hs^2/16`), and JONSWAP
   `S(w) = A g^2 w^-5 exp(-1.25 (wp/w)^4) gamma^r`, `r = exp(-(w - wp)^2/(2 s^2 wp^2))`, `s = 0.07` (`w <= wp`) or `0.09`,
   with `A` fixed numerically so that `m0 = Hs^2/16` (peak-enhancement factor `gamma = 3.3` default). Deterministic-amplitude
@@ -115,14 +115,14 @@ Coordinates: `x` along propagation, `z` vertical, `z = 0` the still-water level,
   bit-reproducible for a seed. `eta(x,t) = sum a_i cos(k_i x - w_i t + phi_i)`; velocities by summing the Airy kinematics. The
   record repeats with period `4 pi/d_w` (midpoint frequencies are odd multiples of `d_w/2`); that is the maximum record length
   without repetition and is returned. Moments `m_n = int w^n S dw` by midpoint quadrature; `Hs = 4 sqrt(m0)`.
-* **Relaxation zone / numerical beach.** With the zone coordinate `chi in [0,1]` (0 at the inner edge where the full solution
+* Relaxation zone / numerical beach. With the zone coordinate `chi in [0,1]` (0 at the inner edge where the full solution
   lives, 1 at the outer edge; `zone_chi(x, x_inner, x_outer)` works for either orientation and clamps), the weight of the
   computed solution is
   `exponential`: `w(chi) = 1 - (exp(chi^p) - 1)/(e - 1)`, `p = 3.5` default (the blending usually attributed to the waves2Foam
   authors, UNVERIFIED), or `polynomial`: `w(chi) = (1 - chi)^n`, `n >= 1`. Endpoints are exact (`w(0) = 1`, `w(chi >= 1) = 0`
   bit-exact by clamping), monotone decreasing. The field is blended as `phi <- w phi + (1 - w) phi_target`. Also a sponge rate
   `sigma(chi) = sigma_max chi^n` (1/s) with `int sigma dx = sigma_max L/(n+1)`.
-* **1-D reflection toy (`WaveTank`)**: linear shallow-water equations `eta_t = -h u_x`, `u_t = -g eta_x` on a staggered grid,
+* 1-D reflection toy (`WaveTank`): linear shallow-water equations `eta_t = -h u_x`, `u_t = -g eta_x` on a staggered grid,
   leapfrog (`eta` at cell centres and integer time, `u` at faces and half time), left face `u_0 = (c/h) eta_inc(t)`
   (`c = sqrt(g h)`, incident wave with the ramp above), right end wall `u_N = 0`, optional relaxation zone at the right end
   applying `eta, u <- w eta, w u` after each step (target = still water; a pure sponge `exp(-sigma dt)` variant is also
@@ -194,7 +194,7 @@ F-227: case wiring of wave inlets and relaxation zones into a free-surface solve
 
 ## Addendum (end of wave 23B): measured results and deviations
 
-Registered limits above are unchanged. Everything below is what happened. Measured on the committed code (`cargo test --release -p rcfd-fv`).
+Registered limits above are unchanged. Measured on the committed code (`cargo test --release -p rcfd-fv`).
 
 ### Measured against the registered checks
 

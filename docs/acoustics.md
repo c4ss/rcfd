@@ -4,7 +4,7 @@ This page is for users who want a fan-noise estimate from a CFD run and for anyo
 each part of the chain assumes and how far its numbers can be trusted. For the older permeable-surface command and its input file read [reactor-and-acoustics.md](reactor-and-acoustics.md); for every check
 with its limit and measured value read the ADR named in the title.
 
-This document describes the library chain added for fan noise: a time-domain Ffowcs Williams-Hawkings (FW-H) solver
+The library chain added for fan noise consists of a time-domain Ffowcs Williams-Hawkings (FW-H) solver
 for moving impermeable surfaces, a closed-form rotor tonal estimate (Gutin type) as an independent check, three
 steady-RANS broadband proxies, noise metrics, and file readers and writers. It extends the permeable-surface solver
 of ADR 0013 (`docs/reactor-and-acoustics.md`, `rcfd acoustics`). Plan item: F-243 stays partial; the acceptance

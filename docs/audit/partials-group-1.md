@@ -111,14 +111,14 @@ Closure (S): extend `q2a` and the tetrahedron tests with the missing closed form
 
 ## DONE items: notes
 
-- **F-044.** K1 SA cb1 +20 percent changes max nut by 0.153. K2 k-epsilon c2 +10 percent changes it by 0.287. Explicit
+- F-044. K1 SA cb1 +20 percent changes max nut by 0.153. K2 k-epsilon c2 +10 percent changes it by 0.287. Explicit
   defaults are bit-identical. R1 shows the flow and iteration counter kept across switches. R2 (ignored, about 58 s in release)
   passes, and its numbers match the note. Scope beyond the acceptance: SST coefficients rejected when non-default;
   expression/UDF overrides; laminar switching. Either reword the acceptance to include them or move them to a new item.
-- **F-119.** VTK 9.6.2 readers (`vtkSTLReader`, `vtkTecplotReader`, `vtkXdmfReader`) reproduce cell counts, volumes and cell
+- F-119. VTK 9.6.2 readers (`vtkSTLReader`, `vtkTecplotReader`, `vtkXdmfReader`) reproduce cell counts, volumes and cell
   data `p` for hex, tet, prism and a mixed hex/pyramid/tet/prism set (20 PASS, 0 FAIL; GLB SKIP is not this item). The blunt-fin
   grid is read as 40x32x32 with VTK's bounds. The third-party check is a manual script, not CI. Scope beyond: HDF5 heavy data;
   the TMR flat-plate and bump grids of the SCOPE addition. The sample's SHA-256 in docs/reference-data.md was not re-checked by me.
-- **F-201.** All three clauses are met by passing tests. The two superseded ignored records (`e1_...`, `e5_...`) also pass
+- F-201. All three clauses are met by passing tests. The two superseded ignored records (`e1_...`, `e5_...`) also pass
   now. Scope beyond: the title's "every transported quantity" (mass, momentum by expression, turbulence quantities,
   compressible). Propose a new item for those and marking F-201 done.

@@ -108,10 +108,10 @@ Validity classes of a functional's study (exactly one; anything not VALID gives 
 
 ### Readings (part R), fixed now
 
-* **R-E credibility** (the empty passage, exact value 0): for each of L and the swirl energy, if VALID, the band `[f1 - U, f1 + U]` contains 0 (pass)
+* R-E credibility (the empty passage, exact value 0): for each of L and the swirl energy, if VALID, the band `[f1 - U, f1 + U]` contains 0 (pass)
   or not (MISS, `*_known_miss`). If either empty-passage functional is not VALID or misses, the bladed bands are reported but labelled "not shown
   credible on this family".
-* **R-B contain in principle**: for each bladed functional that is VALID, "the numerical error band could in principle contain the experiment" iff
+* R-B contain in principle: for each bladed functional that is VALID, "the numerical error band could in principle contain the experiment" iff
   `|measured - f1| <= U` (torque 2.1418 N m, Delta p_ts 126.46 Pa). The band is the discretisation error of the in-plane / spanwise / axial
   resolution only (part F). This is not agreement: Delta p_ts is an installation value (ADR 0078 question 2: the rotor-only Delta p_ts is not
   determined to the registered tolerance by the rotor); the measured shaft power may include bearing loss; the density is assumed. A band that does

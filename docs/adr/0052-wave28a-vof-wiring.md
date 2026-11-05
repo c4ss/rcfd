@@ -71,7 +71,7 @@ changes, through a new function `solve_pressure_src` in `pressure.rs` (additive;
 no source, so every existing path is bit-identical).
 B3 Closed domain: a net volume source needs an outflow; with all-Neumann pressure the reference-cell anchor would absorb the
 imbalance, so a case with mass transfer needs a pressure (Dirichlet) patch; the tree refuses mass transfer without one.
-B4 Limitations stated, not hidden: no energy equation, so no latent-heat cooling (the energy source `-mdot_eff h_fg` is reported as a
+B4 Limitations: no energy equation, so no latent-heat cooling (the energy source `-mdot_eff h_fg` is reported as a
 diagnostic power, never applied); the momentum convection mass flux `rho_phi` is built from the alpha flux and does not carry the
 phase-change contribution (second-order for the quiescent cases registered here); no Stefan front.
 
@@ -85,7 +85,7 @@ C2 Relaxation zones. `RelaxZone { x_inner, x_outer, blend: Blend (23B), target: 
 correction of each step: `alpha <- w alpha + (1-w) alpha_target`, `u <- w u + (1-w) u_target` with `w = blend.weight(zone_chi(x_c))`
 of the cell centre. The face flux `phi` is left solenoidal (a convex blend keeps `alpha` in `[0,1]`); to keep the Rhie-Chow
 defect of the next step unaffected by the blend, the defect is formed from the velocity before the blend (`u_rc`). The liquid
-volume added or removed by the blend is accumulated (`relax_volume`), so mass is bookkept, not hidden.
+volume added or removed by the blend is accumulated (`relax_volume`), so the mass change is bookkept.
 C3 `VofStepInfo` gains `alpha_outflow` (net liquid volume leaving through the boundary during the step, from the time-averaged alpha
 flux) and `relax_volume`; no existing field changes.
 C4 Ambient numerical-error estimate (first principles, for the tolerance below): a first-order implicit-Euler step damps a wave of
@@ -169,7 +169,7 @@ default `VofSettings` (no mass transfer, no waves) gives bit-identical results t
 3. HK with `|grad alpha|` as area density is only a closure; M5 checks the arithmetic of the wiring, not the physics.
 4. Lee evaporation in pure-liquid cells is the model as written (it acts on every liquid cell, not only on the interface); M4 does
    not claim an interface-only source.
-5. The relaxation blend does not conserve liquid volume; it is bookkept (W3), not conserved.
+5. The relaxation blend does not conserve liquid volume; the change is bookkept (W3).
 
 ## Named gaps
 

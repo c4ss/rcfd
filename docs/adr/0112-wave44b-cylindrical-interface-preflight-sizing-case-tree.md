@@ -158,7 +158,7 @@ there. Not defective; no limit changes.
 | T4 case without the keys | hash 0x6eca7279950f43c3 = HEAD fee6ecc value; `baseline_hashes.rs` untouched (gate) | exact | PASS |
 | T5 isotropic option, full annulus K2 counts | converged in 238 it, error 6.239e-3 V_i | converged, 2e-2 | PASS |
 
-Interpretation, in plain words: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success, so the case
+Interpretation: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success, so the case
 tree now refuses the meshes that diverged there before spending a run on them, and tells the user by how much the radial spacing of
 the interface cells must grow. The 70-deg limit is conservative for the rcfd-fv sector solver (the uniform G2 sector at 70.5 deg
 converges with central convection), which the case tree does not offer. The near-isotropic sizing brings the interface angle to

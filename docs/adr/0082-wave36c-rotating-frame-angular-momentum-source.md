@@ -47,19 +47,19 @@ scheme would make zero) and `S_seam` the sum over the periodic face pairs (each 
 pair). The ADR 0078 excess (report-based wall torque, molecular viscosity) is printed next to `E_s`. All values are multiplied by 9 (full annulus) and by
 `rho` = 1.2.
 
-* **H1 (upwind convection of the rigid part).** The generation is the first-order upwind dissipation acting on the rigid part of the relative velocity.
+* H1 (upwind convection of the rigid part). The generation is the first-order upwind dissipation acting on the rigid part of the relative velocity.
   Closed form computed from the converged flux: `C_up = 9 rho (Omega/2) sum_f |phi_f| |d_perp,f|^2` over internal and periodic faces (periodic faces:
   `d` from the owner centre to the partner centre mapped into the owner's frame). Falsified if any of: (i) `G_conv` < 0.7 `E_s` in X2a; (ii) `C_up`
   outside [0.7, 1.3] `G_conv` in X2a; (iii) the wall-adjacent plus seam-adjacent cells carry more than 50 % of `G_conv` (the mechanism is volumetric).
-* **H2 (Laplacian-form viscous stress on the rigid part).** `G_visc` is a real contribution of size `C_visc = 9 rho Omega sum_f Gamma_f |S_f| |d_perp|^2 / |d|`
+* H2 (Laplacian-form viscous stress on the rigid part). `G_visc` is a real contribution of size `C_visc = 9 rho Omega sum_f Gamma_f |S_f| |d_perp|^2 / |d|`
   (internal faces; the wall faces reported separately), predicted 1e-2 to 1e-1 N m. Called significant if `|G_visc|` >= 0.1 `E_s`; falsified as a
   contribution if `|G_visc|` < 0.01 `E_s`.
-* **H3 (frame source inconsistency, including Rhie-Chow).** Predicted `|G_frame|` < 0.1 `E_s` (X2f already cleared the frame terms by a different
+* H3 (frame source inconsistency, including Rhie-Chow). Predicted `|G_frame|` < 0.1 `E_s` (X2f already cleared the frame terms by a different
   route). If the Rhie-Chow part exceeds 0.1 `E_s`, it is split further (body-force face term against pressure part) in an amendment before any fix run.
-* **H4 (pressure lever arms on non-orthogonal faces).** Predicted `|G_p|` < 0.1 `E_s`.
-* **H5 (seam pairs).** Predicted `|S_seam|` < 0.01 `E_s`.
-* **Closure.** `|sum_C G_res,C|` <= 0.05 `E_s`, otherwise the attribution is reported as NOT CLOSED and no term is called responsible.
-* **Reconstruction check.** For every cell and component, the face-flux sums of the rebuilt convection and Laplacian fluxes equal the row results
+* H4 (pressure lever arms on non-orthogonal faces). Predicted `|G_p|` < 0.1 `E_s`.
+* H5 (seam pairs). Predicted `|S_seam|` < 0.01 `E_s`.
+* Closure. `|sum_C G_res,C|` <= 0.05 `E_s`, otherwise the attribution is reported as NOT CLOSED and no term is called responsible.
+* Reconstruction check. For every cell and component, the face-flux sums of the rebuilt convection and Laplacian fluxes equal the row results
   `(A u - b)` of `rcfd_fv::convection` / `laplacian` called with the solver's own `phi_conv`, boundary coefficients, `Gamma` and scheme, to
   1e-10 of the largest row magnitude. If not, the budget is not used.
 
@@ -75,10 +75,10 @@ All on this wave's code (release build), single thread per run, at most two runs
 ADR 0078 stop rules (8000 iterations, continuity non-finite or above 1e6, 60 min wall clock; plus the ADR 0077 steady guard record: a recorded trip
 ends the run as diverged).
 
-* **X2a-36.** ADR 0078 X2a unchanged, first. Reproduction rule: outlet L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit (ADR 0078
+* X2a-36. ADR 0078 X2a unchanged, first. Reproduction rule: outlet L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit (ADR 0078
   amendment 4 on c188d3f). If it does not reproduce, the other runs stop until the difference is explained in an amendment. The budget is computed at
   its end.
-* **X2d-36.** ADR 0078 X2d unchanged (expected 0.0026 N m, 19.97 Pa, to the printed digits) with the budget.
+* X2d-36. ADR 0078 X2d unchanged (expected 0.0026 N m, 19.97 Pa, to the printed digits) with the budget.
 
 ## The fix (specified now; written only if H1 is not falsified)
 
@@ -114,17 +114,17 @@ Arms: **Y(h)** = the empty passage with F-RP (`mrf`, `rotor_passage = true`, abs
 difference); **R(h)** = ADR 0078 X2a (relative frame, upwind) on M2, M3 (M1 is X2a-36). Iteration-error check on M1: B(M1) and Y(M1) at the
 registered tolerance 1e-5 and at 1e-7; if L changes by more than 10 % in either, all B and Y runs use 1e-7 (the M1 runs at 1e-7 are then the ones used).
 
-* **A0 bit-identical when off.** (i) The full workspace suite at the final gate passes with the wave-35 totals plus this wave's tests, and
+* A0 bit-identical when off. (i) The full workspace suite at the final gate passes with the wave-35 totals plus this wave's tests, and
   `baseline_hashes.rs` is unchanged; (ii) X2a-36 re-run on the final code reproduces 2.25440 N m / -59.984 Pa to every printed digit; (iii) an ADR 0008
   M1 `mrf` case run 20 iterations with the key absent and with `rotor_passage = false`: all cell fields bit-identical.
-* **A1 construction.** The closure check of item 2 passes on M1-M3 and on the FAN-01 E0 mesh; on the first iteration of the Y(M1) and F1 smokes the
+* A1 construction. The closure check of item 2 passes on M1-M3 and on the FAN-01 E0 mesh; on the first iteration of the Y(M1) and F1 smokes the
   largest `|phi - offset|` on the faces of walls that rotate with the zone (F1: `blade`, `hub`) is at most 1e-12 `Omega r |S|` (catches a sign error),
   and on every periodic pair `|phi_rel,f + phi_rel,g|` <= 1e-12 `Omega r |S|`.
-* **A2 empty-passage angular momentum, tied to the inertial result.** `|L_out(Y(h))| <= 10 |L_out(B(h))|` on M1, M2 and M3 (each pair at the same
+* A2 empty-passage angular momentum, tied to the inertial result. `|L_out(Y(h))| <= 10 |L_out(B(h))|` on M1, M2 and M3 (each pair at the same
   tolerance).
-* **A3 empty-passage energy.** Outlet `rho <c_theta^2/2>_m` of Y(h) <= 0.2 Pa (1 % of X2d's 19.97 Pa; a decision threshold of this protocol) and the
+* A3 empty-passage energy. Outlet `rho <c_theta^2/2>_m` of Y(h) <= 0.2 Pa (1 % of X2d's 19.97 Pa; a decision threshold of this protocol) and the
   duct total-pressure change `Delta p_tt(Y(h)) <= 0` (a passive duct with walls at rest cannot gain total pressure), on M1-M3.
-* **A4 order from the 3-mesh study.** The exact outlet angular-momentum flux is 0, so the error is `e_h = |L_out(Y(h))|`. Observed order
+* A4 order from the 3-mesh study. The exact outlet angular-momentum flux is 0, so the error is `e_h = |L_out(Y(h))|`. Observed order
   `p = ln(e_M1 / e_M3) / ln(2.25)` >= 0.5 and `e_M3 <= e_M2 <= e_M1` (monotone). Decided now for the floor case: if on M1 `|L(Y)|` changes by more than
   50 % between the tolerances 1e-5 and 1e-7 run at the iteration check (so `e` is iteration error, not discretisation error), A4 is reported "not
   measurable (iteration floor)" and is neither passed nor missed; acceptance then rests on A0-A3. The same order is computed for B(h) and reported.
@@ -311,7 +311,7 @@ registered removal). It was never committed; the code is not in the repository. 
 if A0-A4 pass. No torque or Delta p_ts change with the fix is reported. The only bladed F-RP numbers are a disclosed 300-iteration scratch look
 (torque 1.79 N m, continuity 0.30, res_u 0.47, not converged), which is not a result.
 
-What the runs do show: a fix is possible in principle. On M1, where Y converged (567 iterations), removing the rigid part from the convected quantity
+The runs show that a fix is possible in principle. On M1, where Y converged (567 iterations), removing the rigid part from the convected quantity
 removes the source: outlet angular-momentum flux -1.42e-5 N m against 2.254 N m in the relative formulation and 1.63e-4 N m in the inertial control,
 swirl energy 0.0000 Pa, duct Delta p_tt -1.54 Pa (inertial -1.53). This passes the mechanism falsifier registered in amendment 1 (A2 on Y(M1)), so
 the mechanism stands by that test. The fix was not delivered because this implementation does not converge on the coarser mesh M0 (the inertial

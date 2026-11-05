@@ -124,9 +124,9 @@ A checkpoint (restart file) is a checksummed `rcfd-io` container holding velocit
 iteration counter and (with the energy equation) temperature, tied to the mesh by its content hash. Since ADR 0031 it also
 holds the mesh itself (section `mesh`) and, for transient runs, the time, the step counter and the BDF2 history
 (`meta.engine` is `steady` or `transient`; old files stay readable).
-It is available for **steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation**, and for **transient
+It is available for steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation, and for transient
 laminar constant-density PISO/PIMPLE runs without energy equation, scalars, statistics, frozen flow, solids, rheology
-or user functions**. Other runs (compressible, turbulence models, energy or scalars in transient runs) report a `warning`
+or user functions. Other runs (compressible, turbulence models, energy or scalars in transient runs) report a `warning`
 event instead of writing one, and `--continue-from` fails with exit 1. A checkpoint of a different mesh, or a damaged file, is
 refused by `--continue-from`; `--restart-from` transfers the solution onto the new mesh instead. A transient restart on the
 same mesh continues bit for bit like the uninterrupted run (measured: PISO Euler, PISO BDF2, PIMPLE BDF2); after a mesh change

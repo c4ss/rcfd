@@ -32,17 +32,17 @@ conservative allow-list first, with no Agent SDK sidecar and no auto-approval of
 
 ### W48-10: project-folder files that change what `claude -p` runs
 
-* (a) **Pin MCP servers.** Every chat passes `--strict-mcp-config --mcp-config <app-owned file>` naming only the rcfd project server
+* (a) Pin MCP servers. Every chat passes `--strict-mcp-config --mcp-config <app-owned file>` naming only the rcfd project server
   (ADR 0135). Needs an additive change to `check_args`: these two flags are allowed only in that form, with the config path outside the
   project folder (in the Studio's config directory). Covers `.mcp.json`; does not cover hooks in `.claude/settings*.json`
   (UNVERIFIED whether a flag limits setting sources in `-p`; not relied on). Under strict mode the sidebar's server is a non-plugin
   server from the app-owned file, so its tools are named `mcp__<server>__<tool>`; the app names that server `rcfd_project` (no hyphen,
   so `AllowRule::Tool` accepts the names). Whether `--strict-mcp-config` also drops plugin-provided servers is UNVERIFIED; the sidebar
   does not rely on the plugin either way.
-* (b) **Confirm the folder.** Before the first chat in a project, the Studio lists the files that change Claude Code's behaviour
+* (b) Confirm the folder. Before the first chat in a project, the Studio lists the files that change Claude Code's behaviour
   (`.mcp.json`, `.claude/`, `CLAUDE.md` at any depth, `.claude-plugin/`) with their hashes and starts a chat only after the user
   confirms them; the confirmed hashes go into `.rcfd/claude-trust.json`; any later change asks again.
-* (c) **Document only**: state the risk in the tutorial and do nothing in code.
+* (c) Document only: state the risk in the tutorial and do nothing in code.
 
 Trade-offs: (a) also stops the sidebar from using the user's other MCP servers in that chat, which may surprise; (b) adds one dialog
 per new folder and per change; (c) leaves a known way to run code from a received folder. **Recommendation: (b) and (a) together**:
@@ -67,16 +67,16 @@ or `AllowRule::Tool` must be widened to accept `-`. The first is preferred: it k
 
 ## Design (proposed, assuming the recommendations)
 
-* **Session list**: `Claude::discover` on a worker every 2 s, shown as open (mirror, input disabled, with the pid), closed (input
+* Session list: `Claude::discover` on a worker every 2 s, shown as open (mirror, input disabled, with the pid), closed (input
   enabled) or unknown (input disabled, reason shown). A "new chat" button starts `new_session`.
-* **Mirror**: `transcript::tail(50)` then `read_new` every 500 ms; role, text, tool names, timestamps only.
-* **Send**: a closed session is resumed with the prompt; a new session gets its id from `new_session`. One `Chat` at a time per
+* Mirror: `transcript::tail(50)` then `read_new` every 500 ms; role, text, tool names, timestamps only.
+* Send: a closed session is resumed with the prompt; a new session gets its id from `new_session`. One `Chat` at a time per
   session; the input is disabled while a turn runs; cancel calls `Chat::cancel`.
-* **Approvals**: a `PermissionDenied` event shows the tool, its input (from the matching tool call) and the suggested rule; "allow"
+* Approvals: a `PermissionDenied` event shows the tool, its input (from the matching tool call) and the suggested rule; "allow"
   adds exactly that rule to the file and says it applies from the next message (`-p` is one process per message). Rules can be removed.
   The panel states the floor caveat of ADR 0126 (CLI and settings may allow more).
-* **Costs**: `total_cost_usd` of each result is shown per turn and summed per session.
-* **Claude Code missing**: `Claude::from_env()` none: the panel says so and how to install; the rest of the app works.
+* Costs: `total_cost_usd` of each result is shown per turn and summed per session.
+* Claude Code missing: `Claude::from_env()` none: the panel says so and how to install; the rest of the app works.
 
 ## Placement
 

@@ -99,7 +99,7 @@ judgement, not a fit. The message is a risk notice: it gives `W_max`, the cell a
 that this combination (unlimited linear-upwind on thin, strongly skewed wall cells) diverged in ADR 0171's NACA 0012 runs at
 y+ about 2 once the flow was off-axis, that it is a risk, not a prediction (the same metric value did not diverge on M1 at
 0 degrees); names `solver.linear_upwind_limiter = "barth_jespersen"` and its cost (+3 % of `cd_eff` at 0 degrees in ADR
-0171, all in the pressure drag); and says that lowering the relaxation factors did not help there. **Honest about false
+0171, all in the pressure drag); and says that lowering the relaxation factors did not help there. **False
 positives:** the rule fires on M1 at 0 degrees, which ran clean for 8000 iterations, and on any thin-celled skewed wall mesh
 that would have converged; it does not fire on a stable run whose sliver cells are not wall cells, nor on a diverging run
 whose wall cells stay under the level. The default is unchanged (the limiter stays opt-in).

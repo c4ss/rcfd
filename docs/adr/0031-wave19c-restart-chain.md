@@ -7,7 +7,7 @@ NEW corrected test and the old one stays as a record. Addenda (file names, mesh 
 appended at the end without touching a registered limit.
 
 Scope. F-115, F-121, F-240 and F-241 are partly delivered or open (F-115 and F-121 are `partial` with a steady-laminar-only
-restart, F-240 and F-241 are `todo`). This wave extends them and stops each one honestly at `partial` with named gaps. F-209 and
+restart, F-240 and F-241 are `todo`). This wave extends them and stops each one at `partial` with named gaps. F-209 and
 F-210 are NOT attempted (time). Clean-room: published methods (inverse-distance weighting, weighted least-squares linear
 reconstruction, axis-aligned cell-overlap remapping with a linear reconstruction) and first principles only; no vendor code, text,
 data or names. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded: nothing
@@ -52,7 +52,7 @@ modes `gradient` and `conservative` of the new method list call it unchanged.
   second order. Normalisation is by the covered volume; the uncovered part of a target cell takes the `nearest` value, weighted by
   its volume. Non-box cells give an error (`not all cells are axis-aligned boxes`) and callers fall back to `conservative`.
 * Identical meshes (equal `Mesh::content_hash` and equal cell count) short-circuit to a copy for every method: the identity map is
-  bit-exact by construction. This is a short-cut, disclosed as such.
+  bit-exact by construction. This is a short-cut.
 
 The unstructured conservative remap (arbitrary polyhedral overlap) and flux-specific remapping are NOT delivered (named gaps).
 "Conservative-aware for fluxes where specified" is covered only as: the face flux of a restarted incompressible run is rebuilt from
@@ -158,7 +158,7 @@ here; the mesh thresholds are the library's own `check_mesh` thresholds, 70/85 d
 
 SV001-SV003, SV005-SV008, SV010-SV013 restate checks that the engines/loaders already enforce elsewhere; they are mirrors
 (one data-driven place, categorised, with stable ids, evaluable without building the simulation). SV004 restates the
-`turb.rs` derivation of the initial k. The genuinely new diagnostics are SV009, SV101-SV105 and SV201-SV203. Wiring: `rcfd
+`turb.rs` derivation of the initial k. The new diagnostics are SV009, SV101-SV105 and SV201-SV203. Wiring: `rcfd
 check <case>` (settings, simulation build, mesh quality, then the rules; exit 0 when no error-level diagnostic, 3 with one,
 4 when the mesh fails its quality check; `--json` prints `{ok, exit_code, diagnostics, rules, mesh}`), `rcfd validate` prints
 rule diagnostics as additional lines (warnings and infos do not change its exit code), `rcfd run` evaluates the rules after the
@@ -174,118 +174,118 @@ generator depth in z, the same for source and target of a pair.
 
 ### Field transfer (`crates/rcfd-post/tests/remap_w19c.rs`)
 
-* **I1 linear exactness.** `f = 0.7 + 1.3 x - 0.9 y` (2D) and `+ 0.4 z` (3D). 2D: source `cavity_2d_rect(13, 9, 1.3, 0.9)`,
+* I1 linear exactness. `f = 0.7 + 1.3 x - 0.9 y` (2D) and `+ 0.4 z` (3D). 2D: source `cavity_2d_rect(13, 9, 1.3, 0.9)`,
   target `cavity_2d_rect(17, 11, 1.3, 0.9)`, and the reverse direction. 3D: source `channel([5,4,3],[1.0,0.8,0.6])`, target
   `channel([7,5,4],[1.0,0.8,0.6])` (uniform grading, as the generator call allows). Methods `least_squares`, `conservative_overlap`
   (point-value source for `least_squares`, volume-average source for the overlap method: the linear field's cell average equals its
   centre value on a box cell) must give max abs error `<= 1e-12` at ALL target cells; method `gradient` `<= 1e-12` at target cells
   whose centre lies inside the rectangle (box) spanned by the source cell centres.
-* **I2 convergence order.** `f = x^2 + 0.5 x y + y^2` on the unit square, sources `cavity_2d_rect(n, n, 1, 1)` with
+* I2 convergence order. `f = x^2 + 0.5 x y + y^2` on the unit square, sources `cavity_2d_rect(n, n, 1, 1)` with
   `n = 8, 16, 32`, one fixed target `cavity_2d_rect(41, 37, 1, 1)` (non-matching). Point-value methods (`nearest`,
   `inverse_distance`, `least_squares`, `gradient`): source values `f(x_i)`, reference `f(x_t)`. `conservative_overlap`: source values
   are the exact cell averages of `f`, reference the exact target cell averages. Error: relative L2 over the target. Observed order
   `p = log2(e_n / e_2n)` for `8->16` and `16->32` must both lie in `[1.7, 2.5]` for `least_squares`, `gradient` and
   `conservative_overlap`, and in `[0.7, 1.5]` for `nearest` and `inverse_distance`.
-* **I3 conservation.** `conservative_overlap`, `f = 1 + sin(3x) cos(2y) + (x > 0.5 ? 0.5 : 0)` (discontinuity on purpose) and the
+* I3 conservation. `conservative_overlap`, `f = 1 + sin(3x) cos(2y) + (x > 0.5 ? 0.5 : 0)` (discontinuity on purpose) and the
   vector `(f, -f)` component-wise, `cavity_2d_rect` pairs 10x7 -> 23x17 (refine) and 23x17 -> 10x7 (coarsen) on the unit square:
   `|sum V_t f_t - sum V_s f_s| / sum V_s |f_s| <= 1e-12`. Also the existing `conservative` mode (uniform shift): relative integral
   mismatch `<= 1e-10` for the same fields (re-registered from the first F-115 slice).
-* **I4 identity.** Same mesh (two independent builds of `cavity_2d_rect(12, 9, ...)`) and `RemapMethod` of every kind: output equals
+* I4 identity. Same mesh (two independent builds of `cavity_2d_rect(12, 9, ...)`) and `RemapMethod` of every kind: output equals
   the input bit for bit (`to_bits`), for a scalar and for a vector field.
-* **I5 fallback and boundedness.** Target `cavity_2d_rect(20, 20, 1.2, 1.2)` over source `cavity_2d_rect(12, 12, 1, 1)` (the target
+* I5 fallback and boundedness. Target `cavity_2d_rect(20, 20, 1.2, 1.2)` over source `cavity_2d_rect(12, 12, 1, 1)` (the target
   extends beyond the source): every method returns finite values at every target cell; `nearest`, `inverse_distance` and
   `gradient` stay within `[min, max]` of the source field; `least_squares` at target centres outside the source cell-centre
   bounding box equals the `nearest` value exactly; `conservative_overlap` of a constant field `c = 3.25` reproduces `c` to
   `1e-14` relative at every target cell, including the partially covered ones; the overlap method reports the covered fraction
   (`< 1` for the extended cells).
-* **I6 refusal.** `conservative_overlap` on a non-box mesh (`cylinder_ogrid`) returns an error whose text contains
+* I6 refusal. `conservative_overlap` on a non-box mesh (`cylinder_ogrid`) returns an error whose text contains
   `axis-aligned`; a source field of the wrong length is an error.
 
 ### Restart (`crates/rcfd-api/tests/restart_w19c.rs`)
 
 All on the lid-driven cavity of the existing run-control tests (12x12, `nu = 0.01`, `lid` velocity 1, upwind) unless stated.
 
-* **S1 steady same-mesh identity.** `restart_from` of a steady file on the same mesh equals `load_checkpoint`: `ux`, `uy`, `p` and
+* S1 steady same-mesh identity. `restart_from` of a steady file on the same mesh equals `load_checkpoint`: `ux`, `uy`, `p` and
   the flux after restore are bit-identical; after 25 further iterations bit-identical to the uninterrupted run (max abs
   difference exactly 0).
-* **S2 transient restart equals continued run.** PISO + implicit Euler, PISO + BDF2, and PIMPLE (`n_outer = 2`) with BDF2: run
+* S2 transient restart equals continued run. PISO + implicit Euler, PISO + BDF2, and PIMPLE (`n_outer = 2`) with BDF2: run
   `N1 = 8` steps, `save_restart`, run `N2 = 12` more; a fresh simulation `load_restart`-ed from the file and stepped 12 times has
   bit-identical `ux`, `uy`, `p`, flux and time (max abs difference exactly 0, time equal). Also a run-control driver run stopped
   with a step limit that writes the transient restart file and a second driver run `--continue-from` it.
-* **S3 cross-engine.** A converged steady file loaded with `restart_from` into the PISO simulation of the same mesh gives `u`, `p`
+* S3 cross-engine. A converged steady file loaded with `restart_from` into the PISO simulation of the same mesh gives `u`, `p`
   and the flux bit-identical to the file, time 0.
-* **S4 embedded mesh.** A file written on a 12x12 mesh restarts a 24x24 simulation without a source case; a v1-style file
+* S4 embedded mesh. A file written on a 12x12 mesh restarts a 24x24 simulation without a source case; a v1-style file
   (embedded mesh removed) needs `source_case` and gives the same result as the embedded one (bit-identical fields); without
   either it is an error; a file of another mesh restarted with the same hash check is refused when the transfer is not asked
   for.
-* **S5 coarse-to-fine iterations (reported, pass/fail as registered).** Cold start: uniform 24x24 cavity, `simplec`, tolerances
+* S5 coarse-to-fine iterations (reported, pass/fail as registered). Cold start: uniform 24x24 cavity, `simplec`, tolerances
   `1e-6`, count `n_cold` = iterations until done. Source: 12x12 converged to `1e-7`. For each of `gradient`, `least_squares`,
-  `conservative_overlap`: (a) **S5a** `n_interp < n_cold` (iterations to the same tolerance); (b) **S5b** the number of iterations
+  `conservative_overlap`: (a) S5a `n_interp < n_cold` (iterations to the same tolerance); (b) S5b the number of iterations
   until the relative L2 distance of the speed from the converged 24x24 solution (reference run to `1e-10`) first falls below
   `1e-2` is strictly smaller than the same count for the cold start. Both are registered as stated; the first F-115 slice measured
   103 vs 89 iterations for (a) with `gradient`, so a miss of S5a is the expected outcome for that method and is reported as such.
 
 ### Chain (`crates/rcfd-api/tests/chain_w19c.rs`, `crates/rcfd-cli/tests/chain_w19c.rs`)
 
-* **C1 chain equals manual procedure, bit for bit.** Base: cavity 16x16, `simplec`, tolerances `1e-8`; stage `steady` (no `set`)
+* C1 chain equals manual procedure, bit for bit. Base: cavity 16x16, `simplec`, tolerances `1e-8`; stage `steady` (no `set`)
   then stage `transient` with `set = ["solver.algorithm=\"piso\"", "solver.dt=0.05", "solver.end_time=1.0"]`. The chain's final
   `ux`, `uy`, `p`, flux and time equal, bit for bit, those of the manual procedure (run the steady case to its restart file;
   build the transient case; `restart_from`; drive). At the CLI: `rcfd run chain.toml` writes `<out>/transient/solution.vtu`, which
   is byte-identical to the one written by `rcfd run steady.toml` followed by `rcfd restart transient.toml --from <steady
   restart.rcfd>`.
-* **C2 F-241 acceptance.** The same chain's final speed field has relative L2 distance `<= 2e-2` from the single steady run (the
+* C2 F-241 acceptance. The same chain's final speed field has relative L2 distance `<= 2e-2` from the single steady run (the
   steady solution is a fixed point of the time-stepping up to the steady tolerance and the transient Rhie-Chow difference), and the
   same for the pressure after removing its volume mean.
-* **C3 mesh change between stages.** Chain `coarse` (12x12 steady) then `fine` (`set = ["mesh.nx=24","mesh.ny=24"]`, steady): the
+* C3 mesh change between stages. Chain `coarse` (12x12 steady) then `fine` (`set = ["mesh.nx=24","mesh.ny=24"]`, steady): the
   fine stage converges with exit code 0 and 24x24 cells, and its `restart` report says `transferred`.
-* **C4 failure propagation.** Stage 1 with `solver.max_iterations=3` and `allow_unconverged` false: chain exit code 5, stage 2
+* C4 failure propagation. Stage 1 with `solver.max_iterations=3` and `allow_unconverged` false: chain exit code 5, stage 2
   never started (no `stage_start` for it, no output directory).
-* **C5 events.** For C1: events in the order `stage_start(steady)`, ..., `stage_finish(steady)`, `stage_start(transient)`, ...,
+* C5 events. For C1: events in the order `stage_start(steady)`, ..., `stage_finish(steady)`, `stage_start(transient)`, ...,
   `stage_finish(transient)`, `chain_finish`; every other event carries `stage`; `chain_finish.exit_code == 0`.
-* **C6 static checks.** A `sequence` naming a stage that does not exist, a malformed `set` entry (no `=`), an unknown path in `set`
+* C6 static checks. A `sequence` naming a stage that does not exist, a malformed `set` entry (no `=`), an unknown path in `set`
   and a value of the wrong type are each rejected with a diagnostic at the located path (`chain.sequence.1`,
   `chain.stages.<n>.set.<i>`).
 
 ### Run control (`crates/rcfd-cli/tests/w19c_run_control.rs`)
 
-* **R1 exit codes through the binary.** Existing tests cover 0, 1, 2, 3, 5, 7, 8. This wave adds 4 and 6 end to end. Candidate for
+* R1 exit codes through the binary. Existing tests cover 0, 1, 2, 3, 5, 7, 8. This wave adds 4 and 6 end to end. Candidate for
   4: `wedge_2d` with `ramp_angle = 89`. Candidates for 6: (i) simple with `alpha_u = 1.0`, `alpha_p = 1.0`, lid speed 1000, `nu =
   1e-4`, central convection; (ii) PISO with `dt = 100`, `end_time = 1000`, central convection. If neither candidate produces 6 (or
   the wedge candidate 4) the check is reported as NOT REPRODUCED through the binary and left to the library tests, not
   re-tried with other values.
-* **R2 print-settings.** `rcfd run case --print-settings` exits 0 without running (no results directory is created) and its stdout
+* R2 print-settings. `rcfd run case --print-settings` exits 0 without running (no results directory is created) and its stdout
   JSON equals `Case::tree.to_json()`; an invalid case exits 3.
-* **R3 `--set`.** `--set solver.max_iterations=7 --set mesh.nx=10` gives the same `case_hash` in the `start` event as a case file
+* R3 `--set`. `--set solver.max_iterations=7 --set mesh.nx=10` gives the same `case_hash` in the `start` event as a case file
   edited by hand; a malformed argument (`--set foo`) exits 2; an unknown path exits 3.
-* **R4 `rcfd check`.** Exit 0 on a valid case and on one with only warnings, 3 on an error-level rule, 4 on a bad mesh; the
+* R4 `rcfd check`. Exit 0 on a valid case and on one with only warnings, 3 on an error-level rule, 4 on a bad mesh; the
   `--json` output has the top-level keys `ok exit_code diagnostics rules mesh` and every entry of `rules` has exactly the keys
   `id severity category path message` (plus `fix` where the rule has one).
-* **R5 thread independence of the new paths.** `rcfd restart ... --threads 1` and `--threads 3` write byte-identical
+* R5 thread independence of the new paths. `rcfd restart ... --threads 1` and `--threads 3` write byte-identical
   `solution.vtu` files (coarse-to-fine restart and a chain).
 
 ### Rule engine (`crates/rcfd-api/tests/rules_w19c.rs`)
 
-* **E1 each rule fires.** For each of the 21 registered rules a crafted case (a minimal valid base plus the stated mutation) makes
+* E1 each rule fires. For each of the 21 registered rules a crafted case (a minimal valid base plus the stated mutation) makes
   the engine return a diagnostic with exactly that rule id, severity, category and the located path of the table (with the
   entry name filled in); and no other error-level rule fires on that case (SV004 and SV011 may co-fire with nothing else; the
   assertion is on the set of error ids). A completeness assertion: the fixtures cover exactly the ids in the data file, and the
   data file has at least 14 rules with unique ids.
-* **E2 zero false positives.** The engine (with the mesh context) returns NO diagnostic of severity error or warning (info
+* E2 zero false positives. The engine (with the mesh context) returns NO diagnostic of severity error or warning (info
   allowed and listed) for: every `cases/**/*.toml` setup file; every fenced `toml` block of `docs/case-schema.md` and
   `docs/run-control.md` that parses as a case; every case text extracted from the sources of `crates/*/tests/*.rs` (raw string
   literals and `"..."` literals that parse as a case and pass `semantic_errors`; format templates with `{}` placeholders are
   skipped and counted). At least 30 distinct case texts must be evaluated in total; if fewer, the check is reported as
   under-powered, not passed. Counts of evaluated and skipped texts are reported.
-* **E3 determinism.** The diagnostics of each crafted case serialise to identical bytes in two evaluations and after the case is
+* E3 determinism. The diagnostics of each crafted case serialise to identical bytes in two evaluations and after the case is
   rebuilt from its JSON with the keys re-inserted in reverse order.
-* **E4 wiring.** `Case`-level: `run.check`/`check_only` adds the `rules` array; `rcfd check` and `rcfd run` behave as in D6 (exit
+* E4 wiring. `Case`-level: `run.check`/`check_only` adds the `rules` array; `rcfd check` and `rcfd run` behave as in D6 (exit
   codes 0/3/4; a rule-error case never starts solving; a warning-only case runs and emits a `warning` status event naming the
   rule id). The data file is parsed with strict validation: unknown condition keys, unknown operators, unknown severities or
   categories are load errors tested by a deliberately broken rules text.
 
 ### Baseline
 
-* **B1.** `cargo test -p rcfd-api --test baseline_hashes` passes unchanged (no re-recording).
+* B1. `cargo test -p rcfd-api --test baseline_hashes` passes unchanged (no re-recording).
 
 ## Anticipated deviations and limits (declared before running)
 
@@ -341,7 +341,7 @@ Restart (`crates/rcfd-api/tests/restart_w19c.rs`: 6 pass, 1 ignored):
   error).
 * **S4 PASS** (embedded mesh 12x12 to 24x24 without a source case; a file with the `mesh` section removed needs the source case
   and then gives bit-identical fields; the wrong source case, no source case and `load_restart` of another mesh are refused).
-* **S5.** Cold start 24x24: 89 iterations to 1e-6 and 23 iterations to a speed distance of 1e-2 from the converged solution.
+* S5. Cold start 24x24: 89 iterations to 1e-6 and 23 iterations to a speed distance of 1e-2 from the converged solution.
   **S5a MISS for all three methods** (iterations to tolerance): gradient 103, least_squares 96, conservative_overlap 103, versus 89.
   Cause (diagnosed in the first slice and unchanged): the residual normalisation is relative to the run's own variation, so the
   better start does not shorten the tail of the convergence to 1e-6, and the transferred flux is not divergence-free (max flux
@@ -350,14 +350,14 @@ Restart (`crates/rcfd-api/tests/restart_w19c.rs`: 6 pass, 1 ignored):
 
 Chain (`crates/rcfd-api/tests/chain_w19c.rs`, `crates/rcfd-cli/tests/chain_w19c.rs`; all PASS):
 
-* **C1** the chain's final state equals the manual procedure bit for bit; at the command line `<out>/transient/solution.vtu` is
+* C1 the chain's final state equals the manual procedure bit for bit; at the command line `<out>/transient/solution.vtu` is
   byte-identical to `rcfd run steady` followed by `rcfd restart transient --from`, and so is the steady stage output.
-* **C2** (16x16 cavity, steady tolerance 1e-8, then PISO dt 0.05 to t = 1): speed relative L2 distance to the single steady run
+* C2 (16x16 cavity, steady tolerance 1e-8, then PISO dt 0.05 to t = 1): speed relative L2 distance to the single steady run
   2.08e-3 (limit 2e-2), pressure with the volume mean removed 8.35e-3 (limit 2e-2).
-* **C3** 12x12 to 24x24: the fine stage runs on 576 cells, report `transferred`, converges in 147 iterations (exit 0).
-* **C4** exit 5, stage `b` never started, no `b` directory; with `allow_unconverged` both stages run.
-* **C5** event order as registered, every non-`chain_finish` event carries `stage`, 38 events.
-* **C6** unknown stage, repeated stage, entry without `=`, unknown setting path, value of the wrong type, value that is not JSON and
+* C3 12x12 to 24x24: the fine stage runs on 576 cells, report `transferred`, converges in 147 iterations (exit 0).
+* C4 exit 5, stage `b` never started, no `b` directory; with `allow_unconverged` both stages run.
+* C5 event order as registered, every non-`chain_finish` event carries `stage`, 38 events.
+* C6 unknown stage, repeated stage, entry without `=`, unknown setting path, value of the wrong type, value that is not JSON and
   a `set` on the chain section itself are each rejected at the located path.
 
 Run control (`crates/rcfd-cli/tests/w19c_run_control.rs`, `chain_w19c.rs`):

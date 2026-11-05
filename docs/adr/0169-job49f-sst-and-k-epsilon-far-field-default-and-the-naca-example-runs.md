@@ -251,8 +251,6 @@ both trees before and after.
 - The RSM inlet condition.
 - Making the far field read `k_initial` / `omega_initial` (question 1).
 - The case comments and the coarse-mesh limits of the example (ADR 0142).
-</content>
-</invoke>
 
 ## Questions for the maintainer (registered now; answers are not assumed)
 

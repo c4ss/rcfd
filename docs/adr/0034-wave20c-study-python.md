@@ -93,7 +93,7 @@ overwritten and all points run.
 
 ### D5 Python package (F-083)
 
-Feasibility check (done before the decision, facts recorded here): the workspace sets `unsafe_code = "forbid"` for every crate
+Feasibility check (done before the decision): the workspace sets `unsafe_code = "forbid"` for every crate
 and PyO3's macros expand to unsafe code, so an `rcfd-py` crate would have to opt out of the workspace lints; PyO3 and maturin are
 not in the offline cargo registry cache; the only Python on this machine is a Microsoft Store Python 3.9 whose install lives in
 the protected `WindowsApps` directory (linking against `python39.lib` and the unrelocatable DLL from a build is fragile there);

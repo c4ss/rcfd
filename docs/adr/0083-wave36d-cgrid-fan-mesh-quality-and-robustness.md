@@ -37,10 +37,10 @@ solver's `continuity` is the LARGEST cell mass imbalance divided by the largest 
 comparable between meshes; only the ratio `L / c10` (L = maximum over iterations 200-300, c10 = value at iteration 10) and the signal's shape are.
 
 Runs (each once, 300 iterations):
-* **A0** FAN-01-C (x1); **A1** x0.75; **A2** x1.25; **A3** x1.5 (the counts above; mesh y+ rule unchanged, so the first cell is the same 5.654e-4 m).
-* **A4** FAN-01-C with `physics.nu = 1.5e-4` (ten times; Re based on the design relative speed and the mid chord falls from about 1.4e5 to 1.4e4;
+* A0 FAN-01-C (x1); A1 x0.75; A2 x1.25; A3 x1.5 (the counts above; mesh y+ rule unchanged, so the first cell is the same 5.654e-4 m).
+* A4 FAN-01-C with `physics.nu = 1.5e-4` (ten times; Re based on the design relative speed and the mid chord falls from about 1.4e5 to 1.4e4;
   `mesh.fan.nu` stays 1.5e-5, so the mesh is A0's).
-* **A5** FAN-01-C, 1 500 iterations (is the growth bounded, periodic or monotone).
+* A5 FAN-01-C, 1 500 iterations (is the growth bounded, periodic or monotone).
 
 Recorded every iteration (from `Simulation::flux` and the cell faces, the same sum the solver uses): the argmax cell of `|sum phi|`, its tag
 `(block, a, b, k)` (from the C-grid built with the same options), whether it is a **poor cell** (any of its faces above 70 deg non-orthogonality or
@@ -62,27 +62,27 @@ stays ignored); MESH or MIXED keep P10 as the acceptance smoke of Part C unchang
 
 ### Diagnostics first (measurements only, development data)
 
-* **DF** (the failing controls): on every FAN-01 R-G in-range combination that failed, a development hook lists ALL folded quads of every fallback step
+* DF (the failing controls): on every FAN-01 R-G in-range combination that failed, a development hook lists ALL folded quads of every fallback step
   by layer and region (wake lines / suction / nose / pressure / F block; row), and for the wake lines the per-line `stack_cells` and first height
   `d1` of the neighbouring lines. **Hypothesis HF**: the wake-end folds come from the switch of the wake stack on/off (`growth_sum(d1, n_bl) <= 0.25
   dm`) or of `d1` between neighbouring wake lines or layers. Falsified if no folded wake quad of the first step sits on a line whose neighbour has a
   different `stack_cells` or a `d1` differing by more than the growth ratio.
-* **DW** (FAN-01-C, line 5): the same `stack_cells` / `d1` listing for the wake lines of layers 9-20, and the in-plane shape of the cells (5, 1..3).
+* DW (FAN-01-C, line 5): the same `stack_cells` / `d1` listing for the wake lines of layers 9-20, and the in-plane shape of the cells (5, 1..3).
   **Hypothesis HW**: the FAN-01-C skewness maximum and the 80 deg wake-stack faces have the cause HF. Falsified as for HF.
-* **DC** (seam corner, FAN-01-C layers 10-20): the angles of the four C cells and the two F cells at the irregular corner node, and the angle at which
+* DC (seam corner, FAN-01-C layers 10-20): the angles of the four C cells and the two F cells at the irregular corner node, and the angle at which
   lines 19, 20, 21 meet the seam / front edge.
-* **DL / DN** (B'): the code of C5 and of C6 (ADR 0079 record commit 5348934) is reinstated in a development copy only, and the D1 attribution of ADR
+* DL / DN (B'): the code of C5 and of C6 (ADR 0079 record commit 5348934) is reinstated in a development copy only, and the D1 attribution of ADR
   0079 is run on B' with each, to locate the 85.89 deg (C5) and 81.69 deg (C6) maxima.
 
 ### Candidate families (the exact change of each is specified in Amendment 1, written after the diagnostics and before any run of a change)
 
-* **H1** wake-end: a wake stack and first height that do not switch between neighbouring lines or layers (for example the stack kept on every wake line
+* H1 wake-end: a wake stack and first height that do not switch between neighbouring lines or layers (for example the stack kept on every wake line
   with `d1` continuous in the line index), if DF / DW support HF.
-* **H2** seam corner: the arrival of the lines at the irregular corner node (for example the corner placement rule or the targets of lines h_c +- 1).
-* **H3** trailing-edge lean: C5 with its side effect removed at its source as located by DL (for example a lean factor faded along the wake, or
+* H2 seam corner: the arrival of the lines at the irregular corner node (for example the corner placement rule or the targets of lines h_c +- 1).
+* H3 trailing-edge lean: C5 with its side effect removed at its source as located by DL (for example a lean factor faded along the wake, or
   continuous between neighbouring lines).
-* **H4** nose rows: C6 with its side effect removed at its source as located by DN.
-* **H5** control range: a range re-registered on the FAN-01 failure data (DF), only for the new construction.
+* H4 nose rows: C6 with its side effect removed at its source as located by DN.
+* H5 control range: a range re-registered on the FAN-01 failure data (DF), only for the new construction.
 
 ### Decision rule (registered; 10 % and 1 % are protocol thresholds, not accuracy limits)
 
@@ -100,15 +100,15 @@ and `docs/case-schema.md`); `camber_seam` stays G, bit-identical. If none is acc
 
 ## Part C: acceptance on H (run once, after Amendment 1 freezes H and, for H5, the range)
 
-* **C1** FAN-01-C with H: ADR 0079 P1, P3-P8 (same limits), P2 quality target 70 deg / 2.0 / 300 (unchanged from ADR 0079).
-* **C2** P9 (`FvGeometry::new`, `check_mesh` ok, `rules::check_case` without an error-level finding) through the case with `camber_seam_h`.
-* **C3** P10 (the ADR 0079 criterion) through the case with `camber_seam_h`, unless Part A finds FLOW (then the corrected set-up of the amendment).
-* **C4** registered scan **R-H** (combinations different from the development scan, R-E and R-G): n_chord {15, 22, 30} x n_nose {3, 5, 8} x n_side
+* C1 FAN-01-C with H: ADR 0079 P1, P3-P8 (same limits), P2 quality target 70 deg / 2.0 / 300 (unchanged from ADR 0079).
+* C2 P9 (`FvGeometry::new`, `check_mesh` ok, `rules::check_case` without an error-level finding) through the case with `camber_seam_h`.
+* C3 P10 (the ADR 0079 criterion) through the case with `camber_seam_h`, unless Part A finds FLOW (then the corrected set-up of the amendment).
+* C4 registered scan R-H (combinations different from the development scan, R-E and R-G): n_chord {15, 22, 30} x n_nose {3, 5, 8} x n_side
   {10, 13, 18, 26} with n_nose + 2 <= n_chord, and front_gap {0.2, 0.28, 0.45, 0.75}, on blade B (S counts otherwise) and FAN-01 (FAN-01-C counts
   otherwise) with H. Gates: (a) every in-range combination builds and validates with positive volumes: 100 % per fan; (b) every out-of-range combination
   is refused with a located error naming a control: 100 %. Reported: the fraction that also meets 70 / 2.0 / 300, the median non-orthogonality, the
   construction steps. R-G is re-run with H and reported beside it (no gate).
-* **C5** A' and B' with H: the Q1 gates of ADR 0072 (A' 70 / 2.0 / 300, B' 70 / 2.0 / 3000), reported as ADR 0079 did for G.
+* C5 A' and B' with H: the Q1 gates of ADR 0072 (A' 70 / 2.0 / 300, B' 70 / 2.0 / 3000), reported as ADR 0079 did for G.
 
 ## Part D: default behaviour bit-identical
 
@@ -151,19 +151,19 @@ not flag; the only feature found at the argmax cell is a volume jump of 6.5 to a
 
 ### Part B diagnostics
 
-* **DF** (development hook, not committed): the 19 FAN-01 in-range R-G failures. All wake lines of every failing combination carry the full stack
+* DF (development hook, not committed): the 19 FAN-01 in-range R-G failures. All wake lines of every failing combination carry the full stack
   with `d1 = h1` (continuous to 1 %): **HF falsified**. Step 0 of the fallback chain folds everywhere (hundreds of quads in the nose rows and the F
   block); several combinations miss only by 2-30 nose quads in rows 2-5 (just beyond the stack) at step 1 or 7; two (n_chord 36 / n_nose 6 /
   n_side 24 and n_chord 18 / n_nose 6 / n_side 14) have no in-plane fold at steps 0-1 and fail as a 3-D tangle (`Mesh::from_cell_faces`); front_gap 0.9
   is the `n_up` refusal at the hub (the front edge 10.5 mm from the inlet).
-* **DW** (FAN-01-C, layers 8-21): every wake line has the full stack and `d1` 5.65e-4 to 5.71e-4 m: **HW falsified**; the line-5 skewness is not a
+* DW (FAN-01-C, layers 8-21): every wake line has the full stack and `d1` 5.65e-4 to 5.71e-4 m: **HW falsified**; the line-5 skewness is not a
   stack switch.
-* **DC** (FAN-01-C, layers 9-20): at the lower seam corner the C side spans 151 deg (seam at -50 deg, front edge at +102 deg) and holds only the
+* DC (FAN-01-C, layers 9-20): at the lower seam corner the C side spans 151 deg (seam at -50 deg, front edge at +102 deg) and holds only the
   corner line h_c, which arrives at 94 deg, 7.6 deg from the front edge: the cell (h_c, n_side - 1) is a sliver and its i-face is the 83.26 deg maximum.
   The seam cell next to the corner is 3.5 mm long, the front-edge cell next to it 64 mm.
-* **DL** (C5 on B' with E): the 85.89 deg maximum is on hub boundary faces of wake/outer cells (lines 22 and 150-152, rows 17-19, layer 0, node-line
+* DL (C5 on B' with E): the 85.89 deg maximum is on hub boundary faces of wake/outer cells (lines 22 and 150-152, rows 17-19, layer 0, node-line
   tilt 57-65 deg): it sits in the wake, where C5 applies the trailing-edge lean factor to every wake line.
-* **DN** (C6 on B' with E): the 81.69 deg maximum is the stack-edge j-face of line 71 = h_c - 1, the first line outside the nose lines that C6
+* DN (C6 on B' with E): the 81.69 deg maximum is the stack-edge j-face of line 71 = h_c - 1, the first line outside the nose lines that C6
   freezes (rows 7/8, mid-span): the hard edge of the frozen region.
 
 ### Part B development (disclosed; all on development data)
@@ -182,17 +182,17 @@ So the B' measurements of H3 and H4 below are not blind (developed on B' with E;
 
 ### The changes, frozen (new opt-in fields of `CGridOptions`); order H1, H3, H4 on top of G
 
-* **H1 `post_untangle`**: after the in-plane smoothing of a layer, the local untangling that precedes it (`UNTANGLE_PASSES`, free nodes around folded
+* H1 `post_untangle`: after the in-plane smoothing of a layer, the local untangling that precedes it (`UNTANGLE_PASSES`, free nodes around folded
   quads to the mean of their four neighbours) is applied once more. Target: FAN-01 R-G in-range builds (G: 20 of 39).
-* **H3 `lean_stack`**: C5 of ADR 0079 (every blade wall stack built with the in-plane offsets divided by `cos(lambda)`, lambda between the in-plane
+* H3 `lean_stack`: C5 of ADR 0079 (every blade wall stack built with the in-plane offsets divided by `cos(lambda)`, lambda between the in-plane
   wall normal and the 3-D surface normal) on the blade lines; on the wake lines the factor is `c_te + (1 - c_te)(1 - fade(p / max(1, n_down / 4)))`, p
   the wake line's distance from the trailing edge in lines, so it is the trailing-edge value next to it and 1 from a quarter of the wake on. Stacks
   (iii) along the 3-D surface normal as registered. Target: B' blade-stack maximum skewness (G value measured in the run).
-* **H4 `nose_blend`**: after the smoothing of a layer (no freezing inside it), the C-line nodes of rows `n_b < j < n_side` move back towards the
+* H4 `nose_blend`: after the smoothing of a layer (no freezing inside it), the C-line nodes of rows `n_b < j < n_side` move back towards the
   algebraic grid by `w = fade(dist / n_nose) fade((j - n_b - 1) / max(1, (n_side - n_b) / 4))`, dist the line's distance in lines from the nose lines
   `[h_c, n_i - h_c]` (0 on them), `fade` the smooth step from 1 to 0. Target: B' nose/outer maximum skewness.
 * H2: none (above). The registered H3 + H4 package applies as registered (only if each fails (ii) alone).
-* **H5** (range of H, checked with `c_grid_construction = "camber_seam_h"` only, located errors before any construction): `0.15 <= n_nose / n_chord
+* H5 (range of H, checked with `c_grid_construction = "camber_seam_h"` only, located errors before any construction): `0.15 <= n_nose / n_chord
   <= 0.3`; `max(8, n_bl + 6) <= n_side <= min(2 n_chord, 16)`; `0.15 <= front_gap <= 0.6`. Chosen from the R-G FAN-01 failures (14 of the 19 have
   n_side 24 or 40, one has n_nose / n_chord 0.375, one front_gap 0.9). It is a restriction, not a fix. Under it, the R-H list has 11 in-range
   combinations per fan (n_chord / n_nose (15, 3), (22, 5), (30, 5), (30, 8) x n_side {10, 13}, and front_gap {0.2, 0.28, 0.45}).

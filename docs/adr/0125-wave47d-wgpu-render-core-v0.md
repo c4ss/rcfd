@@ -12,7 +12,7 @@ interpolation) and our own code (`rcfd-post` `render.rs` and `gltf.rs`). No wind
 
 ## Step 0: does wgpu work on this machine? (spike, run before any design)
 
-Machine: Windows 11 Pro 10.0.26300, rustc 1.99.0, wgpu **30.0.1**. A throw-away example enumerated every DX12 and Vulkan adapter. On
+Machine: Windows 11 Pro 10.0.26300, rustc 1.99.0, wgpu 30.0.1. A throw-away example enumerated every DX12 and Vulkan adapter. On
 each one it drew the triangle (-1,-1), (1,-1), (-1,1) in clip space into a 64 x 64 `Rgba8Unorm` texture and read it back. Result, verbatim:
 
 | Adapter | Back end | Type | Driver | max_texture_2d | max_buffer_size | max_storage_binding | red / black pixels |
@@ -138,7 +138,7 @@ top-left rule. The spike is kept as `examples/adapters.rs`, which prints the sam
 
 ## Registered checks
 
-All GPU checks are in `crates/rcfd-render/tests/render.rs`. Each runs on **every** DX12 and Vulkan adapter that `adapters()` returns,
+All GPU checks are in `crates/rcfd-render/tests/render.rs`. Each runs on every DX12 and Vulkan adapter that `adapters()` returns,
 WARP included. With no adapter, each test prints `SKIP <file>:<line>: no wgpu adapter ...` and passes. The camera checks are unit tests in
 `src/camera.rs`. Pixel differences are per channel, in 8-bit steps.
 

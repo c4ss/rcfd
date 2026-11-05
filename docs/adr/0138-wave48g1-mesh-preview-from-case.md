@@ -35,7 +35,7 @@ egui public API.
 ## Decision (the design as implemented)
 
 1. **Source.** The preview shows the case asked for last (`Studio::open_case`, the browser's click) while no run is
-   selected (the run selection still wins, as specified). It is built from the case **file on disk**, parsed exactly as
+   selected (the run selection still wins, as specified). It is built from the case file on disk, parsed exactly as
    `rcfd run <file> --case-dir <its folder>` parses it, so the picture is the mesh a run of that file uses; unsaved editor
    edits are not shown (the panel says so). It rebuilds when the editor's base hash of the file changes (a save or a
    reload) and when the watcher reports the case file or its mesh file changed.

@@ -111,17 +111,17 @@ Table B1, the numerical axis (class S), relative to the case as written (cell si
 | Time means | until each mean's SE <= budget/24, from at least 40 batches (V-e) | as xhigh | as written | as written | `statistics`, `piso` and `pimple` only |
 
 Notes on Table B1:
-* **Schemes stay as written at every tier.** Space and time schemes are not tier knobs. Medium, high and xhigh therefore differ in h
+* Schemes stay as written at every tier. Space and time schemes are not tier knobs. Medium, high and xhigh therefore differ in h
   and dt only, and form a refinement family.
-* **First-order cases.** A case written with a first-order scheme keeps it at every tier. Its xhigh then rarely meets the D8
+* First-order cases. A case written with a first-order scheme keeps it at every tier. Its xhigh then rarely meets the D8
   uncertainty rule, so its checks are reported as non-discriminating.
-* **Scheme upgrades.** An upgrade, for example euler to bdf2, would be a separate step outside this ladder; none is proposed here.
-* **Tolerances.** They change the iteration error only. VR4 checks xhigh and its partner; the lower tiers' iteration error is part of
+* Scheme upgrades. An upgrade, for example euler to bdf2, would be a separate step outside this ladder; none is proposed here.
+* Tolerances. They change the iteration error only. VR4 checks xhigh and its partner; the lower tiers' iteration error is part of
   the error they are judged on.
-* **First cell.** Where the first cell is not scaled, the near-wall cells leave the refinement family. That covers wall functions at
+* First cell. Where the first cell is not scaled, the near-wall cells leave the refinement family. That covers wall functions at
   every tier, and low on wall-resolved meshes. The wall-normal error is then outside every band, as in ADR 0086, and low's pair
   estimate is refused (`not_in_family`, V-f).
-* **Wall layers (what `expand` does to them).**
+* Wall layers (what `expand` does to them).
   * The layer count and growth stay as written at every tier: `mesh.wall_layers` and `mesh.layer_growth`, and the fan passage's
     `mesh.fan.n_bl` and `growth`.
   * Where y+ <= 1, xhigh and high scale the first layer by the cell-size factor. That is `mesh.first_layer_height`, or
@@ -351,7 +351,7 @@ Delivery:
 
 ### D8 How a claim is validated, and the ledger rule
 
-The full procedure is the validation plan below; this section states its rules in short.
+The full procedure is the validation plan below.
 
 * **What a claim is.** A claim is (tier, class, quantity, budget). A miss becomes `*_known_miss` with the limit intact. The claim then
   reads MISSED in the claim table, and the tier stays available for that class without a claim.
@@ -468,11 +468,11 @@ House rules apply:
 **VC0, the case-file gate (the first step of T2).** The tiers act on case files through `expand`. Most validation tests, however,
 build their solvers directly through `rcfd_fv`; only `pipe_sweep.rs`, `study_w20c.rs` and `fan01_gci_w37c.rs` go through the case
 tree.
-* **Check.** Each calibration case first gets a case file. VC0 checks that the case file, on the harness's own mesh, reproduces the
+* Check: each calibration case first gets a case file. VC0 checks that the case file, on the harness's own mesh, reproduces the
   harness's registered value.
-* **Limit.** Within 0.1 %, or within the harness's own fine-mesh GCI if that is larger.
-* **Failure.** A case that misses VC0, or that the case tree cannot express, stays out of T2 until an amendment fixes the cause.
-* **Negative control.** The case file with `physics.nu` doubled misses.
+* Limit: within 0.1 %, or within the harness's own fine-mesh GCI if that is larger.
+* Failure: a case that misses VC0, or that the case tree cannot express, stays out of T2 until an amendment fixes the cause.
+* Negative control: the case file with `physics.nu` doubled misses.
 
 | Class | Case and its registered reference (path, ADR) | Case file today | Table C row | Members |
 |---|---|---|---|---|
@@ -630,21 +630,21 @@ and the old file is kept. Limit: each within its budget. A failure follows the h
 
 ### V-i What the validation cannot prove
 
-* **That xhigh is right.**
+* That xhigh is right.
   * VR1-VR4 bound numerical error under refinement, and VR6 compares with published values only where they exist.
   * Model-form error (closure, transition, installation) is outside every band.
   * Class F has no measured data.
-* **That a claim transfers beyond its envelope**: other geometries, imported or unstructured meshes, other Reynolds ranges, other
+* That a claim transfers beyond its envelope: other geometries, imported or unstructured meshes, other Reynolds ranges, other
   platforms.
-* **More than the set supports.** With 3 to 7 discriminating cases per row, the strongest per-row statement is that at least 37 % to
+* More than the set supports. With 3 to 7 discriminating cases per row, the strongest per-row statement is that at least 37 % to
   65 % of similar cases pass, at 95 % confidence. Rare failures are not excluded, and rows with fewer than 3 cases carry no claim.
-* **Bias that refinement does not remove.** A band built from refinement cannot see it (the swept pipe, VR6); only a published or
+* Bias that refinement does not remove. A band built from refinement cannot see it (the swept pipe, VR6); only a published or
   exact value can.
-* **Speedups on other hardware or under load**, and the 3D transient band, which has no calibration case.
-* **The no-claim physics**: rankings near stall or separation onset, tones below the transient tiers, broadband noise below xhigh,
+* Speedups on other hardware or under load, and the 3D transient band, which has no calibration case.
+* The no-claim physics: rankings near stall or separation onset, tones below the transient tiers, broadband noise below xhigh,
   turbulent heat transfer.
-* **Mixed precision outside the calibrated cases**: that it is harmless for ill-conditioned or stiff systems.
-* **Permanence.** Claims hold for the solver version that produced them; VG2 detects drift only on its guarded cases.
+* Mixed precision outside the calibrated cases: that it is harmless for ill-conditioned or stiff systems.
+* Permanence. Claims hold for the solver version that produced them; VG2 detects drift only on its guarded cases.
 
 ## Staged plan
 
@@ -756,18 +756,18 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
 
 ### Risks
 
-* **Generic matrix types move bits.** The change touches every solve. T3-1 runs before any other T3 check.
-* **A tier read as a guarantee.** "low, 7 %", quoted by Claude or the Studio for a case outside a calibrated class, would mislead.
+* Generic matrix types move bits. The change touches every solve. T3-1 runs before any other T3 check.
+* A tier read as a guarantee. "low, 7 %", quoted by Claude or the Studio for a case outside a calibrated class, would mislead.
   Every report carries the claim status and the no-claim flags (D7).
-* **Rapid prototyping makes cheap numbers easy to quote.** With the tier on the MCP tools (D9), a low or xlow number is one call away.
-  Every tier tool result carries the claim status and the refusals, and `tier_report` refuses rather than guesses (V-f).
-* **Medium is only as good as the author's mesh [F-1].** Under the relative ladder every class S claim is conditional on the case as
+* Rapid prototyping makes cheap numbers easy to quote. With the tier on the MCP tools (D9), a low or xlow number is one call away.
+  Every tier tool result carries the claim status and the refusals, and `tier_report` returns no estimate where a refusal applies (V-f).
+* Medium is only as good as the author's mesh [F-1]. Under the relative ladder every class S claim is conditional on the case as
   written. The per-run estimate (D7) is the only per-case evidence.
-* **Preset drift.** Presets changed in place would make two runs at "low" incomparable. Versions are in `run.json`, and T1-2 fixes
+* Preset drift. Presets changed in place would make two runs at "low" incomparable. Versions are in `run.json`, and T1-2 fixes
   them.
-* **Expensive references.** xhigh runs can take hours, and xhigh fan runs do not fit this machine. F-11 moves long runs out of the
+* Expensive references. xhigh runs can take hours, and xhigh fan runs do not fit this machine. F-11 moves long runs out of the
   gate, and the runner refuses runs over its memory budget.
-* **One release of duplication.** The ledger's evaluator suffix duplicates `tier`, and evaluator filters on `cfd` stop matching. Its
+* One release of duplication. The ledger's evaluator suffix duplicates `tier`, and evaluator filters on `cfd` stop matching. Its
   removal needs a later ADR, as `case_source` does in ADR 0130.
 
 ## Limits
@@ -868,7 +868,7 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
     **Recommendation: (a)**, then T2, then T3.
 13. **F-13, the tier in the MCP tools: DECIDED by the maintainer, 2026-10-28.** The tier must be reachable through the MCP tools for
     rapid prototyping. It goes on the `--project` tool set (D9), and the default tool list stays byte-identical (ADR 0135 check F1).
-    This is no longer open. The earlier recommendation kept the tier off the MCP tools except through the run path; the decision
+    The earlier recommendation kept the tier off the MCP tools except through the run path; the decision
     replaces it.
 
 ## Proposed roadmap items (ids to be assigned by the maintainer)

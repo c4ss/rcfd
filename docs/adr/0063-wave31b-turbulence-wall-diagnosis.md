@@ -83,7 +83,7 @@ No library schema key is added in this wave (the new variant is selectable throu
 
 ## Addendum 2 (results; written after the experiments, limits above untouched)
 
-Outcome in one paragraph: neither deficit is isolated as a coding or boundary-condition defect against a published formulation, so NO solver change was made in this wave (no new key, no baseline touched, `baseline_hashes` unchanged).
+Outcome: neither deficit is isolated as a coding or boundary-condition defect against a published formulation, so NO solver change was made in this wave (no new key, no baseline touched, `baseline_hashes` unchanged).
 (A) The registered Re_theta is biased low and exaggerates the deficit; what remains is a slowly (first order) decaying sensitivity to the published wall-face omega factor 10, not a defect.
 (B) The mesh dependence is the validity limit of the log-law function with a viscous fall-back branch and a positive feedback of y* on k; the published equilibrium forms were tried as an opt-in treatment, removed the bump but not the fall, missed the registered limits E1 and E2 and were removed again.
 

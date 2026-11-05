@@ -62,7 +62,7 @@ written at the sample interval. The volume quadrupole is not included.
 
 ### Surface file
 
-Surface file (`rcfd-fwh-surface` version 1):
+Format `rcfd-fwh-surface`, version 1:
 
 ```json
 {"format": "rcfd-fwh-surface", "version": 1, "rho0": 1.2, "c0": 340.0, "t0": 0.0, "dt": 1e-4,

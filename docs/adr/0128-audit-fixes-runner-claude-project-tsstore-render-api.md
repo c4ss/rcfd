@@ -25,7 +25,7 @@ Status: **ACCEPTED 2026-10-27** (acceptance registered before any code). Written
 
 `.rcfd/runner-config.json` can set `rcfd_bin`, so a project folder can make the runner execute any program.
 **Fix:** remove the field. The solver is `RCFD_BIN`, else `rcfd` next to the runner. `Config` keeps `deny_unknown_fields`, so a config
-that still names `rcfd_bin` is **rejected** at `serve` start with an error that names the config file and the key.
+that still names `rcfd_bin` is rejected at `serve` start with an error that names the config file and the key.
 **Accept:** test `f01_config_naming_rcfd_bin_is_rejected_and_never_run`: a project whose config names a script (`.cmd` on Windows,
 `sh` script elsewhere) that writes a marker file, one queued run without `mem_mb` (so the runner would start a pre-launch check with
 the solver at once); `rcfd-runner serve` started directly exits non-zero within 10 s, stderr names `runner-config.json` and `rcfd_bin`,
@@ -37,9 +37,9 @@ and the marker file does not exist 2 s after the exit. S1-S11 pass unchanged.
 `suggest()` ends in `validate()`, so it inherits the refusal. Before comparing, each `/`-segment is normalised: empty and `.`
 segments dropped, ASCII lowercase (on every platform; refusing `Claude.md` on Linux costs nothing), trailing `.` and spaces stripped
 (Windows ignores them). Decisions registered here:
-* a segment equal to a control name is refused at **any** depth (a nested `CLAUDE.md` is also loaded by the CLI; `cases/.claude/x`
+* a segment equal to a control name is refused at any depth (a nested `CLAUDE.md` is also loaded by the CLI; `cases/.claude/x`
   is refused although only the root one is read: conservative);
-* a wildcard (`*`, `?`, `[`) in the **first** segment is refused when the segment could match a control name (`*.md`, `.c*`,
+* a wildcard (`*`, `?`, `[`) in the first segment is refused when the segment could match a control name (`*.md`, `.c*`,
   `*.json`, `rcfd-*`); the test is a small glob match of that segment against the five names;
 * known limit: a wildcard in a deeper segment (`cases/**`) still matches a nested `cases/CLAUDE.md`. Refusing `cases/**` would
   remove the main use of the list; recorded, not fixed;
@@ -57,7 +57,7 @@ After spawn, a failed write of the `running` status is only logged; the run stay
 second solver into the same folder (which deletes the first one's `output/`).
 **Fix:** right after spawn the `launched` event is appended (it now comes before the `running` state event), then the status is
 written. If either write fails, the child is killed and the run is failed with a reason naming the file and the error. In `scan`, a
-run whose status is `queued` (or `paused` without pid) but whose `events.jsonl` has a `launched` event is **adopted** (pid from the
+run whose status is `queued` (or `paused` without pid) but whose `events.jsonl` has a `launched` event is adopted (pid from the
 event, probed like any adopted run) and never put back in the queue.
 **Seam:** `Runner` becomes generic over `RunStore` (the trait the crate already has for this boundary) so a unit test can inject a
 store whose `write_status(running)` fails.
@@ -73,8 +73,8 @@ store whose `write_status(running)` fails.
 
 ### 4. Liveness probe by fixed name, one miss finalises (`runner.rs` 655-657, `sys.rs` 13-28)
 
-**Fix:** the probe uses the file stem of the solver the runner was started with; an adopted run is finalised only after **two
-consecutive** missed probes (a hit resets the count). Counting is a small pure function.
+**Fix:** the probe uses the file stem of the solver the runner was started with; an adopted run is finalised only after two
+consecutive missed probes (a hit resets the count). Counting is a small pure function.
 **Seam:** the probe function is a field of `Runner` (default `sys::pid_alive`).
 **Accept:** unit test `f04_one_missed_probe_does_not_finalise_two_do` (scripted probe: miss, hit, miss stays running; miss, miss
 finalises); integration test `f04_renamed_solver_survives_a_runner_restart`: `rcfd` copied to `mysolver(.exe)`, `RCFD_BIN` set on a
@@ -120,7 +120,7 @@ unchanged.
 
 ### 8. Upload larger than the device's buffer limit panics (`rcfd-render/src/gpu.rs` 289-316)
 
-**Fix:** the vertex byte count is computed from the triangle count **before** the buffer is built and checked against
+**Fix:** the vertex byte count is computed from the triangle count before the buffer is built and checked against
 `device.limits().max_buffer_size`; over the limit it returns `Error::Mesh` naming both numbers and the adapter.
 **Seam:** a pure helper `vertex_bytes_check(triangles, limit)` (for the test without a GPU).
 **Accept:** unit test of the helper (just under, at, just over the limit; overflowing counts); GPU test
@@ -131,7 +131,7 @@ render checks of ADR 0125 pass unchanged.
 ### 9. Watcher hashes every small file on every poll (`rcfd-project/src/watch.rs` 110-121)
 
 **Fix:** a file whose length and modification time equal the previous scan's, and whose modification time was more than 2 s older
-than the **start of the previous scan**, reuses the previous hash (a write after that scan would have changed the time on any file
+than the start of the previous scan, reuses the previous hash (a write after that scan would have changed the time on any file
 system with a timestamp granularity of 2 s or finer). The scan time is kept outside `Sig` equality.
 Known limit (unchanged in kind): a same-length rewrite that restores an old modification time on purpose is not seen.
 **Seam:** `Watcher::bytes_hashed()` (cumulative bytes read for hashing).
@@ -210,7 +210,7 @@ recorded as a limit.
 ### 16. Duplicated code
 
 (a) The sandbox containment check is copied in `rcfd-api/src/chemistry.rs` 149, `exprs.rs` 78 and `udf.rs` 421, and each copy treats a
-failed canonicalize of the **root** as inside. **Fix:** one helper `case::sandbox_contains(root, base, file) -> Result<bool, String>`
+failed canonicalize of the root as inside. **Fix:** one helper `case::sandbox_contains(root, base, file) -> Result<bool, String>`
 used by all three: a root that cannot be canonicalized is an error (each caller reports it at its own key: "the sandbox root ...
 cannot be resolved: ..."); a missing file still counts as inside, so the later "cannot read" diagnostic is unchanged; each caller's
 "outside the sandbox" message is unchanged. Behaviour change on an error path only: a configuration whose sandbox root exists is not

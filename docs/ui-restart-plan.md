@@ -35,10 +35,10 @@ This page is for the user and for contributors working on the Studio. Read secti
 
 ## 4. Wave order
 
-- **Wave 47 (foundations, no window needed):** L1 project format, L2 run service, L3 time-series store, L4 wgpu offscreen render core v0 (mesh, scalar colouring, camera, PNG, checked against a CPU reference), L6 research and library prototype (session discovery, transcript tail, headless message send).
-- **Wave 48:** L5 application shell and viewport integration; L7 plugin and the project tools.
-- **Wave 49:** compute rendering (iso-surfaces, streamlines, particles), animation, video export, side-by-side compare.
-- **Wave 50:** computer-fan modes (tolerance spread, dust field, noise and vibration spectra, design ledger and Pareto view); stress and strain only after a structural solver (decision deferred, see `docs/fan-project-breakdown.md`).
+- Wave 47 (foundations, no window needed): L1 project format, L2 run service, L3 time-series store, L4 wgpu offscreen render core v0 (mesh, scalar colouring, camera, PNG, checked against a CPU reference), L6 research and library prototype (session discovery, transcript tail, headless message send).
+- Wave 48: L5 application shell and viewport integration; L7 plugin and the project tools.
+- Wave 49: compute rendering (iso-surfaces, streamlines, particles), animation, video export, side-by-side compare.
+- Wave 50: computer-fan modes (tolerance spread, dust field, noise and vibration spectra, design ledger and Pareto view); stress and strain only after a structural solver (decision deferred, see `docs/fan-project-breakdown.md`).
 
 Waves 48 and later start after the user has run the previous result and reported on it.
 

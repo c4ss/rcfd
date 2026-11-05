@@ -85,21 +85,21 @@ stands AND Y4b is outside [1.9, 2.3] (the velocity anchor alone reproduces the f
 
 ### Part A: the ADR 0073 set with K (limits unchanged)
 
-* **C-O1** TG PISO fine and coarse; **C-O2** TG PIMPLE-C fine; **C-O3** TG PIMPLE-4 fine; **C-O7** TG PISO variable step fine; **C-S1** TG-S PISO fine;
-  **C-S2** TG-S PIMPLE-4 fine: all orders in [1.9, 2.3] against the same-scheme dt = 1/1280 reference.
-* **C-O9** joint refinement against the exact solution, TG PISO, (16, 0.1), (32, 0.05), (64, 0.025): both orders >= 1.9.
-* **N1** exact velocity AND pressure error with K <= 1.05 x the default at dt in {0.05, 0.025, 0.0125}, N = 32, PISO, on TG, TG-S, MMS, MODE (12 velocity and
+* C-O1 TG PISO fine and coarse; C-O2 TG PIMPLE-C fine; C-O3 TG PIMPLE-4 fine; C-O7 TG PISO variable step fine; C-S1 TG-S PISO fine;
+  C-S2 TG-S PIMPLE-4 fine: all orders in [1.9, 2.3] against the same-scheme dt = 1/1280 reference.
+* C-O9 joint refinement against the exact solution, TG PISO, (16, 0.1), (32, 0.05), (64, 0.025): both orders >= 1.9.
+* N1 exact velocity AND pressure error with K <= 1.05 x the default at dt in {0.05, 0.025, 0.0125}, N = 32, PISO, on TG, TG-S, MMS, MODE (12 velocity and
   9 pressure comparisons; MODE pressure is zero and skipped, as in ADR 0073).
-* **N2** with every option off the five `w33b_default_bits` fingerprints are identical; `baseline_hashes` unchanged.
-* **C-O6r** (reported, no limit): MMS PISO and PIMPLE-C fine and coarse, TG PIMPLE-C coarse, TG-S PISO and PIMPLE-4 default.
+* N2 with every option off the five `w33b_default_bits` fingerprints are identical; `baseline_hashes` unchanged.
+* C-O6r (reported, no limit): MMS PISO and PIMPLE-C fine and coarse, TG PIMPLE-C coarse, TG-S PISO and PIMPLE-4 default.
 * N3 (A1 decomposition, prints, no limit) is NOT rerun: by the prediction above F-S does not touch TG and F-R does not touch PISO/PIMPLE-4 (alpha 1), so it
   equals ADR 0073's F-G N3. If the implementation check below fails, this is void and the reason is reported.
-* **Implementation check (prediction, not a limit of the fixes):** the TG errors of C-O1, C-O3 and C-O7 with K equal the ADR 0073 F-G errors to the printed
+* Implementation check (prediction, not a limit of the fixes): the TG errors of C-O1, C-O3 and C-O7 with K equal the ADR 0073 F-G errors to the printed
   four digits. A difference means F-S touches something it should not; it is then investigated before any other acceptance run, and reported.
 
 ### Part P: F-R (only if written)
 
-* **N5** PIMPLE-C no-harm: exact velocity AND pressure error with K <= 1.05 x the default (all options off, same PIMPLE-C settings) at dt in {0.05, 0.025, 0.0125},
+* N5 PIMPLE-C no-harm: exact velocity AND pressure error with K <= 1.05 x the default (all options off, same PIMPLE-C settings) at dt in {0.05, 0.025, 0.0125},
   N = 32, on TG, TG-S and MMS (9 velocity and 9 pressure comparisons). The errors of F-G + F-S without F-R are printed alongside (information).
 
 ### Part R: rotationally periodic seams (K on; new set-ups)
@@ -107,10 +107,10 @@ stands AND Y4b is outside [1.9, 2.3] (the velocity anchor alone reproduces the f
 Mesh `annulus_sector(n, n, 0.5, 1.0, pi/3, Uniform, 0.1)` (60-degree sector, `theta_min`/`theta_max` a rotational pair, walls `inner`/`outer` with zero velocity,
 `frontAndBack` empty), central convection, BDF2, nu = 0.02, t_end = 1, tolerances of the Common section. Paths PISO and PIMPLE-4 (n_outer 4, alpha 1).
 
-* **SWIRL** (exact unforced Navier-Stokes solution): `u = U(r) e^{-nu k^2 t} e_theta`, `p = P(r) e^{-2 nu k^2 t}` with `U'' + U'/r - U/r^2 + k^2 U = 0`,
+* SWIRL (exact unforced Navier-Stokes solution): `u = U(r) e^{-nu k^2 t} e_theta`, `p = P(r) e^{-2 nu k^2 t}` with `U'' + U'/r - U/r^2 + k^2 U = 0`,
   `U(0.5) = U(1) = 0`, `k` the first eigenvalue, `max |U| = 1`, `P' = U^2/r`, `P(0.5) = 0`. U, U' and P from RK4 shooting (40 000 steps, bisection on k), cubic
   Hermite interpolation; accuracy 1e-14 (smoke). This is an independent solution (no Bessel tables used).
-* **SECT-M** (manufactured, non-axisymmetric, no-slip): stream function `psi = g(t) F(r) cos(6 theta)`, `F = 32 (r - 0.5)^2 (1 - r)^2`, `g = 1 + 0.5 sin(2t + 0.3)`,
+* SECT-M (manufactured, non-axisymmetric, no-slip): stream function `psi = g(t) F(r) cos(6 theta)`, `F = 32 (r - 0.5)^2 (1 - r)^2`, `g = 1 + 0.5 sin(2t + 0.3)`,
   `u_r = (1/r) d psi/d theta`, `u_theta = -d psi/dr`; `p = 0.25 g^2 cos(6 theta)`; source `f = u_t + (u.grad) u + grad p - nu lap u` (velocity derivatives by
   fourth-order central differences, h = 1e-4 for first and 1e-3 for second derivatives), balanced-force face values `f.S` on internal and coupled faces and
   `grad p.S` on the walls (as the ADR 0069 MMS), applied through the `step_with` hook at `t + dt`.
@@ -118,11 +118,11 @@ Mesh `annulus_sector(n, n, 0.5, 1.0, pi/3, Uniform, 0.1)` (60-degree sector, `th
   as in ADR 0073 (volume means removed).
 
 Acceptance (K on):
-* **R1** SWIRL 16 x 16 PISO fine pair in [1.9, 2.3] (default 1.135); **R1b** SWIRL PIMPLE-4 fine pair in [1.9, 2.3] (default 2.052; no-harm row).
-* **R2** SECT-M 16 x 16 PISO fine pair in [1.9, 2.3] (default 1.041); **R2b** SECT-M PIMPLE-4 fine pair in [1.9, 2.3] (default 0.538).
-* **R3** joint refinement against the exact solution, PISO, (n, dt) = (16, 0.05), (32, 0.025), (64, 0.0125): SWIRL both orders >= 1.9; SECT-M both orders >= 1.8
+* R1 SWIRL 16 x 16 PISO fine pair in [1.9, 2.3] (default 1.135); R1b SWIRL PIMPLE-4 fine pair in [1.9, 2.3] (default 2.052; no-harm row).
+* R2 SECT-M 16 x 16 PISO fine pair in [1.9, 2.3] (default 1.041); R2b SECT-M PIMPLE-4 fine pair in [1.9, 2.3] (default 0.538).
+* R3 joint refinement against the exact solution, PISO, (n, dt) = (16, 0.05), (32, 0.025), (64, 0.0125): SWIRL both orders >= 1.9; SECT-M both orders >= 1.8
   (the spatial orders of the smoke study are 1.878 and 1.921 on this sequence; 1.8 leaves the temporal part no room to lower the order by more than 0.08).
-* **R4** no-harm on the sector, 16 x 16 PISO, dt in {0.05, 0.025, 0.0125}: exact velocity and pressure error with K <= 1.05 x the default, SWIRL and SECT-M (6 + 6).
+* R4 no-harm on the sector, 16 x 16 PISO, dt in {0.05, 0.025, 0.0125}: exact velocity and pressure error with K <= 1.05 x the default, SWIRL and SECT-M (6 + 6).
 * The default rows (all options off) of R1, R1b, R2, R2b, R3 are printed with them.
 
 ### Decision rules (fixed now)

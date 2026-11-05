@@ -58,11 +58,11 @@ in its place.
 1. **The z 0.17 hub site is the hub trailing edge, not mid-chord.** The hub section runs from z 0.1000 (leading edge) to
    z 0.17160 (trailing edge) on both meshes. The label "hub mid-chord" used by ADRs 0111 and 0175-0180 should be read as
    "hub trailing edge".
-2. **B2**: the six site cells of ADR 0180 (c7, c57, c107, c157, c621, c1235) are all on C-block line `i = n_down - 1 = 7`,
+2. B2: the six site cells of ADR 0180 (c7, c57, c107, c157, c621, c1235) are all on C-block line `i = n_down - 1 = 7`,
    the first wake column downstream of the trailing edge (suction-side branch of the wake cut), rows `j` 0-3, layers
-   `k` 0-2 (r 0.1243-0.1256). The 66 cells of the two first wake columns at `k <= 2` (0.48 % of the mesh) carry **37.0 %**
+   `k` 0-2 (r 0.1243-0.1256). The 66 cells of the two first wake columns at `k <= 2` (0.48 % of the mesh) carry 37.0 %
    of `sum |du|^2` at iteration 1000; the last chord columns at `k <= 2` 3.4 %, the leading-edge columns at `k <= 2` 0.1 %.
-3. **B3**: the 19 hub seeds of ADR 0178 (the F-R(0.25) hub cycle) are on lines `i` 5-7 (5 = the first wake column, 6-7
+3. B3: the 19 hub seeds of ADR 0178 (the F-R(0.25) hub cycle) are on lines `i` 5-7 (5 = the first wake column, 6-7
    the last two chord cells on the suction side) plus three cells at `i` 9, 10 and 26, rows `j` 1-7, layers `k` 0-3. The
    B3 default stall is at the leading-edge root (c17, c341, c665: `i = h - 1 = 17`, `j = 0`, `k` 0-2): the
    leading-edge columns at `k <= 2` carry 30.8 % of `sum |du|^2`, the first wake columns at `k <= 2` 11.9 %.
@@ -105,15 +105,15 @@ Nothing that it does only there. Two construction features meet at the site; eac
 
 - **G1, the radial stack-to-middle jump** (`graded_two_sided`). The two exact stack cells are `h1` and `1.2 h1`
   (`h1` 0.565 mm); the first middle cell is `h1 g^n_bl` = 0.814 mm and the next one jumps to the capped middle size:
-  - B3: 0.814 mm -> 29.4 mm, a **ratio of 36.2**, at r 0.1260;
-  - B2: 0.814 -> 3.49 -> 14.9 mm, **ratio 4.28 twice**, at r 0.1260 and 0.1295.
+  - B3: 0.814 mm -> 29.4 mm, a ratio of 36.2, at r 0.1260;
+  - B2: 0.814 -> 3.49 -> 14.9 mm, ratio 4.28 twice, at r 0.1260 and 0.1295.
   The site layers `k` 0-2 lie directly below that face. The same jump is at the tip end of the span and at every `i`.
   The family is not consistent here: the ratio changes 8.5 times from B3 to B2. On B3 it gives the `k = 2` faces a
   linear-interpolation weight of 0.97 (ADR 0180 reading 1: `kappa <= lambda` is anti-dissipative where `lambda > 1/2`).
 - **G2, the wake axial growth at the trailing edge** (`capped_cells(len_w, n_down, dz_te)`). The wake starts at the last
   chord spacing `dz_te` (B3 2.72 mm, B2 1.62 mm at the hub; cosine clustering at the trailing edge) and grows by a solved
-  ratio up to 1.5 times the mean wake cell. At the hub the first two wake steps are **3.85 and 3.69 on B3, 2.83 and 2.67
-  on B2**; on the chord side of the trailing edge the step is 2.0 (B3) and 1.9 (B2). The site cells are the first wake
+  ratio up to 1.5 times the mean wake cell. At the hub the first two wake steps are 3.85 and 3.69 on B3, 2.83 and 2.67
+  on B2; on the chord side of the trailing edge the step is 2.0 (B3) and 1.9 (B2). The site cells are the first wake
   column, so their downstream neighbour is 2.8-3.9 times longer. Every layer has this (mid-span B2: 3.5 and 2.9).
 - Smaller or absent:
   - G3, the trailing-edge line normal (a central difference across the closed trailing edge) turns the in-plane line
@@ -129,16 +129,16 @@ Nothing that it does only there. Two construction features meet at the site; eac
 ## Arms (fixed now)
 
 Two features, G1 and G2, give the arms. Each is a construction rule, applied by the generator the same way on B3 and on
-B2 (B3 calibration, B2 held out). Neither has a tuned parameter: each replaces a capped growth by **one geometric ratio
-solved to fill the length with the given count**, which for a fixed count and first cell is the distribution with the
+B2 (B3 calibration, B2 held out). Neither has a tuned parameter: each replaces a capped growth by one geometric ratio
+solved to fill the length with the given count, which for a fixed count and first cell is the distribution with the
 smallest largest neighbour ratio (a constant ratio; any other distribution of the same count and end cells has a larger
 step somewhere). Cell counts, the first cell `h1` and every other rule of `camber_seam_h` stay as they are.
 
 | Id | Opt-in value (`mesh.fan.c_grid_grading`) | Change | Feature |
 |---|---|---|---|
-| **M-R** | `"radial_geometric"` | span layers `h1 rho^min(k, n_span - 1 - k)`, `rho` solved (no stack, no cap); tip gap unchanged | G1 |
-| **M-W** | `"wake_geometric"` | wake axial cells `dz_te rho^m`, `rho` solved per layer (no cap) | G2 |
-| **M-RW** | `"radial_wake_geometric"` | both | G1 and G2 |
+| M-R | `"radial_geometric"` | span layers `h1 rho^min(k, n_span - 1 - k)`, `rho` solved (no stack, no cap); tip gap unchanged | G1 |
+| M-W | `"wake_geometric"` | wake axial cells `dz_te rho^m`, `rho` solved per layer (no cap) | G2 |
+| M-RW | `"radial_wake_geometric"` | both | G1 and G2 |
 
 Expected values (computed from the formulas, not from a mesh): M-R `rho` 2.914 (B3) and 1.810 (B2), so the largest
 radial step falls from 36.2 to 2.91 and from 4.28 to 1.81; the mid-span layers grow from 30.3 to 40.8 mm (B3) and from
@@ -151,13 +151,13 @@ The default (key absent or `"capped"`) is the unchanged construction. The key is
 
 ## Protocol (fixed now)
 
-The mesh cannot be changed during a run, so **every arm runs from iteration 1**: the default case (`case_toml(F3)` or
+The mesh cannot be changed during a run, so every arm runs from iteration 1: the default case (`case_toml(F3)` or
 `case_toml(F2)` of the harness: SST, SIMPLEC, `linear_upwind` + Barth-Jespersen, rotating frame, the ADR 0086 set-up)
-with only the `c_grid_grading` line added, **3000 iterations** (the 1000 + 2000 of ADR 0180). No relaxation, mask,
+with only the `c_grid_grading` line added, 3000 iterations (the 1000 + 2000 of ADR 0180). No relaxation, mask,
 selector, frozen limiter or scheme switch.
 
 Normalisation (stated because the switch protocol of ADRs 0175-0180 does not apply): the reference of mesh m is the
-**unchanged mesh's default run** of step 1:
+unchanged mesh's default run of step 1:
 - `rho_du,m = |du|_2 at iteration 3000 of the arm / |du|_2 at iteration 1000 of the unchanged-mesh run` (5.742 m/s B3,
   8.248 m/s B2); cell counts are equal, so the norms compare like with like;
 - `rho_med,m` = the arm's medians of `res_u` and `res_p` over iterations 2501-3000 against the reference medians
@@ -182,11 +182,11 @@ Normalisation (stated because the switch protocol of ADRs 0175-0180 does not app
 
 | Id | Limit |
 |---|---|
-| **C1** | B3 and B2: `res_u` and `res_p` both below 1e-5 at some iteration in 1001-3000 |
-| **C2** | B3 and B2: `is_converged()` true at iteration 3000 |
-| **C3** | B3 and B2: `rho_du <= 0.01` |
-| **RN** (refinement, not grow) | with `D_f,m = abs(f_end,m - f_ref,m) / abs(f_ref,m)`: `D_T,B2 <= max(D_T,B3, 0.002)` **and** `D_P,B2 <= max(D_P,B3, 0.005)` |
-| **SB** (sanity band) | on B3 and on B2: `D_T,m <= 0.02` and `D_P,m <= 0.08` |
+| C1 | B3 and B2: `res_u` and `res_p` both below 1e-5 at some iteration in 1001-3000 |
+| C2 | B3 and B2: `is_converged()` true at iteration 3000 |
+| C3 | B3 and B2: `rho_du <= 0.01` |
+| RN (refinement, not grow) | with `D_f,m = abs(f_end,m - f_ref,m) / abs(f_ref,m)`: `D_T,B2 <= max(D_T,B3, 0.002)` **and** `D_P,B2 <= max(D_P,B3, 0.005)` |
+| SB (sanity band) | on B3 and on B2: `D_T,m <= 0.02` and `D_P,m <= 0.08` |
 
 - `D` is the effect of the mesh change on the functional against the unchanged mesh's cycle mean. A mesh change that is a
   consistent modification must move the answer less on the finer mesh (RN, the floors of ADR 0180).
@@ -209,12 +209,12 @@ values (2.142 N m, 126.5 Pa, ADR 0075; not a limit), the ratio `D_B2 / D_B3`, an
 
 | Id | Prediction |
 |---|---|
-| **P1** | M-R misses C3 on B3: the B3 default stall is at the leading-edge root, which G1 does not change |
-| **P2** | M-R on B2: `rho_du` below 0.5 (the hub trailing-edge cycle weakens), but C1-C3 are missed |
-| **P3** | M-W misses C1-C3 on B3 and on B2, with `rho_du` above 0.5 on B2 |
-| **P4** | M-RW misses C1-C3 on B2 |
-| **P5** | no arm is accepted |
-| **PS** | M-R moves the B2 torque by more than M-W does (it changes every span layer) |
+| P1 | M-R misses C3 on B3: the B3 default stall is at the leading-edge root, which G1 does not change |
+| P2 | M-R on B2: `rho_du` below 0.5 (the hub trailing-edge cycle weakens), but C1-C3 are missed |
+| P3 | M-W misses C1-C3 on B3 and on B2, with `rho_du` above 0.5 on B2 |
+| P4 | M-RW misses C1-C3 on B2 |
+| P5 | no arm is accepted |
+| PS | M-R moves the B2 torque by more than M-W does (it changes every span layer) |
 
 Reasoning: the diagnosis finds no geometric outlier at the site; what singles it out is a near-stagnant corner pocket, so
 I expect the cycle to be a property of the discrete flow there more than of a mesh defect. G1 is the strongest
@@ -363,17 +363,17 @@ No default, limit or known miss of another ADR changes.
 
 ### Deviations
 
-1. **Amendment 1**: two of the three registered arms were withdrawn before any run because their meshes do not build
+1. Amendment 1: two of the three registered arms were withdrawn before any run because their meshes do not build
    (V3). The registration's G2 numbers were wall-curve ratios; amendment 1 corrected them to axial steps before any run.
-2. **V1 interpretation**: "reproduce step 1" was met by rerunning the 1000-iteration unchanged-mesh reference inside
+2. V1 interpretation: "reproduce step 1" was met by rerunning the 1000-iteration unchanged-mesh reference inside
    each arm test (about 45 s on B3, 100 s on B2, outside the arm's budget clock), not by reading the step-1 records.
-3. **V2 ran beside M-R-B3** in separate processes. The results are deterministic, and M-R-B3 stayed well inside its budget.
+3. V2 ran beside M-R-B3 in separate processes. The results are deterministic, and M-R-B3 stayed well inside its budget.
 4. The workspace gate was not run (fmt and clippy only on the touched targets: `rcfd-mesh` lib, `rcfd-api` lib and the
    new test). The local Jacobian was not built (optional).
-5. **Commit order.** Amendment 1 (f556d86) is committed before the generator change (dd73d0c). V3 was evaluated on the
+5. Commit order. Amendment 1 (f556d86) is committed before the generator change (dd73d0c). V3 was evaluated on the
    uncommitted working tree, and dd73d0c then recorded that tree unchanged. The amendment's "written after the generator
    change" is true of the working tree, not of the history.
-6. **The withdrawal reason.** Amendment 1 cites "the brief allows no extra arms". That clause is the stop rule after
+6. The withdrawal reason. Amendment 1 cites "the brief allows no extra arms". That clause is the stop rule after
    misses, and it does not forbid correcting a defective arm within the cap of three. The reason that stands is the other
    one: a replacement wake rule would have been chosen by trying rules until one builds.
 
@@ -452,7 +452,7 @@ results stay bit-identical" for the case hash; V2 did not list H1, and the works
 | A4 | lint | `cargo fmt --check` and `cargo clippy -D warnings` clean on the touched crate |
 | A5 | the workspace gate on a git archive of the final commit (with main merged) | 0 failed |
 
-A missed limit is reported, not hidden; no limit changes after a run.
+A missed limit is reported; no limit changes after a run.
 
 ## Addendum: results of the hash-neutral default (2026-11-05)
 

@@ -332,7 +332,7 @@ Consequences, registered now:
 
 Release builds; one run per registered set-up unless stated. Limits are the registered ones (with amendments 1 to 3), unchanged.
 
-Outcome in one paragraph. (1) A steady SIMPLE/SIMPLEC/coupled run that diverges is now stopped: the guard records the first trip (non-finite state, continuity growth,
+Outcome. (1) A steady SIMPLE/SIMPLEC/coupled run that diverges is now stopped: the guard records the first trip (non-finite state, continuity growth,
 velocity or pressure runaway) with a located record and the run-control driver (`rcfd run`, `run.headless`/MCP, the design loop) and the service background loop end the run
 `diverged` (exit 6) with the reason and a machine-readable `divergence` object; the 34D FAN-01 run that ran for 2 h stops at iteration 7 to 8 in about a second, and a diverged
 design candidate is a failed evaluation carrying the kind and the last good iteration. On the suite it never tripped on a converging run (22 trips, all on diverging set-ups;

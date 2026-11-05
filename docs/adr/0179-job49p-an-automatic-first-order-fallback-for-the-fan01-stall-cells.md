@@ -55,13 +55,13 @@ Requirements of the request:
 
 ## Candidate properties (registered; none scored yet)
 
-1. **Mesh quality**: the ADR 0172 / 0174 wall-cell metric, the largest face non-orthogonality, the aspect ratio.
+1. Mesh quality: the ADR 0172 / 0174 wall-cell metric, the largest face non-orthogonality, the aspect ratio.
    **Not used.** ADR 0174 already showed the stall cells are mild on them, and a static mesh property cannot follow a
    cycle that moves when the scheme changes (ADR 0175, 0177).
-2. **Limiter switching**: the number of iterations in a window in which a cell's Barth-Jespersen factor changes by
+2. Limiter switching: the number of iterations in a window in which a cell's Barth-Jespersen factor changes by
    more than 1e-3 (ADR 0110 recorded switching in 1 300 cells per iteration, far more than the stall cells). **Not
    used as the selector** for that reason; reported only.
-3. **Iterate oscillation (the selector)**: `a_c` = the largest `|u_c^n - u_c^(n-1)|` (speed change of cell c) over a
+3. Iterate oscillation (the selector): `a_c` = the largest `|u_c^n - u_c^(n-1)|` (speed change of cell c) over a
    round of iterations. A cell that keeps changing after the rest of the field has settled is, by definition, where the
    outer iteration fails to converge. It uses only the current solution. It needs no geometry, no ids and no
    coordinates, and it would apply unchanged to any case.

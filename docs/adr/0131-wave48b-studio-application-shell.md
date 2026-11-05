@@ -165,7 +165,7 @@ manifest (no compile). Limits are unchanged.
   `dx12`, `vulkan`). `cargo tree -e features -i wgpu@30.0.1 --workspace` lists `dx12`, `std`, `vulkan`, `wgsl`, as for
   `rcfd-render` alone before the change. `accesskit`, `links` and `persistence` are off: they add crates the ADR does not name (the
   layout and preferences are persisted by the Studio itself, B8).
-* `Cargo.lock`: one wgpu 30.x, **30.0.1** (and the frozen GUI's 0.19.4). 85 new packages, no package removed (compared by name
+* `Cargo.lock`: one wgpu 30.x, 30.0.1 (and the frozen GUI's 0.19.4). 85 new packages, no package removed (compared by name
   and version; the two `-version = "0.3.2"` lines of `git diff` are hunk boundaries of `objc2-metal` and `objc2-quartz-core` 0.3.2,
   which stay). Every new licence is on `deny.toml`'s list alone or as one choice, except `epaint_default_fonts` (below). One new
   package was published less than two weeks ago: `font-types` 0.12.7 (2026-10-15); it is held at 0.12.6 (2026-10-03) with

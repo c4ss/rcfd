@@ -60,11 +60,11 @@ Nothing of this job had been run. What I had read and computed:
 3. **ADR 0159's stored solutions** (`E:\projects\cfd\w48y-work\w\runs\*\output\solution.vtu`, read with a scratch script,
    no solver run). The median nuTilda/nu over the cells 5 to 40 chords upstream:
    - SA-a00: 23.8 (TMR 3);
-   - SA-a10: about **6.0e4**, the same in every far-field bin up to 50 chords. That is nu_t about 0.01 U c in the outer
+   - SA-a10: about 6.0e4, the same in every far-field bin up to 50 chords. That is nu_t about 0.01 U c in the outer
      flow, an "outer Reynolds number" of about 100.
 
    The wall-law friction drag from the stored y+ field (u_tau = y+ nu/dn, tau = u_tau^2 along the wall-cell velocity,
-   integrated over the 256 wall faces) is **0.00710** at 0 degrees and 0.00726 at 10 degrees. The reported total cd was
+   integrated over the 256 wall faces) is 0.00710 at 0 degrees and 0.00726 at 10 degrees. The reported total cd was
    0.0037 and 0.0396. The wall-cell y+ median is 42 (5.5 to 61) at 0 degrees.
 4. **ADR 0159's cd histories** (monitors.csv), checkpoint values:
 
@@ -81,7 +81,7 @@ Nothing of this job had been run. What I had read and computed:
    - CFL3D: cl 0 / 1.0909 / 1.5461 and cd 0.00819 / 0.01231 / 0.02124 at 0 / 10 / 15 degrees. Seven codes span
      0.00812-0.00830 at 0 degrees and 0.01225-0.01245 at 10 degrees.
    - The friction part at 0 degrees, 2 x integral of cf dx over the upper-surface file (by `w49a_sa_drag.py tmr`), is
-     **0.006831**. That leaves 0.001361 for pressure.
+     0.006831. That leaves 0.001361 for pressure.
    - Committed as `validation-data/reference/w49a_tmr_naca0012_sa_cfl3d_clcd.csv` and `..._cf_alpha0_upper.csv`.
 6. **ADR 0014's library flat plate** (S5). SA wall mode `auto` on a wall-function mesh (y+ 31.7 at x = 0.97) gave
    Cf(0.97) = 0.002863, +5.8 % against the TMR SA value 2.70565e-3. The y+ 0.5 mesh gave +2.97 %. That Cf is the model's
@@ -366,15 +366,15 @@ ADR 0159's SA drag was wrong for two independent reasons. Neither is the SA mode
 2. **H2 confirmed: the far-field nuTilda.** Nothing fixes nuTilda on a `freestream` far field. The median outer
    nuTilda/nu of ADR 0159's runs:
    - 23.8 at 0 degrees;
-   - **6.02e4** at 10 degrees, that is 0.01 U c of eddy viscosity in the whole outer flow.
+   - 6.02e4 at 10 degrees, that is 0.01 U c of eddy viscosity in the whole outer flow.
 
    With the corrected far field (amendment 1's opt-in `turbulence = "freestream"`) it is 3.000 at both angles. At
    10 degrees that changes the solution:
 
    | | A10 (ADR 0159's far field) | F10 (corrected) | TMR |
    |---|---|---|---|
-   | cl | 0.982 | **1.055** (-3.3 %) | 1.0909 |
-   | cd (`total_effective`) | 0.0445 | **0.0155** (+26 %) | 0.01231 |
+   | cl | 0.982 | 1.055 (-3.3 %) | 1.0909 |
+   | cd (`total_effective`) | 0.0445 | 0.0155 (+26 %) | 0.01231 |
    | pressure part of cd | 0.0374 | 0.0095 | |
 
    On 500 chords (C10) the corrected set-up gives cl 1.065 (-2.4 %) and cd 0.0135 (+10 %). So most of F10's remaining
@@ -431,7 +431,7 @@ ADR 0159's SA drag was wrong for two independent reasons. Neither is the SA mode
 
 - **SST at 0 degrees (S00)**, 4000-iteration cap, exit 5:
   - cd (default) 0.003637, ADR 0159's 0.0036;
-  - `total_effective` **0.008317**, +1.5 % against TMR's SA value;
+  - `total_effective` 0.008317, +1.5 % against TMR's SA value;
   - friction 0.006901 (+1.0 %), pressure 0.001416.
 
   SST's half-size drag in ADR 0159 was the same report effect. Its outer turbulence was not checked: SST was not the

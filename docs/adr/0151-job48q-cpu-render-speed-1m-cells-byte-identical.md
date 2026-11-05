@@ -248,7 +248,7 @@ Whole r2 processes took 23-30 s under S2L, against 10-12 s under U.
 **C-profile (Q0)**, r2's workload, 5 repetitions per condition.
 * The host was 64 % (U) and 100 % (S2L) busy at the start. The absolute times are therefore inflated: the base render took
   1.6 s under U here, against 0.729 s in C-r2.
-* What counts is the shares and the probe deltas.
+* Read the shares and the probe deltas instead.
 
 | Phase of the base code | U, median | share of the render | S2L, median |
 |---|---|---|---|
@@ -294,19 +294,19 @@ equals the base fill.
 
 ### Where the time goes
 
-1. **The render is the time**, in r2 and in r4: the polygons 72 %, colour and fill 14 %, freeing 9 %, everything else
+1. The render takes the time, in r2 and in r4: the polygons 72 %, colour and fill 14 %, freeing 9 %, everything else
    under 1 %.
-2. **Allocation is the largest single cost**, about 58 % of the base render in all:
+2. Allocation is the largest single cost, about 58 % of the base render in all:
    * per-cell `Vec`s in the polygons, about 0.66 s of 1.12 s;
    * per-scanline `Vec`s in the fill, about 0.14 s of 0.20 s;
    * freeing the 1M hulls, about 0.14 s.
-3. **The 24-point sort** of each hex is about half of the polygon phase once allocation is gone.
-4. **Colour mapping** is about 1 %. A lookup table would gain nothing, and an exact one is impossible for a continuous `t`
+3. The 24-point sort of each hex is about half of the polygon phase once allocation is gone.
+4. Colour mapping is about 1 %. A lookup table would gain nothing, and an exact one is impossible for a continuous `t`
    (Context). Not done.
-5. **PNG encode**: 40-70 ms under U and about 0.1 s under S2L. Unchanged by design.
-6. **The CLI's extras** each take under 2 ms: base64, serialisation, transport, the client's parse and print. Process start
+5. PNG encode: 40-70 ms under U and about 0.1 s under S2L. Unchanged by design.
+6. The CLI's extras each take under 2 ms: base64, serialisation, transport, the client's parse and print. Process start
    and connection take about 22 ms. `service.rs` and the CLI are therefore not changed.
-7. **Threads.** The base uses one thread. The polygon and fill phases, about 95 % of the render, can be split by cells and by
+7. The base uses one thread. The polygon and fill phases, about 95 % of the render, can be split by cells and by
    rows. `view`, the range and the colour bar stay serial: about 6 ms together.
 
 ### Design decisions
@@ -365,9 +365,9 @@ RAM.
 
 | Id | Limit | Negative control |
 |---|---|---|
-| Q4-r1 (primary) | median of the product with 1 thread / median of the base copy <= **0.43**, under U and under S2L | the base copy against itself gives 1 |
+| Q4-r1 (primary) | median of the product with 1 thread / median of the base copy <= 0.43, under U and under S2L | the base copy against itself gives 1 |
 | Q4-r2 | the same ratio with 2 threads <= 0.43, under U and S2L | as Q4-r1 |
-| Q4-a1 | under S2L, the median of the product with 1 thread <= **1.0 s** | C-r2: the base under S2L, 2.179 s |
+| Q4-a1 | under S2L, the median of the product with 1 thread <= 1.0 s | C-r2: the base under S2L, 2.179 s |
 | Q4-a2 | under S2L, the median of the product with 2 threads <= 1.0 s | as Q4-a1 |
 | Q4-v (validity of an S2L run) | the median of the base copy is >= 1.6 s in the same run | |
 
@@ -518,10 +518,10 @@ alternating.
 | Q5-a | S2L: after median <= 1.0 s | | 0.873 s | **pass** |
 
 The CI-faithful r4 estimate, as registered (reported, not a limit), is Q5 after (S2L) - Q4 default (S2L) + Q4 2 threads (S2L):
-0.873 - 0.394 + 0.619 = **1.098 s**.
+0.873 - 0.394 + 0.619 = 1.098 s.
 * This session's S2L was heavier than CI: the control `render.png` took 3.423 s here, against CI's 2.086 s for the same
   call.
-* Scaled by that same-run control, the estimate becomes 2.086 x 1.098 / 3.423 = **0.67 s** on CI.
+* Scaled by that same-run control, the estimate becomes 2.086 x 1.098 / 3.423 = 0.67 s on CI.
 
 ### Timing: the existing tests (R2, R2-u, R4)
 
@@ -596,32 +596,32 @@ files. Each was read.
 
 ### Deviations and notes
 
-1. **fmt.** `cargo fmt --all -- --check` stops here with "The filename or extension is too long (os error 206)": the worktree's
+1. `cargo fmt --all -- --check` stops here with "The filename or extension is too long (os error 206)": the worktree's
    path is deep, and the command line holds every file of the workspace. `cargo fmt -p rcfd-post -- --check` and
    `cargo fmt -p rcfd-cli -- --check` were run instead: clean. These are the only packages this job changed. The gate's fmt
    runs at CI's short path.
-2. **A shared host.** Other agents' builds and solver runs used the host during every run: 20-100 % CPU before the runs. The
+2. Other agents' builds and solver runs used the host during every run: 20-100 % CPU before the runs. The
    registered set-up records this but cannot prevent it.
    * The after session was busier than the control session. The control's `render.png` under S2L took 2.502 s in C-r4 and
      3.423 s in Q5's same-run control. The control's r2 under U took 0.729 s in C-r2 and 1.109 s in the R2 session.
    * Every comparison was therefore also made inside one session: Q4 interleaved, Q5 alternating, R2 back to back. The
      absolute limits held in the busier session.
-3. **S2L's contention varies from run to run.** The base render was 1.111 s in one C-r2 round, 1.03 s in Q0, and 1.102-2.280
+3. S2L's contention varies from run to run. The base render was 1.111 s in one C-r2 round, 1.03 s in Q0, and 1.102-2.280
    s in the R2 session's control runs. Both registered S2L runs that carry a validity check (Q4, Q5) were valid, so no
    repeat or amendment was needed.
-4. **Row 15 does not tell the two paths apart.** Without the non-finite path, the probe gives the same image (0 pixels
+4. Row 15 does not tell the two paths apart. Without the non-finite path, the probe gives the same image (0 pixels
    differ). That path's identity with the base therefore rests on its construction: it hands `convex_hull_into` the base's
    own list of face points. It also rests on row 15 passing on all 7 thread settings. No discriminating test exists.
-5. **Two threads under S2L were slower than one** (Q4, 0.619 s against 0.381 s). This is within the limits; see question 1.
-6. **Q0's absolute times are inflated** by the host load, as stated in part 2. The probe deltas carry the profile.
-7. **The control's r4 runs** (C-r4) used the control test binary. It reaches `target\release\rcfd.exe`, whose hash was checked
+5. Two threads under S2L were slower than one (Q4, 0.619 s against 0.381 s). This is within the limits; see question 1.
+6. Q0's absolute times are inflated by the host load, as stated in part 2. The probe deltas carry the profile.
+7. The control's r4 runs (C-r4) used the control test binary. It reaches `target\release\rcfd.exe`, whose hash was checked
    to be the control's (20B2DFE4) before every run. The after runs (R4) checked the change's (A6A077BE).
-8. **Processes of other sessions** (`rcfd.exe` runs of other worktrees) ran on the host during some runs; none was touched.
+8. Processes of other sessions (`rcfd.exe` runs of other worktrees) ran on the host during some runs; none was touched.
    No busy loop of this job was left running (checked after every series), and no `rcfd` process of this job was left at
    the end.
-9. **The worktree's start.** The worktree was created at origin/main 1248a76, not at local main. Before any work it was
+9. The worktree was created at origin/main 1248a76, not at local main. Before any work it was
    fast-forwarded to local main 6867e40, the base of every figure here.
-10. **The row 15 probe runs in the gate.** It is report-only, has no limit as registered, and takes under 0.1 s. An
+10. The row 15 probe runs in the gate. It is report-only, has no limit as registered, and takes under 0.1 s. An
     `#[ignore]` would match its role equally well; it was left as committed.
 
 ### Not run

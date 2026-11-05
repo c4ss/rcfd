@@ -20,7 +20,7 @@ steering the limits, every limit below is either taken from an earlier registere
 
 Decision. A new register type `field` with keys `field` (one of `velocity_magnitude`, `ux`, `uy`, `uz`, `pressure`, `temperature`) and the
 existing `above` and `below` (inclusive, 1e300 means unbounded). It selects the cells whose value lies in [above, below]. The field values come
-from the **initial fields**. They are taken once, in `Simulation::new`, after the uniform values, `initial.velocity_expression_*` and the
+from the initial fields. They are taken once, in `Simulation::new`, after the uniform values, `initial.velocity_expression_*` and the
 user-function `initialise` hook, and before any `initial.patches` are applied. Pressure is the kinematic pressure the solver stores. That one
 mask is used by every `initial.patches.<n>` entry and by `sources.<n>.zone = "register"`. The register is not re-evaluated during the run.
 

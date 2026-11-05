@@ -17,22 +17,22 @@ ADR 0159's SA drag had two independent causes. Neither is the SA model, its cons
      viscosity nu + nu_t,w, and the molecular value is only about u+/y+ of it.
    - On the aerofoil the reported friction is 0.32 of the applied friction; on the y+ 40 plate it is 0.35. At y+ 1 the
      two agree to 0.5 %.
-   - With the opt-in component `total_effective`, cd at 0 degrees is **0.00848**, +3.6 % against TMR's 0.00819. Friction
+   - With the opt-in component `total_effective`, cd at 0 degrees is 0.00848, +3.6 % against TMR's 0.00819. Friction
      is 0.00706 against 0.00683, pressure 0.00142 against 0.00136.
    - SST's 0.0036 is the same report effect: arm S00 gives 0.003637 by default and 0.008317 with `total_effective`.
 2. **From 4 degrees up (cd 1.4 to 4.6 times too high, rising for thousands of iterations): the far-field nuTilda.**
    - A `velocity = "freestream"` far field gets the turbulence role `zero_gradient`, so nothing holds nuTilda at 3 nu.
-   - Around the lifting aerofoil it grows to **6.0e4 nu** in the whole outer flow at 10 degrees (24 nu at 0 degrees). That
+   - Around the lifting aerofoil it grows to 6.0e4 nu in the whole outer flow at 10 degrees (24 nu at 0 degrees). That
      is an outer eddy viscosity of 0.01 U c.
    - It takes thousands of iterations to get there: the cd drift is this growth (A10: cd +19 % between iterations
      1001-2000 and 7001-8000).
    - With the opt-in role `boundaries.farfield.turbulence = "freestream"` (amendment 1: 3 nu on inflow faces, zero
      gradient on outflow faces):
-     - the outer nuTilda stays at **3.000 nu**;
+     - the outer nuTilda stays at 3.000 nu;
      - the run meets the residual targets at iteration 577 with cd constant to 5 digits;
-     - at 10 degrees cl goes from 0.982 to **1.055** (TMR 1.091, -3.3 %) and cd from 0.0445 to **0.0155** (TMR 0.0123,
+     - at 10 degrees cl goes from 0.982 to 1.055 (TMR 1.091, -3.3 %) and cd from 0.0445 to 0.0155 (TMR 0.0123,
        +26 %).
-   - On a 500-chord far field (C10) the same set-up gives cl **1.065** (-2.4 %) and cd **0.0135** (+10 %). Most of the
+   - On a 500-chord far field (C10) the same set-up gives cl 1.065 (-2.4 %) and cd 0.0135 (+10 %). Most of the
      remaining excess at 50 chords is the far-field extent; there is no point-vortex correction.
    - The remaining +10 % on 500 chords is not attributed. Untested candidates: the wall law at y+ 40, wall cells in the
      buffer layer, first-order nuTilda convection and the O-grid's resolution.

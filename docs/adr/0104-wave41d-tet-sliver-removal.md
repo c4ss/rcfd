@@ -39,15 +39,15 @@ The curvature remesh everywhere is ADR 0093's: `SizeField::Curvature { theta: 0.
 
 Hypotheses and the result that falsifies each, fixed before the runs:
 
-* **H1** the remesh output depends on the input vertex numbering. **D1**: remesh the in-code and the STL surface; compare the two
+* H1 the remesh output depends on the input vertex numbering. D1: remesh the in-code and the STL surface; compare the two
   remeshed surfaces as geometry: the sorted multiset of triangles, each a canonical (rotated to its smallest coordinate triple) triple of
   bitwise coordinates, plus the tag. H1 is falsified if the multisets are equal.
-* **H2** `tetrahedralize` depends on the numbering of a fixed geometric surface. **D0**: tetrahedralize the welded STL surface without
-  remeshing and compare to the in-code `cyl_in_box` (1137 cells). **D2**: on the in-code remeshed surface, (a) reverse the vertex ids
+* H2 `tetrahedralize` depends on the numbering of a fixed geometric surface. D0: tetrahedralize the welded STL surface without
+  remeshing and compare to the in-code `cyl_in_box` (1137 cells). D2: on the in-code remeshed surface, (a) reverse the vertex ids
   only, (b) reverse the triangle order only, (c) both; tetrahedralize each. Outputs are compared as geometry (sorted multiset of cells,
   each the sorted bitwise coordinates of its 4 vertices). H2 is falsified for the vertex ids if D0 and D2a give equal multisets, and
   for the triangle order if D2b does.
-* **D3** where the bad cells sit (default options, both paths): for every cell with minimum dihedral below 3 deg or radius-edge ratio
+* D3 where the bad cells sit (default options, both paths): for every cell with minimum dihedral below 3 deg or radius-edge ratio
   above 2, record: number of faces on the surface (0, 1, 2), number of vertices on the surface, whether a vertex is an interior Steiner
   point, whether the edge with the smallest dihedral angle is a surface edge, the tag of the nearest surface, and the geometry class
   of its centroid (nearest of: cylinder side, cylinder rim, cylinder cap, box face, box edge; interior if farther than 0.3 from all).
@@ -79,17 +79,17 @@ cases (Q7) are not run with the pass before that amendment.
 Pipelines: STL path = ADR 0093 `from_stl_file` then the curvature remesh; in-code path = `cyl_in_box` then the curvature remesh.
 "With the pass" = the frozen options of the amendment.
 
-* **W0** default bit-identity: default options (and the three size options) give exactly the nine fingerprints of the smoke table.
-* **Q1** STL path with the pass: remeshed surface closed manifold; volume of `to_mesh` equal to the remeshed surface volume within
+* W0 default bit-identity: default options (and the three size options) give exactly the nine fingerprints of the smoke table.
+* Q1 STL path with the pass: remeshed surface closed manifold; volume of `to_mesh` equal to the remeshed surface volume within
   1e-10 relative; 2 patches; every cell volume positive and `tet_quality` min volume positive; `check_mesh(..).is_ok()`; minimum
   dihedral at least 3.0 deg (ADR 0030 T5).
-* **Q2** STL path with the pass: fraction of cells with radius-edge ratio at most 2 at least 0.99 (ADR 0030 T5).
-* **Q3, Q4** the same as Q1, Q2 on the in-code path.
-* **Q5** patches preserved, both paths with the pass: per tag, the boundary area of the volume mesh equals the remeshed surface area
+* Q2 STL path with the pass: fraction of cells with radius-edge ratio at most 2 at least 0.99 (ADR 0030 T5).
+* Q3, Q4 the same as Q1, Q2 on the in-code path.
+* Q5 patches preserved, both paths with the pass: per tag, the boundary area of the volume mesh equals the remeshed surface area
   of that tag within 1e-10 relative; every boundary triangle centroid lies on a remeshed input triangle of the same tag within 1e-9
   (plane distance and edge tests as T1 of ADR 0030); `V - E + F - C = 2`.
-* **Q6** determinism with the pass: two runs of the STL path give equal points (bitwise) and cells.
-* **Q7** held-out no-regression with the pass: cube(2, 2), icosphere(1, 2) and the t5b torus (torus(2, 0.5, 48, 24) remeshed with
+* Q6 determinism with the pass: two runs of the STL path give equal points (bitwise) and cells.
+* Q7 held-out no-regression with the pass: cube(2, 2), icosphere(1, 2) and the t5b torus (torus(2, 0.5, 48, 24) remeshed with
   `Curvature { theta: 0.6, h_min: 0.05, h_max: 0.8 }`): volume within 1e-10 of the input surface volume, `check_mesh` ok, radius-edge
   fraction at least 0.99, minimum dihedral at least 3.0 deg, minimum volume positive.
 
@@ -99,17 +99,17 @@ Each limit is reported separately; a partial result (for example Q1 met, Q2 miss
 
 ## Diagnosis results (D0 to D3, default options, run after the registration above)
 
-* **D0**: the welded STL surface equals the in-code surface as geometry, and their tetrahedralizations are equal as geometry (1137
+* D0: the welded STL surface equals the in-code surface as geometry, and their tetrahedralizations are equal as geometry (1137
   cells each). The input numbering does not reach the tetrahedral mesh.
-* **D1**: the two remeshed surfaces both have 372 triangles and 190 points but are NOT equal as geometry: 272 of 372 triangles are
+* D1: the two remeshed surfaces both have 372 triangles and 190 points but are NOT equal as geometry: 272 of 372 triangles are
   common. H1 holds: the remesher depends on the vertex numbering. Mechanism (read from the code after the run, not isolated further):
   `surface_remesh` sorts the long edges to split by length and breaks ties by the vertex ids `(a, b)`; the box and cylinder grids have
   many edges of exactly equal length, so the tie-breaking, and from there the splits, collapses, flips and the Gauss-Seidel smoothing
   in vertex-id order, follow the numbering.
-* **D2**: on the fixed in-code remeshed surface, reversing the vertex ids, the triangle order or both gives a tetrahedral mesh equal as
+* D2: on the fixed in-code remeshed surface, reversing the vertex ids, the triangle order or both gives a tetrahedral mesh equal as
   geometry to the base (1061 cells, minimum dihedral 3.3395 deg, fraction 0.9274 in all four). H2 is falsified on this input. So the
   1.84 vs 3.34 deg difference of ADR 0093 comes entirely from the two different remeshed surfaces.
-* **D3** (cells failing a T5 limit): in-code 77 of 1061, STL 71 of 1115. Every in-code failure and all but one STL failure is a
+* D3 (cells failing a T5 limit): in-code 77 of 1061, STL 71 of 1115. Every in-code failure and all but one STL failure is a
   radius-edge failure (ratio over 2 but dihedral at least 3 deg), not a sliver. They sit next to the surface: near box faces 18 / 28
   (the STL count includes the sliver), near the cylinder side 40 / 28, at the cylinder rim 17 / 9, cylinder cap 0 / 1, interior 2 / 5
   (in-code / STL). Most have one surface face and one interior Steiner vertex (49 / 35) or two surface vertices and two interior Steiner vertices. The single STL sliver (1.84 deg, ratio

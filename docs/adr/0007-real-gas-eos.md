@@ -79,7 +79,7 @@ unchanged.
 **(R5) Real-gas subsonic duct.** ADR 0005 case (a1) geometry (planar duct, `h_in = h_e = 2 h_t`, `h_t = 0.05`,
 `L = 40 h_t`, slip adiabatic walls, 200 x 10 cells, linear upwind, SIMPLEC) with CO2 (PR), `p0 = 5 MPa`, `T0 = 400 K`,
 `cp0 = 940 J/kg/K`, `mu = 1.8e-5`, throat Mach number (real sound speed) 0.3. The independent reference integrates the
-isentropic path with the same EOS **in the test** by an ODE in `p` (`dh = dp/rho`, `dT/dp|_s = T (dv/dT)_p/cp`, with
+isentropic path with the same EOS in the test by an ODE in `p` (`dh = dp/rho`, `dT/dp|_s = T (dv/dT)_p/cp`, with
 `cp = dh/dT|_p` by differences of the departure enthalpy) from `(p0, T0)`, not through `s_dep`; the ODE result is
 also compared with the `s_dep` root solve to 1e-4 as a self-check. The mass flux function is `G(p) = rho u`
 with `u = sqrt(2 (h0 - h))`; `G_max` locates the critical (sonic) state; throat state from `M = 0.3`;

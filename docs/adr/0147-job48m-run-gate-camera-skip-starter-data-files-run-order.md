@@ -85,14 +85,14 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 2. **The camera on a rebuild** (`Viewport::replace_surface`, `viewport::same_bounds`, `preview::install`). A new surface of
    the case whose surface the viewport holds (`Preview::installed`, the case of the last install; the viewport still
    showing it) is installed with:
-   * the camera **kept** when the bounds are the same: target, distance, yaw, pitch and projection unchanged; near and far
+   * the camera kept when the bounds are the same: target, distance, yaw, pitch and projection unchanged; near and far
      follow the new box (`clip_planes`). "The same bounds" (`same_bounds`): in 2D the x and y extents, in 3D all three, each
      within `SAME_BOUNDS` = 1e-6 of the larger box's size. In 2D the z of the front is left out because it is the cell size
      (Context), so typing `nx` would otherwise always refit; 1e-6 of the box is at most 1/100 of a pixel of the largest
      texture (8192 px) and above the rounding of `len * i / n`.
-   * the camera **refit** when the bounds changed: `viewport::fit` of the camera, the double click's Fit: yaw, pitch and
+   * the camera refit when the bounds changed: `viewport::fit` of the camera, the double click's Fit: yaw, pitch and
      projection kind kept, framed to the new box. This is my reading of "refit" (question 1).
-   * the **start camera** when the 2D flag changed (orthographic face-on and perspective are different pictures), for
+   * the start camera when the 2D flag changed (orthographic face-on and perspective are different pictures), for
      another case, and when the viewport showed nothing before (a project opened, the Run side shown in between: the view
      starts again, as ADR 0144 question 3 (a) has it for the run).
    Counters `Stats::camera_kept`, `camera_refit`. Test switch `preview::Switches::restart_camera` (ADR 0138's rule).
@@ -111,7 +111,7 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 4. **The starter copies a case's data file** (`case_starter::Companion`, `create_with`, `target_line`; the maintainer's
    extra (a), the mechanism decided here):
    * `channel/profile_inlet.toml` is offered (480 cells, 2D, cheapest-first between `packed_bed` and `wedge`), with
-     `channel/profile_inlet.csv` as its **data file** (`Example::companions`). Both are embedded (`include_str!`, as ADR 0139
+     `channel/profile_inlet.csv` as its data file (`Example::companions`). Both are embedded (`include_str!`, as ADR 0139
      D2). `EXCLUDED` keeps the 6 descriptors.
    * The data file is written next to the new case under its own file name, `cases/profile_inlet.csv`, so the case's text
      stays byte-equal to the example (ADR 0139 D3) and its relative `file = "profile_inlet.csv"` finds it.

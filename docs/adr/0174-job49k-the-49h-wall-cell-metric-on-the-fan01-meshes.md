@@ -156,7 +156,7 @@ FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
 2. **The unlimited divergence: K1 is falsified as registered, with a split result.** The location agrees exactly: unlimited
    `linear_upwind` fails first in the largest-m cell of E3, and SV302's own search names that cell (D2). The level does not:
    750, against 6 900 to 21 000 where the aerofoil diverged and 1 600 where it did not. So ADR 0171's mechanism is not claimed
-   for FAN-01. What this does show is that a metric level taken from the aerofoil does not carry over to a swirling, strongly
+   for FAN-01. This does show that a metric level taken from the aerofoil does not carry over to a swirling, strongly
    off-axis flow, consistent with ADR 0171's own caveat that the metric alone does not predict divergence. Reported without a
    verdict: an extrapolation over the long side of the worst cell is a candidate on both meshes; testing it needs a run
    (Barth-Jespersen limited only at the top-m cells), which was not registered here.

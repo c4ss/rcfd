@@ -108,7 +108,7 @@ with a registered tolerance, measured and reported honestly; docs; tests; the ca
    rotation is never moved along (question 3).
 6. **D6 World coordinates.** No setting of the case is rotated. Flow and force directions, gravity, body force and the
    bulk-flow direction are world quantities by intent and get no warning. Settings that place something relative to the
-   geometry stay in world coordinates too and get a warning (id **MT101**, severity warning, category mesh, located at
+   geometry stay in world coordinates too and get a warning (id MT101, severity warning, category mesh, located at
    the setting) when the rotation is not 0: a non-empty position or axis list (`point`, `origin`, `position`, `centre`,
    `box_min`, `box_max`, `rotation_origin`, `rotation_axis`, `wall_rotation_origin`, `wall_rotation_axis`, `axis`,
    `reference_point`) anywhere in the settings; probe and moment reports (their point or origin, even at the default);
