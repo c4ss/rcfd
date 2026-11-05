@@ -28,6 +28,23 @@ fn state_schema() -> Value {
     json!({"type": "string", "enum": STATES})
 }
 
+/// The arguments of `new_case` (ADR 0186 G3), also `start_run`'s `new_case` object.
+fn new_case_schema() -> Value {
+    let examples: Vec<&str> = rcfd_workspace::examples::EXAMPLES.iter().map(|e| e.source).collect();
+    let templates: Vec<&str> = rcfd_workspace::templates::TEMPLATES.iter().map(|t| t.0).collect();
+    obj(
+        json!({
+            "name": {"type": "string", "description": "case name: letters, digits, '-' and '_', at most 64 characters, not taken in cases/ in any letter case; the file is cases/<name>.toml (.json for settings or a .json source)"},
+            "example": {"type": "string", "enum": examples, "description": "a shipped example, written byte for byte with the data files it reads"},
+            "template": {"type": "string", "enum": templates, "description": "a built-in template"},
+            "toml": {"type": "string", "description": "case file text (TOML)"},
+            "settings": {"type": "object", "description": "case settings as JSON, written as cases/<name>.json"},
+            "copy": {"type": "string", "description": "project-relative case file to copy byte for byte"}
+        }),
+        &["name"],
+    )
+}
+
 fn snapshot_props(extra: Value) -> Value {
     let mut p = json!({
         "run": run_schema(),
@@ -171,19 +188,27 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "new_case",
+            description: "Create a new case file cases/<name>.toml (or .json) in the project from exactly one source: a shipped example (byte for byte, with the data files it reads), a built-in template, TOML text, a settings object (written as JSON) or a copy of a project case. The case is validated before anything is written and no file is ever replaced. Returns its path and hash (the base_hash for edit_case).",
+            access: Access::WriteFiles,
+            schema: new_case_schema,
+        },
+        Tool {
             name: "start_run",
             description: "Queue a run of a project case with the project's run service and start the service if none is alive. set holds rcfd run --set overrides (path=value). Returns the run id.",
             access: Access::Execute,
             schema: || {
                 obj(
                     json!({
+                        "new_case": {"description": "instead of case: a new case made first, with the arguments of new_case, then run", "type": "object", "properties": new_case_schema()["properties"], "required": ["name"], "additionalProperties": false},
+                        "store": {"type": "string", "enum": ["plan", "none"], "description": "plan: the Studio's start plan stores the run's fields (about 100 snapshots, f32) unless the case or set gives the store; none: only what the case asks for. Default plan with new_case, none with case"},
                         "case": {"type": "string", "description": "project-relative case file"},
                         "set": {"type": "array", "items": {"type": "string"}, "description": "overrides path=value, in order"},
                         "priority": {"type": "integer"},
                         "threads": {"type": "integer", "minimum": 1, "maximum": 256},
                         "mem_mb": {"type": "integer", "minimum": 1}
                     }),
-                    &["case"],
+                    &[],
                 )
             },
         },

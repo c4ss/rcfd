@@ -2877,6 +2877,7 @@ dependencies = [
  "rcfd-runner",
  "rcfd-tsstore",
  "serde_json",
+ "toml",
 ]
 
 [[package]]

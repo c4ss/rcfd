@@ -92,7 +92,7 @@ entry.
 
 ## Project tools (`--project`)
 
-`rcfd-mcp --project <dir>` adds 17 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
+`rcfd-mcp --project <dir>` adds 18 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
 folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8). Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
 `clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only; without `--root`, `--project` also confines the existing tools' file access to the project); the run tools
@@ -100,7 +100,8 @@ also need `rcfd-runner` and `rcfd` in the same folder as `rcfd-mcp` (as `cargo i
 
 The tools are the commands and queries of the project workspace, the crate `crates/rcfd-workspace` that the Studio uses too
 ([ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md),
-[ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md)); `rcfd-mcp` keeps their descriptors.
+[ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md),
+[ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md)); `rcfd-mcp` keeps their descriptors.
 
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
 with 1004 before anything is created). Run arguments are run ids (`r-<yyyymmddThhmmss>-<4 hex>`). Errors added by these tools:
@@ -123,7 +124,8 @@ are paged, series decimated, files read in pages; a residual set or image over t
 | `read_project_file` | read | `path`, `hash` (of the whole file; the `base_hash` for edits), `size`, `offset`, `text`, `next_offset` (null at the end); pages of at most 32 000 bytes |
 | `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; an edit that cannot be placed in the file's own lines, such as a value written over several lines, is refused with 1003 and nothing is written), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run` |
 | `write_note` | write_files | `path`, `created`, `old_hash`, `new_hash`; under `notes/` only; no `base_hash` means "create, the file must not exist" |
-| `start_run` | execute | `run`, `case`, `state`; arguments `case`, `set` [`path=value`], `priority`, `threads`, `mem_mb`; starts the project's `rcfd-runner` when none is alive, with its output appended to `.rcfd/runner.log`; a runner that exits before it holds the project's lock gives an error result at once (code -32000, `data.run` the queued run) whose message has the runner's exit code and the end of that log ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md)) |
+| `new_case` | write_files | `path`, `hash` (the `base_hash` for `edit_case`), `bytes`, `from` (`example <source>`, `template <name>`, `toml`, `settings` or `copy <path>`), `data_files` [{`path`, `written`}]; arguments `name` (letters, digits, `-`, `_`; not taken in `cases/` in any letter case, else 1004) and exactly one of `example` (a shipped example of the repository's `cases/`, written byte for byte with the data files it reads), `template`, `toml`, `settings` (written as `cases/<name>.json`) or `copy` (a project case, byte for byte); the case is validated before anything is written (1003 with located `data.diagnostics`) and no file is ever replaced ([ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) G3) |
+| `start_run` | execute | `run`, `case`, `state`, plus `created` (the `new_case` result) when it made the case and `store` {`applied`, `set`, `snapshots`, `estimated_bytes`, `note`} when the start plan was asked for; arguments `case` or `new_case` (an object with `new_case`'s arguments: the case is made first, then run, in one call), `set` [`path=value`], `priority`, `threads`, `mem_mb`, `store` (`plan`: the Studio's field-store proposal of [ADR 0140](adr/0140-wave48g3-store-fields-by-default.md), about 100 snapshots in f32, put before `set` unless the case or a `set` entry gives `output.store_interval` or `output.store_time_interval`; `none`: only what the case asks for; default `plan` with `new_case` and `none` with `case`, ADR 0186 Q2); starts the project's `rcfd-runner` when none is alive, with its output appended to `.rcfd/runner.log`; a runner that exits before it holds the project's lock gives an error result at once (code -32000, `data.run` the queued run) whose message has the runner's exit code and the end of that log ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md)) |
 | `pause_run`, `resume_run`, `cancel_run` | execute | `run`, `requested`, `state`; 1002 for a run that already ended |
 | `wait_run` | read | `run`, `from`, `state`, `changed`, `terminal`, `waited_s`, `status`; returns when the state differs from `from` (default: the state at the call) or the run ended, at the latest after `timeout_s` (default 30, at most 60) |
 

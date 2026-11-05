@@ -2179,9 +2179,9 @@
     "deps": [
       "F-270"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "In project mode the MCP server creates a case in cases/ (from a shipped example, a built-in template, TOML, settings or a copy of a project case, never replacing a file) and starts a run of it through the runner, in one call if asked, with the same start plan as the Studio, so the run's fields are stored and the Studio lists the run and can read its snapshots (ADR 0173 R1, W3, check C7, decisions D7 and D2).",
-    "note": "ADR 0173 (proposed). Priority 2. The shared start plan changes start_run's output for cases with no store setting, so it needs the maintainer's approval (D7). Size M."
+    "note": "ADR 0173 (proposed). Priority 2. The shared start plan changes start_run's output for cases with no store setting, so it needs the maintainer's approval (D7). Size M. PARTIAL (ADR 0186, the registration of F-271, 2026-11-05, branch f271-new-simulations, not merged): the project tool new_case makes cases/<name>.toml (or .json) from a shipped example, the built-in template, TOML, settings or a copy, validated first and never replacing a file; start_run makes a new case and runs it in one call with the Studio's field-store plan, so its fields are stored, and the Studio's run poller and store reader show it (C7). Open: start_run of an existing case applies the plan only with store: \"plan\", because the default change waits for the maintainer's approval of D7 (ADR 0186 Q2); the project tool is named new_case because the session tool create_case is the only way to make a session, so D2's hiding is left to F-275 (ADR 0186 Q1); the Studio still uses its own copy of the start plan, pinned equal by a parity test, until the maintainer's Studio work lands."
   },
   {
     "id": "F-272",
