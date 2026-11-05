@@ -581,3 +581,54 @@ treatment is removed and PC-2 is an ignored `*_known_miss` test with the limit i
 PC-3N, PC-4N) that does not fire is a defective set-up of that control, corrected by an amendment before any re-run; it
 is never counted as a pass. A missed limit is reported with its number and kept as an ignored `*_known_miss` test with
 the limit intact. Results follow in the next addendum.
+
+### Addendum: results of amendment P-C (2026-11-05)
+
+Amendment c643075; code as registered in a225005 (the record, with the transient wall pressure); 4b0cec2 removes the
+transient wall pressure by the PC-2 rule. Files kept: `crates/rcfd-api/src/sources.rs` (scope, `has_rotating_frame`),
+`sim.rs` (the pair-mean flag, `pimple_solver` / `pimple_solver_mut`), `schema.rs` (doc strings), tests
+`crates/rcfd-api/tests/exp_rot_pc.rs`, T6 of `transient_sources.rs` as amended, and the `rotating_frame` lines of
+`docs/case-schema.md`. After 4b0cec2, `crates/rcfd-fv` is identical to 4e84c11. Every registered check was run once, in
+release, on a225005; the kept code was then run once more, because the removal changes the code under the checks.
+Nothing was re-run to pick a result.
+
+| Id | a225005 (registered run) | 4b0cec2 (kept code) | Limit | Result |
+|---|---|---|---|---|
+| PC-1 | `max abs(u - u_implicit)` 2.771e-13, `max abs(p)` 0 | same | 1e-9; 1e-9 | met |
+| PC-1b | `max abs(u - u_explicit)` 2.272e-14 | same | 1e-9 | met |
+| PC-1N | `max abs(u - u_implicit)` with one outer iteration 5.027e-1 | same | >= 1e-3 | met (PC-1 can fail) |
+| PC-2 | with the treatment: final speed 9.664e-13 `Omega R_max`, pressure error 1.598e-11 of the range (maxima over the steps 1.032e-3, 1.166e-2) | without it: 3.163e-13, 6.422e-12 (maxima over the steps 4.566e-4, 6.260e-3) | 1e-3; 1e-2 (final state) | met (recorded on the run without the treatment) |
+| PC-2N | without the treatment: 3.163e-13, 6.422e-12 | removed with the code | one PC-2 limit missed | not missed: the treatment is removed (registered rule) |
+| PC-2b | profile error 0.0622 % of the centre line; transverse dp -3.33697 against -3.33023 (+0.2022 %); `max abs(u_y)` 1.56e-5 of the centre line (reported) | 0.0622 %; -3.33705 (+0.2046 %); 1.53e-5 | 1 %; 1 % | met |
+| PC-3 | worst seam pair sum 1.064e-15 of the largest seam flux | 1.049e-15 | 1e-8 every step | met |
+| PC-3N | owner `rAU`: 6.827e-4 | 5.127e-4 | > 1e-8 at some step | met (PC-3 can fail) |
+| PC-4 | hub and shroud `max abs(phi_f)` 1.739e-16 `Omega r abs(S)` over 10 steps; non-vacuity 5.685e-2; 10 of 10 steps finite, no guard trip | same; finite | 1e-12; >= 1e-3 | met |
+| PC-4N | unprojected walls: 5.685e-2 `Omega r abs(S)` | same | >= 1e-3 | met (PC-4 can fail) |
+| PC-5 | accepted with `pimple`; located at `sources.frame.type` for `piso`, `mrf` with `pimple` and `piso`, and the fractional step; at `dynamic_mesh.enabled`; at `turbulence.model` for `k_omega_sst` with `pimple` | same | as registered | met |
+| PC-6 | both flags on with `rotating_frame` (alone and with an acceleration), both off with no source, acceleration, porous, actuator disk, Lorentz | the pair-mean flag as registered (the second flag went with its code) | as registered | met |
+| PC-0b | - | 10 of 10 bit hashes equal to 4e84c11 (steady SIMPLEC rest box 4081ff82445ae2e6, rotating channel 880e05f0c3c37a5a; `pimple` and `piso` with acceleration, porous, actuator disk, Lorentz) | identical | met |
+
+Reported with PC-4 (laminar E3, 5 040 cells, D5's dt, `bdf2`, 5 outer iterations): seam pair sum at most 8.1e-16 of the
+largest seam flux, continuity at most 3.0e-10, 0.33 to 0.36 s per step. This is not the registered V3 smoke of check H
+(B2, SST).
+
+**PC-2N, and the removal.** Without the transient wall pressure the rest state reached round-off, so by the registered
+rule the treatment is not needed on the transient path and was removed (4b0cec2). PC-2N was the decision run of the
+design's conditional item, so its rule applies; it is not counted as the pass of any check, and nothing was re-run. A
+likely cause, not proven here: the PIMPLE fixed-flux wall condition uses the face body force with no `rAU / rAtU` factor,
+and on this uniform box the `O(h^2)` errors of the extrapolated wall value and of the interpolated opposite face cancel
+for the quadratic pressure, so the wall cell's Green-Gauss gradient already equals the cell force. The steady miss of
+wave 9 had the SIMPLEC factor. PC-2 is a uniform Cartesian box. The curved, faceted walls of FAN-01 were not tested for
+this treatment, and the treatment raised the start-up maxima of PC-2 (1.0e-3 against 4.6e-4). The PC-2N test and the
+second PC-6 flag were removed with the code (`exp_rot_pc.rs` keeps PC-2 on the code without it).
+
+**Check H stays NOT RUNNABLE as registered.** P-C makes laminar `rotating_frame` with `pimple` runnable on a static mesh.
+D5 needs k-omega SST with `pimple`, which the case tree refuses (PC-5 records it). Open question 8 of amendment P-C is
+unchanged. D3's first-user check of P-C (V3, the 200-step smoke of H(dt)) could not be run.
+
+V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); `case_hashes_w48u.rs` untouched (no key added). The full
+release suites of `rcfd-fv` and `rcfd-api` on 4b0cec2 (`cargo test -p rcfd-fv -p rcfd-api --release --no-fail-fast`):
+1374 passed, 0 failed, 578 ignored, including `baseline_hashes` (3 passed, 1 ignored), `case_hashes_w48u` (1 passed), `transient_sources` (17 passed, 7 ignored), `exp_rot_pc` (10 passed), `exp_rot_pab`, `fan01_stall_w43c`, `dynamic_mesh`, `ale_flows`, `ale_gcl`, `w36b_limiter`, `sources`, `rotating_foundation`, `mrf`, `w35a_seam` and `w33b_default_bits`. `cargo fmt --check` (per package) and `cargo clippy --all-targets -D warnings` are clean on both crates.
+
+No construction check of P-C was missed, so P-C is kept (opt-in by the source type, defaults bit-identical). No
+`*_known_miss` test was added.
