@@ -451,3 +451,48 @@ amended above) and `case_hashes_w48u.rs` (H1 as amended above) pass. The coupled
 A miss is reported with its number and kept as an ignored `*_known_miss` test with the limit intact. A miss of V5, V5-a
 or PB-1 is a failed construction check of P-B, and D3's effort bound then applies; a miss of PA-2 or PA-3 is reported
 beside P-A. Results follow in the next addendum.
+
+### Addendum: results of amendment P-AB (2026-11-05)
+
+Code in 9c2a7e0 (amendment d35759b before it). Files: `crates/rcfd-fv/src/pimple.rs` (P-A), `crates/rcfd-fv/src/ale.rs`
+(P-B, `rest_velocity`, `set_rest_conditions`), `crates/rcfd-api/src/dynmesh.rs`, `sim.rs`, `schema.rs` (keys and
+checks), tests `crates/rcfd-fv/tests/exp_rot_pab.rs` and `crates/rcfd-api/tests/exp_rot_pab.rs`, the amended
+`case_hashes_w48u.rs` (H1) and `w36b_limiter.rs` (L0c), `docs/case-schema.md` (the lines of the two keys) and
+`docs/dynamic-mesh.md`. Every check was run once, in release; nothing was re-run to pick a result.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| V5 | C0 = 0 exactly (the static run has no radial or tangential velocity); rotating `max abs(c_theta)` 1.213e-12 m/s (1.28e-13 U); `max abs(c_r)` 1.25e-12 m/s; 360 of 360 steps | `max(10 C0, 1e-9 U)` = 9.478e-9 m/s | met |
+| V5-a | continuity max 4.16e-12; GCL max 6.27e-16 mean(V); seam pairs at step 1 3.65e-15 Omega r abs(S); wall sweep `max abs(m_f)` 2.10e-14 Omega r abs(S) (reported: round-off, as the amendment derived for chord faces) | 1e-9; 1e-12; 1e-12 | met |
+| V5-N | following walls: `max abs(c_theta)` 8.32 m/s; the guard did not stop the run (360 steps) | above 9.478e-9 m/s, or a guard stop | met (V5 can fail) |
+| V5-U | report only. At rest: `max abs(c_theta)` 8.53e-5 m/s, `max abs(c_r)` 1.76e-3 m/s; rotating: `max abs(c_theta)` 1.417e-4 m/s (1.50e-5 U), `max abs(c_r)` 1.68e-3 m/s; continuity max 3.9e-14 | none | reported |
+| PB-1 | steps 1 to 3: `max abs(phi_f - m_f)` 1.38e-17 Omega r_out abs(S_f); tangential part at most 1.72e-17 Omega r_out; `max abs(m_f)` 3.97e-2 Omega r_out abs(S_f) | 1e-12; 1e-12; non-vacuity >= 1e-3 | met |
+| PB-1N | plain `fixed` 0 walls: `max abs(phi_f - m_f)` 3.97e-2 Omega r_out abs(S_f) | >= 1e-3 | met (PB-1 can fail) |
+| PB-2 | every registered located error at its path; `moving_patches = []` accepted with a rigid prescribed motion, refused with `smoothing` and `six_dof` | as registered | met |
+| PB-3 | key absent and `[]`: equal settings value and content hash (07d69e902b96415d on the PB-1 case); `["inner", "outer"]`: 500fb527083c7fe5, written and round-tripped | as registered | met |
+| PA-0 | `piso` and `pimple`: key absent and `"none"` bit-identical in `ux`, `uy`, `p` and flux after 20 steps | bit-identical | met |
+| PA-1 | accepted for `piso`, `pimple` (and the limited run differs from the unlimited one in both) and `piso` with `dynamic_mesh`; located at the key for `piso` with `upwind`, with the fractional step, and `coupled` | as registered | met |
+| PA-2 | overshoot unlimited 0.1134, limited 0 (the limited top hat stays within [0, 1] on every step) | `O_LU >= 1e-3`, `O_BJ <= 0.5 O_LU` | met |
+| PA-3 | `max abs(u_moving - V - u_fixed)` 9.16e-16; 37 of 128 (cell, component) pairs with a limiter factor below 1 | 1e-9; at least 1 | met |
+| H1 | 41 recorded sources, 0 differ after the extended normalisation; C3: 30 of 30 valid sources differ raw in the text columns only; C4: the copy with `rest_patches = ["inner"]` differs from R0 | as the ADR 0181 addendum F2 form | met |
+
+**V5-U and the premise of the V5 deviation.** The amendment expected C0 to be round-off for the inflow variant (mirror
+symmetry of each cell). It is not: the static sector with a velocity inlet has `max abs(c_theta)` 8.53e-5 m/s, about
+5 % of its `max abs(c_r)`. A likely cause, not proven here, is the seam coupling, which PISO lags within a step (D4):
+the lag turns a radial velocity at the rotational seams into a tangential error, and the maximum over the steps
+includes the start-up. The rotating run has 1.66 times C0, so the literal inflow variant would also have met the
+registered V5 limit (`10 C0` = 8.53e-4 m/s). The amendment's reason for the deviation therefore did not apply on this
+mesh. The registered V5 (axially periodic, `c_r = 0`) stays the check of record, and it is the stricter one
+(`1e-9 U` against `10 C0`). These two numbers do not separate the rotating-mesh swirl source that the amendment
+derived from the seam effect; the rotating run exceeds the static one by 5.6e-5 m/s (5.9e-6 U). If the seam lag is the
+cause, the static empty passage I1 (which has seams) carries an L floor of its own; A1-L compares Y1 against that
+floor.
+
+V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); the full release test suites of `rcfd-fv`,
+`rcfd-mesh` and `rcfd-api` were run on 9c2a7e0, including the non-ignored tests of `fan01_stall_w43c.rs`,
+`dynamic_mesh.rs`, `ale_flows.rs`, `ale_gcl.rs`, `w36b_limiter.rs` and `case_hashes_w48u.rs`: 1557 passed, 0 failed, 622 ignored
+(`cargo test -p rcfd-fv -p rcfd-mesh -p rcfd-api --release`).
+`cargo fmt --check` and `cargo clippy --all-targets -D warnings` are clean on the three crates.
+
+No limit was missed, so no `*_known_miss` test was added. P-A and P-B are kept (opt-in, defaults bit-identical). D3's
+first-user checks (V2, V3 of arm 1) belong to the experiment and were not run.
