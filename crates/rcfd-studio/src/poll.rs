@@ -9,10 +9,10 @@
 use crate::runs::{self, residual_series, RunRow, StartPlan};
 use rcfd_project::records::{RunEvent, RunRecord, RunState, RunStatus};
 use rcfd_project::runid;
-use rcfd_runner::client::Client;
 use rcfd_runner::records::RunSettings;
 use rcfd_runner::runner::Config;
 use rcfd_runner::store::extra;
+use rcfd_workspace::runs::RunService as Client;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Seek, SeekFrom};

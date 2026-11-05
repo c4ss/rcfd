@@ -13,7 +13,7 @@
 use crate::runs::RunRow;
 use crate::studio::Studio;
 use rcfd_project::RunState;
-use rcfd_runner::client::Client;
+use rcfd_workspace::runs::RunService as Client;
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Instant;

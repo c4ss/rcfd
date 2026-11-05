@@ -9,8 +9,8 @@
 use crate::runs::{propose_store, PlanRoute, StartPlan, StoreEvery, StorePlan, STORE_SNAPSHOTS};
 use rcfd_api::case::Case;
 use rcfd_project::records::RunRecord;
-use rcfd_runner::client::Client;
 use rcfd_runner::records::RunSettings;
+use rcfd_workspace::runs::RunService as Client;
 use serde_json::Value;
 use std::path::Path;
 use std::sync::OnceLock;
