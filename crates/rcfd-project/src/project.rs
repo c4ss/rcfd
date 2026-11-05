@@ -284,6 +284,9 @@ impl Project {
             created: crate::time::rfc3339_ms(now),
             case_source: None,
             case_dir: None,
+            study: None,
+            variant: None,
+            condition: None,
         };
         atomic::write_json_new(&dir.join("run.json"), &record)?;
         let status = RunStatus {
