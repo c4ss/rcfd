@@ -196,3 +196,35 @@ the electric potential (Q4), reports that follow the options (Q3), a case key fo
 
 * [ADR 0016](0016-wave13-numerics.md) D2 and its F-208 results for what the options do on the manufactured problem.
 * [Case schema](../case-schema.md) for the keys.
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+Branch `f256-gradient-wiring`, after this text: `rcfd-fv` (K3) with its library test, then `rcfd-api` (K1, K2, K4, K5) with the
+tree tests and H2, then the documents. Not merged.
+
+**Built as registered.** K1 to K7 as written. `rcfd-fv`: `SweepExtras::gradient`, `EnergySolver::gradient` and
+`ScalarTransport::gradient` (all `None` by default), and one public helper `diffusion::laplacian_opt` (plain `laplacian` for
+`None`, `laplacian_with` otherwise) used by `sweep_ext` and by `radiation::iterate_with_implicit`. `rcfd-api`: the four keys in
+`schema.rs` (`hash_omit_default`), `sim::gradient_options` (K2) and `check_gradient_options` (R2 to R4, called in
+`Simulation::new` after the energy, scalar and phase-change states are built), and one line each in `sim.rs` (energy) and
+`scalars.rs` (`make`) that set the options. `ScalarState::sweeps_any` gives R3 its scalar part. No Studio file changed.
+Existing test edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/gradient_sweep_f256.rs` (1) and
+`crates/rcfd-api/tests/gradient_options_f256.rs` (5).
+
+**Differences found while building.** (1) G1 has one control more than registered: the phase-change case without the keys is
+accepted, so R3's refusal of that case is caused by the key. (2) G4 (iv) also asserts a control: ADR 0016's C2 changes the
+library result (1.717e-2), so its bit comparison can fail. (3) E1 and S1 solve the same equation (diffusivity 0.1, the same
+field data, relaxation 0.9, 60 sweeps on a zero flux), so their C2 numbers agree. (4) Every tree run equals its library run
+bit for bit (difference 0), not only to 1e-12.
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| P | mesh W: maximum non-orthogonality 29.641 degrees (at least 20) |
+| G1 | refused at the registered key, each with its message: R1 `minmod`, `wall`, `-1.0`, `"yes"` (schema); R2 `upwind` + O1, `central` + O3, `blended` + O4; R3 S1 without the scalar + O1, the phase-change case + O2; R4 K = 1 without the limiter. Accepted: E1 + O1, S1 + O1, E1 + O6, the phase-change case without the keys |
+| G2 | tree vs library, largest absolute difference (limit 1e-12): E1 control (no keys, library `None`) 0, O1 to O6 and C2 0 each; E2 control 0, C2 0; S1 control 0, C2 0 |
+| G3 | change against the default tree run (limit > 1e-9): E1 O1 8.106e-3, O2 7.414e-3, O3 1.770e-2, O4 2.150e-5, O5 1.724e-3, O6 1.207e-3, C2 1.500e-2; E2 C2 1.499e-2; S1 C2 1.500e-2. O5 (K 5) vs O6 (K 0.5) on E1: 7.724e-4 (limit > 1e-12) |
+| G4 | (i) the keys written at their defaults: settings hash unchanged (E1 `6a4cf3ebb71aa79b`, E2 `0b5356c774cf0c69`, S1 `2d39a6acfe080ca1`), 0 of 256 cells differ in a bit in each; (ii) `baseline_hashes.rs` unedited: 3 passed, 1 ignored (as before); (iii) H1 with H2: 41 recorded sources, 0 differ; C3 30 of 30 valid sources differ raw in the text columns only; C4 the seven non-default copies differ from R0; (iv) 0 of 512 cells differ (K mesh, n = 8) |
+| Can fail | the line of K4 that sets the options on the `EnergySolver` removed: G2 E1 O1 failed (tree vs library 8.106e-3, G3 change 0); `sim.rs` restored and equal byte for byte to the kept copy (`cmp`) |
+| Audit | `scripts/limit_audit.py`: no hit in the two new test files; its one hit in `case_hashes_w48u.rs` is the existing `return` of the R0 record mode (moved from line 266 to 272 by H2's lines) |
