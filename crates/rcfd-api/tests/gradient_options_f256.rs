@@ -105,6 +105,9 @@ fn c2() -> Set {
     }
 }
 
+/// A case text with extra `[solver]` lines.
+type CaseText = Box<dyn Fn(&str) -> String>;
+
 /// The four keys written at their defaults (G4 (i)).
 const DEFAULT_KEYS: &str = "gradient_face_correction = false\ngradient_secondary_limiter = \"none\"\ngradient_limiter_k = 5.0\ngradient_boundary = \"owner\"\n";
 
@@ -384,7 +387,7 @@ fn g2_g3_s1_poisson_scalar_c2() {
 /// G4 (i): the keys written at their defaults leave the settings hash and every bit of the result unchanged.
 #[test]
 fn g4_i_keys_at_their_defaults_change_nothing() {
-    let cases: [(&str, Box<dyn Fn(&str) -> String>, &str); 3] = [
+    let cases: [(&str, CaseText, &str); 3] = [
         ("E1", Box::new(|s: &str| energy_text(true, "linear_upwind", s)), "T"),
         ("E2", Box::new(|s: &str| energy_text(false, "linear_upwind", s)), "T"),
         ("S1", Box::new(|s: &str| scalar_text(true, s)), "s"),
