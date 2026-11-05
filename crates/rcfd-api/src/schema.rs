@@ -1977,7 +1977,7 @@ pub fn case_schema() -> Schema {
             "sources",
             Schema::named(
                 Schema::object()
-                    .doc("A momentum source restricted to a cell zone (SIMPLE/SIMPLEC, PISO and PIMPLE runs; rotating_frame and mrf steady only)")
+                    .doc("A momentum source restricted to a cell zone (SIMPLE/SIMPLEC, PISO and PIMPLE runs; rotating_frame steady or PIMPLE on a static mesh, ADR 0183 P-C; mrf steady only)")
                     .field(
                         "type",
                         Schema::enumeration("porous", &["porous", "rotating_frame", "mrf", "acceleration", "actuator_disk", "lorentz"])
@@ -2062,7 +2062,7 @@ pub fn case_schema() -> Schema {
                         Schema::enumeration("none", &["none", "solve"]).doc("lorentz: none = grad phi = 0 (J = sigma (E_ext + u x B), the fully developed / short-circuited approximation); solve = solve div(sigma grad phi) = div(sigma (E_ext + u x B)) with the boundaries.<patch>.electric conditions (insulated by default; a cell is pinned when no patch fixes the potential)"),
                     ),
             )
-            .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; SIMPLE/SIMPLEC, PISO and PIMPLE runs (ADR 0045; rotating_frame and mrf steady only)"),
+            .doc("Momentum sources (porous media, rotating reference frame, constant acceleration) acting in cell zones; SIMPLE/SIMPLEC, PISO and PIMPLE runs (ADR 0045; rotating_frame steady or PIMPLE on a static mesh, ADR 0183 P-C; mrf steady only)"),
         )
         .field(
             "components",

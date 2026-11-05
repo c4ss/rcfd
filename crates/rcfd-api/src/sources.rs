@@ -68,12 +68,19 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 format!("momentum sources are available with the algorithms simple, simplec, piso and pimple, not with \"{alg}\" (it has no momentum-source hook)"),
             );
         } else if matches!(alg.as_str(), "piso" | "pimple") {
-            // transient hook (ADR 0045): the frame-flux offset and component-diagonal correction of the rotating-frame
-            // sources exist in the steady kernel only; the fractional-step advance has no outer iteration to hook into
-            if matches!(kind.as_str(), "rotating_frame" | "mrf") {
+            // transient hook (ADR 0045): the frame-flux offset and component-diagonal correction of MRF zones exist in the
+            // steady kernel only; the fractional-step advance has no outer iteration to hook into. A relative-velocity
+            // rotating frame runs with pimple, its Coriolis term re-evaluated every outer iteration (ADR 0183 P-C); piso would
+            // evaluate it once per step
+            if kind == "mrf" {
                 bad(
                     p("type"),
                     format!("\"{kind}\" sources are available with the steady algorithms (simple, simplec) only, not with \"{alg}\""),
+                );
+            } else if kind == "rotating_frame" && alg == "piso" {
+                bad(
+                    p("type"),
+                    "\"rotating_frame\" sources are available with simple, simplec and pimple (ADR 0183 P-C: the Coriolis term is re-evaluated every outer iteration), not with \"piso\"; use pimple".into(),
                 );
             }
             if gs(case, "solver.time_advance") == "fractional_step" {
@@ -616,6 +623,13 @@ impl Sources {
             nu: gf(case, "physics.nu"),
             frame_flux,
         }))
+    }
+
+    /// Is a relative-velocity `rotating_frame` source configured? On the transient engine it switches on the seam body-force
+    /// pair mean (ADR 0183 P-C); unlike `wall_pressure_trapezoid` it is false for acceleration, actuator-disk and Lorentz
+    /// sources, whose transient runs stay unchanged.
+    pub fn has_rotating_frame(&self) -> bool {
+        self.items.iter().any(|i| matches!(i.kind, Kind::Rotating(_)))
     }
 
     /// Body acceleration and implicit sink for the current velocity field.

@@ -496,3 +496,144 @@ V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); the full relea
 
 No limit was missed, so no `*_known_miss` test was added. P-A and P-B are kept (opt-in, defaults bit-identical). D3's
 first-user checks (V2, V3 of arm 1) belong to the experiment and were not run.
+
+### Amendment P-C (2026-11-05): the set-up of P-C and of its checks, written before its code
+
+Job EXP-ROT P-C, branch `exprot-pc` from main 4e84c11. The D3 row of P-C names three items and the design (section 2)
+a fourth, conditional one. This amendment makes them specific enough to code and test. It changes no limit of this ADR,
+and no part of the experiment (arms, runs, functionals, verdicts) is run by this job. Arm 2 is a separate job.
+
+**What exists (read on 4e84c11, no run).** The ADR 0045 hook already evaluates every `sources.<n>` once per outer
+iteration on `piso` / `pimple` (`sim.rs`, `Sources::evaluate` inside the `step_with` hook). `RotatingFrame::add_force`
+gives the centrifugal part analytically at cell and face centres and the Coriolis part from the velocity it is given
+(boundary faces: the boundary velocity). Only `sources::check` refuses `rotating_frame` with `piso` / `pimple`. The
+transient kernel has the opt-in `PimpleSettings::coupled_body_pair_mean` (ADR 0080 F-BP: the body-force face term of
+every periodic face uses the coupled pair mean of `rAU`, the ADR 0076 Y5 term), which nothing in the API switches on. The
+steady wall-pressure treatment of the rotating frame (`SimpleSolver::wall_pressure_trapezoid`, wave 10: the wall value
+that enters the Green-Gauss gradient of a fixed-velocity wall cell is chosen so that the wall-normal gradient equals the
+cell-centre body force) is not on the transient path (ADR 0045 D1: not ported). A `moving_wall` with
+`wall_velocity_projection = "tangential"` builds the same fixed-value condition for every algorithm (`wall_motion.rs`).
+
+**P-C as built.**
+- `sources::check`: `rotating_frame` is accepted with `pimple` (constant density, iterative time advance). It stays a
+  located error at `sources.<n>.type` with `piso` (D3 names `pimple`; one evaluation per step is a lagged Coriolis
+  term), with `solver.time_advance = "fractional_step"` (existing rule), and with every other engine. `mrf` stays refused
+  with `piso` and `pimple`. A moving mesh stays refused (the existing located error at `dynamic_mesh.enabled`, momentum
+  sources), so P-C is the static mesh only. The line of ADR 0045 T6 (`transient_sources.rs`,
+  `t6_unsupported_combinations_get_located_errors`) that asserts the refusal of `("pimple", "rotating_frame")` is
+  superseded by D3; that case becomes `("piso", "rotating_frame")`. The other lines stay.
+- Frame acceleration: no new hook code. The existing hook calls `Sources::evaluate` at the start of every outer
+  iteration with the current iterate, so the Coriolis part is re-evaluated every outer iteration (and converges to the
+  implicit term with the outer iterations).
+- `Sources` gets a predicate that is true only when a `rotating_frame` source is configured. On the `pimple` engine it
+  switches on `PimpleSettings::coupled_body_pair_mean` (the D3 seam term) and the new
+  `PimpleSettings::wall_pressure_trapezoid` (below). Both are set once when the solver is built.
+  `Sources::wall_pressure_trapezoid` (true also for acceleration, actuator disk and Lorentz sources) is not used for this,
+  so every transient run with those sources stays bit-identical.
+- Transient wall pressure (the design's conditional item): `PimpleSettings::wall_pressure_trapezoid` (default false).
+  With a body force, the boundary values of the two Green-Gauss pressure gradients of `step_with` (momentum predictor and
+  velocity correction) are the steady `gradient_wall_values` construction, moved to a crate-level function that the
+  steady solver calls unchanged. The SIMPLEC wall correction of the steady path is not ported (PIMPLE has no `rAtU`).
+  The fixed-flux pressure condition, the face fluxes and the pressure equation are unchanged.
+- Casing `moving_wall` with the tangential projection: no new code; checked on this path (PC-4).
+- No case key is added or changed. The settings value and content hash of every case are unchanged, and
+  `case_hashes_w48u.rs` (H1) and `baseline_hashes.rs` are not edited. `Simulation::pimple_solver` / `pimple_solver_mut`
+  (diagnostics and tests, as `simple_solver` / `simple_solver_mut`) are added.
+
+**Gap that P-C does not close: check H needs transient SST.** D5 registers H with k-omega SST. `turb.rs` refuses
+`k_omega_sst` (and every transported RANS model) with `piso` / `pimple`, and ADR 0136 lists URANS as missing. D3 does not
+list it. After P-C the case tree runs `rotating_frame` with `pimple` laminar only, so check H as registered stays NOT
+RUNNABLE, and D3's first-user construction check of P-C (V3, the 200-step smoke of H(dt)) cannot be run. This amendment
+does not decide it. Open question 8 for the maintainer (the ADR has no recommendation, and none is given here): (a) a
+further prerequisite, k-omega SST with `pimple` on a static mesh (time derivative in the k and omega equations, updated
+within the outer iterations), registered by its own amendment before code; (b) H laminar, which changes D5 (D9 expects
+laminar flow behind a trailing edge at a chord Reynolds number of 1.4e5 to be unsteady, so the reading of H would
+change); (c) H NOT RUNNABLE, so row 3 of D9 does not fire.
+
+**Checks (limits fixed now; gate tests unless marked).** Every run is made once, in release.
+
+| Id | Set-up | Limit |
+|---|---|---|
+| PC-1 | case tree: `box_2d` 8 x 8, unit square, doubly periodic, `nu = rho = 1`, initial `u = (1, 0, 0)`, `rotating_frame` `angular_velocity = 0.5` about z, `centrifugal = false`; `pimple`, `euler`, `n_outer = 30`, `alpha_u = alpha_p = 1`, `upwind`, `dt = 0.1` (`a = 2 Omega dt = 0.1`), momentum and pressure `rel_tol = 1e-12`; 50 steps. Reference: the implicit-Euler recursion `u' = (u + a v)/(1 + a^2)`, `v' = (v - a u)/(1 + a^2)` | every step and cell: `abs(u - u_ref) <= 1e-9` (vector norm) and `abs(p) <= 1e-9` (the ADR 0045 T1 limits) |
+| PC-1b | PC-1 with `n_outer = 1` | every step and cell within `1e-9` of the explicit recursion `u' = u + a v`, `v' = v - a u` (the source is evaluated from the iterate at the start of the outer iteration) |
+| PC-1N | negative control: the PC-1b run against the implicit recursion | `max abs(u - u_ref) >= 1e-3` (PC-1's limit is missed) |
+| PC-2 | case tree: the wave-9 rest state (`sources.rs` `rest_text(24)`: closed unit box 24 x 24, walls `fixed` 0, `nu 0.05`, `rotating_frame` `angular_velocity = 3` about `(0.5, 0.5, 0)`, centrifugal on) on `pimple`, `euler`, `n_outer = 2`, `n_correctors = 2`, `upwind`, `dt = 0.05` (`nu dt / dy^2 = 1.44`, below the ADR 0045 bound), 400 steps (t = 20 s, one viscous time `L^2 / nu`), from rest | final state: speed `<= 1e-3 Omega R_max` and pressure error `<= 1e-2` of the range (the wave-9 criterion of the steady test); the maximum over the steps is reported |
+| PC-2N | PC-2 with `wall_pressure_trapezoid` switched off after the build | at least one PC-2 limit missed |
+| PC-2b | case tree: the wave-9 rotating channel (`sources.rs` `ROT_CHANNEL`: `box_2d` 4 x 40, periodic in x, plates at y = 0 and 1, `nu 0.1`, Coriolis only, `angular_velocity = 2`) with the drive as a `sources.drive` acceleration `(1, 0, 0)` (`physics.body_force` is steady-only), `pimple`, `euler`, `n_outer = 2`, `upwind`, `dt = 0.01` (`nu dt / dy^2 = 1.6`), 3000 steps (t = 30 s, three viscous times `h^2 / nu`; the slowest start-up mode decays by `exp(-3 pi^2)`), from rest | final state: profile error `<= 1 %` of the centre-line velocity, and the transverse pressure difference within `1 %` of `-2 Omega` times the integral of the parabola (the registered wave-9 limits) |
+| PC-3 | case tree: `annulus_3d_sector` 8 x 6 x 8, `r_in 0.5`, `r_out 1.0`, `lz 0.5`, 40 deg, `nu 0.01`, `rotating_frame` `angular_velocity = 2`, centrifugal on; inlet `zmin` fixed `(2 y + 0.2 x, -2 x + 0.2 y, 1 + y)` m/s (relative frame; not axisymmetric and with a radial part, so the two sides of a seam differ); outlet `zmax` pressure 0, zero-gradient velocity; `inner` fixed 0; `outer` `moving_wall` at rate `-2` with the tangential projection; `pimple`, `bdf2`, `n_outer = 3`, `n_correctors = 2`, `linear_upwind` with `barth_jespersen`, `dt = 0.05`, 10 steps. Quantity: `max abs(phi_f + phi_g) / max abs(phi_f)` over the `theta_min` / `theta_max` pairs | every step `<= 1e-8` (ADR 0080 P1) |
+| PC-3N | negative control: PC-3 with `coupled_body_pair_mean` switched off after the build | above `1e-8` at some step |
+| PC-4 | case tree: the ADR 0086 empty passage E3 (the `fan01_gci_w37c.rs` F3 counts, `camber_seam_h`, no blade), laminar (the `[turbulence]` block and the boundary turbulence lines removed), `rotating_frame` at Omega, hub and shroud `moving_wall` at `-Omega` with the tangential projection, the inlet and initial state of ADR 0086, `pimple`, `bdf2`, `n_outer = 5`, `linear_upwind` with `barth_jespersen`, `dt = 4.605e-5` s (D5's dt), 10 steps | every step, every hub and shroud face: `abs(phi_f) <= 1e-12 Omega r_f abs(S_f)`; non-vacuity: `max abs((Omega e_z x r_f) . n_f) / (Omega r_f) >= 1e-3` on those faces (ADR 0113: 1.84e-2 / 4.5e-3); every step finite with no guard trip. Reported: the seam pair sums (the PC-3 quantity), continuity, wall seconds per step |
+| PC-4N | negative control: PC-4 with hub and shroud `velocity = "fixed"` and `velocity_expression_x/y = Omega y, -Omega x` (the same rigid wall velocity, not projected) | `max abs(phi_f) / (Omega r_f abs(S_f)) >= 1e-3` on hub and shroud (PC-4's limit is missed) |
+| PC-5 | case tree, scope | accepted: `rotating_frame` with `pimple`; located at `sources.<n>.type`: `rotating_frame` with `piso`, `mrf` with `pimple` and with `piso`, `rotating_frame` with `pimple` and `time_advance = "fractional_step"`; located at `dynamic_mesh.enabled`: `rotating_frame` with `pimple` and a dynamic mesh; located at `turbulence.model`: `k_omega_sst` with `pimple` and `rotating_frame` (the gap above, recorded) |
+| PC-6 | case tree, the flags of the built `pimple` solver | `rotating_frame` (alone, and with an acceleration): both flags true; no source, `acceleration`, `porous`, `actuator_disk`, `lorentz`: both false |
+| PC-0b | scratch (not committed): bit hash of `ux`, `uy`, `p` and the flux on a `git archive` of 4e84c11 and on the final tree, separate target directories, built one after the other: steady SIMPLEC `rest_text(24)` and `ROT_CHANNEL` (200 iterations each); `pimple` with an acceleration, a porous, an actuator-disk and a Lorentz source (`plates_text` of `transient_sources.rs`, 20 steps) | bit-identical |
+
+V0 for P-C: `baseline_hashes.rs` unchanged and passing; the non-ignored tests of `fan01_stall_w43c.rs`, `dynamic_mesh.rs`,
+`ale_flows.rs`, `ale_gcl.rs`, `w36b_limiter.rs`, `case_hashes_w48u.rs` (untouched), `exp_rot_pab.rs`, `sources.rs`,
+`rotating_foundation.rs`, `mrf.rs`, `transient_sources.rs` (T6 as amended above), `w35a_seam.rs` and the `rcfd-fv`
+fingerprint tests pass; the full release suites of `rcfd-fv` and `rcfd-api`.
+
+**Classes.** V0, PC-0b, PC-1, PC-1b, PC-2b, PC-3, PC-4, PC-5 and PC-6 are the construction checks of P-C: a miss is a
+failed construction check, and D3's effort bound applies (P-C removed; H NOT RUNNABLE for that reason too). PC-2 and
+PC-2N decide the transient wall pressure only: it is kept if PC-2 meets and PC-2N misses. If PC-2N meets, the treatment
+is not needed on the transient path and is removed, and PC-2 is recorded on the run without it. If PC-2 misses, the
+treatment is removed and PC-2 is an ignored `*_known_miss` test with the limit intact. A negative control (PC-1N, PC-2N,
+PC-3N, PC-4N) that does not fire is a defective set-up of that control, corrected by an amendment before any re-run; it
+is never counted as a pass. A missed limit is reported with its number and kept as an ignored `*_known_miss` test with
+the limit intact. Results follow in the next addendum.
+
+### Addendum: results of amendment P-C (2026-11-05)
+
+Amendment c643075; code as registered in a225005 (the record, with the transient wall pressure); 4b0cec2 removes the
+transient wall pressure by the PC-2 rule. Files kept: `crates/rcfd-api/src/sources.rs` (scope, `has_rotating_frame`),
+`sim.rs` (the pair-mean flag, `pimple_solver` / `pimple_solver_mut`), `schema.rs` (doc strings), tests
+`crates/rcfd-api/tests/exp_rot_pc.rs`, T6 of `transient_sources.rs` as amended, and the `rotating_frame` lines of
+`docs/case-schema.md`. After 4b0cec2, `crates/rcfd-fv` is identical to 4e84c11. Every registered check was run once, in
+release, on a225005; the kept code was then run once more, because the removal changes the code under the checks.
+Nothing was re-run to pick a result.
+
+| Id | a225005 (registered run) | 4b0cec2 (kept code) | Limit | Result |
+|---|---|---|---|---|
+| PC-1 | `max abs(u - u_implicit)` 2.771e-13, `max abs(p)` 0 | same | 1e-9; 1e-9 | met |
+| PC-1b | `max abs(u - u_explicit)` 2.272e-14 | same | 1e-9 | met |
+| PC-1N | `max abs(u - u_implicit)` with one outer iteration 5.027e-1 | same | >= 1e-3 | met (PC-1 can fail) |
+| PC-2 | with the treatment: final speed 9.664e-13 `Omega R_max`, pressure error 1.598e-11 of the range (maxima over the steps 1.032e-3, 1.166e-2) | without it: 3.163e-13, 6.422e-12 (maxima over the steps 4.566e-4, 6.260e-3) | 1e-3; 1e-2 (final state) | met (recorded on the run without the treatment) |
+| PC-2N | without the treatment: 3.163e-13, 6.422e-12 | removed with the code | one PC-2 limit missed | not missed: the treatment is removed (registered rule) |
+| PC-2b | profile error 0.0622 % of the centre line; transverse dp -3.33697 against -3.33023 (+0.2022 %); `max abs(u_y)` 1.56e-5 of the centre line (reported) | 0.0622 %; -3.33705 (+0.2046 %); 1.53e-5 | 1 %; 1 % | met |
+| PC-3 | worst seam pair sum 1.064e-15 of the largest seam flux | 1.049e-15 | 1e-8 every step | met |
+| PC-3N | owner `rAU`: 6.827e-4 | 5.127e-4 | > 1e-8 at some step | met (PC-3 can fail) |
+| PC-4 | hub and shroud `max abs(phi_f)` 1.739e-16 `Omega r abs(S)` over 10 steps; non-vacuity 5.685e-2; 10 of 10 steps finite, no guard trip | same; finite | 1e-12; >= 1e-3 | met |
+| PC-4N | unprojected walls: 5.685e-2 `Omega r abs(S)` | same | >= 1e-3 | met (PC-4 can fail) |
+| PC-5 | accepted with `pimple`; located at `sources.frame.type` for `piso`, `mrf` with `pimple` and `piso`, and the fractional step; at `dynamic_mesh.enabled`; at `turbulence.model` for `k_omega_sst` with `pimple` | same | as registered | met |
+| PC-6 | both flags on with `rotating_frame` (alone and with an acceleration), both off with no source, acceleration, porous, actuator disk, Lorentz | the pair-mean flag as registered (the second flag went with its code) | as registered | met |
+| PC-0b | - | 10 of 10 bit hashes equal to 4e84c11 (steady SIMPLEC rest box 4081ff82445ae2e6, rotating channel 880e05f0c3c37a5a; `pimple` and `piso` with acceleration, porous, actuator disk, Lorentz) | identical | met |
+
+Reported with PC-4 (laminar E3, 5 040 cells, D5's dt, `bdf2`, 5 outer iterations): seam pair sum at most 8.1e-16 of the
+largest seam flux, continuity at most 3.0e-10, 0.33 to 0.36 s per step. This is not the registered V3 smoke of check H
+(B2, SST).
+
+**PC-2N, and the removal.** Without the transient wall pressure the rest state reached round-off, so by the registered
+rule the treatment is not needed on the transient path and was removed (4b0cec2). PC-2N was the decision run of the
+design's conditional item, so its rule applies; it is not counted as the pass of any check, and nothing was re-run.
+**A drafting conflict in the amendment, for the maintainer:** the amendment puts PC-2N under two rules that disagree on
+this outcome, its own decision rule (PC-2N meets: the treatment is removed) and the generic clause that a negative control
+which does not fire is a defective set-up to be amended before any re-run. The generic clause was meant for the controls
+that show a check can fail (PC-1N, PC-3N, PC-4N); PC-2N answers the design's question whether the treatment is missing on
+the transient path. The specific decision rule was applied, and no amendment or re-run followed. A
+likely cause, not proven here: the PIMPLE fixed-flux wall condition uses the face body force with no `rAU / rAtU` factor,
+and on this uniform box the `O(h^2)` errors of the extrapolated wall value and of the interpolated opposite face cancel
+for the quadratic pressure, so the wall cell's Green-Gauss gradient already equals the cell force. The steady miss of
+wave 9 had the SIMPLEC factor. PC-2 is a uniform Cartesian box. The curved, faceted walls of FAN-01 were not tested for
+this treatment, and the treatment raised the start-up maxima of PC-2 (1.0e-3 against 4.6e-4). The PC-2N test and the
+second PC-6 flag were removed with the code (`exp_rot_pc.rs` keeps PC-2 on the code without it).
+
+**Check H stays NOT RUNNABLE as registered.** P-C makes laminar `rotating_frame` with `pimple` runnable on a static mesh.
+D5 needs k-omega SST with `pimple`, which the case tree refuses (PC-5 records it). Open question 8 of amendment P-C is
+unchanged. D3's first-user check of P-C (V3, the 200-step smoke of H(dt)) could not be run.
+
+V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); `case_hashes_w48u.rs` untouched (no key added). The full
+release suites of `rcfd-fv` and `rcfd-api` on 4b0cec2 (`cargo test -p rcfd-fv -p rcfd-api --release --no-fail-fast`):
+1374 passed, 0 failed, 578 ignored, including `baseline_hashes` (3 passed, 1 ignored), `case_hashes_w48u` (1 passed), `transient_sources` (17 passed, 7 ignored), `exp_rot_pc` (10 passed), `exp_rot_pab`, `fan01_stall_w43c`, `dynamic_mesh`, `ale_flows`, `ale_gcl`, `w36b_limiter`, `sources`, `rotating_foundation`, `mrf`, `w35a_seam` and `w33b_default_bits`. `cargo fmt --check` (per package) and `cargo clippy --all-targets -D warnings` are clean on both crates.
+
+No construction check of P-C was missed, so P-C is kept (opt-in by the source type, defaults bit-identical). No
+`*_known_miss` test was added.
