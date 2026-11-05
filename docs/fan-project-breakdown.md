@@ -60,7 +60,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | C4 | Metrics extraction: flow rate, total and static pressure rise, torque, shaft power, efficiency, from any solution | partial (F-123) |
 | C5 | Fan curve sweep with restart, and the operating point against a system curve | partial (F-095 parametric runner; F-113 lumped fan curves) |
 | C6 | Convergence and failure reporting that a loop can act on (located reasons) | done (ADR 0067, 0077) |
-| C7 | **Reduced-order tier**: blade-element or Euler-equation performance with loss correlations; gives a fan curve in milliseconds, a bound the CFD must respect, and a way to run the whole design loop before CFD converges | partial (F-218 actuator disk, F-113) |
+| C7 | Reduced-order tier: blade-element or Euler-equation performance with loss correlations; gives a fan curve in milliseconds, a bound the CFD must respect, and a way to run the whole design loop before CFD converges | partial (F-218 actuator disk, F-113) |
 
 ### D. Noise
 
@@ -105,7 +105,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | H1 | Objective definition: flow at the system operating point over a range of impedances, noise, power, vibration, robustness to tolerances | missing |
 | H2 | Optimisers: Nelder-Mead, DOE exist; CMA-ES and multi-objective are todo | partial (F-095, F-249, F-260) |
 | H3 | Surrogate model (for example Gaussian process) fitted to past evaluations to choose the next variant cheaply | missing |
-| H4 | **Design ledger**: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | missing |
+| H4 | Design ledger: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | missing |
 | H5 | Assistant tools: create variant, run sweep, fetch metrics, compare, propose next, read history | partial (MCP/assistant layer exists; design-loop tools partial) |
 | H6 | Long-horizon improvement: Claude reads the ledger, forms hypotheses (for example "more sweep lowers tonal noise at equal flow"), tests them, and records what it learned | missing |
 | H7 | Fidelity management: use C7 to screen, CFD to confirm, with the disagreement between them logged and used to correct C7 | missing |

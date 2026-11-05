@@ -234,55 +234,55 @@ Each step's ADR repeats the split for its items, with the item notes to add to `
 
 ### Alternative A: STL only
 
-*   **Pros:** the reader exists and is checked against VTK's reader (F-119).
-*   **Cons:** a binary STL file has one unnamed solid, so patches are lost. Multi-solid ASCII STL keeps names but is a
+*   Pros: the reader exists and is checked against VTK's reader (F-119).
+*   Cons: a binary STL file has one unnamed solid, so patches are lost. Multi-solid ASCII STL keeps names but is a
     less common export option.
 *   **Reason for rejection:** CUJ 4 needs one patch per object, which OBJ and glTF carry.
 
 ### Alternative B: third-party crates for OBJ and glTF
 
-*   **Pros:** maintained parsers with wider coverage of the formats.
-*   **Cons:** a new dependency changes `Cargo.lock`, which makes the fast tier of ADR 0182 select every package, and the
+*   Pros: maintained parsers with wider coverage of the formats.
+*   Cons: a new dependency changes `Cargo.lock`, which makes the fast tier of ADR 0182 select every package, and the
     house rules of ADR 0130 allow no new third-party crate without a decision. The subset needed (triangles, names,
     transforms) is small.
 *   **Reason for rejection:** both readers are written in the crate from the public specifications.
 
 ### Alternative C: patches from OBJ groups (`g`) by default
 
-*   **Pros:** some exporters write only groups.
-*   **Cons:** the parent design states that each OBJ object is one patch.
+*   Pros: some exporters write only groups.
+*   Cons: the parent design states that each OBJ object is one patch.
 *   **Reason for rejection:** objects are the default; groups are an option of the reader.
 
 ### Alternative D: one glTF patch per primitive
 
-*   **Pros:** in Blender, primitives follow material slots, so a user could mark patches by material.
-*   **Cons:** primitives have no name in glTF 2.0, so patch names would have to be made up from material names or indices.
+*   Pros: in Blender, primitives follow material slots, so a user could mark patches by material.
+*   Cons: primitives have no name in glTF 2.0, so patch names would have to be made up from material names or indices.
     A Blender object becomes a node with its name, which matches the OBJ rule.
 *   **Reason for rejection:** one patch per node. Material-based patches can be added later as an option.
 
 ### Alternative E: guess boundary types from patch names
 
-*   **Pros:** the Fluent and Gmsh readers do it (`common::guess_kind`), so cases need fewer lines.
-*   **Cons:** a guess can set a wrong boundary type silently.
+*   Pros: the Fluent and Gmsh readers do it (`common::guess_kind`), so cases need fewer lines.
+*   Cons: a guess can set a wrong boundary type silently.
 *   **Reason for rejection:** F-280's acceptance says boundary types are never guessed. The case names them.
 
 ### Alternative F: no welding in the readers
 
-*   **Pros:** the surface keeps the file's vertex numbering.
-*   **Cons:** glTF splits vertices at seams by design, so most exported closed bodies would arrive with free edges, and
+*   Pros: the surface keeps the file's vertex numbering.
+*   Cons: glTF splits vertices at seams by design, so most exported closed bodies would arrive with free edges, and
     `tetrahedralize` refuses a surface with free edges.
 *   **Reason for rejection:** bitwise welding merges only identical points, so it changes numbering, never geometry.
 
 ## Non-functional requirements
 
-*   **Robustness.** Readers follow the parser rules of ADR 0011 (H1 to H5 in `crates/rcfd-io/src/guard.rs`): file size cap
+*   Robustness. Readers follow the parser rules of ADR 0011 (H1 to H5 in `crates/rcfd-io/src/guard.rs`): file size cap
     1 GiB, item caps, checked arithmetic before any allocation sized from the file, no panic on any input (checked by
     `guard::fuzz_no_panic` on every fixture).
-*   **Determinism.** The same bytes and unit give the same `TriSurface`, bit for bit. No result depends on hash order.
-*   **Security.** No network access. Sidecar buffers resolve only inside the folder of the `.gltf` file.
-*   **Rollout.** Steps 1 to 3 add library code and a CLI command; no existing default changes. Step 4 adds optional case
+*   Determinism. The same bytes and unit give the same `TriSurface`, bit for bit. No result depends on hash order.
+*   Security. No network access. Sidecar buffers resolve only inside the folder of the `.gltf` file.
+*   Rollout. Steps 1 to 3 add library code and a CLI command; no existing default changes. Step 4 adds optional case
     keys; cases without them keep today's behaviour and case hash.
-*   **Cost.** Step 1 adds no dependency and no heavy test; its tests take seconds.
+*   Cost. Step 1 adds no dependency and no heavy test; its tests take seconds.
 
 ## Risks and mitigations
 

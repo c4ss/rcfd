@@ -31,7 +31,7 @@ Stokes drag `3 pi mu d (u - v)` divided by the mass `pi rho_p d^3 / 6`).
 
     dv/dt = f(Re) (u - v) / tau_p + (1 - rho_f/rho_p) g,   dx/dt = v,   Re = rho_f d |u - v| / mu,   f(Re) = C_D Re / 24.
 
-The gravity term is gravity plus buoyancy (Archimedes) only. Not included (stated, not hidden): added mass, pressure-gradient
+The gravity term is gravity plus buoyancy (Archimedes) only. Not included: added mass, pressure-gradient
 (fluid acceleration) force, Basset history, lift, Brownian motion, turbulent dispersion, particle rotation, particle-particle and
 particle-to-fluid coupling (one-way only).
 
@@ -305,7 +305,7 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   at nearly the settling speed, while the uniform fluid velocity (0.3, 0, -0.2) pushes them into that wall. Each reflection is followed by a
   return to the wall in a time that shrinks, so more than `max_bounces` reflections occur in one flow step (Zeno accumulation of resting
   contact). This matches the observation but the mechanism is read from positions and velocities, not from a bounce-by-bounce trace.
-  Resting contact is not modelled (F-128 wall interaction); the parcels are counted and reported, not hidden.
+  Resting contact is not modelled (F-128 wall interaction); the parcels are counted and reported.
 * The ADR text of D6 above says "more than 100 reflections"; the implementation and `docs/particles.md` use 1000. This was a text
   inconsistency from the design stage, found now; the implementation value was never tuned.
 * The first-commit rows for PT14 and PT5c overstated what was tested: PT14 did not test the tree-hash sub-check and asserted only

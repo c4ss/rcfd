@@ -139,7 +139,7 @@ Run on the uncommitted D1 code (release, `target-w45c`), before this ADR was com
   p = 0 outlet is not a feasibility problem. Sector arms, 30 iterations each: F1 off / pair mean on: finite, res_u 4.8e-5, continuity
   6.1e-9; F1 on / pair mean on: finite, 5.5e-5, 1.1e-8; F1 on / pair mean off: finite, 5.5e-5, 1.1e-8. No sector-annulus difference
   was computed.
-* `w45c_smoke_key_on_the_fan_path` (rcfd-api): the solver flag after step 2 on E3 is **true with the key and false without** (the key
+* `w45c_smoke_key_on_the_fan_path` (rcfd-api): the solver flag after step 2 on E3 is true with the key and false without (the key
   reaches the kernel through `step()` on a mesh with cyclic faces; the first case-tree run of F1 on cyclic faces). E3 with the key, 40
   iterations: finite, no guard trip (res_u 1.2e-2). B3 with the key, 40 iterations: finite, no guard trip (res_u 9.5e-3).
 * No set-up is defective by the smoke; no amendment is needed before the registered runs.

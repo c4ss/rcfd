@@ -65,7 +65,7 @@ tool is a separate decision (the service method is available to any JSON-RPC cli
 
 ### D4 `postprocessing` (F-072)
 
-* `derived`: list, **opt-in** (default empty: default `solution.vtu` files do not change). Names: `vorticity` (cell vector
+* `derived`: list, opt-in (default empty: default `solution.vtu` files do not change). Names: `vorticity` (cell vector
   `vorticity`), `q_criterion` (cell scalar `q_criterion`), `total_pressure` (cell scalar `p_total`), `mach` (cell scalar
   `mach`), `wall_shear` (patch-face vector `wall_shear`), `wall_y_plus` (patch-face scalar `wall_y_plus`). Names do not
   clash with the existing arrays `y_plus` (turbulence, cell), `mach` (density-based and variable-density engines),
@@ -136,34 +136,34 @@ runs ignore the key). No existing case or test uses the combination (searched in
 
 ## Derivations and constants used by the checks
 
-* **Partition count balance.** For the unweighted `bisection`/`graph` strategies the part sizes differ by less than one cell
+* Partition count balance. For the unweighted `bisection`/`graph` strategies the part sizes differ by less than one cell
   from `N/n`, so imbalance `<= 1/floor(N/n)`; the sector strategies cut equal-count bands (difference `<= 1`, same bound).
   The test meshes have `N >= 400` and `n <= 16`, so the bound is `<= 1/25 = 0.04 < 0.05`, the library's registered limit.
   The graph refinement only moves cells into parts below `(1 + tolerance) W/n` with `tolerance = 0.03` and never lowers
   a part below one cell, so its imbalance is `<= max(seed, 0.03 + 1/(W/n))`; with `W/n >= 25` that is `<= 0.07`: the bound
   used for `graph` is therefore the registered 0.05 *plus the observation*, not a derivation. If the graph partitioner
   exceeds 0.05 on a case mesh this is a miss to be reported (the library's own tests got 0.030 worst case).
-* **Test meshes.** `Q1`: case generator `box_2d`, `nx = 40, ny = 10, lx = 4, ly = 1` (400 cells). `Q2`: case generator
+* Test meshes. `Q1`: case generator `box_2d`, `nx = 40, ny = 10, lx = 4, ly = 1` (400 cells). `Q2`: case generator
   `cylinder_ogrid` with the parameters fixed in the test file and recorded in an addendum (at least 400 cells, curved).
   `Q3`: `box_2d`, `nx = 40, ny = 4` (160 cells; `n <= 8`, bound `1/20 = 0.05`, only for the reorder bound).
-* **Reorder bound.** For a 2D grid of `n1 x n2` cells (`n1 >= n2`) ADR 0020 A2 gives RCM bandwidth `<= 2 n2 - 1`; for
+* Reorder bound. For a 2D grid of `n1 x n2` cells (`n1 >= n2`) ADR 0020 A2 gives RCM bandwidth `<= 2 n2 - 1`; for
   `Q3` that is 7.
-* **Linear velocity test field** (box_2d, `initial.velocity_expression_x = "1 [1/s] * x + 2 [1/s] * y"`,
+* Linear velocity test field (box_2d, `initial.velocity_expression_x = "1 [1/s] * x + 2 [1/s] * y"`,
   `..._y = "3 [1/s] * x - 1 [1/s] * y"`, no iteration is run): `du/dx = 1, du/dy = 2, dv/dx = 3, dv/dy = -1`; vorticity
   `z = dv/dx - du/dy = 1`, `x = y = 0`; `Q = -0.5 sum_kj A_kj A_jk = -0.5 (1 + 1 + 2 * 2 * 3) = -7`. The least-squares
   gradient is exact for a linear field only when every neighbour value is the field value, which holds for cells without a
   boundary face (the boundary values are the boundary conditions, not the field). The analytic comparison is therefore
   restricted to cells that have no boundary face, stated in each check.
-* **Couette wall shear** (box_2d `lx = 2, ly = 0.5, nx = 8, ny = 10`, `physics.rho = 1.2`, `physics.nu = 0.05`, lower wall
+* Couette wall shear (box_2d `lx = 2, ly = 0.5, nx = 8, ny = 10`, `physics.rho = 1.2`, `physics.nu = 0.05`, lower wall
   at rest, upper wall `U = 3` in x, initial field `ux = U y / ly` evaluated at cell centres, no iteration): the first-cell
   difference quotient `(u_c - u_wall)/dn` is exact for a linear profile, so `|tau| = rho nu U / ly = 1.2 * 0.05 * 3 / 0.5 =
   0.36` on both walls (direction `+x` on the lower wall, `-x` on the upper wall: force of the fluid on the wall in the
   library's sign convention, `rho nu (u_c - u_wall)/dn`), and `y+ = dn sqrt(|tau|/rho)/nu` with `dn = ly / (2 ny) = 0.025`:
   `y+ = 0.025 * sqrt(0.3) / 0.05 = 0.27386127875258306`.
-* **Total pressure, incompressible**: `rho = 1.2`, `initial.pressure = 3` (kinematic), uniform velocity `(2, 0, 0)`
+* Total pressure, incompressible: `rho = 1.2`, `initial.pressure = 3` (kinematic), uniform velocity `(2, 0, 0)`
   (no expression): `p_total = 1.2 * 3 + 0.5 * 1.2 * 4 = 6.0`.
-* **Inflation y+ target**: `first_cell_height_from_y_plus(0.8, 0.05, 1e-5) = 3.2e-4` (ADR 0020 I6).
-* **VTK round trip**: the writer prints floats with `{:?}` (shortest representation that parses back exactly), so values
+* Inflation y+ target: `first_cell_height_from_y_plus(0.8, 0.05, 1e-5) = 3.2e-4` (ADR 0020 I6).
+* VTK round trip: the writer prints floats with `{:?}` (shortest representation that parses back exactly), so values
   parsed from a `.vtu`/`.vtp`/CSV equal the library output bit for bit. All VTK/CSV value comparisons are therefore EXACT
   (difference 0.0), not tolerance based. The test files contain a small parser (no VTK reader exists in the repository).
 
@@ -174,105 +174,105 @@ Test files: `crates/rcfd-api/tests/decomposition.rs`, `postprocessing.rs`, `infl
 
 ### Item W (heat_flow conductivity, variable density)
 
-* **W1** an ideal-gas variable-density case (taken from `tests/variable_density.rs`) with a `heat_flow` report and
+* W1 an ideal-gas variable-density case (taken from `tests/variable_density.rs`) with a `heat_flow` report and
   `conductivity = 2.0` fails `Case::parse_toml` with a diagnostic whose path is exactly `reports.<n>.conductivity`, which
   carries the TOML line of that key (exact line number).
-* **W2** positive controls: the same case without the key, and with `conductivity = 0.0`, has no diagnostic; a
+* W2 positive controls: the same case without the key, and with `conductivity = 0.0`, has no diagnostic; a
   constant-density case with `conductivity = 2.0` still validates (`report_conductivity.rs` passes unmodified).
-* **W3** `rcfd validate` on the failing case exits 3 and prints the path.
+* W3 `rcfd validate` on the failing case exits 3 and prints the path.
 
 ### F-236 decomposition
 
 All on `Q1` and `Q2`, methods `bisection` (rules longest, cycle, x, y, z), `inertial`, `sectors` (radial and circumferential
 about the z axis, origin at the mesh centre), `graph`, `n` in `{2, 3, 5, 8, 16}`.
 
-* **D1 equals the library**: the part vector of `decomp::run` equals the direct library call (`Bisection`, `Sectors`,
+* D1 equals the library: the part vector of `decomp::run` equals the direct library call (`Bisection`, `Sectors`,
   `GraphPartitioner` with the same parameters) element for element: 0 differences in every case.
-* **D2 cover**: length `N`, every id `< n`, every part non-empty, `sum(part_cells) == N` exactly, `Decomposition::from_assignment`
+* D2 cover: length `N`, every id `< n`, every part non-empty, `sum(part_cells) == N` exactly, `Decomposition::from_assignment`
   succeeds.
-* **D3 balance**: report `imbalance` equals `partition::weighted_imbalance` bit for bit and is `<= 0.05` for every method,
+* D3 balance: report `imbalance` equals `partition::weighted_imbalance` bit for bit and is `<= 0.05` for every method,
   mesh and `n`.
-* **D4 edge cut**: report `edge_cut` equals an independent count of internal faces whose cells differ in part (exact);
+* D4 edge cut: report `edge_cut` equals an independent count of internal faces whose cells differ in part (exact);
   `edge_cut(graph) <= edge_cut(bisection longest)` for every mesh and `n` (the roadmap criterion, exact integers).
-* **D5 weights**: `weights.mode = box` (`inside = 4`, `outside = 1`, box covering the half `x > mid` of Q1/Q2):
+* D5 weights: `weights.mode = box` (`inside = 4`, `outside = 1`, box covering the half `x > mid` of Q1/Q2):
   `bisection`, `inertial`, `graph` give weighted imbalance `<= 0.05` for `n` in `{2, 4, 8, 16}`; the part vector equals the
   direct call with the same weight vector (0 differences); positive control: the same weights with `method = bisection`
   but `weights.mode = none` has weighted imbalance `> 0.05` for at least one `n`.
-* **D6 smoothing**: `smooth = true` equals `partition` followed by `smooth_partition` with the same parameters (0
+* D6 smoothing: `smooth = true` equals `partition` followed by `smooth_partition` with the same parameters (0
   differences); cut after `<=` cut before; cover intact.
-* **D7 reorder**: `bandwidth.natural` and `bandwidth.rcm` equal the library values computed from the mesh internal-face
+* D7 reorder: `bandwidth.natural` and `bandwidth.rcm` equal the library values computed from the mesh internal-face
   list (exact); on `Q3`, `bandwidth.rcm <= 7`; the mesh used by a following run is unchanged (`Simulation` fields equal
   with and without `reorder`: 0 differences after 5 iterations).
-* **D8 VTK**: `rcfd partition --out f.vtu` and `rcfd run` with `write_field = true` write a `partition` array that parses
+* D8 VTK: `rcfd partition --out f.vtu` and `rcfd run` with `write_field = true` write a `partition` array that parses
   back to exactly the part vector (0 differences, `N` entries); a default run writes no `partition` array and no derived
   array, and its `solution.vtu` is byte-identical to one produced with `[decomposition] method = "none"` and an empty
   `[postprocessing]` present.
-* **D9 CLI JSON**: keys `method, n_parts, n_cells, part_cells, part_weights, imbalance, edge_cut, ghost_cells` present with
+* D9 CLI JSON: keys `method, n_parts, n_cells, part_cells, part_weights, imbalance, edge_cut, ghost_cells` present with
   the right types; `sum(part_cells) == n_cells`; with `--reorder` also `bandwidth.natural` and `bandwidth.rcm`; exit code 0.
-* **D10 located validation**: each of the errors listed in D2 is returned with exactly the path stated there; TOML cases
+* D10 located validation: each of the errors listed in D2 is returned with exactly the path stated there; TOML cases
   carry a line number. An unknown `method` value reports `decomposition.method` (schema enum). Exit code 3 from the CLI.
-* **D11 service**: `mesh.partition` returns a report equal (JSON value) to the library report for the same session case.
-* **D12** `baseline_hashes` passes unmodified.
+* D11 service: `mesh.partition` returns a report equal (JSON value) to the library report for the same session case.
+* D12 `baseline_hashes` passes unmodified.
 
 ### F-072 derived fields and sampling
 
-* **P1 vorticity and Q through the case tree**: the linear field above on `box_2d` (`nx = 12, ny = 10`) with
+* P1 vorticity and Q through the case tree: the linear field above on `box_2d` (`nx = 12, ny = 10`) with
   `derived = ["vorticity", "q_criterion"]`; `export_vtu` writes `vorticity` (3 components) and `q_criterion`; parsed values
   equal `derived::vorticity(velocity_gradient(...))` and `q_criterion` of the same inputs exactly (0.0 difference, all
   cells); on cells without a boundary face `|omega_z - 1| <= 1e-12`, `|omega_x|, |omega_y| <= 1e-12`, `|Q + 7| <= 1e-12`.
   At least one such cell must exist (positive control on the selection: count `>= 40`).
-* **P2 total pressure, incompressible**: `p_total` is `6.0` in every cell to 1e-12 relative (and equals
+* P2 total pressure, incompressible: `p_total` is `6.0` in every cell to 1e-12 relative (and equals
   `total_pressure_incompressible(rho * p, rho, u)` exactly); the kinematic-to-dynamic conversion is thus verified.
-* **P3 variable density**: an ideal-gas variable-density case (from `tests/variable_density.rs`, a few iterations):
+* P3 variable density: an ideal-gas variable-density case (from `tests/variable_density.rs`, a few iterations):
   `derived = ["mach", "total_pressure"]`; `mach` array equals `sim.field("mach")` exactly; `p_total` equals
   `total_pressure_isentropic(p_abs, mach, fluid.gamma)` per cell to 1e-12 relative.
-* **P4 wall shear and y+**: the Couette case above, `derived = ["wall_shear", "wall_y_plus"]`, `wall_patches = ["ymin",
+* P4 wall shear and y+: the Couette case above, `derived = ["wall_shear", "wall_y_plus"]`, `wall_patches = ["ymin",
   "ymax"]`: `wall_ymin.vtp` and `wall_ymax.vtp` exist, 8 faces each; the parsed arrays equal `derived::wall_shear` /
   `derived::y_plus` exactly; `|tau|` is `0.36` to 1e-12 relative on every face, the x component has sign `+` at `ymin` and
   `-` at `ymax`; `wall_y_plus` is `0.27386127875258306` to 1e-12 relative.
-* **P5 located restrictions** (exact paths): `wall_shear` with `turbulence.model = "k_epsilon"`, with
+* P5 located restrictions (exact paths): `wall_shear` with `turbulence.model = "k_epsilon"`, with
   `fluid.density = "ideal_gas"`, with `solver.algorithm = "compressible"`, with a `rheology` law, and `mach` for an
   incompressible case, `total_pressure` with `real_gas`: each reports `postprocessing.derived`; an unknown name
   reports `postprocessing.derived`; an unknown or non-wall `wall_patches` entry reports `postprocessing.wall_patches`
   (from `Simulation::new`). Positive control: the valid Couette case validates.
-* **P6 line sampling**: on the linear field (box_2d `nx = 12, ny = 10`, `lx = 4, ly = 1`), line from `(0.8, 0.3, 0.05)` to
+* P6 line sampling: on the linear field (box_2d `nx = 12, ny = 10`, `lx = 4, ly = 1`), line from `(0.8, 0.3, 0.05)` to
   `(3.2, 0.7, 0.05)` with 20 points (all in cells without a boundary face), fields `ux, uy`, gradient on: CSV header is
   exactly `s,x,y,z,ux,uy,inside`; 20 rows; the CSV text equals the direct library result (`sample_line` + `add_field` with
   the same least-squares gradient) byte for byte; sampled values equal the linear field `x + 2y`, `3x - y` to 1e-12 absolute.
   (The z coordinate lies inside the one-cell-thick mesh; the mesh thickness is read from the mesh, and the line z is set to
   the mid-plane in the test.)
-* **P7 plane sampling**: plane `origin = (0.8, 0.3, mid)`, `e1 = x`, `e2 = y`, extents `2.4 x 0.4`, `n1 x n2 = 6 x 4`:
+* P7 plane sampling: plane `origin = (0.8, 0.3, mid)`, `e1 = x`, `e2 = y`, extents `2.4 x 0.4`, `n1 x n2 = 6 x 4`:
   24 rows, header `x,y,z,ux,uy,inside`, CSV equals the direct library CSV byte for byte, values equal the linear field to
   1e-12.
-* **P8 outside points**: a line that leaves the mesh has `inside = 0` and empty value fields exactly for the points the
+* P8 outside points: a line that leaves the mesh has `inside = 0` and empty value fields exactly for the points the
   library reports outside (count equal to `20 - SampleSet::n_inside`, which is positive).
-* **P9 CLI**: `rcfd sample case.toml --max-iterations 0 --line ... --fields ux,uy --out f.csv` writes a file equal to the
+* P9 CLI: `rcfd sample case.toml --max-iterations 0 --line ... --fields ux,uy --out f.csv` writes a file equal to the
   P6 CSV byte for byte; a case with `postprocessing.samples.s1` and `rcfd run` write `sample_s1.csv` in the output directory
   equal to the CLI output for the same sample (byte for byte), when run with the same iteration count; exit codes 0; an invalid
   sample gives exit 3 with the path.
-* **P10 service**: `field.sample` returns `csv` equal to the P6 CSV byte for byte.
-* **P11 located sample errors**: the errors listed in D4 return exactly the stated paths.
-* **P12** default `solution.vtu` unchanged (see D8) and `baseline_hashes` passes unmodified.
+* P10 service: `field.sample` returns `csv` equal to the P6 CSV byte for byte.
+* P11 located sample errors: the errors listed in D4 return exactly the stated paths.
+* P12 default `solution.vtu` unchanged (see D8) and `baseline_hashes` passes unmodified.
 
 ### F-108 inflation report
 
 On `box_2d` case (`nx = 8, ny = 4`), patch `ymax`.
 
-* **N1**: `rcfd inflate --first 0.01 --growth 1.2 --layers 6 --json` prints a `report` JSON equal (value equality, exact) to
+* N1: `rcfd inflate --first 0.01 --growth 1.2 --layers 6 --json` prints a `report` JSON equal (value equality, exact) to
   the serde value of `inflate_patch(&mesh, "ymax", FirstGrowth{0.01, 1.2, 6}).1` computed directly.
-* **N2** keys `patch, sizing, cells_before, cells_after, report` present; `cells_after - cells_before == 8 * 6` exactly.
-* **N3 y+ target**: `--y-plus 0.8 --u-tau 0.05 --nu 1e-5 --layers 4 --growth 1.2`: `report.first_height_min` equals `3.2e-4` to
+* N2 keys `patch, sizing, cells_before, cells_after, report` present; `cells_after - cells_before == 8 * 6` exactly.
+* N3 y+ target: `--y-plus 0.8 --u-tau 0.05 --nu 1e-5 --layers 4 --growth 1.2`: `report.first_height_min` equals `3.2e-4` to
   1e-12 relative.
-* **N4** `--out f.vtu`: the file's `NumberOfCells` equals `cells_after`.
-* **N5 errors**: unknown patch exits 1 with the patch name in the message; `--layers 0` exits 2; `--first` missing for a
+* N4 `--out f.vtu`: the file's `NumberOfCells` equals `cells_after`.
+* N5 errors: unknown patch exits 1 with the patch name in the message; `--layers 0` exits 2; `--first` missing for a
   `first-growth` sizing exits 2; `--growth 0` exits 1.
-* **N6 service**: `mesh.inflate` returns a JSON value equal to the N1 output.
+* N6 service: `mesh.inflate` returns a JSON value equal to the N1 output.
 
 ### Documentation
 
 `docs/case-schema.md` gains sections for `decomposition` and `postprocessing` and the corrected `conductivity` note;
 `docs/mesh-quality.md` links the inflation report; `docs/reference-data.md` is checked for unverifiable references (this
-wave introduces none: every number is derived above); `docs/roadmap.json` is updated honestly (F-236 note only, status
+wave introduces none: every number is derived above); `docs/roadmap.json` is updated (F-236 note only, status
 unchanged unless every sentence of the roadmap acceptance is met by tests; F-072 and F-108 stay partial unless stated).
 
 ## Not attempted (stated in advance)

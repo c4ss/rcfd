@@ -36,7 +36,7 @@ The steady solver (`crates/rcfd-fv/src/simple.rs`, `iterate`) does this with SIM
    `bc_cat::Catalogue::refresh` just before the iteration).
 2. Cell velocity: `u = HbyA - (rAU - rAtU) grad(p_old) - rAtU grad(p_new)`, with `rAU = V / a_P` and `rAtU = V / (a_P - sum|a_nb|)`.
 3. Face flux: internal faces get the compact compensation `(rAtU - rAU)_f snGrad(p_old) |S|` and then `- rAtU_f snGrad(p_new) |S|`.
-   **Boundary faces get no compensation**: the flux of a fixed-pressure face (and of a periodic seam face) is
+   Boundary faces get no compensation: the flux of a fixed-pressure face (and of a periodic seam face) is
    `HbyA_P . S - rAtU_P snGrad_b(p_new) |S|`.
 
 At a vent face the pressure equation sets the flux to the inlet flux, so the cell pressure next to the vent follows the vent value
@@ -82,13 +82,13 @@ outcome is recorded, falsified or not.
 
 Candidates, both opt-in (each changes results it touches, so neither can be the default):
 
-* **B** `solver.simplec_boundary_compensation` (bool, default `false`; steady `simplec` only, a located error with any other algorithm,
+* B `solver.simplec_boundary_compensation` (bool, default `false`; steady `simplec` only, a located error with any other algorithm,
   no effect with `simple`): add `(rAtU - rAU)_f snGrad_b(p_old) |S|` to `phiHbyA` on every boundary face whose flux the pressure sets, with
   the boundary forms the corrected flux already uses (owner value and the pressure condition's gradient on fixed or mixed pressure faces;
   the distance-weighted pair mean and the partner-cell difference on periodic faces). Then `rAtU_f - (rAtU - rAU)_f = rAU_f` on every face,
   as on internal faces. In the first iteration this cancels the kick exactly (to the solver tolerances), and at a fixed point every face
   carries `rAU`.
-* **F** a vent-level key that evaluates the vent law with the face velocity phi/|S|. It removes the amplifier, not the trigger.
+* F a vent-level key that evaluates the vent law with the face velocity phi/|S|. It removes the amplifier, not the trigger.
 
 Choice rule: B if D1 and D3 stand. Else F if D2b stands. Else no fix (diagnosis only; X7 stays a known miss). B and F are not combined.
 
@@ -97,12 +97,12 @@ That part is checked by B2 below, not by X7 (the X7 flow is one-dimensional).
 
 ## Registered acceptance checks (run once each after the fix is in)
 
-* **A1 `x7_vent_at_fixed_pseudo_dt`** (non-ignored, `heat_exchanger.rs`): the X7 sweep exactly as registered in ADR 0095 (pseudo-time
+* A1 `x7_vent_at_fixed_pseudo_dt` (non-ignored, `heat_exchanger.rs`): the X7 sweep exactly as registered in ADR 0095 (pseudo-time
   0.02 at every flow, u = 0.5, 1, 2, -0.5, -1, -2, K = 2.5, the `run` helper: 2000 iterations plus the 300-iteration stationarity check at
   1e-8 with the finite check) with the one added line `simplec_boundary_compensation = true` in `[solver]`. Limit: outlet-column pressure
   within 1e-6 relative of 0.5 K u|u| and finite at all six flows (ADR 0022 C3 limit, unchanged). The ignored
   `x7_vent_at_fixed_pseudo_dt_known_miss` stays as it is (default code) and is run once to show it still gives NaN at u = 2.
-* **A2 B1 / B2** (`crates/rcfd-api/tests/simplec_boundary_w41b.rs`, non-ignored): an exact identity. SIMPLE and SIMPLEC with the same
+* A2 B1 / B2 (`crates/rcfd-api/tests/simplec_boundary_w41b.rs`, non-ignored): an exact identity. SIMPLE and SIMPLEC with the same
   alpha_u build the same momentum matrix, so their fixed points are the same once every face carries `rAU` (cells:
   `HbyA - (rAU - rAtU) grad p - rAtU grad p = HbyA - rAU grad p`; faces: `rAtU_f - (rAtU - rAU)_f = rAU_f` with the same interpolation
   weights). Set-up: duct 2 m x 0.5 m, 40 x 10 cells, nu 0.02, upwind, inlet 1 m/s at xmin, fixed pressure 0 at xmax, a Darcy block
@@ -115,9 +115,9 @@ That part is checked by B2 below, not by X7 (the X7 flow is one-dimensional).
   of its fixed point, and rho^100 < 0.5 for runs that settle in a few hundred iterations, so 1e-9 leaves four orders for round-off in the
   pressure range. Smoke (default code only, rule d): simple settles in 400 (B1) and 300 (B2) iterations, default simplec in 400 and 400;
   default SIMPLEC against SIMPLE: B1 u 4.80e-3, p 3.74e-3; B2 u 2.62e-3, p 4.05e-3.
-* **A3 default bit-identity**: `baseline_hashes.rs` passes unchanged; the workspace gate has 0 failures; the key is read only into a field
+* A3 default bit-identity: `baseline_hashes.rs` passes unchanged; the workspace gate has 0 failures; the key is read only into a field
   that is `false` unless set, and the added code runs only when it is `true`.
-* **A4 located error**: `simplec_boundary_compensation = true` with `algorithm = "piso"` is an error at `solver.simplec_boundary_compensation`.
+* A4 located error: `simplec_boundary_compensation = true` with `algorithm = "piso"` is an error at `solver.simplec_boundary_compensation`.
 
 Status rule for F-248: done iff A1 passes as a non-ignored test and A3 holds. The acceptance text says "with plain SIMPLEC, without changing
 the default settings of existing cases": A1 uses the SIMPLEC algorithm with one opt-in key and no other change; that reading is stated in the
@@ -138,7 +138,7 @@ F-248 note.
 | Id | Plain SIMPLEC u = 1, K 2.5 | Pseudo 0.02, u = 2, K 2.5 | Verdict |
 | --- | --- | --- | --- |
 | default | kick 5.057 (x 1.99), NaN path (1.8e5 at iteration 3) | kick 1.125 (x 1.99), NaN at iteration 194 | (smoke) |
-| D1 | kick **1.553e-4** (x 1.97), last 2.24e-5 | kick 5.70e-5 (x 1.97), last 9.5e-13, p 5.000000 | **falsified by its threshold at plain u = 1** (1.553e-4 > 1e-4); stands at pseudo u = 2 |
+| D1 | kick 1.553e-4 (x 1.97), last 2.24e-5 | kick 5.70e-5 (x 1.97), last 9.5e-13, p 5.000000 | **falsified by its threshold at plain u = 1** (1.553e-4 > 1e-4); stands at pseudo u = 2 |
 | D1s | kick 1.553e-4, last 2.24e-5 (equal to D1 to the printed 7 digits) | kick 5.70e-5, last 1.7e-12 | stands (seams play no role in X7) |
 | D2a | kick 10.11 (x 1.99), last 5.7e-4 | kick 2.250, last 1.1e-12 | stands |
 | D2b | kick 5.057, then **diverges** (8.0e7 at 30, rows differ by 3e14) | kick 1.125, **does not settle** (0.85 at 300, rows differ by 3.1) | **falsified** |
@@ -150,7 +150,7 @@ Readings:
 
 * Inlet: out (smoke, the kick is in the vent column). Seam: out (D1s = D1; the X7 flow is one-dimensional).
 * The vent law is the amplifier (D2a: a frozen vent pressure takes the full kick, 10.1, and settles). Evaluating the law with the face
-  velocity (candidate F) is **not** a cure: it diverges through a transverse mode. My reading, not tested: the per-face flux of a
+  velocity (candidate F) is not a cure: it diverges through a transverse mode. My reading, not tested: the per-face flux of a
   fixed-pressure face responds to its own face pressure with the gain rAtU |S| / d, so a per-face law `p_b(phi_b)` closes a face-by-face loop
   of gain about rAtU K |u| / d (45 at plain u = 1); the cell-velocity law averages over the cell and does not have this loop.
 * The trigger is the SIMPLEC term `(rAtU - rAU) grad(p_old)` (D3 removes the kick) left uncompensated at the boundary face (D1 removes it to
@@ -171,11 +171,11 @@ viscous coefficient only, upwind), so cell N-1 is off by about `(nu A / dx) / a_
 pressure step. The measured 1.553e-4 is in cell N-1 (x = 1.97), not in the vent cell. If this is right, the residual kick is proportional to
 the viscosity and is not the boundary defect.
 
-Corrected diagnostic **D1v** (plain SIMPLEC, u = 1, K = 2.5, D1 switch on, 30 iterations), two runs:
+Corrected diagnostic D1v (plain SIMPLEC, u = 1, K = 2.5, D1 switch on, 30 iterations), two runs:
 * nu = 1.5e-9 (10^-4 of X7's): prediction kick <= 1e-6 (falsified if larger);
 * nu = 1.5e-4 (10 x X7's): prediction kick between 5e-4 and 5e-3, i.e. about 10 x 1.553e-4 (falsified if outside), and settles.
 
-Amended choice rule: **B** if D1v stands (both runs) and D3 stands (it does); otherwise no fix. F is out either way (D2b falsified). The
+Amended choice rule: B if D1v stands (both runs) and D3 stands (it does); otherwise no fix. F is out either way (D2b falsified). The
 original D1 verdict stays recorded as falsified by its threshold. The acceptance checks A1 to A4 and their limits are unchanged.
 
 ## Amendment 2 (step 3 diagnosis; written after D1v, A1-A4, R1 and R2 had run, before the run it governs)
@@ -209,7 +209,7 @@ the viscous coupling of the momentum predictor, not the boundary defect. By the 
 `solver.simplec_boundary_compensation` (`crates/rcfd-fv/src/simple.rs` `simplec_boundary_flux_correction`; schema and located error in
 `crates/rcfd-api/src/schema.rs` and `sim.rs`; documented in `docs/case-schema.md`).
 
-Root cause in one sentence: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only, so when the vent pressure changes the
+Root cause: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only, so when the vent pressure changes the
 vent-cell velocity takes the uncompensated `(rAtU - rAU)` times the jump (5.06 m/s in the first plain iteration at u = 1), and the vent law,
 which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|; the run diverges when G > 1 (10.1 plain at u = 1,
 1.125 with pseudo-time 0.02 at u = 2), whatever the Courant number (G1, G2).

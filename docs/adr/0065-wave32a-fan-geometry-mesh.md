@@ -70,7 +70,7 @@ Test blade B: N = 5, r_hub 0.10, r_tip 0.30, clearance 0.01, NACA 4412-like line
   NACA 00xx closed form `A = 10 t c^2 (0.2969*2/3 - 0.1260/2 - 0.3516/3 + 0.2843/4 - 0.1036/5)` within 1e-5; maximum thickness within 1 % of t
   (NACA), within 1e-12 (circular arc, x = 1/2).
 * G2 surface: closed triangulated blade B surface: area vs quadrature of `|X_u x X_r|` (tensor Gauss on the exact parametrisation) and enclosed volume vs
-  `int A(r) dr` (exact for sections on cylinders: dV = dr ds dz) -- volume within 1e-3, area within 2e-3 relative at 80 points per side and 24 spanwise strips,
+  `int A(r) dr` (exact for sections on cylinders: dV = dr ds dz): volume within 1e-3, area within 2e-3 relative at 80 points per side and 24 spanwise strips,
   and the error strictly decreasing over (80,24), (160,48), (320,96) with observed order >= 1.5 between the last two.
 * G3 watertight: every directed edge appears exactly once and its reverse exactly once, Euler characteristic 2, volume > 0.
 * M1 volume: with V_env from the same mesh built without the blade, `|V_passage + V_solid - V_env| <= 1e-11 V_env` where V_solid is the divergence-theorem volume of

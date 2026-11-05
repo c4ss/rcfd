@@ -163,38 +163,38 @@ the maximum change of `ux` over the last 200 iterations below `1e-9` of `max ux`
 Resolution rule fixed in advance: `Ha dy/a <= 0.25`, i.e. `ny = 40, 80, 160` for `Ha = 2, 10, 20` (the first-order viscous-layer
 discretisation error estimate for a cell Peclet number in the layer of 0.25 is below 1 percent).
 
-* A1 Hartmann, short circuit, `potential = "none"`, `Ha = 2, 10, 20`: profile error <= **2 %** (roadmap acceptance) and flow-rate
-  error <= **1 %**. Reported: both errors and `U/U_P` against `3(Ha - tanh Ha)/Ha^3`.
+* A1 Hartmann, short circuit, `potential = "none"`, `Ha = 2, 10, 20`: profile error <= 2 % (roadmap acceptance) and flow-rate
+  error <= 1 %. Reported: both errors and `U/U_P` against `3(Ha - tanh Ha)/Ha^3`.
 * A2 Hartmann, insulating walls through the imposed field (`applied_electric_field = [0, 0, -U B0]` with `U` the exact mean of (b),
-  `G` taken from (b) for `U = 1`; `B0 = 2 Ha`), `Ha = 10`: profile error <= **2 %**, flow-rate error <= **1 %**.
+  `G` taken from (b) for `U = 1`; `B0 = 2 Ha`), `Ha = 10`: profile error <= 2 %, flow-rate error <= 1 %.
 * A3 Lorentz integral and force balance at `Ha = 10` (A1 run): (i) `sum_c F_x V_c` of the reported `lorentz_force_x` equals
-  `-sigma B0^2 sum_c u_x V_c` to **1e-9** relative; (ii) global momentum balance `G V = sum_walls mu u_c A/(dy/2) + sum_c sigma B0^2 u_c V_c`
-  to **1e-6** relative; (iii) the Lorentz force never accelerates the flow: `sum_c F_x u_x V_c < 0` and equals `-sigma B0^2 sum u_x^2 V` to 1e-9.
+  `-sigma B0^2 sum_c u_x V_c` to 1e-9 relative; (ii) global momentum balance `G V = sum_walls mu u_c A/(dy/2) + sum_c sigma B0^2 u_c V_c`
+  to 1e-6 relative; (iii) the Lorentz force never accelerates the flow: `sum_c F_x u_x V_c < 0` and equals `-sigma B0^2 sum u_x^2 V` to 1e-9.
 * A4 Located diagnostics: each located error of D1 names its path (`sources.<n>.magnetic_field`, `.conductivity`, `.potential`, ...);
   `piso`, `pimple` and `coupled` with a Lorentz source are refused; `electric.enabled` together with a Lorentz source is refused.
 * A5 Null check of the solved potential: same channel, `B = [0, 0, B0]` (normal to the plane of the flow, so `u x B = -u B0 e_y` has
   a divergent source), `potential = "solve"`, walls insulated, no fixed potential patch (cell 0 pinned), `Ha = 10`, `ny = 80`: the exact
   state is `J = 0`, `d phi/dy = -u B0`, plain Poiseuille. Limits: `max |J| / (sigma B0 max u) <= 1e-6`; `max|u - u_plain| / max u_plain <= 1e-6`
   against the run of the same case without the source (identical numerics); and with `potential = "none"` the same case reproduces the
-  Hartmann flow-rate ratio `3(Ha - tanh Ha)/Ha^3` within **1 %** (the braking of an uncompensated `u x B`).
+  Hartmann flow-rate ratio `3(Ha - tanh Ha)/Ha^3` within 1 % (the braking of an uncompensated `u x B`).
 * M1 Lorentz algebra (no mesh solve): for several non-collinear `u`, `B`, `E_ext`, `sigma`: `J x B / rho` equals the hand evaluation
   to 1e-13; the split identity `BodyForce - sink*u = J x B / rho` to 1e-13; `F . B = 0` to 1e-12 relative; for `E = 0` the work
   identity `u . (J x B) = -|J|^2/sigma` to 1e-12; the Lorentz integral over the zone equals `V_zone J x B`.
 * M2 Electrodes with the potential solve (library, `box_2d` 2-D, `B = B0 e_z`, imposed parabola `u(y) = u0 (1 - (y/a)^2) e_x`, electrodes
   `phi(ymin) = 0`, `phi(ymax) = DV`, `ny = 40`): the transverse current density `j` is uniform: `max|j_f - j|/|j| <= 1e-9` on the faces
-  and `j = sigma(-DV/(2a) - B0 Ubar)` with `Ubar = 2 u0/3` to **5e-3** relative for `DV = 0` (short circuit) and for `DV = -2 a B0 Ubar`
+  and `j = sigma(-DV/(2a) - B0 Ubar)` with `Ubar = 2 u0/3` to 5e-3 relative for `DV = 0` (short circuit) and for `DV = -2 a B0 Ubar`
   the open-circuit current vanishes (`|j|/(sigma B0 Ubar) <= 5e-3`); the cell reconstruction gives `sum_c F_x V_c = j B0 V` to 1e-9 relative
   to `|j B0 V|` in the first case.
 
 H library (exchanger):
 * H1 counterflow and parallel against the independent finite-difference marching (2000 steps, Richardson extrapolated): relative error
-  <= **1e-5** for `NTU = 0.2, 1, 3, 8` and `Cr = 0, 0.25, 0.75, 1`; the `Cr = 1` branch is continuous with the general form (`Cr = 1 - 1e-7`) to 1e-6.
+  <= 1e-5 for `NTU = 0.2, 1, 3, 8` and `Cr = 0, 0.25, 0.75, 1`; the `Cr = 1` branch is continuous with the general form (`Cr = 1 - 1e-7`) to 1e-6.
 * H2 limits: `Cr = 0` gives `1 - e^{-N}` for all arrangements (1e-14); `eps <= N` small-`N` slope (`eps/N -> 1`) within 1e-3 at `N = 1e-3`
   for all arrangements; counterflow `eps -> 1` for `Cr < 1` and `N/(1+N)` for `Cr = 1`; parallel `eps -> 1/(1+Cr)`; ordering
   `eps_parallel <= eps_cross_both <= eps_counter`, `eps_shell <= eps_counter`, every `eps` in `[0,1]`, monotone increasing in `N` and
   decreasing in `Cr` on a grid of 200 points (strict violations counted, zero allowed).
 * H3 crossflow variants against the cell-exact recursion (800 x 800 cells for both unmixed, 4000 rows for the mixed ones): `C_max` mixed and
-  `C_min` mixed relative error <= **1e-3**; both unmixed (approximate formula) <= **2 %** (stated approximate; the series solution is not
+  `C_min` mixed relative error <= 1e-3; both unmixed (approximate formula) <= 2 % (stated approximate; the series solution is not
   implemented). Shell and tube: the closed form is derived from memory of the standard result and is checked only for `Cr = 0`, limits and
   the ordering of H2; it is marked UNVERIFIED in the reference list and no numeric agreement with a published table is claimed.
 * H4 energy balance exact: `|Q_p - Q_s|/|Q| <= 1e-12` (outlet temperatures from `Q`); round trip `ntu_for_effectiveness(eps(N)) = N` to 1e-9;
@@ -205,21 +205,21 @@ X case tree (exchanger), common set-up: `box_2d`, `periodic_y = true`, `lx = 2`,
 `[2,0,0]`, `T = 300`, outlet `xmax` zero gradient, fixed pressure; exchanger zone `x in [0.8, 1.0]`; `simplec`, upwind. Stationarity as
 in ADR 0012 (change over 300 iterations below `1e-8`). Measured stream temperatures are cell columns at `x = 0.01` and `x = 1.99`.
 * X1 Counterflow ntu mode: `UA = 40 W/K`, `T_sec = 350 K`, `C_sec = 20 W/K` (`C_p = rho cp u A_frontal` is computed from the measured
-  flow). Limits: stream enthalpy rise `rho cp Q (T_out - T_in)` equals the reported duty to **1e-6** relative; reported duty equals
-  `eps_counter(NTU, Cr) C_min (T_sec - T_in)` evaluated with the reported `T_in` and flow to **1e-9** (consistency); and equals the
-  independent marched counterflow solution (H1 reference) with the measured inlet temperature and flow within **1e-4** relative and,
-  as the roadmap acceptance, within **2 %**. Repeated for `C_sec = 0` (infinite) and parallel-flow arrangement.
+  flow). Limits: stream enthalpy rise `rho cp Q (T_out - T_in)` equals the reported duty to 1e-6 relative; reported duty equals
+  `eps_counter(NTU, Cr) C_min (T_sec - T_in)` evaluated with the reported `T_in` and flow to 1e-9 (consistency); and equals the
+  independent marched counterflow solution (H1 reference) with the measured inlet temperature and flow within 1e-4 relative and,
+  as the roadmap acceptance, within 2 %. Repeated for `C_sec = 0` (infinite) and parallel-flow arrangement.
 * X2 Loss closure: `loss_coefficient K = 5` and separately `loss_linear r1 = 2 Pa s/m` on the exchanger plane (`u = 2 m/s`): the pressure
   difference of the cell columns just before and after the zone equals `K rho u^2/2` and `r1 u` plus a no-loss reference run's difference
-  (the plane sits in a uniform stream, reference `~ 0`) with relative error <= **1e-3** (Z1 measured 1e-6 for the same mechanism).
+  (the plane sits in a uniform stream, reference `~ 0`) with relative error <= 1e-3 (Z1 measured 1e-6 for the same mechanism).
 * X3 Dual cell: lower half (`y < 0.1`) hot stream 350 K, upper half 300 K (inlet `temperature_expression`), zones `x in [0.8,1.0]` each half,
   `UA = 60 W/K`, counterflow arrangement, both streams `u = 2 m/s`. Limits: stream enthalpy changes of the two halves are `+Q` and
-  `-Q` of the reported duty to **1e-6** relative each; their sum is below **1e-6 Q**; reported `Q` equals the marched counterflow solution
-  with the measured inlets and flows within **1e-4** and **2 %**.
+  `-Q` of the reported duty to 1e-6 relative each; their sum is below 1e-6 Q; reported `Q` equals the marched counterflow solution
+  with the measured inlets and flows within 1e-4 and 2 %.
 * X4 Fan boundary: inlet patch `fan_boundary` with the curve of ADR 0012 Z2 (`(0, 200), (0.03, 140), (0.06, 0)` Pa at `Q` m^3/s,
   `A_frontal = 0.02 m^2`, i.e. `ly = 0.2`, `depth = 0.1`), downstream the Z1 porous jump (`alpha = 1e-8`, `C2 = 1000`, `t = 0.02`), outlet
   static pressure 0: the operating point is the intersection of the fan curve with the analytic jump (bisection 1e-12). Limits (Z2
-  values): `|Q - Q_op|/Q_op <= 5e-3`; patch pressure equals the curve value at `Q` to **2e-3** relative (Z3 missed 1e-4 with 8.5e-4 on the
+  values): `|Q - Q_op|/Q_op <= 5e-3`; patch pressure equals the curve value at `Q` to 2e-3 relative (Z3 missed 1e-4 with 8.5e-4 on the
   same lagged mechanism, so 1e-4 is not registered; the cause there was not isolated, and this limit is chosen from that measurement).
   Relaxation `relax = 0.02` as in Z3 (stiff lagged boundaries), stated before the run.
 * X5 Located diagnostics (list in D3). X6 `baseline_hashes` unchanged; existing `tests/lumped.rs` unchanged and passing.
@@ -280,7 +280,7 @@ Written after the runs. Limits are those registered above; none was widened, rep
 * X1 (`rcfd-api/tests/heat_exchanger.rs`; `box_2d`, `periodic_y`, `lx = 2`, `ly = 0.2`, `nx = 100`, `ny = 4`, depth 0.02 so `Q = 8.0e-3 m^3/s`, `NTU = 4.146`):
   counterflow `C_sec = 20`: duty 451.450431 W, stream enthalpy rise relative 2.57e-12 [1e-6], against the library eps-NTU 0 [1e-9], against the marched solution 9.8e-15
   [1e-4 and 2e-2]; counterflow `C_sec = 0`: 474.764283 W, 2.46e-12, 0, 1.0e-14; parallel `C_sec = 20`: 324.721140 W, 3.43e-12, 0, 1.7e-14. Pass.
-  Honest reading: the macro cell is the algebraic eps-NTU relation, so agreement with it and with the marched solution is expected by construction; the check
+  Reading: the macro cell is the algebraic eps-NTU relation, so agreement with it and with the marched solution is expected by construction; the check
   verifies that the flow, the inlet temperature and the energy source are wired correctly (stream enthalpy equals the duty), not the physics of a resolved exchanger.
 * X2 loss closure at `u = 2 m/s`: `K = 5` gives 12.000000 Pa against 12 (relative 2.7e-14), `r1 = 2` gives 4.000000 against 4 (6.2e-15) [1e-3]; the no-loss reference drop is 6e-15 Pa. Pass.
 * X3 dual cell (lower hot half 350 K, upper 300 K, `UA = 60`, `Q = 4.0e-3` per half): duty -223.250588 W; stream enthalpy changes -223.250585 and +223.250585

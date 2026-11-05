@@ -102,7 +102,7 @@ Transfer and per-iteration costs:
 | 1000000 | 6940000 | 71.52 (95280004) | 23.6 | 2.24 | 0.65 | 5.41 | 0.0108 (10) | 257.7 | 8339.2 |
 | 5000211 | 34826031 | 263.64 (477914908) | 138.4 | 9.21 | 2.78 | 48.67 | 0.0680 (11) | 1315.3 | 52558.0 |
 
-Reading the table honestly:
+Reading the table:
 
 * The GPU is slower than one CPU thread at 4096 unknowns (0.22x one-shot, 0.24x resident) and about equal at 32768 unknowns
   (1.15x one-shot). The per-iteration cost of the device is about 90 us at small sizes (launch and synchronisation latency), so small
@@ -115,7 +115,7 @@ Reading the table honestly:
   every outer iteration, so the one-shot figure is the relevant one there. The resident figure applies to repeated solves with one matrix.
 * The CPU AMG-CG (1 thread) needs far fewer iterations (6 to 7) but its setup cost is large; the device Jacobi-CG is faster in wall time
   at every size measured (1.18x at 4096 unknowns, 90x at 5000211) including set-up. This compares different algorithms; it is not a statement that Jacobi-CG is the better method.
-* Timing noise is real: a second run of the F1 test measured the 1-thread CPU solve at 2.84 s (this table: 1.94 s) and the one-shot GPU at 0.187 s (15x);
+* Timing noise: a second run of the F1 test measured the 1-thread CPU solve at 2.84 s (this table: 1.94 s) and the one-shot GPU at 0.187 s (15x);
   the speedup range at 5M unknowns is therefore roughly 10x to 15x one-shot, 31x to 45x resident.
 * The CPU 1-thread time per iteration jumps from 8.3 ms (1M) to 52.6 ms (5M), well above the 5x size ratio; the 5M matrix (about 480 MB)
   no longer fits the caches. Not investigated further.

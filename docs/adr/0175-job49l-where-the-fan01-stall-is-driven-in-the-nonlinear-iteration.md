@@ -269,13 +269,13 @@ the 0.04 m/s outlet-hub cycle of S10, as in ADR 0111 G1.
    not decided by the registered rules.** No local mask up to 129 cells (2.6 % of the mesh) brings `rho_med` below
    0.4. Rule 1 does not apply, because D2 does not calm.
 3. What the location records show (observations, no verdict):
-   - **The leading-edge root carries the largest cycle in the reference** (c665, c17, c341). The cycle stays there
+   - The leading-edge root carries the largest cycle in the reference (c665, c17, c341). The cycle stays there
      whenever the leading edge is not masked: HUB1, HUB2, D2, and also C-L.
-   - **Masking the leading edge (LE1, LE2) removes the cycle there** (share in LE2 0.02 and 0.00) but does not calm the
+   - Masking the leading edge (LE1, LE2) removes the cycle there (share in LE2 0.02 and 0.00) but does not calm the
      passage. The cycle reappears at full amplitude (`rho_du` 0.87-1.12) at hub cells at r 0.125, z 0.158-0.183. Those
      cells were already in C0's top five (c905, c906). Most of them lie just outside HUB2, on the hub at the axial height
      of the ADR 0111 mode (z 0.149-0.172). This is S12's relocation, now seen in the live iteration.
-   - **Masking both sites (U2) halves the amplitude** (`|du|_2` from 5.7 to 2.4 m/s), and the cycle moves on to a third
+   - Masking both sites (U2) halves the amplitude (`|du|_2` from 5.7 to 2.4 m/s), and the cycle moves on to a third
      set: r 0.17-0.20 at z 0.12, and hub cells at z 0.14.
    - So the convection deferred correction is unstable at several places of B3, in a ranked order: leading-edge root,
      then hub mid-chord, then mid-span near the leading edge. Removing the strongest exposes the next.

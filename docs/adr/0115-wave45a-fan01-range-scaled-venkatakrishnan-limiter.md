@@ -43,7 +43,7 @@ checks, and every test below. Runs made before registration, each once:
   2.9 m/s (k 0.05, u_z, B3), which still brackets the measured cycle amplitudes (0.065 m/s on E3 to 2.2 m/s on B3). The k set is kept
   (user decision).
 * **P4 feasibility smoke** (`w45a_p4_feasibility_smoke`, BJ and unlimited only; the new limiter was not run on it):
-  * the drafted doubly periodic set-up does **not** converge: after 20 000 iterations `res_u` / `res_p` 0.044 / 0.099 (16^2) and 0.012 /
+  * the drafted doubly periodic set-up does not converge: after 20 000 iterations `res_u` / `res_p` 0.044 / 0.099 (16^2) and 0.012 /
     0.025 (32^2) with either scheme, L2 error 0.29-0.30 (16^2) and 0.19 (32^2). Diagnosis (`w45a_tg_diag`, 16^2 unlimited, 4000
     iterations, started from the exact field): at nu = 1 it converges to 3e-15 (L2 6.9e-3); at nu = 0.1 it leaves the exact state between
     iterations 500 and 1000 (L2 4.8e-2 -> 3.0e-1, the pressure range falls from 1.0 to 0.71-0.77) and keeps moving. The forced cellular
@@ -104,7 +104,7 @@ and accepts any k, so its accuracy is checked at every registered k). The key de
 * **P3, Kovasznay** (the ADR 0081 L3 set-up unchanged, Re 40, 12x16 / 24x32 / 48x64; `w45a_p3_kovasznay_order`): fine-pair L2 order >= 1.8.
 * **P4, a smooth interior extremum (amended before registration, see "What I already knew"):** the exact steady Navier-Stokes solution
   u = U (sin x cos y, -cos x sin y), p = (U^2/4)(cos 2x + cos 2y), body force 2 nu u_exact (cell values and face values `f . S_f` at the
-  face centres), on [0, 2 pi]^2 with **the exact velocity on all four sides** instead of doubly periodic; u_x has interior extrema at
+  face centres), on [0, 2 pi]^2 with the exact velocity on all four sides instead of doubly periodic; u_x has interior extrema at
   (pi/2, pi) and (3 pi/2, pi), u_y at (pi, pi/2) and (pi, 3 pi/2). U = 1, nu = 0.1, meshes 16^2 / 32^2 / 64^2, SIMPLE 0.7 / 0.3,
   tolerances 1e-10, cap 20 000, started from the exact velocity (`w45a_p4_taylor_green_order`). Limits: every mesh converges; the
   fine-pair L2 order >= 1.8; the 64^2 L2 error <= the BJ 64^2 L2 error of the same run. Reported: L-inf orders, the share of cells with
@@ -176,8 +176,8 @@ from copies of the built test binaries. The P5 hashes were recorded at e65b4ea. 
   an eps up to 0.05 R leaves the per-cell minimum over faces and the neighbour max / min, and the E3 cycle survives those kinks.
 * **Where it converges (E1 at k 0.01 and 0.05, E2 at k 0.05 to 7e-9) it converges to more spurious swirl.** The exact absolute outlet
   swirl is zero; the BJ stall gives abs(L) 0.0095 / 0.0596 / 0.1060 N m on E3 / E2 / E1, the new limiter 0.139-0.268 N m on every member
-  and k, 1.3 to 28 times the BJ value (the swirl energy E_s is lower than BJ's in every arm). The (d) check exists exactly to refuse this,
-  and it does. abs(L) falls with k on each member and is nearly the same on the three members at a given k: it does not grow with
+  and k, 1.3 to 28 times the BJ value (the swirl energy E_s is lower than BJ's in every arm). The (d) check refuses this.
+  abs(L) falls with k on each member and is nearly the same on the three members at a given k: it does not grow with
   refinement as BJ's does (ADR 0110 part L), but it is larger.
 * E2 at k 0.05 converges in the residuals (`res_u` 7e-9) but `is_converged()` stays false: a 4e-4 m/s period-two change remains at shroud
   tip-layer cells (c13537 and neighbours, r 0.2497, z 0.144), c_u 1.1e-5 with `res_nut` 3.2e-3; the SST criterion sees it (ADR 0111

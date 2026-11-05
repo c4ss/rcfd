@@ -122,7 +122,7 @@ every use of that hash found afterwards; checkpoints are not among them.)
 5. Plots keep residuals and monitors apart: the selected run's residuals go to `Studio::plots` as `res_<equation>` (the runner's
    `u`, `p`; `continuity` kept), so `residual_names` and the ported M6 hold; its monitors go to a second store `Studio::monitors` under
    their report names. A non-finite value (`null` in the file) is kept as NaN; the drawn lines are split into segments at
-   non-finite values (`segments`, each segment decimated by the unchanged `decimate_minmax`), so a gap is a gap and not a joined line;
+   non-finite values (`segments`, each segment decimated by the unchanged `decimate_minmax`), so no line is drawn across a gap;
    the first non-finite step of each series is a warning of the run.
 6. The run list stays the 48B browser list (`Browser::runs`, which B7 measures) with the worker's rows laid over it by run id for
    the rows drawn (state, step, time, reason, queue position, last residuals); a run the worker knows and the browser does not yet

@@ -18,7 +18,7 @@ constants) were re-checked against web sources; per-item values, URLs and verdic
 `docs/verification-report.md`. One code constant differs from the original (Realizable A0 4.04 vs 4.0).
 
 This page is a lookup record for anyone who needs to know where a benchmark value or constant in a test, case or data file comes from
-and how well it was checked. Each section names the value, the source read and the result; later waves added their own sections at
+and how well it was checked. Later waves added their own sections at
 the end, in the order the work was done. Sources that could not be reached online, and what still rests on secondary copies, are
 in "Not verifiable online"; registered criteria the code does not meet, with their ignored known-miss tests, are in "Known misses". For the downloadable datasets, their checksums and licences, read
 [validation data](validation-data.md) instead.

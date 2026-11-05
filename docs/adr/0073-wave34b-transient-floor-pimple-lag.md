@@ -96,7 +96,7 @@ measured Co_t agree with the sign of `|G| - 1` (e.g. PIMPLE-2 BDF2 at Co_t = 4: 
 
 Set-ups, tolerances (`tol_rel` 1e-12, `tol_abs` 1e-14, `max_iter` 5000), the error measure (relative L2 of the cell velocity at t = 1 against a same-scheme reference
 with dt_ref = 1/1280 on the same mesh), the pairs (fine 0.025/0.0125 binding, coarse 0.1/0.05) and the paths PISO, PIMPLE-C, PIMPLE-4, FRAC are those of ADR 0069.
-New set-up **TG-S**: the Taylor-Green vortex of ADR 0069 shifted by `s = 0.6` in x and y (`u = (sin(x+s) cos(y+s), -cos(x+s) sin(y+s)) e^{-2 nu t}`,
+New set-up TG-S: the Taylor-Green vortex of ADR 0069 shifted by `s = 0.6` in x and y (`u = (sin(x+s) cos(y+s), -cos(x+s) sin(y+s)) e^{-2 nu t}`,
 `p = (cos 2(x+s) + cos 2(y+s))/4 e^{-4 nu t}`), same mesh, nu = 0.1, central, t_end = 1. Exact error = relative L2 against the exact cell-centre velocity; pressure
 error = relative L2 of the cell pressure against the exact one after removal of the volume mean of both.
 
@@ -108,7 +108,7 @@ dt in {0.05, 0.025, 0.0125, 0.00625}, self-referenced errors `e(N, dt)` (referen
 p in [1, 3] step 0.02, s in [0, 4] step 0.05, r in [0.5, 2.5] step 0.02. Printed: a, p, c, s, r, the rms of `log(model/e)`, and the share of the c-term at (N = 32, dt = 0.0125).
 Also per N the two-term fit `e = A_N dt^2 + B_N dt` (four points, weights 1/e), and the spatial error `e_s(N)` of the reference runs against the exact solution with
 its fitted exponent `e_s = b h^q` (independent space and time refinement). Reading rule: an O(dt h^s) floor term is **present** if its share at (32, 0.0125) is >= 30 %
-and `r <= 1.5`; it is **identified as O(dt h^2)** if in addition `|s - 2| <= 0.5` and `|r - 1| <= 0.35`. A reference-adequacy row **A0** (prints): at N = 16 and 32 the
+and `r <= 1.5`; it is **identified as O(dt h^2)** if in addition `|s - 2| <= 0.5` and `|r - 1| <= 0.35`. A reference-adequacy row A0 (prints): at N = 16 and 32 the
 PISO and PIMPLE-4 errors at dt = 0.0125 recomputed against dt_ref = 1/2560; adequate if they differ from the 1/1280 values by <= 5 %.
 
 **A2. Falsifier of H-COMM, run BEFORE F-C is written (scratch tree only, prints).** Y1 "uniform-rate split": on the iterative path replace `a_P` in `HbyA`, `rAU` and
@@ -122,20 +122,20 @@ not reduced by at least a factor 3 against the default; otherwise H-COMM **stand
 `(c1/dt)(gamma phi^n - interp(rAU u^n).S) - (c2/dt)(gamma phi^{n-1} - interp(rAU u^{n-1}).S)` on internal faces AND on translationally periodic coupled faces
 (owner/partner distance weights, `gamma` of the face = the coupled mean used by the pressure equation; rotationally periodic faces unchanged, stated), with the
 `rAU` of the current outer iteration. Requires `ddt_correction = true`. Acceptance (all, with F-C on; band [1.9, 2.3]):
-* **C-O1** TG PISO fine and coarse; **C-O2** TG PIMPLE-C fine; **C-O3** TG PIMPLE-4 fine; **C-O7** TG PISO variable step (ADR 0069 O7 sequence) fine;
-  **C-S1** TG-S PISO fine and **C-S2** TG-S PIMPLE-4 fine. (The coarse pair of PIMPLE-C and the MMS rows carry the PISO/PIMPLE splitting error that ADR 0069 found
-  to be pre-asymptotic; they are run and reported, **C-O6r**, not part of the acceptance.)
-* **C-O9** joint refinement against the exact solution (ADR 0069 O9 set-up) with F-C: both orders >= 1.9.
-* **No-harm N1**: exact velocity error AND pressure error with F-C <= 1.05 x the default at dt in {0.05, 0.025, 0.0125}, N = 32, for TG PISO, TG-S PISO, MMS PISO,
+* C-O1 TG PISO fine and coarse; C-O2 TG PIMPLE-C fine; C-O3 TG PIMPLE-4 fine; C-O7 TG PISO variable step (ADR 0069 O7 sequence) fine;
+  C-S1 TG-S PISO fine and C-S2 TG-S PIMPLE-4 fine. (The coarse pair of PIMPLE-C and the MMS rows carry the PISO/PIMPLE splitting error that ADR 0069 found
+  to be pre-asymptotic; they are run and reported, C-O6r, not part of the acceptance.)
+* C-O9 joint refinement against the exact solution (ADR 0069 O9 set-up) with F-C: both orders >= 1.9.
+* No-harm N1: exact velocity error AND pressure error with F-C <= 1.05 x the default at dt in {0.05, 0.025, 0.0125}, N = 32, for TG PISO, TG-S PISO, MMS PISO,
   MODE PISO (12 velocity and 12 pressure comparisons; MODE pressure is zero and is skipped).
-* **N2**: with every new option off the five fingerprints of `w33b_default_bits` are identical (zero differing bits); `baseline_hashes` unchanged.
-* **N3** (decomposition with F-C, prints): A1 rerun for PISO and PIMPLE-4 with F-C on N in {16, 32, 64}; the reading rule of A1 applied.
+* N2: with every new option off the five fingerprints of `w33b_default_bits` are identical (zero differing bits); `baseline_hashes` unchanged.
+* N3 (decomposition with F-C, prints): A1 rerun for PISO and PIMPLE-4 with F-C on N in {16, 32, 64}; the reading rule of A1 applied.
 If C-O1/C-O3 fail with Y1 having passed, the remaining floor is reported with the A1 decomposition of the F-C runs; no second fix is tried in this wave.
 
 **A4. Falsifier of H-K and fix F-K `PimpleSettings::fractional_increment_flux` (default false; fractional path; incremental form only).** The predictor face term
 `dte (interp(grad p^n).S - snGrad(p^n)|S|)` is not added, so `phi* = interp(u*).S`. Run first (diagnostic): FRAC TG N = 32, fine and coarse pairs, and the A1
-dt set at N = 16, 32, 64. Reading rule: H-K is **falsified** if the fine-pair order stays below 1.9 with F-K. Acceptance of F-K: **C-O4** FRAC TG fine and coarse in
-[1.9, 2.3]; **C-O4S** FRAC TG-S fine in [1.9, 2.3]; **No-harm N4**: exact velocity and pressure errors with F-K <= 1.05 x the default at dt in {0.05, 0.025, 0.0125} on
+dt set at N = 16, 32, 64. Reading rule: H-K is **falsified** if the fine-pair order stays below 1.9 with F-K. Acceptance of F-K: C-O4 FRAC TG fine and coarse in
+[1.9, 2.3]; C-O4S FRAC TG-S fine in [1.9, 2.3]; No-harm N4: exact velocity and pressure errors with F-K <= 1.05 x the default at dt in {0.05, 0.025, 0.0125} on
 TG, TG-S and MODE (N = 32), AND a checkerboard check on the lid cavity (16 x 16, Re = 100, linear upwind, FRAC BDF2, dt = 0.01, t = 5): the cell-to-cell
 checkerboard indicator `chi = max |p_P - (mean of the 4 face neighbours' p)| / (max p - min p)` with F-K <= 1.5 x its default value; and the cavity velocity with F-K
 differs from the default by <= 2 % of the lid speed (max over cells). F-K is kept only if all hold (ADR 0069's F2 lesson: an order gain that moves the converged
@@ -153,8 +153,8 @@ F-C opt-in with the cylinder result stated as a caveat; no second run, no other 
 **B2. Verification on the actual solver (new runs, prints and limits).** Periodic unit square 32 x 32, nu chosen so that `D = (4 nu/h^2) dt / c0` takes the values
 {1, 2, 3, 4, 6} at dt = 0.01 (one nu per D), fluid at rest, initial pressure `p0 = 1e-6 cos(2 pi x) cos(2 pi y)`, linear upwind, PIMPLE-2 and PIMPLE-4 (one corrector,
 alpha_u 0.8, alpha_p 0.5), Euler and BDF2 (BDF2: D uses c0 = 1.5), 12 steps. Measured growth factor `g = (||p_12|| / ||p_6||)^(1/6)` (mean removed). Model value: the
-exact-symbol G of R5 with `lambda` of this mode (`lambda = nu (4/h^2)(2 sin^2(pi h))`, `lambda_d = 4 nu/h^2`). Limits: **B2a** for every case with model
-`|G| >= 1.15` the run grows (`g > 1`) and `|g - |G|| <= 0.10 |G|`; **B2b** for every case with `|G| <= 0.85` the run does not grow (`g < 1`). Cases with `|G|` in
+exact-symbol G of R5 with `lambda` of this mode (`lambda = nu (4/h^2)(2 sin^2(pi h))`, `lambda_d = 4 nu/h^2`). Limits: B2a for every case with model
+`|G| >= 1.15` the run grows (`g > 1`) and `|g - |G|| <= 0.10 |G|`; B2b for every case with `|G| <= 0.85` the run does not grow (`g < 1`). Cases with `|G|` in
 (0.85, 1.15) are reported only.
 
 **B3. New cavity predictions (uniform 32 x 32, Re = 100, registered harness of ADR 0069, one run each).** Predicted STABLE: PIMPLE-2 Euler Co_t 2.3 (G = 0.71),
@@ -171,13 +171,13 @@ non-final ones; the velocity error is zero at the step start. `rho >= 1`: `Warn`
 a message naming the remedy (`n_correctors >= 2` or a smaller dt). The settings rule documented with it: one pressure corrector with a lagged pressure is unstable
 once the smooth-mode diffusion number exceeds the D* of R5.
 Acceptance:
-* **B4a** (B2 set-up): the check's `rho` (step 1) within 10 % of the measured `g` for every B2 case with model `|G| >= 1.15`, and `rho < 1` for every case with `|G| <= 0.85`.
-* **B4b** (cavity, ADR 0069 harness, Warn mode, every = 20): all PIMPLE-2 and PIMPLE-4 runs of the required set and the scan (2 meshes x 2 Re x 2 schemes x
+* B4a (B2 set-up): the check's `rho` (step 1) within 10 % of the measured `g` for every B2 case with model `|G| >= 1.15`, and `rho < 1` for every case with `|G| <= 0.85`.
+* B4b (cavity, ADR 0069 harness, Warn mode, every = 20): all PIMPLE-2 and PIMPLE-4 runs of the required set and the scan (2 meshes x 2 Re x 2 schemes x
   Co_t {0.5, 1, 2, 4, 8, 16}, 96 runs, the stability verdict re-measured in the same run): every UNSTABLE run is warned at or before the step of its first violated
   criterion; at most 4 STABLE runs are warned. The Re = 1000 unstable runs are inside this limit (no exemption).
-* **B4c**: PIMPLE-2 with `n_correctors = 2` at Co_t = 4, Re = 100, both meshes and schemes: `rho < 1` at step 1 (the X8 remedy is recognised).
-* **B4d** (Raise): uniform Re = 100 PIMPLE-2 Euler Co_t = 4 stops at step 1 with the located message; the state at the stop is finite and max|u| <= 1.5.
-* **B4e**: with the check off, fingerprints identical (N2).
+* B4c: PIMPLE-2 with `n_correctors = 2` at Co_t = 4, Re = 100, both meshes and schemes: `rho < 1` at step 1 (the X8 remedy is recognised).
+* B4d (Raise): uniform Re = 100 PIMPLE-2 Euler Co_t = 4 stops at step 1 with the located message; the state at the stop is finite and max|u| <= 1.5.
+* B4e: with the check off, fingerprints identical (N2).
 
 ### Out of scope
 
@@ -277,7 +277,7 @@ fine-pair order is in [1.9, 2.3]; otherwise it is falsified. No fix follows in t
 
 ## Final addendum (measured values, misses and deviations; nothing above was changed)
 
-Y3 was run once after amendment 3: TG-S PISO with F-G and the extrapolated seam partner values, fine pair 4.322e-5 / 9.197e-6, order **2.232** (in band; the
+Y3 was run once after amendment 3: TG-S PISO with F-G and the extrapolated seam partner values, fine pair 4.322e-5 / 9.197e-6, order 2.232 (in band; the
 errors equal the TG PISO F-G ones to three digits). By the registered rule **H-SEAM-CONV stands**: the remaining TG-S PISO floor is the first-order lag of the periodic
 partner value in the convection (and Laplacian link) terms on the first BDF2 outer iteration. No fix is made for it in this wave (amendment 1); the remedy measured by
 Y3 (take the coupled-face coefficients and the link lag values from the extrapolated velocity on that outer iteration, as the fractional path already does) is the

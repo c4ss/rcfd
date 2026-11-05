@@ -56,12 +56,12 @@ A missed goal is reported as missed in the addendum with the measured value; the
 
 ## Consequences
 
-* Process per test is more isolation than today, not less: environment changes (`set_var` in five rcfd-assistant tests) and global
+* Process per test isolates more than today: environment changes (`set_var` in five rcfd-assistant tests) and global
   state no longer leak between tests. Tests of different binaries now overlap. Audit before the first run: every fixed temp path
   (`rcfd_particles_case_out`, `rcfd_timectl_restart`, `w44a_jac`, `w37a_jac`, `elsewhere.toml`, the `rcfd-gui-*` folders,
   `rcfd_w26c_ensight_write`) and every file written under `CARGO_TARGET_TMPDIR` belongs to a single binary, so no two binaries share
-  one; within a binary they already ran concurrently on three threads. Pid-suffixed folders can meet a reused pid; that gives the
-  sharing a single-process binary already had, nothing new.
+  one; within a binary they already ran concurrently on three threads. Pid-suffixed folders can meet a reused pid; that gives only the
+  sharing a single-process binary already had.
 * Startup of about 2100 processes adds seconds, not minutes.
 * The original `cargo test` remains the reference; if the runner and it ever disagree, the runner is wrong.
 

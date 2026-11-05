@@ -174,7 +174,7 @@ Checks (`crates/rcfd-api/tests/w36b_lag_known.rs`):
 * P-a: every P-gt classification equals the earlier one in the table. A difference is a set-up defect of the tree form (reported); P-b then uses P-gt.
 * P-b: with the default key (`warn`) and `runctl::drive` over 3 steps, exactly one `pressure_lag` warning (at step 1 for Euler, step 2 for BDF2) iff the
   set-up is UNSTABLE by P-gt; no warning iff STABLE. All six.
-* C4'' (reported): the accounting of ADR 0077 C4' extended by these six one-corrector runs: warnings on the STABLE ones are false positives. This is what
+* C4'' (reported): the accounting of ADR 0077 C4' extended by these six one-corrector runs: warnings on the STABLE ones are false positives. This
   makes C4 non-vacuous, and only for these six set-ups (no existing validation case of the suite uses one corrector).
 
 ### Process
@@ -221,7 +221,7 @@ Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
 Release builds, scratch tree on top of 2403566 (rebased onto 7c4dff2 before the gate; the rebase touched no file of this wave except the two docs).
 One run per registered set-up unless stated. Limits are the registered ones (with amendments 1 and 2), unchanged.
 
-Outcome in one paragraph. (1) `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the FAN-01
+Outcome. (1) `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the FAN-01
 mesh, laminar and SST, keeps every converging case checked converging (also with the limiter forced on in all 542 steady `linear_upwind` simulations
 of the suite: no new guard trip), and keeps second order on the Kovasznay flow (fine-pair L2 order 2.17; fine-mesh error 0.6 % above the unlimited
 scheme): every limit met, the key is kept. (2) The sheared-mesh SIMPLEC divergence needs no wall, no open boundary and no convection (a doubly periodic
@@ -279,7 +279,7 @@ Readings (registered rules; every variant used by a reading is STABLE at 0 degre
 * H-X6 (start-up only): STANDS (rho 0.982 < 1; V9b 0.889).
 
 Decision (registered): no code fix (neither H-X1 nor H-X2 stands). Documented in `docs/case-schema.md` (SIMPLEC on uniformly sheared meshes).
-Observations, no verdict: lowering `alpha_u` at `alpha_p = 1`, or SIMPLE 0.7/0.3, makes the channel worse, not better; lowering `alpha_p` is the
+Observations, no verdict: lowering `alpha_u` at `alpha_p = 1`, or SIMPLE 0.7/0.3, makes the channel worse; lowering `alpha_p` is the
 effective remedy; two correctors without the ADR 0050 compensation are unstable from 15 degrees (consistent with the ADR 0050 mode). What amplifies the
 start-up transient on these meshes is not identified: the linearised iteration at the converged state contracts, so it is a finite-amplitude or
 transient-growth effect (not tested further). A start-up procedure (an alpha_p ramp) was not tested.

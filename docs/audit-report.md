@@ -33,13 +33,13 @@ item; ran `cargo test --workspace --release`, `cargo fmt --check`, `cargo clippy
    "baseline runs bit-identical (hash check)". The tool that computes the hashes is a "throwaway, not committed" example
    excluded through `.git/info/exclude`, and no baseline hash values are committed. The constant-density-limit tests
    (ADR 0005 d2/d3) do exist and pass; the bit-identity claim does not have a committed gate.
-6. **Counts:** 53 done / 21 partial / 40 todo overall (63.5 of 114 weighted, 55.7 %). Gap items F-104..F-139: 9 done / 8
+6. Counts: 53 done / 21 partial / 40 todo overall (63.5 of 114 weighted, 55.7 %). Gap items F-104..F-139: 9 done / 8
    partial / 19 todo (13.0 of 36, 36.1 %). If the corrections in section 7 are accepted, overall becomes 48 / 26 / 40 (61.0
    of 114, 53.5 %) and gap items stay 9 / 8 / 19 (the F-001/002/004/027/073 changes are outside the gap range).
 7. **ROADMAP.md has drifted from roadmap.json** in notes (33 items); statuses, titles, acceptance text and dependencies
    agree for all 114 items. The most misleading drift is F-006 and F-028/F-042/F-060, where ROADMAP.md still says reference
    values were "from memory / unverified" while the JSON says they were cross-checked (section 8).
-8. **Vendor-derived content:** no vendor code, text or data is in the repository. But the roadmap notes of about 20 gap
+8. Vendor-derived content: no vendor code, text or data is in the repository. But the roadmap notes of about 20 gap
    items used vendor-specific identifiers for settings and modules instead of generic capability names, and `ROADMAP.md`
    cited an inventory file that is not in the repo. These should be generic capability descriptions (section 9).
    (Later edit: those notes were reworded generically; this report no longer quotes the identifiers.)
@@ -189,18 +189,18 @@ pass verifies nothing. It reproduced the F-106 note values for Re_h 100/200/389 
 
 ## 5. Status checks: done items whose evidence is ignored, missing, or weaker than the criterion
 
-- **F-073 (done)**: criterion "renders a contour image in under 2 s for a 1M-cell mesh". There is no timing and no 1M-cell
+- F-073 (done): criterion "renders a contour image in under 2 s for a 1M-cell mesh". There is no timing and no 1M-cell
   render anywhere in the repo (searched `Instant::now`, `1_000_000`, `million` in `rcfd-post`). Not demonstrated.
-- **F-027 (done)**: V-cycle criterion versus W-cycle evidence, tolerance chosen by the author, marginal 14/15, ignored test.
-- **F-001, F-002 (done)**: criteria require passing CI on two OSes; no hosted run exists.
-- **F-004 (done)**: criterion includes "reviewed"; note says review pending.
-- **F-028, F-029 (done)**: the Re 400/1000 cavities and the cylinder Strouhal gates exist only as ignored tests. They pass
+- F-027 (done): V-cycle criterion versus W-cycle evidence, tolerance chosen by the author, marginal 14/15, ignored test.
+- F-001, F-002 (done): criteria require passing CI on two OSes; no hosted run exists.
+- F-004 (done): criterion includes "reviewed"; note says review pending.
+- F-028, F-029 (done): the Re 400/1000 cavities and the cylinder Strouhal gates exist only as ignored tests. They pass
   when run. A default `cargo test --workspace` therefore gives no protection for those parts of the criteria.
-- **F-116 (done)**: the vortex-shedding part is an ignored test; the averaging check compares two computations on the same run.
-- **F-061 (partial)**: choked-flow gate is ignored; API wiring residual target dropped from the test (rows 5, 6).
-- **F-042 (partial)**: reattachment never asserted (row 7).
-- **F-148 (done)**: stale note only.
-- **F-070 (done)**: "opens in ParaView" never run; read back with the VTK python library.
+- F-116 (done): the vortex-shedding part is an ignored test; the averaging check compares two computations on the same run.
+- F-061 (partial): choked-flow gate is ignored; API wiring residual target dropped from the test (rows 5, 6).
+- F-042 (partial): reattachment never asserted (row 7).
+- F-148 (done): stale note only.
+- F-070 (done): "opens in ParaView" never run; read back with the VTK python library.
 - No done item had a missing test file. No `#[ignore]` was added after a test was first committed.
 
 ## 6. Unreproducible hash claims
@@ -244,12 +244,12 @@ Non-status recommendations:
 Parsed both files: 114 items in each, identical ids, titles, dependency lists, acceptance text and status (53 [x], 21 [~],
 40 [ ] in the markdown). Differences are in `note` fields only, 33 items (26 with no markdown note, 7 with different text):
 
-- ROADMAP.md has **no note** for 24 done/partial items (F-029, 071, 073, 074, 080, 081, 082, 084, 085, 090, 091, 092, 093,
+- ROADMAP.md has no note for 24 done/partial items (F-029, 071, 073, 074, 080, 081, 082, 084, 085, 090, 091, 092, 093,
   140-150) and two todo items (F-055, F-095) that roadmap.json documents. In particular F-029 (cylinder result) and F-092/F-093 (demotion to
   optional extras) are invisible in the markdown.
-- Stale content in the markdown: **F-006** says the Ghia/de Vahl Davis tables were "transcribed from memory; verify against the
-  papers before using as hard gates", while the JSON says they were cross-checked in wave 6a. **F-028, F-042, F-060** carry the
-  pre-6a wording ("from memory / not checked") versus verified wording in the JSON. **F-107** lacks the "Done: ..." detail.
+- Stale content in the markdown: F-006 says the Ghia/de Vahl Davis tables were "transcribed from memory; verify against the
+  papers before using as hard gates", while the JSON says they were cross-checked in wave 6a. F-028, F-042, F-060 carry the
+  pre-6a wording ("from memory / not checked") versus verified wording in the JSON. F-107 lacks the "Done: ..." detail.
   F-112 and F-126 notes are shorter.
 - The JSON header says it is the "source of truth for automation"; no automatic check ties the two files together. I
   recommend generating the markdown from the JSON.

@@ -122,47 +122,47 @@ Notation: relative error `|a-b|/|b|`. `s` = bins per doubling. All "exact" refer
 
 ### Bins (B)
 
-* **B1 linear grid Flory.** `M = 400`, `dx = 1`, `K = 1`, `N0 = 1`, monodisperse in bin 1, RK4 `dt = 0.01`, at `tau = 1` and `4`:
+* B1 linear grid Flory. `M = 400`, `dx = 1`, `K = 1`, `N0 = 1`, monodisperse in bin 1, RK4 `dt = 0.01`, at `tau = 1` and `4`:
   `max_k |N_k - N_k^exact|/N0 <= 1e-7`; `|m_1 - 1| <= 1e-12`; `min_i N_i >= -1e-10 max N` over all stored steps (positivity, B9).
-* **B2 geometric grid, number closure.** `s = 4`, `x_1 = 1`, 40 doublings, monodisperse at `x_1`, `K = 1`, `dt = 0.01`: `m_0` relative error vs
+* B2 geometric grid, number closure. `s = 4`, `x_1 = 1`, 40 doublings, monodisperse at `x_1`, `K = 1`, `dt = 0.01`: `m_0` relative error vs
   `N0/(1+tau)` at `tau = 1, 4` at most `1e-8`; `|m_1 - 1| <= 1e-12`.
-* **B3 exponential initial density, convergence in `s`.** `x_1 = 1e-6`, `x_M` at least `1e4` (34 doublings), `s = 2, 4, 8`, projected
+* B3 exponential initial density, convergence in `s`. `x_1 = 1e-6`, `x_M` at least `1e4` (34 doublings), `s = 2, 4, 8`, projected
   `n_0 = e^(-v)`, `K = 1`, `dt = 0.005`, at `tau = 2`: `m_0` relative error at most `1e-5`, `m_1` relative error at most `1e-8` (all `s`);
   `m_2` relative error at most `0.08` for `s = 4` and `0.03` for `s = 8`; `m_3` at most `0.10` for `s = 8`; the `m_2` and `m_3` errors decrease
   strictly from `s = 2` to `4` to `8`. Observed orders `log2(e_s/e_2s)` in bin width are REPORTED; expectation recorded: between 1 and 2, no assertion.
-* **B4 sum kernel, linear grid.** `M = 600`, `B = 1`, `N0 = 1`, `dt = 0.002`, `t = 1`: `m_0` vs `e^-1` and `m_2` vs `e^2`, relative error at most `1e-6`.
-* **B5 product kernel, linear grid.** `M = 600`, `C = 1`, `N0 = 1` (`t_g = 1`), `dt = 0.002`, `t = 0.5`: `m_0` vs `0.75`, `m_2` vs `2`, relative `1e-6`.
-* **B6 binary-equal breakup.** `s = 2`, 20 doublings (`G = 20` generations), monodisperse at the top pivot, `B = 1`, `dt = 0.01`, `t = 1`:
+* B4 sum kernel, linear grid. `M = 600`, `B = 1`, `N0 = 1`, `dt = 0.002`, `t = 1`: `m_0` vs `e^-1` and `m_2` vs `e^2`, relative error at most `1e-6`.
+* B5 product kernel, linear grid. `M = 600`, `C = 1`, `N0 = 1` (`t_g = 1`), `dt = 0.002`, `t = 0.5`: `m_0` vs `0.75`, `m_2` vs `2`, relative `1e-6`.
+* B6 binary-equal breakup. `s = 2`, 20 doublings (`G = 20` generations), monodisperse at the top pivot, `B = 1`, `dt = 0.01`, `t = 1`:
   generation numbers `n_g` vs `e^-1 2^g/g!` for `g = 0..15`, absolute error at most `1e-9`; `m_0` vs `e` at most `1e-9` relative; volume at most `1e-12`.
-* **B7 uniform daughters.** `s = 4`, 40 doublings, monodisperse at the top pivot (`x = 1`), `Gamma = 1`, `dt = 0.01`, `t = 1`: `m_0` vs `e` at most
+* B7 uniform daughters. `s = 4`, 40 doublings, monodisperse at the top pivot (`x = 1`), `Gamma = 1`, `dt = 0.01`, `t = 1`: `m_0` vs `e` at most
   `1e-8`; `m_1` at most `1e-12`; for `s = 8` `m_2` vs `e^(-1/3)` at most `0.05` and `m_3` vs `e^(-1/2)` at most `0.10`; errors fall from `s = 4` to `8`.
-* **B8 round-off conservation of the right-hand side.** Deterministic pseudo-random positive `N`, `s = 3`, 30 doublings (coalescence: constant, sum, product,
+* B8 round-off conservation of the right-hand side. Deterministic pseudo-random positive `N`, `s = 3`, 30 doublings (coalescence: constant, sum, product,
   Brownian, shear; breakup: constant+uniform, power+beta(q=2), binary): `|sum x_i f_i| / sum |x_i f_i| <= 1e-13`. Number: coalescence only with support in
   the lower half of the grid: `|sum f_i + 1/2 sum_jk b_jk N_j N_k|/(1/2 sum b N N) <= 1e-13`; binary-equal breakup with support above bin `s+1` and
   rate constant: `|sum f_i - Gamma sum N_i| / (Gamma sum N_i) <= 1e-13`.
-* **B10 kernel identities.** Brownian `b(v,v) = 8kT/(3mu)` and the RHS-initial number rate for a monodisperse bin `= -(4kT/3mu)N^2` at `1e-12` relative;
+* B10 kernel identities. Brownian `b(v,v) = 8kT/(3mu)` and the RHS-initial number rate for a monodisperse bin `= -(4kT/3mu)N^2` at `1e-12` relative;
   laminar shear `b(v,v) = 8 gdot v/pi` at `1e-14`; Saffman-Turner equals the laminar-shear kernel with `gdot_eff = (1.2944/(4/3)) sqrt(eps/nu)` at `1e-14`;
   all kernels symmetric and positive on a grid sample; daughter distributions: `sum_i n_ik = nu` and `sum_i x_i n_ik = x_k` at `1e-13` for every `k` whose
   daughters stay above `x_1` (uniform and beta `q = 1, 3`).
 
 ### QMOM (Q)
 
-* **Q1 recovery of finite distributions.** Moments of the two-point law `(w, x) = ((0.3, 0.7), (1, 3))` and a three-point law `((0.2, 0.5, 0.3), (0.5, 2, 5))`
+* Q1 recovery of finite distributions. Moments of the two-point law `(w, x) = ((0.3, 0.7), (1, 3))` and a three-point law `((0.2, 0.5, 0.3), (0.5, 2, 5))`
   inverted with `N = 2, 3`: nodes and weights recovered to `1e-12` relative.
-* **Q2 gamma and lognormal.** Gamma(2, 1), `N = 2`: nodes `3 +- sqrt(3)` to `1e-12`, moments `m_0..m_3` reproduced to `1e-12`. Gamma(2,1) and lognormal
+* Q2 gamma and lognormal. Gamma(2, 1), `N = 2`: nodes `3 +- sqrt(3)` to `1e-12`, moments `m_0..m_3` reproduced to `1e-12`. Gamma(2,1) and lognormal
   (`mu = 0`, `sigma = 0.5`, `m_n = exp(n^2 sigma^2/2)`), `N = 3`: moments `m_0..m_5` reproduced to `1e-9`, nodes positive and ordered.
-* **Q3 degenerate and non-realizable.** Delta distribution (`m = (2, 2c, 2c^2, 2c^3)`): one node `c`, weight 2, `1e-12`. Negative variance `(1, 1, 0.5, 1)`,
+* Q3 degenerate and non-realizable. Delta distribution (`m = (2, 2c, 2c^2, 2c^3)`): one node `c`, weight 2, `1e-12`. Negative variance `(1, 1, 0.5, 1)`,
   `m_0 = 0`, `m_0 < 0`, NaN moment, and a moment set with `m_3` violating the second Hankel condition: each `Err(NotRealizable)` with the index reported, and the
   error text starts with `popbal:` and contains the index (asserted).
-* **Q4 constant kernel.** Exponential initial moments `m_k = k! N0`, `K = 1`, `N0 = 1`, `dt = 0.01`, to `tau = 5`; `N = 2` (`m_0..m_3`) and `N = 3`
+* Q4 constant kernel. Exponential initial moments `m_k = k! N0`, `K = 1`, `N0 = 1`, `dt = 0.01`, to `tau = 5`; `N = 2` (`m_0..m_3`) and `N = 3`
   (`m_0..m_5`) vs `k! N0 (1+tau)^(k-1)`: relative error at most `1e-8` for every `k`, `|m_1 - 1| <= 1e-12`. (The moment RHS only uses moments up to
   `2N-1`, so QMOM is exact here up to time integration; the check validates the machinery.)
-* **Q5 sum kernel.** `N = 2`, exponential initial, `B = 1`, `t = 1`, `dt = 0.002`: `m_0` and `m_2` vs derived form, relative `1e-7`.
-* **Q6 product kernel.** `N = 2`, exponential initial (`m_2(0) = 2`, `C = 1`, `t_g = 1/2`), `dt = 0.001`, at `t = 0.25` (`theta = 0.5`) and `t = 0.4`
+* Q5 sum kernel. `N = 2`, exponential initial, `B = 1`, `t = 1`, `dt = 0.002`: `m_0` and `m_2` vs derived form, relative `1e-7`.
+* Q6 product kernel. `N = 2`, exponential initial (`m_2(0) = 2`, `C = 1`, `t_g = 1/2`), `dt = 0.001`, at `t = 0.25` (`theta = 0.5`) and `t = 0.4`
   (`theta = 0.8`): `m_0, m_2, m_3` vs derived forms relative `1e-7`.
-* **Q7 breakup.** Constant `Gamma = 1`, uniform and binary-equal daughters, `N = 2`, exponential initial, `t = 1`, `dt = 0.005`: `m_0..m_3` vs derived
+* Q7 breakup. Constant `Gamma = 1`, uniform and binary-equal daughters, `N = 2`, exponential initial, `t = 1`, `dt = 0.005`: `m_0..m_3` vs derived
   relative `1e-8`. Linear breakup `g = x`, uniform: `m_0` vs `m_0(0) + m_1 t` at `t = 2` relative `1e-8` and `|m_1 - m_1(0)|/m_1(0) <= 1e-12`.
-* **Q8 bins vs QMOM.** Constant kernel, exponential initial, `tau = 2`: `m_0` of the `s = 8` bin run (B3) and QMOM `N = 2` agree to `1e-5`
+* Q8 bins vs QMOM. Constant kernel, exponential initial, `tau = 2`: `m_0` of the `s = 8` bin run (B3) and QMOM `N = 2` agree to `1e-5`
   (REPORT the `m_2` difference as the bin discretisation error; no limit).
 
 ### One-way transport (T)
@@ -170,16 +170,16 @@ Notation: relative error `|a-b|/|b|`. `s` = bins per doubling. All "exact" refer
 Mesh: `channel([nx, 1, 1], [1, 0.1, 0.01])`, uniform flux of speed `U = 1` (`face_flux`), inlet `FixedValue`, outlet and walls `ZeroGradient`,
 `diffusivity = 0`, `ConvScheme::LinearUpwind`, `ImplicitEuler`. No `Symmetry` walls.
 
-* **T1 pure advection.** Kernels off, Gaussian pulse `exp(-((x-0.25)/0.08)^2)` in bin 1 (others zero), `nx = 400`, `dt = 0.4/(nx U)`, advect to `t = 0.3`: relative L2
+* T1 pure advection. Kernels off, Gaussian pulse `exp(-((x-0.25)/0.08)^2)` in bin 1 (others zero), `nx = 400`, `dt = 0.4/(nx U)`, advect to `t = 0.3`: relative L2
   error against the translated profile at most `0.06`; the bins are independent: bin 2 loaded with `3` times the same pulse equals `3` times bin 1 to `1e-12`.
-* **T2 coagulating plug flow.** Constant kernel, `K N0 L/U = 4`, monodisperse inlet in the bin of volume 1 on a geometric grid (`s = 4`, 40 doublings),
+* T2 coagulating plug flow. Constant kernel, `K N0 L/U = 4`, monodisperse inlet in the bin of volume 1 on a geometric grid (`s = 4`, 40 doublings),
   zero initial field, `nx = 200`, `dt = 0.5/(nx U)`, to `t = 5 L/U`: outlet-cell `m_0` vs `N0/(1 + K N0 x/(2U))` at `x = L`: relative error at most `0.01`;
   outlet-cell volume `m_1` over the inlet value within `1e-6`.
-* **T3 source step conservation.** One source step on a cell state: `|V_after - V_before|/V_before <= 1e-12`.
+* T3 source step conservation. One source step on a cell state: `|V_after - V_before|/V_before <= 1e-12`.
 
 ### Process
 
-* **P1** `baseline_hashes.rs` passes unchanged. **P2** final gate on a `git archive` copy: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+* P1 `baseline_hashes.rs` passes unchanged. P2 final gate on a `git archive` copy: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace --release --no-fail-fast`.
 
 ## Not delivered / named gaps (registered before the work)
@@ -241,19 +241,19 @@ Measured against the registered limit:
 
 Deviations and disclosures (none changes a registered limit):
 
-* **B10 set-up defect.** The first version of the daughter-row assertion required a total daughter number strictly greater than 1. For
+* B10 set-up defect. The first version of the daughter-row assertion required a total daughter number strictly greater than 1. For
   bin 1 all uniform daughters fall below the first pivot and the volume-conserving pile-up gives number exactly 1. The first test is kept
   as `b10_kernel_and_daughter_identities_v1_setup_defect` (ignored) and the corrected `..._v2` passes.
-* **B10 registered wording.** The registered statement "`sum_i n_ik = nu` for every `k` whose daughters stay above `x_1`" is vacuous for the
+* B10 registered wording. The registered statement "`sum_i n_ik = nu` for every `k` whose daughters stay above `x_1`" is vacuous for the
   continuous densities (their daughters always reach below `x_1`). What is checked instead: volume `sum x_i n_ik = x_k` to 1e-13 for every
   `k` and every density; the number sum is `2 - x_1/x_k` for the uniform density (closed form, 1e-13) and between 1 and 2 for the betas; the
   binary-equal row has number exactly 2 for `k >= 2`; the moment factors `mb_k/x^k` agree with composite-Simpson integrals of the densities
   to 1e-9. The Saffman-Turner identity is tested with the exact constant `sqrt(8 pi/15)` (1.2944 is its rounded value).
-* **Q3 "second Hankel".** Realized as a three-point law with `m_4` multiplied by 0.3 (N = 3); the error carries index 4.
-* **B3 order.** Observed order 2, above the recorded expectation "between 1 and 2" (the expectation was a report, not a limit). It is the
+* Q3 "second Hankel". Realized as a three-point law with `m_4` multiplied by 0.3 (N = 3); the error carries index 4.
+* B3 order. Observed order 2, above the recorded expectation "between 1 and 2" (the expectation was a report, not a limit). It is the
   expected value for piecewise-linear splitting of the interpolation error per event (second order in the bin width in `v^2`), a
   reading consistent with the derivation in D2.
-* **T2 cost.** The registered T2 set-up (161 bins, 200 cells, 2000 steps) takes about 225 s in a release build (dominated by 322 000
+* T2 cost. The registered T2 set-up (161 bins, 200 cells, 2000 steps) takes about 225 s in a release build (dominated by 322 000
   implicit transport solves), which is long for the suite. The parameters stay as registered.
 * **Not done:** no case-tree wiring, no schema change (so `docs/case-schema.md` is unchanged), no turbulence-coupled run.
 * The pair loop of the bin right-hand side skips pairs where either number density is exactly zero (an optimisation with identical results).

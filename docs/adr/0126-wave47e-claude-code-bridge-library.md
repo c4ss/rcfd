@@ -19,7 +19,7 @@ decisions of 2026-10-26).
 ## Observed on the installed build (Claude Code 2.1.310, 2026-10-26)
 
 Method: `claude --version`, `claude --help`, `claude -p --help` (the same options without the subcommand list), `claude agents --help`,
-`claude agents --json` (no model calls), then **five** real headless calls with `--model haiku` (resolved to `claude-haiku-5-5`) in the
+`claude agents --json` (no model calls), then five real headless calls with `--model haiku` (resolved to `claude-haiku-5-5`) in the
 scratch folder `<scratch dir>`. Total reported cost 0.0241 USD. Conditions: the calls ran from inside a Claude Code
 session, so they inherited `CLAUDECODE` and several `CLAUDE_CODE_*` session and messaging variables; the driver passes the environment
 through unchanged, so a Studio started from a Claude Code terminal behaves as observed. The user settings held no permission rules.
@@ -200,7 +200,7 @@ New observations from R2 and R3, the first runs with the driver's exact argument
 * `--allowedTools <rule>` followed by `--resume <id>` parsed as intended, so the variadic list ended at the next option.
 * The resumed session kept its id.
 
-Real CLI usage in total: **7** billable headless calls (5 observation calls and R2, R3), all with `--model haiku`, about 0.033 USD.
+Real CLI usage in total: 7 billable headless calls (5 observation calls and R2, R3), all with `--model haiku`, about 0.033 USD.
 `claude agents --json` ran about 12 times and makes no model call.
 
 Deviations:

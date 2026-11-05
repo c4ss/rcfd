@@ -2,8 +2,7 @@
 
 Read-only audit of ten roadmap items with status `partial` (HEAD 272eb89, 2026-10-21). Every grade below rests on tests re-run
 for this audit in release mode (`cargo test --release ... -- --include-ignored --nocapture`, own target directory), unless the row
-says "read". Ignored `*_known_miss` tests were run too; all of them still fail, which confirms the recorded misses. Paths are given
-as plain text.
+says "read". Ignored `*_known_miss` tests were run too; all of them still fail, which confirms the recorded misses.
 
 Grades: DONE = the acceptance text as written is met by passing, non-ignored tests with numeric limits; PARTIAL = a real tested
 slice exists, named clauses unmet; TODO = nothing usable; OVERSTATED = the note claims more than the tests show.

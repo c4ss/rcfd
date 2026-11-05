@@ -126,50 +126,50 @@ comparison to the published number is not claimed.
 
 Toy mechanisms are those of `rcfd_reactor::toy`; GRI-Mech tests skip with a message when the data are absent.
 
-* **I1 sensitivity by finite differences.** Isothermal toy first-order isomerisation A -> B (`k` from the Arrhenius toy, 800 K,
+* I1 sensitivity by finite differences. Isothermal toy first-order isomerisation A -> B (`k` from the Arrhenius toy, 800 K,
   `dt` with `k dt = 0.5`), `BatchMap` isothermal. Analytic `A`: `dY_A'/dY_A = e^{-k dt}`, `dY_B'/dY_A = 1 - e^{-k dt}`,
   `dY_B'/dY_B = 1`, `dT'/dT = 1`, `dY_A'/dT = -Y_A dt k'(T) e^{-k dt}` with `k' = k Ea/(R T^2)`, and the rest zero. Limit: every
   entry of the FD matrix within `1e-3` of the largest entry magnitude of its column.
-* **I2 exactness on a linear map.** 200 isothermal states `(T = 800, Y_A in [0,1])` (deterministic sequence): exactly 1 record is
+* I2 exactness on a linear map. 200 isothermal states `(T = 800, Y_A in [0,1])` (deterministic sequence): exactly 1 record is
   added, 199 queries are retrieved, the scaled error of every retrieval against the analytic exponential is `<= 1e-5`.
-* **I3 toy adiabatic ignition ensemble (cell, light).** `CellModel` (rho = 1.5, constant cv as in ADR 0027 K2a), 40 members
+* I3 toy adiabatic ignition ensemble (cell, light). `CellModel` (rho = 1.5, constant cv as in ADR 0027 K2a), 40 members
   `T0 = 780 + j` K (j = 0..39), 100 steps of `dt = 2e-6` s per member sharing one table. For every retrieval the scaled error against
   the shadow direct integration is `<= eps_isat = 1e-3`; the time at which T crosses `T0 + 1000` K differs from the direct trajectory
   of the member by at most 5 percent for every member; retrievals > 0 (the table is used).
-* **I4 GRI H2/air homogeneous ignition batch ensemble.** Constant pressure 1 atm, phi = 1, 16 members `T0 = 1100 + 0.04 j` K,
+* I4 GRI H2/air homogeneous ignition batch ensemble. Constant pressure 1 atm, phi = 1, 16 members `T0 = 1100 + 0.04 j` K,
   `dt = 5e-6` s, 40 steps per member (to 2e-4 s), one shared table, `eps_isat = 1e-3`. Per-retrieval scaled error vs shadow direct
   `<= 1e-3`; ignition delay (max dT/dt on the stepped trajectory, interpolated) of every member within 5 percent of the direct
   trajectory; final temperature within 10 K; retrieved element mass fractions equal the input element mass fractions within `1e-9`
   (absolute, every element); retrieved enthalpy `|h(R_lin) - h(phi)|/cp <= 1 K` (stated bound for the second-order conservation).
   Speed-up (wall and integrator right-hand-side counts) is REPORTED, no limit.
-* **I5 GRI H2/air cell-state ensemble from a 1-D case.** Planar reacting mixing layer (library driver in the test, not a flow
+* I5 GRI H2/air cell-state ensemble from a 1-D case. Planar reacting mixing layer (library driver in the test, not a flow
   solver): 100 cells over 1 mm, `Z(x) = 0.5 (1 - tanh((x - 0.5 mm)/0.1 mm))`, fuel side 10 % H2 / 90 % N2 (mole) at 300 K, air side
   (O2 : N2 = 1 : 3.76) at 1000 K, mixed adiabatically in Z (enthalpy-linear), diffusion of `[T, Y]` with `D = 2e-6` m2/s by explicit
   FTCS, Lie-split with the chemistry step `dt = 5e-6`, 60 steps (3e-4 s). The cell states of every step form the ensemble (6000
   queries). ISAT run: per-retrieval scaled error vs shadow direct `<= 1e-3`; the final temperature profile differs from the direct
   run by at most 10 K; ISAT run wall time shorter than the direct run (speed-up > 1, the one pass/fail use of a speed-up); the number
   of retrievals is reported. Element masses of every retrieved result equal the inputs within `1e-9`.
-* **D1 DRG graph by hand.** Toy mechanism `A <=> B`, `B => C` (slow), `C => D` (slower), element X only, with hand-computed
+* D1 DRG graph by hand. Toy mechanism `A <=> B`, `B => C` (slow), `C => D` (slower), element X only, with hand-computed
   interaction coefficients at a given state (`r_AB`, `r_BC`, `r_CD` from the definition): computed values equal the hand values to
   `1e-12`; the active set from target A at thresholds 0.5 / 0.001 / 0 equals the hand-derived sets.
-* **D2 GRI H2/air static DRG.** `eps_drg = 0.01`, targets H2 and O2, skeleton from 40 sampled states of the T0 = 1100 K run. Species
+* D2 GRI H2/air static DRG. `eps_drg = 0.01`, targets H2 and O2, skeleton from 40 sampled states of the T0 = 1100 K run. Species
   count of the skeleton `< 53` and `<= 20`; reduced-mechanism ignition delay within 5 percent and final temperature within 5 K of the full
   integration at T0 = 1000, 1100 and 1200 K (1 atm, phi = 1); element drift of the reduced run `<= 1e-9`; enthalpy drift
   `|h_end - h_start|/cp <= 1e-2 K` (as the batch reactor); Jacobian dimension reduced (reported).
-* **D3 GRI CH4/air static DRG.** `eps_drg = 0.01`, targets CH4 and O2, T0 = 1400 K, phi = 1: skeleton species count `< 53`; delay within
+* D3 GRI CH4/air static DRG. `eps_drg = 0.01`, targets CH4 and O2, T0 = 1400 K, phi = 1: skeleton species count `< 53`; delay within
   5 percent; final temperature within 20 K; element drift `<= 1e-9`.
-* **D4 dynamic DRG.** H2/air, T0 = 1100 K, per-step active sets with `eps_drg = 0.01`, 400 steps of the ignition run: delay within 5
+* D4 dynamic DRG. H2/air, T0 = 1100 K, per-step active sets with `eps_drg = 0.01`, 400 steps of the ignition run: delay within 5
   percent; final temperature within 5 K; the mean active species count `< 53`.
-* **C1 clustering with tolerance zero.** An ensemble of 300 cell states with duplicates and distinct states (toy cell map): the result
+* C1 clustering with tolerance zero. An ensemble of 300 cell states with duplicates and distinct states (toy cell map): the result
   with `tau = 0` equals the direct result bit for bit (`f64::to_bits`); the number of integrations equals the number of distinct
   states.
-* **C2 clustering with tolerance.** GRI H2/air cell-state ensemble of I5 at step 30 (100 states), `tau = 1e-3`: the number of clusters
+* C2 clustering with tolerance. GRI H2/air cell-state ensemble of I5 at step 30 (100 states), `tau = 1e-3`: the number of clusters
   `< 100`; every member's scaled error vs its own direct integration `<= 10 tau = 1e-2`; element masses of every member preserved
   within `1e-12` (absolute); the speed-up over the direct cell loop REPORTED.
-* **W1 through the case tree.** The wave 21C K2b adiabatic isomerisation box (4 x 4 cells) with `acceleration = cluster`,
-  `accel_tolerance = 0`: fields bit-identical to `acceleration = off`. **W2** `acceleration = isat`, `accel_tolerance = 1e-3`: species
-  and temperature differ from `off` by at most 1e-3 scaled and the retrievals > 0 (counter exposed in `chemistry.json`). **W3** located
-  errors: `acceleration` with `eddy_dissipation`, a negative or unset tolerance, `isat` with tolerance 0, an unknown value. **W4** the
+* W1 through the case tree. The wave 21C K2b adiabatic isomerisation box (4 x 4 cells) with `acceleration = cluster`,
+  `accel_tolerance = 0`: fields bit-identical to `acceleration = off`. W2 `acceleration = isat`, `accel_tolerance = 1e-3`: species
+  and temperature differ from `off` by at most 1e-3 scaled and the retrievals > 0 (counter exposed in `chemistry.json`). W3 located
+  errors: `acceleration` with `eddy_dissipation`, a negative or unset tolerance, `isat` with tolerance 0, an unknown value. W4 the
   default (`off`) leaves a case without the keys bit-identical (baseline hashes and every existing test unchanged in the final gate).
 
 ## Part 2. F-129 combustion extensions (target `partial`; the Sandia-flame acceptance is NOT attempted)
@@ -239,46 +239,46 @@ Toy mechanisms are those of `rcfd_reactor::toy`; GRI-Mech tests skip with a mess
 
 ### Registered checks, F-129 (limits fixed now)
 
-* **B1 Burke-Schumann versus equilibrium.** Toy streams above, 301-point Z grid including `Z_st`: equilibrium (HP) table versus the
+* B1 Burke-Schumann versus equilibrium. Toy streams above, 301-point Z grid including `Z_st`: equilibrium (HP) table versus the
   closed form: `max |T_eq - T_BS| <= 1e-3 K` over the grid, `max |Y_k,eq - Y_k,BS| <= 1e-8`, `T_st` equals 2194.7368 K within 1e-3 K,
   the table's second difference of T is zero (to 1e-3 K) away from the node `Z_st`, i.e. piecewise linear with one kink.
-* **B2 beta PDF.** (a) Linear function: `<f> = f(Zm)` within `1e-12 |f|` for 12 `(Zm, v)` pairs including `Zm` near 0 and 1 and
+* B2 beta PDF. (a) Linear function: `<f> = f(Zm)` within `1e-12 |f|` for 12 `(Zm, v)` pairs including `Zm` near 0 and 1 and
   `a, b < 1` (U-shaped PDF); (b) normalisation `<1> = 1` within `1e-12`; (c) delta limit: `v = 0` gives the lookup bit for bit; with
   `v = 1e-8` the Burke-Schumann mean at `Zm` at least `0.05` from the kink equals the lookup within `1e-6 (T_max - T_min)`; (d) maximum
   variance limit: `v = (1 - 1e-6) Zm (1 - Zm)` gives `(1 - Zm) f(0) + Zm f(1)` within `1e-4 (T_max - T_min)` for the BS table;
   (e) independent quadrature: for `(Zm, v) = (0.3, 0.02)` (`a = 2.85`, `b = 6.65`, smooth) the beta mean of the BS temperature equals a
   200-panel composite Gauss-Legendre (5-point) integral to `1e-8` relative; (f) mean and variance of the PDF reproduced by integrating
   `Z` and `Z^2` with a fine (4001-point) table: mean within 1e-12, `Z^2` mean within `Zm^2 + v` to `1e-6`.
-* **B3 special functions.** `ln Gamma(5) = ln 24`, `Gamma(1/2) = sqrt(pi)`, `Gamma(10.5)` against the closed form
+* B3 special functions. `ln Gamma(5) = ln 24`, `Gamma(1/2) = sqrt(pi)`, `Gamma(10.5)` against the closed form
   `945 sqrt(pi)/1024`, all `1e-13` relative; `I_x(1,1) = x`, `I_x(2,1) = x^2`, `I_x(1,3) = 1 - (1-x)^3`, `I_x(1/2,1/2) = (2/pi) asin(sqrt x)`,
   symmetry `I_x(a,b) = 1 - I_{1-x}(b,a)` (several a, b, x), all `1e-12` absolute; `erf(1) = 0.8427007929497149` and round trip
   `erfc(erfc^{-1}(y)) = y` for ten `y` within `1e-12` relative.
-* **B4 element conservation of the table.** Toy: element mass fractions of every table row equal `Z e_F + (1 - Z) e_O` within `1e-12`
+* B4 element conservation of the table. Toy: element mass fractions of every table row equal `Z e_F + (1 - Z) e_O` within `1e-12`
   and `sum Y = 1` within `1e-12`; GRI CH4/air: within `1e-9`. Table temperatures at `Z = 0` and `Z = 1` equal the stream temperatures
   within `1e-6 K` (frozen mixing at the ends; the pure streams do not react).
-* **B5 interpolation order.** A table of `f(Z) = Z^2` on N and 2N intervals: linear lookup error at interval midpoints equals `h^2/4`
+* B5 interpolation order. A table of `f(Z) = Z^2` on N and 2N intervals: linear lookup error at interval midpoints equals `h^2/4`
   within `1e-12` and the maximum error ratio of the two grids is within `[3.9, 4.1]`; a linear function is reproduced within `1e-13`.
-* **B6 located errors.** `Zm` outside `[0,1]`, `v < 0`, `v > Zm(1-Zm)`, non-monotonic Z grid, unknown species name in a stream,
+* B6 located errors. `Zm` outside `[0,1]`, `v < 0`, `v > Zm(1-Zm)`, non-monotonic Z grid, unknown species name in a stream,
   streams with a zero composition, a table row count mismatch: each returns an error whose text names the offending argument and
   value (tests match on the argument name).
-* **B7 CH4/air GRI equilibrium table (report only).** `Z_st` from the element balance, the Z of the maximum equilibrium temperature,
+* B7 CH4/air GRI equilibrium table (report only). `Z_st` from the element balance, the Z of the maximum equilibrium temperature,
   its value and the lean / rich branch temperatures are printed; no pass / fail on agreement with literature numbers.
-* **F1 flamelet, no reaction.** Solution is the linear mixing line to `1e-12`; Newton converges in at most 2 iterations.
-* **F2 flamelet, first-order decay.** Isothermal toy A -> B, `chi = const`, N = 101 grid: the solution equals the exact discrete
+* F1 flamelet, no reaction. Solution is the linear mixing line to `1e-12`; Newton converges in at most 2 iterations.
+* F2 flamelet, first-order decay. Isothermal toy A -> B, `chi = const`, N = 101 grid: the solution equals the exact discrete
   solution `sinh(mu Z)/sinh(mu)` with `2 (cosh(mu h) - 1)/h^2 = m^2` to `1e-9` and the continuous solution `sinh(m Z)/sinh(m)`,
   `m = sqrt(2 k/chi)`, `m = 2`, to `2e-4`.
-* **F3 flamelet, fast chemistry limit.** Toy `F + O <-> 2P` (reversible by the equilibrium constant of B1, rate `A = 1e8 m3/mol/s`
+* F3 flamelet, fast chemistry limit. Toy `F + O <-> 2P` (reversible by the equilibrium constant of B1, rate `A = 1e8 m3/mol/s`
   scale chosen as stated in the test), N = 801: for `chi_st = 1e-1, 1e-2, 1e-3` the maximum temperature deviation from the BS peak
   `|T_max - T_st|/Delta T_st` decreases monotonically and is `<= 0.1` at `chi_st = 1e-3`; the converged scaled residual
   `<= 1e-8`; element X mass fraction linear in Z within `1e-9`.
-* **F4 flamelet, extinction trend.** Toy irreversible Arrhenius one-step (activation temperature 15000 K): `T_max(chi_st)` strictly
+* F4 flamelet, extinction trend. Toy irreversible Arrhenius one-step (activation temperature 15000 K): `T_max(chi_st)` strictly
   decreases along a continuation of at least 6 increasing `chi_st` values; the first non-converging `chi_st` (extinction) is reported.
-* **F5 `chi(Z)` profile.** `chi(Z_st) = chi_st` exactly, symmetric about `Z = 1/2` (`chi(Z) = chi(1 - Z)`) within `1e-12`, maximum at
+* F5 `chi(Z)` profile. `chi(Z_st) = chi_st` exactly, symmetric about `Z = 1/2` (`chi(Z) = chi(1 - Z)`) within `1e-12`, maximum at
   `Z = 1/2`.
-* **F6 flamelet table lookup.** Bilinear in `(Z, ln chi_st)`: exact reproduction of a node and of a linear field; PDF-integrated
+* F6 flamelet table lookup. Bilinear in `(Z, ln chi_st)`: exact reproduction of a node and of a linear field; PDF-integrated
   table value with `v = 0` equals the lookup.
-* **P1 front speed.** Zeldovich cubic, `Gamma = 2`, `k = 5`: `m = sqrt(Gamma k/2) = sqrt 5` within `1e-4` relative; **P2** the profile
-  from the phase plane agrees with the logistic profile (as `g(c) = a c (1-c)`) within `1e-4` absolute in `g/a`; **P3** progress variable
+* P1 front speed. Zeldovich cubic, `Gamma = 2`, `k = 5`: `m = sqrt(Gamma k/2) = sqrt 5` within `1e-4` relative; P2 the profile
+  from the phase plane agrees with the logistic profile (as `g(c) = a c (1-c)`) within `1e-4` absolute in `g/a`; P3 progress variable
   from the HP equilibrium: `c = 0` for the unburnt state, `c = 1` for the equilibrium state, monotone along a constant-pressure ignition
   trajectory (GRI H2/air, `c` from `T`), PDF mean of a source linear in `c` equals the source at the mean within `1e-12`.
 * **P4 not attempted** (named): a premixed flame table from a detailed-chemistry flame, the burning-velocity versus equivalence-ratio

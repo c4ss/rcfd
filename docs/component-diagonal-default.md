@@ -4,7 +4,7 @@ This page is the analysis record for the user, who decides whether the corrected
 anyone who wants to know what that change would move. For the key itself and its values see the solver keys in
 [case-schema.md](case-schema.md).
 
-Analysis for a decision that is the user's (ADR 0074 part C, wave 34C). Nothing here changes the default; `averaged` stays the default and no
+Analysis for ADR 0074 part C, wave 34C. Nothing here changes the default; `averaged` stays the default and no
 baseline hash was re-recorded. All numbers below were measured in wave 34C on the tree at HEAD fbc409b plus the wave-34C changes; the harness is
 `crates/rcfd-api/tests/w34c_component_diagonal_default.rs` (ignored diagnostics, C1 and C2) and one full workspace test run of a scratch copy whose
 schema default was flipped to `corrected` (never committed).
@@ -20,8 +20,7 @@ heat-exchanger channel that stopped converging with the flipped default turned o
 applied to a round-off pressure field, not a solver defect (see the update at the end of this page); its two tests would still
 need an absolute stationarity criterion, or the averaged setting made explicit, if the default changed.
 
-Status of the decision: it is the user's. Nothing on this page changes the default and no baseline hash was re-recorded. The
-options are listed in "Options".
+Status of the decision: it is the user's. The options are listed in "Options".
 
 ## What the key does
 

@@ -67,22 +67,22 @@ area is `A = ly * depth`, slip (symmetry) side walls, `simplec`, `convection = u
 
 * Z1 porous jump in a velocity-inlet duct (mu = rho nu = 1.8e-5 Pa s, rho = 1.2, alpha = 1e-8 m^2, C2 = 1000 1/m,
   t = 0.02 m; inlet velocities 0.5, 2, 5 m/s; kinematic pressure from the cell columns just before and after the
-  zone): `dp` reproduces `(mu/alpha) t v + C2 t rho v^2/2` with relative error below **1e-3** at each velocity. A
+  zone): `dp` reproduces `(mu/alpha) t v + C2 t rho v^2/2` with relative error below 1e-3 at each velocity. A
   viscous-only (C2 = 0) and an inertial-only (alpha = 0) jump are checked with the same limit at 2 m/s.
 * Z2 fan operating point (fixed static pressure 0 at inlet and outlet, zero-gradient velocity inlet, fan zone then
   the porous jump of Z1, fan curve (Q, dp) = (0, 200), (0.03, 140), (0.06, 0) with Q [m^3/s], dp [Pa]; A = 0.02 m^2):
   the reference operating point is the intersection of the fan curve with the analytic jump curve found by bisection to
   1e-12. Limits: `|Q_cfd - Q_op| / Q_op < 5e-3`; the pressure rise across the fan zone equals the curve value at
-  `Q_cfd` to **1e-3** relative; the pressure drop across the jump equals the analytic jump at `Q_cfd` to 1e-3. If the
+  `Q_cfd` to 1e-3 relative; the pressure drop across the jump equals the analytic jump at `Q_cfd` to 1e-3. If the
   SIMPLE kernel cannot hold a fixed-pressure inlet with zero-gradient velocity (non-stationary or failed run), that is
   reported as a miss, not repaired by changing the test.
 * Z3 network outlet: fan zone, velocity-zero-gradient fixed-pressure inlet at 0, outlet patch pressure from the
   network `R1 = 1000 Pa s/m^3`, `R2 = 40000 Pa s^2/m^6`, `p_ref = 0`; the operating point is the intersection of the
   fan curve of Z2 with `R1 Q + R2 Q^2` (bisection 1e-12): `|Q_cfd - Q_op| / Q_op < 5e-3`, and the converged outlet
-  pressure equals `R(Q_cfd)/rho` to **1e-4** relative.
+  pressure equals `R(Q_cfd)/rho` to 1e-4 relative.
 * Z4 heat exchanger energy balance (rho = 1.2, cp = 1005, conductivity 1e-3 W/m/K, inlet 2 m/s at 300 K, outlet
   zero-gradient, upwind): fixed duty -500 W: the enthalpy rise of the stream between inlet and outlet,
-  `rho cp Q (T_out - T_in)`, equals the duty to **1e-6** relative; the integral of the energy source equals the duty to
+  `rho cp Q (T_out - T_in)`, equals the duty to 1e-6 relative; the integral of the energy source equals the duty to
   1e-9; effectiveness mode (eps = 0.7, T_sec = 350 K; once with `secondary_capacity_rate` 0 and once 20 W/K):
   reported duty equals `eps C_min (T_sec - T_in)` evaluated with the exact inlet temperature to 1e-6 and the stream
   enthalpy rise equals the reported duty to 1e-6 (the roadmap acceptance is 1 percent).
@@ -99,7 +99,7 @@ Parallel plates at x = 0 and x = L = 1 m (black unless stated) with the energy f
 
 * R1 P1 radiative equilibrium: the flux between the plates is the analytic P1/Marshak solution (G linear)
   `q = sigma (T1^4 - T2^4) / (1/eps1 + 1/eps2 - 1 + 3 tau/4)`, `tau = beta L`. Optical thickness 0.1, 1, 10 (black) and
-  1 (eps1 = 0.8, eps2 = 0.5): relative error of the wall radiative flux below **1e-3** (the solution is linear,
+  1 (eps1 = 0.8, eps2 = 0.5): relative error of the wall radiative flux below 1e-3 (the solution is linear,
   the check is of the discretisation, the Marshak coefficients and the coupling convergence). Pure absorber and
   `sigma_s = a` (same `beta`) give the same flux (scattering does not change the equilibrium flux): 1e-3.
 * R2 P1 against the transport asymptote (model check, not a code check): for black plates at `tau = 20` the transport
@@ -109,12 +109,12 @@ Parallel plates at x = 0 and x = L = 1 m (black unless stated) with the energy f
   Limit: `|Psi_P1 - Psi_Milne| / Psi_Milne < 1 %` at tau = 20 (the analytic difference is 0.41 %).
 * R3 Rosseland slab (conduction plus Rosseland radiation, `beta = a = 100 1/m`, `L = 0.1 m`, k = 0.1 W/m/K,
   walls 1000 K and 500 K, 200 cells): the Kirchhoff variable `Phi(T) = k T + 4 sigma n^2 T^4 / (3 beta)` is linear in x:
-  maximum deviation below **1e-3** of the range of Phi; wall flux `q = [k (T1 - T2) + 4 sigma (T1^4 - T2^4)/(3 beta)] / L`
+  maximum deviation below 1e-3 of the range of Phi; wall flux `q = [k (T1 - T2) + 4 sigma (T1^4 - T2^4)/(3 beta)] / L`
   within 1e-3. With k = 1e-9 the profile T^4 is linear in x within 1e-3 of its range.
 * R4 P1 with conduction (k = 0.1, `a = 100 1/m`, `L = 0.1 m`, 100 cells, walls 1000/500 K): the total (conductive plus
-  radiative) wall flux is the same at both walls (energy balance) to **1e-4** relative to the flux magnitude; the
+  radiative) wall flux is the same at both walls (energy balance) to 1e-4 relative to the flux magnitude; the
   integral of `a (G - 4 sigma T^4)` over the domain equals the net radiative wall flux to 1e-6.
-  At tau = 50 (a = 500) the total flux of P1 and Rosseland agree within **5 %** (analytic estimate 2.6 %).
+  At tau = 50 (a = 500) the total flux of P1 and Rosseland agree within 5 % (analytic estimate 2.6 %).
 * R5 diagnostics: located errors for negative absorption, `p1`/`rosseland` without `energy.enabled`, unsupported
   algorithms, emissivity outside (0, 1], zero extinction.
 * Unit tests: Marshak face coefficients (black wall, G equal to the black-body value gives zero flux), Rosseland

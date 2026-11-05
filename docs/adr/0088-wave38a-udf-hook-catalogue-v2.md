@@ -32,7 +32,7 @@ that applies them (silently ignoring them would be worse).
 **Not delivered in this slice** (stated in the roadmap note): turbulence source hooks (the turbulence models live inside rcfd-fv and expose no source
 input), species (multicomponent) source hooks (only passive scalars), adjust hook (modifying fields between iterations), exit hook as distinct from
 execute-at-end, reaction-rate hook, dynamic-zone motion hook, specific-heat and density property hooks, any hook in the compressible, variable-density
-or VOF solvers (still refused for all user functions), and transient/coupled use of H3-H5. **Particle hooks** stay gated on the particle model: the
+or VOF solvers (still refused for all user functions), and transient/coupled use of H3-H5. Particle hooks stay gated on the particle model: the
 Lagrangian tracking features F-056 and F-128 are `partial`, and no particle hook (injection, drag law, wall interaction, scalar update) is offered.
 
 ## Registered checks (`crates/rcfd-api/tests/udf_hooks_w38a.rs`)
@@ -44,31 +44,31 @@ equations, so only round-off of the per-face/per-cell values may differ.
 Common slab ("SLAB", copy of `tests/zone_sources.rs`): box_2d nx x 2 cells on 0.1 x 0.02 m, rho 1, cp 1000, k 2, no flow (all velocities fixed 0),
 energy relax 1, xmin/xmax T = 300 K, SIMPLEC 400 iterations.
 
-* **C1 (H1)**: SLAB nx 32, xmin `temperature_udf` returning 300 + 1000 y K against `temperature_expression = "300 [K] + 1000 [K/m] * y"`:
+* C1 (H1): SLAB nx 32, xmin `temperature_udf` returning 300 + 1000 y K against `temperature_expression = "300 [K] + 1000 [K/m] * y"`:
   rel diff of T < 1e-9; and the run differs from the uniform-300 xmin run (rel diff > 1e-3).
-* **C2 (H2)**: SLAB nx 32, xmin `temperature = "heat_flux"`, `heat_flux_udf` returning 5000 W/m^2 against `heat_flux_value = 5000`: rel diff of T
+* C2 (H2): SLAB nx 32, xmin `temperature = "heat_flux"`, `heat_flux_udf` returning 5000 W/m^2 against `heat_flux_value = 5000`: rel diff of T
   < 1e-9; and the hook run equals the closed form T = 300 + q (L - x) / k to max |error| / (q L / k) < 1e-9 (a linear profile is exact for the
   scheme).
-* **C3 (H3)**: SLAB nx 32 with a uniform zone source 1e4 W/m^3, `physics.conductivity = 5` and a `thermal_conductivity` module returning 2, against
+* C3 (H3): SLAB nx 32 with a uniform zone source 1e4 W/m^3, `physics.conductivity = 5` and a `thermal_conductivity` module returning 2, against
   `physics.conductivity = 2` without the module: rel diff of T < 1e-9; the k = 5 run without the module differs (rel diff > 1e-3).
-* **C4 (H4)**: (a) SLAB nx 64, `energy_source` returning 1e4 against `zone_sources` value 1e4: rel diff of T < 1e-9. (b) The same hook run against
+* C4 (H4): (a) SLAB nx 64, `energy_source` returning 1e4 against `zone_sources` value 1e4: rel diff of T < 1e-9. (b) The same hook run against
   the slab profile: the discrete identity T_h = 300 + q x (L - x) / (2 k) + q h^2 / (8 k) holds to 1e-6 of the maximum rise q L^2 / (8 k) (the E1a
   limit of `tests/zone_sources.rs`). (c) SLAB nx 64, `energy_source` returning 2e4 x / L against the closed form T = 300 + q0 x (L^2 - x^2) / (6 k L):
   max error / max rise <= 6e-4 (the E2 limit of `tests/zone_sources.rs` at nx 64, registered there with its 8-64 refinement study).
-* **C5 (H5)**: SLAB nx 64 with a passive scalar c (diffusivity 0.01, c = 0 on xmin and xmax), `source_udf` returning 5 against `source = 5`: rel
+* C5 (H5): SLAB nx 64 with a passive scalar c (diffusivity 0.01, c = 0 on xmin and xmax), `source_udf` returning 5 against `source = 5`: rel
   diff of c < 1e-9; and the hook run satisfies the same discrete identity c_h = S x (L - x) / (2 D) + S h^2 / (8 D) to 1e-6 of S L^2 / (8 D).
-* **C6 (H6)**: channel_2d 16 x 10 (2 x 1 m) with energy, `initial_value` returning u = (6 y (1 - y), 0, 0), p = 0.25, T = 310, against
+* C6 (H6): channel_2d 16 x 10 (2 x 1 m) with energy, `initial_value` returning u = (6 y (1 - y), 0, 0), p = 0.25, T = 310, against
   `initial.velocity_expression_x = "6 [m/s] * y / 1 [m] * (1 - y / 1 [m])"`, `initial.pressure = 0.25`, `initial.temperature = 310` with
   `initial.velocity = [1, 0, 0]` in both: after construction the fields ux, uy, p, T have rel diff < 1e-12; after 50 SIMPLEC iterations < 1e-9.
-* **C7 (H7)**: the F-122 channel run (16 x 10, SIMPLEC, 300 iterations) with an `execute_at_end` module returning ux: the monitor `udf_end_<n>` has
+* C7 (H7): the F-122 channel run (16 x 10, SIMPLEC, 300 iterations) with an `execute_at_end` module returning ux: the monitor `udf_end_<n>` has
   exactly one value, recorded at the last step, equal to sum(ux V) of the final fields to 1e-12 relative.
-* **C8 (diagnostics and refusals)**: each of these is refused with a located message, none panics: a role flag (`conductivity`, `energy_source`,
+* C8 (diagnostics and refusals): each of these is refused with a located message, none panics: a role flag (`conductivity`, `energy_source`,
   `initialise`, `at_end`) or a reference (`temperature_udf`, `heat_flux_udf`, `source_udf`) whose module lacks the export; a reference to an
   undefined module; `temperature_udf` without `temperature = "fixed"` and `heat_flux_udf` without `temperature = "heat_flux"`; two modules with
   `energy_source`; `energy_source`, `conductivity`, `source_udf` with `solver.algorithm = "piso"`; `conductivity` with `properties.conductivity`;
   `conductivity` with a `heat_flux` boundary; `initialise` with `initial.method = "potential"`. A non-positive conductivity and a non-finite energy
   source stop the run with state failed.
-* **Defaults**: `crates/rcfd-api/tests/baseline_hashes.rs` and the F-122 tests `tests/udf.rs` pass unchanged.
+* Defaults: `crates/rcfd-api/tests/baseline_hashes.rs` and the F-122 tests `tests/udf.rs` pass unchanged.
 
 ## Smoke runs of the built-in counterparts (rule d), before this registration
 

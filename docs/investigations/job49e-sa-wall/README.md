@@ -12,7 +12,7 @@ SA's default wall mode `auto` over-predicts the friction when the wall cell lies
   y+ 40.
 - On the NACA 0012 at 0 degrees it is +17 % in friction on a mesh of median wall y+ 5, and +9.5 % at 15.
 
-**Cause.** The cause is the linear interpolation of the eddy viscosity to the face between the wall cell and the next
+**Cause.** Linear interpolation of the eddy viscosity to the face between the wall cell and the next
 cell, across the steep, non-linear buffer-layer profile.
 - The wall function itself is consistent. Its u_tau iteration, wall-face viscosity and wall nuTilda are not the cause.
 - A 1-D model of exactly that discretisation reproduces the default curve within 1.2 points at all 10 y+ (limit LH1).

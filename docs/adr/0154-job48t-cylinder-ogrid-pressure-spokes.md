@@ -87,7 +87,7 @@ does not show it (the 48H agent's checks).
 
 Grading 10.88 restores the 64 x 48 first cell (0.013657) at ny = 256. `rcfd check`: non-orthogonality about 1e-11 degrees,
 skewness 0.006 (256 x 256) and 0.024 (64 x 48); the reported max aspect ratios 38.2 and 14.7 are depth over an in-plane edge
-(out of plane), not the in-plane wall aspect above. Matching the Courant number does **not** match the wall diffusion number:
+(out of plane), not the in-plane wall aspect above. Matching the Courant number does not match the wall diffusion number:
 it grows like 1/h at a Courant-matched dt.
 
 ### The user's runs (main checkout, untracked; read-only, copied for analysis)
@@ -108,17 +108,17 @@ trace already contradicts "benign transient" (a). The registered falsifier of (a
 
 ## Hypotheses
 
-* **H-disp**: the pattern is drawn by the display (Studio or render core), not stored by the solver.
-* **H-phys**: a physical start-up transient, resolved only on the fine mesh, that decays.
-* **H-Dw**: PISO with one outer iteration loses the pressure-velocity coupling in the wall layer when the wall diffusion number
+* H-disp: the pattern is drawn by the display (Studio or render core), not stored by the solver.
+* H-phys: a physical start-up transient, resolved only on the fine mesh, that decays.
+* H-Dw: PISO with one outer iteration loses the pressure-velocity coupling in the wall layer when the wall diffusion number
   `D_w` is large; the error is grid-scale in theta (odd-even) because the theta faces are the weakly coupled ones. Removed by a
   smaller dt (smaller `D_w`), a coarser first cell (grading), outer iterations, or (perhaps) more correctors.
-* **H-Co**: driven by the Courant number instead.
-* **H-Choi**: the unlimited transient Rhie-Chow carry-over (`ddt_correction`) feeds the odd-even mode.
-* **H-lin**: unconverged linear solves (pressure CG/AMG, momentum BiCGStab/ILU0) leave the mode.
-* **H-conv**: unbounded `linear_upwind` dispersion.
-* **H-start**: the impulsive start (or the push) excites the mode.
-* **H-nonorth**: non-orthogonal correction; predicted null (the mesh is orthogonal to 1e-11).
+* H-Co: driven by the Courant number instead.
+* H-Choi: the unlimited transient Rhie-Chow carry-over (`ddt_correction`) feeds the odd-even mode.
+* H-lin: unconverged linear solves (pressure CG/AMG, momentum BiCGStab/ILU0) leave the mode.
+* H-conv: unbounded `linear_upwind` dispersion.
+* H-start: the impulsive start (or the push) excites the mode.
+* H-nonorth: non-orthogonal correction; predicted null (the mesh is orthogonal to 1e-11).
 
 ## Metrics (fixed here; none has been computed on any field before this registration)
 
@@ -126,16 +126,16 @@ Cells are grouped into rings by their centre radius (equal to 1e-9 relative with
 each ring; `q = 0.5 rho U^2 = 0.5` (kinematic pressure, rho = 1, U = 1). For a ring j with `n_theta` cells and values `p_j(i)`,
 `P_j(k)` is its DFT.
 
-* **M_hf** (primary): RMS over the cells of the band rings (centre radius in [0.55, 0.70]) of the high-pass part of `p_j`, the
+* M_hf (primary): RMS over the cells of the band rings (centre radius in [0.55, 0.70]) of the high-pass part of `p_j`, the
   inverse DFT of the modes `n_theta/8 <= k <= n_theta/2` (wavelength <= 8 cells), divided by q.
-* **A_N** (secondary): the Nyquist (2-cell) amplitude `|(1/n_theta) sum_i p_j(i) (-1)^i| / q`; reported as the band mean, the
+* A_N (secondary): the Nyquist (2-cell) amplitude `|(1/n_theta) sum_i p_j(i) (-1)^i| / q`; reported as the band mean, the
   value at the first (wall) ring, and the maximum over rings with centre radius <= 0.70.
-* **M_2** (secondary): RMS over the band of the circumferential second difference `p_j(i+1) - 2 p_j(i) + p_j(i-1)`, divided by q.
-* **lambda***: wavelength in cells `n_theta/k*` of the band-averaged `|P_j(k)|` maximum over `k >= n_theta/8`; also in units of D
+* M_2 (secondary): RMS over the band of the circumferential second difference `p_j(i+1) - 2 p_j(i) + p_j(i-1)`, divided by q.
+* lambda*: wavelength in cells `n_theta/k*` of the band-averaged `|P_j(k)|` maximum over `k >= n_theta/8`; also in units of D
   at r = 0.6.
-* **Physical signal**: RMS of the low-pass part (`1 <= k < n_theta/8`) over the band, divided by q (printed).
-* **Ring profile**: A_N and the high-pass RMS per ring from the wall to r = 1.5 (printed, figure).
-* **Screen** (from the status stream of every run): RMS of the step-to-step change of cd over the steps with t in [2, 3], and
+* Physical signal: RMS of the low-pass part (`1 <= k < n_theta/8`) over the band, divided by q (printed).
+* Ring profile: A_N and the high-pass RMS per ring from the wall to r = 1.5 (printed, figure).
+* Screen (from the status stream of every run): RMS of the step-to-step change of cd over the steps with t in [2, 3], and
   the median initial p residual over the same steps; wall time per simulated second.
 
 ## Limits and reading rules

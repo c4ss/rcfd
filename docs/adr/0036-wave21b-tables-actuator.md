@@ -133,7 +133,7 @@ F-217: not attempted.
 
 ## Addendum (end of wave 21B): measured results and deviations
 
-Registered limits above are unchanged. Everything below is what happened.
+Registered limits above are unchanged.
 
 ### Measured against the registered checks
 
@@ -142,7 +142,7 @@ Registered limits above are unchanged. Everything below is what happened.
 - P1 max |dT| 4.377e-12 K, heat flow relative difference 1.334e-13; P2 max |T - exact| 7.405e-2 K (limit 0.5), heat flow -0.032 percent (limit 1); P3 4.377e-12 K; P4 max |u - exact| 4.357e-5 U (limit 1e-2); P5, P6 pass.
 - A1 closed forms to <= 1e-13, Betz scan within 1e-5; A2 (raw top-hat, `distribution = "cell"`) force 3.7 to about 4e-16 relative, torque 0.700000000000001; selected volume 4.93496e-2 vs pi R^2 t 5.65487e-2 (-12.73 percent, reported only); A3 pass.
 - **A4 as registered (symmetry side walls) cannot pass, set-up defect.** The velocity limits fail even for the EMPTY duct: with `velocity = "symmetry"` side walls the existing solver does not preserve plug flow (max |ux - 1| = 0.159 at iteration 400 and later). The pressure jump is inside the limit (49.71 sharp, 49.95 smooth). Kept as ignored test `a4_pressure_jump_across_a_disk_in_a_duct_symmetry_walls_known_miss` (smooth: max |ux - 1| 1.598e-1, |uy| 2.011e-2). The cause of the symmetry-wall deviation was not investigated further (pre-existing solver behaviour; recommended for a follow-up).
-- **A4b corrected set-up** (walls `velocity = "fixed"` with the stream velocity (1, 0, 0); the empty duct is exact to 2e-12): kinematic dp 50.0000 (limit 0.5), max |ux - 1| 2.92e-12, max |uy| 4.6e-13 (limit 1e-3), with the default smoothed distribution. Passes.
+- A4b corrected set-up (walls `velocity = "fixed"` with the stream velocity (1, 0, 0); the empty duct is exact to 2e-12): kinematic dp 50.0000 (limit 0.5), max |ux - 1| 2.92e-12, max |uy| 4.6e-13 (limit 1e-3), with the default smoothed distribution. Passes.
 - **A4c sharp top-hat on the corrected set-up misses** (ignored test `a4c_sharp_top_hat_known_miss`): max |ux - 1| 2.897, max |uy| 0.47, dp 49.985. Root cause: a sharp cell zone leaves an unbalanced half force in the edge cells (the discrete pressure gradient gives edge cells half the force density, and the outside neighbours half), producing a jet of about sqrt(a dx) = 3 m/s.
 - A5 (hover in a finite box) NOT attempted (report-only check).
 - R1 max |du| 0.0 (limit 1e-6), max |dp| 0.0 (limit 3.6e-6); the laminar and k_epsilon runs differ by 9.3e-4 in ux (so the check is not vacuous, but the flow is only weakly turbulent at nu = 0.02); R1b a partial region changes ux by 1.9e-4; R2 exact; R3 six located-error cases pass; R4 baseline hashes unchanged.

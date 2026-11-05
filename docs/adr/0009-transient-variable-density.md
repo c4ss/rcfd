@@ -220,7 +220,7 @@ unchanged (Q1, Q2 MET).
 
 ### Misses and what is known about them
 
-* **T3c BDF2 (1.34 against [1.80, 2.20]).** The ADR expected a spatial floor of 1e-5 at 200 cells; that estimate was
+* T3c BDF2 (1.34 against [1.80, 2.20]). The ADR expected a spatial floor of 1e-5 at 200 cells; that estimate was
   wrong. Post-hoc (after the miss, not a gate): the 800-cell run gives the same errors, so the floor is not spatial;
   with `ly = 0.1`, or with a zero-gradient `u` on the y faces, the BDF2 order is 2.07 to 2.15 (errors 1.05e-2, 2.38e-3,
   5.7e-4). Cause: the pressure-equation diagonal `a_P` is the mean of the component diagonals, and on the one-cell-high
@@ -228,22 +228,22 @@ unchanged (Q1, Q2 MET).
   the y diagonal, which inflates `a_P` and slightly damps the acoustic mode (about 1e-3 amplitude loss per period at
   `ly = 0.01`). It is a pre-existing property of the kernel on thin strips; the kernel was not changed for it.
   (`t3c_order_bdf2_posthoc_tall_strip` records the `ly = 0.1` number.)
-* **T5 mass-flow limits.** At 400 steps (0.4 s, ten flow-through times) the transient run is still relaxing: the
+* T5 mass-flow limits. At 400 steps (0.4 s, ten flow-through times) the transient run is still relaxing: the
   mass flow in and out is 0.1159 kg/s against 0.1161 steady and the in/out difference is 1.6e-5. Post-hoc 1200 steps
   (not a gate): in/out 5.3e-10, mass flow 6.4e-4 from the steady value (the floor of the steady kernel's own
   `res_u ~ 1e-5` convergence), Mach 4.6e-4, pressure 7.3e-5; they would have passed. The registered 400 steps were kept.
 
 ### Deviations and disclosures
 
-* **Tightened linear solves in the tests** (all kernel tests except T4): momentum and pressure relative tolerance
+* Tightened linear solves in the tests (all kernel tests except T4): momentum and pressure relative tolerance
   1e-10, energy 1e-12, iteration caps 2000 / 20000 / 2000, so that the inner tolerance and not the linear solver limits
   the accuracy. T4 uses the default linear solver settings.
-* **Inner-iteration floor.** In compressible mode the inner change `max(|dP|/P, ...)` stalls near 1e-11 (round-off of the
+* Inner-iteration floor. In compressible mode the inner change `max(|dP|/P, ...)` stalls near 1e-11 (round-off of the
   absolute pressure), below the registered `inner_tol = 1e-12` of T1/T1r; the tests assert `change < 1e-9` instead of
   `converged`. In T4, 200 of the 1000 steps stopped at the 20-iteration cap (early transient, change up to 1.2e-5);
   after 10 s a step takes one inner iteration. In T6 the first steps use the 40-iteration cap (change 3e-10 to 5e-8)
   and the test asserts `change < 1e-4`; the registered `inner_tol = 1e-10` is therefore not reached in the first steps.
-* **Kernel faults found by the checks and fixed** (not tuning of a criterion): (1) T1r exposed that the mass shift of a
+* Kernel faults found by the checks and fixed (not tuning of a criterion): (1) T1r exposed that the mass shift of a
   closed compressible domain assumed the ideal-gas `rho = psi p`; it is now a Newton step with the actual EOS. (2) T6
   exposed that a prescribed-velocity boundary face, whose density used the lagged cell pressure, made the inner
   iteration diverge for a flow Courant number above one (the lagged outflow of a cell is multiplied by `u dt/dx`, here
@@ -251,7 +251,7 @@ unchanged (Q1, Q2 MET).
   applied only in transient compressible runs; the steady kernel and every other check are untouched). After this fix
   both T6 modes pass at the registered `dt = 0.5 s`. (3) Section 5 (adiabatic-wall energy boundary condition) was
   needed for T6 B; the steady kernel keeps its pre-existing limitation unless viscous heating is on.
-* **T7 Couette setup.** The case schema had only a uniform initial velocity. A uniform start (50 m/s) or a start from
+* T7 Couette setup. The case schema had only a uniform initial velocity. A uniform start (50 m/s) or a start from
   rest with the imposed end profile `u = U y/H` makes the transient solver diverge in the first steps (compressible at
   every `dt` tried between 0.5 and 0.005 (only a few steps at 1e-4 ran); low-Mach with viscous heating at `dt` from 0.5 to 0.02; the impulsive wall layer
   heats the first cells by tens of kelvin per 10 ms). A new key `initial.velocity_expression_x/_y/_z` (expressions of
@@ -262,12 +262,12 @@ unchanged (Q1, Q2 MET).
 * **T6 B top-wall flux is not independent evidence.** `heat_flow_out` reads the temperature boundary coefficients, so a
   zero-gradient (adiabatic) patch returns exactly 0 and the `|q_top| <= 1e-3 q_bottom` check passes by construction. The
   check of the section 5 `h0` wall condition is the temperature profile (1.6e-4 of the scale) and the bottom-wall flow.
-* **Re-measurement.** After the last kernel change (prescribed-velocity `phid`) the ignored `varden_transient` and
+* Re-measurement. After the last kernel change (prescribed-velocity `phid`) the ignored `varden_transient` and
   `varden_transient_duct` tests were run again: T3c BDF2 errors 1.114e-2, 2.99e-3, 1.18e-3 (order 1.34) and T5 6.04e-4,
   1.88e-4, 1.64e-3 / 1.62e-3, 1.56e-5 are unchanged.
-* **History.** The `schema.rs` keys and the `sim.rs` transient branch were committed inside the MRF commit dbe672b of
+* History. The `schema.rs` keys and the `sim.rs` transient branch were committed inside the MRF commit dbe672b of
   another agent (it picked up the working-tree files); `vd.rs` followed in 86aa775, so dbe672b alone does not build.
-* **Viscous heating in steady runs** is available (same terms) but unvalidated; only the transient Couette checks
+* Viscous heating in steady runs is available (same terms) but unvalidated; only the transient Couette checks
   exercise the term.
 
 ## Reference data

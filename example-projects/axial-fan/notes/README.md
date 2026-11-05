@@ -30,12 +30,12 @@ The design ledger `designs/variants.ledger.jsonl` (ADR 0121) holds the run's rep
 
 ## What to click, in order
 
-1. **Project panel**: select `cases/fan01-passage-upwind.toml`. The Case editor shows its settings and the Viewport shows
+1. Project panel: select `cases/fan01-passage-upwind.toml`. The Case editor shows its settings and the Viewport shows
    the mesh preview, labelled "3D". Middle drag rotates the view, right drag pans, the wheel zooms, a double click fits
    the passage into the view. "patch colours" tells the blade, hub, casing, inlet and outlet apart.
-2. **Runs panel**: select the run of the case. The Viewport shows `p` on the surfaces of the passage, in 3D as the
+2. Runs panel: select the run of the case. The Viewport shows `p` on the surfaces of the passage, in 3D as the
    preview. Choose `uz` (the axial velocity) or `nut` in the "field" box and hover for values.
-3. **Scrub**: the run is steady, so the slider runs over iterations (a snapshot every 150). The **Plots** panel shows the
+3. Scrub: the run is steady, so the slider runs over iterations (a snapshot every 150). The Plots panel shows the
    residuals and the reports: `m_blade`, `m_hub` (the moments of one passage about the fan axis; the torque of the whole
    rotor is -9 (`m_blade` + `m_hub`)), `m_in`, `m_out` (mass flows) and `p_in`, `p_out` (area averages of `p`).
 
@@ -63,9 +63,9 @@ Written by `scripts/make_example_projects.py` from the run folder; wall-clock ti
   and p residuals are below 1e-5 (4.7e-6 and 7.9e-7) but the solver reports `not_converged` (exit 5), and the torque
   -9 (`m_blade` + `m_hub`) is 1.40 N m, 35 % below the measured value (ADR 0176). The measured pressure rise is an installation value (bellmouth, struts, diffuser) that a rotor-only passage
   cannot reproduce. The state of the fan work is in `../../docs/milestone-fan.md`.
-* **Coarse mesh.** 4 920 cells, no mesh study here; the largest face non-orthogonality is about 78 degrees, so `rcfd check`
+* Coarse mesh: 4 920 cells, no mesh study here; the largest face non-orthogonality is about 78 degrees, so `rcfd check`
   warns (SV101).
-* **Assumed density.** `physics.rho = 1.2` is assumed (ADR 0075).
+* The density `physics.rho = 1.2` is assumed (ADR 0075).
 * To try the second-order scheme in a copy: set `solver.convection = "linear_upwind"` and add
   `linear_upwind_limiter = "barth_jespersen"` under `[solver]`; the run then stops at `max_iterations` without meeting the
   tolerances.

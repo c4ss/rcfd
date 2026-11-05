@@ -158,7 +158,7 @@ Stage 2 (finest) runs now: H3a and H3b (both survived stage 1).
 
 ## Addendum (measured values; limits above untouched)
 
-Outcome in one paragraph. (1) The half-channel defect is the averaged momentum diagonal of ADR 0010, not the `Symmetry` condition: every term of a
+Outcome. (1) The half-channel defect is the averaged momentum diagonal of ADR 0010, not the `Symmetry` condition: every term of a
 `Symmetry` face (momentum coefficients, scalar condition, pressure-correction flux) is what it should be (A1 to A3), and with the existing opt-in
 `component_diag_correction` (`solver.component_diagonal = "corrected"`) the half channel reproduces the derived discrete Poiseuille solution to 1e-10, equals the
 mirrored full channel to 2e-11 (laminar) and to the printed digits (SST), and the plug, Couette and transient exact solutions hold to 1e-13 (A4 to A9, A11, A12b).

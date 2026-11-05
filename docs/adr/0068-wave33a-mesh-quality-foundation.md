@@ -27,7 +27,7 @@ Every radial node layer k (radius r_k, radii exactly as in 0065: `graded_cells` 
 shroud) carries the same 2-D multi-block grid in the unrolled plane (z, s = r theta), stacked radially and bent to
 (r cos(s/r), r sin(s/r), z). Blocks, all hexahedral:
 
-* **C block** (index i around the blade, j away from it). Half index h = 0..H, H = n_down + n_chord (h = 0 is the outlet end of
+* C block (index i around the blade, j away from it). Half index h = 0..H, H = n_down + n_chord (h = 0 is the outlet end of
   the lower seam, h = n_down the trailing-edge node, h = H the leading-edge node); full index i = h (suction side, lower seam)
   and i = n_i - h (pressure side, upper seam), n_i = 2H. Wall curve W(i): the wake line (axial, s = s_TE, z from the outlet to
   the trailing edge; nodes shared by the two sides, i.e. the wake cut is a set of interior faces), the suction surface from the
@@ -35,12 +35,12 @@ shroud) carries the same 2-D multi-block grid in the unrolled plane (z, s = r th
   trailing edge; surface points `surface_zs(x_m, side)` of the exact section), and the pressure surface back. The leading- and
   trailing-edge nodes are single nodes (sharp section, closed trailing edge): no blunt end faces, no truncation, no
   monotonicity restriction on the section.
-* **Boundary-layer stack**: on every blade wall node, n_bl nodes at distances y_q = sum_{p<=q} h1 g^p along the in-plane unit
+* Boundary-layer stack: on every blade wall node, n_bl nodes at distances y_q = sum_{p<=q} h1 g^p along the in-plane unit
   normal n (outward from the solid). n is the rotation of the central difference of the wall nodes (one-sided is not needed:
   wall nodes are interior of the chain) with two defined exceptions: leading-edge node n = -z (forward), trailing-edge node
   n = -s on the suction j-line and +s on the pressure j-line (the j-lines at the trailing edge are pitchwise so that they
   continue the pitchwise j-lines of the wake). In the wake there is no wall and no exact stack.
-* **Outer part of the j-line**: from the last stack node E to the outer point O(i) with a geometric fit (`graded_cells`, ratio
+* Outer part of the j-line: from the last stack node E to the outer point O(i) with a geometric fit (`graded_cells`, ratio
   solved, first spacing h1 g^n_bl on the blade, d1_w in the wake). O(i): on the seams for i < h_c (h_c = H - n_nose), on the
   front edge (z = z_f) for h_c <= i <= n_i - h_c. Seam points of station h have z_out(h), the SAME function for the lower
   and upper seam (so the upper seam is the lower seam translated by the pitch P = 2 pi r / N in s, i.e. rotated by exactly
@@ -49,12 +49,12 @@ shroud) carries the same 2-D multi-block grid in the unrolled plane (z, s = r th
   station of h, q_c = q(h_c), lambda = 0.25 c (c = local chord), z_f = z_LE - 0.3 c (`front_gap`); the front edge nodes are
   graded in s from the corner (z_f, s_lo) to (z_f, s_LE) with n_nose cells (`graded_cells`, first cell at the corner equal to
   the seam cell there); mirrored on the pressure side.
-* **Wake first spacing**: d1_w(h) = max(h1, min(0.5 dz_h, 0.5 W_h / n_side)), dz_h the local axial cell size, W_h the width to
+* Wake first spacing: d1_w(h) = max(h1, min(0.5 dz_h, 0.5 W_h / n_side)), dz_h the local axial cell size, W_h the width to
   the seam.
-* **F block** (inlet): rows a = 0..n_up in z from z = 0 to z_f (graded, the last cell equals the adjacent seam cell), columns
+* F block (inlet): rows a = 0..n_up in z from z = 0 to z_f (graded, the last cell equals the adjacent seam cell), columns
   b = 0..2 n_nose at the front-edge s nodes; row a = n_up is the front edge of the C block (shared nodes); b = 0 / 2 n_nose
   are the lower / upper seam.
-* **Core block** (inside the blade, only for the tip gap): columns m = 0..n_chord at the same chord stations, n_core cells from
+* Core block (inside the blade, only for the tip gap): columns m = 0..n_chord at the same chord stations, n_core cells from
   the suction node to the pressure node. At the leading and trailing node the column collapses to the single wall node, so the
   first and last core cells are triangular prisms (degenerate hex faces with fewer than three distinct nodes are dropped,
   coincident nodes of a face are merged). Core cells are deleted for k < n_span (the blade), kept for k >= n_span (the tip
@@ -94,17 +94,17 @@ they are not adjusted after the measurement.
 Pencil analysis of the corner geometry (no mesh was generated) showed three construction problems in the text above. They are fixed here, before implementation, and
 the gates and set-ups are untouched:
 
-1. **Wall normal everywhere** is the rotation of the central difference of the neighbouring nodes of the wall-and-wake curve (one-sided only at the two outlet ends). There
+1. Wall normal everywhere is the rotation of the central difference of the neighbouring nodes of the wall-and-wake curve (one-sided only at the two outlet ends). There
    is no exception at the leading edge (forcing -z would point 46 deg away from the true normal of a staggered, cambered nose and tangle the nose cells) and none at the
    trailing edge (a pitchwise trailing-edge j-line crosses the neighbouring pressure-side stack lines, a concave corner). The trailing-edge node has two normals (suction
    side uses the wake neighbour and the first suction node, pressure side the first pressure node and the wake neighbour).
-2. **Wake line** leaves the trailing edge along the tangent of the PRESSURE surface (slope sigma_0 = ds/dz at x = 1) and bends to axial:
+2. Wake line leaves the trailing edge along the tangent of the PRESSURE surface (slope sigma_0 = ds/dz at x = 1) and bends to axial:
    s_w(z) = s_TE + sigma_0 lambda_w (1 - exp(-(z - z_TE)/lambda_w)), lambda_w = 0.2 c. (An axial wake would make a concave turn of about the stagger angle on the pressure side where
    the stack lines would fold; along the pressure tangent the pressure side is smooth and the suction side has a convex turn of the trailing-edge wedge angle.) The wake stations carry
    a stack along the wake normal (first spacing d1_w, n_bl layers) while its thickness is <= 0.25 of the width to the nearest seam, otherwise a pure geometric fit.
-3. **Seam point of a station**: z_out(h) = z_a - (q_c - z_f) exp(-(z_a - q_c)/lambda) where z_a = (z of the stack edge on the lower line + z of the stack edge on the upper
+3. Seam point of a station: z_out(h) = z_a - (q_c - z_f) exp(-(z_a - q_c)/lambda) where z_a = (z of the stack edge on the lower line + z of the stack edge on the upper
    mirror line)/2 and q_c = z_a at the corner station (lambda = 0.25 c). The same z_out serves both seams. (Replaces the camber-line formula; at mid chord the two coincide.)
-4. **Chord stations** x(u) = 0.85 (1 - cos(pi u))/2 + 0.15 u, u = m / n_chord (a 15 % linear share keeps the end spacing from collapsing, which the stack thickness at y+ = 30
+4. Chord stations x(u) = 0.85 (1 - cos(pi u))/2 + 0.15 u, u = m / n_chord (a 15 % linear share keeps the end spacing from collapsing, which the stack thickness at y+ = 30
    would otherwise exceed at the trailing edge).
 
 ## Amendment 2 (written after development runs of the small set-up S only; A' and B' have NOT been run)
@@ -112,14 +112,14 @@ the gates and set-ups are untouched:
 Development iterations on S (a layer-by-layer check of 2-D cell areas and a per-face listing of non-orthogonality; S is not a gated set-up) changed the line construction. They
 are listed here so that the later measurement can be read against them. Gates, set-up counts and `front_gap` 0.3 for A', B', S are unchanged.
 
-1. **Pursuit lines instead of straight rays.** A straight ray from the stack edge to its seam or front-edge target grazes the wall near the pressure-side nose and folds (negative
+1. Pursuit lines instead of straight rays. A straight ray from the stack edge to its seam or front-edge target grazes the wall near the pressure-side nose and folds (negative
    2-D areas on S, cell 121 of the first build). Each line now leaves along the wall normal and turns smoothly to aim at its target (direction blend weight smoothstep of
    q / (0.7 n) over the n cells outside the stack), reaching the target exactly; step lengths keep the graded fractions of the remaining distance. The outlet lines (i = 0, n_i) are
    straight so that the outlet stays planar. A Bezier variant was tried first and hooked at the trailing edge; it is not used.
-2. **Common first height everywhere.** The wake stacks use d1 = h1 as the blade (not 0.5 x the local axial spacing): a first height that varies by 20 % between neighbouring lines misaligns
+2. Common first height everywhere. The wake stacks use d1 = h1 as the blade (not 0.5 x the local axial spacing): a first height that varies by 20 % between neighbouring lines misaligns
    the rows by more than the line spacing and gave 80+ deg faces in the wake on S. The wake cells are therefore thin in the stack rows (aspect is gated, the wake is not a wall).
-3. **Front-edge nodes** start at the nose with the width of three wall cells and grow geometrically to the seam corners (previously the reverse).
-4. **Known geometric limit, measured on S only:** at `front_gap` 0.3 the nose fan spreads n_nose lines over the 0.28 m front edge that lies 0.02 m ahead of the nose; the lines are
+3. Front-edge nodes start at the nose with the width of three wall cells and grow geometrically to the seam corners (previously the reverse).
+4. Known geometric limit, measured on S only: at `front_gap` 0.3 the nose fan spreads n_nose lines over the 0.28 m front edge that lies 0.02 m ahead of the nose; the lines are
    oblique by construction. S gives max non-orthogonality 78.8 deg and 371 faces above 60 deg of 11536 cells. A larger `front_gap` (1 chord and more) tangles the pressure-side
    fan (lines graze the staggered pressure surface) and is rejected by the generator with a located error. I therefore expect A' and B' to MISS the 70 deg gate; this is a
    prediction written before they run, not a gate change.
@@ -132,30 +132,30 @@ then as a new test with the old one left ignored.
 
 Tests: `crates/rcfd-mesh/tests/fan_cgrid.rs`, `crates/rcfd-api/tests/fan_cgrid_case.rs`, `crates/rcfd-api/tests/seam_flux_w33a.rs`.
 
-* **Q1 quality** (A', B'; same numeric limits as 0065, not relaxed): max non-orthogonality <= 70 deg, max skewness <= 2.0, max aspect
+* Q1 quality (A', B'; same numeric limits as 0065, not relaxed): max non-orthogonality <= 70 deg, max skewness <= 2.0, max aspect
   ratio <= 300 (A') / <= 3000 (B'). Full distribution (max, mean, p99, counts above 50 and 60 deg, min volume, max volume ratio) reported.
-* **Q2 closure/topology** (S and A'): `Mesh::validate`; each internal face has two distinct cells, owner < neighbour; all cell volumes
+* Q2 closure/topology (S and A'): `Mesh::validate`; each internal face has two distinct cells, owner < neighbour; all cell volumes
   > 0; per cell |sum S_f| <= 1e-13 sum |S_f|; every face incident to 2 (internal) or 1 (boundary) cells.
-* **Q3 volume conservation**: with V_env from the same mesh with `include_blade = false`, |V_passage + V_solid - V_env| <= 1e-11 V_env, V_solid
+* Q3 volume conservation: with V_env from the same mesh with `include_blade = false`, |V_passage + V_solid - V_env| <= 1e-11 V_env, V_solid
   the divergence-theorem volume of the `blade` patch plus the root footprint polygon (wall chain at k = 0).
-* **Q4 refinement order, volume**: (a) envelope volume against pi/N (Rs^2 - Rh^2) L for levels (n_nose, n_side) = (4, 8), (8, 16), (16, 32) with the
+* Q4 refinement order, volume: (a) envelope volume against pi/N (Rs^2 - Rh^2) L for levels (n_nose, n_side) = (4, 8), (8, 16), (16, 32) with the
   other counts of S: strictly decreasing, finest <= 5e-3, observed order between the last two >= 1.5. (b) blade solid volume (envelope - passage) against
   the quadrature of `fan.section_area(r)` over r (the exact section, no truncation), levels (n_chord, n_span) = (16, 8), (32, 16), (64, 32):
   strictly decreasing, finest <= 2e-3, order between the last two >= 1.5.
-* **Q5 refinement order, area**: area of the lateral blade patch (faces of the C j = 0 chain, k < n_span) against the quadrature of |X_u x X_r| over the exact lateral surface
+* Q5 refinement order, area: area of the lateral blade patch (faces of the C j = 0 chain, k < n_span) against the quadrature of |X_u x X_r| over the exact lateral surface
   (the same quadrature as ADR 0065 G2), same levels as Q4(b): strictly decreasing, finest <= 2e-3, order >= 1.5.
-* **Q6 periodicity / rotation match**: (a) every `seam_lo` node rotated by +2 pi/N about z lands on a `seam_hi` node within 1e-12 m (bijection); (b) equal face
+* Q6 periodicity / rotation match: (a) every `seam_lo` node rotated by +2 pi/N about z lands on a `seam_hi` node within 1e-12 m (bijection); (b) equal face
   counts, rotated face centres match within 1e-12 m; (c) area vectors: |S_hi + R S_lo| <= 1e-12 |S_lo| for every matched pair (the property the flux antisymmetry needs);
   (d) `FvGeometry::new` accepts the mesh.
-* **Q7 exact wall stacks**: hub, shroud, tip cap (above and below): spacings h1 g^m, relative deviation <= 1e-12 (A'); on every blade wall node
+* Q7 exact wall stacks: hub, shroud, tip cap (above and below): spacings h1 g^m, relative deviation <= 1e-12 (A'); on every blade wall node
   the distance of stack node m along the defined normal equals sum_{p<=m} h1 g^p within 1e-12 (A'); for B' the tolerance is 4 eps 0.4 / h1 (the f64
   coordinate resolution found in 0065, unchanged reasoning); h1 from y+ matches the formula within 1e-14. Normals at the leading and trailing node are the
   defined exceptions above. The 3-D distance differs by the declared twist rate and is not gated.
-* **Q8 validation**: unfittable specifications (n_nose >= n_chord, n_side <= n_bl, front gap beyond the inlet, blade too wide for the pitch) return located errors, never a panic.
-* **R1 rules**: the example case `cases/axial_fan_cgrid` built through the same mesh-JSON producer the service uses, `rules::check_case` returns NO finding of
+* Q8 validation: unfittable specifications (n_nose >= n_chord, n_side <= n_bl, front gap beyond the inlet, blade too wide for the pitch) return located errors, never a panic.
+* R1 rules: the example case `cases/axial_fan_cgrid` built through the same mesh-JSON producer the service uses, `rules::check_case` returns NO finding of
   severity error (SV011 is the only error-level mesh rule, limit 85 deg); the warnings (SV101 > 70, SV102 > 4, SV103 > 1000) are reported.
-* **S1' empty passage** (C-grid, `include_blade = false`, walls moving at the inflow): converged velocity equals (0,0,U) within 1e-8 U (as 0065 S1).
-* **S3' laminar rotating passage** (as 0065 S3 on the C-grid mesh S; relative-frame `rotating_frame` source): converges within the cap; |m_in + m_out| <= 1e-6 |m_in|
+* S1' empty passage (C-grid, `include_blade = false`, walls moving at the inflow): converged velocity equals (0,0,U) within 1e-8 U (as 0065 S1).
+* S3' laminar rotating passage (as 0065 S3 on the C-grid mesh S; relative-frame `rotating_frame` source): converges within the cap; |m_in + m_out| <= 1e-6 |m_in|
   (registered limit unchanged); the pair mismatch (m_lo + m_hi)/|m_lo| and the per-face pair metric below are reported.
 
 ## Seam-flux diagnosis (0065 S3: relative mismatch 3.5e-6 to 2.7e-5 between the seam_lo and seam_hi mass flows)
@@ -165,7 +165,7 @@ Pair metric: e_pair = max over matched seam pairs (f, g) of |phi_f + phi_g| / su
 (`coupled_gamma`, `boundary_hby_a` with the partner vector rotated by the patch rotation, distance weights w and 1 - w); the diagnosis tests where that
 symmetry could be lost. Tests, all on the converged steady SIMPLEC solution, cell counts small:
 
-* D1 control: plane Couette flow in a box with a TRANSLATIONAL periodic pair (existing generator) -- e_pair expected <= 1e-12.
+* D1 control: plane Couette flow in a box with a TRANSLATIONAL periodic pair (existing generator); e_pair expected <= 1e-12.
 * D2 analytic: circular Couette flow in an empty rotational sector (C-grid mesh, `include_blade = false`; hub and shroud rotating at the exact
   angular velocities of u_theta = A r + B/r, stationary frame, no source, inlet prescribed with the exact profile): the exact solution is axisymmetric, so the seam
   fluxes cancel pairwise; e_pair <= 1e-12 expected if the rotational pair is consistent.

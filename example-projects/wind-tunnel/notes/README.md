@@ -24,20 +24,20 @@ results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`
 
 ## What to click, in order
 
-1. **Project panel**: the eight cases are listed under `cases/`, the mesh files under `meshes/`, the ledger under `designs/`.
-2. **Select a case** (for example `cases/cylinder-re100.toml`): the Case editor shows its settings. Case > Validate checks
+1. Project panel: the eight cases are listed under `cases/`, the mesh files under `meshes/`, the ledger under `designs/`.
+2. Select a case (for example `cases/cylinder-re100.toml`): the Case editor shows its settings. Case > Validate checks
    it. If your Studio has the mesh preview of wave 48G, the Viewport shows the case's mesh.
-3. **Runs panel**: the eight finished runs, one per case, with their final state and step. Select the run of
+3. Runs panel: the eight finished runs, one per case, with their final state and step. Select the run of
    `cases/cylinder-re100.toml`.
-4. **Viewport**: the run's pressure field `p` appears on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
+4. Viewport: the run's pressure field `p` appears on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
    "field" box; hover to read values.
-5. **Scrub**: drag the time slider, or use the first, previous, play, next and last buttons. A transient run (the cylinder)
+5. Scrub: drag the time slider, or use the first, previous, play, next and last buttons. A transient run (the cylinder)
    slides over simulated time; a steady run (aerofoil, step) slides over iterations. The Plots panel shows the residuals
    and the report monitors (`cd`, `cl`, ...) of the selected run, with a line at the viewport's step.
-6. **Compare a variant**: select the run of the variant case (for example `cases/cylinder-re200.toml`) and look at the same
+6. Compare a variant: select the run of the variant case (for example `cases/cylinder-re200.toml`) and look at the same
    field and time. Side-by-side views are not in the Studio yet (wave 49); the numbers of both runs are in the table below
    and in `designs/variants.ledger.jsonl`.
-7. **Run a variant yourself** (in a copy of the folder, step 2): Runs > Start run..., pick the case, keep "Store fields"
+7. Run a variant yourself (in a copy of the folder, step 2): Runs > Start run..., pick the case, keep "Store fields"
    as the case sets it, Start. The new run streams into the Runs and Plots panels; the committed run stays for comparison.
    Change a value in the Case editor first (for example `physics.nu`), Save, then start a run of it.
 

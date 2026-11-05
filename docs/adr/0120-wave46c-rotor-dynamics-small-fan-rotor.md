@@ -41,7 +41,7 @@ the running range (assumed here, not checked), so a rigid rotor on flexible, dam
   `Deck`. No new crate, no new dependency.
 * **D2, model and solver.**
   * Rigid rotor: mass `m`, transverse inertia `It` about the centre of mass, polar inertia `Ip`, constant spin `Omega` about `z`.
-    Two **isotropic** bearings at axial positions `z_j` from the centre of mass: radial stiffness `k_j`, viscous damping `c_j`,
+    Two isotropic bearings at axial positions `z_j` from the centre of mass: radial stiffness `k_j`, viscous damping `c_j`,
     optional hysteretic loss factor `eta_j`. Rigid, grounded housing. Four lateral degrees of freedom, small motions.
   * With isotropic bearings the equations are written in complex coordinates `w = x + i y`, `psi = theta_y - i theta_x`. A
     harmonic `exp(i lam t)` gives a 2x2 complex system `D(lam) [W, Psi] = [F, M]`:
@@ -52,7 +52,7 @@ the running range (assumed here, not checked), so a rigid rotor on flexible, dam
     ```
 
     `lam > 0` is forward whirl, `lam < 0` backward. A stationary-frame lateral harmonic at `omega` is split into its forward
-    (`+omega`) and backward (`-omega`) circular parts, each solved by **Cramer's rule**. That is the "small, dependency-free complex
+    (`+omega`) and backward (`-omega`) circular parts, each solved by Cramer's rule. That is the "small, dependency-free complex
     frequency-domain solver". Reusing the real LU would need a new `rcfd-post -> rcfd-reactor` edge and a 4x4 real embedding of a
     2x2 complex system, for no gain. The hysteretic term carries `sgn(lam)`: it is an equivalent viscous damper `eta k / |lam|`
     and must dissipate for both whirl directions (without `sgn`, backward components would generate energy).
@@ -69,15 +69,15 @@ the running range (assumed here, not checked), so a rigid rotor on flexible, dam
   plane; a couple unbalance is two equal unbalances 180 degrees apart at different `z`. The specific unbalance is `e = U / m`.
 * **D4, balance grade (definition, first principles).** `G = e Omega` in mm/s, with `e` the centre-of-mass offset and `Omega` the
   maximum service speed in rad/s. The permissible residual unbalance is `U_per = G m / Omega`. In units: `U_per [g mm] = 1000 G [mm/s]
-  m [kg] / Omega [rad/s]`. The grade **scale** of ISO 1940-1 (G 0.4, 1, 2.5, 6.3, 16, 40, 100, 250, 630, 1600, 4000; consecutive
+  m [kg] / Omega [rad/s]`. The grade scale of ISO 1940-1 (G 0.4, 1, 2.5, 6.3, 16, 40, 100, 250, 630, 1600, 4000; consecutive
   grades a factor 2.5 apart) is recalled and **UNVERIFIED**; so are the usual assignments "fans: G 6.3" and "small electric
   armatures: G 2.5", and the supersession of ISO 1940-1 by ISO 21940-11. The code exposes the scale as
   `ISO1940_GRADES_UNVERIFIED` and depends on it nowhere.
-* **D5, E3 interface.** `response(rotor, spin, loads)` takes harmonic loads in **stationary housing axes**, one complex amplitude
+* **D5, E3 interface.** `response(rotor, spin, loads)` takes harmonic loads in stationary housing axes, one complex amplitude
   per component and per frequency (for example `n x BPF` from unsteady blade loads of a CFD run or another agent's reduced model):
   `[Fx, Fy, Fz]` and `[Mx, My, Mz]` about the centre of mass. It returns, per frequency, the rotor motion, the lateral force on
-  the housing at each bearing, and the **mount** force and moment: the resultant on the rigid housing, moments about the centre of
-  mass. The axial force `Fz` and the torque `Mz` are **not** carried by the lateral model; they pass to the mount unchanged (rigid
+  the housing at each bearing, and the mount force and moment: the resultant on the rigid housing, moments about the centre of
+  mass. The axial force `Fz` and the torque `Mz` are not carried by the lateral model; they pass to the mount unchanged (rigid
   axial and torsional path at constant speed). They are not dropped, because axial thrust is often the largest BPF load.
   `ellipse_major` gives the peak of an elliptical orbit or force.
 * **D6, E4 hook (F-237).** `load_deck` writes the housing loads as an F-237 `Deck`: grids 1 and 2 at the bearing seats `(0, 0,
@@ -173,7 +173,7 @@ vibration (no data).
 
 ## Amendment 1 (written after the one registered run of all checks, before the corrected J1 test runs)
 
-* What happened: `w46c_j1_jeffcott_critical_speed` panicked in its **negative control**, after its check had printed critical
+* What happened: `w46c_j1_jeffcott_critical_speed` panicked in its negative control, after its check had printed critical
   speed rel 0 and natural frequencies rel 0 / 0 (known to me when writing this). The control set `k_2 = 1e-30`, which leaves the
   point-mass rotor on a single bearing at `z = -1`. Then `kt kr - kc^2` cancels to round-off, the static stiffness is singular,
   `critical_speeds` returns an empty list and `[0]` panics. The set-up is defective: the wrong model was meant to be "one bearing's
@@ -208,8 +208,8 @@ other checks sit at round-off.
 
 ### Worked example W (REPORTED; assumed rotor, see above)
 
-* `U_per` at G 6.3, 35 g, 2000 rpm: **1.053 g mm**. The assumed 1.0 g mm static unbalance is grade **G 5.98** at 2000 rpm.
-* Critical speeds: **one**, 32 062 rpm (translation). The conical mode has no synchronous crossing (`Ip > It`).
+* `U_per` at G 6.3, 35 g, 2000 rpm: 1.053 g mm. The assumed 1.0 g mm static unbalance is grade G 5.98 at 2000 rpm.
+* Critical speeds: one, 32 062 rpm (translation). The conical mode has no synchronous crossing (`Ip > It`).
 * Natural frequencies at 2000 rpm: backward -541.1 Hz and -205.1 Hz, forward 259.7 Hz and 542.1 Hz. The conical pair splits by
   gyroscopic coupling around about 230 Hz.
 * Unbalance response (static plus couple):
