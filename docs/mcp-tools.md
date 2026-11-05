@@ -100,7 +100,7 @@ next entry.
 
 ## Project tools (`--project`)
 
-`rcfd-mcp --project <dir>` adds 22 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
+`rcfd-mcp --project <dir>` adds 23 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
 folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8). Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
 `clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only).
@@ -111,7 +111,8 @@ The tools are the commands and queries of the project workspace, the crate `crat
 ([ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md),
 [ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md),
 [ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md),
-[ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md)).
+[ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md),
+[ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
 `rcfd-mcp` keeps their descriptors.
 
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
@@ -126,6 +127,10 @@ Errors added by these tools:
 - 1201: another cooperating writer held the file's edit lock for 2 s.
 - 1202: no such run, file, field or snapshot.
 
+The tools that change the project (`edit_case`, `write_note`, `new_case`, `import_mesh`, `start_run`, `pause_run`, `resume_run`,
+`cancel_run`) take an optional `reason`: a string of at most 500 characters (longer, or not a string: -32602, nothing done),
+kept with the change in the project journal (below) and shown in the Studio and by `read_feed`. Results do not change with it.
+
 | Tool | Access | Result |
 |---|---|---|
 | `project_info` | read | `name`, `root`, `schema_version`, `created`, `solver_version_created`, `migrated_from`, `counts` {`cases`, `meshes`, `designs`, `notes`, `runs`, `skipped_runs`}, `runs_by_state` {state: count}, `issues` [{`path`, `message`}] (at most 50), `issues_total` |
@@ -137,13 +142,14 @@ Errors added by these tools:
 | `render_field` | read | an image block (PNG) and the text {`run`, `field`, `snapshot`, `interpolated`, `min`, `max`, `width`, `height`, `png_bytes`}; or, over the budget, the text with `path` and `note`. Cell fields of 2D (one cell layer) meshes only; same renderer and options as `render_image` |
 | `compare_runs` | read | `baseline` (the first id), `runs` [{`id`, `case`, `state`, `step`, `time`, `residual_lines`}], `metrics` {report name: {run id: value}} (as in `list_runs`), `differences` {name: {run id: value minus the baseline's}}, `metrics_total`, `metrics_omitted`; 2 to 10 runs |
 | `list_changes` | read | `token`, `changes` [paths], `total`, `truncated`, and `since` when given; call without `since` to get a token (`.rcfd/` is not watched) |
+| `read_feed` | read | without `since`: `cursor`, `entries` [], `total` 0 (the server's feed starts at its first call); with `since`: `since`, `cursor`, `entries` (numbered after `since`, oldest first, at most `limit`, 1-200, default 50, and within the size budget), `total`, `next` (the number to pass as `since` to continue, null when none), `dropped` (entries after `since` no longer kept; the feed keeps 1 000), `skipped_lines`. An entry has `n`, `source` (`journal`, `run` or `external`), `kind`, `t`, `seq`, `path`, `run`, `who`, `actor` {`client`, `instance` {`pid`, `started`}}, `reason`, `changes` [{`path`, `old`, `new`}], the line's other fields, and `text` (one line: who changed what and why). Journal entries are the lines of the project journal; run entries are a run's `state`, `warning` and `stop` events (`run_state`, `run_warning`, `run_stop`); an `external` entry is a file outside `runs/` that changed with no journal line for its new content, 500 ms after its modification ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) J6, J7) |
 | `read_project_file` | read | `path`, `hash` (of the whole file; the `base_hash` for edits), `size`, `offset`, `text`, `next_offset` (null at the end); pages of at most 32 000 bytes |
 | `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; an edit that cannot be placed in the file's own lines, such as a value written over several lines, is refused with 1003 and nothing is written), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run`; when `set` holds a `mesh.*` setting the edited mesh is built and checked before anything is written (a refused mesh file 1004, a mesh that cannot be built 1003 with located `data.diagnostics`) and the result has `mesh` {`ok`, `report`, `patches`, `patches_total`} as `check_case_mesh`; a mesh that builds but fails the check is written with `mesh.ok` false ([ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) M7, Q2) |
 | `write_note` | write_files | `path`, `created`, `old_hash`, `new_hash`; under `notes/` only; no `base_hash` means "create, the file must not exist" |
 | `new_case` | write_files | `path`, `hash` (the `base_hash` for `edit_case`), `bytes`, `from` (`example <source>`, `template <name>`, `toml`, `settings` or `copy <path>`), `data_files` [{`path`, `written`}]; arguments `name` (letters, digits, `-`, `_`; not taken in `cases/` in any letter case, else 1004) and exactly one of `example` (a shipped example of the repository's `cases/`, written byte for byte with the data files it reads), `template`, `toml`, `settings` (written as `cases/<name>.json`) or `copy` (a project case, byte for byte); the case is validated before anything is written (1003 with located `data.diagnostics`) and no file is ever replaced ([ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) G3) |
 | `check_case_mesh` | read | `case`, `mesh` {`source` `generator` with `generator`, or `file` with `file`}, `ok`, `report` (the quality report `rcfd check-mesh --json` prints), `patches` [{`name`, `faces`, `kind`}] (the names `boundaries.*` must use), `patches_total`; argument `case` (.toml or .json). The case's `mesh.file` must resolve inside the project (else 1004, located at `mesh.file`); a mesh that cannot be built is 1003 with located `data.diagnostics`. Over the size budget patches are dropped from the end, then the report's `poor_list` (`poor_list_omitted`) |
 | `preview_mesh` | read | an image block (PNG) and the text {`case`, `measure`, `min`, `max`, `non_finite`, `range`, `cells`, `cells_drawn`, `axis`, `slice`, `width`, `height`, `png_bytes`, `reduced_from`?}; arguments `case`, `measure` (`non_orthogonality`, the default: the largest of the cell's faces, degrees; `skewness`, the largest of its faces; `aspect_ratio`), `width` (64-4096, default 640), `axis` (`x`, `y`, `z`) and `slice` (default: the middle of the thinnest direction, the plane `render_field` draws); colours run from the measure's ideal value (0, or 1 for the aspect ratio) to its largest value (ideal + 1 when the mesh is within 1e-9 of ideal); an image over the budget is drawn again at half the width, down to 64 pixels ([ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) M4, Q4, Q5) |
-| `import_mesh` | write_files | `source`, `path` (`meshes/<name>`), `copied`, `format` (`gmsh`, `fluent` or `openfoam`), `files` [{`path`, `bytes`, `hash`, `written`}], `cells`, `faces`, `internal_faces`, `points`, `patches`, `patches_total`, `zones` [{`name`, `kind`, `size`}], `zones_total`, `bounds` {`min`, `max`}, `notes`, `mesh_file` (the `mesh.file` of a case directly in `cases/`); arguments `path` (a Gmsh or Fluent `.msh`/`.cas` file, or an OpenFOAM folder: its `polyMesh` subfolder or itself) and `name` (default the source's name; letters, digits, `-`, `_`, `.`; a file keeps its extension). Read with the readers a case's mesh build uses before anything is written (1003 when none reads it); never replaces a file (the same bytes already there: `copied` false; other bytes or a name differing only in letter case: 1004); no `.rcfd/edits.jsonl` line |
+| `import_mesh` | write_files | `source`, `path` (`meshes/<name>`), `copied`, `format` (`gmsh`, `fluent` or `openfoam`), `files` [{`path`, `bytes`, `hash`, `written`}], `cells`, `faces`, `internal_faces`, `points`, `patches`, `patches_total`, `zones` [{`name`, `kind`, `size`}], `zones_total`, `bounds` {`min`, `max`}, `notes`, `mesh_file` (the `mesh.file` of a case directly in `cases/`); arguments `path` (a Gmsh or Fluent `.msh`/`.cas` file, or an OpenFOAM folder: its `polyMesh` subfolder or itself) and `name` (default the source's name; letters, digits, `-`, `_`, `.`; a file keeps its extension). Read with the readers a case's mesh build uses before anything is written (1003 when none reads it); never replaces a file (the same bytes already there: `copied` false; other bytes or a name differing only in letter case: 1004); one `mesh_imported` journal line when it wrote a file |
 | `list_meshes` | read | `meshes` [{`path`, `kind` (`file`, or `openfoam` for a folder holding `points`, `faces`, `owner`, `neighbour` and `boundary`), `bytes`, `files`, `used_by` [cases whose `mesh.file` names it]}], `total`, `offset`, `next_offset`, `outside` [{`case`, `mesh_file`, `path`, `exists`, `refused`}] (case mesh files that are not an entry of `meshes/` or that leave the project; at most 20), `outside_total`, `unread` [{`path`, `message`}] (cases that are not TOML or JSON; at most 20), `unread_total`; arguments `offset`, `limit` (1-100, default 50) |
 | `start_run` | execute | `run`, `case`, `state`, plus `created` (the `new_case` result) when it made the case and `store` {`applied`, `set`, `snapshots`, `estimated_bytes`, `note`} when the start plan was asked for; arguments `case` or `new_case` (an object with `new_case`'s arguments: the case is made first, then run, in one call), `set` [`path=value`], `priority`, `threads`, `mem_mb`, `store` (`plan`: the Studio's field-store proposal of [ADR 0140](adr/0140-wave48g3-store-fields-by-default.md), about 100 snapshots in f32, put before `set` unless the case or a `set` entry gives `output.store_interval` or `output.store_time_interval`; `none`: only what the case asks for; default `plan` with `new_case` and `none` with `case`, ADR 0186 Q2); starts the project's `rcfd-runner` when none is alive, with its output appended to `.rcfd/runner.log`; a runner that exits before it holds the project's lock gives an error result at once (code -32000, `data.run` the queued run) whose message has the runner's exit code and the end of that log ([ADR 0146](adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md)) |
 | `pause_run`, `resume_run`, `cancel_run` | execute | `run`, `requested`, `state`; 1002 for a run that already ended |
@@ -156,9 +162,26 @@ C2). What this does to Claude Code when it closes or restarts the server has not
 server.
 
 Edits (`edit_case`, `write_note`) are compare-and-replace under a cooperative lock (`rcfd_project::atomic::replace_if_hash`). The
-file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held. Each accepted edit appends
-`{t, kind: "edit", who, path, old_hash, new_hash}` to `.rcfd/edits.jsonl`, so the Studio can say who changed a file. Writers that do
-not take the lock (Claude Code's own Edit and Write tools, an editor) are not stopped; the Studio's watcher sees their edits afterwards.
+file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held. Writers that do not take the
+lock (Claude Code's own Edit and Write tools, an editor) are not stopped; the feed reports their edits afterwards as `external`.
+
+The project journal, `.rcfd/edits.jsonl`, has one JSON line per accepted write, case creation, mesh import, run submission and
+accepted run request, from the MCP server and from the Studio alike ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
+Each line has `t`, `kind`, `who` (the command), `seq` (one more than the last, given under the short lock
+`.rcfd/locks/journal.lock`; lines written before ADR 0188 have none), `actor` {`client` (`mcp` or `studio`), `instance` {`pid`,
+`started`}} when the writer has one, and `reason` when given. By kind:
+
+- `edit`: `path`, `old_hash`, `new_hash`, and `changes` [{`path`, `old`, `new`}]: for `edit_case` each setting set, for a Studio
+  save every setting whose value changed (values as the case reads them, defaults included). At most 100 entries
+  (`changes_total` when cut); a value over 1 000 bytes of JSON is written as {`bytes`, `hash`}.
+- `case_created`: `path`, `hash`, `bytes`, `from`, `data_files` [{`path`, `hash`, `written`}].
+- `mesh_imported`: `path`, `source`, `format`, `files` [{`path`, `bytes`, `hash`}], `cells`, `faces`, `patches` (their count).
+- `run_submitted`: `run`, `case`, `set`, `priority`, `threads`, `mem_mb`.
+- `run_control`: `run`, `requested` (`pause`, `resume` or `cancel`).
+- `stale_lock_broken`: `path`, `age_s` (an edit lock older than 30 s was removed).
+
+Which Claude Code session an `mcp` actor belongs to is not recorded: no way to link the server's process to a session has been
+checked (ADR 0188 Q4).
 
 ## Where to go next
 
