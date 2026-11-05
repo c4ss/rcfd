@@ -614,7 +614,12 @@ largest seam flux, continuity at most 3.0e-10, 0.33 to 0.36 s per step. This is 
 
 **PC-2N, and the removal.** Without the transient wall pressure the rest state reached round-off, so by the registered
 rule the treatment is not needed on the transient path and was removed (4b0cec2). PC-2N was the decision run of the
-design's conditional item, so its rule applies; it is not counted as the pass of any check, and nothing was re-run. A
+design's conditional item, so its rule applies; it is not counted as the pass of any check, and nothing was re-run.
+**A drafting conflict in the amendment, for the maintainer:** the amendment puts PC-2N under two rules that disagree on
+this outcome, its own decision rule (PC-2N meets: the treatment is removed) and the generic clause that a negative control
+which does not fire is a defective set-up to be amended before any re-run. The generic clause was meant for the controls
+that show a check can fail (PC-1N, PC-3N, PC-4N); PC-2N answers the design's question whether the treatment is missing on
+the transient path. The specific decision rule was applied, and no amendment or re-run followed. A
 likely cause, not proven here: the PIMPLE fixed-flux wall condition uses the face body force with no `rAU / rAtU` factor,
 and on this uniform box the `O(h^2)` errors of the extrapolated wall value and of the interpolated opposite face cancel
 for the quadratic pressure, so the wall cell's Green-Gauss gradient already equals the cell force. The steady miss of
