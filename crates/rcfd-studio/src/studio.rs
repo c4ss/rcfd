@@ -1150,6 +1150,12 @@ impl Studio {
                 opened,
                 companions,
             } => crate::case_starter::on_created(self, &rel, opened, &companions),
+            // ADR 0188 J8: who changed what and why, for the changes another actor made through the workspace
+            Event::Feed(changes) => {
+                for c in changes.iter().filter(|c| crate::watch::announce(c)) {
+                    self.say(c.text.clone());
+                }
+            }
         }
     }
 
