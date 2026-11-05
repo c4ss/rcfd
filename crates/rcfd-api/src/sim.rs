@@ -1955,6 +1955,14 @@ impl Simulation {
         } else {
             Sources::from_case(case, &geom, init_fields.as_ref())?
         };
+        // ADR 0183 P-C: a rotating frame on the transient engine (pimple; sources::check refuses it with piso) gets the seam
+        // body-force pair mean of rAU (ADR 0080) and the wall pressure of the steady rotating frame; other sources leave both off
+        if let (Engine::Transient(s), Some(src)) = (&mut engine, &sources) {
+            if src.has_rotating_frame() {
+                s.settings.coupled_body_pair_mean = true;
+                s.settings.wall_pressure_trapezoid = true;
+            }
+        }
         let components = if compressible || vdens {
             None
         } else {
@@ -2377,6 +2385,22 @@ impl Simulation {
     pub fn simple_solver_mut(&mut self) -> Option<&mut SimpleSolver> {
         match &mut self.engine {
             Engine::Steady(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The PISO/PIMPLE solver of a transient incompressible run (diagnostics and tests), if that is the engine.
+    pub fn pimple_solver(&self) -> Option<&PimpleSolver> {
+        match &self.engine {
+            Engine::Transient(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Mutable access to the PISO/PIMPLE solver of a transient incompressible run (diagnostics and tests).
+    pub fn pimple_solver_mut(&mut self) -> Option<&mut PimpleSolver> {
+        match &mut self.engine {
+            Engine::Transient(s) => Some(s),
             _ => None,
         }
     }

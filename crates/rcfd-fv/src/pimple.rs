@@ -95,6 +95,13 @@ pub struct PimpleSettings {
     /// multiplied by its limiter factor in the convection term only, also on the moving-mesh step. `None` (default) =
     /// unlimited. Only with `ConvScheme::LinearUpwind`; not used by the fractional step.
     pub linear_upwind_limiter: Option<crate::gradient::Limiter>,
+    /// Wall pressure of the two Green-Gauss pressure gradients of the PISO/PIMPLE loop (momentum predictor and velocity
+    /// correction) when a body force acts: on every fixed-velocity face that is not coupled, the boundary value is chosen so
+    /// that the wall-normal component of the owner's gradient equals the cell-centre body force, as the steady
+    /// `SimpleSolver::wall_pressure_trapezoid` (wave 10; the steady SIMPLEC wall correction has no counterpart here). The face
+    /// fluxes and the pressure equation are unchanged. The API switches it on with a `rotating_frame` source (ADR 0183 P-C).
+    /// Default `false` (bit-identical).
+    pub wall_pressure_trapezoid: bool,
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -454,6 +461,22 @@ impl Divergence {
     }
 }
 
+/// Boundary pressures of a Green-Gauss pressure gradient of the PISO/PIMPLE loop: those of `pbc`, or with a body force and
+/// `trapezoid` (`PimpleSettings::wall_pressure_trapezoid`, ADR 0183 P-C) the wall values of the steady rotating-frame
+/// treatment.
+fn gradient_wall_values(
+    g: &FvGeometry,
+    pbc: &crate::pressure::PressureBc,
+    body: Option<&BodyForce>,
+    trapezoid: bool,
+    p: &[f64],
+) -> Vec<f64> {
+    match (body, trapezoid) {
+        (Some(bf), true) => crate::simple::trapezoid_wall_values(g, pbc, bf, p),
+        _ => boundary_values_pbc(g, pbc, p),
+    }
+}
+
 fn first_nonfinite(v: &[f64]) -> Option<(usize, f64)> {
     v.iter().copied().enumerate().find(|(_, x)| !x.is_finite())
 }
@@ -492,6 +515,7 @@ impl PimpleSettings {
             coupled_body_pair_mean: false,
             corrector_control: None,
             linear_upwind_limiter: None,
+            wall_pressure_trapezoid: false,
         }
     }
 
@@ -955,7 +979,7 @@ impl PimpleSolver {
                 a.apply_wall_gradients(&mut pbc, &g.dn);
             }
             let ub = self.u.boundary_values(&g);
-            let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
+            let bvals_p = gradient_wall_values(&g, &pbc, body, s.wall_pressure_trapezoid, &self.p.values);
             let mut grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
             if let Some(j) = &self.face_jump {
                 // the jump is removed from the face interpolation of the cell gradient (as in the SIMPLE kernel)
@@ -1198,7 +1222,7 @@ impl PimpleSolver {
                     );
                 }
                 self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
-                let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
+                let bv_new = gradient_wall_values(&g, &pbc, body, s.wall_pressure_trapezoid, &p_new);
                 let mut grad_new = green_gauss(&g, &p_new, &bv_new, 0);
                 if let Some(j) = &self.face_jump {
                     let fix = j.gradient_fix(&g, &j.totals(&self.phi));

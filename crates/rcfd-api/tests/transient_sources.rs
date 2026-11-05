@@ -805,7 +805,9 @@ fn t6_unsupported_combinations_get_located_errors() {
         "{:?}",
         paths(&frac)
     );
-    for (alg, kind) in [("piso", "mrf"), ("pimple", "rotating_frame"), ("pimple", "mrf")] {
+    // ADR 0183 amendment P-C supersedes the ("pimple", "rotating_frame") case of T6 (accepted since P-C); it became
+    // ("piso", "rotating_frame"), which stays refused
+    for (alg, kind) in [("piso", "mrf"), ("piso", "rotating_frame"), ("pimple", "mrf")] {
         let src = format!("[sources.rot]\ntype = \"{kind}\"\nzone = \"all\"\nrotation_axis = [0.0, 0.0, 1.0]\nangular_velocity = 1.0\n");
         let t = plates_text(10, alg, "euler", 1, 0.01, 1.0, "", &src);
         assert!(
