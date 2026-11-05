@@ -175,3 +175,32 @@ run poller stay as they are.
 * [ADR 0173](0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) for the layer this begins.
 * [MCP tools](../mcp-tools.md) for the project tools the crate now serves.
 * [Architecture and crate graph](../architecture.md) for the layering rule.
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+Branch `f270-workspace`, four commits after this text, as E9 planned: the crate and `rcfd-mcp` on it (W1, W2); Studio saves
+and creates; Studio starts. Not merged; the Studio files are being changed in another worktree.
+
+**Built as registered.** E1 to E8 as written. `rcfd-mcp/src/project.rs` keeps the 17 descriptors byte-for-byte and is now an
+adapter around them (272 lines, from 1,286); `case_edit.rs` moved whole to `rcfd_workspace::case_text` (its 4 unit tests with it), the
+setting loop of `edit_case` became `case_text::apply_sets` (the same calls in the same order). The Studio changes are: the
+worker's `Save` arm (`watch.rs`), the removal of `save_if_base` and `SaveOutcome` (`case_edit.rs`), the name rule and
+`create_with` re-exported or wrapped (`case_starter.rs`), one dependency line, and one import line in each of `poll.rs`,
+`quick_run.rs`, `store_plan.rs` and `stop.rs` (`rcfd_workspace::runs::RunService as Client`).
+
+**One difference found while building.** `replace_if_hash` creates a missing parent folder; `save_if_base` did not. A Studio save
+of a case whose folder was deleted meanwhile now recreates the folder instead of failing. No test covers that case before or
+after.
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| A1 parity | the five MCP files and the four Studio files pass unedited; every test of `rcfd-mcp` passes (debug, with `rcfd` and `rcfd-runner` built); `cargo test --release -p rcfd-studio`: 280 passed, 21 ignored, 15 failed, all 15 because the `fake-claude` test binary of `rcfd-claude` is not built by a one-package run (the workspace gate builds it). A debug run of `case_starter_g2.rs` stopped at a `debug_assert!` inside epaint (a dropped `TexturesDelta` in headless frames), which release builds do not compile; the gate runs release |
+| A2 tool list | `project_list_f270.rs`: 50 tools, 38 978 bytes, byte-identical to the golden of main 7c960bb; `default_f1.rs` passes |
+| A3 race | the Studio's save waited for the held lock and ended 6 ms after its release, in the conflict state with the other writer's bytes; no journal line. Control: the route before wrote under the held lock, and its bytes were then lost |
+| A4 both orders | workspace and Studio: the second writer gets a conflict naming the first one's hash (1200 with `data.current_hash`, or the editor's conflict state); one journal line, `who` `edit_case` or `save_case` |
+| A5 comment | `Lines` keeps the comment line and every other line (one line changed; an absent optional table gets only its changed setting); control `Whole` loses it; a removed report is written whole |
+| A6 graph | `workspace_graph.rs` 4 of 4, including the new rule that `rcfd-studio` does not depend on `rcfd-mcp`, `rcfd-gui` or `rcfd-assistant` |
+| A7 lock file | `Cargo.lock` gains the `rcfd-workspace` entry and that name in the dependency lists of `rcfd-mcp` and `rcfd-studio`; nothing else |
+| Scanner | `scripts/limit_audit.py` reports none of the new tests |
