@@ -98,6 +98,10 @@ refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rc
 `clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only; without `--root`, `--project` also confines the existing tools' file access to the project); the run tools
 also need `rcfd-runner` and `rcfd` in the same folder as `rcfd-mcp` (as `cargo install` or a build directory gives).
 
+The tools are the commands and queries of the project workspace, the crate `crates/rcfd-workspace` that the Studio uses too
+([ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md),
+[ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md)); `rcfd-mcp` keeps their descriptors.
+
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
 with 1004 before anything is created). Run arguments are run ids (`r-<yyyymmddThhmmss>-<4 hex>`). Errors added by these tools:
 1200 the file changed since its hash was read (`data.current_hash`, null when the file is absent), 1201 another cooperating writer

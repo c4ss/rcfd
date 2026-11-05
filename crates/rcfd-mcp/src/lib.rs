@@ -10,7 +10,6 @@
 //! denied permission) are tool results with `isError: true` whose text is a
 //! JSON object `{"error": {"code", "message", "data"?}}`.
 
-mod case_edit;
 pub mod policy;
 pub mod project;
 

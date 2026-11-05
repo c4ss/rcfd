@@ -23,7 +23,8 @@ rcfd-turb   -> core, mesh, fv
 rcfd-post   -> core, mesh
 rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
 rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
-rcfd-mcp    -> api, project, runner, tsstore, post   (project tools behind --project: folder, run service, stored fields, CPU render; ADR 0135)
+rcfd-workspace -> api, project, runner, tsstore, post   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185)
+rcfd-mcp    -> api, workspace, project, runner, tsstore, post   (project tools behind --project: their MCP descriptors over the workspace; ADR 0135, ADR 0185)
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)
 rcfd-gui    -> api, mcp, assistant   (legacy eframe/egui desktop app on glow (OpenGL), frozen (docs/ui-restart-plan.md); egui 0.36 as the Studio, ADR 0165; needs Rust 1.95)
@@ -36,7 +37,8 @@ rcfd-studio -> project, runner, render, tsstore, mesh, claude, api, core   (Stud
 ## Layering rules
 
 Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
-`gpu`/`dist`/`runner`/`claude` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui` < `studio`).
+`gpu`/`dist`/`runner`/`claude` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `workspace` < `mcp`/`cli` <
+`assistant` < `gui` < `studio`).
 No crate depends on `studio`, and `studio` does not depend on `gui`, `assistant` or `mcp`. The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.
 

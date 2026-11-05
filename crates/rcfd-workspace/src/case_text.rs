@@ -1,14 +1,16 @@
-//! Smallest-change edits of case files for `edit_case` (ADR 0135 amendment 1 item 5).
+//! Smallest-change edits of case files: the write rule of `edit_case` (ADR 0135 amendment 1 item 5), moved here from
+//! `rcfd-mcp` (ADR 0185 E2) so that every writer of a case can use it.
 //!
 //! A TOML case gets the `key = value` line of each dotted setting replaced in place (comments and layout kept), or
 //! added to its table; a JSON case gets the value set in its parsed document. The caller re-parses the result and
 //! compares it with the expected settings tree; anything this module cannot place returns `None` and the caller
-//! writes the canonical form instead, so a wrong guess here can never reach the disk.
+//! refuses the edit (`edit_case`) or writes the whole text it was given (`save_case` in its `Lines` form, ADR 0185 Q2),
+//! so a wrong guess here can never reach the disk.
 
 use serde_json::Value;
 
 /// `value` as a TOML literal (`None` for `null`, which TOML cannot write).
-pub(crate) fn toml_literal(value: &Value) -> Option<String> {
+pub fn toml_literal(value: &Value) -> Option<String> {
     Some(match value {
         Value::Null => return None,
         Value::Bool(b) => b.to_string(),
@@ -131,7 +133,7 @@ fn value_span(line: &str) -> Option<(usize, usize)> {
 }
 
 /// Set dotted `path` to `value` in TOML `text`; `None` when the place cannot be found with confidence.
-pub(crate) fn toml_set(text: &str, path: &str, value: &Value) -> Option<String> {
+pub fn toml_set(text: &str, path: &str, value: &Value) -> Option<String> {
     let lit = toml_literal(value)?;
     let (table, key) = match path.rsplit_once('.') {
         Some((t, k)) => (t.to_string(), k.to_string()),
@@ -201,7 +203,7 @@ pub(crate) fn toml_set(text: &str, path: &str, value: &Value) -> Option<String> 
 }
 
 /// Set dotted `path` to `value` in a parsed JSON case document.
-pub(crate) fn json_set(doc: &mut Value, path: &str, value: &Value) -> Option<()> {
+pub fn json_set(doc: &mut Value, path: &str, value: &Value) -> Option<()> {
     let segs: Vec<&str> = path.split('.').collect();
     let mut cur = doc;
     for s in &segs[..segs.len() - 1] {
@@ -213,6 +215,29 @@ pub(crate) fn json_set(doc: &mut Value, path: &str, value: &Value) -> Option<()>
     cur.as_object_mut()?
         .insert(segs[segs.len() - 1].to_string(), value.clone());
     Some(())
+}
+
+/// The case `text` with each `(dotted path, value)` of `set` changed in its own lines (TOML) or in its parsed document
+/// (JSON, written back pretty with a final newline), in order; `None` when one of them cannot be placed. The caller still
+/// re-parses the result and compares its settings with the ones it expects.
+pub fn apply_sets<'a>(
+    text: &str,
+    is_json: bool,
+    set: impl IntoIterator<Item = (&'a str, &'a Value)>,
+) -> Option<String> {
+    if is_json {
+        let mut d = serde_json::from_str::<Value>(text).ok()?;
+        for (k, v) in set {
+            json_set(&mut d, k, v)?;
+        }
+        serde_json::to_string_pretty(&d).ok().map(|s| s + "\n")
+    } else {
+        let mut t = text.to_string();
+        for (k, v) in set {
+            t = toml_set(&t, k, v)?;
+        }
+        Some(t)
+    }
 }
 
 #[cfg(test)]

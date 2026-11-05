@@ -23,6 +23,7 @@ members = [
     "crates/rcfd-render",
     "crates/rcfd-tsstore",
     "crates/rcfd-studio",
+    "crates/rcfd-workspace",
 ]
 
 [workspace.package]
@@ -56,6 +57,7 @@ rcfd-mcp = { path = "crates/rcfd-mcp" }
 rcfd-assistant = { path = "crates/rcfd-assistant" }
 rcfd-tsstore = { path = "crates/rcfd-tsstore" }
 rcfd-project = { path = "crates/rcfd-project" }
+rcfd-workspace = { path = "crates/rcfd-workspace" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
