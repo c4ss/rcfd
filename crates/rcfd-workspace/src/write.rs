@@ -3,11 +3,18 @@
 //! `.rcfd/edits.jsonl` line per accepted write naming the command (`who`). A case changed by setting values keeps its
 //! comments and layout ([`crate::case_text`]).
 //!
-//! The commands `edit_case` and `write_note` of the MCP project tools (moved from `rcfd-mcp`, text unchanged).
+//! The commands `edit_case` and `write_note` of the MCP project tools (moved from `rcfd-mcp`, text unchanged). An
+//! `edit_case` that sets a `mesh.*` setting also builds and checks the edited mesh before it writes, and returns the
+//! check as `mesh` (ADR 0187 M7); without one its result and bytes are as before.
 
 use crate::case_text::apply_sets;
-use crate::{err, project_error as perr, str_arg, RpcError, Workspace, CONFLICT, PARAMS, REFUSED, VALIDATION};
+use crate::meshes::{check_object, is_mesh_key};
+use crate::{
+    err, project_error as perr, str_arg, text_len, RpcError, Workspace, CONFLICT, PARAMS, REFUSED, TEXT_BUDGET,
+    VALIDATION,
+};
 use rcfd_api::case::{Case, Diagnostic};
+use rcfd_mesh::quality::check_mesh;
 use rcfd_project::atomic;
 use rcfd_project::records::{hash_bytes, hash_matches};
 use serde_json::{json, Map, Value};
@@ -95,6 +102,21 @@ impl Workspace {
         if !sem.is_empty() {
             return Err(invalid("the edited case is not valid".into(), sem));
         }
+        // ADR 0187 M7: a mesh setting changed: the edited mesh is confined, built and checked before anything is written
+        let mesh_check = if set.keys().any(|k| is_mesh_key(k)) {
+            let (mesh, _) = self.build_case_mesh(&norm, &expected)?;
+            let q = check_mesh(&mesh);
+            Some((mesh, q))
+        } else {
+            None
+        };
+        let with_mesh = |mut v: Value| {
+            if let Some((mesh, q)) = &mesh_check {
+                let budget = TEXT_BUDGET.saturating_sub(text_len(&v) + 16);
+                v["mesh"] = check_object(mesh, q, budget);
+            }
+            v
+        };
         let want = expected.tree.to_json();
         let minimal = apply_sets(text, is_json, set.iter().map(|(k, v)| (k.as_str(), v)));
         let (new_text, form) = match minimal.filter(|t| parse(t).is_ok_and(|c| c.tree.to_json() == want)) {
@@ -117,14 +139,16 @@ impl Workspace {
             .collect();
         let new_hash = hash_bytes(new_text.as_bytes());
         if dry_run {
-            return Ok(json!({"path": norm, "written": false, "valid": true, "form": form,
-                "old_hash": old_hash, "new_hash": new_hash, "values": values}));
+            return Ok(with_mesh(
+                json!({"path": norm, "written": false, "valid": true, "form": form,
+                "old_hash": old_hash, "new_hash": new_hash, "values": values}),
+            ));
         }
         let r = atomic::replace_if_hash(root, &norm, Some(base), new_text.as_bytes(), "edit_case").map_err(perr)?;
-        Ok(
+        Ok(with_mesh(
             json!({"path": r.rel, "written": true, "valid": true, "form": form, "old_hash": r.old_hash,
             "new_hash": r.new_hash, "values": values}),
-        )
+        ))
     }
 
     pub(crate) fn write_note(&self, args: &Value) -> Result<Value, RpcError> {

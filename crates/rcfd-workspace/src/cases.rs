@@ -9,7 +9,7 @@ use std::path::Path;
 pub const MAX_NAME: usize = 64;
 
 /// Windows device names: refused as case names in any letter case (with any extension they still name the device).
-const RESERVED: [&str; 24] = [
+pub(crate) const RESERVED: [&str; 24] = [
     "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT0",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
