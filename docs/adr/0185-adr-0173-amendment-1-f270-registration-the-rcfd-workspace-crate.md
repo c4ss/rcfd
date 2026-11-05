@@ -14,8 +14,9 @@ maintainer decision. Where the code read below raises a question ADR 0173 does n
 listed (Q1 to Q3), and work proceeds only on a choice that is reversible.
 
 House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md)): defaults stay bit-identical; no solver result, case
-hash or file written by a client changes; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new third-party crate;
-no commit trailers.
+hash or byte of a case file a client writes changes (a Studio save now also takes the edit lock under `.rcfd/locks/` and adds a
+`.rcfd/edits.jsonl` line, which C2 asks for); `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new third-party
+crate; no commit trailers.
 
 ## What F-270 asks
 
@@ -188,15 +189,18 @@ worker's `Save` arm (`watch.rs`), the removal of `save_if_base` and `SaveOutcome
 `create_with` re-exported or wrapped (`case_starter.rs`), one dependency line, and one import line in each of `poll.rs`,
 `quick_run.rs`, `store_plan.rs` and `stop.rs` (`rcfd_workspace::runs::RunService as Client`).
 
-**One difference found while building.** `replace_if_hash` creates a missing parent folder; `save_if_base` did not. A Studio save
-of a case whose folder was deleted meanwhile now recreates the folder instead of failing. No test covers that case before or
-after.
+**Two differences found while building.** (1) `replace_if_hash` creates a missing parent folder; `save_if_base` did not. A
+Studio save of a case whose folder was deleted meanwhile now recreates the folder instead of failing. No test covers that case
+before or after. (2) The Studio's project worker now waits for a held edit lock, up to `EDIT_LOCK_WAIT` (2 s), before it saves;
+in that time it neither polls the watcher nor answers the browser. A lock left by a writer that crashed (an `rcfd-mcp` killed
+mid-edit) makes Studio saves fail with "edit lock ... is held by another writer" until the lock is 30 s old
+(`EDIT_LOCK_STALE`) and is broken. Both are visible in the Studio; neither is covered by a test.
 
 **Results.**
 
 | Check | Result |
 |---|---|
-| A1 parity | the five MCP files and the four Studio files pass unedited; every test of `rcfd-mcp` passes (debug, with `rcfd` and `rcfd-runner` built); `cargo test --release -p rcfd-studio`: 280 passed, 21 ignored, 15 failed, all 15 because the `fake-claude` test binary of `rcfd-claude` is not built by a one-package run (the workspace gate builds it). A debug run of `case_starter_g2.rs` stopped at a `debug_assert!` inside epaint (a dropped `TexturesDelta` in headless frames), which release builds do not compile; the gate runs release |
+| A1 parity | the five MCP files and the four Studio files pass unedited; every test of `rcfd-mcp` passes (debug, with `rcfd` and `rcfd-runner` built); `cargo test --release -p rcfd-studio`: 280 passed, 21 ignored, 15 failed, all 15 because the `fake-claude` test binary of `rcfd-claude` is not built by a one-package run (the workspace gate builds it). A debug run of `case_starter_g2.rs` stopped at a `debug_assert!` inside epaint (a dropped `TexturesDelta` in headless frames), which release builds do not compile (not checked on main); the gate runs release |
 | A2 tool list | `project_list_f270.rs`: 50 tools, 38 978 bytes, byte-identical to the golden of main 7c960bb; `default_f1.rs` passes |
 | A3 race | the Studio's save waited for the held lock and ended 6 ms after its release, in the conflict state with the other writer's bytes; no journal line. Control: the route before wrote under the held lock, and its bytes were then lost |
 | A4 both orders | workspace and Studio: the second writer gets a conflict naming the first one's hash (1200 with `data.current_hash`, or the editor's conflict state); one journal line, `who` `edit_case` or `save_case` |
@@ -204,3 +208,4 @@ after.
 | A6 graph | `workspace_graph.rs` 4 of 4, including the new rule that `rcfd-studio` does not depend on `rcfd-mcp`, `rcfd-gui` or `rcfd-assistant` |
 | A7 lock file | `Cargo.lock` gains the `rcfd-workspace` entry and that name in the dependency lists of `rcfd-mcp` and `rcfd-studio`; nothing else |
 | Scanner | `scripts/limit_audit.py` reports none of the new tests |
+| Gate | 6c9c15d, `git archive` copy, three jobs (`scripts/gate_test.py`): fmt 0, clippy `-D warnings` 0, 2791 passed, 0 failed, 799 ignored, 534 binaries, 67 min. The last gate before it (`386c81e`, before the test fix `7c4091f`) gave 2776 / 1 / 799; the 15 more passing tests are that fixed test and the 14 new ones of F-270 (the 4 moved unit tests count once) |
