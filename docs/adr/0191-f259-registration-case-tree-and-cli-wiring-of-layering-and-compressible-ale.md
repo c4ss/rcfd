@@ -262,3 +262,13 @@ on any mesh, so a fixed-mesh step of a uniform state with fixed-state boundaries
 as the ALE step does. M2 must instead fail B-eq (the smoothing piston, whose cells change volume and whose moving wall
 compresses the gas only through the ALE fluxes). Nothing else changes; C-gcl stays a check of the ALE step's discrete GCL,
 not of the mutation.
+
+## Amendment 2 (2026-11-05, before the run it covers)
+
+M1 as registered (the tree's layer check skipped) was run once and did not end. Without removals the piston layer shrinks
+towards the last static plane, the explicit step shrinks with it, and the A run stepped on without reaching its end time.
+It was stopped after about 4 minutes of CPU time (the unmutated A run takes 12 s for the tree and the library together),
+the file was restored and compared byte for byte with the kept copy (equal). M1 can therefore not fail A-eq with a result;
+it only keeps the test from ending. A terminating mutation is added and is the check of record: **M1b**, a removal gives
+the merged cell the state of its first source cell instead of the volume-weighted remap (an addition is unchanged), which
+must fail A-eq. Nothing else changes.
