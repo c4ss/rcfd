@@ -12,7 +12,7 @@ F-056 and wave 21C.
 The new crate `rcfd-particles` (layer 2: depends on `rcfd-core` and `rcfd-mesh` only) implements the tracking, and the
 settings-tree section `particles` (`rcfd-api::particles`) configures it.
 
-## Not delivered (F-056 stays partial; F-128 partial)
+## Not delivered (F-056 stays partial; F-128 done)
 
 rcfd does not deliver:
 
@@ -25,7 +25,9 @@ rcfd does not deliver:
 * turbulent dispersion of the heat transfer
 * evaporation and mass transfer
 * breakup
-* wall film
+* in the wall film (F-253, see "Wall film" below): gas shear, splash and rebound at impact, film separation and
+  dripping, evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling
+  or heat transfer
 * erosion
 * periodic patches
 * tracking through unjoined non-conformal pairs
@@ -121,8 +123,8 @@ Outputs of the run path (`particles.vtp`, `particles_<n>.vtp`, `particle_report.
 ## Output
 
 The output format is ASCII VTK PolyData (`.vtp`): points and point data `id`, `diameter`, `velocity`, `density`, `parcel_count`,
-`cell`, `age`, `state` (0 active, 1 deposited, 2 escaped, 3 stuck). The settings are `particles.output_file` and
-`particles.output_every`.
+`cell`, `age`, `state` (0 active, 1 deposited, 2 escaped, 3 stuck, 4 absorbed into the wall film). The settings are
+`particles.output_file` and `particles.output_every`.
 
 ## Extensions of wave 29C (F-128, ADR 0057)
 
@@ -136,6 +138,37 @@ The output format is ASCII VTK PolyData (`.vtp`): points and point data `id`, `d
 * Discrete random walk (`Dispersion`, `Tracker::set_dispersion`; case keys `particles.dispersion*`): see ADR 0057 D2 and the closed
   form `sigma_p^2 = sigma^2 T_L/(T_L + tau_p)`. Homogeneous isotropic turbulence of given k and epsilon only.
 * Injection: `uniform` diameters, equal-mass parcels from `mass_flow`, cone injections (`ConeSpec`, `InjectorExt`).
+
+## Wall film (F-253, ADR 0192)
+
+Parcels of a liquid can feed a thin film on wall patches. With `[particles.film]` (`enabled = true`, the wall `patches`,
+the liquid `viscosity`), a parcel that reaches a face of a film patch is absorbed: its mass joins the film on that face,
+and the parcel ends with state 4 (`film`). The film liquid density is `particles.density`.
+
+Each face holds a film mass `M`, so its thickness is `h = M/(rho_l A)`. The film runs along the wall with the mean
+velocity of a steady laminar film of its own thickness under the part of gravity along the wall:
+
+    u_bar = rho_l h^2 g_t / (3 mu_l),   g_t = g - (g . n) n
+
+Down a plane inclined at `theta` this gives the Nusselt thickness for a mass flow `Gamma` per unit width:
+
+    h_N = (3 mu_l Gamma / (rho_l^2 g sin(theta)))^(1/3)
+
+Mass moves between neighbouring film faces by a donor-cell flux across their shared edges. The film is advanced at the
+end of every tracking step, in explicit sub-steps that keep the Courant number of the kinematic wave (speed `3 u_bar`)
+at 0.5 or less, so no face mass becomes negative. Film that reaches an edge where no other film face continues leaves the
+film and is counted as drained.
+
+Below the feed, the steady film has exactly the Nusselt thickness. ADR 0192 checks this on a 30-degree incline fed by
+four parcel streams at `Re_f = 4 Gamma/mu_l = 2`. The check also requires the mass of all parcels injected to equal
+airborne + deposited + escaped + stuck + film on the wall + drained to 1e-10. The model holds for laminar wave-free films,
+`Re_f` up to about 30. It has no film inertia, so it cannot show the waves of a real film. The run report gives the
+largest face `Re_f`.
+
+Not modelled: shear and pressure gradients from the gas, surface tension and the hydrostatic gradient, splash and
+rebound at impact, separation and dripping, evaporation and heat transfer of the film. The film never acts on the flow,
+and it is refused together with `two_way` or `heat_transfer`. From code, `Tracker::set_film(FilmSpec)` switches it on
+and `Tracker::film()` reads it (`rcfd_particles::film`).
 
 ## Where to go next
 

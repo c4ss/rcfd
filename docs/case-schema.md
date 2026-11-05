@@ -1977,6 +1977,20 @@ Transient: the tracker advances over each flow step on the old-level field, and 
 Not delivered: sub-iteration of the transient exchange, the mechanical energy exchange, `heat_transfer` without `two_way`,
 `frozen_flow`, `dynamic_mesh` (located errors).
 
+Wall film (F-253, ADR 0192; `docs/particles.md`, "Wall film"). `particles.film` is an optional table: absent, it is not in
+the case data and changes nothing (a case that writes it with its defaults keeps its settings hash).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `film.enabled` | `false` | a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face (state `film`); the film runs down the wall under gravity and leaves it where no other film face continues it |
+| `film.patches` | `[]` | the wall patches that carry the film; required, each once, and without a `particles.walls.<patch>` entry |
+| `film.viscosity` | `-1` | dynamic viscosity of the film liquid [Pa s], must be set (> 0); the liquid density is `particles.density` |
+
+Located errors: `particles.film.enabled` without `particles.enabled` or together with `two_way` or `heat_transfer`;
+`particles.film.patches` empty, repeated, also in `particles.walls`, or (when the mesh is built) unknown or not a wall;
+`particles.film.viscosity` unset; `particles.gravity` false or `physics.gravity` zero (the film is driven by gravity
+alone).
+
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
 --check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`
@@ -1996,6 +2010,9 @@ Outputs next to `solution.vtu`:
 * `particle_report.json` (`time`, `injected`, `counts {active, deposited, escaped, stuck}`, `mean_diameter`, `mass_by_state`,
   `steps`)
 * with `tracks`, `particle_tracks.csv`
+* with `film.enabled` (ADR 0192): `particle_film.csv`, one row per film face
+  (`face,patch,x,y,z,area,thickness,mass,ux,uy,uz`); the report then also has `counts.film`, `mass_by_state.film` and
+  `film {faces, held, drained, absorbed, max_thickness, max_reynolds}`. Without the film the report is unchanged
 
 A transient run with particles is not restartable (the tracker state is not in the checkpoint; the run-control warning is
 emitted). Service method `particles.report` (`session`, optional `with_tracks`) returns the report of the live session (a

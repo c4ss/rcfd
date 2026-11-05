@@ -305,6 +305,48 @@ changes: the mesh, the gravity, the particles, the film, the limits and the chec
 equation runs on the frozen field at rest and does not reach the particles or the film (`heat_transfer` is off). The three
 tests on the registered K stay as ignored records (`*_k_setup_defect`), and the corrected tests are new.
 
-## Addendum
+## Addendum 1: results (2026-11-05)
 
-To be written after the runs.
+Measured against the limits registered above; no limit was changed. Release builds on Windows: the library checks on
+commit 2bdd456, the case-tree checks on 9048548 (after amendment 1). Each registered check ran once, except C1, C2-C3 and
+C4, whose first run stopped at the set-up defect of amendment 1.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `Gamma` round trip; `abs(g_t)` of the 40 faces; part across the slope | 1e-14 | 4.3e-16; 5.4e-16; 2.9e-17 | met |
+| A2 rows 1 to 9; loss of row 0; held + drained; sub-steps | 1e-13; 1e-13; 1e-14; 1 | 0; 9.3e-16; 0; 1 | met |
+| A3 rows 1 to 9 at 20 s (worst: row 9); added = held + drained; smallest mass; sub-steps | 1e-10; 1e-12; `>= 0`; 2000 | 1.3e-14; 1.6e-13; 0; 2000 | met (predicted 5e-15) |
+| B1 the four station faces, window average and at 20 s | 5 percent | 2.0e-15 to 2.6e-15; 1.7e-11 | met |
+| B2 window average | 1e-6 | 2.6e-15 | met (predicted 2e-16) |
+| B3 ledger at the end of every step | 1e-10 | 6.1e-13 | met |
+| B4 absorbed against held + drained | 1e-10 | 6.1e-13 | met |
+| B5 `Re_f`; largest face `Re_f` at 20 s | in `(0, 30]` and below 5.774; `<= 30` | 2; 2.0000 | met |
+| B6 parcels deposited, escaped or stuck; smallest mass | 0; `>= 0` | 0 (58 400 injected, 58 336 absorbed, 64 in flight); 0 | met |
+| C1 (corrected K) twelve invalid inputs; the valid K | each at its path; none | each at its path; none | met |
+| C2 `track_frozen`, run path and tracker by hand (fingerprint of 189 813 words, face masses, drained) | bit for bit | equal | met |
+| C3 row-6 face of K at 20 s | 5 percent | 1.7e-11 | met |
+| C4 report film fields, `counts.film` (14 584); CSV rows (10), thickness read back | equal; 1e-15 | equal; 0 | met |
+| D1 R1 | `e56421d672c5454f` | equal | met |
+| D2 R2 | `ce9df10b3a885c96` | equal | met |
+| D3 H1 (41 recorded sources, 0 differ); `baseline_hashes`; the particle suites `closed_forms`, `lagrangian_ext`, `particles_case`, `particles_ext_case`, `particle_run`, `particles_two_way` | unchanged | pass | met |
+| D4 no `film` key in the data; settings hash with an inert `[particles.film]` | equal | equal (`09e5c4029f2e09c9`) | met |
+
+The record of the set-up defect: `c1_located_errors_of_the_film_keys_k_setup_defect`,
+`c2_c3_tree_equals_library_and_meets_the_nusselt_thickness_k_setup_defect` and `c4_report_and_film_csv_k_setup_defect`
+run the registered case K and are ignored; the corrected tests are `c1b_...`, `c2b_c3b_...` and `c4b_...`.
+
+Disclosures:
+
+- The refusal of an edge held by more than two film faces (S1) is not exercised by a test. The boundary of a mesh that
+  passes `validate()` is a closed surface, so no patch set of such a mesh has that edge; the check is defensive.
+- B does not assert where each parcel lands. The four columns give the same station values to round-off, which they
+  would not if a column's parcels landed on another face.
+- The station error at 20 s is the same number in B and C3 (1.7084e-11): each column gets the same feed and the same
+  arithmetic.
+- The R1 scenario ran 60 steps in its first version, which left no parcel deposited; its set-up assertion failed, and it
+  was lengthened to 150 steps before this text was registered. Both records were made on main before any code of F-253.
+- `docs/particles.md` called F-128 partial in a heading; the roadmap has it done since 2026-10-21, and the heading now
+  says so.
+- The tests take under a second each in release (`wall_film` 0.6 s, `wall_film_f253` 0.4 s).
+
+The full gate result is appended below once it has run.
