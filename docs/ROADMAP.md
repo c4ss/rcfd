@@ -3675,6 +3675,8 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - DONE: acceptance met by non-ignored tests (m1_m4, m5).
     - Outside the acceptance and still open: pressure-interpolation variants, a separate warped-face correction,
       case-tree wiring of GradientOptions.
+    - F-256 (ADR 0190, branch f256-gradient-wiring, not merged): the gradient options are wired into the case tree as
+      solver.gradient_*.
 - [~] **F-209** Adaptive time stepping and convergence accelerators: error-estimator steps, period-based steps, RMS/MAX Courant criteria, local timescale factors, residual smoothing, extrapolated step initialisation, nonlinear (Aitken-type) acceleration, stretched-mesh pseudo-time acceleration
   - depends on: F-024, F-106, F-027
   - acceptance: Error-controlled stepping (step doubling, `solver.error_tolerance`) on a two-timescale linear decay (rates differing by at least 100, both modes of unit initial amplitude) reaches its requested error without a user-chosen step: the final error E satisfies E / (tol T) within [0.3, 3] for two tolerances a factor 4 apart; on the Taylor-Green vortex the error-controlled global error scales with the tolerance (E / (tol T) within [0.3, 3]); a high-aspect-ratio flat-plate boundary-layer mesh converges to Blasius and turbulent skin-friction values within the unaccelerated tolerance
@@ -4833,7 +4835,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - acceptance: Particle dispersion driven by turbulence-model fields reproduces the analytic dispersion growth of a passive cloud in homogeneous turbulence (Taylor result, closed form derived in the ADR) within 5 percent, and a particle surface reaction conserves the mass of each species to 1e-10 relative
   - note: Split from F-245 on 2026-10-22 (user decision): these were in F-128's not-delivered list and tracked nowhere.
     Acceptance text proposed by the lead; refine when scheduled. Size L.
-- [ ] **F-256** Case-tree wiring of the gradient options
+- [x] **F-256** Case-tree wiring of the gradient options
   - depends on: F-208
   - acceptance: Case-tree wiring of the existing GradientOptions (face correction, secondary limiter, boundary-gradient
     treatment; options added later (for example by F-246) wire under the same checks): invalid values give located
@@ -4841,6 +4843,19 @@ Added after the static feature-gap review; wording is product-independent. Phase
     bit-identical (baseline hashes unchanged).
     - Out of scope: new gradient schemes, limiter changes.
   - note: Split from F-246 on 2026-10-22 (user decision). Can ship before F-246. Size S.
+    - DONE (ADR 0190, the registration of F-256, 2026-11-05, branch f256-gradient-wiring, not merged): the keys
+      solver.gradient_face_correction, gradient_secondary_limiter (none, barth_jespersen, venkatakrishnan),
+      gradient_limiter_k (default 5) and gradient_boundary (owner, corrected, dropped), left out of the settings hash at
+      their defaults, set the library options of the diffusion term of the energy equation (incompressible
+      constant-density solvers, P1 radiation included) and of the transported scalars and species. Invalid values, and
+      options that would act on nothing (a scheme without a cell gradient, no equation that takes them, K without its
+      limiter), are located errors (G1). On a wedge mesh of 29.6 degrees non-orthogonality the tree run equals the
+      library run exactly (0, limit 1e-12) for seven option sets of the steady energy equation and for ADR 0016's set C2
+      of the transient energy equation and a poisson scalar, and each set moves the result by 2.2e-5 to 1.8e-2 against
+      the default (G2, G3). The keys at their defaults change no bit and no settings hash; baseline hashes unchanged
+      (G4).
+    - Open: the names and place of the keys (ADR 0190 Q1); the default K (Q2); the conjugate heat_flow report keeps the
+      default secondary flux (Q3); the options stay off momentum, pressure, turbulence and the electric potential (Q4).
 - [ ] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
