@@ -6,6 +6,7 @@
 //! Osher 1988) is selected with `solver.algorithm = "compressible"`.
 
 use crate::case::{Case, Diagnostic};
+use crate::dynmesh::DynMesh;
 use crate::sim::{conv_scheme, get_b, get_f, get_i, get_s, get_v};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::compressible::{to_prim, CompBc, CompSettings, CompressibleSolver, Gas, Prim, RiemannSolver, RkScheme};
@@ -456,6 +457,70 @@ impl CompState {
             dt,
             error: None,
         }
+    }
+
+    /// [`Self::advance`] on a moving mesh (F-259, ADR 0191 W4): the step `dt` of the current mesh, clipped as there; the ALE
+    /// step to the mesh of `dm` at the end of the step; the step's changes before a layer event; the layer event of a layered
+    /// piston; the shadow fields rebuilt when the cell count changed. `Err` is a failure of the mesh motion, already worded
+    /// as the run's `dynamic_mesh:` message; a failure of the solver is the `error` of the result, as in [`Self::advance`].
+    pub fn advance_moving(&mut self, t_end: Option<f64>, dm: &mut DynMesh) -> Result<Advance, String> {
+        let gas = self.solver.gas;
+        let before = self.solver.u.clone();
+        let mut dt = self.solver.max_dt();
+        if let Some(te) = t_end {
+            dt = dt.min((te - self.solver.time).max(1e-300));
+        }
+        let fail = |msg: String, dt: f64| Advance {
+            res_rho: f64::NAN,
+            res_p: f64::NAN,
+            mass_drift: f64::NAN,
+            dt,
+            error: Some(msg),
+        };
+        if !(dt.is_finite() && dt > 0.0) {
+            return Ok(fail(
+                format!("the stable time step is not positive and finite ({dt})"),
+                dt,
+            ));
+        }
+        let (step, t_new) = (self.solver.steps + 1, self.solver.time + dt);
+        let moved = |e: String| crate::dynmesh::failure_message(step, t_new, &e);
+        let geom = dm.compressible_geometry(t_new).map_err(moved)?;
+        if let Err(e) = self.solver.step_ale(geom, dt) {
+            return Ok(fail(e.to_string(), dt));
+        }
+        let mut res_rho: f64 = 0.0;
+        let mut res_p: f64 = 0.0;
+        for (a, b) in self.solver.u.iter().zip(&before) {
+            let (pa, pb) = (to_prim(gas, a), to_prim(gas, b));
+            if !(pa.rho.is_finite() && pa.p.is_finite() && pa.rho > 0.0 && pa.p > 0.0) {
+                return Ok(fail(
+                    "non-positive or non-finite density / pressure after the step".into(),
+                    dt,
+                ));
+            }
+            res_rho = res_rho.max((a[0] - b[0]).abs() / b[0]);
+            res_p = res_p.max((pa.p - pb.p).abs() / pb.p);
+        }
+        if let Some((g, u)) = dm.layer_event(&self.solver).map_err(moved)? {
+            self.solver.replace_mesh(g, u).map_err(|e| moved(e.to_string()))?;
+        }
+        let g = &self.solver.geom;
+        if self.u.values.len() != g.n_cells() {
+            self.u = VectorField::uniform("U", g, [0.0; 3]);
+            self.p = ScalarField::uniform("p", g, 0.0);
+        }
+        if self.phi.len() != g.mesh.n_faces() {
+            self.phi = vec![0.0; g.mesh.n_faces()];
+        }
+        let mass = self.solver.totals()[0];
+        Ok(Advance {
+            res_rho,
+            res_p,
+            mass_drift: (mass - self.mass0).abs() / self.mass0,
+            dt,
+            error: None,
+        })
     }
 
     /// Named cell field (`rho`, `p`, `T`, `mach`), if it is one of the compressible ones.
