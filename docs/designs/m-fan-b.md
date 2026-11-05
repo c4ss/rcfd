@@ -4,11 +4,11 @@
 *   **Status:** Proposed
 *   **Date:** 2026-11-04
 *   **Parent design:** `docs/designs/unblock-roadmap-fan01-fea.md`, Part 2, milestone M-FAN-B (goal G9).
-    That file, ADR 0182 (`docs/adr/0182-tiered-gate-and-nightly.md`), `docs/milestones.json` and roadmap items F-270 to
-    F-277 are on branch `m0-gate-roadmap` and not yet on main, so they are named here as paths, not links, until that
+    That file, ADR 0182 (`docs/adr/0182-tiered-gate-and-nightly.md`), `docs/milestones.json` and roadmap items F-276 to
+    F-283 are on branch `m0-gate-roadmap` and not yet on main, so they are named here as paths, not links, until that
     branch merges.
 *   **Registration:** [ADR 0184](../adr/0184-m-fan-b-registration-and-obj-gltf-readers.md) fixes the limits of this
-    milestone's acceptance and of step 1 (F-274) before any run.
+    milestone's acceptance and of step 1 (F-280) before any run.
 
 ## Overview
 
@@ -18,12 +18,12 @@ rotor-only FAN-01 run (M-FAN-A1), which runs on the blade mesh this milestone pr
 Pass condition (G9, from `docs/milestones.json` on `m0-gate-roadmap`): *a case meshes and runs the FAN-01 blade from a
 surface file with units, with prism layers and a hash-keyed rebuild.*
 
-Items: F-273 (surface file as case geometry, hash-keyed rebuild), F-274 (OBJ and glTF readers), F-108 (prism layers),
+Items: F-279 (surface file as case geometry, hash-keyed rebuild), F-280 (OBJ and glTF readers), F-108 (prism layers),
 F-132 (tetrahedral volume mesh), F-232 (surface diagnostics and repair), F-234 (Cartesian-core fill with prism layers).
 
 **What this document details.** The whole milestone at the level of problem, goals, user journey and architecture; the
 split of each partly done item into the part G9 needs and the part it does not; and a file-level plan for step 1 only
-(F-274, the readers). Steps 2 to 5 each get a registration ADR, written before their first run, that fixes their file plan
+(F-280, the readers). Steps 2 to 5 each get a registration ADR, written before their first run, that fixes their file plan
 and limits. The reason is the same as in the parent design: step 3's route (open question Q1) decides the files that step 4
 touches.
 
@@ -55,7 +55,7 @@ decided something, the decision is cited. The open questions at the end need the
 
 Each goal names the step that delivers it. A step merges on its own.
 
-*   **B1. Readers (step 1, F-274).**
+*   **B1. Readers (step 1, F-280).**
     *   `rcfd_io::obj` and `rcfd_io::gltf` read a surface into an `rcfd_mesh::surface::TriSurface` whose tag `k` is patch
         `k`, plus the list of patch names and a list of notes on what was ignored.
     *   The length unit is a required argument. It is never guessed, and glTF's metre is not assumed.
@@ -72,7 +72,7 @@ Each goal names the step that delivers it. A step merges on its own.
     outer domain, build one conforming `rcfd_mesh::Mesh` whose wall patches carry prism layers sized by first-layer height
     and growth (or a y+ target through `layers::first_cell_height_from_y_plus`), with the layers part of the fluid mesh. The
     route is open question Q1.
-*   **B4. Case geometry and rebuild (step 4, F-273).**
+*   **B4. Case geometry and rebuild (step 4, F-279).**
     *   New case keys under `geometry` (parent design: `geometry.source = "surface"`, `geometry.file`, `geometry.units`,
         `geometry.variant`). Their schema text is written in step 4, not here.
     *   The mesh is rebuilt only when the hash of the file bytes, the unit and every meshing setting changes. The hash is
@@ -129,7 +129,7 @@ and the rebuild and patch diff; B5 is the journey run on the real blade.
  FAN-01 blade acceptance run                                                      [step 5, B5]
 ```
 
-### Step 1: readers (F-274), detailed below
+### Step 1: readers (F-280), detailed below
 
 The output type is the one the existing pipeline already takes: `tetrahedralize` reads a `TriSurface`, and
 `TetMesh::to_mesh(&BTreeMap<u32, String>)` turns tags into named patches. `surface::repair` carries tags through. So a
@@ -221,8 +221,8 @@ graded by ADR 0184 limits A1 to A7.
 
 | Item | Done part (on main) | Part G9 needs (in M-FAN-B) | Not needed for G9 (stays on the item) |
 |---|---|---|---|
-| F-274 | nothing | all of it (step 1) | nothing |
-| F-273 | nothing | all of it (steps 4 and 5) | nothing |
+| F-280 | nothing | all of it (step 1) | nothing |
+| F-279 | nothing | all of it (steps 4 and 5) | nothing |
 | F-232 | diagnose; repair of seeded-defect sphere and cube to closed manifolds, volume within 0.5 % | intake report and refusal of an open surface (step 2) | self-intersection detection, spikes, leak-tolerant wrapping, a public defective surface set, exact defect counts on it |
 | F-108 | block-mesh wall layers; solved y+ on the flat plate (ADR 0094); `inflate_patch` outward shell with sizing rules | prism layers on unstructured wall patches merged into the fluid mesh, first-layer height checked on the merged mesh (step 3) | a schema report surface for layer metrics beyond what step 4 prints |
 | F-132 | tetrahedralization of closed surfaces with tags to patches; opt-in quality pass; polydual (F-102) | volume mesh of an imported closed surface with boundary layers, if route T (step 3) | sliver guarantees, the superlinear cost of the quality pass |
@@ -264,7 +264,7 @@ Each step's ADR repeats the split for its items, with the item notes to add to `
 
 *   **Pros:** the Fluent and Gmsh readers do it (`common::guess_kind`), so cases need fewer lines.
 *   **Cons:** a guess can set a wrong boundary type silently.
-*   **Reason for rejection:** F-274's acceptance says boundary types are never guessed. The case names them.
+*   **Reason for rejection:** F-280's acceptance says boundary types are never guessed. The case names them.
 
 ### Alternative F: no welding in the readers
 

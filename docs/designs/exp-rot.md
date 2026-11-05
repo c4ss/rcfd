@@ -3,7 +3,7 @@
 *   **Status:** Proposed. Design only. No code has been written and nothing has been run. The limits are registered in
     [ADR 0183](../adr/0183-exp-rot-registration.md).
 *   **Date:** 2026-11-04
-*   **Roadmap:** F-270, milestone EXP-ROT (requires M-0). Parent: goal G7 and Technical Plan Part 2 of
+*   **Roadmap:** F-276, milestone EXP-ROT (requires M-0). Parent: goal G7 and Technical Plan Part 2 of
     `docs/designs/unblock-roadmap-fan01-fea.md` (branch `m0-gate-roadmap`, not merged when this was written).
 
 ## Overview
@@ -51,7 +51,7 @@ What is known about FAN-01 on the C-grid family of [ADR 0086](../adr/0086-wave37
   steady state exists there at all.
 
 The decision this experiment feeds is in the parent design. If rigid rotation removes the spurious angular momentum, A1
-is built on rigid rotation, time-marched (which needs F-271, SST on moving meshes). If not, A1 stays on a rotating-frame
+is built on rigid rotation, time-marched (which needs F-277, SST on moving meshes). If not, A1 stays on a rotating-frame
 solve. If the limit cycle stays whatever the treatment of the rotation, the blocker is the mesh or the scheme, and A1
 starts from the CAD mesh of M-FAN-B.
 
@@ -71,7 +71,7 @@ starts from the CAD mesh of M-FAN-B.
 
 ## Non-goals
 
-*   SST on moving meshes (F-271), sliding interfaces (F-250), and the CAD blade mesh (M-FAN-B).
+*   SST on moving meshes (F-277), sliding interfaces (F-250), and the CAD blade mesh (M-FAN-B).
 *   Grading against the measured fan. Torque and Delta p_ts are reported against the ADR 0181 references, not graded.
 *   Any change of a default. Every prerequisite is opt-in, and `baseline_hashes.rs` is not re-recorded.
 *   Deciding the fate of the 49K to 49R branches (open question 1).
@@ -84,7 +84,7 @@ cover, and those are left to the maintainer:
 
 | Outcome | Then |
 |---|---|
-| Q-ROT YES | A1 on rigid rotation, time-marched; F-271 moves into A1 (parent design) |
+| Q-ROT YES | A1 on rigid rotation, time-marched; F-277 moves into A1 (parent design) |
 | Q-ROT NO | A1 stays on a rotating-frame solve; its design reopens the diagnosis (parent design) |
 | Q-LC STAYS and H STEADY or NUMERICAL | the blocker is the mesh or the scheme; A1 starts from the M-FAN-B mesh (parent design) |
 | Q-ROT NOT REPRODUCED or NOT EVALUABLE | open question 3 |
@@ -304,12 +304,12 @@ time of the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so
 *   **Cons:** it is not the arm the parent design names, and it has never run anywhere.
 *   **Not chosen.** Open question 5.
 
-### F. Wait for F-271 and run arm 1 with SST
+### F. Wait for F-277 and run arm 1 with SST
 
 *   **Pros:** the same turbulence model as the stall.
-*   **Cons:** F-271 is unsized, and EXP-ROT is what decides whether A1 needs it.
+*   **Cons:** F-277 is unsized, and EXP-ROT is what decides whether A1 needs it.
 *   **Rejected.** The laminar arm answers whether the formulation itself is clean. A turbulent repeat is recommended
-    inside F-271's verification if the laminar control does not reproduce the growth (open question 3).
+    inside F-277's verification if the laminar control does not reproduce the growth (open question 3).
 
 ## Risks
 
@@ -330,7 +330,7 @@ time of the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so
 ADR 0183 lists them, each with a recommendation. In short:
 1. The 49K to 49R jobs: EXP-ROT takes over ADR 0181 question 1. No new steady-iteration job until EXP-ROT reports.
 2. Prerequisites: build P-A and P-B as registered.
-3. Q-ROT NOT REPRODUCED: build A1 on rigid rotation provisionally if Y1 is clean, and repeat arm 1 with SST in F-271's
+3. Q-ROT NOT REPRODUCED: build A1 on rigid rotation provisionally if Y1 is clean, and repeat arm 1 with SST in F-277's
    verification. NOT EVALUABLE: one registered amendment, then decide.
 4. "Both arms": read the clause as arm 2 STAYS and H STEADY or NUMERICAL, not from the laminar bladed runs.
 5. Arm 2's form: ADR 0085 arm C as the parent design names it, with the Y2S control.

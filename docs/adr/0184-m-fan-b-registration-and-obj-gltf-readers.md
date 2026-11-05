@@ -1,11 +1,11 @@
-# ADR 0184: M-FAN-B registration (surface import and meshing pipeline) and job J4, the OBJ and glTF surface readers (F-274)
+# ADR 0184: M-FAN-B registration (surface import and meshing pipeline) and job J4, the OBJ and glTF surface readers (F-280)
 
 Status: **registered 2026-11-04**, before any implementation result of this job and before any run. Amendments follow
 this text, each written before the runs it covers; results go in an addendum. Not yet accepted by the maintainer.
 
 Job J4, on local main edb4839 (worktree branch `j4-mfanb-readers`). Design:
 [`docs/designs/m-fan-b.md`](../designs/m-fan-b.md). Parent design: `docs/designs/unblock-roadmap-fan01-fea.md` (goal G9),
-which with ADR 0182, `docs/milestones.json` and roadmap items F-270 to F-277 is on branch `m0-gate-roadmap`, not yet on
+which with ADR 0182, `docs/milestones.json` and roadmap items F-276 to F-283 is on branch `m0-gate-roadmap`, not yet on
 main. Number: 0182 is used on `m0-gate-roadmap`, 0183 is reserved for another job, 0173 to 0181 are on unmerged job
 branches; no branch has 0184 (checked over all local branches just before writing).
 
@@ -65,7 +65,7 @@ conformance cases; a `tamper` run of each must fail with the format name.
 **D9. Out of this step.** The `geometry.*` case keys, the intake function, the CLI command and any change to
 `docs/case-schema.md` belong to later steps.
 
-**D10. Roadmap.** F-274 exists only in `docs/roadmap.json` on `m0-gate-roadmap`; main's file has 184 items and no F-274.
+**D10. Roadmap.** F-280 exists only in `docs/roadmap.json` on `m0-gate-roadmap`; main's file has 184 items and no F-280.
 This job does not add the item on main (that would clash with the m0 roadmap track). The note to add when both have
 merged is in the addendum.
 
@@ -157,7 +157,7 @@ and `obj::read_file` were checked once on files in a temporary folder (sidecar i
 **Not shown.** No file written by Blender, FreeCAD or another third-party exporter was read; the only independent writer is
 rcfd's own F-117 GLB exporter.
 
-**Roadmap note for F-274** (to add to `docs/roadmap.json` when `m0-gate-roadmap` has merged, since F-274 is not on main):
+**Roadmap note for F-280** (to add to `docs/roadmap.json` when `m0-gate-roadmap` has merged, since F-280 is not on main):
 "Job J4 (ADR 0184): rcfd_io::obj and rcfd_io::gltf read OBJ, .gltf (data URI or sidecar buffers) and .glb into a TriSurface
 with a required length unit and one patch per OBJ object or glTF mesh node; boundary types are never guessed; registered
 checks R1 to R12 pass (crates/rcfd-io/tests/j4_surface_readers.rs, crates/rcfd-post/tests/j4_glb_reader_cross.rs). Not

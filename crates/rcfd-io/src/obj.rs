@@ -1,4 +1,4 @@
-//! Wavefront OBJ surface reader (F-274, ADR 0184 D5).
+//! Wavefront OBJ surface reader (F-280, ADR 0184 D5).
 //!
 //! Written from the public description of the OBJ format (polygonal subset): `v x y z [w]` vertices, `f` faces whose
 //! references are `v`, `v/vt`, `v//vn` or `v/vt/vn`, 1-based, or negative to count back from the last vertex defined so

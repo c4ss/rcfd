@@ -1,4 +1,4 @@
-//! Job J4 (ADR 0184) registered checks R1 to R10 and R12: the OBJ and glTF surface readers (F-274).
+//! Job J4 (ADR 0184) registered checks R1 to R10 and R12: the OBJ and glTF surface readers (F-280).
 //! Every fixture is written by these tests, in memory (sidecar files through the resolver).
 
 use rcfd_core::units::Unit;

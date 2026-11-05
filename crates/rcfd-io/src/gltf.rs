@@ -1,4 +1,4 @@
-//! glTF 2.0 surface reader, `.gltf` and `.glb` (F-274, ADR 0184 D6).
+//! glTF 2.0 surface reader, `.gltf` and `.glb` (F-280, ADR 0184 D6).
 //!
 //! Written from the public Khronos glTF 2.0 specification. Only what describes the surface is read:
 //!

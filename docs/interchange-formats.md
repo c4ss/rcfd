@@ -1,4 +1,4 @@
-# Interchange formats, registers and GLB validation (F-119, F-124, F-117, F-274; ADR 0011, ADR 0184)
+# Interchange formats, registers and GLB validation (F-119, F-124, F-117, F-280; ADR 0011, ADR 0184)
 
 This page lists the interchange formats rcfd converts, reads and writes, the library entry points for them, what is not done or
 not verified for each, and related library features: registers (named cell sets), the GLB checker, the format registry and a
@@ -28,7 +28,7 @@ packing, `VARLOCATION`), `rcfd_io::plot3d` (multi-block, ASCII and Fortran-unfor
 precision, either byte order, iblank, function files, headerless C-binary single-grid files via `read_grid_raw`),
 `rcfd_io::xdmf` (writer).
 
-## Surface readers: OBJ and glTF (F-274, ADR 0184)
+## Surface readers: OBJ and glTF (F-280, ADR 0184)
 
 `rcfd_io::obj` and `rcfd_io::gltf` read a triangulated surface for meshing. Both return
 `rcfd_io::common::SurfaceImport { surface, patches, notes }`: an `rcfd_mesh::surface::TriSurface` in metres whose triangle

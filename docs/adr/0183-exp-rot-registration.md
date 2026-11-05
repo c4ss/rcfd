@@ -1,4 +1,4 @@
-# ADR 0183: EXP-ROT (F-270) registration: rigid rotation against the rotating frame on FAN-01, the coupled solver with the rotation implicit, and the hub trailing-edge pocket in time
+# ADR 0183: EXP-ROT (F-276) registration: rigid rotation against the rotating frame on FAN-01, the coupled solver with the rotation implicit, and the hub trailing-edge pocket in time
 
 Status: **REGISTERED 2026-11-04** (design only). No code of this experiment has been written and no run of it has been
 made.
@@ -9,7 +9,7 @@ accepted by the maintainer.
 Design: [`docs/designs/exp-rot.md`](../designs/exp-rot.md). Parent design and milestone (both on the unmerged branch
 `m0-gate-roadmap` when this was written): `docs/designs/unblock-roadmap-fan01-fea.md` goal G7 and Technical Plan Part 2,
 ADR 0182 (`docs/adr/0182-tiered-gate-and-nightly.md`), milestone EXP-ROT in `docs/milestones.json` (requires M-0, item
-F-270). Parents in this tree: [ADR 0082](0082-wave36c-rotating-frame-angular-momentum-source.md),
+F-276). Parents in this tree: [ADR 0082](0082-wave36c-rotating-frame-angular-momentum-source.md),
 [ADR 0085](0085-wave37b-rotor-passage-robustness.md), [ADR 0086](0086-wave37c-fan01-solution-verification.md),
 [ADR 0033](0033-wave20b-dynamic-mesh.md), [ADR 0076](0076-wave35a-transient-seams-and-relaxation.md),
 [ADR 0110](0110-wave43c-fan01-rotor-passage-non-convergence-diagnosis.md),
@@ -155,7 +155,7 @@ the design; they go to the maintainer as questions 3 and 6, and this ADR does no
 
 | Outcome | Then | Source |
 |---|---|---|
-| Q-ROT **YES** | M-FAN-A1 is built on rigid rotation, time-marched, which needs F-271 | design |
+| Q-ROT **YES** | M-FAN-A1 is built on rigid rotation, time-marched, which needs F-277 | design |
 | Q-ROT **NO** | the cause is not the rotating-frame term; A1 stays on a rotating-frame solve and its design reopens the diagnosis | design |
 | Q-LC **STAYS** in arm 2 and H is **STEADY** or **NUMERICAL** | the blocker is the mesh or the scheme, not the rotor model; A1's design starts from the M-FAN-B mesh | design (the "both arms" clause read as below) |
 | Q-ROT **NOT REPRODUCED** or **NOT EVALUABLE** | open question 3 | this ADR |
@@ -319,7 +319,7 @@ and its key is documented in `docs/case-schema.md`. Code of a part that is NOT R
 
 - An `upwind` pair in arm 1. ADR 0082 and ADR 0085 already showed that the absolute-velocity formulation removes the
   first-order upwind source where it converges. The open item is the growth under the limited scheme.
-- SST in arm 1. It needs F-271 (k-omega SST on moving meshes), which `docs/dynamic-mesh.md` lists as missing.
+- SST in arm 1. It needs F-277 (k-omega SST on moving meshes), which `docs/dynamic-mesh.md` lists as missing.
 - The finest bladed mesh B1 (38 184 cells) in Y1b, check H and arm 2. ADR 0181 used B3 and B2, and B1 would cost about
   three times B2.
 - Local pseudo-time on B2 (`pseudo_mode = "local"`, no code). A converged result would only show that a steady state
@@ -341,7 +341,7 @@ and its key is documented in `docs/case-schema.md`. Code of a part that is NOT R
    ADR 0086.
 3. **Q-ROT NOT REPRODUCED or NOT EVALUABLE.** The design maps only YES and NO. Recommendation: for NOT REPRODUCED, build
    A1 on rigid rotation provisionally if Y1 meets A1-N, A1-L and A1-E (the formulation is clean on these meshes), and
-   repeat arm 1 with SST as part of F-271's verification before A1 is graded. For NOT EVALUABLE, keep A1's frame open,
+   repeat arm 1 with SST as part of F-277's verification before A1 is graded. For NOT EVALUABLE, keep A1's frame open,
    and decide after one registered amendment that addresses the cause.
 4. **Reading "the limit cycle stays in both arms" (D9).** Recommendation: read it as arm 2 STAYS and H STEADY or
    NUMERICAL, not from the laminar Y1b, for the reason given under D9. A NOT EVALUABLE H gives no reading.

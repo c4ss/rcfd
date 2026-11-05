@@ -1,5 +1,5 @@
 //! Job J4 (ADR 0184) registered check R11: a GLB written by the independent F-117 exporter (`rcfd_post::gltf`) is read
-//! by the F-274 surface reader (`rcfd_io::gltf`).
+//! by the F-280 surface reader (`rcfd_io::gltf`).
 
 use rcfd_mesh::gen::{box_mesh, Grading};
 use rcfd_mesh::surface::{diagnose, DiagOptions};
