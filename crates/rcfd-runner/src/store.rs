@@ -64,10 +64,71 @@ pub struct FsStore {
     root: PathBuf,
 }
 
+/// What a run of a design study is for (ADR 0189 S6): written to `run.json` as `study`, `variant` and `condition`, each only
+/// when set. The default sets none.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunTags {
+    /// The study's folder, project-relative.
+    pub study: Option<String>,
+    /// The study's candidate (`<parameter>=<value>,...`).
+    pub variant: Option<String>,
+    /// The label of the operating condition.
+    pub condition: Option<String>,
+}
+
 impl FsStore {
     /// The store of the project folder `root`.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         FsStore { root: root.into() }
+    }
+
+    /// [`RunStore::create_run`] with the run's `tags` in `run.json` (ADR 0189 S6); without tags the run is the one
+    /// `create_run` makes, byte for byte.
+    pub fn create_run_tagged(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        solver_version: Option<String>,
+        tags: &RunTags,
+    ) -> io::Result<String> {
+        let text = std::fs::read(case)?;
+        let case_abs = std::env::current_dir()?.join(case);
+        let case_dir = case_abs.parent().map(Path::to_path_buf).unwrap_or_default();
+        let runs = self.root.join("runs");
+        std::fs::create_dir_all(&runs)?;
+        let mut id = records::new_run_id();
+        while runs.join(&id).exists() || runs.join(format!(".tmp-{id}")).exists() {
+            id = records::new_run_id();
+        }
+        let tmp = runs.join(format!(".tmp-{id}"));
+        std::fs::create_dir(&tmp)?;
+        let rec = RunRecord {
+            id: id.clone(),
+            case: case_in_project(&self.root, &case_abs),
+            case_snapshot_hash: rcfd_project::records::hash_bytes(&text),
+            mesh: None,
+            mesh_hash: None,
+            solver_version: solver_version.unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.into()),
+            settings: serde_json::to_value(settings).map_err(bad)?,
+            created: records::now_iso(),
+            case_source: Some(case_abs.display().to_string()),
+            case_dir: Some(case_dir.display().to_string()),
+            study: tags.study.clone(),
+            variant: tags.variant.clone(),
+            condition: tags.condition.clone(),
+        };
+        atomic::write_new(&tmp.join("case.snapshot"), &text).map_err(io_error)?;
+        atomic::write_json_new(&tmp.join("run.json"), &rec).map_err(io_error)?;
+        let st = RunStatus {
+            updated: rec.created.clone(),
+            ..RunStatus::new(RunState::Queued)
+        };
+        atomic::write_json(&tmp.join("status.json"), &st).map_err(io_error)?;
+        let mut ev = state_event(None, RunState::Queued, "created");
+        ev["t"] = json!(rec.created);
+        jsonl::append_one(&tmp.join("events.jsonl"), &ev).map_err(io_error)?;
+        records::retry(|| std::fs::rename(&tmp, runs.join(&id)))?;
+        Ok(id)
     }
 }
 
@@ -127,41 +188,7 @@ impl RunStore for FsStore {
     }
 
     fn create_run(&self, case: &Path, settings: &RunSettings, solver_version: Option<String>) -> io::Result<String> {
-        let text = std::fs::read(case)?;
-        let case_abs = std::env::current_dir()?.join(case);
-        let case_dir = case_abs.parent().map(Path::to_path_buf).unwrap_or_default();
-        let runs = self.root.join("runs");
-        std::fs::create_dir_all(&runs)?;
-        let mut id = records::new_run_id();
-        while runs.join(&id).exists() || runs.join(format!(".tmp-{id}")).exists() {
-            id = records::new_run_id();
-        }
-        let tmp = runs.join(format!(".tmp-{id}"));
-        std::fs::create_dir(&tmp)?;
-        let rec = RunRecord {
-            id: id.clone(),
-            case: case_in_project(&self.root, &case_abs),
-            case_snapshot_hash: rcfd_project::records::hash_bytes(&text),
-            mesh: None,
-            mesh_hash: None,
-            solver_version: solver_version.unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.into()),
-            settings: serde_json::to_value(settings).map_err(bad)?,
-            created: records::now_iso(),
-            case_source: Some(case_abs.display().to_string()),
-            case_dir: Some(case_dir.display().to_string()),
-        };
-        atomic::write_new(&tmp.join("case.snapshot"), &text).map_err(io_error)?;
-        atomic::write_json_new(&tmp.join("run.json"), &rec).map_err(io_error)?;
-        let st = RunStatus {
-            updated: rec.created.clone(),
-            ..RunStatus::new(RunState::Queued)
-        };
-        atomic::write_json(&tmp.join("status.json"), &st).map_err(io_error)?;
-        let mut ev = state_event(None, RunState::Queued, "created");
-        ev["t"] = json!(rec.created);
-        jsonl::append_one(&tmp.join("events.jsonl"), &ev).map_err(io_error)?;
-        records::retry(|| std::fs::rename(&tmp, runs.join(&id)))?;
-        Ok(id)
+        self.create_run_tagged(case, settings, solver_version, &RunTags::default())
     }
 
     fn read_record(&self, id: &str) -> io::Result<RunRecord> {

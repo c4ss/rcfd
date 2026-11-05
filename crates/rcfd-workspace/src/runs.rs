@@ -163,6 +163,17 @@ impl RunService {
     pub fn wait(&self, id: &str, timeout: Duration) -> Result<RunStatus, String> {
         self.client.wait(id, timeout)
     }
+
+    /// Queue a run of `case` tagged with its design study, variant and condition, without starting a runner; returns the
+    /// run id (ADR 0189 S6).
+    pub fn submit_tagged(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        tags: &rcfd_runner::store::RunTags,
+    ) -> Result<String, String> {
+        self.client.submit_tagged(case, settings, tags)
+    }
 }
 
 impl Workspace {

@@ -917,6 +917,10 @@ impl McpServer {
                         p["session"] = json!(id);
                     }
                 }
+                // ADR 0189 S1: in project mode a study's candidates are evaluated on the project's runner
+                if let Some(proj) = self.project.as_ref().filter(|_| rcfd_workspace::design::ON_RUNNER.contains(&method)) {
+                    return Ok(ok_result(proj.workspace().design_call(svc, method, &p)?));
+                }
                 Ok(ok_result(svc.call(method, &p)?))
             }
             "render_image" => {

@@ -5,7 +5,7 @@
 
 use crate::records::{RunSettings, RunState, RunStatus};
 use crate::runner::{dot_dir, sibling_exe, EXIT_ALREADY_RUNNING};
-use crate::store::{extra, FsStore, RunStore};
+use crate::store::{extra, FsStore, RunStore, RunTags};
 use crate::sys;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
@@ -201,6 +201,11 @@ impl Client {
 
     /// Queue a run of `case` without starting a runner; returns the run id.
     pub fn submit(&self, case: &Path, settings: &RunSettings) -> Result<String, String> {
+        self.submit_tagged(case, settings, &RunTags::default())
+    }
+
+    /// [`Client::submit`] with the run's design-study `tags` in `run.json` (ADR 0189 S6).
+    pub fn submit_tagged(&self, case: &Path, settings: &RunSettings, tags: &RunTags) -> Result<String, String> {
         let version = version_cmd(&sibling_of(&self.runner_exe, "rcfd"))
             .0
             .output()
@@ -208,7 +213,7 @@ impl Client {
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
         self.store
-            .create_run(case, settings, version)
+            .create_run_tagged(case, settings, version, tags)
             .map_err(|e| format!("{}: {e}", case.display()))
     }
 
