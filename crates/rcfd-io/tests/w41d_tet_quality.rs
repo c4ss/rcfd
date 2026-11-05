@@ -43,7 +43,8 @@ fn from_stl_file() -> TriSurface {
     // one file per call: tests run in parallel and a shared name raced (a reader saw the file truncated by another writer)
     static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let n = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("w41d_cylinder_in_box_{n}.stl"));
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("w41d_cylinder_in_box_{}_{n}.stl", std::process::id()));
     std::fs::write(&path, text).unwrap();
     let back = stl::read_file(&path).unwrap();
     let mut s = TriSurface::from_soup(&back[0].triangles, 0.0);
