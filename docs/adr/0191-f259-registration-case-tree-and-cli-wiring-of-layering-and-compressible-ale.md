@@ -254,3 +254,11 @@ lands. (b) Leave it. Recommendation (a). Proceeding with no change.
 * [ADR 0090](0090-wave38c-dynamic-mesh-layering.md) for the library and its measured checks.
 * [ADR 0033](0033-wave20b-dynamic-mesh.md) for the `dynamic_mesh` section.
 * [Dynamic mesh](../dynamic-mesh.md) and [case schema](../case-schema.md) for the keys.
+
+## Amendment 1 (2026-11-05, before the mutation runs it covers)
+
+M2 cannot fail C-gcl as registered. A rigid motion keeps every cell volume, and the faces of a closed cell sum to zero area
+on any mesh, so a fixed-mesh step of a uniform state with fixed-state boundaries keeps it uniform on the moved mesh as well
+as the ALE step does. M2 must instead fail B-eq (the smoothing piston, whose cells change volume and whose moving wall
+compresses the gas only through the ALE fluxes). Nothing else changes; C-gcl stays a check of the ALE step's discrete GCL,
+not of the mutation.
