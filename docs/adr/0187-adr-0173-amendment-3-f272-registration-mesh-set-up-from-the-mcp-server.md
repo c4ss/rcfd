@@ -302,6 +302,7 @@ ending in `.` (Windows drops it). (5) `check_case_mesh` and `preview_mesh` answe
 | Gate | `d397600` (the code of this branch and the documents before this row), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test): fmt 0, clippy `-D warnings` 0, 2819 passed, 0 failed, 800 ignored, 541 binaries, 77 min wall (60 min of tests). Against the F-271 gate (2810 / 0 / 800, 539 binaries): the 7 workspace and 2 MCP tests of F-272 in 2 new binaries. `chat_e` `e1_session_list_open_closed_unknown` passed in the gate |
 
 **Questions for the maintainer.** Q1 to Q6 stand as registered, each proceeding on its reversible choice. Q6 changes what the
-Studio's sidebar runs without asking and was not acted on. The finding of difference (1) is a further one: under `--project`
-the session `check_mesh` and `load_mesh` cannot reach a case that names `meshes/` with `..`, which bears on D2's hiding of
-them (F-275).
+Studio's sidebar runs without asking and was not acted on. The finding of difference (1) is a further one: under the project's
+sandbox root, `create_case {path}` of a case that names `meshes/` with `..` is refused, so no session, and no session
+`check_mesh`, can be made from it (the session `load_mesh` was not tested); this bears on D2's hiding of the session mesh
+tools (F-275).
