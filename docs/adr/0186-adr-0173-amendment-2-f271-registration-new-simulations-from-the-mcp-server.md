@@ -193,3 +193,12 @@ journal lines and the feed (W6, F-273), mesh commands (W4, F-272), design studie
 * [ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) for the crate this extends.
 * [ADR 0140](0140-wave48g3-store-fields-by-default.md) for the store proposal the start plan follows.
 * [MCP tools](../mcp-tools.md) for the project tools.
+
+## Amendment 1 (2026-11-05, before the change it covers)
+
+The first run of `rcfd-mcp`'s tests found a third count of the project-mode tool list that item 2 did not name:
+`crates/rcfd-mcp/tests/project_w48f.rs` F3 asserts `33 + 17` tools for a library server with a project. G7 therefore covers a
+third edit, that count to `33 + 18`, and C-1 moves `project_w48f.rs` from "with no edit" to "with only its tool count
+changed". Nothing else of that file changes. Because F3's per-tool loop covers the 17 tools of its own list, the
+read-only refusal of `new_case` is checked in `new_simulations_f271.rs` instead: under `Policy::read_only()` a `new_case`
+call is refused with 1100 and the project folder is unchanged.
