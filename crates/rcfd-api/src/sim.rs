@@ -123,6 +123,78 @@ pub fn solver_conv_scheme(case: &Case) -> ConvScheme {
     }
 }
 
+/// The gradient options of the energy and scalar diffusion term (ADR 0190 K1, K2): `None` while `solver.gradient_*` all hold
+/// their defaults (the plain Laplacian, as before the keys existed), else the library options they name.
+pub fn gradient_options(case: &Case) -> Option<rcfd_fv::diffusion::GradientOptions> {
+    use rcfd_fv::diffusion::{BoundaryGradient, GradientOptions};
+    use rcfd_fv::gradient::Limiter;
+    let opts = GradientOptions {
+        face_correction: get_b(case, "solver.gradient_face_correction"),
+        secondary_limiter: match get_s(case, "solver.gradient_secondary_limiter").as_str() {
+            "barth_jespersen" => Some(Limiter::BarthJespersen),
+            "venkatakrishnan" => Some(Limiter::Venkatakrishnan(get_f(case, "solver.gradient_limiter_k"))),
+            _ => None,
+        },
+        boundary: match get_s(case, "solver.gradient_boundary").as_str() {
+            "corrected" => BoundaryGradient::Corrected,
+            "dropped" => BoundaryGradient::Dropped,
+            _ => BoundaryGradient::Owner,
+        },
+    };
+    (opts != GradientOptions::default()).then_some(opts)
+}
+
+/// The default of `solver.gradient_limiter_k` (ADR 0190 K1: ADR 0016's option set C2).
+const GRADIENT_LIMITER_K_DEFAULT: f64 = 5.0;
+
+/// ADR 0190 K5 R2 to R4: the located error of gradient options that would act on nothing. `takes` is whether the built
+/// simulation solves an equation that takes them (an `EnergySolver` energy equation without the phase change, or a swept
+/// scalar or species on a solved flow).
+fn check_gradient_options(case: &Case, conv: ConvScheme, takes: bool) -> std::result::Result<(), Vec<Diagnostic>> {
+    let first = [
+        (
+            "solver.gradient_face_correction",
+            !get_b(case, "solver.gradient_face_correction"),
+        ),
+        (
+            "solver.gradient_secondary_limiter",
+            get_s(case, "solver.gradient_secondary_limiter") == "none",
+        ),
+        (
+            "solver.gradient_boundary",
+            get_s(case, "solver.gradient_boundary") == "owner",
+        ),
+    ]
+    .into_iter()
+    .find(|(_, default)| !default)
+    .map(|(path, _)| path);
+    if let Some(path) = first {
+        if !conv.needs_gradient() {
+            return Err(diag(
+                path,
+                format!(
+                    "the gradient options act on the explicit non-orthogonal flux of the diffusion term, which solver.convection = \"{}\" does not compute (no cell gradient); use a gradient-based scheme such as linear_upwind or a tvd scheme, or leave the option at its default",
+                    get_s(case, "solver.convection")
+                ),
+            ));
+        }
+        if !takes {
+            return Err(diag(
+                path,
+                "the gradient options act on the diffusion term of the energy equation of the incompressible constant-density solvers (not with phase_change) and of the scalars and species swept on a solved flow; this case solves none of them",
+            ));
+        }
+    }
+    let k = get_f(case, "solver.gradient_limiter_k");
+    if k != GRADIENT_LIMITER_K_DEFAULT && get_s(case, "solver.gradient_secondary_limiter") != "venkatakrishnan" {
+        return Err(diag(
+            "solver.gradient_limiter_k",
+            format!("has no effect unless solver.gradient_secondary_limiter = \"venkatakrishnan\" (got {k}); remove it or select that limiter"),
+        ));
+    }
+    Ok(())
+}
+
 /// Time scheme of `solver.time_scheme`.
 pub fn solver_time_scheme(case: &Case) -> TimeScheme {
     match get_s(case, "solver.time_scheme").as_str() {
@@ -1791,6 +1863,8 @@ impl Simulation {
             let mut solver = EnergySolver::new(geom.clone(), temp, kth / (rho * cp));
             solver.convection = conv;
             solver.relax = get_f(case, "energy.relax");
+            // ADR 0190 K4: the gradient options of the diffusion term (None without the keys)
+            solver.gradient = gradient_options(case);
             if transient_alg {
                 // linear for the frozen flux, solved tightly every step
                 solver.solver.tol_rel = 1e-10;
@@ -2018,6 +2092,13 @@ impl Simulation {
             if let Some(w) = why {
                 return Err(diag("solver.corrector_control", format!("adaptive {w}")));
             }
+        }
+        {
+            // ADR 0190 K5 R2 to R4: prescribed flow sweeps the energy only (Simulation::step)
+            let frozen = cht.as_ref().is_some_and(|c| c.frozen_flux.is_some());
+            let takes = (energy.is_some() && phase.is_none())
+                || (!frozen && scalars.as_ref().is_some_and(ScalarState::sweeps_any));
+            check_gradient_options(case, conv, takes)?;
         }
         let timectl = {
             let transient = matches!(engine, Engine::Transient(_)) && !compressible;
