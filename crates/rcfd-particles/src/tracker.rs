@@ -3,6 +3,7 @@
 use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
 use crate::dispersion::{Dispersion, Eddy};
 use crate::drag::{drag_factor, reflect, step_particle, tau_p, DragLaw, Fluid, Scheme};
+use crate::film::{Film, FilmSpec};
 use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
 use crate::rng::SplitMix64;
@@ -29,6 +30,8 @@ pub enum WallAction {
     Stick,
     /// The particle leaves the domain.
     Escape,
+    /// The particle joins the wall film of the face (ADR 0192; set by [`Tracker::set_film`]).
+    Film,
 }
 
 /// Life-cycle state of a particle.
@@ -42,6 +45,8 @@ pub enum State {
     Escaped = 2,
     /// Stopped after too many reflections in one step.
     Stuck = 3,
+    /// Absorbed into the wall film (ADR 0192); its mass is in the film.
+    Film = 4,
 }
 
 /// One parcel.
@@ -146,6 +151,7 @@ struct Ctx<'a> {
     disp: Option<&'a mut DispCtx>,
     thermal: Option<&'a Thermal>,
     cpl: Option<&'a mut Coupling>,
+    film: Option<&'a mut Film>,
 }
 
 struct Injector {
@@ -169,6 +175,7 @@ pub struct Tracker {
     disp: Option<DispCtx>,
     thermal: Option<Thermal>,
     coupling: Option<Coupling>,
+    film: Option<Film>,
     /// All parcels, including finished ones.
     pub particles: Vec<Particle>,
     /// Current time [s].
@@ -229,6 +236,7 @@ impl Tracker {
             disp: None,
             thermal: None,
             coupling: None,
+            film: None,
             particles: Vec::new(),
             time: 0.0,
         })
@@ -284,6 +292,31 @@ impl Tracker {
     /// The recorded exchange, mutable (for `reset`).
     pub fn coupling_mut(&mut self) -> Option<&mut Coupling> {
         self.coupling.as_mut()
+    }
+
+    /// Switch on the wall film on the patches of `spec` (ADR 0192): parcels that reach one of their faces are absorbed into
+    /// it, and the film is advanced at the end of every [`Tracker::advance`]. Refused when a film is already set.
+    pub fn set_film(&mut self, spec: FilmSpec) -> Result<()> {
+        if self.film.is_some() {
+            return err("wall film: a film is already set");
+        }
+        let film = Film::new(self.loc.mesh(), &spec)?;
+        let nint = self.loc.mesh().n_internal_faces();
+        for &f in film.faces() {
+            self.actions[f - nint] = WallAction::Film;
+        }
+        self.film = Some(film);
+        Ok(())
+    }
+
+    /// The wall film, if set.
+    pub fn film(&self) -> Option<&Film> {
+        self.film.as_ref()
+    }
+
+    /// The wall film, mutable.
+    pub fn film_mut(&mut self) -> Option<&mut Film> {
+        self.film.as_mut()
     }
 
     /// Temperature of parcel `i` [K] (NaN when heat transfer is off).
@@ -462,6 +495,7 @@ impl Tracker {
                 disp: self.disp.as_mut(),
                 thermal: self.thermal.as_ref(),
                 cpl: self.coupling.as_mut(),
+                film: self.film.as_mut(),
             };
             for (p, a) in self.particles[..n_old].iter_mut().zip(self.aux.iter_mut()) {
                 if p.state == State::Active {
@@ -484,9 +518,13 @@ impl Tracker {
                     disp: self.disp.as_mut(),
                     thermal: self.thermal.as_ref(),
                     cpl: self.coupling.as_mut(),
+                    film: self.film.as_mut(),
                 };
                 advance_particle(&self.loc, &opts, &self.actions, flow, p, a, &mut ctx, left)?;
             }
+        }
+        if let Some(film) = self.film.as_mut() {
+            film.advance(dt);
         }
         self.time = t1;
         Ok(())
@@ -509,6 +547,10 @@ impl Tracker {
             out.push(p.cell as u64);
             out.push(p.age.to_bits());
             out.push(p.state as u64);
+        }
+        if let Some(film) = &self.film {
+            out.extend(film.masses().iter().map(|m| m.to_bits()));
+            out.push(film.drained().to_bits());
         }
         out
     }
@@ -724,6 +766,12 @@ fn advance_particle(
                     }
                     WallAction::Stick => p.state = State::Deposited,
                     WallAction::Escape => p.state = State::Escaped,
+                    WallAction::Film => {
+                        if let Some(film) = ctx.film.as_deref_mut() {
+                            film.absorb(face, mass);
+                        }
+                        p.state = State::Film;
+                    }
                 }
             }
         }
