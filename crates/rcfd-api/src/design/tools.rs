@@ -4,6 +4,10 @@
 //! stateless and survive a restart of the server.
 //!
 //! All paths go through [`Service::sandbox_path`]; names are restricted to `[A-Za-z0-9_.-]` without a leading dot.
+//!
+//! [`call_with`] is [`call`] with another evaluator for `design.run_study` and `design.evaluate`, chosen per study by an
+//! [`EvaluatorSource`] (ADR 0189 S2): the project workspace evaluates on the project's runner that way. Everything else of
+//! those methods (loading the study, the allowance, the store and its signature, the result) is the same code.
 
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
 use super::ledger;
@@ -541,6 +545,46 @@ impl Loaded {
     }
 }
 
+/// A loaded study, as an [`EvaluatorSource`] sees it (ADR 0189 S2).
+#[derive(Debug)]
+pub struct StudyRun<'a> {
+    /// The study folder.
+    pub dir: &'a Path,
+    /// The definition.
+    pub def: &'a StudyDef,
+    /// The base case file.
+    pub base_path: &'a Path,
+    /// The base case as the study loaded it.
+    pub base: &'a Case,
+    /// Whether each operating condition starts from the previous converged one (`chain`).
+    pub chain: bool,
+    /// The study's own step cap (`max_steps` of `study.json`).
+    pub max_steps: Option<usize>,
+    /// The limits the in-process evaluator runs a case with.
+    pub limits: RunLimits,
+}
+
+/// Chooses the evaluator of `design.run_study` and `design.evaluate` for a loaded study ([`call_with`], ADR 0189 S2).
+pub trait EvaluatorSource {
+    /// The evaluator of `study`, or `None` for the in-process [`CaseEvaluator`]. An error ends the call before the study's
+    /// store is opened, so nothing is written.
+    fn evaluator<'s>(&'s self, study: &StudyRun<'_>) -> Rpc<Option<Box<dyn Evaluator + 's>>>;
+}
+
+impl Loaded {
+    fn study_run<'a>(&'a self, svc: &Service) -> StudyRun<'a> {
+        StudyRun {
+            dir: &self.dir,
+            def: &self.def,
+            base_path: &self.meta.base_path,
+            base: &self.base,
+            chain: self.meta.chain,
+            max_steps: self.meta.max_steps,
+            limits: self.limits(svc),
+        }
+    }
+}
+
 // ---------------------------------------------------------------- record output
 
 fn params_obj(def: &StudyDef, x: &[f64]) -> Value {
@@ -624,6 +668,16 @@ pub fn call(svc: &Arc<Service>, method: &str, p: &Value) -> Rpc {
             code::METHOD_NOT_FOUND,
             format!("unknown method '{other}'"),
         )),
+    }
+}
+
+/// [`call`], with the evaluator of `design.run_study` and `design.evaluate` chosen by `source` (ADR 0189 S2); every other
+/// method is [`call`]'s.
+pub fn call_with(svc: &Arc<Service>, method: &str, p: &Value, source: &dyn EvaluatorSource) -> Rpc {
+    match method {
+        "design.run_study" => run_study_with(svc, p, Some(source)),
+        "design.evaluate" => evaluate_with(svc, p, Some(source)),
+        _ => call(svc, method, p),
     }
 }
 
@@ -929,12 +983,21 @@ fn run_map(svc: &Service, p: &Value) -> Rpc {
 }
 
 fn run_study(svc: &Service, p: &Value) -> Rpc {
+    run_study_with(svc, p, None)
+}
+
+fn run_study_with(svc: &Service, p: &Value, source: Option<&dyn EvaluatorSource>) -> Rpc {
     let l = load_study(svc, p)?;
     let cap = svc.config().max_design_evaluations;
     let allowance = opt_usize(p, "max_evaluations")?.unwrap_or(cap).min(cap);
-    let ev = l.evaluator(svc);
+    let other = match source {
+        Some(s) => s.evaluator(&l.study_run(svc))?,
+        None => None,
+    };
+    let in_process = l.evaluator(svc);
+    let ev: &dyn Evaluator = other.as_deref().unwrap_or(&in_process);
     let store = l.store(true)?;
-    let mut study = Study::new(l.def.clone(), store, &ev).map_err(bad)?;
+    let mut study = Study::new(l.def.clone(), store, ev).map_err(bad)?;
     study.allowance = Some(allowance);
     let state = match study.run(&l.meta.method) {
         Ok(_) => "complete",
@@ -949,11 +1012,20 @@ fn run_study(svc: &Service, p: &Value) -> Rpc {
 }
 
 fn evaluate(svc: &Service, p: &Value) -> Rpc {
+    evaluate_with(svc, p, None)
+}
+
+fn evaluate_with(svc: &Service, p: &Value, source: Option<&dyn EvaluatorSource>) -> Rpc {
     let l = load_study(svc, p)?;
     let x = l.x_from(p)?;
-    let ev = l.evaluator(svc);
+    let other = match source {
+        Some(s) => s.evaluator(&l.study_run(svc))?,
+        None => None,
+    };
+    let in_process = l.evaluator(svc);
+    let ev: &dyn Evaluator = other.as_deref().unwrap_or(&in_process);
     let store = l.store(true)?;
-    let mut study = Study::new(l.def.clone(), store, &ev).map_err(bad)?;
+    let mut study = Study::new(l.def.clone(), store, ev).map_err(bad)?;
     let cap = svc.config().max_design_evaluations;
     study.allowance = Some(cap);
     let pos = study.eval_points(&[x], "evaluated").map_err(stop_error)?;
