@@ -178,7 +178,34 @@ tools that write files are `write_files` and need approval under the permission 
 | `design_ledger_rerun_check` | `design.ledger_rerun_check` | read | compare a re-run with a ledger entry |
 
 Limits: `max_design_evaluations` (service configuration; `rcfd-mcp --max-design-evaluations`) bounds the number of case runs one call
-may start (map points, study evaluations); `max_cells` and `max_steps_per_call` apply to every run.
+may start (map points, study evaluations); `max_cells` and `max_steps_per_call` apply to every run in the server process.
+
+### In a project: evaluations on the runner (ADR 0189)
+
+With `rcfd-mcp --project`, `design_run_study` and `design_evaluate` evaluate each candidate at each operating condition as one run of
+the project's runner ([ADR 0189](adr/0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md)), not in
+the server process. Their arguments, the study folder and the store are the same; so are the other design tools.
+
+* A run is the base case file with one `rcfd run --set` entry per parameter target and per setting of the condition. Before the
+  run is queued, the base case with those entries is checked to give the settings tree the in-process evaluator builds.
+* Its `run.json` names the study folder (`study`, for example `designs/nu3`), the candidate (`variant`, for example `nu=0.015`)
+  and the condition's label (`condition`). These fields appear only in the runs of a study.
+* Its result is read from the run's `metrics.json`: the status by the in-process rule on the solver's `finish` event (a run the
+  runner calls `finished` may still be `not_converged`), the metrics from its report values.
+* `workers` candidates are in flight at once, each with all its conditions queued; the runner's `max_runs` bounds how many run.
+  The runs count against the runner's budgets; as every run of the runner, they go on when the server stops and show in the
+  Studio's run list (ADR 0123, ADR 0133; not checked again by F-274's tests).
+* The result adds `evaluator` (`runner`), `runs` (at most 50 objects {`run`, `variant`, `condition`, `state`} of the runs this
+  call made) and `runs_total`.
+
+Two kinds of study stay in the server process, as before, with `evaluator: process` and the reason in `evaluator_note`: a study
+whose conditions are chained (`chain`, true by default, with two or more conditions), because a run cannot yet start from another
+run's result, and a study with its own `max_steps`. Operating maps stay in the server process too. The server's `max_cells` and
+`max_steps_per_call` do not bound runs on the runner, as they do not bound `start_run`.
+
+Measured (ADR 0189 C4, the 32 x 32 lid-driven cavity at three viscosities): the runner's records equal the in-process ones bit for
+bit (largest relative difference of a metric 0, the same iteration counts). One evaluation took 0.64 s on the runner and 0.23 s in
+the server process, so about 0.4 s more per run; the time was not broken down.
 
 ## Divergence guard (PIMPLE and PISO)
 

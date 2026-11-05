@@ -89,6 +89,15 @@ pub struct RunRecord {
     /// Directory the case's relative paths resolve against (run service).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub case_dir: Option<String>,
+    /// The design study the run evaluates for: its folder, project-relative (ADR 0189 S6; only design runs have it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub study: Option<String>,
+    /// The study's candidate: `<parameter>=<value>` per parameter, joined by `,` (ADR 0189 S6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
+    /// The label of the study's operating condition the run is for (ADR 0189 S6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
 }
 
 /// On-disk form of [`RunRecord`]: `case` or its legacy name `case_source`, optional `solver_version`.
@@ -110,6 +119,12 @@ struct RunRecordWire {
     solver_version: Option<String>,
     settings: Value,
     created: String,
+    #[serde(default)]
+    study: Option<String>,
+    #[serde(default)]
+    variant: Option<String>,
+    #[serde(default)]
+    condition: Option<String>,
 }
 
 impl TryFrom<RunRecordWire> for RunRecord {
@@ -130,6 +145,9 @@ impl TryFrom<RunRecordWire> for RunRecord {
             created: w.created,
             case_source: w.case_source,
             case_dir: w.case_dir,
+            study: w.study,
+            variant: w.variant,
+            condition: w.condition,
         })
     }
 }
