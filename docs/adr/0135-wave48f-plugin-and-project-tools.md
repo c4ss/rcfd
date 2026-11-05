@@ -40,12 +40,12 @@ in Claude Code outside the app; edits there appear live in the app), 3 (L7), 7 (
 
 ### W48-12: where the project tools live
 
-* (a) **In `rcfd-mcp`, behind `--project <dir>`**: a `project` module adds the project tools to `tools/list` only when the flag is
+* (a) In `rcfd-mcp`, behind `--project <dir>`: a `project` module adds the project tools to `tools/list` only when the flag is
   given; without it the list is unchanged. New edges `rcfd-mcp -> rcfd-project, rcfd-runner, rcfd-tsstore` (all lower layers). Images
   through the CPU renderer of `rcfd-post`, which `rcfd-mcp` already reaches through `rcfd-api`. No wgpu.
-* (b) **New crate `rcfd-mcp-project`** (binary `rcfd-project-mcp`) that reuses `McpServer` through a small extension hook in
+* (b) New crate `rcfd-mcp-project` (binary `rcfd-project-mcp`) that reuses `McpServer` through a small extension hook in
   `rcfd-mcp`; only the new crate depends on the project crates.
-* (c) **As (a), plus a cargo feature `gpu-render`** that adds a 3D render tool through `rcfd-render`.
+* (c) As (a), plus a cargo feature `gpu-render` that adds a 3D render tool through `rcfd-render`.
 
 Trade-offs: (a) keeps one server binary, which is what the plan says ("extending `rcfd-mcp`"), and adds three small std-only crates to
 the build of `rcfd-assistant` and `rcfd-gui` (no third-party dependency beyond `miniz_oxide`, already compiled); (b) keeps those builds
@@ -84,7 +84,7 @@ rewrite and visibility are open items of their own).
 
 ### W48-15: edit conflict policy
 
-* (a) **Base hash and cooperative lock.** Every writer that cooperates (the Studio editor, the MCP edit tools) records the FNV-1a hash
+* (a) Base hash and cooperative lock. Every writer that cooperates (the Studio editor, the MCP edit tools) records the FNV-1a hash
   of the file it read (`rcfd_project::records::hash_bytes`) and writes with "replace only if the file still has this hash", checked and
   replaced while holding `.rcfd/locks/<path hash>.lock` (created with `create_new`, removed after; a stale lock older than 30 s is
   broken with an event). A mismatch is a conflict: the MCP tool returns an error naming the current hash; the Studio shows both versions

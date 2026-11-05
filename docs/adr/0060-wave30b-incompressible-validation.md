@@ -94,24 +94,24 @@ R5. Cylinder, Re = 100, unbounded 2-D flow (values: time-averaged drag C_D, Stro
 All tests are new files in `crates/rcfd-api/tests/` (the crate already depends on rcfd-fv, rcfd-mesh, rcfd-turb and rcfd-post). No
 `Symmetry` boundary is used where plug flow matters (the plate top is a `Freestream`, the channel is periodic with no-slip walls).
 
-**V1 cavity** (`validation_cavity_ghia.rs`): unit square, lid speed 1, SIMPLEC, `rcfd_mesh::gen::cavity_2d`. Re 100: linear upwind;
+V1 cavity (`validation_cavity_ghia.rs`): unit square, lid speed 1, SIMPLEC, `rcfd_mesh::gen::cavity_2d`. Re 100: linear upwind;
 Re 400: linear upwind; Re 1000: TVD van Leer (the schemes of the existing tests). Convergence to max change 1e-7. Centreline velocities
 interpolated exactly as in `cavity.rs` (cell-line average, 4-point Lagrange) at the Ghia stations.
 
-**V2 backward step** (`validation_bfs_step.rs`): ER 2, h = 1, 2 h inlet channel with the parabolic
+V2 backward step (`validation_bfs_step.rs`): ER 2, h = 1, 2 h inlet channel with the parabolic
 mean-1 profile, 40 h outlet, Re_h = 400 (Re_D = 800), SIMPLEC, van Leer TVD, residual 1e-7, reattachment from the last negative-to-positive
 crossing of u in the first cell row above the floor, exactly as in `step_laminar.rs`.
 
-**V3 Blasius** (`validation_blasius_plate.rs`): U = 1, L = 1, nu = 1e-5 (Re_L = 1e5, laminar), plate wall on ymin from x = 0 (uniform inlet
+V3 Blasius (`validation_blasius_plate.rs`): U = 1, L = 1, nu = 1e-5 (Re_L = 1e5, laminar), plate wall on ymin from x = 0 (uniform inlet
 at xmin, as in the TMR-style plate tests), top boundary at y = 0.3 (19 outlet boundary-layer thicknesses) a `Freestream` for u and p, outlet
 zero-gradient u and fixed p = 0, linear upwind, SIMPLEC. Cf from the wall-face shear on the wall-cell values; profile and displacement
 thickness taken from the cell column nearest x = 0.5.
 
-**V4 channel Re_tau 178.12** (`validation_channel_re180.rs`): periodic channel of half height 1 (`box_2d_graded`, periodic in x), no-slip
+V4 channel Re_tau 178.12 (`validation_channel_re180.rs`): periodic channel of half height 1 (`box_2d_graded`, periodic in x), no-slip
 walls, uniform body force 1 so u_tau = 1 exactly, nu = 1/178.12 (the DNS value, not the nominal 180), SIMPLEC, k-omega SST (wall-resolved
 mesh) and standard k-epsilon (wall functions). Bulk velocity is volume-weighted.
 
-**V5 cylinder** (`validation_cylinder_re100.rs`): `cylinder_ogrid`, D = 1, r_out = 20 (20 D; blockage-like error of the far field is a
+V5 cylinder (`validation_cylinder_re100.rs`): `cylinder_ogrid`, D = 1, r_out = 20 (20 D; blockage-like error of the far field is a
 known possible error source, cf. the domain test in the bisection list), U = 1, nu = 0.01, PISO (`PimpleSettings::piso`), linear upwind,
 `Freestream` far field exactly as in `cylinder.rs`, same initial disturbance. Run to t = 160, statistics from t > 60. St from upward zero
 crossings of v at the probe (3, 0, 0.05) over the last 8 periods (whole periods); C_D = F_x / (0.5 U^2 D depth) with depth 0.1 from
@@ -136,9 +136,9 @@ Cf sqrt(Re_x) at x = 0.5; V4 U_b+; V5 St and C_D.
 
 ## Registered checks (fixed before any run of the new tests)
 
-Limits are on the FINEST mesh; coarser meshes are reported only. Justification is given with each group.
+Limits are on the FINEST mesh; coarser meshes are reported only.
 
-**V1 cavity.** Reference scatter: |Ghia - Botella| <= 0.0063 at Re 1000 (R1), i.e. Ghia carries about 0.006 of its own error at the
+V1 cavity. Reference scatter: |Ghia - Botella| <= 0.0063 at Re 1000 (R1), i.e. Ghia carries about 0.006 of its own error at the
 highest Re and less at lower Re (the lower the Re the smaller the error of a 129x129 solution). Allowance for the second-order scheme on
 the finest mesh: 0.004 of the lid speed.
  * C1 Re 100 n = 80: max |u - Ghia| <= 0.010 and max |v - Ghia| <= 0.010 (all stations of the stored tables).
@@ -150,7 +150,7 @@ the finest mesh: 0.004 of the lid speed.
  * C5 grid convergence, every Re: observed order p of the successive-difference RMS >= 0.9 and GCI_fine of u_min <= 1.0 % of |u_min|.
  * C6 every run converges (max change below 1e-7 within 12000 iterations).
 
-**V2 step.** Reference scatter: ten published values, 11.48 to 12.20, half-width 3.0 % about 11.84 (R2). Allowance 2 % for the finest-mesh
+V2 step. Reference scatter: ten published values, 11.48 to 12.20, half-width 3.0 % about 11.84 (R2). Allowance 2 % for the finest-mesh
 discretisation error and the difference of inlet treatment, giving +-5 % about 11.84, i.e. [11.248, 12.432] (this equals the 5 % of the
 earlier test; it is not tightened because the inlet-channel difference could account for part of the spread).
  * S1 x_r/h on the finest mesh in [11.248, 12.432].
@@ -158,7 +158,7 @@ earlier test; it is not tightened because the inlet-channel difference could acc
  * S3 convergence of every run to 1e-7.
 Re_D < 800 and Armaly: data not obtained, no check.
 
-**V3 Blasius.** The reference is exact (32 digits), so the whole limit is discretisation and leading-edge error. A second-order scheme
+V3 Blasius. The reference is exact (32 digits), so the whole limit is discretisation and leading-edge error. A second-order scheme
 with at least 50 cells across the boundary layer at x = 0.25 on the finest mesh gives about 1 percent; the singular leading edge of a
 uniform start and the finite outlet add a few tenths of percent at Re_x >= 2.5e4. Allowance 3 %.
  * B1 Cf sqrt(Re_x) within 3 % of 0.664115 at x = 0.25, 0.5, 0.75, 0.9 (Re_x 2.5e4 .. 9e4), finest mesh.
@@ -166,7 +166,7 @@ uniform start and the finite outlet add a few tenths of percent at Re_x >= 2.5e4
  * B3 displacement thickness delta* sqrt(U/(nu x)) at x = 0.5 within 3 % of 1.72079.
  * B4 grid convergence: observed order p of Cf sqrt(Re_x)(x = 0.5) >= 1.0 and GCI_fine <= 1.0 %.
 
-**V4 channel.** Reference uncertainty: DNS statistical error well under 1 % in U+ (not quantified here, stated as an allowance); discretisation
+V4 channel. Reference uncertainty: DNS statistical error well under 1 % in U+ (not quantified here, stated as an allowance); discretisation
 on the wall-resolved SST mesh <= 1 %; model-form error is what is being measured, and is bounded by an engineering allowance of the size of
 the repo's existing Re_tau = 395 bounds (10 %) tightened where the quantity is integral.
  * D1 (SST, finest) U_b+ within 5 % of 15.679 and C_f = 2/U_b+^2 within 10 % of 0.008135 (equivalent statements, listed separately).
@@ -177,7 +177,7 @@ the repo's existing Re_tau = 395 bounds (10 %) tightened where the quantity is i
    (max-min)/mean over the three meshes <= 5 %.
  * D6 convergence (change below 1e-6) on every run.
 
-**V5 cylinder.** Reference scatter: St 0.164 to 0.167, half-width 0.9 % about 0.1655, experiment 0.165; C_D 1.314 to 1.370, half-width
+V5 cylinder. Reference scatter: St 0.164 to 0.167, half-width 0.9 % about 0.1655, experiment 0.165; C_D 1.314 to 1.370, half-width
 2.1 % about 1.342. Allowance for discretisation (time step included) on the finest mesh: 2 % for both.
  * K1 St within 3 % of 0.165, i.e. [0.16005, 0.16995].
  * K2 time-averaged C_D within 4 % of 1.342, i.e. [1.2883, 1.3957].
@@ -237,8 +237,8 @@ St 0.16175 (-1.97 % of 0.165, inside 3 %), C_D 1.3234; (iii) r_out = 30 at dt 0.
 Cause: temporal discretisation error of the first-order-in-time PISO step; mesh and dt were refined together, so the sequence is dominated by dt (halving
 dt alone moves St by +1.9 %). Steps (ii) and (iv) were not run. No defect proven; the registered K1 and K3 stand as missed.
 
-**Data pack.** Five datasets added to `validation-data/manifest.json` (`python validation-data/fetch.py verify` ok for all). `cargo test -p rcfd-cli --test data`
+Data pack. Five datasets added to `validation-data/manifest.json` (`python validation-data/fetch.py verify` ok for all). `cargo test -p rcfd-cli --test data`
 currently fails with "manifest: sod-exact-marzouk2020: case 'sod' does not exist in cases/", an entry added by wave 30C, not by this wave.
 
-**Moved from unverified to verified:** see docs/reference-data.md, wave 30B section. Not obtained: Armaly (1983), Gartling and Ghia originals, Ghia v at Re 400/1000,
+Moved from unverified to verified: see docs/reference-data.md, wave 30B section. Not obtained: Armaly (1983), Gartling and Ghia originals, Ghia v at Re 400/1000,
 Moody/Colebrook/Dean, Williamson original.

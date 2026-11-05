@@ -17,23 +17,23 @@ Scratch files `crates/rcfd-fv/tests/w37a_smoke.rs` (not committed) and the harne
 release build of feb015f. Classification = the ADR 0081 one (1000 iterations, `SteadyGuard`, UNSTABLE iff trip, or max speed over 10..1000 above
 3 U_ref, or continuity non-finite, or max continuity over 900..1000 above its value at 10).
 
-* **SM1 V7 (40 x 10 on 4 x 1), alpha_p 1.0, default linear tolerances**: at 50, 55, 57.5 degrees the speed reaches 1.03-1.04 by iteration 20 and stays
+* SM1 V7 (40 x 10 on 4 x 1), alpha_p 1.0, default linear tolerances: at 50, 55, 57.5 degrees the speed reaches 1.03-1.04 by iteration 20 and stays
   there; at 50 `res_u` falls slowly (1.2e-2 at 1000), at 55 and 57.5 it stays at 0.2-0.3 for 1000 iterations (bounded, not converging). At 60 the speed
   is 1.03-1.05 up to iteration 100, then grows (21.6 at 300, maximum 37.4 at 845); at 65 and 70 growth starts after 20-50 iterations. No guard trip.
   **So on V7 the growth starts from a state close to the converged one; it does not look like a start-up transient.** This contradicts the transfer of
   the ADR 0081 H-X6 reading (measured on channel B only) to V7.
-* **SM2 the same with linear solves to 1e-13 relative** ("tight"): the same picture and threshold (60), the same numbers to two digits up to 100.
-* **SM3 box size** (default tolerances, alpha_p 1.0): 10 x 10 on 1 x 1 and 8 x 8 on 1 x 1 converge (res below 1e-6) at every angle 50-70; 20 x 10 on
+* SM2 the same with linear solves to 1e-13 relative ("tight"): the same picture and threshold (60), the same numbers to two digits up to 100.
+* SM3 box size (default tolerances, alpha_p 1.0): 10 x 10 on 1 x 1 and 8 x 8 on 1 x 1 converge (res below 1e-6) at every angle 50-70; 20 x 10 on
   2 x 1 is STABLE to 55, bounded but not converging at 57.5 (`res_u` 0.41 at 1000), unstable from 60. A box of length 1 admits x-wavenumbers 2 pi m
   only; length 2 also admits pi.
-* **SM4 V7 alpha_p 0.7**: 55, 60, 65 STABLE (60: `res_u` 2.7e-2 at 1000, slow), 70 and 75 grow (from about iteration 50).
-* **SM5 harness**: on a 6 x 3 box at 60 degrees the map (one `SimpleSolver::iterate` from a set state) is bit-identical on repeated evaluation
+* SM4 V7 alpha_p 0.7: 55, 60, 65 STABLE (60: `res_u` 2.7e-2 at 1000, slow), 70 and 75 grow (from about iteration 50).
+* SM5 harness: on a 6 x 3 box at 60 degrees the map (one `SimpleSolver::iterate` from a set state) is bit-identical on repeated evaluation
   (stateless); the central-difference Jacobian (n = 99) builds and the analysis script runs (at that non-converged state two eigenvalues near 1 with
   x-uniform velocity eigenvectors, 1.000089 and 0.99958: the mean-velocity modes are only neutral at a fixed point, see the deflation rule below).
-* **SM6 converged states (tight solves) at 0.9/0.3**: channel B converges to res 1e-12 in 911 (55 deg), 887 (60), 836 (70) iterations; one base-map
+* SM6 converged states (tight solves) at 0.9/0.3: channel B converges to res 1e-12 in 911 (55 deg), 887 (60), 836 (70) iterations; one base-map
   iteration (0.9/1.0) moves those states by at most 1.8e-14. V7 at 60 and 70 does not reach res 1e-12 within 20 000 iterations (a residual floor), but one
   base-map iteration moves the final state by 5.6e-16 and 4.4e-16 (max abs over the state): a fixed point to round-off.
-* **SM7 channel B, tight against default tolerances** (alpha_p 1.0): identical classifications (45 STABLE, 50 and 52.5 overshoot to 6.2 / 14.3 U,
+* SM7 channel B, tight against default tolerances (alpha_p 1.0): identical classifications (45 STABLE, 50 and 52.5 overshoot to 6.2 / 14.3 U,
   55-60 trip at iterations 39-48).
 
 ## Method (registered)
@@ -102,17 +102,17 @@ correctors (unless stated).
 
 Formed at K40 60 x* and K40 70 x* with alpha_p 0.7, and at B 55 (x* and the first k of J9 with rho > 1, if any), only where the base rho > 1:
 
-* **P(m) non-orthogonal part of the pressure correction, sub-iterated**: after the pressure solve, q = p_new - p_old; m times: the least-squares
+* P(m) non-orthogonal part of the pressure correction, sub-iterated: after the pressure solve, q = p_new - p_old; m times: the least-squares
   gradient of q (boundary values: those of p_new minus those of p_old), the face term n_f = rAtU_f k_f . grad(q)_f on internal faces (k = S - Delta, the
   non-orthogonal part of the face vector, as the existing correctors), and the pressure equation re-solved with phiHbyA - n; the flux is the corrected flux of
   phiHbyA - n with the last p_new (exactly divergence-free). n vanishes at a fixed point, so the fixed point is unchanged. m in {1, 2, 4}.
-* **R cell-velocity correction reconstructed from the face correction**: the cell velocity is `HbyA - rAtU grad(p_old) + (1/V) sum_f s_cf dphi_f (x_f -
+* R cell-velocity correction reconstructed from the face correction: the cell velocity is `HbyA - rAtU grad(p_old) + (1/V) sum_f s_cf dphi_f (x_f -
   x_c)` instead of `HbyA - rAtU grad(p_new)`, with dphi_f the part of the corrected flux that depends on q (internal: -rAtU_f lap_f (q_N - q_P); periodic:
   the coupled form; fixed-pressure faces: the boundary form; fixed-velocity faces: 0) and s_cf the outward sign. Zero at a fixed point.
-* **S SIMPLEC compensation on periodic seam faces**: the term `(rAtU - rAU)_f snGrad(p_old) |S|` that internal faces get is added on coupled boundary
+* S SIMPLEC compensation on periodic seam faces: the term `(rAtU - rAU)_f snGrad(p_old) |S|` that internal faces get is added on coupled boundary
   faces too (the code adds it to internal faces only, so at a SIMPLEC fixed point the seam flux carries `rAtU` where internal faces carry `rAU`; found
   reading the code for this registration). S CHANGES the fixed point on periodic meshes; its Jacobian is formed at its own x* (0.9/0.3 with S).
-* **alpha_p** 0.7 / 0.5 (J3, J4).
+* alpha_p 0.7 / 0.5 (J3, J4).
 
 Reading (per switch; 0.005 is a protocol threshold): **drives** iff the switch brings rho to <= 1 where the base rho > 1; **contributes** iff it lowers
 rho by more than 0.005 without reaching 1; **does not drive** otherwise. Also reported: the eigenvector description of the leading mode with and without
@@ -267,7 +267,7 @@ after the flow has overshot); R was attributed at x0 only (registered), so A2 is
 
 Release builds, scratch tree on feb015f (`<scratch dir>`); each registered run once. Limits are the registered ones, unchanged.
 
-Outcome in one paragraph. The SIMPLEC divergence on uniformly sheared meshes is a period-two pressure mode of the outer iteration. The cell velocity
+Outcome. The SIMPLEC divergence on uniformly sheared meshes is a period-two pressure mode of the outer iteration. The cell velocity
 is corrected with `rAtU` times the full Green-Gauss gradient of the pressure change; the face flux is corrected with the over-relaxed orthogonal part
 only. On strongly non-orthogonal faces the two disagree enough for the pressure update to overshoot (eigenvalue -1.06 at 60 degrees, -1.44 at 70,
 alpha_p 1.0). The mode needs no convection, wall or open boundary. On the doubly periodic box (V7) it is a linear instability of the converged state,

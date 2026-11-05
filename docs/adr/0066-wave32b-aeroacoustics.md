@@ -44,14 +44,14 @@ All in `crates/rcfd-post` (library) and `crates/rcfd-cli` (one new command), plu
 
 Conventions: medium at rest in the "medium frame"; c the speed of sound; k = omega/c; p' acoustic pressure.
 
-**FW-H, impermeable, uniform flow.** Formulation 1A as in ADR 0013 with U_i = v_i, L_i = p' n_i. A body fixed in a
+FW-H, impermeable, uniform flow. Formulation 1A as in ADR 0013 with U_i = v_i, L_i = p' n_i. A body fixed in a
 uniform stream U_inf (body frame) is moved to the medium frame: a body point x_b is at x_m = x_b - U_inf t, the surface
 velocity is v_m = v_b - U_inf, a fluid velocity u_m = u_b - U_inf, p' and the normals are unchanged, and a body-fixed
 observer at x_ob has the path x_o(t) = x_ob - U_inf t. The FW-H retarded-time integral is a statement at the field point
 (x, t); for a moving observer it is evaluated at x = x_o(t), which is exact (the Green's function is that of the medium
 frame). Requirement: |v_m| < c. Volume quadrupole not included.
 
-**Pulsating sphere (W1).** A sphere of radius a, surface normal velocity U_n = U0 cos(w t), in the medium at rest,
+Pulsating sphere (W1). A sphere of radius a, surface normal velocity U_n = U0 cos(w t), in the medium at rest,
 time dependence e^{-iwt}. Exact radiating-sphere field: phi = Re[A e^{i(kr - wt)}/r], u_r = d phi/dr,
 p' = -rho0 d phi/dt = Re[i w rho0 A e^{i(kr - wt)}/r], u_r(a) = U0 gives A = U0 a^2 e^{-ika}/(ika - 1). Surface
 pressure p'(a,t) = Re[i w rho0 U0 a/(ika - 1) e^{-iwt}]. The thickness term alone, for a stationary surface, is
@@ -63,12 +63,12 @@ Realisation: x(t) = (a + eps sin(w t)) n_hat, v = eps w cos(w t) n_hat, constant
 The kinematic velocity v enters the Mach terms; with v/c = eps k = 1.6e-5 this is a model error of order 1e-5, stated
 here as part of the error budget.
 
-**Compact dipole (W2).** Loading only, stationary sphere (a = 0.01 m, ka = 0.0157), p'(surface) = P0 sin(w t) n_x,
+Compact dipole (W2). Loading only, stationary sphere (a = 0.01 m, ka = 0.0157), p'(surface) = P0 sin(w t) n_x,
 net force on the fluid F(t) = F0 sin(w t) e_x, F0 = P0 4 pi a^2/3. Exact point-force field
 p' = (cos(theta)/(4 pi r)) (F'(t - r/c)/c + F(t - r/c)/r), theta from the x axis (this is the field used in ADR 0013 A4).
 The finite-size form factor of the cos(theta) shell is 3 j1(ka)/(ka) = 1 - (ka)^2/10 = 1 - 2.5e-5.
 
-**Rotating point force, Gutin-type harmonics (W3).** Derived here (Gutin 1936 and Lowson 1965 were NOT read; the
+Rotating point force, Gutin-type harmonics (W3). Derived here (Gutin 1936 and Lowson 1965 were NOT read; the
 result is checked against the FW-H code, not against a citation). B equal blades; each carries a compact force on the fluid
 F_b = T_b e_z + D_b e_phi (e_z the rotor axis in the direction of the thrust force on the fluid, e_phi the direction
 of rotation, rotation rate Omega, radius R_t). Totals: T = B T_b, Q = B D_b R_t (torque, magnitude). Observer far away at
@@ -90,16 +90,16 @@ fluid along +e_phi), tested at theta = 45 and 135 degrees where the two terms ad
 r >> R_t and k_m r >> 1 (near-field terms O(1/(k_m r)) are not in the formula), compact chordwise loading, steady
 loading, no thickness noise, no flow.
 
-**Sound power.** Far field intensity I = <p'^2>/(rho0 c); W = closed-integral I dS over a sphere of radius R. Monopole
+Sound power. Far field intensity I = <p'^2>/(rho0 c); W = closed-integral I dS over a sphere of radius R. Monopole
 Q = Q0 sin(w t): p' = rho0 w Q0 cos(w(t - r/c))/(4 pi r) (purely 1/r, so the sphere integral is exact at any R),
 W = rho0 w^2 Q0^2/(8 pi c). Compact dipole of force amplitude F0: W = w^2 F0^2/(24 pi rho0 c^3) (far field).
 
-**A-weighting.** A(f) = 20 log10(R_A(f)/R_A(1000)), R_A(f) = 12194^2 f^4 / ((f^2 + 20.6^2) sqrt((f^2 + 107.7^2)(f^2 + 737.9^2)) (f^2 + 12194^2)).
+A-weighting. A(f) = 20 log10(R_A(f)/R_A(1000)), R_A(f) = 12194^2 f^4 / ((f^2 + 20.6^2) sqrt((f^2 + 107.7^2)(f^2 + 737.9^2)) (f^2 + 12194^2)).
 This is the normalised-by-R_A(1000) variant, so A(1000) = 0 by construction (not the "+2.00 dB" offset variant, which
 gives 0 only to about 1.4e-4 dB with these rounded constants). Constants and the formula were read on the Wikipedia
 A-weighting page and on metricgate.com (both secondary, citing IEC 61672); IEC 61672-1 itself was not read.
 
-**1/3-octave bands (base 10, IEC 61260-1 style, standard not read).** Centre f_c(n) = 1000 * 10^(n/10), edges
+1/3-octave bands (base 10, IEC 61260-1 style, standard not read). Centre f_c(n) = 1000 * 10^(n/10), edges
 f_c * 10^(+-1/20), band = [f_lo, f_hi) half-open; a bin belongs to the band that contains its centre frequency.
 Nominal labels (25, 31.5, 40, ... 20000) are the preferred numbers nearest f_c.
 

@@ -280,11 +280,11 @@ Changes, registered now:
 | `s4_absolute_formulation_mrf_is_refused_on_the_sector` (existing) | passes | | pass |
 
 Verdict: G (corrected guards), K1, K2, K3, K3c, K4, K5 pass with F1, and D1, D4 discriminate, so by the decision rule F1 and the opt-in
-are kept. What this delivers: an MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus
+are kept. An MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus
 to 1e-8 or better in every check). The positive path is verified at library level only. Through the case tree the key is checked,
 its refusals are located and the default is bit-identical, but no run sends `cyclic_seams = true` through `Sources` and the one-line
 `sim.rs` wiring of F1 into the solver on a mesh with cyclic faces, because no case-tree mesh reaches it (below). The default-path
-refusal message also changed: it now names the patch of the worst face and hints at `cyclic_seams` (diagnostic text only). What it does not deliver: the fan. The `axial_fan_sector`
+refusal message also changed: it now names the patch of the worst face and hints at `cyclic_seams` (diagnostic text only). This does not deliver the fan: the `axial_fan_sector`
 hub and shroud faces are not surfaces of revolution at the face centres (1.8e-2 and 4.5e-3 of `Omega r |S|`), so the case tree still
 refuses an MRF zone on the fan passage, now at the hub; at library level the same passage leaves the exact state by 7.4e-4 U, located
 at hub/shroud cells. Curing that is the wall-frame-flux question of F-RP (ADRs 0082, 0085), or a mesher change that makes the hub and

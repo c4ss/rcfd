@@ -35,7 +35,7 @@ rcfd-studio -> project, runner, render, tsstore, mesh, claude, api, core   (Stud
 
 ## Layering rules
 
-Rules: lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
+Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
 `gpu`/`dist`/`runner`/`claude` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `mcp`/`cli` < `assistant` < `gui` < `studio`).
 No crate depends on `studio`, and `studio` does not depend on `gui`, `assistant` or `mcp`. The graph is checked for
 acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.

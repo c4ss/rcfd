@@ -65,14 +65,14 @@ python scripts/w48y_aoa_sweep.py collect <work> docs/investigations/job48y-aoa-s
 - **Limits.** All are met:
   - L1: 28 of 28 counted runs complete.
   - L2: the slope is 0.1009 per degree, 0.920 x 2 pi (band 0.90 to 1.05; Ladson 0.985).
-  - L3: stall is found only after the registered extension. Steady SA peaks at **20 degrees** (cl_max 1.528), 22 degrees is
+  - L3: stall is found only after the registered extension. Steady SA peaks at 20 degrees (cl_max 1.528), 22 degrees is
     0.913 of the peak and 24 degrees is 0.788.
   - L4: cl(0) is -2e-11.
 - **Against Ladson** (cl_max 1.612 at 17.1 degrees, then 1.00 at 18.0). Steady SA on this mesh stalls about 3 degrees
   late, with cl_max 5 % low, and its lift falls gradually after the peak (0.91 of it at 22 degrees, 0.79 at 24) where
   the experiment drops abruptly. Its drag is 1.4 to 4.6 times the
   measured drag from 4 degrees up, and it grows steadily with alpha.
-- **SST (report only).** Slope 0.970 x 2 pi over 0, 4 and 8 degrees. It peaks at **14 degrees** (cl 1.397), about
+- **SST (report only).** Slope 0.970 x 2 pi over 0, 4 and 8 degrees. It peaks at 14 degrees (cl 1.397), about
   3 degrees early and 13 % low, and is not steady from 16 degrees on. Its drag up to 14 degrees is close to Ladson's:
   0.0083 against 0.0103 at 8 degrees, 0.023 against 0.016 at 14.
 - **Grid check (M2w against M1w).** At 6 degrees cl is +0.8 % and cd -3.5 %. At 14 degrees cl is +0.3 % and cd -3.6 %.

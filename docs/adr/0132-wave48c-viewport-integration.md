@@ -28,12 +28,12 @@ documentation, the egui-wgpu public API, textbook rasterisation; our own `rcfd-r
 
 ### W48-7: the route of the 3D view into the window
 
-* (a) **Shared device, render into a texture.** Additive `Renderer::from_device(device, queue, info)` (the pipelines are built on the
+* (a) Shared device, render into a texture. Additive `Renderer::from_device(device, queue, info)` (the pipelines are built on the
   given device) and `Renderer::render_into(&GpuMesh, &View, &wgpu::TextureView)` that draws the same pipeline into a caller texture of
   format `Rgba8Unorm`; egui shows the texture as an image. No readback.
-* (b) **Readback and upload.** Keep `Renderer` on its own device; every frame `render()` returns an `Image`, which is uploaded as an egui
+* (b) Readback and upload. Keep `Renderer` on its own device; every frame `render()` returns an `Image`, which is uploaded as an egui
   texture. No `rcfd-render` change, but a full readback and upload per frame (8.3 MB at 1920 x 1080; ADR 0125 T1 frames include it).
-* (c) **Paint callback.** Draw inside egui's render pass with egui-wgpu's callback; the pipeline must then target the swap chain's
+* (c) Paint callback. Draw inside egui's render pass with egui-wgpu's callback; the pipeline must then target the swap chain's
   format (possibly sRGB, possibly `Bgra8Unorm`) and egui's depth state.
 
 Trade-offs: (b) has no new API but costs tens of milliseconds per frame at full size and two devices on one GPU; (c) avoids a texture
@@ -54,20 +54,20 @@ unchanged as the guard.
 
 ## Design (proposed, assuming (a) and (a))
 
-* **Viewport model** (non-UI, unit-tested): current run, field, time, colour range (auto per snapshot, auto over the run, or fixed),
+* Viewport model (non-UI, unit-tested): current run, field, time, colour range (auto per snapshot, auto over the run, or fixed),
   camera, part visibility, cut plane. Mouse mapping is a pure function: drag left = orbit (yaw, pitch in radians per pixel), drag right
   = pan, wheel = dolly by a fixed factor per notch, double-click = `Camera::fit`. Sensitivities are constants in the code.
-* **Rendering**: on change only (camera, field, time, size), into a texture of the panel's pixel size; egui draws the texture plus a
+* Rendering: on change only (camera, field, time, size), into a texture of the panel's pixel size; egui draws the texture plus a
   legend and the hover readout as egui widgets (text is egui's, not the render core's).
-* **Time**: a slider over the run's stored snapshots, play, pause, step forward and back, and a time read-out with "interpolated"
+* Time: a slider over the run's stored snapshots, play, pause, step forward and back, and a time read-out with "interpolated"
   shown when `Mode::Linear` is used. The slider snaps to stored times by default (`Pick::Nearest`); linear interpolation is an option.
   The same time drives the plots of ADR 0133 (a marker at the current step).
-* **Live runs**: the reader's `refresh()` is polled with the run status; new snapshots extend the slider.
-* **Hover**: `pick` at the cursor gives face, cell and value; the value shown is the per-face (cell) value from the store, not the
+* Live runs: the reader's `refresh()` is polled with the run status; new snapshots extend the slider.
+* Hover: `pick` at the cursor gives face, cell and value; the value shown is the per-face (cell) value from the store, not the
   interpolated pick value (P2 known miss).
-* **2D cases**: the cavity-style 2D mesh is drawn as its front patch with an orthographic camera, which replaces the frozen GUI's 2D
+* 2D cases: the cavity-style 2D mesh is drawn as its front patch with an orthographic camera, which replaces the frozen GUI's 2D
   raster view (parity item).
-* **No adapter**: the viewport shows "no wgpu adapter" with the located error; the rest of the app works.
+* No adapter: the viewport shows "no wgpu adapter" with the located error; the rest of the app works.
 
 ## Placement
 

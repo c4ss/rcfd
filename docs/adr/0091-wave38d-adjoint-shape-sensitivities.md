@@ -87,23 +87,23 @@ limiter switch) within the state step. Accuracy limit from the FD assembly: abou
 
 ## Registered checks
 
-* **A0 (precondition of the reference, re-measured in the gate test)**: at a0 and at all 12 FD shapes the primal stagnates with
+* A0 (precondition of the reference, re-measured in the gate test): at a0 and at all 12 FD shapes the primal stagnates with
   `max(res_u, res_p) <= 1e-13`; step study `|D(1e-3) - D(2e-3)| <= 5e-3 |D(1e-3)|` for all six pairs; noise floor
   `|J_cold - J_warm| / 1e-3 <= 1e-3 |D(1e-3)|` at `a0 + 1e-3 e_2` for both objectives. If A0 fails, the set-up is defective, not
   the adjoint.
-* **A1 (acceptance, F-137)**: for J in {dp, Fx} and k in {1, 2, 3}: `|g_adj,k - D_k(1e-3)| <= 0.05 |D_k(1e-3)|`. All six pairs
+* A1 (acceptance, F-137): for J in {dp, Fx} and k in {1, 2, 3}: `|g_adj,k - D_k(1e-3)| <= 0.05 |D_k(1e-3)|`. All six pairs
   must pass. Test `duct_adjoint_matches_fd` (not ignored).
-* **A2 (smoothness diagnostic)**: the adjoint gradient with state step 1e-6 and with 1e-5 (x block max) agree within 1e-4 relative
+* A2 (smoothness diagnostic): the adjoint gradient with state step 1e-6 and with 1e-5 (x block max) agree within 1e-4 relative
   for all six pairs. Ignored test `duct_adjoint_state_step_diagnostic`, run once. A failure here with A1 passing is reported as
   non-smoothness, not hidden.
-* **A3 (gradient option of the design loop)**: `optim::projected_gradient` (bound-constrained steepest descent with Armijo
+* A3 (gradient option of the design loop): `optim::projected_gradient` (bound-constrained steepest descent with Armijo
   backtracking, new) on dp with the adjoint gradient, bounds `a_k in [-0.1, 0.25]`, from a0, initial step moving the largest
   parameter by 0.05, at most 3 iterations: every accepted iterate lowers dp, and the final dp `<= 0.95 x dp(a0)`. Test
   `duct_gradient_descent`; it is ignored as heavy if one adjoint gradient takes over 10 s in the gate build (decided from the
   A1 timing, recorded).
-* **A4 (guards)**: `adjoint_gradient` returns an error for a solver with `nu_face` set and for a state above `max_state`. Unit tests.
-* **A5 (defaults)**: no existing code path changes; `baseline_hashes` passes unchanged (gate).
-* **Cost (recorded, not gated)**: wall time of one adjoint gradient (primal excluded) against 2 x 3 converged FD solves.
+* A4 (guards): `adjoint_gradient` returns an error for a solver with `nu_face` set and for a state above `max_state`. Unit tests.
+* A5 (defaults): no existing code path changes; `baseline_hashes` passes unchanged (gate).
+* Cost (recorded, not gated): wall time of one adjoint gradient (primal excluded) against 2 x 3 converged FD solves.
 
 Status rule (registered): F-137 becomes `done` if A1 passes all six pairs with A0 holding in the gate; `partial` if a tested slice
 lands but A1 misses; `todo` if nothing usable lands. The roadmap SCOPE extras (RBF morphing, more observables, topology and
@@ -144,7 +144,7 @@ adjoint per iteration (6.1 s < 10 s, so the test is not ignored, as registered);
 Deviations from the registered plan: none in limits or set-ups. The test runs the noise-floor warm start from the base solution as
 registered. A3 needed no step halving, so the backtracking branch is exercised only by the unit test of `projected_gradient`.
 
-Not delivered (stated, not hidden): RBF morphing (FFD only); observables other than pressure drop and wall x-force (moments, centre
+Not delivered: RBF morphing (FFD only); observables other than pressure drop and wall x-force (moments, centre
 of pressure, cumulative forces); turbulent gradients (refused, no frozen-turbulence variant); transient, energy, body-force, driver
 or pseudo-controller cases (refused); meshes above a few thousand state unknowns (dense Jacobian; a sparse or matrix-free
 transposed solve is the upgrade path); gradients inside `design::study` (the `Method` / `Evaluator` / store have no gradient

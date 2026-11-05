@@ -137,7 +137,7 @@ linear interpolation in the rows of `u+y+.dat`.
 
 ## Registered checks (written before running)
 
-Justifications are given with each limit. "Finest" means the third mesh of the sequence.
+"Finest" means the third mesh of the sequence.
 
 ### A. Heated cavity, per Ra
 A0 The run converges (residual < 1e-9) and the hot and cold wall flux agree within 1e-6 relative (as the existing tests).

@@ -29,7 +29,7 @@ with published geometry: FAN-01, one periodic blade passage of the FAU / EAA low
 data), whose case text exists only inside a test (`crates/rcfd-api/tests/fan01_stall_w43c.rs`, `case_toml`); the
 `cases/axial_fan_*` files are five-bladed laminar smoke cases, not FAN-01.
 
-Constraint (honesty): the registered FAN-01 set-up (SST, Barth-Jespersen-limited `linear_upwind`) does not converge on
+Constraint: the registered FAN-01 set-up (SST, Barth-Jespersen-limited `linear_upwind`) does not converge on
 these meshes (ADR 0110: a limit cycle, residuals stall near 1e-3), and no FAN-01 result agrees with the measured data
 (`docs/milestone-fan.md`). An example run must say so and must not be presented as a fan prediction.
 

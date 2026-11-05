@@ -6,9 +6,9 @@ Status: diagnosis and acceptance limits registered before any change of solver c
 
 Two symptoms that earlier waves met in constant-density SIMPLE/SIMPLEC duct flow:
 
-1. **Symmetry side walls.** An empty duct (`channel_2d`, side walls `velocity = "symmetry"`, uniform inlet and initial stream)
+1. Symmetry side walls. An empty duct (`channel_2d`, side walls `velocity = "symmetry"`, uniform inlet and initial stream)
    deviates from the exact plug flow by 0.159 in SIMPLEC (wave 21B A4, `a4_run`; wave 20B earlier).
-2. **Pressure-pressure duct.** The registered X4 set-up of wave 23A (fan boundary and porous jump in a duct between two fixed
+2. Pressure-pressure duct. The registered X4 set-up of wave 23A (fan boundary and porous jump in a duct between two fixed
    pressures) diverges to NaN in SIMPLEC for every variant tried.
 
 The recorded neighbouring misses (Z3 of ADR 0012, ADR 0022 "frictionless duct driven by two pressure ends", the odd-even
@@ -50,7 +50,7 @@ committed; they are diagnostics, not acceptance results.
 * **The registered X4 set-up is not of that kind.** Fan boundary (`200 .. 0 Pa`) plus the quadratic-Darcy porous jump has a steady
   operating point (`fan(Q) = jump(Q/A)`, ADR 0039); it is well-posed, and the divergence is numerical. A pressure-pressure
   duct with only the jump, `p_in = 0 = p_out` (steady solution `u = 0`, flow decays), also diverges in SIMPLEC at molecular viscosity.
-* **Mechanism.** At a fixed-pressure inlet with zero-gradient velocity, the convection matrix gives the first cell the boundary
+* Mechanism. At a fixed-pressure inlet with zero-gradient velocity, the convection matrix gives the first cell the boundary
   term `phi_b * a_b` with `phi_b < 0` (inflow) and `a_b = 1`, which cancels the outflow term exactly (`div phi = 0`). The cell
   diagonal is then only viscous: measured at iteration 1, `a_p[0] = 4.2e-6` against `5.6e-3` in every other cell, `rAU[0] = 23.7`
   against `1.8e-2` (1300 times). The momentum predictor of that cell is driven by the pressure force alone and its velocity
@@ -63,7 +63,7 @@ committed; they are diagnostics, not acceptance results.
     (`dp = 100`: `u` 2.04 and 2.22 for `K` = 1e-6 and 1e-7), while the same set-up without it diverges; a sink over the whole duct
     (the wave-23A "bed") converges. A sink in the jump cells only does not help (diverges), so the position matters: the inlet cell.
   - SIMPLE (not SIMPLEC) still diverges with the inlet-column sink, so SIMPLE has a second, separate problem (not examined).
-* **Why Z2/Z3 of ADR 0012 converge although they have the same inlet.** Their duct has `ny = 2` with symmetry walls, so the
+* Why Z2/Z3 of ADR 0012 converge although they have the same inlet. Their duct has `ny = 2` with symmetry walls, so the
   inlet cell is a wall cell and the averaged diagonal (symptom 1) adds half of the wall-normal Dirichlet diagonal to its
   `a_p`. The two defects mask each other. Z3 with `component_diagonal = "corrected"` converges to a stationary state
   (one-step change 9e-9) where the registered default has a persistent two-cycle of 2.9e-2 localised in the inlet cell
@@ -84,8 +84,8 @@ A. Plug flow between symmetry walls (`channel_2d` 60 x 10, `lx` 2, `ly` 0.2, dep
    * A5 (current default, averaged): the 0.159 deviation stays a known-miss test (ignored) until the default is changed.
 B. Well-posed pressure-pressure duct (closed form): `box_2d` 100 x 4, `lx` 2, `ly` 1, periodic in y, `rho` 1.2, `mu` 1.8e-5,
    fixed pressure 100 (kinematic) at the inlet, 0 at the outlet, zero-gradient velocity, Darcy bed `K = 1e-6` over the whole
-   duct, 3000 iterations, SIMPLEC: outlet flux / area equals `dp K rho / (mu L)` = 3.3333 m/s to **1e-2** relative; the flux is
-   the same at inlet and outlet to **1e-12** relative. (A value of 3.346, relative 3.8e-3, had been seen in an exploratory run of
+   duct, 3000 iterations, SIMPLEC: outlet flux / area equals `dp K rho / (mu L)` = 3.3333 m/s to 1e-2 relative; the flux is
+   the same at inlet and outlet to 1e-12 relative. (A value of 3.346, relative 3.8e-3, had been seen in an exploratory run of
    the same set-up before the limit was written; the limit 1e-2 was set with that knowledge.)
 C. X4 as registered (ADR 0039: fan boundary + jump, no bed): the registered limits of `x4_run` (5e-3 on `Q`, 2e-3 on the patch
    pressure) stay as they are; they are only claimed met if `x4_registered_lossless_setup_known_miss` passes unchanged.

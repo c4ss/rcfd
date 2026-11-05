@@ -34,7 +34,7 @@ wanted: a settings workaround note for the user.
   pressure-velocity coupling in the thin wall cells of the graded O-grid once the wall diffusion number nu dt / dr1^2 passes an
   onset between 6.5 and 11.4. The ADR 0073 pressure-lag map (power iteration, 60 iterations, the step's frozen matrices) at
   step 1 (DG1): G64 (64 x 48, 1/16) 0.358; G128 (128 x 96, 1/32) 0.746; G256x48 0.221; G256g (grading 10.88) 0.219; G256c4
-  (256 x 256, 1/64, **4 correctors**) 0.563; G256s (256 x 256, 1/256) 1.166; G256 (256 x 256, 1/64) 2.418; G64x256 (64 x 256,
+  (256 x 256, 1/64, 4 correctors) 0.563; G256s (256 x 256, 1/256) 1.166; G256 (256 x 256, 1/64) 2.418; G64x256 (64 x 256,
   1/64) 4.359; G256p2 (PIMPLE n_outer 2, alpha 0.9) 2.433. Twins: every arm with rho(step 1) <= 1.166 ran clean, every arm with
   rho(step 1) >= 2.418 was spoky or diverged (near t = 1 the failing arms had 1.68 to 1.95). The leading mode sits in the
   first cell layer at the wall in every failing arm.
@@ -49,7 +49,7 @@ wanted: a settings workaround note for the user.
 
 * The user's committed-case run U1 (64 x 48, dt 1/16, PISO-2, to t = 80; `E:\projects\cfd\w48t-work\user-runs\U1`, read here):
   cl peak to peak 0.45 at t = 10 to 15, 0.60 to 0.62 from t = 40; upward cl zero crossings after t = 40 at 42.30, 48.89, 55.49,
-  62.08, 68.67, 75.27: period 6.59, **St 0.1517**; mean cd over 5-unit windows 1.32 from t = 30. So the case sheds from about
+  62.08, 68.67, 75.27: period 6.59, St 0.1517; mean cd over 5-unit windows 1.32 from t = 30. So the case sheds from about
   t = 10 (the push), not from t = 40 as ADR 0154 assumed.
 * Job 48S (ADR 0153, its probes P2-P6, read in its worktree): 256 x 256 PISO-2 is unstable at dt 0.007 and 0.005 (Courant about
   1), slowly growing at 0.0042, decaying at 0.0035; `n_correctors` 3 stable at 0.005; its Studio plan runs with
@@ -344,7 +344,7 @@ DG1 values; the census of the test suite found it on two families of existing te
 4. **SV301 can miss cases** whose viscosity comes from a law the Simulation applies before each step (rheology, eddy viscosity,
    property laws): the limitation below, question 7. The adaptive control itself is not affected.
 5. **Cost.** On the user's mesh the opt-in costs 1.36 x the three-corrector workaround and 2.3 x the fractional step per step
-   (A7); robustness across meshes is what it buys.
+   (A7); the gain is robustness across meshes.
 
 ### Results
 

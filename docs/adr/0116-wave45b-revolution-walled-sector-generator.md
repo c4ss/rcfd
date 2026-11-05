@@ -48,7 +48,7 @@ The code gives two facts that limit what such a generator can deliver.
      cell, the `blade` patch among them. A blade surface is not a surface of revolution.
    * `crates/rcfd-api/tests/fan_sector.rs::s4_absolute_formulation_mrf_is_refused_on_the_sector` has documented this since ADR 0065:
      "the blade and seam faces are not surfaces of revolution".
-   * ADR 0113 A2 / K6 moved the refusal from the seams to the hub, on the **empty** passage only (`include_blade = false`).
+   * ADR 0113 A2 / K6 moved the refusal from the seams to the hub, on the empty passage only (`include_blade = false`).
    * An MRF zone on a bladed passage needs the frame flux on the blade walls, so that the wall carries `phi = F_f` and `phi_rel = 0`.
      That is the F-RP route. It did not converge and was removed twice (ADRs 0082, 0085). No generator removes this blocker, and by
      user decision no third attempt is drafted.
@@ -61,7 +61,7 @@ The code gives two facts that limit what such a generator can deliver.
    * The C-grid wraps around the nose, so it cannot be a translation net. The ADR 0113 smoke agrees: hub 4.23e-3 even with zero
      stagger, camber, sweep and lean.
 
-**What this wave delivers:** an **empty** sector whose walls are exact surfaces of revolution, built through the case tree.
+**What this wave delivers:** an empty sector whose walls are exact surfaces of revolution, built through the case tree.
 * It closes the gap ADR 0113 left open. No case-tree run had sent `cyclic_seams = true` through `Sources` and the `sim.rs` 2667 F1
   line, because no case-tree mesh reached it.
 * It gives ADR 0117 an exact case-tree sector.

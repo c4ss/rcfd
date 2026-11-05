@@ -37,10 +37,10 @@ removal), ADR 0081 part L (`solver.linear_upwind_limiter = "barth_jespersen"`), 
 
 Meshes M0, M1, M2 of ADR 0082 amendment 3 (4 320, 13 524, 47 040 cells; M3 is the recorded defective set-up and is not used). The empty-passage arms:
 
-* **Y(h)**: F-RP as in ADR 0082 (`[sources.rotor] type = "mrf"`, `zone = "all"`, `rotation_axis = [0, 0, 1]`, `angular_velocity = Omega` = 1486 rpm,
+* Y(h): F-RP as in ADR 0082 (`[sources.rotor] type = "mrf"`, `zone = "all"`, `rotation_axis = [0, 0, 1]`, `angular_velocity = Omega` = 1486 rpm,
   `rotor_passage = true`), absolute conditions identical to B (inlet `(0, 0, U)` with the ADR 0078 `k`, `omega`; hub `fixed` 0; shroud `fixed` 0 with
   `turbulence = "wall"`; outlet zero-gradient velocity, fixed pressure), SST, SIMPLEC, `upwind`, tolerance 1e-5, the ADR 0078 / 0082 harness quantities.
-* **B(h)**: the inertial control = Y without the source (ADR 0078 X2b).
+* B(h): the inertial control = Y without the source (ADR 0078 X2b).
 * An arm's variant `Y_A(h)` and its control `B_A(h)` use the same solver settings (algorithm, scheme, limiter, pseudo-time) as each other; only the
   source differs.
 
@@ -52,23 +52,23 @@ alone (200 iterations) is recorded in amendment 1 before any registered M2 run; 
 
 ## Part D: diagnosis of the non-convergence (registered; run before any remedy arm)
 
-* **D0 reproduction.** Y(M1) and Y(M0) on the re-applied F-RP, with the location record below. Reproduction rule: Y(M1) converged in 567 iterations
+* D0 reproduction. Y(M1) and Y(M0) on the re-applied F-RP, with the location record below. Reproduction rule: Y(M1) converged in 567 iterations
   with L -1.42e-5 N m (printed digits of ADR 0082); Y(M0) not converged at 8000 iterations with res_u 0.78, L 0.068 N m, Delta p_tt +981 Pa (printed
   digits). If either does not reproduce, the other runs stop until the difference is explained in an amendment.
-* **Location record of Y(M0)** (no limit): every 100 iterations the cell with the largest velocity change `|u^n - u^(n-1)|` and its region (upstream /
+* Location record of Y(M0) (no limit): every 100 iterations the cell with the largest velocity change `|u^n - u^(n-1)|` and its region (upstream /
   chord band / downstream; wall-, seam-, inlet/outlet-adjacent; radius), continuity, res_u, res_p, and the worst periodic-pair flux sum
   `|phi_f + phi_g| / (Omega r |S|)`.
 
 Hypotheses for the non-convergence of Y(M0) and their falsifiers. Each diagnostic is one run of Y(M0) with exactly one change, made by a scratch switch
 in this wave's working copy that is never committed (disclosed here). "Converges" means by the registered criterion within the registered caps.
 
-* **H-S (ADR 0082's suspect): the lagged `-Omega x c` source with SIMPLEC.** DS: the frame acceleration (cell and face parts) is removed; the frame flux
+* H-S (ADR 0082's suspect): the lagged `-Omega x c` source with SIMPLEC. DS: the frame acceleration (cell and face parts) is removed; the frame flux
   stays. H-S is FALSIFIED if DS does not converge. If DS converges, H-S stands and the remedies I and C below are aimed at the right term.
-* **H-T: the turbulence model on the relative flux with absolute-velocity gradients** (the new `sim.rs` hunk of F-RP). DT: `k`, `omega` convected with the
+* H-T: the turbulence model on the relative flux with absolute-velocity gradients (the new `sim.rs` hunk of F-RP). DT: `k`, `omega` convected with the
   absolute flux `phi` (the default `mrf` path). Falsified if DT does not converge.
-* **H-P: the seam-pair asymmetry of the body-force term** (pair mean off for MRF). DP: `coupled_body_pair_mean = true`. Falsified if DP does not converge.
+* H-P: the seam-pair asymmetry of the body-force term (pair mean off for MRF). DP: `coupled_body_pair_mean = true`. Falsified if DP does not converge.
   The D0 location record shows the pair-flux sum; H-P is also reported against it.
-* **H-K: the component-diagonal correction** (on for MRF, off for R). DK: `component_diag_correction = false`. Falsified if DK does not converge.
+* H-K: the component-diagonal correction (on for MRF, off for R). DK: `component_diag_correction = false`. Falsified if DK does not converge.
 
 If exactly one of DT, DP, DK converges, its change becomes the remedy arm **X** (part of F-RP when `rotor_passage = true`, nothing else changes) and is
 screened and accepted like the others. If two or more converge, they are all reported, and arm X is the one whose diagnostic converged in the fewest
@@ -76,15 +76,15 @@ iterations. If none of DS, DT, DP, DK converges, no hypothesis stands and the th
 
 ## Part R: remedy arms (requested by the task; each registered now)
 
-* **L: Barth-Jespersen-limited `linear_upwind`.** Y with `convection = "linear_upwind"`, `linear_upwind_limiter = "barth_jespersen"` (existing keys, no new
+* L: Barth-Jespersen-limited `linear_upwind`. Y with `convection = "linear_upwind"`, `linear_upwind_limiter = "barth_jespersen"` (existing keys, no new
   code). Control B_L: the same keys without the source.
-* **I: linearised frame source in the segregated solver.** In a segregated solve `-Omega x c` has no diagonal part per component; of the two forms
+* I: linearised frame source in the segregated solver. In a segregated solve `-Omega x c` has no diagonal part per component; of the two forms
   available (Gauss-Seidel ordering of the components, which needs a change inside `simple.rs`, the file of the parallel agent 37A; or a diagonal damping
   that vanishes at convergence) this arm uses the second, with the existing keys: `pseudo_mode = "physical"`, `pseudo_dt = 1 / Omega` (6.426e-3 s), i.e.
   `V Omega` on the diagonal and `V Omega c_old` on the right-hand side in every cell (the zone is the whole mesh). In the single-cell model this damps the
   explicit rotation for any `x` below about 2.5 (`|lambda|^2 = ((a (1 - alpha)/alpha + D)^2 + (Omega V)^2) / (a/alpha + D)^2`, `D = Omega V`). No new code.
   Control B_I: the same keys without the source.
-* **C: coupled pressure-velocity solver with the frame source implicit.** The coupled solver gets, only for this arm: (1) rotationally periodic patches
+* C: coupled pressure-velocity solver with the frame source implicit. The coupled solver gets, only for this arm: (1) rotationally periodic patches
   (the pressure is coupled implicitly across a pair in the gradient, continuity and Rhie-Chow rows, the partner velocity rotated into the owner's frame
   exactly in the continuity rows; momentum across the seam through the lagged partner coefficients of `boundary_coeffs`, as SIMPLEC does); (2) a
   convective flux offset (the F-RP frame flux); (3) the MRF acceleration `-Omega x c` as the cross-component blocks `M_xy = -Omega V`, `M_yx = +Omega V`
@@ -93,7 +93,7 @@ iterations. If none of DS, DT, DP, DK converges, no hypothesis stands and the th
   allowed only for `mrf` sources. Nothing changes for a coupled case without periodic patches, offset or sources. Control B_C: coupled, no source.
   Effort bound: if the extension does not pass its construction checks (A1 below on Y_C(M1)) and a 30-iteration smoke with finite continuity on
   B_C(M0), the arm is reported NOT RUNNABLE with the reason and its code removed. Arm C runs last.
-* **X**: only if Part D produces it (above).
+* X: only if Part D produces it (above).
 
 Smokes (rule (d) of wave 35): every arm's Y and B on M0 get construction plus a 30-iteration smoke before its registered run; values in amendment 1.
 
@@ -108,21 +108,21 @@ Smokes (rule (d) of wave 35): every arm's Y and B on M0 get construction plus a 
 
 ## Acceptance (all must pass for the kept arm A; a fix that fails any of A0-A4 is removed)
 
-* **A0 bit-identical when off.** (i) The full workspace suite at the final gate passes with the wave-36 totals (1873 passed, 0 failed, 519 ignored)
+* A0 bit-identical when off. (i) The full workspace suite at the final gate passes with the wave-36 totals (1873 passed, 0 failed, 519 ignored)
   plus this wave's tests, and `crates/rcfd-api/tests/baseline_hashes.rs` is unchanged; (ii) ADR 0082 X2a-36 re-run on the final code reproduces outlet
   L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit; (iii) the ADR 0082 A0 (iii) test (ADR 0008 annulus `mrf`, 20 iterations, the key
   absent and `rotor_passage = false`) bit-identical; (iv) if arm C is kept: the coupled lid cavity (`crates/rcfd-api/tests/w36b_coupled_guard.rs`
   set-up without the NaN start: 12 x 12, nu 0.01, 20 iterations) gives bit-identical u, p and flux on the final code and on feb015f (the feb015f values
   are recorded in amendment 1 before any coupled code is written).
-* **A1 construction.** The F-RP closure check passes (1e-10) on M0-M2 and the E0 mesh; at iteration 1 of Y_A(M1) the periodic pairs satisfy
+* A1 construction. The F-RP closure check passes (1e-10) on M0-M2 and the E0 mesh; at iteration 1 of Y_A(M1) the periodic pairs satisfy
   `|phi_rel,f + phi_rel,g| <= 1e-12 Omega r |S|`.
-* **A2 convergence and angular momentum.** Y_A(h) converges within the caps on M0, M1 and M2, and `|L_out(Y_A(h))| <= 10 |L_out(B_A(h))|` on each mesh.
+* A2 convergence and angular momentum. Y_A(h) converges within the caps on M0, M1 and M2, and `|L_out(Y_A(h))| <= 10 |L_out(B_A(h))|` on each mesh.
   If B_A(h) does not converge within the caps, that comparison is a set-up defect of the control, not a miss of the fix: the limit on that mesh is then
   `0.01 |L(R(h))|` with ADR 0082's converged relative-frame values (R(M0) 3.4396, R(M1) 2.2544, R(M2) 1.6793 N m, i.e. 0.0344, 0.0225, 0.0168 N m),
   and the report says so. The convergence of Y_A(h) itself has no fallback.
-* **A3 energy.** Outlet `rho <c_theta^2/2>_m` of Y_A(h) <= 0.2 Pa (1 % of ADR 0082 X2d's 19.97 Pa) and the mass-averaged duct `Delta p_tt <= 0` (a
+* A3 energy. Outlet `rho <c_theta^2/2>_m` of Y_A(h) <= 0.2 Pa (1 % of ADR 0082 X2d's 19.97 Pa) and the mass-averaged duct `Delta p_tt <= 0` (a
   passive duct with walls at rest cannot gain total pressure), on M0-M2.
-* **A4 order from the 3-mesh study.** `e_h = |L_out(Y_A(h))|` (the exact value is 0); `e_M2 <= e_M1 <= e_M0` and
+* A4 order from the 3-mesh study. `e_h = |L_out(Y_A(h))|` (the exact value is 0); `e_M2 <= e_M1 <= e_M0` and
   `p = ln(e_M0 / e_M2) / ln(2.25) >= 0.5`. Floor rule (ADR 0082): Y_A(M1) and B_A(M1) are also run at tolerance 1e-7; if `L(Y_A(M1))` changes by more
   than 50 % between 1e-5 and 1e-7, A4 is "not measurable (iteration floor)", neither passed nor missed, and acceptance rests on A0-A3. If L changes by
   more than 10 % for Y_A or B_A, all M0 and M2 runs of that arm use 1e-7 (re-run once at 1e-7; the 1e-5 runs are reported). The order of B_A is reported.
@@ -254,7 +254,7 @@ B_I(M2) L 8.47e-5 N m.
   inertial controls. The coupled inertial control falls with order 2.4 over M0-M2 (5.41e-4, 1.60e-4, 7.88e-5 N m); Y_C falls by a factor 1.40 from M0
   to M1 (pairwise order 0.83).
 * The M0 failure of the SIMPLEC rotor passage is cured by damping the momentum update (`pseudo_dt = 1 / Omega`, arm I) or by the coupled solve (arm C),
-  but not by removing the frame source (DS). So the cure is not about the frame source: damping or a coupled solve stabilises something else in the
+  but not by removing the frame source (DS). So damping or a coupled solve stabilises something other than the frame source, in the
   convection of absolute momentum by the large relative flux. The D0 record put the largest updates next to the hub downstream of the chord band and at
   the outlet / seam corner, with outlet backflow (92 of 240 faces); the converged arm I and C runs on M0 have no backflow.
 * On M2 the largest updates of Y_C sit in hub-adjacent cells (r 0.1241-0.1245) of the chord band and just downstream; those of Y_I in two interior

@@ -42,8 +42,6 @@ Open benchmark data for validating rcfd, with sources and licences, is described
 
 ## Runnable cases
 
-Each entry has the same layout: the files and what each one shows, how far they are checked, then the commands.
-
 ### Channel flows (`channel`)
 
 * `kepsilon_channel.toml`: periodic plane channel at Re_tau = 395, standard k-epsilon with wall functions, coarse on purpose.
@@ -79,7 +77,7 @@ converged
 ### Porous and rotating channels (`packed_bed`, `rotating_channel`)
 
 * `packed_bed.toml`: air through a packed bed of 5 mm spheres (Ergun porous resistance). Its own settings stop at the 1700-iteration
-  cap without meeting the tolerances, so the run exits with code 5 (not converged); this is the current state, not hidden.
+  cap without meeting the tolerances, so the run currently exits with code 5 (not converged).
 * `rotating_channel.toml`: laminar channel rotating about the spanwise axis; the Coriolis force is balanced by a cross-stream
   pressure gradient.
 

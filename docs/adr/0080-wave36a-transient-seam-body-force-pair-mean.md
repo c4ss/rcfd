@@ -66,22 +66,22 @@ tolerances 1e-14 / 1e-12, fine pair 0.025 / 0.0125 on 16 x 16 against the same-s
 
 ### Part B: the key on HEAD (binding rows marked)
 
-* **P1 (binding, analytic)** pair conservation: on the 12 smoke configurations above (n 16, 32, 64; PISO and PIMPLE-4; dt 0.05 and 0.0125; 4 steps) the
+* P1 (binding, analytic) pair conservation: on the 12 smoke configurations above (n 16, 32, 64; PISO and PIMPLE-4; dt 0.05 and 0.0125; 4 steps) the
   flux pair sum divided by the largest seam flux is <= 1e-8 with B (the default value is printed alongside).
-* **B-R4 (binding, exact solution, rule b of wave 34)** no-harm: SECT-M 16 x 16, PISO and PIMPLE-4, dt in {0.05, 0.025, 0.0125}: exact velocity AND pressure
+* B-R4 (binding, exact solution, rule b of wave 34) no-harm: SECT-M 16 x 16, PISO and PIMPLE-4, dt in {0.05, 0.025, 0.0125}: exact velocity AND pressure
   error with B <= 1.05 x the default (6 velocity + 6 pressure comparisons).
-* **N2 (binding)** with every option off the five `w33b_default_bits` fingerprints are identical (gate); `baseline_hashes` unchanged (gate).
-* **N2b (binding)** the key is inert where the prediction says so: bit-identical cell velocity, pressure and face flux, key on vs off, for (i) SWIRL 16 x 16 (rotational
+* N2 (binding) with every option off the five `w33b_default_bits` fingerprints are identical (gate); `baseline_hashes` unchanged (gate).
+* N2b (binding) the key is inert where the prediction says so: bit-identical cell velocity, pressure and face flux, key on vs off, for (i) SWIRL 16 x 16 (rotational
   seams, no body force) PISO and PIMPLE-4, 8 steps of dt 0.05; (ii) the ADR 0069 MMS box (body force, no periodic faces) N = 16, PISO, 8 steps of dt 0.05;
   (iii) the ADR 0069 TG periodic box (no body force) N = 16, PIMPLE-C, 8 steps of dt 0.05.
-* **B-R2** SECT-M PISO fine pair in [1.9, 2.3] (default 1.041); **B-R2b** SECT-M PIMPLE-4 fine pair in [1.9, 2.3] (default 0.538); **B-R3** SECT-M PISO joint
+* B-R2 SECT-M PISO fine pair in [1.9, 2.3] (default 1.041); B-R2b SECT-M PIMPLE-4 fine pair in [1.9, 2.3] (default 0.538); B-R3 SECT-M PISO joint
   refinement vs exact, (16, 0.05), (32, 0.025), (64, 0.0125), both orders >= 1.8 (limit of ADR 0076 R3). Registered rows with their ADR 0076 limits; a miss is
   reported as MISS and gets a `*_known_miss` test. **Registered in advance (rule b exception): a miss of B-R2, B-R2b or B-R3 does not remove the key**, because
   the predicted causes (seam convection lag, face-consistency floor) are defects outside F-BP that the default kernel keeps; F-BP's own job is P1.
 
 ### Part K: information with K (scratch tree at fbcc05c plus the same term; K stays removed, no verdict on K)
 
-* **IC (implementation check, binding for keeping B)**: R2 and R2b with K + term reproduce the Y5 errors 7.7563e-4 / 1.8884e-4 and 2.4919e-5 / 6.1413e-6 to three
+* IC (implementation check, binding for keeping B): R2 and R2b with K + term reproduce the Y5 errors 7.7563e-4 / 1.8884e-4 and 2.4919e-5 / 6.1413e-6 to three
   significant digits. A failure means this code is not what Y5 measured: B is then removed.
 * Reported with K + term (no limit, no verdict): R3 SECT-M (PISO joint refinement vs exact), R4 SECT-M (PISO, exact velocity and pressure error vs default).
   C-O2 and the N1 TG/TG-S/MODE/MMS rows are not rerun with K + term: the term is bit-inert there (N2b), so they equal ADR 0076's K values.

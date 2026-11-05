@@ -32,7 +32,7 @@ blade and wake (68 + 18 mm of 86.6 mm). The tip gap (2.5 mm) cannot hold two sta
 
 ### Changes (opt-in fields of `CGridOptions`, default `false`; every existing path bit-identical)
 
-* **`camber_seam`**: per layer a passage centre line `C(z)`: the camber line of the section for `z_le <= z <= z_te` (sampled at 256 cosine-spaced
+* `camber_seam`: per layer a passage centre line `C(z)`: the camber line of the section for `z_le <= z <= z_te` (sampled at 256 cosine-spaced
   chord points, linear in z; a camber line whose z is not strictly increasing is a located error `mesh.fan.stagger`); for `z > z_te` the wake curve of the
   construction itself (so the wake lies mid-passage by construction); for `z < z_le` the C1 extension `s_le - sigma_le lambda (1 - exp(-(z_le - z)/lambda))`
   with `sigma_le` the camber slope ds/dz at the leading edge and `lambda = 0.2 c`. Seams `s_lo(z) = C(z) - P/2`, `s_hi(z) = s_lo(z) + P` (so the upper seam is
@@ -41,10 +41,10 @@ blade and wake (68 + 18 mm of 86.6 mm). The tip gap (2.5 mm) cannot hold two sta
   `(z_out[h], s_lo(z_out[h]))` (the `z_out` rule unchanged), the corner points `(z_f, s_lo(z_f))`, the front-edge distribution (about `C(z_f)` instead of
   `s_le`) and the F block (row `a` shifted by `C(z_a) - C(z_f)`). This is the seam of the H-slit generator (camber line inside the chord) extended C1 and
   carried along the wake.
-* **`gap_fit`**: tip-gap first height `h_g = min(h1, L_g / (2 S + (n_gap - 2 n_bl) g^n_bl))`, `S = sum_{q < n_bl} g^q`: the largest height for which
+* `gap_fit`: tip-gap first height `h_g = min(h1, L_g / (2 S + (n_gap - 2 n_bl) g^n_bl))`, `S = sum_{q < n_bl} g^q`: the largest height for which
   two exact stacks and a middle of cells `h_g g^n_bl` fill the gap with continuous growth. The gap radii are `graded_two_sided(L_g, n_gap, h_g, g, n_bl)`;
   the span keeps `h1`. Identity when `h_g = h1` (A', B', S, the example).
-* **Hub**: no change registered now. Diagnostic DH (on the development counts, below) decides: build or fold; the end-wall first-layer (k = 0 hub faces
+* Hub: no change registered now. Diagnostic DH (on the development counts, below) decides: build or fold; the end-wall first-layer (k = 0 hub faces
   and k-faces of the first `n_bl` layers) maximum non-orthogonality and skewness, the k-face maxima, and where they sit. A hub change, if any, is
   specified in an amendment before the registered FAN-01 build.
 
@@ -100,16 +100,16 @@ normal, over the face size and over the owner's thickness), and for wake lines t
 
 ### Mechanisms and their falsifiers (decided on D1)
 
-* **M1 hub first-layer wedge**: the B' non-orthogonality maximum is on an end-wall boundary face or a k-face within `n_bl` layers of the hub or the
+* M1 hub first-layer wedge: the B' non-orthogonality maximum is on an end-wall boundary face or a k-face within `n_bl` layers of the hub or the
   shroud. Falsified if the B' maximum is elsewhere (then M1 targets the faces above 70 deg in those layers, if any, else it is dropped).
-* **M2 wake-cut skewness**: the B' skewness maximum is on a wake-cut face or a wake-stack j-face. Falsified if not. Prediction registered now: the wake
+* M2 wake-cut skewness: the B' skewness maximum is on a wake-cut face or a wake-stack j-face. Falsified if not. Prediction registered now: the wake
   faces are thin cells on a surface that turns with r, so their skewness tracks (face warp + wedge shift) / thickness, not the first-height ratio alone
   (ADR 0072 W2, one first height everywhere, made it worse).
-* **M3 warped blade-stack faces**: prediction (pencil, before D1): the warp of a quad between two consecutive section chords is about
+* M3 warped blade-stack faces: prediction (pencil, before D1): the warp of a quad between two consecutive section chords is about
   `L Delta_r dphi/dr` (phi the in-plane angle of the surface), set by the twist of the surface and NOT by where the wall nodes sit along the chord; a
   twist-following re-placement of the wall nodes therefore cannot remove it and can only change the shear of the radial lines. Falsified if D1's
   decomposition shows the stack-face skewness dominated by shear rather than warp.
-* **M4 A' aspect at the irregular seam corner** (0072 unregistered observation: the corner cells in the first layers below the shroud and the tip cap).
+* M4 A' aspect at the irregular seam corner (0072 unregistered observation: the corner cells in the first layers below the shroud and the tip cap).
 
 ### Candidate changes (families named now; the exact change of each is specified in Amendment 1, written after D1 and before any run of a change)
 
@@ -192,10 +192,10 @@ the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to 
 
 ### The single-factor changes (new opt-in fields of `CGridOptions`), order C2, C5, C6, C4
 
-* **C2** (`wake_aspect_50`): the wake first height `d1 = max(h1, dz / 50)` instead of `dz / 300` (one constant). Derivation: with the measured
+* C2 (`wake_aspect_50`): the wake first height `d1 = max(h1, dz / 50)` instead of `dz / 300` (one constant). Derivation: with the measured
   epsilon <= 0.3 between neighbouring lines, `skew ~ 50 x 0.3 / 12 = 1.25`. Target measure as registered for M2 (B' maximum skewness over wake-cut and
   wake-stack faces, 4.847). Prediction: below 1.5.
-* **C5** (`lean_stack`), replacing C3 (the named C3 families, planar triangles and twist-following placement, act on warp and shear, which D1 shows
+* C5 (`lean_stack`), replacing C3 (the named C3 families, planar triangles and twist-following placement, act on warp and shear, which D1 shows
   are not the cause; this is a departure from the registered candidate list, disclosed here before any run): every blade wall stack (and the wake
   stack, which continues it) is built with the in-plane offsets divided by `cos(lambda)`, lambda the angle between the in-plane wall normal and the 3-D
   surface normal at that wall node (surface tangent along the radius by a central difference of `AxialFan::surface_point` over `1e-6 r`; the wake
@@ -203,10 +203,10 @@ the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to 
   registered for M3 (B' maximum skewness over blade-stack faces, 2.057); also reported: the B' maximum non-orthogonality of blade-stack faces (78.17).
   Q7 under C5 (departure from decision-rule item (iii), registered now): the in-plane stack distance is `h1 g^q / cos(lambda)` by design; Q7-E is
   evaluated as the distance along the 3-D surface normal (same tolerances), and the in-plane form is reported.
-* **C6** (`nose_rows_algebraic`): in the smoothing, on the C lines of the nose region (`h_c <= i <= n_i - h_c`), the first `max(1, (n_side - n_bl) / 4)`
+* C6 (`nose_rows_algebraic`): in the smoothing, on the C lines of the nose region (`h_c <= i <= n_i - h_c`), the first `max(1, (n_side - n_bl) / 4)`
   rows beyond the stack keep their algebraic positions (the existing `freeze` rule of the fallback chain, restricted to the nose lines). Target
   measure: the B' maximum skewness over nose/outer faces (7.084); also reported: the nose-stack non-orthogonality maximum (77.38).
-* **C4** (`front_edge_held`): in the smoothing, the front-edge row (the C/F interface, corner included) keeps its algebraic positions. Target
+* C4 (`front_edge_held`): in the smoothing, the front-edge row (the C/F interface, corner included) keeps its algebraic positions. Target
   measure as registered for M4 (A' maximum aspect, 395.1); also reported: B' aspect.
 
 Each is accepted or removed by the registered decision rule, applied in this order on top of the changes accepted before it.

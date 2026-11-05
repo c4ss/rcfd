@@ -98,50 +98,50 @@ All limits below are fixed now. "Bit" checks compare `f64` bit patterns and have
 
 ### F-210 (tests in `crates/rcfd-fv/tests/fractional_step.rs`)
 
-* **A1 Euler and non-periodic paths bit-identical.** Fingerprint (rotate-xor-multiply over `u`, `p`, `phi` bits) of the Euler
+* A1 Euler and non-periodic paths bit-identical. Fingerprint (rotate-xor-multiply over `u`, `p`, `phi` bits) of the Euler
   Taylor-Green run (n = 32, nu = 0.05, dt = 0.02, to t = 1) equals `8c2d50e6a8e9b9ee`; fingerprint of the BDF2 cavity run (16 x 16,
   nu = 0.01, lid 1, linear upwind, incremental Kim-Moin, dt = 0.05, to t = 1) equals `e8bd7eaeefd7048b`. Both values were taken from
   the code before the fix. Limit 0 bits. Also every existing test of `fractional_step.rs` that passed keeps passing and
   `crates/rcfd-api/tests/baseline_hashes.rs` passes unchanged.
-* **A2 F3 spatial ratio with the fix** (same set-up as `f3_known_miss_spatial_order`): e16/e32 >= 3.0 (the registered limit).
+* A2 F3 spatial ratio with the fix (same set-up as `f3_known_miss_spatial_order`): e16/e32 >= 3.0 (the registered limit).
   Passing is recorded in a NEW test; the old test stays ignored with a note.
-* **A3 F2 temporal order BDF2 with the fix** (same set-up as `f2_known_miss_temporal_order_bdf2`): order in [1.7, 2.3]. Expected
+* A3 F2 temporal order BDF2 with the fix (same set-up as `f2_known_miss_temporal_order_bdf2`): order in [1.7, 2.3]. Expected
   to be at risk (D1 (f)); if it misses it stays the ignored record with its limit intact and the measured value is reported.
-* **A4 improvement evidence (limit fixed here, not derived from a theory):** at the F2 set-up the errors against the dt/32
+* A4 improvement evidence (limit fixed here, not derived from a theory): at the F2 set-up the errors against the dt/32
   reference must be at most half of the pre-fix values: e(0.1) <= 4.6e-3 (pre-fix 9.256e-3) and e(0.05) <= 2.25e-3 (pre-fix 4.502e-3).
   This only shows that the defect was acting; it does not replace A3.
-* **A5 F8:** no change, no new claim.
+* A5 F8: no change, no new claim.
 
 ### F-212 (tests in `crates/rcfd-fv/tests/solidification.rs`)
 
-* **S1 N = 480 invariants.** The registered P2 and P8 set-ups (`stefan_case` with N = 60, 120, 240, 480): at every level P4 balance
+* S1 N = 480 invariants. The registered P2 and P8 set-ups (`stefan_case` with N = 60, 120, 240, 480): at every level P4 balance
   <= 1e-10, P5 range and monotonicity <= 1e-10, P6 all steps converged with fewer than 100 Newton iterations, and the position error at
   N = 480 <= 3 percent (the registered acceptance applied at the finest level too). The successive-order criterion >= 0.9 of the
   original P2/P8 text is reported; it is NOT asserted in the new tests and the old ignored tests keep it, because the N = 240
   error (6.3e-5) is an accidental near-cancellation, so the criterion is expected to fail at 240 -> 480 whatever the solver does.
-* **S2 no regression, bit-identical where the old loop converged.** `PhaseChange::safeguarded_steps == 0` after every run that
+* S2 no regression, bit-identical where the old loop converged. `PhaseChange::safeguarded_steps == 0` after every run that
   converged before (P1 all four levels, P2/P8 at 60, 120, 240, P3), and the tree tests `phase_change_case.rs` pass unchanged
   (tree equals library: difference 0.0).
-* **S3 the safeguarded branch is itself correct.** With the branch forced (a public flag `force_safeguard` of `PhaseChange`,
+* S3 the safeguarded branch is itself correct. With the branch forced (a public flag `force_safeguard` of `PhaseChange`,
   default false), P2 at N = 60, 120, 240: P4 <= 1e-10, P5 <= 1e-10, P6 converged below 100 iterations, and the interface position
   agrees with the default branch to relative 1e-8.
-* **S4 the cycle was reproduced.** The default branch at N = 480 enters the safeguarded branch (`safeguarded_steps > 0`) for P2 (this
+* S4 the cycle was reproduced. The default branch at N = 480 enters the safeguarded branch (`safeguarded_steps > 0`) for P2 (this
   documents that the cycle existed; it is not a pass criterion of the physics).
-* **S5 P1 order: honest decomposition, no fix claimed.** Reported, unasserted: the successive differences between the numerical
+* S5 P1 order: decomposition, no fix claimed. Reported, unasserted: the successive differences between the numerical
   positions |s_60 - s_120|, |s_120 - s_240|, |s_240 - s_480| and their orders. If these differences contract at order >= 0.9 the
   scheme converges and the registered metric (error against the analytic position) is limited by a grid-independent offset of the
   reference (mush width, initial state sampled from the analytic profile at t0); the registered P1 order test stays an ignored miss.
-* **S6 K2 diagnosis.** The exact solution of the 1-D discrete problem (second-order finite volume, wall at half a cell, same sink)
+* S6 K2 diagnosis. The exact solution of the 1-D discrete problem (second-order finite volume, wall at half a cell, same sink)
   agrees with the converged SIMPLEC solution to relative 1e-9 at ny = 20, 40, 80; the centre-normalised error of the discrete
   solution at ny = 20 is then the discretisation error. If both hold, K2 is a truncation-error miss and no code changes; the ignored
   record stays.
 
 ### F-215 (exploratory evidence in the addendum; no registered code change)
 
-* **G1 diagnosis falsifiable form:** the compensated column-sum defect of the assembled matrix predicts the side-0 drift at
+* G1 diagnosis falsifiable form: the compensated column-sum defect of the assembled matrix predicts the side-0 drift at
   dt = 0.01, 1e-3, 1e-4 within a factor 1.5 of the measured one (2.0e-12, 2.5e-13, 1.8e-14). If it does not, the "representation of
   the stored matrix" explanation is withdrawn.
-* **G2** The registered G5 limit 1e-12 is not changed; `g5_open_connection_transient_conserves_each_side_known_miss` stays ignored
+* G2 The registered G5 limit 1e-12 is not changed; `g5_open_connection_transient_conserves_each_side_known_miss` stays ignored
   and `g5_v2` stays as is. No library change unless a proven, baseline-neutral fix exists; the energy sweep is shared by all
   scalar transport and its bits would change under any refinement, so a refinement could only be opt-in.
 
@@ -164,14 +164,14 @@ N = 60, 120 and 240 and by 1.69e-3 for N = 480, and the final position errors (1
 enthalpy balance is exact (P4) any initial content error is a persistent offset of the position. This is a SET-UP defect of P1, P2
 and P8 (the ADR text says only "cell-centre values; disclosed"), not a property of the scheme.
 
-* **S7 corrected set-up (new tests; the old tests are kept unchanged).** Initial cell enthalpy = cell average of the sharp-front
+* S7 corrected set-up (new tests; the old tests are kept unchanged). Initial cell enthalpy = cell average of the sharp-front
   analytic enthalpy `H(x) = T_exact(x) + (L/c) [x < s(t0)]` (melting orientation; the freezing mirror image has `L/c - H`) taken with
   200 midpoint sub-samples per cell, inverted to the cell temperature through the piecewise-linear law (below the solidus
   `T = h`, in the mush linear, above the liquidus `T = h - L/c`). Then the unchanged registered limits of P1, P2, P8 apply to
   N = 60, 120, 240, 480: P4 <= 1e-10, P5 <= 1e-10, P6 below 100 iterations, position error at N = 240 <= 3 percent, successive
   orders >= 0.9. The outcome is not known in advance; whichever criterion fails is reported as measured and stays a miss (a new
   ignored `*_known_miss` record for the corrected set-up), and the P1/P2/P8 order claims are made only for criteria that pass.
-* **S5 replaced as a diagnosis, not as a criterion:** the offset of the initial liquid content is the reported explanation of the
+* S5 replaced as a diagnosis, not as a criterion: the offset of the initial liquid content is the reported explanation of the
   non-monotone P1 errors; S7 is its test (if S7 P1 orders still fail, the explanation is incomplete and is reported as such).
 
 ## Addendum: results and deviations (written after the runs; no registered limit was changed)

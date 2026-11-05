@@ -17,8 +17,8 @@ Defect: after a NaN or a blow-up `PimpleSolver::step` keeps solving (the pressur
 12000 per step in the wave 31A case), so an automated run looks hung. `runctl::drive` only stops after the step, and only for non-finite residuals; a finite blow-up
 (fields of order 1e30) is not caught at all.
 Design (fixed now):
-* `PimpleSettings.divergence_courant_limit: f64`, default `1e6` (`PimpleSettings::piso/pimple`). Tree key `solver.divergence_courant_limit` (float, >= 0), **unset
-  sentinel 0** meaning the built-in default 1e6. A positive value replaces it; a value that disables the Courant criterion in practice is `1e300`. A non-finite
+* `PimpleSettings.divergence_courant_limit: f64`, default `1e6` (`PimpleSettings::piso/pimple`). Tree key `solver.divergence_courant_limit` (float, >= 0), unset
+  sentinel 0 meaning the built-in default 1e6. A positive value replaces it; a value that disables the Courant criterion in practice is `1e300`. A non-finite
   state is never a valid result and is always fatal (not switchable).
 * `PimpleSolver.diverged: Option<Divergence>` (step, outer iteration, stage, quantity, cell index, value, limit). Checks are read-only and run (a) after each
   momentum-predictor component solve (finite velocity), (b) on `phiHbyA` before each pressure solve (finite), (c) after each pressure corrector (finite pressure and
@@ -60,7 +60,7 @@ and the `map` section is NOT added to the case schema (a map is a driver, not a 
 Numeric checks (registered):
 * M1 Analytic surrogate: pump/fan curve `dP(Q, N) = a N^2 - b N Q - c Q^2` with a = 2.0, b = 0.5, c = 3.0, shaft power `P(Q, N) = p0 N^3 + p1 N Q^2` with p0 = 0.1, p1 = 0.25,
   efficiency `eta = Q dP / P` (P > 0), axes Q in {0.1, 0.2, 0.3, 0.4, 0.5} (inner) and N in {1.0, 1.5, 2.0} (outer): 15 points; every table value equals the closed form
-  **to the bit** (the surrogate evaluator uses an independently written expression in the test), the order is the grid order, the status of all points is `converged`,
+  to the bit (the surrogate evaluator uses an independently written expression in the test), the order is the grid order, the status of all points is `converged`,
   each point except the first received the previous point's state (counted by the surrogate), the CSV round-trips every value to the bit (shortest round-trip print).
 * M2 Failure handling: a surrogate that fails at flow index 3 of speed 1.5 (and fails again if started warm from the point before it): `continue` gives 15 rows with exactly
   one `failed`, the next point `restart = cold`, a warm point that fails and then passes when cold under `retry_cold` is recorded `cold_retry` with status `converged`;
@@ -78,9 +78,9 @@ Modules `crates/rcfd-api/src/design/{sampling,optim,pareto,store,study}.rs`, pur
 * DOE samplers on the unit cube, scaled to bounds: `full_factorial(levels)` (levels per parameter, endpoints included, row-major), `latin_hypercube(n, d, seed)` (stratified permutation sampling
   with an own, documented SplitMix64-seeded xoshiro256** RNG, points jittered inside the stratum), `sobol(n, d)` (unscrambled Sobol sequence, Gray-code construction, dimensions 1 to 10,
   direction numbers of Joe and Kuo recalled from memory and verified only by the net properties below; more than 10 dimensions is a located error), `halton` is not provided.
-* Optimisers (gradient free, bound-aware, seeded, deterministic): **Nelder-Mead** (Nelder and Mead 1965, standard coefficients 1, 2, 0.5, 0.5, initial simplex of 5 % of the range per axis from the initial point,
-  every trial point clamped into the box, up to `restarts` restarts from the best point with a re-seeded simplex of half the previous size) and **differential evolution** (Storn and Price 1997, DE/rand/1/bin,
-  F = 0.5, CR = 0.9, population `max(10 d, 20)`, bounds by reflection back into the box, generation-synchronous so each generation is one parallel batch). **CMA-ES-lite is not delivered**; this is stated, not hidden.
+* Optimisers (gradient free, bound-aware, seeded, deterministic): Nelder-Mead (Nelder and Mead 1965, standard coefficients 1, 2, 0.5, 0.5, initial simplex of 5 % of the range per axis from the initial point,
+  every trial point clamped into the box, up to `restarts` restarts from the best point with a re-seeded simplex of half the previous size) and differential evolution (Storn and Price 1997, DE/rand/1/bin,
+  F = 0.5, CR = 0.9, population `max(10 d, 20)`, bounds by reflection back into the box, generation-synchronous so each generation is one parallel batch). **CMA-ES-lite is not delivered**.
   Constraints `g_i(x) <= 0` use Deb's feasibility rules (feasible beats infeasible; two infeasible compare by total violation; two feasible by objective), in both optimisers.
   A failed evaluation is the worst possible fitness (infeasible with infinite violation) and is recorded.
 * Multi-objective: each evaluation yields a vector of objective values per operating condition; `Robust` scalarisation per objective over the conditions: `mean`, `worst` (max of the minimised
@@ -156,7 +156,7 @@ The final gate runs on a `git archive` of the final commit: `cargo fmt --check`,
 
 ### Addendum 1 (guard implementation, measured)
 * G1 candidate selection: candidate A (12 x 12 cavity, central, PISO, dt 2.0) does NOT blow up within 500 steps; candidate B (PIMPLE, alpha_u 1.9, alpha_p 1.5, 4 outer iterations) does: the guard trips at
-  **step 130** with a maximum Courant number of 5.76e18 (limit 1e6), stage `end of step`, wall time of the whole test 0.7 s. By the registered rule B is the synthetic unstable run. Limits met: 130 <= 300 steps,
+  step 130 with a maximum Courant number of 5.76e18 (limit 1e6), stage `end of step`, wall time of the whole test 0.7 s. By the registered rule B is the synthetic unstable run. Limits met: 130 <= 300 steps,
   stopping step within 3000 pressure iterations, later `step()` calls return the stale record without work, `restore()` clears the guard (test `g1_unstable_run_stops_located_and_cheaply`).
 * G3 deviation: the registered tree-level check used candidate A, which is stable, and candidate B needs `alpha_u` > 1 which the schema (range 0.05 to 1) rejects, so no unstable run is reachable from the case tree.
   The tree plumbing (state `diverged`, exit 6, located reason, negative value rejected, unset = 0 sentinel, a stable run unaffected) is therefore tested with `solver.divergence_courant_limit = 1e-3` on a stable

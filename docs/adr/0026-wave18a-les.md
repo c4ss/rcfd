@@ -40,8 +40,8 @@ are derived below carry their derivation and need no reference.
 
 ## Scope decisions stated up front (before looking at any result)
 
-* F-045 delivers two eddy-viscosity subgrid models, **Smagorinsky and WALE**, as registered turbulence models usable in the
-  **transient** algorithms (piso, pimple) of the existing engine. They are evaluated explicitly each time step from the
+* F-045 delivers two eddy-viscosity subgrid models, Smagorinsky and WALE, as registered turbulence models usable in the
+  transient algorithms (piso, pimple) of the existing engine. They are evaluated explicitly each time step from the
   velocity at the start of the step (no relaxation, no pseudo time).
 * **DES-class hybrids are NOT attempted.** `sa.rs` solves a steady segregated pseudo-time sweep (no time-derivative term, no
   history); an SA-based DES with a modified length scale `min(d, C_DES Delta)` would be a steady-state model, not a
@@ -51,7 +51,7 @@ are derived below carry their derivation and need no reference.
   Smagorinsky, Vreman, sigma, wall-modelled LES, SAS, delayed DES variants, stress-blended hybrid, embedded LES zones,
   inflow turbulence generators (F-207 entirely), a filter-width option other than `V^(1/3)`, a subgrid model in the
   compressible or variable-density engines, subgrid heat/scalar flux (Pr_t, Sc_t).
-* F-206 delivers the algebraic **mixing-length** closure (linear `kappa d` with upper cap, optional Nikuradse profile, optional
+* F-206 delivers the algebraic mixing-length closure (linear `kappa d` with upper cap, optional Nikuradse profile, optional
   van Driest damping) as a registered model usable steady (simple, simplec) and transient. The acceptance statement
   "mixing-length pipe profile agrees with the Nikuradse data" is **not met**: there is no full-pipe generator
   (`cylinder_ogrid` is an annulus) and the Nikuradse measurements are not in the repository, so the registered physical check
@@ -125,7 +125,7 @@ Parameters `Cs` = 0.17, `Cw` = 0.325, `Delta` = 0.1 in S1 (so `(Cs Delta)^2` = 2
 
 Closed forms below were derived by hand and the digits computed once with an independent script.
 * S1a pure shear `g_12 = 2` (all else 0): `S_12 = S_21 = 1`, `|S| = sqrt(2 * 2) = 2`; Smagorinsky `= 2.89e-4 * 2 = 5.78e-4`.
-  `g2 = 0` exactly, so WALE `= 0` **exactly** (`== 0.0`).
+  `g2 = 0` exactly, so WALE `= 0` exactly (`== 0.0`).
 * S1b pure strain `g = diag(e, -e, 0)`, `e = 1.5`: `S:S = 2 e^2`, Smagorinsky `= (Cs Delta)^2 2 e = 8.670e-4`. `g2 = diag(e^2, e^2, 0)`,
   `Sd = diag(e^2/3, e^2/3, -2e^2/3)`, `Sd:Sd = (2/3) e^4`, WALE `= (Cw Delta)^2 e (2/3)^(3/2)/(2^(5/2) + (2/3)^(5/4)) =
   1.377838789072e-4`.

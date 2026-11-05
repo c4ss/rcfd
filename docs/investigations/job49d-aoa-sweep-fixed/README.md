@@ -55,20 +55,20 @@ steady takes its window mean, flagged.
 | 24 | 1.2748 | 0.5451 | | | 1.2039 | 0.3068 | **no** | 0.18 to 2.15 | 8000 (5) | +1.40 |
 
 Notes on the table:
-- **Ladson** is the 80-grit data, interpolated to each angle.
-- **ADR 0159** is the 50-chord sweep without either fix.
-- **D** is D6's drift metric on cd_eff.
-- **"no (window rule)"** at 13 and 16 degrees: both runs met the residual targets (1e-6), at iterations 777 and 2008.
+- Ladson is the 80-grit data, interpolated to each angle.
+- ADR 0159 is the 50-chord sweep without either fix.
+- D is D6's drift metric on cd_eff.
+- "no (window rule)" at 13 and 16 degrees: both runs met the residual targets (1e-6), at iterations 777 and 2008.
   The rule's window is the last half of the run, and it still holds the start-up tail. Their final iterates are
   1.3429 / 0.01938 and 1.5436 / 0.03291.
-- **"no"** from 17 degrees up: the steady iteration swings through a cycle of cl from about 0 to 2 and never settles.
+- "no" from 17 degrees up: the steady iteration swings through a cycle of cl from about 0 to 2 and never settles.
   The value shown is an iteration mean, not a flow value. No DDES was run in this job.
 
 ### Summary against Ladson
 
-- **Lift slope** over 0-8 degrees: 0.1081 per degree, which is **0.986 x 2 pi**. Ladson's is 0.985. ADR 0159 gave 0.920.
+- **Lift slope** over 0-8 degrees: 0.1081 per degree, which is 0.986 x 2 pi. Ladson's is 0.985. ADR 0159 gave 0.920.
 - **Stall.**
-  - SA: cl_max **1.542 at 16 degrees**. At 17 degrees and above, steady SA no longer converges; its iteration mean
+  - SA: cl_max 1.542 at 16 degrees. At 17 degrees and above, steady SA no longer converges; its iteration mean
     is 1.05, a 35 % drop, so the first angle below 0.9 cl_max is 17.
   - Ladson: cl_max 1.612 at 17.13 degrees, then 1.00 at 18.02.
   - ADR 0159: the peak was at 20 degrees (1.528), and the first angle below 0.9 cl_max was 24.
@@ -92,8 +92,8 @@ equal to C10's, bit for bit.
 ## The effect of each fix (four-way comparison, 500 chords)
 
 There are two runs per angle:
-- **N** keeps ADR 0159's far field, written out as `turbulence = "zero_gradient"`;
-- **SA** uses the `freestream` role.
+- N keeps ADR 0159's far field, written out as `turbulence = "zero_gradient"`;
+- SA uses the `freestream` role.
 
 Each run reports both the molecular force and the effective force. The table gives cl / cd.
 
@@ -123,7 +123,7 @@ What each fix does:
   - the flow separates from 17 degrees up, where the old set-up stayed attached to beyond 20 degrees.
 - **Either fix alone** is wrong at lift. The effective force alone makes cd worse at 10 and 15 degrees, because it adds
   friction on top of the far-field pressure drag. The freestream role alone gives cd 23 % below TMR at 10
-  degrees. **Both together** give +9.8 % at 10 degrees and +26 % at 15.
+  degrees. Both together give +9.8 % at 10 degrees and +26 % at 15.
 - **50 against 500 chords:** with the old set-up, cl changes by up to 0.006 and cd by 1-3 %. With both fixes, the
   50-chord F10 of ADR 0164 gave cd +26 %; 500 chords gives +9.8 %.
 

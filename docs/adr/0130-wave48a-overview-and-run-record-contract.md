@@ -8,7 +8,7 @@ corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/te
 [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 3, 4, 6 and 8. Roadmap: F-266 (application shell) and F-267 (plugin) cover
 wave 48; F-261 to F-265 are its foundations.
 
-This ADR has two parts. Part 1 is the wave-48 overview: sub-waves, order, parallel work, crates touched, the gate plan and the ordered
+Part 1 is the wave-48 overview: sub-waves, order, parallel work, crates touched, the gate plan and the ordered
 list of open decisions. Part 2 is sub-wave 48A, a headless prerequisite that the code reading showed is needed before any Studio
 panel can list a run that the runner made.
 

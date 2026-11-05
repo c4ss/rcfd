@@ -161,85 +161,85 @@ fixed in the tests (sizes not fixed here are recorded in the addendum).
 
 ### Wiring: particles (W)
 
-* **W1 transient equivalence.** A `piso` case with a flow (lid-driven cavity 20 x 20, `nu` 0.01, 40 steps of `dt` 0.01) and a
+* W1 transient equivalence. A `piso` case with a flow (lid-driven cavity 20 x 20, `nu` 0.01, 40 steps of `dt` 0.01) and a
   point injection. Run A: `runctl::drive` + `write_results` into a temp directory (the run path). Run B: a second `Simulation`
   from the same text, `particles::track_transient` with `particles.output_file` set. Limits: tracker fingerprint of A and B
   equal (0 bits); `particles.vtp` of A is byte-identical to the file of B.
-* **W2 steady equivalence.** Converged `simple` cavity (same mesh) with a surface or point injection; run path vs
+* W2 steady equivalence. Converged `simple` cavity (same mesh) with a surface or point injection; run path vs
   `track_frozen`: fingerprints equal (0 bits), `particles.vtp` byte-identical.
-* **W3 flow untouched.** The cavity of W1 with `particles.enabled = true` vs `false`: `ux, uy, p` and the face flux equal in all
+* W3 flow untouched. The cavity of W1 with `particles.enabled = true` vs `false`: `ux, uy, p` and the face flux equal in all
   bits after 40 steps (and after 60 SIMPLE iterations for W2's case). `baseline_hashes.rs` passes unchanged.
-* **W4 defaults inert.** With `particles.enabled = false` and `chemistry.model = off` the output directory of a run holds
+* W4 defaults inert. With `particles.enabled = false` and `chemistry.model = off` the output directory of a run holds
   exactly `monitors.csv, monitors.json, report.html, solution.vtu` (no particle or chemistry file) and the vtu array name list is
   unchanged by `chemistry.write_rates`.
-* **W5 located errors** (path asserted, message non-empty): `particles.enabled` with `dynamic_mesh.enabled`; an injection point
+* W5 located errors (path asserted, message non-empty): `particles.enabled` with `dynamic_mesh.enabled`; an injection point
   outside the mesh (`particles.injection.<n>.position`, now raised by `Simulation::new` and by `--check-only`); unknown
   surface patch (`particles.injection.<n>.patch`); unknown `particles.walls.<n>`; `particles.track_every = 0`
   (`particles.track_every`). `rcfd run --check-only` exits 3 for each.
-* **W6 outputs exact.** In `particle_report.json`: `active + deposited + escaped + stuck = injected` (exact) and `injected`
+* W6 outputs exact. In `particle_report.json`: `active + deposited + escaped + stuck = injected` (exact) and `injected`
   equals `floor(rate (t_inj_end - t_start))` of the registered injection rule; with `particles.tracks`, every parcel has at
   least one row, the first row time equals the parcel's injection step end and the last row position equals the final position
   in `particles.vtp` (bits of the printed shortest-round-trip numbers, 0 differences), row count equals the sum over parcels of
   recorded steps (exact).
-* **W7 real binary and service.** `rcfd run <case.toml> --out <dir>` (the built binary, as in the existing CLI tests) exits 0
+* W7 real binary and service. `rcfd run <case.toml> --out <dir>` (the built binary, as in the existing CLI tests) exits 0
   and its `particles.vtp` is byte-identical to the in-process run path of W1; the service `run.headless` with `out_dir` writes
   the same bytes; the interactive path (`run.start` to completion, then `particles.report`) gives the same `counts` and `time`
   as W1's report.
-* **W8 checkpoint honesty.** With particles enabled `Simulation::supports_restart()` is false and `drive` with a checkpoint path
+* W8 checkpoint honesty. With particles enabled `Simulation::supports_restart()` is false and `drive` with a checkpoint path
   emits the existing "cannot be restarted" warning event.
 
 ### Wiring: chemistry (C)
 
-* **C1 binary vs library vs cell integral.** The closed-box case of ADR 0027 K2b (4 x 4 `box_2d`, `piso`, `dt` 1e-5,
+* C1 binary vs library vs cell integral. The closed-box case of ADR 0027 K2b (4 x 4 `box_2d`, `piso`, `dt` 1e-5,
   `energy.enabled`, heat release, isomerisation or the K2b mechanism as in `tests/chemistry.rs`) run with the built `rcfd run`:
   species and `T` read back from `solution.vtu` equal the in-process `Simulation` fields to `1e-9 DeltaT_ad` (temperature) and
   `1e-9` (mass fractions) [the K2b cell-spread limit]; and equal the single-cell integration of the toolkit to `1e-5 DeltaT_ad`
   [the K2b equality limit].
-* **C2 steady through the binary.** The K4 plug-flow decay case (steady, `nx` as in `tests/chemistry.rs`) run with `rcfd run`:
+* C2 steady through the binary. The K4 plug-flow decay case (steady, `nx` as in `tests/chemistry.rs`) run with `rcfd run`:
   outlet species profile equals the in-process `Simulation` to `1e-9` relative to the inlet value and the discrete solution of
   K4 to its registered `5e-6`.
-* **C3 report.** `chemistry.json` exists and is valid JSON; `species` count equals the mechanism; the mass-fraction sum range
+* C3 report. `chemistry.json` exists and is valid JSON; `species` count equals the mechanism; the mass-fraction sum range
   satisfies `|sum - 1| <= 1e-12` in the closed-box case; element mass totals change by at most `1e-12` relative between the first
   and last step (K3 invariant, `3e-14` registered there) (the report is produced at the end, the initial totals come from the
   initial fields in the test).
-* **C4 rate arrays.** With `chemistry.write_rates = true` the arrays `wdot_<species>` equal `cell_rates` evaluated on the
+* C4 rate arrays. With `chemistry.write_rates = true` the arrays `wdot_<species>` equal `cell_rates` evaluated on the
   final fields (relative `1e-12`) and, with heat release, `heat_release_rate` equals `-sum h_k wdot_k/(rho cp)` of the same call
   (relative `1e-12`); with the key false no such array exists (W4).
-* **C5 service.** `run.headless` with `out_dir` for the C1 case writes `chemistry.json` identical to the CLI's.
+* C5 service. `run.headless` with `out_dir` for the C1 case writes `chemistry.json` identical to the CLI's.
 
 ### Fractional step (F)
 
-* **F1 Taylor-Green decay (library).** `n = 32`, central convection, `nu = 0.05`, `dt = 0.02`, `t = 2` (the PISO test set-up),
+* F1 Taylor-Green decay (library). `n = 32`, central convection, `nu = 0.05`, `dt = 0.02`, `t = 2` (the PISO test set-up),
   exact initial `u` and `p`, form incremental, `kim_moin`, `ImplicitEuler`: relative error of the kinetic energy against
   `e^{-4 nu t}` at most 0.02 (the roadmap acceptance, 2 percent); relative L2 error of the velocity field against the closed
   form at most 0.02.
-* **F2 temporal order.** `n = 32`, `nu = 0.1`, `t = 1`, central, exact initial data; reference `dt/32` of the same method
+* F2 temporal order. `n = 32`, `nu = 0.1`, `t = 1`, central, exact initial data; reference `dt/32` of the same method
   and form with `dt = 0.1, 0.05`: observed order in `[0.8, 1.3]` for `ImplicitEuler`, `[1.7, 2.3]` for `Bdf2`, both measured with
   the incremental form; the L2 difference to the reference is used.
-* **F3 spatial order.** `dt = 0.005`, `nu = 0.1`, `t = 0.5`, `Bdf2`: error against the closed form at `n = 16` over `n = 32` at
+* F3 spatial order. `dt = 0.005`, `nu = 0.1`, `t = 0.5`, `Bdf2`: error against the closed form at `n = 16` over `n = 32` at
   least 3.0 (the existing PISO criterion).
-* **F4 divergence free to solver tolerance.** Over every step of F1 and of the cavity of F6: `max continuity <= 1e-6` with the
+* F4 divergence free to solver tolerance. Over every step of F1 and of the cavity of F6: `max continuity <= 1e-6` with the
   default linear controls (relative tolerance 1e-7); with `pressure_solver.tol_rel = 1e-12`, `tol_abs = 1e-16` the maximum is at
   most `1e-9`.
-* **F5 agreement with PISO.** The F1 mesh and data, `nu = 0.05`, `dt = 0.01`, `t = 1`, central, `ImplicitEuler`, both forms:
+* F5 agreement with PISO. The F1 mesh and data, `nu = 0.05`, `dt = 0.01`, `t = 1`, central, `ImplicitEuler`, both forms:
   the relative L2 difference of the velocity fields between the fractional-step solver and the PISO solver (2 correctors) is at
   most `5e-3`.
-* **F6 lid-driven cavity steady state.** Re = 100, 40 x 40 `cavity_2d`, `linear_upwind`, `dt = 0.05`, run until
+* F6 lid-driven cavity steady state. Re = 100, 40 x 40 `cavity_2d`, `linear_upwind`, `dt = 0.05`, run until
   `max |u^{n+1} - u^n| / dt < 1e-7` or `t = 200`: (a) it reaches the stop rule; (b) centreline `u` and `v` against the Ghia et al.
   data of `cases/cavity/reference` (verified in `docs/reference-data.md`): maximum error at most 0.02 of the lid speed (the F-028
   band); (c) maximum centreline difference to the steady SIMPLEC solution of the same mesh and scheme at most 0.01.
-* **F7 step sensitivity.** F6 with `dt = 0.05` and `dt = 0.025`: maximum centreline difference at most 0.005.
-* **F8 Kim-Moin effect (Chorin form).** The F6 cavity with `fractional_form = chorin` at `dt = 0.05` and `0.025`: the
+* F7 step sensitivity. F6 with `dt = 0.05` and `dt = 0.025`: maximum centreline difference at most 0.005.
+* F8 Kim-Moin effect (Chorin form). The F6 cavity with `fractional_form = chorin` at `dt = 0.05` and `0.025`: the
   centreline difference between the two step sizes with `kim_moin` is at most 0.5 times that with `plain`.
-* **F9 Chorin form decays.** Chorin form, F1 set-up with `dt = 0.01`: kinetic-energy relative error at most 0.02.
-* **F10 momentum.** F1: the mean velocity stays below `1e-8` in magnitude.
-* **F11 tree equivalence.** F1 through the case tree (`box_2d` periodic, initial `velocity_expression`, `solver.time_advance =
+* F9 Chorin form decays. Chorin form, F1 set-up with `dt = 0.01`: kinetic-energy relative error at most 0.02.
+* F10 momentum. F1: the mean velocity stays below `1e-8` in magnitude.
+* F11 tree equivalence. F1 through the case tree (`box_2d` periodic, initial `velocity_expression`, `solver.time_advance =
   fractional_step`): `u` and `p` equal the library run built from the same data to `1e-12` relative (bits expected equal; the
   limit is 1e-12 to allow a different but equivalent initial-field evaluation); the tree run through `rcfd run` writes a
   `solution.vtu`.
-* **F12 located errors.** `solver.time_advance` is the path for: `pimple`, steady algorithms, `energy.enabled`, a turbulence
+* F12 located errors. `solver.time_advance` is the path for: `pimple`, steady algorithms, `energy.enabled`, a turbulence
   model, `rheology`, `physics.body_force`, `dynamic_mesh.enabled`; an unknown enum value is a schema error.
-* **F13 defaults unchanged.** `baseline_hashes.rs` passes unchanged (not re-recorded); a `piso` run with
+* F13 defaults unchanged. `baseline_hashes.rs` passes unchanged (not re-recorded); a `piso` run with
   `time_advance = "iterative"` explicitly set is bit-identical to one without the key.
 
 ## Not delivered / named gaps (registered before the work)

@@ -283,27 +283,27 @@ Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/
 
 ### Deviations from the registered text (disclosed, none loosens a limit)
 
-1. **Steady stop criterion.** The registered library stop "change below 1e-13 in at most 400 sweeps" is unattainable: every sweep restarts
+1. Steady stop criterion. The registered library stop "change below 1e-13 in at most 400 sweeps" is unattainable: every sweep restarts
    the linear solve with `tol_rel = 1e-13`, so the change stagnates at 1e-12 to 1e-11 (noise of order `tol_rel T`). The library harness
    stops at 1e-11 (sanity assertion 1e-10). The accuracy limits above are unchanged.
-2. **A3 set-up defect.** The first A3/A3b tests asserted the heat flow with the sign of an inflow. The tests `a3_radiation_with_convection`
+2. A3 set-up defect. The first A3/A3b tests asserted the heat flow with the sign of an inflow. The tests `a3_radiation_with_convection`
    and `a3b_pure_radiation` are kept as ignored records; the corrected `*_v2` tests pass.
-3. **D set-up defect (diagnosed, not tuned).** The ADR sentence "upwind convection (exact for a linear profile in x)" is wrong at the
+3. D set-up defect (diagnosed, not tuned). The ADR sentence "upwind convection (exact for a linear profile in x)" is wrong at the
    Dirichlet inlet face: there the boundary face value is carried, while interior faces carry the upstream CELL value, which is an O(dx)
    discrepancy independent of `n_f`. With upwind the errors were 8.4e-3, 8.36e-3, 8.33e-3 (orders 0.02, 0.005; D2 failed), D3 interface
    flux 2.95e-3 (> 1e-3); D1 passed only by coincidence. The corrected tests `*_central` use central convection (second order, exact
    for a linear profile) and meet all limits; the upwind tests are kept as ignored records. The case-level D4 uses `solver.convection =
    "central"`. Energy conservation was fine with either scheme (7e-12 with upwind).
-4. **Key name.** The registered `emissivity` key of the convection condition collides with the existing P1-radiation `boundaries.*.emissivity`
+4. Key name. The registered `emissivity` key of the convection condition collides with the existing P1-radiation `boundaries.*.emissivity`
    (default 1.0). It is `wall_emissivity` (default 0 = none) so that no existing value changes meaning.
-5. **Which patches carry no prescribed flux.** The ADR text says "wall patches"; `box_2d` labels every patch a wall, so the rule is by the
+5. Which patches carry no prescribed flux. The ADR text says "wall patches"; `box_2d` labels every patch a wall, so the rule is by the
    velocity condition instead: `symmetry`, any wall type, or `fixed` with zero velocity and no expression or user function.
-6. **Buoyancy conflict** is raised only when `energy.buoyancy` (default true) can act, i.e. `physics.thermal_expansion` and `physics.gravity` are
+6. Buoyancy conflict is raised only when `energy.buoyancy` (default true) can act, i.e. `physics.thermal_expansion` and `physics.gravity` are
    non-zero, not on the bare default.
-7. **Additional unregistered checks** (supplementary evidence, same limits as the library counterparts): `convection_wall_through_the_tree`
+7. Additional unregistered checks (supplementary evidence, same limits as the library counterparts): `convection_wall_through_the_tree`
    (A1 and A3b through the settings tree) and the ignored upwind records.
 
-8. **Silent-drop guards added after review** (test `f4b_combinations_that_would_drop_a_setting_are_rejected`): user `scalars`/`species`
+8. Silent-drop guards added after review (test `f4b_combinations_that_would_drop_a_setting_are_rejected`): user `scalars`/`species`
    with solids or a prescribed flow (they would never be advanced), and `temperature = "convection"` with a temperature-dependent
    conductivity law or with the variable-density / compressible solvers (the condition would silently use the constant
    `physics.conductivity` or become adiabatic) are located errors. `initial.patches` velocity values are not read by the prescribed

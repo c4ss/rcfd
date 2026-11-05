@@ -21,15 +21,15 @@ The design ledger `designs/variants.ledger.jsonl` (ADR 0121) holds the parameter
 
 ## What to click, in order
 
-1. **Project panel**: four cases under `cases/`. Select `cases/cavity-re100.toml`: the Case editor shows its settings;
+1. Project panel: four cases under `cases/`. Select `cases/cavity-re100.toml`: the Case editor shows its settings;
    Case > Validate checks it.
-2. **Runs panel**: select the run of `cases/cavity-re100.toml`. The **Viewport** shows `p`; choose `ux` or `uy` in the
+2. Runs panel: select the run of `cases/cavity-re100.toml`. The Viewport shows `p`; choose `ux` or `uy` in the
    "field" box and hover for values.
-3. **Scrub**: these runs are steady, so the slider runs over iterations (a snapshot every 5 or 10): watch the vortex form
-   while the solver converges. The **Plots** panel shows the residuals and the report `lid_drag` (or `q_hot` and `nu_hot`).
-4. **Compare**: select the run of `cases/cavity-re400.toml` (the vortex centre moves towards the middle and the lower
+3. Scrub: these runs are steady, so the slider runs over iterations (a snapshot every 5 or 10): watch the vortex form
+   while the solver converges. The Plots panel shows the residuals and the report `lid_drag` (or `q_hot` and `nu_hot`).
+4. Compare: select the run of `cases/cavity-re400.toml` (the vortex centre moves towards the middle and the lower
    corner vortices grow), then the two heated-cavity runs with the field `T` (at Ra 1e4 the isotherms bend into an S).
-5. **Run something yourself** (in a copy, step 2): Runs > Start run..., pick `cases/cavity-re400.toml`, Start. The run
+5. Run something yourself (in a copy, step 2): Runs > Start run..., pick `cases/cavity-re400.toml`, Start. The run
    streams into the Runs and Plots panels within a second or two. Or change `physics.nu` in the Case editor, Save, and run it.
 
 ## The runs in this folder

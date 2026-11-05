@@ -32,7 +32,7 @@ driver takes any evaluator through a generic trait, and every check uses analyti
   files, the four service methods and MCP tools, and the M1 test.
 * The ignored smokes `smoke_w46d` (U1-U8 set-ups with seeds 1-13, not the registered seeds) and `smoke_w46d_ledger` (the L3 and L4
   harnesses with 50 entries and 4 x 50 threads) ran before registration. Results below.
-* The smoke found one defective negative control: in U2 the wrong model scaled the input sd by 1.1 **and** shifted the mean by 0.1 sd;
+* The smoke found one defective negative control: in U2 the wrong model scaled the input sd by 1.1 and shifted the mean by 0.1 sd;
   at the lower tail the shift cancels the scaling (MC linear p = 0.05: exact 6.0959 inside [5.9728, 6.1075]). Before registration the
   U2 wrong model was changed to the sd scaling alone (U1 keeps the shift, where it is caught at 14 to 25 SE). The corrected U2 control
   was smoked once more with the smoke seeds: every p = 0.05 and 0.95 exact quantile fell outside.
@@ -92,7 +92,7 @@ driver takes any evaluator through a generic trait, and every check uses analyti
    * Probability of violating each requirement with the Clopper-Pearson interval. A failed sample (verdict not ok, panics included)
      counts as a violation of every requirement; metric statistics are over the ok samples only. Failures are never dropped silently:
      each is a ledger entry with its reason.
-   * Sensitivity: **standardised regression coefficients** (SRC_i = b_i s(x_i) / s(y) of a linear least-squares fit) with R^2, and
+   * Sensitivity: standardised regression coefficients (SRC_i = b_i s(x_i) / s(y) of a linear least-squares fit) with R^2, and
      the ranking by |SRC|. Limits: SRC measures linear effects only; it misses interactions and non-monotone effects (R^2 well below 1
      says the ranking is not trustworthy) and assumes independent inputs. It would mis-rank an Ishigami-type function, so it is
      verified on a linear-plus-interaction function. Morris and Sobol indices are not provided.
@@ -313,7 +313,7 @@ All registered checks passed; no known miss, no amendment.
 Run time of the 47 `design::` library tests: 37.5 s (debug). The U5 MC mean error is 3.0 SE: inside the 4-SE limit, reported because it
 is the largest z of the run.
 
-What these numbers are not: they verify the driver and the ledger on analytic functions. They say nothing about the spread of a real
+These numbers verify the driver and the ledger on analytic functions. They say nothing about the spread of a real
 fan's flow, power, noise or vibration: no fan perturbation model (46A) or fan evaluator (46B) is attached, and F1 stays partial.
 
 ## Amendment 1 (written after the addendum's runs, before any run of L3b)

@@ -94,11 +94,11 @@ convection `linear_upwind` with `barth_jespersen` in every run):
 
 | Run | Frame and algorithm | Walls | Mesh |
 |---|---|---|---|
-| **R1(h)** control | relative, `rotating_frame` (Omega, centrifugal), SIMPLEC, steady: the ADR 0086 case text with `[turbulence] model = "laminar"` and the boundary turbulence lines removed | ADR 0086 empty set-up (hub and shroud `moving_wall` at -Omega, projection tangential) | E3, E2, E1 |
-| **Y1(h)** arm | absolute, `dynamic_mesh` rigid, `rotation_angle_expression = "155.614 [1/s] * t"`, axis z, origin 0, PISO, Euler | hub and shroud at rest (P-B) | E3, E2, E1 |
-| **I1(h)** inertial control | absolute, no mesh motion, PISO, Euler, otherwise Y1 | hub and shroud `fixed` 0 | E3, E2, E1 |
-| **I1S(h)** algorithm control, report only | absolute, no mesh motion, no source, steady SIMPLEC, otherwise R1 (no code needed) | hub and shroud `fixed` 0 | E3, E2, E1 |
-| **Y1b(h)** bladed, report only | as Y1 | hub and blade follow the mesh; shroud at rest (P-B) | B3, B2 |
+| R1(h) control | relative, `rotating_frame` (Omega, centrifugal), SIMPLEC, steady: the ADR 0086 case text with `[turbulence] model = "laminar"` and the boundary turbulence lines removed | ADR 0086 empty set-up (hub and shroud `moving_wall` at -Omega, projection tangential) | E3, E2, E1 |
+| Y1(h) arm | absolute, `dynamic_mesh` rigid, `rotation_angle_expression = "155.614 [1/s] * t"`, axis z, origin 0, PISO, Euler | hub and shroud at rest (P-B) | E3, E2, E1 |
+| I1(h) inertial control | absolute, no mesh motion, PISO, Euler, otherwise Y1 | hub and shroud `fixed` 0 | E3, E2, E1 |
+| I1S(h) algorithm control, report only | absolute, no mesh motion, no source, steady SIMPLEC, otherwise R1 (no code needed) | hub and shroud `fixed` 0 | E3, E2, E1 |
+| Y1b(h) bladed, report only | as Y1 | hub and blade follow the mesh; shroud at rest (P-B) | B3, B2 |
 
 Inlet `fixed` (0, 0, 9.478) in the absolute runs, outlet fixed static pressure 0 with zero-gradient velocity, initial
 velocity (0, 0, 9.478). R1 keeps the ADR 0086 inlet and initial state, which are the same flow in the relative frame.

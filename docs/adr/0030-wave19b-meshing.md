@@ -63,27 +63,27 @@ deterministic and independent of hash iteration order (sorted keys everywhere).
 
 ### A3 Registered checks (tests in `crates/rcfd-mesh/tests/surface_diag.rs`)
 
-* **S1** generators: icosphere `L=2` has `V,E,F = 162,480,320`, `chi=2`; cube `s=2, n=3` has `56,162,108`, `chi=2`, area 24 and
+* S1 generators: icosphere `L=2` has `V,E,F = 162,480,320`, `chi=2`; cube `s=2, n=3` has `56,162,108`, `chi=2`, area 24 and
   volume 8 within 1e-12 relative; torus `R=2, r=0.5, 24 x 12` has `288,864,576`, `chi=0`; all three: 0 free, 0 non-manifold, 0
   misoriented edges, enclosed volume positive, one component.
-* **S2** detector counts, exact integers, on the icosphere `L=2`: (a) remove triangles 0, 100, 200 (chosen pairwise vertex-disjoint;
+* S2 detector counts, exact integers, on the icosphere `L=2`: (a) remove triangles 0, 100, 200 (chosen pairwise vertex-disjoint;
   asserted in the test) gives `free_edges=9`, 3 open loops of length 3; (b) reverse 5 pairwise vertex-disjoint triangles gives
   `misoriented_edges=15`; (c) append copies of 4 distinct triangles gives `duplicate_faces=4`, `nonmanifold_edges=12`; (d) append the
   degenerate triangle `[a,a,b]` and one zero-area triangle `[p,q,r]` with collinear points gives `degenerate_tris=2`; (e) append one
   fin triangle on an existing edge with a new apex gives `nonmanifold_edges=1`. Cube `s=2,n=3`: remove one triangle gives
   `free_edges=3`, one loop.
-* **S3** repair outcomes: after (a) on the icosphere and on the cube: `free_edges=0`, `chi=2`, `F` restored, volume relative change
+* S3 repair outcomes: after (a) on the icosphere and on the cube: `free_edges=0`, `chi=2`, `F` restored, volume relative change
   at most 1e-12. After removing the 6 triangles around one icosphere vertex (vertex id 0) a hexagonal loop of length 6 is reported and
   filled with 4 triangles: `F=318`, `chi=2`, closed manifold, volume change at most 0.5 percent (the roadmap acceptance bound; the
   expected value is far smaller). After (b): `misoriented_edges=0`, volume equals the original within 1e-12. After (c): the original
   triangle count, `nonmanifold_edges=0`. After (d): the original triangle count.
-* **S4** repair is idempotent: `repair(repair(x)) == repair(x)` bit-identically (points and triangles) for each seeded case; repair of
+* S4 repair is idempotent: `repair(repair(x)) == repair(x)` bit-identically (points and triangles) for each seeded case; repair of
   an already clean surface returns it unchanged with an all-zero report; running the same repair twice is bit-identical.
-* **S5** a surface with every triangle reversed (inside-out closed component) is repaired to positive volume equal to the original
+* S5 a surface with every triangle reversed (inside-out closed component) is repaired to positive volume equal to the original
   within 1e-12 relative.
-* **S6** small features: a long thin triangle with smallest angle 0.1 degree is counted in `sliver_tris` exactly once and not in
+* S6 small features: a long thin triangle with smallest angle 0.1 degree is counted in `sliver_tris` exactly once and not in
   `degenerate_tris`; an edge of length 1e-5 times the mean edge length is counted in `small_edges` exactly once.
-* **S7** open surface passed to the volume mesher returns `Err` whose message contains the exact free-edge count (see T8).
+* S7 open surface passed to the volume mesher returns `Err` whose message contains the exact free-edge count (see T8).
 
 ## Part B: F-131, size fields and surface remeshing
 
@@ -129,23 +129,23 @@ and flip. Output is renumbered by first use for determinism. No random numbers.
 
 ### B3 Registered checks (tests in `crates/rcfd-mesh/tests/surface_remesh.rs`)
 
-* **R1** curvature estimate: icosphere `L=3, r=1`: every vertex estimate within `[0.9, 1.1]`. Cylinder `r=0.5`, height 3, 48 around
+* R1 curvature estimate: icosphere `L=3, r=1`: every vertex estimate within `[0.9, 1.1]`. Cylinder `r=0.5`, height 3, 48 around
   and 12 along, vertices on the lateral surface away from the end rims (|z| < 1): estimate within `[1.8, 2.2]` (= `1/r` +-10 percent).
-* **R2** proximity: slab `4 x 4 x 0.2` with 8 x 8 quads on the large faces: for large-face vertices with |x|,|y| < 1.9 the thickness
+* R2 proximity: slab `4 x 4 x 0.2` with 8 x 8 quads on the large faces: for large-face vertices with |x|,|y| < 1.9 the thickness
   estimate equals 0.2 within 1e-9.
-* **R3** uniform remesh of the icosphere `L=4, r=1` to `h=0.25`, 10 iterations: closed manifold, `chi=2`, 0 misoriented edges,
+* R3 uniform remesh of the icosphere `L=4, r=1` to `h=0.25`, 10 iterations: closed manifold, `chi=2`, 0 misoriented edges,
   every vertex within 1e-9 of the input surface, Hausdorff (centroids and edge midpoints of the result to the input surface) at most
   `0.4 h^2/rho = 0.025`, volume ratio within `1.2 (h/rho)^2 = 0.075` of the input volume (and not greater than the input volume by more
   than 1e-3), fraction of edges with `length/h` in `[0.7, 1.4]` at least 0.90, fraction of valence-6 vertices at least 0.60,
   smallest triangle angle at least 10 degrees, and at least 80 percent of triangles with smallest angle 30 degrees or more.
-* **R4** feature capture: cube `s=2, n=2` remeshed to `h=0.5` with feature angle 40 degrees: all 8 corner points still vertices (exact
+* R4 feature capture: cube `s=2, n=2` remeshed to `h=0.5` with feature angle 40 degrees: all 8 corner points still vertices (exact
   coordinates), every vertex lies on a face plane, every vertex that is on a cube edge lies on that edge line, area 24 and volume 8
   within 1e-9 relative, `chi=2`, fraction of edges in `[0.7,1.4] h` at least 0.80.
-* **R5** curvature sizing of the torus (`R=2, r=0.5`, 48 x 24 input) with `theta=0.6, h_min=0.05, h_max=0.8`, 8 iterations: closed,
+* R5 curvature sizing of the torus (`R=2, r=0.5`, 48 x 24 input) with `theta=0.6, h_min=0.05, h_max=0.8`, 8 iterations: closed,
   `chi=0`, no misoriented edges, fraction of edges within `[0.7, 1.4]` of their target at least 0.75, every vertex within 1e-9 of the
   input surface, volume within 3 percent of the input volume.
-* **R6** determinism: the R3 result run twice is bit-identical (points and triangles).
-* **R7** tags: the cylinder in a box surface remeshed with curvature sizing keeps both tags, and the number of tag-1 triangles
+* R6 determinism: the R3 result run twice is bit-identical (points and triangles).
+* R7 tags: the cylinder in a box surface remeshed with curvature sizing keeps both tags, and the number of tag-1 triangles
   is positive; the result is watertight (0 free, 0 non-manifold, 0 misoriented), `chi=4` (two spheres topologically), and the
   enclosed volume (box minus cylinder, divergence theorem) equals the input volume within 3 percent.
 
@@ -164,7 +164,7 @@ more vertices). Cells are classified by flood fill from the tetrahedra on the in
 crossing a surface face. Quality: Delaunay refinement, circumcentre insertion for inside tetrahedra with circumradius over shortest
 edge above `max_radius_edge` (default 2.0) or circumradius above the size function; a circumcentre outside the domain or whose cavity
 contains an outside tetrahedron is not inserted and the encroached surface triangle's longest edge is split instead. Capped. No sliver
-removal (flips, smoothing) is implemented; this is a named gap and slivers are measured and reported, not hidden.
+removal (flips, smoothing) is implemented; this is a named gap and slivers are measured and reported.
 Conversion to `Mesh` via `Mesh::from_cell_faces`; boundary faces form patches by surface tag (`wall` for tag 0, `wall<tag>` otherwise).
 Error contract: an input that is not a closed, consistently oriented, manifold surface returns `Error::Mesh` with a message containing
 `<n> free edge(s)`, `<n> non-manifold edge(s)` or `<n> misoriented edge(s)` as applicable (counts from `diagnose`). Output is
@@ -183,29 +183,29 @@ fixed-seed linear congruential generator).
 
 ### C3 Registered checks (tests in `crates/rcfd-mesh/tests/tetmesh.rs`; solver test in `crates/rcfd-fv/tests/w19b_meshing_solve.rs`)
 
-* **T1** cube `s=2, n=2`: sum of cell volumes equals the divergence-theorem volume of the INPUT surface (8) within 1e-10 relative;
+* T1 cube `s=2, n=2`: sum of cell volumes equals the divergence-theorem volume of the INPUT surface (8) within 1e-10 relative;
   every cell volume positive; every cell has 4 faces; boundary faces are all triangles lying in a cube face plane; total boundary area
   24 within 1e-10; each boundary face centroid lies on an input triangle within 1e-9; number of boundary faces at least the number of
   input triangles; `Mesh::validate` Ok; `check_mesh(...).is_ok()`; every internal face has two distinct cells (owner < neighbour).
-* **T2** icosphere `L=2, r=1`: same volume and positivity checks (volume relative error at most 1e-10 against the divergence volume of
+* T2 icosphere `L=2, r=1`: same volume and positivity checks (volume relative error at most 1e-10 against the divergence volume of
   the input), boundary area equals input area within 1e-10, `V - E + F - C = 1`, boundary is a closed 2-manifold (each boundary edge in
   exactly 2 boundary faces) with `chi=2`, `check_mesh` ok.
-* **T3** torus (24 x 12): volume within 1e-10 of the input divergence volume, positive cells, `V - E + F - C = 0`.
-* **T4** cylinder in box: box `4 x 4 x 2` (side normals outward), cylinder `r=0.5` axis z, `|z| <= 0.5`, 16 around, 4 along, normals
+* T3 torus (24 x 12): volume within 1e-10 of the input divergence volume, positive cells, `V - E + F - C = 0`.
+* T4 cylinder in box: box `4 x 4 x 2` (side normals outward), cylinder `r=0.5` axis z, `|z| <= 0.5`, 16 around, 4 along, normals
   into the cylinder (outward from the domain): volume within 1e-10 of the input divergence volume, positive cells,
   `V - E + F - C = 2`, two boundary patches (box tag 0, cylinder tag 1), `check_mesh` ok.
-* **T5** quality (cube, sphere, torus; recorded per case): after refinement with `max_radius_edge=2.0`, at least 99 percent of
+* T5 quality (cube, sphere, torus; recorded per case): after refinement with `max_radius_edge=2.0`, at least 99 percent of
   cells have radius-edge ratio at most 2.0; minimum dihedral angle over all cells at least 3 degrees; minimum cell volume
   positive. Misses (slivers are expected without a sliver-removal stage) are recorded as measured.
-* **T6** size control: unit icosphere `L=2` with uniform size `h=0.3`: every cell circumradius at most `1.5 h`; cell count at least 0.3
+* T6 size control: unit icosphere `L=2` with uniform size `h=0.3`: every cell circumradius at most `1.5 h`; cell count at least 0.3
   and at most 3.0 times `V_sphere / (h^3/(6 sqrt 2))` (nominal regular-tetrahedron count). The volume equality of T2 holds.
-* **T7** determinism: two runs on the same input give equal `content_hash`, equal point and cell arrays bit for bit.
-* **T8** located errors: the icosphere `L=1` with 1 triangle removed returns `Err` containing `3 free edge`; with 2 vertex-disjoint
+* T7 determinism: two runs on the same input give equal `content_hash`, equal point and cell arrays bit for bit.
+* T8 located errors: the icosphere `L=1` with 1 triangle removed returns `Err` containing `3 free edge`; with 2 vertex-disjoint
   triangles removed `6 free edge`; a surface with one reversed triangle returns `Err` containing `3 misoriented edge`.
-* **T9** exact predicates: `orient3d` and `insphere` agree with an exact big-rational reference on 2000 pseudo-random near-degenerate
+* T9 exact predicates: `orient3d` and `insphere` agree with an exact big-rational reference on 2000 pseudo-random near-degenerate
   configurations (coplanar and cospherical integer points perturbed by one ulp, reference computed in `i128` on small integers);
   they return exactly 0 for exactly coplanar and exactly cospherical integer points.
-* **T10** solver smoke (`rcfd-fv`, new test file): Laplace problem `div grad u = 0` on the tetrahedral unit-sphere mesh (T2 surface
+* T10 solver smoke (`rcfd-fv`, new test file): Laplace problem `div grad u = 0` on the tetrahedral unit-sphere mesh (T2 surface
   refined to `h=0.25`, at least 1000 cells), Dirichlet `u = x^2 - y^2` (harmonic) on all boundary faces evaluated at the face
   centre, solved with the existing diffusion operator and linear solver; cell-centre values against `x^2 - y^2` at cell centres:
   volume-weighted relative L2 error (against the RMS of the exact values) at most 0.05. The same on the cube mesh with the
@@ -260,7 +260,7 @@ Measured values against the registered limits (release build, all runs determini
   triangles. Vertex 0 has valence 5 (five-triangle fan, three fill triangles; F = 318 coincidentally the same). The old test
   `s3_repair_outcomes` is kept `#[ignore]` as a record; the new test `s3c_repair_outcomes` uses vertex 12 (valence 6) with the
   registered limits unchanged (F = 318, chi = 2, volume within 0.5 percent) and passes.
-* **T9 location and reference.** The test is in `crates/rcfd-mesh/tests/predicates.rs`, not `tetmesh.rs`. The reference is exact
+* T9 location and reference. The test is in `crates/rcfd-mesh/tests/predicates.rs`, not `tetmesh.rs`. The reference is exact
   `i128` arithmetic on lattice points `k 2^-30` with small integer `k` (not "one-ulp perturbed" points); many cases are exactly
   degenerate. 4000 cases instead of 2000.
 * **T5 torus miss, diagnosed not tuned.** Input is the coarse anisotropic 24x12 torus (edges 0.26-0.65 across a tube of diameter
@@ -271,17 +271,17 @@ Measured values against the registered limits (release build, all runs determini
   angle has area ratio sin(0.6)/0.6 = 0.941, i.e. 5.9 percent loss in the tube cross-section, so the registered 3 percent was
   under-derived. The ignored test keeps the 3 percent. Post-hoc, non-registered test `r5b_volume_matches_the_angle_derived_bound`
   checks the change is at most 1 - sin(theta)/theta (passes at 4.18 percent).
-* **Non-registered extra test** `p1_pipeline_cylinder_in_box` (remesh then tetrahedralize then `to_mesh`): 1061 cells, radius-edge
+* Non-registered extra test `p1_pipeline_cylinder_in_box` (remesh then tetrahedralize then `to_mesh`): 1061 cells, radius-edge
   fraction 0.927, min dihedral 3.34 deg, volume and `check_mesh` ok. Sliver tetrahedra with small dihedral angles remain; there is
   no sliver exudation or optimisation.
-* **Algorithm additions beyond ADR text.** (i) `TetOptions::split_boundary` (default false): splitting surface edges during
+* Algorithm additions beyond ADR text. (i) `TetOptions::split_boundary` (default false): splitting surface edges during
   refinement ran away on small-angle surfaces (Steiner budget exhausted), so it is experimental and off; (ii) bistellar
   improvement (2-3 flips and edge removal for 3..7 incident tetrahedra, `sliver_q = 0.03`) and (iii) `split_flat_boundary`
   (flat tetrahedra with two surface faces: split the shared surface edge) were added after flat boundary slivers appeared on the
   torus (125 of 1061 tetrahedra, down to 3 after flips, 0 after the flat split). `TetReport` gained `flips` and `flat_split`.
-* **Remesher choices.** Curvature uses vertex normals as registered; closest-point queries are brute force (O(n) per query, fine
+* Remesher choices. Curvature uses vertex normals as registered; closest-point queries are brute force (O(n) per query, fine
   to a few thousand triangles, not for large surfaces); tag boundaries are treated as feature edges.
-* **Existing clippy findings** (newer toolchain) in two lines of my earlier committed files were fixed in the F-131 commit.
+* Existing clippy findings (newer toolchain) in two lines of my earlier committed files were fixed in the F-131 commit.
 
 ### Unverified references
 

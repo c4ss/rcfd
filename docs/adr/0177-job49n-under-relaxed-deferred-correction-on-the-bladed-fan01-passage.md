@@ -29,18 +29,18 @@ unless F-R fails.
 ## What I read (rule d; nothing run)
 
 - [ADR 0111](0111-wave44a-fan01-frozen-limiter-linearisation-and-relaxed-deferred-correction.md) part F.
-  - **Definition.** In each momentum component, the correction source of every cell is relaxed: `c = c_prev + beta
+  - Definition. In each momentum component, the correction source of every cell is relaxed: `c = c_prev + beta
     (c(u) - c_prev)`. This is the right-hand side of the `linear_upwind` convection beyond the upwind one, that is, the
     internal-face corrections and the periodic-face central correction; the matrices are identical. The first relaxed
     iteration takes `c(u)`. The fixed point is unchanged, and the Barth-Jespersen factors are recomputed every
     iteration.
-  - **Acceptance Z2 for B3** (never run): (a) `rho_med <= 0.01` and `rho_du <= 0.01`; (b) `res_u` and `res_p` both
+  - Acceptance Z2 for B3 (never run): (a) `rho_med <= 0.01` and `rho_du <= 0.01`; (b) `res_u` and `res_p` both
     below 1e-5 at some iteration of the arm; (c) the probe, one more iteration with beta = 1 from the final state, gives
     `res_u` and `res_p` <= 1e-5. The torque and Delta p_ts were to be reported without a limit.
-  - **Results.** Z1 met on E3 and E1 (both converged to true Barth-Jespersen fixed points with unchanged functionals).
+  - Results. Z1 met on E3 and E1 (both converged to true Barth-Jespersen fixed points with unchanged functionals).
     Z1 missed on E2, which fell 82-fold but left a 1e-3 to 1e-2 m/s drift at the shroud tip-layer cells. So F-R was
     removed under rule (b), and its code is not in the history: it was written and deleted before the ADR 0111 commits.
-  - **Linearisation.** J(beta) at the B3 cycle point predicted no stabilisation (rho 1.335-1.341), but that
+  - Linearisation. J(beta) at the B3 cycle point predicted no stabilisation (rho 1.335-1.341), but that
     linearisation did not predict the nonlinear iteration (M3 failed).
 - [ADR 0175](0175-job49l-where-the-fan01-stall-is-driven-in-the-nonlinear-iteration.md):
   - the S10 stabilisation is the convection deferred correction C (C-C), not the Laplacian correction;

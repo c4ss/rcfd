@@ -34,7 +34,7 @@ Mixture state of a cell: temperature `T`, mass fractions `Y_1..Y_n` of all mecha
   the chemical enthalpy released by the reaction heats the fluid at its constant heat capacity. It is NOT the constant-volume
   energy equation of the 0D toolkit (which uses `u_k = h_k - R T` and the mixture `cv`); the two coincide when the reaction does
   not change the mole number (`sum_k nu_k = 0`) and `cp` equals the mixture `cv` (isomerisation toy of K2), and differ
-  otherwise. This is stated rather than hidden: the check that compares with the 0D toolkit uses exactly that case.
+  otherwise. The check that compares with the 0D toolkit uses exactly that case.
 * Without heat release (isothermal chemistry) `dT/dt = 0` and `T` is the cell temperature.
 * `rho` and `cp` are never defaulted. `chemistry.density` and (with heat release) `chemistry.heat_capacity` must be given
   (sentinel -1 = unset, an error) and must equal `physics.rho` and `physics.cp` to a relative 1e-12 (a located error at the

@@ -327,22 +327,22 @@ Set-up:
    Measured: a std-spawned runner holds the caller's pipes whatever its standard handles are (I1, I2), and so does an
    intermediate stage (I3). Only turning inheritance off releases the caller (I5), and that also drops the standard handles
    given to the runner (I6). Options:
-   * (a) **Accept and document**, as done. On Windows, start the runner where nobody reads the output to the end: the
+   * (a) Accept and document, as done. On Windows, start the runner where nobody reads the output to the end: the
      Studio, an interactive terminal, or a background job of the calling tool.
-   * (b) **Allow one reviewed unsafe island**: `CreateProcessW` with `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` holding only the
+   * (b) Allow one reviewed unsafe island: `CreateProcessW` with `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` holding only the
      three standard handles. This keeps the log file and drops everything else.
      * It conflicts with `unsafe_code = "forbid"`: it needs a lint exception for one module or one small crate.
      * Clearing the inherit flag of the client's own standard handles (`SetHandleInformation`) would be smaller, but it
        leaves the other handles the caller leaked to the client. For example, a shell's own pipe that the shell passed on
        as an extra handle.
-   * (c) **Wait for std.** `CommandExt::inherit_handles(false)` (issue 146407) releases the caller. But the runner then gets
+   * (c) Wait for std. `CommandExt::inherit_handles(false)` (issue 146407) releases the caller. But the runner then gets
      no usable standard handles (I6), so it would have to open its own log file:
      * a `serve --log-file`, opened by the runner itself, plus a panic hook;
      * the early-exit report would then read that file.
 
      A handle list through `spawn_with_attributes` (issue 114854) would need std to put its own duplicates of the standard
      handles into the list. A caller cannot name those handles.
-   * (d) **A launcher that does not inherit.** For example ShellExecute through `rundll32 shell32.dll,ShellExec_RunDLL`;
+   * (d) A launcher that does not inherit. For example ShellExecute through `rundll32 shell32.dll,ShellExec_RunDLL`;
      ADR 0123 measured that ShellExecute passes no handles. Not verified here. It puts a launcher back into the start path
      (against ADR 0143 decision 1). The client loses the `Child`, so there is no exit code for decision 2 and no reaping.
      It may open a console window, and it can hang as PowerShell did.

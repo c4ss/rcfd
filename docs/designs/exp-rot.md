@@ -10,12 +10,12 @@
 
 EXP-ROT is the experiment that decides how M-FAN-A1 models the FAN-01 rotor. It has three parts:
 
-1. **Arm 1** rotates the ADR 0086 meshes rigidly through `crates/rcfd-mesh/src/motion.rs` and time-marches laminar PISO
+1. Arm 1 rotates the ADR 0086 meshes rigidly through `crates/rcfd-mesh/src/motion.rs` and time-marches laminar PISO
    in the absolute frame. It asks whether rigid rotation removes the spurious outlet angular momentum that the
    rotating-frame solve leaves in the empty passage and that grows with refinement.
-2. **Arm 2** runs the bladed passage with ADR 0085 arm C: the coupled pressure-velocity solver, rotationally periodic
+2. Arm 2 runs the bladed passage with ADR 0085 arm C: the coupled pressure-velocity solver, rotationally periodic
    seams, and the rotation term as implicit cross-component blocks. It asks whether the limiter limit cycle stays.
-3. **Check H** runs B2 time-accurately with SST in the rotating frame. It asks whether the pocket behind the hub trailing
+3. Check H runs B2 time-accurately with SST in the rotating frame. It asks whether the pocket behind the hub trailing
    edge is physically unsteady. This is question 1 of ADR 0181 (job 49R, branch `job49r-fan01-hub-mesh`), which
    recommends a report-only time-accurate check on B2.
 
@@ -143,14 +143,14 @@ effort bound). The sizes are estimates. No line count exists for any earlier ver
 ### 3. Arm 1: rigid rotation, laminar, absolute frame
 
 **Runs** (ADR 0183 D4). On each of E3, E2 and E1:
-- **R1**, the control: the ADR 0086 empty-passage case unchanged except `turbulence.model = "laminar"`. It is relative
+- R1, the control: the ADR 0086 empty-passage case unchanged except `turbulence.model = "laminar"`. It is relative
   frame, steady SIMPLEC, Barth-Jespersen.
-- **Y1**, the arm: the same mesh in the absolute frame, rotating at `Omega t` about z, PISO with Euler, walls at rest
+- Y1, the arm: the same mesh in the absolute frame, rotating at `Omega t` about z, PISO with Euler, walls at rest
   (P-B), inlet (0, 0, 9.478) m/s.
-- **I1**, the inertial control: Y1 with the mesh at rest.
-- **I1S**, the algorithm control (report only, no code): I1 on R1's steady SIMPLEC.
+- I1, the inertial control: Y1 with the mesh at rest.
+- I1S, the algorithm control (report only, no code): I1 on R1's steady SIMPLEC.
 
-The bladed **Y1b** runs on B3 and B2, with the hub and blade following the mesh and the shroud at rest. It is report
+The bladed Y1b runs on B3 and B2, with the hub and blade following the mesh and the shroud at rest. It is report
 only.
 
 **Why laminar is enough for the empty passage.** The exact solution is axial and axisymmetric, with no swirl, for any
@@ -231,7 +231,7 @@ Total: about 1 000 to 1 800 lines, size L. Basis: the item descriptions in ADRs 
 `coupled.rs` today, and the record that ADR 0085 wrote R-1 to R-5 in one wave alongside its diagnostics. No line count
 was recorded, so the range is an estimate. R-6 has no precedent.
 
-**Runs.** **Y2** (coupled, R-1 to R-6) and **Y2S** (F-RP on SIMPLEC, rotation explicit) run on B3 and B2, 3000
+**Runs.** Y2 (coupled, R-1 to R-6) and Y2S (F-RP on SIMPLEC, rotation explicit) run on B3 and B2, 3000
 iterations from iteration 1, with the ADR 0181 limits C1 to C3. Y2S exists for attribution, because Y2 changes three
 things at once: the formulation, the solver, and the implicitness of the rotation term.
 - Y2 GONE with Y2S not GONE points at the coupled solve.
@@ -273,41 +273,41 @@ time of the prerequisites. Arm 1 and check H change a core crate (`rcfd-fv`), so
 
 ### A. Arm 1 with `upwind`, no code
 
-*   **Pros:** no prerequisite; both paths accept it; it is the scheme of ADR 0082's mechanism.
-*   **Cons:** ADR 0082 and ADR 0085 already showed that the absolute formulation removes the first-order source. The open
+*   Pros: no prerequisite; both paths accept it; it is the scheme of ADR 0082's mechanism.
+*   Cons: ADR 0082 and ADR 0085 already showed that the absolute formulation removes the first-order source. The open
     item is the growth under the limited scheme, and `upwind` damps the hub pocket.
 *   **Rejected** in favour of P-A. Kept as option (d) of open question 2.
 
 ### B. `tvd_van_albada` in arm 1 and check H, no limiter code
 
-*   **Pros:** the case tree maps it to the TVD convection for every incompressible algorithm today (its behaviour on the
+*   Pros: the case tree maps it to the TVD convection for every incompressible algorithm today (its behaviour on the
     moving-mesh step was not checked). ADR 0180 found it cycling at the same B2 hub cells as Barth-Jespersen.
-*   **Cons:** the ADR 0086 growth was never measured with it, so R1 would have to establish a new pathology first.
+*   Cons: the ADR 0086 growth was never measured with it, so R1 would have to establish a new pathology first.
 *   **Not chosen.** Option (c) of open question 2.
 
 ### C. A hub that follows the mesh in the empty passage, no wall code
 
-*   **Pros:** the case tree can express it today.
-*   **Cons:** it is not the ADR 0086 set-up. The exact L is no longer zero, so the measure becomes the angular-momentum
+*   Pros: the case tree can express it today.
+*   Cons: it is not the ADR 0086 set-up. The exact L is no longer zero, so the measure becomes the angular-momentum
     excess, which depends on how the wall torque is integrated.
 *   **Not chosen.** Option (b) of open question 2.
 
 ### D. Local pseudo-time on B2 instead of check H
 
-*   **Pros:** no code (`pseudo_mode = "local"`).
-*   **Cons:** it can show only that a steady state exists, not whether the flow leaves it in time.
+*   Pros: no code (`pseudo_mode = "local"`).
+*   Cons: it can show only that a steady state exists, not whether the flow leaves it in time.
 *   **Not chosen.**
 
 ### E. The relative frame on the coupled solver with implicit Coriolis, as arm 2
 
-*   **Pros:** no F-RP. It separates the treatment of the rotation term from the change of formulation.
-*   **Cons:** it is not the arm the parent design names, and it has never run anywhere.
+*   Pros: no F-RP. It separates the treatment of the rotation term from the change of formulation.
+*   Cons: it is not the arm the parent design names, and it has never run anywhere.
 *   **Not chosen.** Open question 5.
 
 ### F. Wait for F-277 and run arm 1 with SST
 
-*   **Pros:** the same turbulence model as the stall.
-*   **Cons:** F-277 is unsized, and EXP-ROT is what decides whether A1 needs it.
+*   Pros: the same turbulence model as the stall.
+*   Cons: F-277 is unsized, and EXP-ROT is what decides whether A1 needs it.
 *   **Rejected.** The laminar arm answers whether the formulation itself is clean. A turbulent repeat is recommended
     inside F-277's verification if the laminar control does not reproduce the growth (open question 3).
 

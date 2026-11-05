@@ -98,7 +98,7 @@ BiCGStab. This is NOT distributed SIMPLE: momentum, pressure-velocity coupling, 
 case driver are not distributed. "A converged laminar flow field matches the serial one" is therefore claimed only for this scalar
 problem, and the report says so.
 
-D11 Honesty about performance: the in-process transport runs rank threads on one machine sharing memory bandwidth and the rayon pool.
+D11 Performance: the in-process transport runs rank threads on one machine sharing memory bandwidth and the rayon pool.
 Timing versus P is REPORTED (printed by an ignored/`--nocapture` test and recorded in the addendum), never asserted, and is not a
 cluster or network measurement.
 

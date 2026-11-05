@@ -7,7 +7,7 @@ house rules of ADRs 0110-0117 apply:
 * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
 Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46a`, target `<target dir>`). It serves
-parts A1, A2 and A5 of `docs/fan-project-breakdown.md` for an **axial** computer fan. Clean-room: first principles, our own ADRs
+parts A1, A2 and A5 of `docs/fan-project-breakdown.md` for an axial computer fan. Clean-room: first principles, our own ADRs
 and standard statistics. Parents: ADR 0065 (blade geometry), ADR 0067 (seeded generator), ADRs 0068/0083 (C-grid).
 
 No CFD is run. Every threshold of the checker is a **process input**, not physics (see "Checker thresholds"). The tests show that
@@ -56,8 +56,8 @@ or fan.
 5. **`Dist`** is one of `fixed`, `uniform` or `truncated_normal`. Truncated means renormalised, not clamped. Each has an analytic
    CDF, mean and variance. Sampling uses one uniform per draw: the truncated normal inverts its CDF by bisection on a series /
    continued-fraction `normal_cdf`.
-   * **`Tolerances`** holds one `Dist` per operator.
-   * **`ComputerFan::ensemble(tol, n, seed)`** draws `n` specimens in a fixed order:
+   * `Tolerances` holds one `Dist` per operator.
+   * `ComputerFan::ensemble(tol, n, seed)` draws `n` specimens in a fixed order:
      * per specimen: common stagger, tip-gap error, eccentricity, eccentricity direction (uniform on [0, 360) deg);
      * then per blade: stagger, chord, thickness, mass, roughness.
 6. **`ComputerFan::static_unbalance()`** is `U = sum_k m_k c_k` in the rotor plane [kg m].
@@ -90,7 +90,7 @@ or fan.
 | `axial_fit` | The blade leaves `[0, depth - strut_depth - min_axial_gap]`, or the hub ends past `depth`. |
 | `root_off_hub` | The root section leaves `[hub.z_start, hub.z_start + hub.length]`. |
 
-Mouldability from first principles assumes an **axial two-plate mould**: two halves pulled along the rotation axis, with no side
+Mouldability from first principles assumes an axial two-plate mould: two halves pulled along the rotation axis, with no side
 actions and no rotating cores.
 * A face can be released only by the half it faces. Every axial line must therefore meet the moulded part in one interval:
   * if a line crosses one section more than twice, the steel between the crossings is trapped (`undercut`);
@@ -119,8 +119,8 @@ All of them are fields of `Limits`, which the caller sets.
 
 ## Honest gap list: what the existing sector generators realise
 
-The sector generators are `fan_mesh` (h_slit, ADR 0065) and `fan_cgrid` (ADR 0068/0079/0083). Each meshes **one periodic blade
-passage**, with a **hub cylinder `r_hub`** and a **shroud cylinder `r_tip + clearance`** over the whole domain length.
+The sector generators are `fan_mesh` (h_slit, ADR 0065) and `fan_cgrid` (ADR 0068/0079/0083). Each meshes one periodic blade
+passage, with a hub cylinder `r_hub` and a shroud cylinder `r_tip + clearance` over the whole domain length.
 
 **Realised** (`meshed = true`):
 * `n_blades`, `r_hub`, `r_tip`, `tip_gap` (as `tip_clearance`), `z_le_root` and `family`;
@@ -128,22 +128,22 @@ passage**, with a **hub cylinder `r_hub`** and a **shroud cylinder `r_tip + clea
 * `deviation.stagger_common_deg` and `deviation.tip_gap_delta`, because they are the same on every blade.
 
 **Not realised** (`meshed = false`):
-* **Per-blade deviations** (stagger, chord, thickness): a single passage with cyclic seams can only carry identical blades. They
+* Per-blade deviations (stagger, chord, thickness): a single passage with cyclic seams can only carry identical blades. They
   need a full-annulus mesh (B3).
-* **Eccentricity**: the gap varies with azimuth, so the domain is not periodic.
-* **Mass, density and `mass_rel`**: they have no role in the flow mesh. They are used only by `static_unbalance`.
-* **Roughness**: the solver has a case-wide `turbulence.roughness_height` (all walls), not a per-blade or blade-only roughness.
+* Eccentricity: the gap varies with azimuth, so the domain is not periodic.
+* Mass, density and `mass_rel`: they have no role in the flow mesh. They are used only by `static_unbalance`.
+* Roughness: the solver has a case-wide `turbulence.roughness_height` (all walls), not a per-blade or blade-only roughness.
   The mesh carries none.
-* **Motor hub length and start**: the mesh hub is a cylinder over the whole domain, so there is no hub nose and no open annulus
+* Motor hub length and start: the mesh hub is a cylinder over the whole domain, so there is no hub nose and no open annulus
   ahead of or behind the hub.
-* **Frame**: no square outline, no inlet bell, no frame depth (the shroud cylinder runs through the whole domain), and no struts.
+* Frame: no square outline, no inlet bell, no frame depth (the shroud cylinder runs through the whole domain), and no struts.
   This is B4.
-* **Chordwise thickness form**: fixed by the family. Only the spanwise maximum thickness is a parameter.
-* **Trailing-edge thickness**: both families close the trailing edge to zero thickness. `min_thickness` therefore tests the
+* Chordwise thickness form: fixed by the family. Only the spanwise maximum thickness is a parameter.
+* Trailing-edge thickness: both families close the trailing edge to zero thickness. `min_thickness` therefore tests the
   maximum thickness only. A moulded edge thickness is neither tested nor realisable.
-* **Tip shape**: no winglets, end plates or rotating ring. The schema does not offer one.
-* **Root fillet**: not in the schema, and not realisable.
-* **No caller**: the case tree (`mesh.fan`, `fan_case.rs`) does not read `ComputerFan` and does not call the checker. The checker is
+* Tip shape: no winglets, end plates or rotating ring. The schema does not offer one.
+* Root fillet: not in the schema, and not realisable.
+* No caller: the case tree (`mesh.fan`, `fan_case.rs`) does not read `ComputerFan` and does not call the checker. The checker is
   a library function, run before meshing by whoever builds the variant. Wiring it into `mesh.fan` would add schema keys.
   Proposed as a roadmap item, not done here, so that defaults stay bit-identical.
 
@@ -349,21 +349,21 @@ The code (`fan_design.rs`, the `Rng` move, `centroid`) and two ignored smoke tes
 Every registered check passed. No known-miss test was created.
 
 **A1 schema**
-* **S1:** the default and the seed-46 specimen round-trip through JSON equal and bitwise equal, and re-serialising gives the same
+* S1: the default and the seed-46 specimen round-trip through JSON equal and bitwise equal, and re-serialising gives the same
   string. NS-S: the unknown key `tip_gapp` and the missing `chord` are both rejected.
-* **S2:** every scalar has a spec and every spec is used. All 32 `PARAMS` paths serialise with their units, and every default is
+* S2: every scalar has a spec and every spec is used. All 32 `PARAMS` paths serialise with their units, and every default is
   bitwise equal to the default fan's field.
-* **S3:** a zero deviation realises every blade bitwise equal to the nominal blade. For blade 3:
+* S3: a zero deviation realises every blade bitwise equal to the nominal blade. For blade 3:
   * chord: nominal times 1.03 (limit 1e-15 relative);
   * absolute thickness: nominal times 0.95 (limit 1e-14);
   * stagger: nominal + 0.3 deg (limit 1e-15 rad);
   * clearance: exact.
-* **S4:** h_slit gives 11 648 cells (max non-orthogonality 86.07 deg). c_grid `camber_seam_h` gives 12 841 cells (87.91 deg).
+* S4: h_slit gives 11 648 cells (max non-orthogonality 86.07 deg). c_grid `camber_seam_h` gives 12 841 cells (87.91 deg).
   c_grid `pursuit` rejects the default with "the wake line leaves the passage" at `n_down`, r = 0.0215 (reported, as at smoke).
 
 **A2 checker**
-* **C1:** the default fan gives no violation.
-* **C2:** every variant gave its code at its path, with the registered radius where one was registered, and no `out_of_bounds`.
+* C1: the default fan gives no violation.
+* C2: every variant gave its code at its path, with the registered radius where one was registered, and no `out_of_bounds`.
   NC1, the bounds-only checker, accepts all 15. Value against limit:
 
   | Variant | Value | Limit |
@@ -384,8 +384,8 @@ Every registered check passed. No known-miss test was created.
   | axial fit | 22.85 mm | 22.0 |
   | root off hub | root LE 1.96 mm | hub start 4.0 mm |
 
-* **C3:** with `axial_mould = false`, the overlap, draft and undercut variants lose their mould code.
-* **C4** and **C5:** pass.
+* C3: with `axial_mould = false`, the overlap, draft and undercut variants lose their mould code.
+* C4 and C5: pass.
 
 **A5 ensembles: E1** passes. Same seed gives the same JSON, seed 47 differs, zero tolerances are bitwise nominal, and `U` is
 bitwise nominal.
@@ -414,11 +414,11 @@ distribution.
 **Negative controls:** NS1 13.77x, NS2 4.27x and NS3 5.75x their limits (required 2x).
 
 **Imbalance**
-* **I1:** the nominal `|U|` is 2.44e-20 kg m, 7.3e-5 of the limit. NI1 is 1.0e12 times the limit.
-* **I2:** `|U|` is 4.781441e-7 kg m (0.478 g mm), equal to `0.01 m0 r_c` to 3.8e-4 of the limit. NI2 is 1.0e10 times the
+* I1: the nominal `|U|` is 2.44e-20 kg m, 7.3e-5 of the limit. NI1 is 1.0e12 times the limit.
+* I2: `|U|` is 4.781441e-7 kg m (0.478 g mm), equal to `0.01 m0 r_c` to 3.8e-4 of the limit. NI2 is 1.0e10 times the
   limit.
-* **I3:** the worst of 20 specimens is 6.8e-6 of the limit.
-* **I4:**
+* I3: the worst of 20 specimens is 6.8e-6 of the limit.
+* I4:
 
   | Blade | Mass | Mass error | Centroid error / `r_c` | Error ratios |
   |---|---|---|---|---|
@@ -437,14 +437,14 @@ distribution.
 
 ## Final gate
 
-* **Gate run.** On a fresh `git archive` of e548e88 (the branch rebased onto main 2d798b2), in `<scratch dir>`:
+* On a fresh `git archive` of e548e88 (the branch rebased onto main 2d798b2), in `<scratch dir>`:
   * `cargo fmt --check`: clean;
   * `cargo clippy --workspace --all-targets -D warnings`: clean;
   * `cargo test --workspace --release --no-fail-fast`: **2042 passed / 0 failed / 651 ignored**.
-* **Reconciliation with wave 45.** The wave-45 gate was 2028 / 0 / 649. This wave adds 13 registered tests and the
+* Reconciliation with wave 45: the wave-45 gate was 2028 / 0 / 649. This wave adds 13 registered tests and the
   `normal_cdf` unit test, which gives 2042, and the 2 ignored smokes, which give 651.
-* **D1 and D2.** In that run, `g6_fan_meshes_unchanged`, `baseline_hashes.rs` and `docs_site_builds_with_no_broken_links`
+* D1 and D2: in that run, `g6_fan_meshes_unchanged`, `baseline_hashes.rs` and `docs_site_builds_with_no_broken_links`
   passed. `git diff main -- crates/rcfd-api/tests/baseline_hashes.rs` is empty.
-* **After the gate.** Main moved to 48b30bc (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
+* After the gate, main moved to 48b30bc (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
   branch was rebased onto it: the commits are 3394a64 (registration), 3a2c648 (implementation) and 9dbb392 (addendum).
   The re-runs on the rebased branch: fmt clean, workspace clippy clean, and this ADR's tests 13 passed / 2 ignored, plus the `normal_cdf` and `rng` unit tests. There was no second full test gate.

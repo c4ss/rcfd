@@ -43,12 +43,12 @@ lower one. At the tip that offset is `pitch sin(gamma) cos(gamma)` = 0.056 m in 
 `n_chord`; at the hub (43.6 deg, the corner already balanced) it would be zero or negative. `d` is one integer for all layers (one index topology).
 Hence a straight inclined front edge over the whole span is not possible in this C-grid; what is possible:
 
-* **I-a (inclined corner segments, same topology)**: the corners stay one periodic node; the front edge is inclined where it meets the seams (its
+* I-a (inclined corner segments, same topology): the corners stay one periodic node; the front edge is inclined where it meets the seams (its
   segments next to each corner turned towards the normal of the seam, i.e. with the stagger, and blended back to the existing front edge away from the
   corners), with the front-edge spacing graded so that the corner cell is comparable to the adjacent seam cell. In the periodic plane, with a front
   edge straight through the corner node, the lower and upper C sides add up to 180 deg; they are equal (90 / 90) when the front edge is perpendicular
   to the seam, against 151 / 47 now.
-* **I-b (offset corner, a topology change)**: the upper corner one station downstream of the lower (`d = 1`); the front edge gets `2 n_nose + 1`
+* I-b (offset corner, a topology change): the upper corner one station downstream of the lower (`d = 1`); the front edge gets `2 n_nose + 1`
   cells; the F block gets one extra row whose lower-seam node collapses onto the lower corner (prism cells, the existing `clean_face` path); the lower
   corner and the new upper corner are irregular nodes of valence 6 (with one triangle) and 5 instead of one node of valence 6.
 
@@ -76,22 +76,22 @@ a new case value `c_grid_construction = "camber_seam_i"` (schema enum, `docs/cas
 
 ## Part C: acceptance on construction I (each run once, after Amendment 1 freezes I and the rule (d) smoke of every new set-up)
 
-* **C1** FAN-01-C (the ADR 0079 registered counts and y+ = 30 rule) with I: P1, P3-P8 of ADR 0079 with their limits (P5 wall stacks along the 3-D
+* C1 FAN-01-C (the ADR 0079 registered counts and y+ = 30 rule) with I: P1, P3-P8 of ADR 0079 with their limits (P5 wall stacks along the 3-D
   surface normal, as ADR 0083 C1, because I includes H3 `lean_stack`).
-* **C1-P2** the full quality target 70 deg / 2.0 / 300: reported, registered **predicted MISS** (the wake-line-5 faces, 80.23 deg / 3.978, lie
+* C1-P2 the full quality target 70 deg / 2.0 / 300: reported, registered **predicted MISS** (the wake-line-5 faces, 80.23 deg / 3.978, lie
   outside the corner region and are not changed by a front edge).
-* **C1-Q** (the registered intermediate target, justified by the numbers above: the corner is where the ADR 0083 maximum is and the only place a
+* C1-Q (the registered intermediate target, justified by the numbers above: the corner is where the ADR 0083 maximum is and the only place a
   front-edge change acts): (i) over the faces of the corner-region cells the maximum non-orthogonality is at most 70 deg and the maximum skewness at most
   2.0; (ii) the FAN-01-C global maxima do not exceed H's by more than 1 %: non-orthogonality <= 84.09 deg, skewness <= 4.018, aspect <= 229.5.
   **Corner region**: C cells `(i, j)` of rows `j >= n_side - 3` with `|i - h_c| <= 2` or `|i - u_c| <= 2` (`u_c` the upper corner line: `n_i - h_c` for
   I-a, `n_i - h_c + 1` for I-b), and F cells of the last two rows within two columns of either seam, in every layer.
-* **C1-B** blade B, as the ADR 0083 rule (ii) and (iii): S, A', B' build with I; no maximum (non-orthogonality, skewness, aspect) of A' or B' exceeds
+* C1-B blade B, as the ADR 0083 rule (ii) and (iii): S, A', B' build with I; no maximum (non-orthogonality, skewness, aspect) of A' or B' exceeds
   H's (ADR 0083 C5b: A' 66.18 / 0.888 / 394.4, B' 80.93 / 8.894 / 8805.0) by more than 1 %; closure (1e-13) and topology on S, A' and FAN-01-C;
   periodicity (1e-12) on S, A', FAN-01-C; stacks A' and FAN-01-C 1e-12, B' 4.9e-11 (wall stacks along the 3-D normal).
-* **C2** P9 through the case with `camber_seam_i`: `FvGeometry::new` accepts, `check_mesh` ok, no error-level rule finding.
-* **C3** P10 through the case with `camber_seam_i` (the ADR 0079 set-up: laminar, rotating frame, SIMPLEC, `upwind`, 300 iterations): no failure,
+* C2 P9 through the case with `camber_seam_i`: `FvGeometry::new` accepts, `check_mesh` ok, no error-level rule finding.
+* C3 P10 through the case with `camber_seam_i` (the ADR 0079 set-up: laminar, rotating frame, SIMPLEC, `upwind`, 300 iterations): no failure,
   continuity / res_u / res_p finite, maximum continuity over iterations 200-300 not above its value at iteration 10.
-* **C4** registered scan **R-I** (combinations not in R-E, R-G, R-H or the development scans): n_chord {17, 21, 26} x n_nose {4, 6} x n_side
+* C4 registered scan R-I (combinations not in R-E, R-G, R-H or the development scans): n_chord {17, 21, 26} x n_nose {4, 6} x n_side
   {11, 16, 21}, and front_gap {0.22, 0.32, 0.55}; blade B on the S counts and FAN-01 on the FAN-01-C counts otherwise (21 per fan, all inside the G
   range). **Gate**: per fan, the number of combinations that build and validate with all volumes positive is with I at least the number with H on the
   same list in the same run. Reported, no gate: the fraction of the 21 that build (against the 100 % ideal), the fraction that meets 70 / 2.0 / 300,

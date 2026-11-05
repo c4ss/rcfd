@@ -96,41 +96,41 @@ Reference meshes: `M1 = box_mesh([20,10,5],[2,1,0.5],Uniform)` (1000 cells),
 `Sectors{Radial, Circumferential}` about the z axis through the bounding-box centre with reference `+x`, `GraphPartitioner`
 (tolerance 0.03, 20 passes).
 
-* **P1 cover**: for every strategy in `S`, mesh and `n`: length `N`, all values `< n`, every part non-empty,
+* P1 cover: for every strategy in `S`, mesh and `n`: length `N`, all values `< n`, every part non-empty,
   `Decomposition::from_assignment` succeeds, and its `edge_cut` equals an independently counted number of unordered
   neighbouring cell pairs with different parts (exact, difference 0).
-* **P2 balance**: unit weights, imbalance `<= 0.05` for every strategy, mesh and `n` (all 3 x 15 x 8 cases).
-* **P3 node weighting**: `w_c = 4` for cells whose centre x lies beyond the mid-plane of the bounding box, else 1, on M1 and M2:
+* P2 balance: unit weights, imbalance `<= 0.05` for every strategy, mesh and `n` (all 3 x 15 x 8 cases).
+* P3 node weighting: `w_c = 4` for cells whose centre x lies beyond the mid-plane of the bounding box, else 1, on M1 and M2:
   weighted `Bisection{Longest, Cycle, Inertial}`, `Sectors{Circumferential}` and `GraphPartitioner` give weighted imbalance
   `<= 0.05` for `n = 2..=16`; positive control: the unweighted `Rcb` on the same weights has weighted imbalance `> 0.05` for
   at least one `n` on M1.
-* **P4 edge cut (the roadmap criterion)**: `cut(GraphPartitioner) <= cut(Rcb)` for every mesh and `n = 2..=16` (exact
+* P4 edge cut (the roadmap criterion): `cut(GraphPartitioner) <= cut(Rcb)` for every mesh and `n = 2..=16` (exact
   integers). Also `GraphPartitioner` on M1 with `n = 2`: cut `<= 50` (slab). The cuts of the other coordinate variants and of
   the sectors are printed, not asserted.
-* **P5 smoothing**: (a) M1, two slabs (x < 1 and x >= 1), then 5 cells of each part, chosen deep inside the part (at least two
+* P5 smoothing: (a) M1, two slabs (x < 1 and x >= 1), then 5 cells of each part, chosen deep inside the part (at least two
   cells from the interface and from each other, positions fixed in the test), assigned to the other part;
   `smooth_partition` (tolerance 0.05) restores the slab assignment exactly, `moved == 10`, cut 50. (b) for every strategy in
   `S`, every mesh, `n = 2..=16`: after smoothing the cut is `<=` before, the cover is intact and the weighted imbalance is
   `<= max(before, 0.05) + 1e-12`.
-* **P6 sectors**: for `Radial` and `Circumferential` on M1 and M3, `n = 2..=16`: the key bands are monotone (max key of part
+* P6 sectors: for `Radial` and `Circumferential` on M1 and M3, `n = 2..=16`: the key bands are monotone (max key of part
   `p` `<=` min key of part `p+1`, exact) and the part sizes differ by at most 1 (unit weights). The quadrant closed form of A2
   holds exactly (the 8x8x1 mesh is `box_mesh([8,8,1],[8,8,1])` shifted by `gen::warp`).
-* **P7 inertial**: box `n=[32,4,2]`, lengths `[32,4,2]`, rotated 30 degrees about z via `gen::warp`: `Bisection::Inertial`
+* P7 inertial: box `n=[32,4,2]`, lengths `[32,4,2]`, rotated 30 degrees about z via `gen::warp`: `Bisection::Inertial`
   with `n = 2` cut is exactly 8 and the parts are the two halves of the slices (64 cells each); positive control: `Rcb` cut
   `> 8`.
-* **R1 order validity** (`crates/rcfd-linalg/tests/reorder.rs`): `rcm_order` returns a permutation of `0..n` for a path, a
+* R1 order validity (`crates/rcfd-linalg/tests/reorder.rs`): `rcm_order` returns a permutation of `0..n` for a path, a
   disconnected graph (two paths and an isolated node) and a grid; repeated calls give identical output.
-* **R2 path**: a path graph of 200 nodes with labels shuffled by a fixed linear congruential sequence has RCM bandwidth 1; the
+* R2 path: a path graph of 200 nodes with labels shuffled by a fixed linear congruential sequence has RCM bandwidth 1; the
   shuffled bandwidth is at least 100 (positive control).
-* **R3 stretched meshes** (`crates/rcfd-fv/tests/reorder.rs`, adjacency from the mesh internal faces): `box_mesh([40,8,8])`
+* R3 stretched meshes (`crates/rcfd-fv/tests/reorder.rs`, adjacency from the mesh internal faces): `box_mesh([40,8,8])`
   (sorted dims 40, 8, 8): RCM bandwidth `<= 2 * 8 * 8 - 1 = 127` and strictly less than the natural bandwidth of the mesh
   numbering (reported; expected `nx * ny = 320`); `box_mesh([40,6,1])`: bound `2 * 6 * 1 - 1 = 11` and strictly less than
   natural (expected 40). The same two meshes with the cell labels shuffled by a fixed sequence: RCM bandwidth satisfies the same
   bound and is `<=` shuffled bandwidth / 4.
-* **R4 permutation identity**: CSR matrix from the LDU Laplacian of `box_mesh([10,6,3])`, a fixed non-constant `x`:
+* R4 permutation identity: CSR matrix from the LDU Laplacian of `box_mesh([10,6,3])`, a fixed non-constant `x`:
   `B (P x)` equals `P (A x)` to `1e-12` relative (infinity norm); `B.bandwidth()` equals the face-list bandwidth under the order;
   the bandwidth of `A` equals `max(upper - lower)` of its addressing.
-* **H1** `baseline_hashes` passes unmodified.
+* H1 `baseline_hashes` passes unmodified.
 
 ## Part B: F-108, inflation on unstructured wall patches
 
@@ -171,30 +171,30 @@ per-point distances along the point normals (the `Normal` case of `extrude_patch
 
 ### B3 Registered checks (F-108), tests in `crates/rcfd-mesh/tests/inflate.rs`
 
-* **I1 block patch**: `box_mesh([4,3,2],[4,3,2],Uniform)` patch `zmax` (area 12), `FirstGrowth{0.01, 1.2, 8}`: cells
+* I1 block patch: `box_mesh([4,3,2],[4,3,2],Uniform)` patch `zmax` (area 12), `FirstGrowth{0.01, 1.2, 8}`: cells
   `24 + 96`, total volume `24 + 12 T` (relative `1e-12`), the 8 layer planes at heights `2 + cum_k` (maximum error
   `<= 1e-12`), cap area 12 and `zmax_side` area `2 (4 + 3) T` (relative `1e-12`), report first and last heights `0.01` and
   `0.01 * 1.2^7` (relative `1e-12`), growth min and max `1.2` (absolute `1e-12`), `quality.is_ok()`,
   `quality.max_aspect_ratio` equals 100 (relative `1e-9`), `quality.max_non_orthogonality <= 1e-4` degrees (exact 0; the
   existing measure carries `acos` noise of order 1e-6 degrees, disclosed in ADR 0018) and `max_skewness <= 1e-9`.
-* **I2 unstructured (triangle) patch**: prism mesh from the 6x6 triangulated unit square, thickness 1 (built with
+* I2 unstructured (triangle) patch: prism mesh from the 6x6 triangulated unit square, thickness 1 (built with
   `Mesh::from_cell_faces`), patch `zmax` of 72 triangles. `FirstGrowth{0.02, 1.3, 5}`: cells `72 + 360`, volume `1 + T`
   (relative `1e-12`), cap area 1, `zmax_side` area `4 T` (relative `1e-12`), every new cell has 5 faces and 6 distinct points,
   `validate()` ok and `check_mesh` ok.
-* **I3 curved patch**: `cylinder_ogrid(24,3,1,2,Uniform,0.5)` patch `cylinder`, `FirstGrowth{0.05, 1.25, 4}`: added volume
+* I3 curved patch: `cylinder_ogrid(24,3,1,2,Uniform,0.5)` patch `cylinder`, `FirstGrowth{0.05, 1.25, 4}`: added volume
   equals the closed form of B2 (relative `1e-10`); every point of layer `k` has radius `1 - cum_k` (absolute `1e-12`);
   `check_mesh` ok.
-* **I4 sizing types** on the box patch of I1 and on the triangle patch of I2: `Uniform{0.3, 6}`: all layers `0.05` (absolute
+* I4 sizing types on the box patch of I1 and on the triangle patch of I2: `Uniform{0.3, 6}`: all layers `0.05` (absolute
   `1e-12`); `AspectRatio{20, 1.15, 5}`: first height `s/20` with `s = 1` (box) and `sqrt(1/72)` (triangles) (absolute
   `1e-12`), growth `1.15` (absolute `1e-12`); `LastRatio{0.01, 0.5, 6}` on the box patch: first `0.01`, last `0.5` (absolute
   `1e-12`), growth `50^0.2` (absolute `1e-12`).
-* **I5 invalid input**: zero layers, `first <= 0`, `growth <= 0`, unknown patch, periodic mesh, `LastRatio` with
+* I5 invalid input: zero layers, `first <= 0`, `growth <= 0`, unknown patch, periodic mesh, `LastRatio` with
   `layers = 1` all return `Err` (positive control: the happy path is `Ok`).
-* **I6 y+ target**: `first = first_cell_height_from_y_plus(0.8, 0.05, 1e-5) = 3.2e-4`; inflating the triangle patch with it,
+* I6 y+ target: `first = first_cell_height_from_y_plus(0.8, 0.05, 1e-5) = 3.2e-4`; inflating the triangle patch with it,
   the report first height is `3.2e-4` (relative `1e-12`) and `y_plus_of_first_cell(report.first_height_min, 0.05, 1e-5) = 0.8`
   (relative `1e-12`).
-* **I7 report**: JSON round trip equal; for the I1 mesh `thickness_min == thickness_max == T` (absolute `1e-12`).
-* **H1** the existing `edit.rs`, `layers.rs` tests and `baseline_hashes` pass unchanged.
+* I7 report: JSON round trip equal; for the I1 mesh `thickness_min == thickness_max == T` (absolute `1e-12`).
+* H1 the existing `edit.rs`, `layers.rs` tests and `baseline_hashes` pass unchanged.
 
 The F-108 roadmap acceptance mixes a solved check (met in wave 7 for block meshes) with "works on unstructured wall patches"
 and "layer quality metrics reported". After this wave the status is decided against the full text and title, not these tests
@@ -248,30 +248,30 @@ New module `rcfd-post::derived` (post already depends on fv and mesh). Fields ar
 
 ### C3 Registered checks (F-072), tests in `crates/rcfd-post/tests/derived.rs`
 
-* **D1 linear field**: graded `box_mesh([10,8,6],[1,1,1],[Expansion(3),Symmetric(2),Uniform])`, `u = A x + b`: vorticity
+* D1 linear field: graded `box_mesh([10,8,6],[1,1,1],[Expansion(3),Symmetric(2),Uniform])`, `u = A x + b`: vorticity
   `(1.0, 1.2, 2.1)` and `Q = 1.6` in every cell (absolute `1e-10`), including boundary cells.
-* **D2 Taylor-Green**: `box_mesh([N,N,1],[2 pi,2 pi,1])`, N = 16 and 32, point values at cell centres, exact values on
+* D2 Taylor-Green: `box_mesh([N,N,1],[2 pi,2 pi,1])`, N = 16 and 32, point values at cell centres, exact values on
   boundary faces: interior `|omega_z - 2 sin x sin y| <= h^2/3` and `|Q - Q_exact| <= h^2` for both N, and the ratio of the
   maximum interior vorticity errors N=16 to N=32 is `>= 3.5`.
-* **D3 Couette**: wall shear on the lower wall `(0.012, 0, 0)`, upper `(-0.012, 0, 0)` (relative `1e-12`), `y+ = 0.625` on
+* D3 Couette: wall shear on the lower wall `(0.012, 0, 0)`, upper `(-0.012, 0, 0)` (relative `1e-12`), `y+ = 0.625` on
   every face of both walls (relative `1e-12`).
-* **D4 Poiseuille**: `tau_est = rho G (H - dn)/2` (relative `1e-12`) and `|tau_est - rho G H/2| / (rho G H/2) <=
+* D4 Poiseuille: `tau_est = rho G (H - dn)/2` (relative `1e-12`) and `|tau_est - rho G H/2| / (rho G H/2) <=
   1/(2 N) (1 + 1e-9)` with N = 16.
-* **D5 Mach and total pressure**: `M` and `p0` equal the formulas (relative `1e-12`); the incompressible total pressure
+* D5 Mach and total pressure: `M` and `p0` equal the formulas (relative `1e-12`); the incompressible total pressure
   equals its definition; the low-Mach difference limit above at `M = 0.05`.
-* **S1 line**: 41 points from `(0.05,0.1,0.07)` to `(0.95,0.8,0.55)` on the graded mesh, gradient reconstruction with
+* S1 line: 41 points from `(0.05,0.1,0.07)` to `(0.95,0.8,0.55)` on the graded mesh, gradient reconstruction with
   least-squares gradients: `|phi - phi_exact| <= 1e-10`, all located, `s_i = i/(n-1) |p1 - p0|` (absolute `1e-12`); a point
   outside the unit cube is reported not inside with an empty CSV field; CSV header `s,x,y,z,phi,inside`, 41 data rows, values
   parsed back are bit-equal to the in-memory ones.
-* **S2 plane**: the midpoint sum equals `0.75` (absolute `1e-12`), all 400 samples inside.
-* **H1** `baseline_hashes` passes unmodified (post is not on the solver path).
+* S2 plane: the midpoint sum equals `0.75` (absolute `1e-12`), all 400 samples inside.
+* H1 `baseline_hashes` passes unmodified (post is not on the solver path).
 
 ## Not attempted
 
-* **F-103** (CGNS/EnSight export, HDF5 read): the acceptance is "exports open in third-party viewers". No viewer is available
+* F-103 (CGNS/EnSight export, HDF5 read): the acceptance is "exports open in third-party viewers". No viewer is available
   here and the container formats (CGNS over HDF5/ADF) cannot be written correctly without a library; format layouts from
   memory could not be verified. Status stays `todo`.
-* **F-125** (public-data validation pack): the remaining gaps are an unresolved source of open compressor data, a
+* F-125 (public-data validation pack): the remaining gaps are an unresolved source of open compressor data, a
   transcription of published rotor tables and wiring of downloaded benchmark files into comparisons; each needs network
   access or published numbers that cannot be checked here. Status stays `partial`, unchanged.
 
@@ -295,7 +295,7 @@ registered check passed at its first run; there are no `*_known_miss` tests.
 * P2 balance (limit 0.05): worst imbalance 0.0300 (M1, `GraphPartitioner`, n = 10; its refinement tolerance is 0.03, the other
   strategies are below that).
 * P3 node weighting (limit 0.05): worst weighted imbalance 0.0296; positive control: unweighted `Rcb` on the same weights
-  reaches 0.613 (n = 2..=16, M1), so the weights matter.
+  reaches 0.613 (n = 2..=16, M1).
 * P4 edge cut: `GraphPartitioner` cut `<=` `Rcb` cut in all 45 cases (M1, M2, M3 x n = 2..=16); strictly lower in 31, equal in
   14 (equal where the coordinate seed is already a local optimum of the move rule, for example n = 2, 4 on all three meshes). Examples
   (rcb / graph): M1 n=3 167 / 117, M1 n=16 598 / 511, M2 n=5 388 / 316, M3 n=5 94 / 79. The cuts of the cycle and inertial
