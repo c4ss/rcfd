@@ -539,13 +539,22 @@ impl Workspace {
         let mut out = Vec::new();
         for c in all.iter().take(limit) {
             let mut j = c.to_json();
-            // an entry too large for a page loses its setting values (they stay in .rcfd/edits.jsonl)
+            // an entry too large for a page loses its setting values and other fields (they stay in .rcfd/edits.jsonl)
             if text_len(&j) > TEXT_BUDGET / 2 {
                 if let Some(o) = j.as_object_mut() {
                     o.retain(|k, _| {
                         matches!(
                             k.as_str(),
-                            "n" | "source" | "kind" | "t" | "seq" | "path" | "run" | "who" | "actor" | "text"
+                            "n" | "source"
+                                | "kind"
+                                | "t"
+                                | "seq"
+                                | "path"
+                                | "run"
+                                | "who"
+                                | "actor"
+                                | "reason"
+                                | "text"
                         )
                     });
                     o.insert("omitted".into(), json!("over the size budget: read .rcfd/edits.jsonl"));

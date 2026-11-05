@@ -570,3 +570,39 @@ fn c3f5_reading_writes_nothing_and_c3f6_old_entries_are_dropped() {
     let (rest, dropped) = feed.since(feed.cursor() - 3);
     assert_eq!((rest.len(), dropped), (3, 0));
 }
+
+/// Added to C3-F (ADR 0188 addendum 1): an entry too large for a page of `read_feed` is returned without its setting
+/// values and other fields, keeping who, the path and the reason (the line stays whole in the journal), and `next`
+/// moves past it.
+#[test]
+fn c3f7_read_feed_returns_a_too_large_entry_without_its_values() {
+    let root = project("c3f7");
+    let ws = Workspace::open(&root).unwrap();
+    let cursor = call(&ws, "read_feed", json!({})).unwrap()["cursor"].as_u64().unwrap();
+    let big: Vec<Value> = (0..30)
+        .map(|i| json!({"path": format!("s{i}"), "old": "x".repeat(990), "new": "y".repeat(990)}))
+        .collect();
+    rcfd_project::journal::append(
+        &root,
+        json!({"kind": "edit", "who": "test", "path": REL, "changes": big, "reason": "large"}),
+    );
+    rcfd_project::journal::append(&root, json!({"kind": "edit", "who": "test", "path": "notes/after.md"}));
+    let f = call(&ws, "read_feed", json!({"since": cursor})).unwrap();
+    let e = f["entries"].as_array().unwrap();
+    eprintln!(
+        "C3-F (7): {} bytes of result; first entry {}",
+        f.to_string().len(),
+        e[0]
+    );
+    assert_eq!(e.len(), 2, "{f}");
+    assert!(f.to_string().len() <= rcfd_workspace::TEXT_BUDGET);
+    assert!(e[0].get("changes").is_none(), "{}", e[0]);
+    assert_eq!(e[0]["reason"], "large");
+    assert!(e[0]["omitted"].as_str().unwrap().contains(".rcfd/edits.jsonl"));
+    assert_eq!(
+        (e[0]["kind"].as_str(), e[0]["path"].as_str()),
+        (Some("edit"), Some(REL))
+    );
+    assert_eq!(f["next"], e[1]["n"]);
+    assert_eq!(journal(&root)[0]["changes"].as_array().unwrap().len(), 30);
+}

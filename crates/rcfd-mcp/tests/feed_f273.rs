@@ -234,6 +234,15 @@ fn c3r_run_submissions_and_requests_are_journaled_and_their_states_are_in_the_fe
     );
     assert_eq!(j[1]["reason"], "enough");
     assert_eq!((j[0]["seq"].clone(), j[1]["seq"].clone()), (json!(1), json!(2)));
+    // the journal itself can be read through the server (ADR 0188 Q7 and read_feed's note on large entries)
+    let raw = m.call("read_project_file", json!({"path": ".rcfd/edits.jsonl"}));
+    assert_eq!(raw["isError"], false, "{raw}");
+    let text = raw["structuredContent"]["text"].as_str().unwrap();
+    assert_eq!(text.lines().count(), 2, "{text}");
+    assert_eq!(
+        serde_json::from_str::<Value>(text.lines().next().unwrap()).unwrap(),
+        j[0]
+    );
     // the feed: the two journal entries and the run's state changes, ending cancelled
     let f = m.call("read_feed", json!({"since": cursor, "limit": 200}))["structuredContent"].clone();
     let entries = f["entries"].as_array().unwrap();
