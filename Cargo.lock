@@ -2750,6 +2750,7 @@ dependencies = [
  "rcfd-project",
  "rcfd-runner",
  "rcfd-tsstore",
+ "rcfd-workspace",
  "serde_json",
 ]
 
@@ -2836,6 +2837,7 @@ dependencies = [
  "rcfd-render",
  "rcfd-runner",
  "rcfd-tsstore",
+ "rcfd-workspace",
  "rfd",
  "serde",
  "serde_json",
@@ -2863,6 +2865,18 @@ dependencies = [
  "rcfd-fv",
  "rcfd-linalg",
  "rcfd-mesh",
+]
+
+[[package]]
+name = "rcfd-workspace"
+version = "0.1.0"
+dependencies = [
+ "rcfd-api",
+ "rcfd-post",
+ "rcfd-project",
+ "rcfd-runner",
+ "rcfd-tsstore",
+ "serde_json",
 ]
 
 [[package]]

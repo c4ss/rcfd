@@ -15,6 +15,9 @@ workspace = true
 rcfd-api.workspace = true
 rcfd-core.workspace = true
 rcfd-project.workspace = true
+# The project workspace (ADR 0173 W5, ADR 0185 E4 to E7): case saves under the edit lock, new case files, the run service.
+# Layer 6, no third-party crate.
+rcfd-workspace.workspace = true
 # The viewport (ADR 0132): the render core on eframe's device, the run's field store, the mesh's patch kinds (layers 5, 4,
 # 1; planned by ADR 0131 Placement).
 rcfd-render = { path = "../rcfd-render" }

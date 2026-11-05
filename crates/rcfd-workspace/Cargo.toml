@@ -1,0 +1,22 @@
+[package]
+name = "rcfd-workspace"
+description = "The workspace layer of a project folder (ADR 0173, ADR 0185): the commands, queries and write rule the MCP server and the Studio share"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# As rcfd-mcp: the dependency closure of rcfd-api needs Rust 1.85 (toml 1.1).
+rust-version = "1.85"
+publish = false
+
+[lints]
+workspace = true
+
+# ADR 0173 D1 (a): above api and below mcp and the Studio. All workspace crates already used by rcfd-mcp's project
+# tools; no third-party crate added (rcfd-io joins when the mesh commands of W4 need it).
+[dependencies]
+rcfd-api.workspace = true
+rcfd-project.workspace = true
+rcfd-runner = { path = "../rcfd-runner" }
+rcfd-tsstore.workspace = true
+rcfd-post.workspace = true
+serde_json.workspace = true

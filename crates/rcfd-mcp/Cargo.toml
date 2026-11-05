@@ -15,8 +15,11 @@ workspace = true
 rcfd-api.workspace = true
 rcfd-io.workspace = true
 serde_json.workspace = true
-# Project tools behind --project (ADR 0135 W48-12 (a)): project folder, run service client, field store reader, and
-# the CPU renderer of render_image (amendment 1 item 13). All lower layers, no third-party crate added.
+# Project tools behind --project (ADR 0135 W48-12 (a)): their commands and queries are the project workspace's (ADR 0173
+# W2, ADR 0185 E3); this crate keeps their MCP descriptors.
+rcfd-workspace.workspace = true
+# Project folder, run service client, field store reader, and the CPU renderer of render_image (amendment 1 item 13).
+# All lower layers, no third-party crate added.
 rcfd-project.workspace = true
 rcfd-runner = { path = "../rcfd-runner" }
 rcfd-tsstore.workspace = true

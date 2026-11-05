@@ -827,10 +827,10 @@ Added after the static feature-gap review; wording is product-independent. Phase
 
 Added with [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), one workspace layer between the project folder, the MCP server and the Studio. Priority set by the maintainer on 2026-11-04: these items come before the FAN-01 diagnosis.
 
-- [ ] **F-270** Workspace layer (rcfd-workspace) shared by the MCP server and the Studio
+- [~] **F-270** Workspace layer (rcfd-workspace) shared by the MCP server and the Studio
   - depends on: F-261, F-262, F-267
   - acceptance: One crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and the Studio use it: the existing project-tool and Studio tests pass unchanged, a Studio save and an edit_case on the same file give one write and one conflict naming the current hash, a comment line in a case survives a Studio save, and the crate graph stays acyclic with rcfd-studio not depending on rcfd-mcp (ADR 0173 W1, W2 and W5, checks C1, C2 and C6).
-  - note: ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L.
+  - note: ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L. PARTIAL (ADR 0185, the registration of F-270, 2026-11-05, branch f270-workspace, not merged): the crate exists and the MCP project tools run on it (W1, W2); the Studio saves under the edit lock with a journal line, creates cases and starts runs through it (W5). Open: a comment line survives a Studio save only in the workspace's line-level form, which the Studio does not use, because the preview's save rule (ADR 0147, ADR 0148) and three Studio tests need the saved bytes to be the editor's whole text (ADR 0185 Q1, a maintainer question).
 - [ ] **F-271** New simulations from the MCP server in project mode
   - depends on: F-270
   - acceptance: In project mode the MCP server creates a case in cases/ (from a shipped example, a built-in template, TOML, settings or a copy of a project case, never replacing a file) and starts a run of it through the runner, in one call if asked, with the same start plan as the Studio, so the run's fields are stored and the Studio lists the run and can read its snapshots (ADR 0173 R1, W3, check C7, decisions D7 and D2).

@@ -2,9 +2,9 @@
 //! does every file operation of the browser and the editor, and sends the results to the UI by channel. The UI thread only
 //! drains the channel.
 
-use crate::case_edit::{save_if_base, SaveOutcome};
 use crate::project_view::{self, Browser};
 use rcfd_project::{Project, Watcher};
+use rcfd_workspace::{SaveError, SaveForm};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -40,7 +40,8 @@ pub enum Command {
     Load(String),
     /// Stop reporting changes of a file.
     Untrack(String),
-    /// Write a file if its hash is still `base` ([`save_if_base`]).
+    /// Write a file if its hash is still `base`: `rcfd_workspace::save_case` (ADR 0185 E4), under the file's edit lock
+    /// and with an `.rcfd/edits.jsonl` line; the bytes as given ([`SaveForm::Whole`]).
     Save {
         /// Project-relative path.
         rel: String,
@@ -247,18 +248,19 @@ fn run(start: Start, poll: Option<Duration>, rx: Receiver<Command>, tx: Sender<E
                         tracked.remove(&rel);
                         continue;
                     }
-                    Command::Save { rel, base, bytes } => match project
-                        .resolve(&rel)
-                        .map_err(|e| e.to_string())
-                        .and_then(|p| save_if_base(&p, &base, &bytes))
-                    {
-                        Ok(SaveOutcome::Saved(hash)) => {
-                            tracked.insert(rel.clone());
-                            Event::Saved { rel, hash }
+                    Command::Save { rel, base, bytes } => {
+                        match rcfd_workspace::save_case(project.root(), &rel, &base, &bytes, SaveForm::Whole) {
+                            Ok(s) => {
+                                tracked.insert(rel.clone());
+                                Event::Saved { rel, hash: s.new_hash }
+                            }
+                            Err(SaveError::Conflict { .. }) => Event::SaveConflict {
+                                disk: read_opt(&project, &rel),
+                                rel,
+                            },
+                            Err(SaveError::Failed(message)) => Event::SaveFailed { rel, message },
                         }
-                        Ok(SaveOutcome::Conflict(disk)) => Event::SaveConflict { rel, disk },
-                        Err(message) => Event::SaveFailed { rel, message },
-                    },
+                    }
                     Command::Create {
                         rel,
                         bytes,
